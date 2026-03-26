@@ -18,7 +18,7 @@ interface QualityOption {
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
-const SUPABASE_PROXY = `${SUPABASE_URL}/functions/v1/video-proxy`;
+const SUPABASE_PROXY = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/video-proxy` : `${CLOUDFLARE_CDN_URL}/video-proxy`;
 
 const isRangeSafeProxy = (proxyUrl?: string): boolean => {
   if (!proxyUrl) return true;
