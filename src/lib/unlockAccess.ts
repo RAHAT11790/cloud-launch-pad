@@ -1,5 +1,6 @@
 import { db, ref, set, runTransaction } from "@/lib/firebase";
 import { callEdgeFunction } from "@/lib/edgeFunctionRouter";
+import { SITE_URL } from "@/lib/siteConfig";
 
 const UNLOCK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const FREE_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -34,7 +35,7 @@ export const createUnlockLinkForCurrentUser = async (): Promise<{ ok: boolean; s
     consumed: false,
   });
 
-  const callbackUrl = `${window.location.origin}/unlock?t=${encodeURIComponent(token)}`;
+  const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}`;
   let data: any;
   try {
     data = await callEdgeFunction("shorten", { url: callbackUrl });

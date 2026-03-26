@@ -2,6 +2,7 @@ import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { initializeApp, getApps } from "firebase/app";
 import { db, ref, set, get, update, remove } from "@/lib/firebase";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { SITE_ICON_URL, SITE_URL } from "@/lib/siteConfig";
 import { toast } from "sonner";
 
 const firebaseConfig = {
@@ -14,7 +15,7 @@ const firebaseConfig = {
 };
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BDMR1Q2pzEWQZtt-E_g_T4GD0AN0_DkGfpDDs2_4a0Oy27INY1LPUGeR8n6NPmIDG3_dBL1OwHbN4a-Toku0Xs4";
-const APP_ICON_URL = import.meta.env.VITE_SITE_ICON_URL || "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png";
+const APP_ICON_URL = SITE_ICON_URL;
 const CHUNK_SIZE = 180;
 const CHUNK_CONCURRENCY = 3;
 const REQUEST_TIMEOUT_MS = 30000;
@@ -54,6 +55,12 @@ const chunkArray = <T,>(arr: T[], size: number): T[][] => {
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const resolvePublicUrl = (url?: string) => {
+  if (!url) return undefined;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${SITE_URL}${url.startsWith("/") ? url : `/${url}`}`;
+};
 
 /** Get or create a stable device ID for this browser */
 const getDeviceId = (): string => {
@@ -226,7 +233,7 @@ export const registerFCMToken = async (userId: string, showDiagnostics = false) 
     }
 
     diag("Step 2: Registering service worker...");
-    const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
+      const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/", updateViaCache: "none" });
     await navigator.serviceWorker.ready;
     diag(`SW registered ✓ scope: ${registration.scope}`, "success");
 
@@ -380,8 +387,9 @@ const normalizePushData = (payload: PushPayload) => {
   Object.entries(payload.data || {}).forEach(([key, value]) => {
     normalizedData[key] = value == null ? "" : String(value);
   });
-  if (payload.url) normalizedData.url = payload.url;
-  normalizedData.baseUrl = window.location.origin;
+  const publicUrl = resolvePublicUrl(payload.url);
+  if (publicUrl) normalizedData.url = publicUrl;
+  normalizedData.baseUrl = SITE_URL;
   return normalizedData;
 };
 
@@ -480,7 +488,6 @@ export const sendPushToUsers = async (
   onProgress?: (progress: PushProgress) => void
 ) => {
   const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
-  const normalizedData = normalizePushData(payload);
 
   onProgress?.({
     phase: "tokens",
@@ -497,71 +504,27 @@ export const sendPushToUsers = async (
     return { skipped: true, success: 0, failed: 0, total: 0, invalidTokensRemoved: 0, reason: "NO_TARGET_USERS" };
   }
 
-  // Show "sending" phase while waiting for server response
-  onProgress?.({
-    phase: "sending",
-    totalTokens: uniqueUserIds.length, // estimate until actual token count arrives
-    sent: 0,
-    success: 0,
-    failed: 0,
-    invalidRemoved: 0,
-    totalUsers: uniqueUserIds.length,
-  });
-
-  let data: any = {};
-  try {
-    const res = await requestWithRetry({
-      userIds: uniqueUserIds,
-      title: payload.title,
-      body: payload.body,
-      image: payload.image,
-      icon: payload.icon || APP_ICON_URL,
-      badge: payload.badge || APP_ICON_URL,
-      data: normalizedData,
-    });
-    data = await res.json().catch(() => ({}));
-  } catch (err) {
-    console.warn("Push request failed:", err);
-    onProgress?.({ phase: "done", totalTokens: 0, sent: 0, success: 0, failed: uniqueUserIds.length, invalidRemoved: 0, totalUsers: uniqueUserIds.length });
-    return {
-      skipped: false,
+  const tokens = await getFCMTokens(uniqueUserIds);
+  if (tokens.length === 0) {
+    onProgress?.({
+      phase: "done",
+      totalTokens: 0,
+      sent: 0,
       success: 0,
-      failed: uniqueUserIds.length,
-      total: 0,
-      invalidTokensRemoved: 0,
-      reason: "REQUEST_FAILED",
-      error: err instanceof Error ? err.message : "Unknown request error",
-    };
+      failed: 0,
+      invalidRemoved: 0,
+      totalUsers: uniqueUserIds.length,
+    });
+    return { skipped: true, success: 0, failed: 0, total: 0, invalidTokensRemoved: 0, reason: "NO_TOKENS" };
   }
 
-  const totalTokens = Number(data?.totalTokens || (Number(data?.success || 0) + Number(data?.failed || 0)));
-  const success = Number(data?.success || 0);
-  const failed = Number(data?.failed || 0);
-  const invalidRemoved = Number(data?.invalidRemoved || 0);
-  const reason = typeof data?.reason === "string" ? data.reason : undefined;
-  const details = data?.details;
-  const failReasons = data?.failReasons || undefined;
-
-  onProgress?.({
-    phase: "done",
-    totalTokens,
-    sent: totalTokens,
-    success,
-    failed,
-    invalidRemoved,
-    totalUsers: uniqueUserIds.length,
-    failReasons,
+  const result = await sendPushToTokens(tokens, payload, (progress) => {
+    onProgress?.({ ...progress, totalUsers: uniqueUserIds.length });
   });
 
   return {
-    success,
-    failed,
-    total: totalTokens,
-    invalidTokensRemoved: invalidRemoved,
-    skipped: totalTokens === 0 && success === 0,
-    reason,
-    details,
-    failReasons,
+    ...result,
+    reason: result.total === 0 ? "NO_TOKENS" : undefined,
   };
 };
 
