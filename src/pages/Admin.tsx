@@ -8977,9 +8977,9 @@ const WsInlineLinkChecker = ({
     const encoded = encodeURIComponent(url);
     const candidates: string[] = [];
     if (url.startsWith('http://')) {
-      candidates.push(`${CLOUDFLARE_CDN}/?url=${encoded}`, `${PROXY_URL}?url=${encoded}`);
+      candidates.push(`${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`, `${PROXY_URL}?url=${encoded}`);
     } else {
-      candidates.push(`${CLOUDFLARE_CDN}/?url=${encoded}`, url, `${PROXY_URL}?url=${encoded}`);
+      candidates.push(`${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`, url, `${PROXY_URL}?url=${encoded}`);
     }
     for (const c of candidates) {
       const ok = await testPlayable(c);
