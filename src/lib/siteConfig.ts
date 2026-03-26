@@ -21,7 +21,7 @@ export const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 export const TMDB_IMG_BASE = "https://image.tmdb.org/t/p/";
 
 // --- Cloudflare CDN ---
-export const CLOUDFLARE_CDN_URL = import.meta.env.VITE_CLOUDFLARE_CDN_URL || "https://rs-anime-3.rahatsarker224.workers.dev";
+export const CLOUDFLARE_CDN_URL = import.meta.env.VITE_CLOUDFLARE_CDN_URL || "https://rs-anime-03.rahatsarker224.workers.dev";
 
 // --- Supabase (auto-set, don't change) ---
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
