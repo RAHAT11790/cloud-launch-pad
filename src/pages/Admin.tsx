@@ -8372,7 +8372,7 @@ const LinkCheckerSection = ({
   const qualityFields = ['link', 'link480', 'link720', 'link1080', 'link4k'] as const;
   const qualityLabels: Record<string, string> = { link: 'Default', link480: '480p', link720: '720p', link1080: '1080p', link4k: '4K' };
 
-  const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy`;
+  const PROXY_URL = import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy` : `${CLOUDFLARE_CDN_URL}/video-proxy`;
   const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState('');
@@ -8407,7 +8407,7 @@ const LinkCheckerSection = ({
     };
 
     const supabaseCandidate = `${PROXY_URL}?url=${encoded}`;
-    const cloudflareCandidate = `${CLOUDFLARE_CDN}/?url=${encoded}`;
+    const cloudflareCandidate = `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`;
     const customProxyCandidate = proxyUrl && isRangeSafeProxy(proxyUrl)
       ? `${proxyUrl}${encoded}`
       : null;
@@ -8945,7 +8945,7 @@ const WsInlineLinkChecker = ({
   const [done, setDone] = useState(false);
   const abortRef = useRef(false);
 
-  const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy`;
+  const PROXY_URL = import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy` : `${CLOUDFLARE_CDN_URL}/video-proxy`;
   const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
   const qualityFields = ['link', 'link480', 'link720', 'link1080', 'link4k'] as const;
   const qualityLabels: Record<string, string> = { link: 'Default', link480: '480p', link720: '720p', link1080: '1080p', link4k: '4K' };
@@ -8977,9 +8977,9 @@ const WsInlineLinkChecker = ({
     const encoded = encodeURIComponent(url);
     const candidates: string[] = [];
     if (url.startsWith('http://')) {
-      candidates.push(`${CLOUDFLARE_CDN}/?url=${encoded}`, `${PROXY_URL}?url=${encoded}`);
+      candidates.push(`${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`, `${PROXY_URL}?url=${encoded}`);
     } else {
-      candidates.push(`${CLOUDFLARE_CDN}/?url=${encoded}`, url, `${PROXY_URL}?url=${encoded}`);
+      candidates.push(`${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`, url, `${PROXY_URL}?url=${encoded}`);
     }
     for (const c of candidates) {
       const ok = await testPlayable(c);
