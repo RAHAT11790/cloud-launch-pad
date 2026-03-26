@@ -42,7 +42,7 @@ export const createUnlockLinkForCurrentUser = async (): Promise<{ ok: boolean; s
     return { ok: false, error: "shortener_failed" };
   }
 
-  const shortUrl = data?.shortenedUrl || data?.short || data?.url;
+  const shortUrl = typeof data === "string" ? data : data?.shortenedUrl || data?.short || data?.url;
   if (!shortUrl) return { ok: false, error: "shortener_empty" };
 
   return { ok: true, shortUrl };

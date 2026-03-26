@@ -2353,7 +2353,14 @@ Pᴏᴡᴇʀ Bʏ :
             body: JSON.stringify(payload),
           });
           const rawText = await response.text();
-          const data = rawText ? JSON.parse(rawText) : {};
+          const data = (() => {
+            if (!rawText) return {};
+            try {
+              return JSON.parse(rawText);
+            } catch {
+              return { rawText };
+            }
+          })();
           if (!response.ok || data?.error) {
             results.push({ id: chatId, ok: false, error: data?.error || 'API error' });
           } else {
@@ -7837,7 +7844,7 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
       let fetchUrl = proxy.id === 'supabase'
         ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy?url=${encodeURIComponent(testUrl)}`
         : proxy.url.includes('{url}')
-          ? proxy.url.replaceAll('{url}', encodeURIComponent(testUrl))
+          ? proxy.url.split('{url}').join(encodeURIComponent(testUrl))
           : /[?&]url=$/.test(proxy.url) || proxy.url.endsWith('=') || proxy.url.includes('?url=') || proxy.url.includes('&url=')
             ? `${proxy.url}${encodeURIComponent(testUrl)}`
             : `${proxy.url.replace(/\/$/, '')}?url=${encodeURIComponent(testUrl)}`;

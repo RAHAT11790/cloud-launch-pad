@@ -30,7 +30,7 @@ const buildProxyPlaybackUrl = (proxyUrl: string, targetUrl: string): string => {
   const encoded = encodeURIComponent(targetUrl);
 
   if (!base) return targetUrl;
-  if (base.includes('{url}')) return base.replaceAll('{url}', encoded);
+  if (base.includes('{url}')) return base.split('{url}').join(encoded);
   if (/[?&]url=$/.test(base) || base.endsWith('=')) return `${base}${encoded}`;
   if (base.includes('?url=') || base.includes('&url=')) return `${base}${encoded}`;
   return `${base.replace(/\/$/, '')}?url=${encoded}`;
