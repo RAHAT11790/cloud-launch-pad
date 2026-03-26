@@ -1,5 +1,5 @@
 import { db, ref, set, runTransaction } from "@/lib/firebase";
-import { supabase } from "@/integrations/supabase/client";
+import { callEdgeFunction } from "@/lib/edgeFunctionRouter";
 
 const UNLOCK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const FREE_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -35,12 +35,14 @@ export const createUnlockLinkForCurrentUser = async (): Promise<{ ok: boolean; s
   });
 
   const callbackUrl = `${window.location.origin}/unlock?t=${encodeURIComponent(token)}`;
-  const { data, error } = await supabase.functions.invoke("shorten-link", {
-    body: { url: callbackUrl },
-  });
+  let data: any;
+  try {
+    data = await callEdgeFunction("shorten", { url: callbackUrl });
+  } catch {
+    return { ok: false, error: "shortener_failed" };
+  }
 
-  if (error) return { ok: false, error: "shortener_failed" };
-  const shortUrl = data?.shortenedUrl || data?.short;
+  const shortUrl = typeof data === "string" ? data : data?.shortenedUrl || data?.short || data?.url;
   if (!shortUrl) return { ok: false, error: "shortener_empty" };
 
   return { ok: true, shortUrl };

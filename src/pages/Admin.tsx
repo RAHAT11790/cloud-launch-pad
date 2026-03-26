@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
-import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions } from "@/lib/edgeFunctionRouter";
+import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
 type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router";
 
@@ -2346,19 +2346,21 @@ Pᴏᴡᴇʀ Bʏ :
           buttonUrl: tgButtonLink || undefined,
         };
         try {
-          const response = await fetch(
-            `${SUPABASE_URL}/functions/v1/send-telegram-post`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-              },
-              body: JSON.stringify(payload),
+          const endpoint = await getEdgeFunctionUrl('telegram-post');
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const rawText = await response.text();
+          const data = (() => {
+            if (!rawText) return {};
+            try {
+              return JSON.parse(rawText);
+            } catch {
+              return { rawText };
             }
-          );
-          const data = await response.json();
+          })();
           if (!response.ok || data?.error) {
             results.push({ id: chatId, ok: false, error: data?.error || 'API error' });
           } else {
@@ -7752,7 +7754,7 @@ const CdnToggle = ({ glassCard }: { glassCard: string }) => {
 
 // Proxy Server presets - only range-safe proxies for reliable seek/skip
 const PROXY_SERVERS = [
-  { id: 'supabase', name: 'Supabase Edge (Default)', region: '🌐 Auto Region • Range ✓', url: '' },
+  { id: 'supabase', name: 'Built-in Proxy (Default)', region: '🌐 Auto Region • Range ✓', url: '' },
 ];
 
 // Proxy Server Selector sub-component
@@ -7810,7 +7812,8 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
     if (!newProxyName.trim() || !newProxyUrl.trim()) { toast.error("নাম ও URL দাও"); return; }
     try {
       const id = `custom_${Date.now()}`;
-      await set(ref(db, `settings/customProxies/${id}`), { name: newProxyName.trim(), url: newProxyUrl.trim() });
+      const normalizedUrl = newProxyUrl.trim();
+      await set(ref(db, `settings/customProxies/${id}`), { name: newProxyName.trim(), url: normalizedUrl });
       setNewProxyName('');
       setNewProxyUrl('');
       setShowAddForm(false);
@@ -7840,7 +7843,11 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
     try {
       let fetchUrl = proxy.id === 'supabase'
         ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy?url=${encodeURIComponent(testUrl)}`
-        : `${proxy.url}${encodeURIComponent(testUrl)}`;
+        : proxy.url.includes('{url}')
+          ? proxy.url.split('{url}').join(encodeURIComponent(testUrl))
+          : /[?&]url=$/.test(proxy.url) || proxy.url.endsWith('=') || proxy.url.includes('?url=') || proxy.url.includes('&url=')
+            ? `${proxy.url}${encodeURIComponent(testUrl)}`
+            : `${proxy.url.replace(/\/$/, '')}?url=${encodeURIComponent(testUrl)}`;
 
       const res = await fetch(fetchUrl, { method: 'GET', signal: AbortSignal.timeout(10000) });
       const elapsed = Math.round(performance.now() - start);

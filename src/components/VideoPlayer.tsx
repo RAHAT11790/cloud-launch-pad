@@ -21,8 +21,19 @@ const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 const SUPABASE_PROXY = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/video-proxy` : `${CLOUDFLARE_CDN_URL}/video-proxy`;
 
 const isRangeSafeProxy = (proxyUrl?: string): boolean => {
-  if (!proxyUrl) return true;
-  return proxyUrl.includes('/functions/v1/video-proxy') || proxyUrl.includes('workers.dev');
+  if (!proxyUrl) return false;
+  return proxyUrl.startsWith('https://') || proxyUrl.startsWith('/');
+};
+
+const buildProxyPlaybackUrl = (proxyUrl: string, targetUrl: string): string => {
+  const base = proxyUrl.trim();
+  const encoded = encodeURIComponent(targetUrl);
+
+  if (!base) return targetUrl;
+  if (base.includes('{url}')) return base.split('{url}').join(encoded);
+  if (/[?&]url=$/.test(base) || base.endsWith('=')) return `${base}${encoded}`;
+  if (base.includes('?url=') || base.includes('&url=')) return `${base}${encoded}`;
+  return `${base.replace(/\/$/, '')}?url=${encoded}`;
 };
 
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string): string[] => {
@@ -38,7 +49,7 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const supabaseProxyCandidate = `${SUPABASE_PROXY}?url=${encoded}`;
   const cloudflareCandidate = `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`;
   const customProxyCandidate = proxyUrl && isRangeSafeProxy(proxyUrl)
-    ? `${proxyUrl}${encoded}`
+    ? buildProxyPlaybackUrl(proxyUrl, url)
     : null;
 
   // http:// cannot be loaded directly on https pages (mixed content)
