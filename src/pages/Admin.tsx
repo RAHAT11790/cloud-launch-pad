@@ -7841,9 +7841,7 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
     const testUrl = 'https://www.google.com/favicon.ico';
     const start = performance.now();
     try {
-      let fetchUrl = proxy.id === 'supabase'
-        ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy?url=${encodeURIComponent(testUrl)}`
-        : proxy.url.includes('{url}')
+      let fetchUrl = proxy.url.includes('{url}')
           ? proxy.url.split('{url}').join(encodeURIComponent(testUrl))
           : /[?&]url=$/.test(proxy.url) || proxy.url.endsWith('=') || proxy.url.includes('?url=') || proxy.url.includes('&url=')
             ? `${proxy.url}${encodeURIComponent(testUrl)}`
@@ -8379,7 +8377,6 @@ const LinkCheckerSection = ({
   const qualityFields = ['link', 'link480', 'link720', 'link1080', 'link4k'] as const;
   const qualityLabels: Record<string, string> = { link: 'Default', link480: '480p', link720: '720p', link1080: '1080p', link4k: '4K' };
 
-  const PROXY_URL = import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy` : `${CLOUDFLARE_CDN_URL}/video-proxy`;
   const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState('');
@@ -8413,24 +8410,28 @@ const LinkCheckerSection = ({
       candidates.push(candidate);
     };
 
-    const supabaseCandidate = `${PROXY_URL}?url=${encoded}`;
     const cloudflareCandidate = `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`;
     const customProxyCandidate = proxyUrl && isRangeSafeProxy(proxyUrl)
-      ? `${proxyUrl}${encoded}`
+      ? (proxyUrl.includes('{url}')
+          ? proxyUrl.split('{url}').join(encoded)
+          : /[?&]url=$/.test(proxyUrl) || proxyUrl.endsWith('=') || proxyUrl.includes('?url=') || proxyUrl.includes('&url=')
+            ? `${proxyUrl}${encoded}`
+            : `${proxyUrl.replace(/\/$/, '')}?url=${encoded}`)
       : null;
 
+    if (cdnEnabled) {
+      addCandidate(cloudflareCandidate);
+      return candidates;
+    }
+
     if (url.startsWith('http://')) {
-      if (cdnEnabled) addCandidate(cloudflareCandidate);
       addCandidate(customProxyCandidate);
-      addCandidate(supabaseCandidate);
       return candidates;
     }
 
     if (url.startsWith('https://')) {
-      if (cdnEnabled) addCandidate(cloudflareCandidate);
       addCandidate(customProxyCandidate);
       addCandidate(url);
-      addCandidate(supabaseCandidate);
       return candidates;
     }
 
@@ -8952,7 +8953,6 @@ const WsInlineLinkChecker = ({
   const [done, setDone] = useState(false);
   const abortRef = useRef(false);
 
-  const PROXY_URL = import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy` : `${CLOUDFLARE_CDN_URL}/video-proxy`;
   const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
   const qualityFields = ['link', 'link480', 'link720', 'link1080', 'link4k'] as const;
   const qualityLabels: Record<string, string> = { link: 'Default', link480: '480p', link720: '720p', link1080: '1080p', link4k: '4K' };
@@ -8981,12 +8981,36 @@ const WsInlineLinkChecker = ({
 
   const checkLink = async (url: string): Promise<boolean> => {
     if (!url) return false;
+    const settingsSnap = await get(ref(db, "settings"));
+    const settings = settingsSnap.val() || {};
+    const cdnEnabled = settings.cdnEnabled !== false;
+    const proxyUrl = settings.proxyServer?.url || '';
     const encoded = encodeURIComponent(url);
     const candidates: string[] = [];
-    if (url.startsWith('http://')) {
-      candidates.push(`${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`, `${PROXY_URL}?url=${encoded}`);
+
+    if (cdnEnabled) {
+      candidates.push(`${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`);
+    } else if (url.startsWith('http://')) {
+      if (proxyUrl) {
+        candidates.push(
+          proxyUrl.includes('{url}')
+            ? proxyUrl.split('{url}').join(encoded)
+            : /[?&]url=$/.test(proxyUrl) || proxyUrl.endsWith('=') || proxyUrl.includes('?url=') || proxyUrl.includes('&url=')
+              ? `${proxyUrl}${encoded}`
+              : `${proxyUrl.replace(/\/$/, '')}?url=${encoded}`
+        );
+      }
     } else {
-      candidates.push(`${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`, url, `${PROXY_URL}?url=${encoded}`);
+      if (proxyUrl) {
+        candidates.push(
+          proxyUrl.includes('{url}')
+            ? proxyUrl.split('{url}').join(encoded)
+            : /[?&]url=$/.test(proxyUrl) || proxyUrl.endsWith('=') || proxyUrl.includes('?url=') || proxyUrl.includes('&url=')
+              ? `${proxyUrl}${encoded}`
+              : `${proxyUrl.replace(/\/$/, '')}?url=${encoded}`
+        );
+      }
+      candidates.push(url);
     }
     for (const c of candidates) {
       const ok = await testPlayable(c);
