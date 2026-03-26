@@ -36,7 +36,7 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
 
   const encoded = encodeURIComponent(url);
   const supabaseProxyCandidate = `${SUPABASE_PROXY}?url=${encoded}`;
-  const cloudflareCandidate = `${CLOUDFLARE_CDN}/?url=${encoded}`;
+  const cloudflareCandidate = `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`;
   const customProxyCandidate = proxyUrl && isRangeSafeProxy(proxyUrl)
     ? `${proxyUrl}${encoded}`
     : null;
