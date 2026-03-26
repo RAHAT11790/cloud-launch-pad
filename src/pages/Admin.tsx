@@ -8407,7 +8407,7 @@ const LinkCheckerSection = ({
     };
 
     const supabaseCandidate = `${PROXY_URL}?url=${encoded}`;
-    const cloudflareCandidate = `${CLOUDFLARE_CDN}/?url=${encoded}`;
+    const cloudflareCandidate = `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`;
     const customProxyCandidate = proxyUrl && isRangeSafeProxy(proxyUrl)
       ? `${proxyUrl}${encoded}`
       : null;
