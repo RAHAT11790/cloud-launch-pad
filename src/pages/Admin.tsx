@@ -8945,7 +8945,7 @@ const WsInlineLinkChecker = ({
   const [done, setDone] = useState(false);
   const abortRef = useRef(false);
 
-  const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy`;
+  const PROXY_URL = import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy` : `${CLOUDFLARE_CDN_URL}/video-proxy`;
   const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
   const qualityFields = ['link', 'link480', 'link720', 'link1080', 'link4k'] as const;
   const qualityLabels: Record<string, string> = { link: 'Default', link480: '480p', link720: '720p', link1080: '1080p', link4k: '4K' };
