@@ -231,6 +231,34 @@ div[style*="z-index: 2147483647"],
     box-shadow: var(--neu-shadow-sm);
   }
 
+  .player-touch-button {
+    background: hsl(var(--card) / 0.84);
+    color: hsl(var(--card-foreground));
+    backdrop-filter: blur(18px);
+    border: 1px solid hsl(var(--border) / 0.5);
+    box-shadow: var(--neu-shadow-sm);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .player-touch-button:active {
+    transform: scale(0.96);
+  }
+
+  .player-touch-button--primary {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    color: hsl(var(--primary-foreground));
+    border-color: hsl(var(--primary) / 0.45);
+    box-shadow: 0 10px 24px hsl(var(--primary) / 0.32);
+  }
+
+  .player-control-chip {
+    background: hsl(var(--card) / 0.78);
+    color: hsl(var(--card-foreground));
+    border: 1px solid hsl(var(--border) / 0.45);
+    box-shadow: var(--neu-shadow-sm);
+  }
+
   .skip-indicator {
     background: hsl(var(--card) / 0.78);
     backdrop-filter: blur(10px);

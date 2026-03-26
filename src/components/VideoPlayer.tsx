@@ -1189,33 +1189,33 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           {/* Controls Overlay - no heavy animations for smooth feel */}
           {showControls && !locked && (
-            <div className="absolute inset-0 player-controls-overlay flex flex-col justify-between" style={{ willChange: "opacity", transition: "opacity 0.15s ease" }}>
+            <div className="absolute inset-0 z-10 player-controls-overlay flex flex-col justify-between" style={{ willChange: "opacity", transition: "opacity 0.15s ease" }}>
               {/* Top controls */}
-              <div className="flex justify-end gap-2 p-3">
-                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1">
+              <div className="flex justify-end gap-2 p-3 pointer-events-auto">
+                <button type="button" onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-9 px-3 rounded-full flex items-center justify-center gap-1.5 text-xs font-medium">
                   <Crop className="w-3.5 h-3.5" />
-                  <span className="text-[10px] font-medium">{cropLabels[cropIndex]}</span>
+                  <span>{cropLabels[cropIndex]}</span>
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-glass w-8 h-8 rounded-full flex items-center justify-center">
-                  <Lock className="w-3.5 h-3.5" />
+                <button type="button" onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center">
+                  <Lock className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Center play */}
-              <div className="flex items-center justify-center gap-8">
-                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="w-10 h-10 rounded-full bg-foreground/20 flex items-center justify-center backdrop-blur">
+              <div className="flex items-center justify-center gap-5 px-4 pointer-events-auto">
+                <button type="button" onClick={(e) => { e.stopPropagation(); seek(-10); resetHideTimer(); }} className="player-touch-button w-12 h-12 rounded-full flex items-center justify-center">
                   <SkipBack className="w-5 h-5" />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="w-14 h-14 rounded-full gradient-primary flex items-center justify-center btn-glow">
-                  {playing ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
+                <button type="button" onClick={(e) => { e.stopPropagation(); togglePlay(); resetHideTimer(); }} className="player-touch-button player-touch-button--primary w-16 h-16 rounded-full flex items-center justify-center">
+                  {playing ? <PauseCircle className="w-10 h-10" /> : <PlayCircle className="w-10 h-10" />}
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="w-10 h-10 rounded-full bg-foreground/20 flex items-center justify-center backdrop-blur">
+                <button type="button" onClick={(e) => { e.stopPropagation(); seek(10); resetHideTimer(); }} className="player-touch-button w-12 h-12 rounded-full flex items-center justify-center">
                   <SkipForward className="w-5 h-5" />
                 </button>
               </div>
 
               {/* Bottom controls */}
-              <div className="px-3 pb-3">
+              <div className="px-3 pb-3 pointer-events-auto">
                 {/* Progress bar - GPU accelerated with will-change */}
                 <div
                   ref={progressBarRef}
@@ -1235,21 +1235,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     </div>
                   </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <span ref={timeDisplayRef} className="text-[11px] font-medium">{formatTime(currentTime)} / {formatTime(duration)}</span>
-                    <button onClick={(e) => { e.stopPropagation(); setMuted(!muted); if (videoRef.current) videoRef.current.muted = !muted; }} className="w-6 h-6 flex items-center justify-center">
+                <div className="flex items-end justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <button type="button" onClick={(e) => { e.stopPropagation(); togglePlay(); resetHideTimer(); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center shrink-0">
+                      {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                    </button>
+                    <span ref={timeDisplayRef} className="text-[11px] font-medium whitespace-nowrap">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setMuted(!muted); if (videoRef.current) videoRef.current.muted = !muted; resetHideTimer(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center shrink-0">
                       {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] bg-foreground/20 px-2 py-0.5 rounded">{playbackRate}x</span>
+                  <div className="flex items-center justify-end gap-2 flex-wrap">
+                    <span className="player-control-chip text-[10px] px-2.5 py-1 rounded-full font-medium">{playbackRate}x</span>
                     {availableQualities.length > 1 && (
                       <div className="relative">
                         <button
-                          onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); }}
-                          className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all ${
-                            currentQuality !== "Auto" ? "gradient-primary text-white" : "bg-foreground/20"
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); resetHideTimer(); }}
+                          className={`text-[10px] px-3 py-1.5 rounded-full font-semibold transition-all ${
+                            currentQuality !== "Auto" ? "player-touch-button player-touch-button--primary" : "player-control-chip"
                           }`}
                         >
                           {currentQuality}
@@ -1280,15 +1284,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       </div>
                     )}
                     {onNextEpisode && (
-                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="text-[10px] bg-primary/30 px-2 py-0.5 rounded flex items-center gap-1">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip text-[10px] px-3 py-1.5 rounded-full flex items-center gap-1 font-medium">
                         Next <ChevronRight className="w-3 h-3" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); }} className="player-glass w-7 h-7 rounded-full flex items-center justify-center">
-                      <Settings className="w-3 h-3" />
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); resetHideTimer(); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center">
+                      <Settings className="w-4 h-4" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-glass w-7 h-7 rounded-full flex items-center justify-center">
-                      {isFullscreen ? <Minimize className="w-3 h-3" /> : <Maximize className="w-3 h-3" />}
+                    <button type="button" onClick={(e) => { e.stopPropagation(); toggleFullscreen(); resetHideTimer(); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center">
+                      {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
