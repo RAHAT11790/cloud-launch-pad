@@ -32,4 +32,4 @@ export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 export const FIREBASE_VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BDMR1Q2pzEWQZtt-E_g_T4GD0AN0_DkGfpDDs2_4a0Oy27INY1LPUGeR8n6NPmIDG3_dBL1OwHbN4a-Toku0Xs4";
 
 // --- FCM ---
-export const FCM_ENDPOINT = `${SUPABASE_URL}/functions/v1/send-fcm`;
+export const FCM_ENDPOINT = `${CLOUDFLARE_CDN_URL}/send-fcm`;
