@@ -40,19 +40,30 @@ interface Season {
 
 import { THEME_PRESETS, type ThemePreset } from "@/lib/themePresets";
 
-// ==================== EDGE FUNCTION ROUTER SECTION ====================
+// ==================== CLOUDFLARE WORKER ROUTER SECTION ====================
 const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
-  const [config, setConfig] = useState<EdgeRouterConfig>({ platform: "lovable", denoBaseUrl: "", perFunction: {} });
-  const [denoUrlInput, setDenoUrlInput] = useState("");
-  const [statuses, setStatuses] = useState<Record<string, { lovable: { alive: boolean; latency: number } | null; deno: { alive: boolean; latency: number } | null }>>({});
+  const [config, setConfig] = useState<EdgeRouterConfig>({ platform: "cloudflare", cloudflareBaseUrl: "https://rs-anime-03.rahatsarker224.workers.dev", functions: {} });
+  const [cfUrlInput, setCfUrlInput] = useState("");
+  const [statuses, setStatuses] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
   const [checking, setChecking] = useState(false);
+  
+  // Add new function form
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newFnName, setNewFnName] = useState("");
+  const [newFnEndpoint, setNewFnEndpoint] = useState("");
+  const [newFnMethod, setNewFnMethod] = useState<"GET" | "POST" | "GET/POST">("POST");
+  const [newFnDesc, setNewFnDesc] = useState("");
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/edgeRouter"), (snap) => {
       const val = snap.val();
       if (val) {
-        setConfig({ platform: val.platform || "lovable", denoBaseUrl: val.denoBaseUrl || "", perFunction: val.perFunction || {} });
-        setDenoUrlInput(val.denoBaseUrl || "");
+        setConfig({
+          platform: val.platform === "deno" ? "cloudflare" : (val.platform || "cloudflare"),
+          cloudflareBaseUrl: val.cloudflareBaseUrl || val.denoBaseUrl || "https://rs-anime-03.rahatsarker224.workers.dev",
+          functions: val.functions || {},
+        });
+        setCfUrlInput(val.cloudflareBaseUrl || val.denoBaseUrl || "");
       }
     });
     return () => unsub();
@@ -61,31 +72,21 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const saveConfig = async (updates: Partial<EdgeRouterConfig>) => {
     const newConfig = { ...config, ...updates };
     await set(ref(db, "settings/edgeRouter"), newConfig);
-    toast.success("Edge Router config saved!");
+    toast.success("Config saved!");
   };
 
   const togglePlatform = () => {
-    const next = config.platform === "lovable" ? "deno" : "lovable";
+    const next = config.platform === "lovable" ? "cloudflare" : "lovable";
     saveConfig({ platform: next });
-  };
-
-  const setFunctionPlatform = (fn: string, platform: "lovable" | "deno" | "auto") => {
-    const perFunction = { ...config.perFunction, [fn]: platform };
-    saveConfig({ perFunction });
   };
 
   const checkAllStatuses = async () => {
     setChecking(true);
     const results: typeof statuses = {};
-    const promises = EDGE_FUNCTIONS.map(async (fn) => {
-      const [lovable, deno] = await Promise.all([
-        checkFunctionStatus(fn, "lovable", ""),
-        config.denoBaseUrl ? checkFunctionStatus(fn, "deno", config.denoBaseUrl) : Promise.resolve(null),
-      ]);
-      results[fn] = {
-        lovable: { alive: lovable.alive, latency: lovable.latency },
-        deno: deno ? { alive: deno.alive, latency: deno.latency } : null,
-      };
+    const allFns = [...DEFAULT_CF_FUNCTIONS, ...Object.values(config.functions).map(f => f.endpoint)];
+    const promises = allFns.map(async (fn) => {
+      const result = await checkFunctionStatus(fn, config.cloudflareBaseUrl);
+      results[fn] = { alive: result.alive, latency: result.latency };
     });
     await Promise.all(promises);
     setStatuses(results);
@@ -93,146 +94,203 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     toast.success("Status check complete!");
   };
 
-  const lovableActive = Object.values(config.perFunction).filter(v => v === "lovable" || v === "auto").length;
-  const denoActive = Object.values(config.perFunction).filter(v => v === "deno").length;
-  const autoCount = EDGE_FUNCTIONS.length - Object.keys(config.perFunction).length + Object.values(config.perFunction).filter(v => v === "auto").length;
+  const addNewFunction = async () => {
+    if (!newFnName.trim() || !newFnEndpoint.trim()) {
+      toast.error("নাম এবং Endpoint দাও");
+      return;
+    }
+    const id = `cf-${Date.now()}`;
+    const newFn: CloudFunction = {
+      id,
+      name: newFnName.trim(),
+      endpoint: newFnEndpoint.trim(),
+      method: newFnMethod,
+      description: newFnDesc.trim() || undefined,
+      enabled: true,
+      addedAt: Date.now(),
+    };
+    const functions = { ...config.functions, [id]: newFn };
+    await saveConfig({ functions });
+    setNewFnName(""); setNewFnEndpoint(""); setNewFnDesc(""); setShowAddForm(false);
+    toast.success(`✅ ${newFnName} ফাংশন যোগ হয়েছে!`);
+  };
+
+  const removeFunction = async (fnId: string) => {
+    const functions = { ...config.functions };
+    delete functions[fnId];
+    await saveConfig({ functions });
+    toast.success("ফাংশন রিমুভ হয়েছে");
+  };
+
+  const toggleFunction = async (fnId: string) => {
+    const fn = config.functions[fnId];
+    if (!fn) return;
+    const functions = { ...config.functions, [fnId]: { ...fn, enabled: !fn.enabled } };
+    await saveConfig({ functions });
+  };
+
+  const dynamicFunctions = Object.values(config.functions);
 
   return (
     <div>
-      {/* Global Platform Switch */}
+      {/* Global Config */}
       <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
-          <Activity size={14} className="text-cyan-400" /> Edge Function Router
+          <Activity size={14} className="text-cyan-400" /> ☁️ Cloudflare Worker Router
         </h3>
         <p className="text-[10px] text-zinc-400 mb-4">
-          Lovable Cloud বন্ধ হলে Deno Deploy তে সুইচ করো। প্রতিটা function আলাদা করে কন্ট্রোল করতে পারবে।
+          Cloudflare Worker এ সব ফাংশন চলে। নতুন ফাংশন লিংক দিয়ে যোগ করো।
         </p>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-3 gap-2 mb-4">
-          <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-2.5 text-center">
-            <div className="text-lg font-bold text-indigo-400">{EDGE_FUNCTIONS.length}</div>
-            <div className="text-[9px] text-zinc-400">Total Functions</div>
+          <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-2.5 text-center">
+            <div className="text-lg font-bold text-orange-400">{DEFAULT_CF_FUNCTIONS.length}</div>
+            <div className="text-[9px] text-zinc-400">Built-in</div>
+          </div>
+          <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2.5 text-center">
+            <div className="text-lg font-bold text-purple-400">{dynamicFunctions.length}</div>
+            <div className="text-[9px] text-zinc-400">Custom</div>
           </div>
           <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-2.5 text-center">
-            <div className="text-lg font-bold text-green-400">{config.platform === "lovable" ? "LC" : "DD"}</div>
-            <div className="text-[9px] text-zinc-400">Default Platform</div>
-          </div>
-          <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-2.5 text-center">
-            <div className="text-lg font-bold text-orange-400">{denoActive}</div>
-            <div className="text-[9px] text-zinc-400">Deno Override</div>
+            <div className="text-lg font-bold text-green-400">{config.platform === "cloudflare" ? "CF" : "LC"}</div>
+            <div className="text-[9px] text-zinc-400">Platform</div>
           </div>
         </div>
 
-        {/* Global Toggle */}
+        {/* Platform Toggle */}
         <div className="flex items-center justify-between bg-zinc-800/50 rounded-xl p-3 mb-4">
           <div>
             <div className="text-xs font-semibold text-white">ডিফল্ট প্ল্যাটফর্ম</div>
-            <div className="text-[10px] text-zinc-400">"Auto" ফাংশনগুলো এখানে যাবে</div>
+            <div className="text-[10px] text-zinc-400">ফাংশন কোথায় চলবে</div>
           </div>
           <button
             onClick={togglePlatform}
             className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-              config.platform === "lovable"
-                ? "bg-indigo-600 text-white"
-                : "bg-emerald-600 text-white"
+              config.platform === "cloudflare"
+                ? "bg-orange-600 text-white"
+                : "bg-indigo-600 text-white"
             }`}
           >
-            {config.platform === "lovable" ? "☁️ Lovable Cloud" : "🦕 Deno Deploy"}
+            {config.platform === "cloudflare" ? "☁️ Cloudflare" : "☁️ Lovable Cloud"}
           </button>
         </div>
 
-        {/* Deno Deploy Base URL */}
+        {/* CF Base URL */}
         <div className="mb-4">
-          <label className="text-[10px] text-zinc-400 block mb-1">Deno Deploy Base URL</label>
+          <label className="text-[10px] text-zinc-400 block mb-1">Cloudflare Worker Base URL</label>
           <div className="flex gap-2">
             <input
-              value={denoUrlInput}
-              onChange={(e) => setDenoUrlInput(e.target.value)}
-              placeholder="https://your-project.deno.dev"
+              value={cfUrlInput}
+              onChange={(e) => setCfUrlInput(e.target.value)}
+              placeholder="https://your-worker.workers.dev"
               className={`${inputClass} flex-1`}
             />
             <button
-              onClick={() => saveConfig({ denoBaseUrl: denoUrlInput.trim() })}
+              onClick={() => saveConfig({ cloudflareBaseUrl: cfUrlInput.trim() })}
               className={`${btnPrimary} !px-3`}
             >
               <Save size={12} /> Save
             </button>
           </div>
-          {config.denoBaseUrl && (
-            <div className="mt-1.5 text-[10px] text-green-400">✓ {config.denoBaseUrl}</div>
+          {config.cloudflareBaseUrl && (
+            <div className="mt-1.5 text-[10px] text-green-400">✓ {config.cloudflareBaseUrl}</div>
           )}
         </div>
 
-        {/* Check Status Button */}
-        <button
-          onClick={checkAllStatuses}
-          disabled={checking}
-          className={`${btnPrimary} w-full !py-2.5 mb-4`}
-        >
-          {checking ? (
-            <><RefreshCw size={14} className="animate-spin" /> Checking...</>
-          ) : (
-            <><Activity size={14} /> Live Status চেক করো</>
-          )}
+        {/* Check Status */}
+        <button onClick={checkAllStatuses} disabled={checking} className={`${btnPrimary} w-full !py-2.5 mb-4`}>
+          {checking ? <><RefreshCw size={14} className="animate-spin" /> Checking...</> : <><Activity size={14} /> Live Status চেক করো</>}
         </button>
       </div>
 
-      {/* Per-Function Controls */}
+      {/* Built-in Functions */}
       <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-          <Settings size={14} className="text-purple-400" /> Function-wise কন্ট্রোল
+          <Zap size={14} className="text-orange-400" /> Built-in Functions
         </h3>
         <div className="space-y-2">
-          {EDGE_FUNCTIONS.map((fn) => {
-            const fnPlatform = config.perFunction[fn] || "auto";
-            const lovableStatus = statuses[fn]?.lovable;
-            const denoStatus = statuses[fn]?.deno;
-            const activePlatform = fnPlatform === "auto" ? config.platform : fnPlatform;
-
+          {DEFAULT_CF_FUNCTIONS.map((fn) => {
+            const st = statuses[fn];
             return (
-              <div key={fn} className="bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40">
-                <div className="flex items-center justify-between mb-2">
+              <div key={fn} className="bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-orange-500" />
+                  <span className="text-xs font-semibold text-white">{fn}</span>
+                </div>
+                {st && (
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-1.5 h-1.5 rounded-full ${st.alive ? "bg-green-400" : "bg-red-400"}`} />
+                    <span className="text-[9px] text-zinc-400">{st.alive ? `${st.latency}ms` : "Down"}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Dynamic / Custom Functions */}
+      <div className={`${glassCard} p-4 mb-4`}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <PlusCircle size={14} className="text-purple-400" /> Custom Functions
+          </h3>
+          <button onClick={() => setShowAddForm(!showAddForm)} className={`${btnPrimary} !py-1 !px-3 !text-[10px]`}>
+            <Plus size={12} /> নতুন যোগ করো
+          </button>
+        </div>
+
+        {/* Add Form */}
+        {showAddForm && (
+          <div className="bg-zinc-800/60 rounded-xl p-3 mb-4 border border-purple-500/30 space-y-2">
+            <input value={newFnName} onChange={e => setNewFnName(e.target.value)} placeholder="ফাংশনের নাম (e.g. my-api)" className={inputClass} />
+            <input value={newFnEndpoint} onChange={e => setNewFnEndpoint(e.target.value)} placeholder="Endpoint (e.g. my-api অথবা https://full-url.com/api)" className={inputClass} />
+            <input value={newFnDesc} onChange={e => setNewFnDesc(e.target.value)} placeholder="বিবরণ (optional)" className={inputClass} />
+            <div className="flex gap-2">
+              {(["GET", "POST", "GET/POST"] as const).map(m => (
+                <button key={m} onClick={() => setNewFnMethod(m)} className={`px-3 py-1 rounded-full text-[10px] font-bold ${newFnMethod === m ? "bg-purple-600 text-white" : "bg-zinc-700 text-zinc-400"}`}>
+                  {m}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2 mt-2">
+              <button onClick={addNewFunction} className={`${btnPrimary} flex-1`}><Plus size={12} /> যোগ করো</button>
+              <button onClick={() => setShowAddForm(false)} className={`${btnSecondary} flex-1`}><X size={12} /> বাতিল</button>
+            </div>
+          </div>
+        )}
+
+        {/* List of dynamic functions */}
+        {dynamicFunctions.length === 0 && !showAddForm && (
+          <p className="text-[10px] text-zinc-500 text-center py-4">কোনো custom function নেই। উপরে "নতুন যোগ করো" চাপো।</p>
+        )}
+        <div className="space-y-2">
+          {dynamicFunctions.map((fn) => {
+            const st = statuses[fn.endpoint];
+            return (
+              <div key={fn.id} className={`bg-zinc-800/40 rounded-xl p-3 border ${fn.enabled ? "border-purple-500/30" : "border-zinc-700/40 opacity-50"}`}>
+                <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${
-                      activePlatform === "lovable" ? "bg-indigo-500" : "bg-emerald-500"
-                    }`} />
-                    <span className="text-xs font-semibold text-white">{fn}</span>
+                    <div className={`w-2 h-2 rounded-full ${fn.enabled ? "bg-purple-500" : "bg-zinc-600"}`} />
+                    <span className="text-xs font-semibold text-white">{fn.name}</span>
+                    <span className="text-[9px] px-1.5 py-0.5 bg-zinc-700 rounded text-zinc-400">{fn.method}</span>
                   </div>
                   <div className="flex gap-1">
-                    {(["auto", "lovable", "deno"] as const).map((p) => (
-                      <button
-                        key={p}
-                        onClick={() => setFunctionPlatform(fn, p)}
-                        className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-all ${
-                          fnPlatform === p
-                            ? p === "lovable" ? "bg-indigo-600 text-white"
-                              : p === "deno" ? "bg-emerald-600 text-white"
-                              : "bg-zinc-600 text-white"
-                            : "bg-zinc-700/50 text-zinc-400 hover:text-white"
-                        }`}
-                      >
-                        {p === "auto" ? "Auto" : p === "lovable" ? "LC" : "Deno"}
-                      </button>
-                    ))}
+                    <button onClick={() => toggleFunction(fn.id)} className="p-1 hover:bg-zinc-700 rounded">
+                      {fn.enabled ? <Eye size={12} className="text-green-400" /> : <EyeOff size={12} className="text-zinc-500" />}
+                    </button>
+                    <button onClick={() => removeFunction(fn.id)} className="p-1 hover:bg-red-900/50 rounded">
+                      <Trash2 size={12} className="text-red-400" />
+                    </button>
                   </div>
                 </div>
-
-                {/* Live Status */}
-                {(lovableStatus || denoStatus) && (
-                  <div className="flex gap-3 mt-1">
-                    {lovableStatus && (
-                      <div className="flex items-center gap-1.5">
-                        <div className={`w-1.5 h-1.5 rounded-full ${lovableStatus.alive ? "bg-green-400" : "bg-red-400"}`} />
-                        <span className="text-[9px] text-zinc-400">LC: {lovableStatus.alive ? `${lovableStatus.latency}ms` : "Down"}</span>
-                      </div>
-                    )}
-                    {denoStatus && (
-                      <div className="flex items-center gap-1.5">
-                        <div className={`w-1.5 h-1.5 rounded-full ${denoStatus.alive ? "bg-green-400" : "bg-red-400"}`} />
-                        <span className="text-[9px] text-zinc-400">Deno: {denoStatus.alive ? `${denoStatus.latency}ms` : "Down"}</span>
-                      </div>
-                    )}
+                <div className="text-[9px] text-zinc-500">{fn.endpoint}</div>
+                {fn.description && <div className="text-[9px] text-zinc-400 mt-0.5">{fn.description}</div>}
+                {st && (
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <div className={`w-1.5 h-1.5 rounded-full ${st.alive ? "bg-green-400" : "bg-red-400"}`} />
+                    <span className="text-[9px] text-zinc-400">{st.alive ? `${st.latency}ms` : "Down"}</span>
                   </div>
                 )}
               </div>
@@ -244,22 +302,19 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
       {/* Guide */}
       <div className={`${glassCard} p-4`}>
         <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-          📖 Deno Deploy সেটআপ গাইড
+          📖 Cloudflare Worker গাইড
         </h3>
         <div className="text-[10px] text-zinc-400 space-y-1.5">
-          <p>১. <a href="https://dash.deno.com" target="_blank" rel="noopener noreferrer" className="text-cyan-400 underline">dash.deno.com</a> এ গিয়ে একাউন্ট খোলো</p>
-          <p>২. GitHub রিপো কানেক্ট করো বা ম্যানুয়ালি ডিপ্লয় করো</p>
-          <p>৩. প্রতিটা Edge Function আলাদা Deno Deploy প্রজেক্ট হিসেবে ডিপ্লয় করো</p>
-          <p>৪. Environment Variables (TELEGRAM_BOT_TOKEN, FIREBASE_SERVICE_ACCOUNT_KEY ইত্যাদি) Deno Deploy ড্যাশবোর্ডে সেট করো</p>
-          <p>৫. Base URL এখানে পেস্ট করে সেভ করো</p>
-          <p className="text-yellow-400 mt-2">⚠️ Deno Deploy তে তোমার কোড হুবহু চলবে — কোনো পরিবর্তন লাগবে না!</p>
+          <p>১. Cloudflare Worker Base URL সেট করো</p>
+          <p>২. Built-in ফাংশনগুলো অটো কানেক্ট হবে</p>
+          <p>৩. "নতুন যোগ করো" দিয়ে নতুন ফাংশন endpoint যোগ করো</p>
+          <p>৪. Full URL দিলে আলাদা worker-এও পাঠানো যাবে</p>
+          <p className="text-yellow-400 mt-2">💡 ভবিষ্যতে যতো ফাংশন চাও, লিংক দিয়ে যোগ করতে পারবে!</p>
         </div>
       </div>
     </div>
   );
 };
-
-// ==================== UI THEMES SECTION ====================
 const UIThemesSection = ({ glassCard, btnPrimary }: { glassCard: string; btnPrimary: string }) => {
   const [activeThemeId, setActiveThemeId] = useState("default");
 
