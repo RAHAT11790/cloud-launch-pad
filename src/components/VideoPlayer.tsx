@@ -16,13 +16,20 @@ interface QualityOption {
 }
 
 // Cloudflare CDN proxy for fast video streaming
-import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
+import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
-const SUPABASE_PROXY = `${SUPABASE_URL}/functions/v1/video-proxy`;
 
-const isRangeSafeProxy = (proxyUrl?: string): boolean => {
-  if (!proxyUrl) return true;
-  return proxyUrl.includes('/functions/v1/video-proxy') || proxyUrl.includes('workers.dev');
+const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string): string => {
+  const base = proxyBase.trim();
+  const encoded = encodeURIComponent(targetUrl);
+  if (!base) return targetUrl;
+  // Support {url} placeholder: https://proxy.example.com/?url={url}
+  if (base.includes('{url}')) return base.split('{url}').join(encoded);
+  // Support ending with = or ?url= or &url=
+  if (/[?&]url=$/.test(base) || base.endsWith('=')) return `${base}${encoded}`;
+  if (base.includes('?url=') || base.includes('&url=')) return `${base}${encoded}`;
+  // Default: append ?url=
+  return `${base.replace(/\/$/, '')}?url=${encoded}`;
 };
 
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string): string[] => {
@@ -35,25 +42,24 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   };
 
   const encoded = encodeURIComponent(url);
-  const supabaseProxyCandidate = `${SUPABASE_PROXY}?url=${encoded}`;
-  const cloudflareCandidate = `${CLOUDFLARE_CDN}/?url=${encoded}`;
-  const customProxyCandidate = proxyUrl && isRangeSafeProxy(proxyUrl)
-    ? `${proxyUrl}${encoded}`
+  const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
+  const customProxyCandidate = proxyUrl
+    ? buildProxyPlaybackUrl(proxyUrl, url)
     : null;
 
   // http:// cannot be loaded directly on https pages (mixed content)
   if (url.startsWith('http://')) {
-    if (cdnEnabled) addCandidate(cloudflareCandidate);
+    // Custom proxy first, then Cloudflare worker
     addCandidate(customProxyCandidate);
-    addCandidate(supabaseProxyCandidate);
+    if (cdnEnabled) addCandidate(cloudflareCandidate);
     return candidates;
   }
 
   if (url.startsWith('https://')) {
-    if (cdnEnabled) addCandidate(cloudflareCandidate);
+    // Custom proxy first, then Cloudflare worker, then direct
     addCandidate(customProxyCandidate);
+    if (cdnEnabled) addCandidate(cloudflareCandidate);
     addCandidate(url); // direct path (closest to user playback)
-    addCandidate(supabaseProxyCandidate); // safe fallback if direct/CDN blocked
     return candidates;
   }
 
