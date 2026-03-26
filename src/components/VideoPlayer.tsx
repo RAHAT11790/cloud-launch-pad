@@ -135,15 +135,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentQuality, setCurrentQuality] = useState<string>("Auto");
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>('');
-  const [currentSrc, setCurrentSrc] = useState(src); // resolved playback src
+  const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
 
   // Load CDN + proxy settings from Firebase
   useEffect(() => {
+    let cdnLoaded = false;
+    let proxyLoaded = false;
+    setPlaybackRouteReady(false);
+
+    const markReady = () => {
+      if (cdnLoaded && proxyLoaded) setPlaybackRouteReady(true);
+    };
+
     const unsub1 = onValue(ref(db, "settings/cdnEnabled"), (snap) => {
       const val = snap.val();
       const enabled = val !== false;
       setCdnEnabled(enabled);
+      cdnLoaded = true;
+      markReady();
     });
 
     const unsub2 = onValue(ref(db, "settings/proxyServer"), (snap) => {
@@ -153,6 +164,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       } else {
         setProxyUrl('');
       }
+      proxyLoaded = true;
+      markReady();
     });
 
     return () => {
@@ -431,13 +444,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
 
   useEffect(() => {
+    if (!playbackRouteReady) return;
     activeSourceBaseRef.current = src;
     setCurrentSrc(getPrimaryPlaybackSrc(src, cdnEnabled, proxyUrl || undefined));
     setCurrentQuality("Auto");
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
-  }, [src, qualityOptions, cdnEnabled, proxyUrl]);
+  }, [src, qualityOptions, cdnEnabled, proxyUrl, playbackRouteReady]);
 
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
@@ -555,7 +569,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   useEffect(() => {
     const v = videoRef.current;
-    if (!v) return;
+    if (!v || !playbackRouteReady || !currentSrc) return;
 
     // Track last known good position for fallback recovery
     let lastKnownTime = 0;
@@ -757,7 +771,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.load();
       if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl]);
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady]);
 
   useEffect(() => {
     const onFs = () => {
