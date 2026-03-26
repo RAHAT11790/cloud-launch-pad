@@ -18,22 +18,11 @@ interface QualityOption {
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
-const SUPABASE_PROXY = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/video-proxy` : `${CLOUDFLARE_CDN_URL}/video-proxy`;
+const SUPABASE_PROXY = `${SUPABASE_URL}/functions/v1/video-proxy`;
 
 const isRangeSafeProxy = (proxyUrl?: string): boolean => {
-  if (!proxyUrl) return false;
-  return proxyUrl.startsWith('https://') || proxyUrl.startsWith('/');
-};
-
-const buildProxyPlaybackUrl = (proxyUrl: string, targetUrl: string): string => {
-  const base = proxyUrl.trim();
-  const encoded = encodeURIComponent(targetUrl);
-
-  if (!base) return targetUrl;
-  if (base.includes('{url}')) return base.split('{url}').join(encoded);
-  if (/[?&]url=$/.test(base) || base.endsWith('=')) return `${base}${encoded}`;
-  if (base.includes('?url=') || base.includes('&url=')) return `${base}${encoded}`;
-  return `${base.replace(/\/$/, '')}?url=${encoded}`;
+  if (!proxyUrl) return true;
+  return proxyUrl.includes('/functions/v1/video-proxy') || proxyUrl.includes('workers.dev');
 };
 
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string): string[] => {
@@ -47,24 +36,22 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
 
   const encoded = encodeURIComponent(url);
   const supabaseProxyCandidate = `${SUPABASE_PROXY}?url=${encoded}`;
-  const cloudflareCandidate = `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}`;
+  const cloudflareCandidate = `${CLOUDFLARE_CDN}/?url=${encoded}`;
   const customProxyCandidate = proxyUrl && isRangeSafeProxy(proxyUrl)
-    ? buildProxyPlaybackUrl(proxyUrl, url)
+    ? `${proxyUrl}${encoded}`
     : null;
 
   // http:// cannot be loaded directly on https pages (mixed content)
   if (url.startsWith('http://')) {
-    // Custom proxy gets highest priority when available
-    addCandidate(customProxyCandidate);
     if (cdnEnabled) addCandidate(cloudflareCandidate);
+    addCandidate(customProxyCandidate);
     addCandidate(supabaseProxyCandidate);
     return candidates;
   }
 
   if (url.startsWith('https://')) {
-    // Custom proxy gets highest priority when available
-    addCandidate(customProxyCandidate);
     if (cdnEnabled) addCandidate(cloudflareCandidate);
+    addCandidate(customProxyCandidate);
     addCandidate(url); // direct path (closest to user playback)
     addCandidate(supabaseProxyCandidate); // safe fallback if direct/CDN blocked
     return candidates;
@@ -958,13 +945,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (!isFullscreen) return;
     const t = e.touches[0];
     setSwipeState({ startX: t.clientX, startY: t.clientY, type: null });
-  }, [isFullscreen]);
+  }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isFullscreen || !swipeState || locked) return;
+    if (!swipeState || locked) return;
     const t = e.touches[0];
     const dy = t.clientY - swipeState.startY;
     if (!swipeState.type && Math.abs(dy) > 20) {
@@ -986,12 +972,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setBrightness(newBr);
       setSwipeState({ ...swipeState, startY: t.clientY });
     }
-  }, [swipeState, locked, volume, brightness, isFullscreen]);
+  }, [swipeState, locked, volume, brightness]);
 
-  const handleTouchEnd = useCallback(() => {
-    if (!isFullscreen) return;
-    setSwipeState(null);
-  }, [isFullscreen]);
+  const handleTouchEnd = useCallback(() => setSwipeState(null), []);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -1034,11 +1017,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           }`}
           style={{ filter: `brightness(${brightness})`, willChange: "transform", margin: isFullscreen ? 0 : undefined }}
           onContextMenu={(e) => e.preventDefault()}
+          onClick={handleVideoClick}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         >
           <video
             ref={videoRef}
             src={currentSrc}
-            className="w-full h-full pointer-events-none"
+            className="w-full h-full"
             style={{ objectFit: cropModes[cropIndex], willChange: "transform", WebkitTouchCallout: "none", userSelect: "none" }}
             playsInline
             preload="auto"
@@ -1047,16 +1034,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             disableRemotePlayback
             onContextMenu={(e) => e.preventDefault()}
             onDragStart={(e) => e.preventDefault()}
-          />
-
-          <div
-            className="absolute inset-0 z-[1] bg-transparent"
-            style={{ WebkitTouchCallout: "none", userSelect: "none", touchAction: isFullscreen ? "none" : "pan-y" }}
-            onContextMenu={(e) => e.preventDefault()}
-            onClick={handleVideoClick}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
           />
 
           {/* Video Error Overlay */}
@@ -1189,33 +1166,33 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           {/* Controls Overlay - no heavy animations for smooth feel */}
           {showControls && !locked && (
-            <div className="absolute inset-0 z-10 player-controls-overlay flex flex-col justify-between" style={{ willChange: "opacity", transition: "opacity 0.15s ease" }}>
+            <div className="absolute inset-0 player-controls-overlay flex flex-col justify-between" style={{ willChange: "opacity", transition: "opacity 0.15s ease" }}>
               {/* Top controls */}
-              <div className="flex justify-end gap-2 p-3 pointer-events-auto">
-                <button type="button" onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-9 px-3 rounded-full flex items-center justify-center gap-1.5 text-xs font-medium">
+              <div className="flex justify-end gap-2 p-3">
+                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1">
                   <Crop className="w-3.5 h-3.5" />
-                  <span>{cropLabels[cropIndex]}</span>
+                  <span className="text-[10px] font-medium">{cropLabels[cropIndex]}</span>
                 </button>
-                <button type="button" onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center">
-                  <Lock className="w-4 h-4" />
+                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-glass w-8 h-8 rounded-full flex items-center justify-center">
+                  <Lock className="w-3.5 h-3.5" />
                 </button>
               </div>
 
               {/* Center play */}
-              <div className="flex items-center justify-center gap-5 px-4 pointer-events-auto">
-                <button type="button" onClick={(e) => { e.stopPropagation(); seek(-10); resetHideTimer(); }} className="player-touch-button w-12 h-12 rounded-full flex items-center justify-center">
+              <div className="flex items-center justify-center gap-8">
+                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="w-10 h-10 rounded-full bg-foreground/20 flex items-center justify-center backdrop-blur">
                   <SkipBack className="w-5 h-5" />
                 </button>
-                <button type="button" onClick={(e) => { e.stopPropagation(); togglePlay(); resetHideTimer(); }} className="player-touch-button player-touch-button--primary w-16 h-16 rounded-full flex items-center justify-center">
-                  {playing ? <PauseCircle className="w-10 h-10" /> : <PlayCircle className="w-10 h-10" />}
+                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="w-14 h-14 rounded-full gradient-primary flex items-center justify-center btn-glow">
+                  {playing ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
                 </button>
-                <button type="button" onClick={(e) => { e.stopPropagation(); seek(10); resetHideTimer(); }} className="player-touch-button w-12 h-12 rounded-full flex items-center justify-center">
+                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="w-10 h-10 rounded-full bg-foreground/20 flex items-center justify-center backdrop-blur">
                   <SkipForward className="w-5 h-5" />
                 </button>
               </div>
 
               {/* Bottom controls */}
-              <div className="px-3 pb-3 pointer-events-auto">
+              <div className="px-3 pb-3">
                 {/* Progress bar - GPU accelerated with will-change */}
                 <div
                   ref={progressBarRef}
@@ -1235,25 +1212,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     </div>
                   </div>
                 </div>
-                <div className="flex items-end justify-between gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <button type="button" onClick={(e) => { e.stopPropagation(); togglePlay(); resetHideTimer(); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center shrink-0">
-                      {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-                    </button>
-                    <span ref={timeDisplayRef} className="text-[11px] font-medium whitespace-nowrap">{formatTime(currentTime)} / {formatTime(duration)}</span>
-                    <button type="button" onClick={(e) => { e.stopPropagation(); setMuted(!muted); if (videoRef.current) videoRef.current.muted = !muted; resetHideTimer(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center shrink-0">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <span ref={timeDisplayRef} className="text-[11px] font-medium">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                    <button onClick={(e) => { e.stopPropagation(); setMuted(!muted); if (videoRef.current) videoRef.current.muted = !muted; }} className="w-6 h-6 flex items-center justify-center">
                       {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
                   </div>
-                  <div className="flex items-center justify-end gap-2 flex-wrap">
-                    <span className="player-control-chip text-[10px] px-2.5 py-1 rounded-full font-medium">{playbackRate}x</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] bg-foreground/20 px-2 py-0.5 rounded">{playbackRate}x</span>
                     {availableQualities.length > 1 && (
                       <div className="relative">
                         <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); resetHideTimer(); }}
-                          className={`text-[10px] px-3 py-1.5 rounded-full font-semibold transition-all ${
-                            currentQuality !== "Auto" ? "player-touch-button player-touch-button--primary" : "player-control-chip"
+                          onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); }}
+                          className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all ${
+                            currentQuality !== "Auto" ? "gradient-primary text-white" : "bg-foreground/20"
                           }`}
                         >
                           {currentQuality}
@@ -1284,15 +1257,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       </div>
                     )}
                     {onNextEpisode && (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip text-[10px] px-3 py-1.5 rounded-full flex items-center gap-1 font-medium">
+                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="text-[10px] bg-primary/30 px-2 py-0.5 rounded flex items-center gap-1">
                         Next <ChevronRight className="w-3 h-3" />
                       </button>
                     )}
-                    <button type="button" onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); resetHideTimer(); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center">
-                      <Settings className="w-4 h-4" />
+                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); }} className="player-glass w-7 h-7 rounded-full flex items-center justify-center">
+                      <Settings className="w-3 h-3" />
                     </button>
-                    <button type="button" onClick={(e) => { e.stopPropagation(); toggleFullscreen(); resetHideTimer(); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center">
-                      {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-glass w-7 h-7 rounded-full flex items-center justify-center">
+                      {isFullscreen ? <Minimize className="w-3 h-3" /> : <Maximize className="w-3 h-3" />}
                     </button>
                   </div>
                 </div>
