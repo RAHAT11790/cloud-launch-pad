@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { db, ref, set, remove, onValue, push } from "@/lib/firebase";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
 import { sendPushToUsers } from "@/lib/fcm";
+import { SITE_URL } from "@/lib/siteConfig";
 
 interface AnimeDetailsProps {
   anime: AnimeItem;
@@ -246,7 +247,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
         {/* Share button */}
         <button
           onClick={() => {
-            const url = `${window.location.origin}?anime=${encodeURIComponent(anime.id)}`;
+            const url = `${SITE_URL}?anime=${encodeURIComponent(anime.id)}`;
             navigator.clipboard.writeText(url).then(() => {
               setShareCopied(true);
               setTimeout(() => setShareCopied(false), 2000);

@@ -956,12 +956,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!isFullscreen) return;
     const t = e.touches[0];
     setSwipeState({ startX: t.clientX, startY: t.clientY, type: null });
-  }, []);
+  }, [isFullscreen]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!swipeState || locked) return;
+    if (!isFullscreen || !swipeState || locked) return;
     const t = e.touches[0];
     const dy = t.clientY - swipeState.startY;
     if (!swipeState.type && Math.abs(dy) > 20) {
@@ -983,9 +984,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setBrightness(newBr);
       setSwipeState({ ...swipeState, startY: t.clientY });
     }
-  }, [swipeState, locked, volume, brightness]);
+  }, [swipeState, locked, volume, brightness, isFullscreen]);
 
-  const handleTouchEnd = useCallback(() => setSwipeState(null), []);
+  const handleTouchEnd = useCallback(() => {
+    if (!isFullscreen) return;
+    setSwipeState(null);
+  }, [isFullscreen]);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -1028,15 +1032,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           }`}
           style={{ filter: `brightness(${brightness})`, willChange: "transform", margin: isFullscreen ? 0 : undefined }}
           onContextMenu={(e) => e.preventDefault()}
-          onClick={handleVideoClick}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
         >
           <video
             ref={videoRef}
             src={currentSrc}
-            className="w-full h-full"
+            className="w-full h-full pointer-events-none"
             style={{ objectFit: cropModes[cropIndex], willChange: "transform", WebkitTouchCallout: "none", userSelect: "none" }}
             playsInline
             preload="auto"
@@ -1045,6 +1045,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             disableRemotePlayback
             onContextMenu={(e) => e.preventDefault()}
             onDragStart={(e) => e.preventDefault()}
+          />
+
+          <div
+            className="absolute inset-0 z-[1] bg-transparent"
+            style={{ WebkitTouchCallout: "none", userSelect: "none", touchAction: isFullscreen ? "none" : "pan-y" }}
+            onContextMenu={(e) => e.preventDefault()}
+            onClick={handleVideoClick}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
           />
 
           {/* Video Error Overlay */}
