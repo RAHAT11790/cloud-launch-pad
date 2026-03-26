@@ -393,6 +393,23 @@ const normalizePushData = (payload: PushPayload) => {
   return normalizedData;
 };
 
+const getPushEligibleUserIds = async (userIds: string[]): Promise<string[]> => {
+  try {
+    const snaps = await Promise.all(userIds.map((uid) => get(ref(db, `users/${uid}`))));
+    return userIds.filter((uid, index) => {
+      const user = snaps[index]?.val?.();
+      if (!user) return true;
+      if (user.pushEnabled === false) return false;
+      if (user.pushPermission === "denied") return false;
+      if (user.pushTokenState === "disabled") return false;
+      return true;
+    });
+  } catch (err) {
+    console.warn("Failed to filter push-eligible users:", err);
+    return userIds;
+  }
+};
+
 export const sendPushToTokens = async (
   tokens: string[],
   payload: PushPayload,
@@ -488,6 +505,7 @@ export const sendPushToUsers = async (
   onProgress?: (progress: PushProgress) => void
 ) => {
   const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+  const eligibleUserIds = await getPushEligibleUserIds(uniqueUserIds);
 
   onProgress?.({
     phase: "tokens",
@@ -496,15 +514,15 @@ export const sendPushToUsers = async (
     success: 0,
     failed: 0,
     invalidRemoved: 0,
-    totalUsers: uniqueUserIds.length,
+    totalUsers: eligibleUserIds.length,
   });
 
-  if (uniqueUserIds.length === 0) {
+  if (eligibleUserIds.length === 0) {
     onProgress?.({ phase: "done", totalTokens: 0, sent: 0, success: 0, failed: 0, invalidRemoved: 0, totalUsers: 0 });
     return { skipped: true, success: 0, failed: 0, total: 0, invalidTokensRemoved: 0, reason: "NO_TARGET_USERS" };
   }
 
-  const tokens = await getFCMTokens(uniqueUserIds);
+  const tokens = await getFCMTokens(eligibleUserIds);
   if (tokens.length === 0) {
     onProgress?.({
       phase: "done",
@@ -513,13 +531,13 @@ export const sendPushToUsers = async (
       success: 0,
       failed: 0,
       invalidRemoved: 0,
-      totalUsers: uniqueUserIds.length,
+      totalUsers: eligibleUserIds.length,
     });
     return { skipped: true, success: 0, failed: 0, total: 0, invalidTokensRemoved: 0, reason: "NO_TOKENS" };
   }
 
   const result = await sendPushToTokens(tokens, payload, (progress) => {
-    onProgress?.({ ...progress, totalUsers: uniqueUserIds.length });
+    onProgress?.({ ...progress, totalUsers: eligibleUserIds.length });
   });
 
   return {

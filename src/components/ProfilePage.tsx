@@ -1655,6 +1655,7 @@ const NotificationToggle = ({ label, desc, defaultOn, storageKey }: { label: str
   });
   const toggle = async () => {
     const next = !enabled;
+    const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
 
     if (storageKey === "rs_notif_push" && next) {
       try {
@@ -1671,7 +1672,6 @@ const NotificationToggle = ({ label, desc, defaultOn, storageKey }: { label: str
         }
         setEnabled(next);
         localStorage.setItem(storageKey, String(next));
-        const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
         if (u?.id) await registerFCMToken(u.id, true);
       } catch {
         setEnabled(!next);
@@ -1679,6 +1679,19 @@ const NotificationToggle = ({ label, desc, defaultOn, storageKey }: { label: str
     } else {
       setEnabled(next);
       localStorage.setItem(storageKey, String(next));
+      if (storageKey === "rs_notif_push" && u?.id) {
+        try {
+          await update(ref(db, `users/${u.id}`), {
+            id: u.id,
+            pushEnabled: false,
+            pushTokenState: "disabled",
+            lastPushCheckAt: Date.now(),
+          });
+          await remove(ref(db, `fcmTokens/${u.id}`));
+        } catch {
+          toast.error("Push disable sync ব্যর্থ");
+        }
+      }
     }
   };
   return (
