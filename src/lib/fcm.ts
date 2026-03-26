@@ -1,6 +1,7 @@
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { initializeApp, getApps } from "firebase/app";
 import { db, ref, set, get, update, remove } from "@/lib/firebase";
+import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { toast } from "sonner";
 
 const firebaseConfig = {
@@ -13,7 +14,6 @@ const firebaseConfig = {
 };
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BDMR1Q2pzEWQZtt-E_g_T4GD0AN0_DkGfpDDs2_4a0Oy27INY1LPUGeR8n6NPmIDG3_dBL1OwHbN4a-Toku0Xs4";
-const SEND_FCM_ENDPOINT = "https://rs-anime-03.rahatsarker224.workers.dev/send-fcm";
 const APP_ICON_URL = import.meta.env.VITE_SITE_ICON_URL || "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png";
 const CHUNK_SIZE = 180;
 const CHUNK_CONCURRENCY = 3;
@@ -21,6 +21,13 @@ const REQUEST_TIMEOUT_MS = 30000;
 const MAX_TOKENS_PER_USER = 3;
 
 let messaging: any = null;
+let cachedSendFcmEndpoint: string | null = null;
+
+const getSendFcmEndpoint = async () => {
+  if (cachedSendFcmEndpoint) return cachedSendFcmEndpoint;
+  cachedSendFcmEndpoint = await getEdgeFunctionUrl("send-fcm");
+  return cachedSendFcmEndpoint;
+};
 
 const getMessagingInstance = () => {
   if (messaging) return messaging;
@@ -71,9 +78,10 @@ const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit, tim
 
 const requestWithRetry = async (body: unknown, retries = 2): Promise<Response> => {
   let lastError: unknown = null;
+  const endpoint = await getSendFcmEndpoint();
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const res = await fetchWithTimeout(SEND_FCM_ENDPOINT, {
+      const res = await fetchWithTimeout(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
