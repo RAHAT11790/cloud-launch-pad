@@ -54,15 +54,17 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
 
   // http:// cannot be loaded directly on https pages (mixed content)
   if (url.startsWith('http://')) {
-    if (cdnEnabled) addCandidate(cloudflareCandidate);
+    // Custom proxy gets highest priority when available
     addCandidate(customProxyCandidate);
+    if (cdnEnabled) addCandidate(cloudflareCandidate);
     addCandidate(supabaseProxyCandidate);
     return candidates;
   }
 
   if (url.startsWith('https://')) {
-    if (cdnEnabled) addCandidate(cloudflareCandidate);
+    // Custom proxy gets highest priority when available
     addCandidate(customProxyCandidate);
+    if (cdnEnabled) addCandidate(cloudflareCandidate);
     addCandidate(url); // direct path (closest to user playback)
     addCandidate(supabaseProxyCandidate); // safe fallback if direct/CDN blocked
     return candidates;
