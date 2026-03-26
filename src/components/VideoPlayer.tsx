@@ -43,23 +43,24 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
 
   const encoded = encodeURIComponent(url);
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
-  const customProxyCandidate = proxyUrl
-    ? buildProxyPlaybackUrl(proxyUrl, url)
-    : null;
+  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url) : null;
+
+  if (cdnEnabled) {
+    addCandidate(cloudflareCandidate);
+    return candidates;
+  }
 
   // http:// cannot be loaded directly on https pages (mixed content)
   if (url.startsWith('http://')) {
-    // Custom proxy first, then Cloudflare worker
+    // When Cloudflare is off, only the configured proxy can safely load http sources
     addCandidate(customProxyCandidate);
-    if (cdnEnabled) addCandidate(cloudflareCandidate);
     return candidates;
   }
 
   if (url.startsWith('https://')) {
-    // Custom proxy first, then Cloudflare worker, then direct
+    // When Cloudflare is off, prefer the custom proxy, then allow direct playback
     addCandidate(customProxyCandidate);
-    if (cdnEnabled) addCandidate(cloudflareCandidate);
-    addCandidate(url); // direct path (closest to user playback)
+    addCandidate(url);
     return candidates;
   }
 
