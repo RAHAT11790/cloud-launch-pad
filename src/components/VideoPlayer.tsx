@@ -639,7 +639,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         const sameQualityRouteFallback = buildPlaybackCandidates(
           activeSourceBaseRef.current,
           cdnEnabled,
-          proxyUrl || undefined
+          proxyUrl || undefined,
+          proxyApiKey || undefined
         ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
 
         if (sameQualityRouteFallback) {
