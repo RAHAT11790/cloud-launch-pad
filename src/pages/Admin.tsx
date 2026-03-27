@@ -53,6 +53,18 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const [newFnEndpoint, setNewFnEndpoint] = useState("");
   const [newFnMethod, setNewFnMethod] = useState<"GET" | "POST" | "GET/POST">("POST");
   const [newFnDesc, setNewFnDesc] = useState("");
+  const [newFnApiKey, setNewFnApiKey] = useState("");
+
+  // Proxy settings
+  const [proxyUrl, setProxyUrl] = useState("");
+  const [proxyApiKey, setProxyApiKey] = useState("");
+
+  // Expanded built-in function for editing apiKey
+  const [expandedBuiltIn, setExpandedBuiltIn] = useState<string | null>(null);
+  const [builtInApiKeys, setBuiltInApiKeys] = useState<Record<string, string>>({});
+
+  // Expanded custom function for editing
+  const [expandedCustom, setExpandedCustom] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/edgeRouter"), (snap) => {
@@ -66,7 +78,15 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         setCfUrlInput(val.cloudflareBaseUrl || val.denoBaseUrl || "");
       }
     });
-    return () => unsub();
+    const unsub2 = onValue(ref(db, "settings/proxyServer"), (snap) => {
+      const val = snap.val();
+      setProxyUrl(val?.url || "");
+      setProxyApiKey(val?.apiKey || "");
+    });
+    const unsub3 = onValue(ref(db, "settings/builtInApiKeys"), (snap) => {
+      setBuiltInApiKeys(snap.val() || {});
+    });
+    return () => { unsub(); unsub2(); unsub3(); };
   }, []);
 
   const saveConfig = async (updates: Partial<EdgeRouterConfig>) => {
@@ -106,12 +126,13 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
       endpoint: newFnEndpoint.trim(),
       method: newFnMethod,
       description: newFnDesc.trim() || undefined,
+      apiKey: newFnApiKey.trim() || undefined,
       enabled: true,
       addedAt: Date.now(),
     };
     const functions = { ...config.functions, [id]: newFn };
     await saveConfig({ functions });
-    setNewFnName(""); setNewFnEndpoint(""); setNewFnDesc(""); setShowAddForm(false);
+    setNewFnName(""); setNewFnEndpoint(""); setNewFnDesc(""); setNewFnApiKey(""); setShowAddForm(false);
     toast.success(`✅ ${newFnName} ফাংশন যোগ হয়েছে!`);
   };
 
@@ -127,6 +148,42 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     if (!fn) return;
     const functions = { ...config.functions, [fnId]: { ...fn, enabled: !fn.enabled } };
     await saveConfig({ functions });
+  };
+
+  const saveCustomFnApiKey = async (fnId: string, apiKey: string) => {
+    const fn = config.functions[fnId];
+    if (!fn) return;
+    const functions = { ...config.functions, [fnId]: { ...fn, apiKey: apiKey.trim() || undefined } };
+    await saveConfig({ functions });
+    toast.success("API Key সেভ হয়েছে!");
+  };
+
+  const saveBuiltInApiKey = async (fnName: string, apiKey: string) => {
+    const keys = { ...builtInApiKeys, [fnName]: apiKey.trim() };
+    if (!apiKey.trim()) delete keys[fnName];
+    await set(ref(db, "settings/builtInApiKeys"), keys);
+    toast.success(`${fnName} API Key সেভ হয়েছে!`);
+  };
+
+  const saveProxySettings = async () => {
+    await set(ref(db, "settings/proxyServer"), {
+      url: proxyUrl.trim() || null,
+      apiKey: proxyApiKey.trim() || null,
+    });
+    toast.success("✅ Proxy সেটিংস সেভ হয়েছে!");
+  };
+
+  const testFunction = async (endpoint: string, apiKey?: string) => {
+    try {
+      let url = endpoint.startsWith("http") ? endpoint : `${config.cloudflareBaseUrl.replace(/\/$/, "")}/${endpoint}`;
+      if (apiKey) url += (url.includes('?') ? '&' : '?') + `apikey=${encodeURIComponent(apiKey)}`;
+      const start = Date.now();
+      const res = await fetch(url, { method: "GET" });
+      const latency = Date.now() - start;
+      toast.success(`✅ ${res.status} — ${latency}ms`);
+    } catch (e: any) {
+      toast.error(`❌ Test failed: ${e.message}`);
+    }
   };
 
   const dynamicFunctions = Object.values(config.functions);
@@ -204,6 +261,48 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         </button>
       </div>
 
+      {/* ====== Video Proxy Settings ====== */}
+      <div className={`${glassCard} p-4 mb-4`}>
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <Video size={14} className="text-blue-400" /> 🎬 Video Proxy সেটিংস
+        </h3>
+        <p className="text-[10px] text-zinc-400 mb-3">ভিডিও প্লেব্যাকের জন্য প্রক্সি URL ও API Key সেট করো</p>
+        <div className="space-y-2">
+          <div>
+            <label className="text-[10px] text-zinc-400 block mb-1">Proxy URL</label>
+            <input
+              value={proxyUrl}
+              onChange={(e) => setProxyUrl(e.target.value)}
+              placeholder="https://your-proxy.com/functions/v1/rs-video-proxy?url="
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-zinc-400 block mb-1">🔑 API Key (optional)</label>
+            <input
+              value={proxyApiKey}
+              onChange={(e) => setProxyApiKey(e.target.value)}
+              placeholder="API key থাকলে এখানে দাও"
+              className={inputClass}
+            />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={saveProxySettings} className={`${btnPrimary} flex-1`}>
+              <Save size={12} /> Save Proxy
+            </button>
+            <button
+              onClick={() => testFunction(proxyUrl || "https://dolsyjysfcxvbfstojnk.supabase.co/functions/v1/rs-video-proxy", proxyApiKey)}
+              className={`${btnSecondary} flex-1`}
+            >
+              <Activity size={12} /> Test
+            </button>
+          </div>
+          <div className="text-[9px] text-zinc-500 mt-1">
+            💡 খালি রাখলে ডিফল্ট Supabase proxy ব্যবহার হবে। API Key থাকলে URL-এ <code>&apikey=...</code> যোগ হবে।
+          </div>
+        </div>
+      </div>
+
       {/* Built-in Functions */}
       <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -212,16 +311,46 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         <div className="space-y-2">
           {DEFAULT_CF_FUNCTIONS.map((fn) => {
             const st = statuses[fn];
+            const isExpanded = expandedBuiltIn === fn;
             return (
-              <div key={fn} className="bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-orange-500" />
-                  <span className="text-xs font-semibold text-white">{fn}</span>
+              <div key={fn} className="bg-zinc-800/40 rounded-xl border border-zinc-700/40 overflow-hidden">
+                <div
+                  className="p-3 flex items-center justify-between cursor-pointer"
+                  onClick={() => setExpandedBuiltIn(isExpanded ? null : fn)}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-orange-500" />
+                    <span className="text-xs font-semibold text-white">{fn}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {st && (
+                      <div className="flex items-center gap-1.5">
+                        <div className={`w-1.5 h-1.5 rounded-full ${st.alive ? "bg-green-400" : "bg-red-400"}`} />
+                        <span className="text-[9px] text-zinc-400">{st.alive ? `${st.latency}ms` : "Down"}</span>
+                      </div>
+                    )}
+                    <ChevronDown size={12} className={`text-zinc-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                  </div>
                 </div>
-                {st && (
-                  <div className="flex items-center gap-1.5">
-                    <div className={`w-1.5 h-1.5 rounded-full ${st.alive ? "bg-green-400" : "bg-red-400"}`} />
-                    <span className="text-[9px] text-zinc-400">{st.alive ? `${st.latency}ms` : "Down"}</span>
+                {isExpanded && (
+                  <div className="px-3 pb-3 pt-0 space-y-2 border-t border-zinc-700/30">
+                    <div>
+                      <label className="text-[9px] text-zinc-500 block mb-1">🔑 API Key (optional)</label>
+                      <input
+                        value={builtInApiKeys[fn] || ""}
+                        onChange={(e) => setBuiltInApiKeys(prev => ({ ...prev, [fn]: e.target.value }))}
+                        placeholder="API key এখানে দাও"
+                        className={`${inputClass} !text-[11px]`}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => saveBuiltInApiKey(fn, builtInApiKeys[fn] || "")} className={`${btnPrimary} flex-1 !py-1.5 !text-[10px]`}>
+                        <Save size={10} /> Save Key
+                      </button>
+                      <button onClick={() => testFunction(fn, builtInApiKeys[fn])} className={`${btnSecondary} flex-1 !py-1.5 !text-[10px]`}>
+                        <Activity size={10} /> Test
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -247,6 +376,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
             <input value={newFnName} onChange={e => setNewFnName(e.target.value)} placeholder="ফাংশনের নাম (e.g. my-api)" className={inputClass} />
             <input value={newFnEndpoint} onChange={e => setNewFnEndpoint(e.target.value)} placeholder="Endpoint (e.g. my-api অথবা https://full-url.com/api)" className={inputClass} />
             <input value={newFnDesc} onChange={e => setNewFnDesc(e.target.value)} placeholder="বিবরণ (optional)" className={inputClass} />
+            <input value={newFnApiKey} onChange={e => setNewFnApiKey(e.target.value)} placeholder="🔑 API Key (optional)" className={inputClass} />
             <div className="flex gap-2">
               {(["GET", "POST", "GET/POST"] as const).map(m => (
                 <button key={m} onClick={() => setNewFnMethod(m)} className={`px-3 py-1 rounded-full text-[10px] font-bold ${newFnMethod === m ? "bg-purple-600 text-white" : "bg-zinc-700 text-zinc-400"}`}>
@@ -268,13 +398,19 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         <div className="space-y-2">
           {dynamicFunctions.map((fn) => {
             const st = statuses[fn.endpoint];
+            const isExpanded = expandedCustom === fn.id;
             return (
-              <div key={fn.id} className={`bg-zinc-800/40 rounded-xl p-3 border ${fn.enabled ? "border-purple-500/30" : "border-zinc-700/40 opacity-50"}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
+              <div key={fn.id} className={`bg-zinc-800/40 rounded-xl border ${fn.enabled ? "border-purple-500/30" : "border-zinc-700/40 opacity-50"} overflow-hidden`}>
+                <div className="p-3 flex items-center justify-between">
+                  <div
+                    className="flex items-center gap-2 cursor-pointer flex-1"
+                    onClick={() => setExpandedCustom(isExpanded ? null : fn.id)}
+                  >
                     <div className={`w-2 h-2 rounded-full ${fn.enabled ? "bg-purple-500" : "bg-zinc-600"}`} />
                     <span className="text-xs font-semibold text-white">{fn.name}</span>
                     <span className="text-[9px] px-1.5 py-0.5 bg-zinc-700 rounded text-zinc-400">{fn.method}</span>
+                    {fn.apiKey && <KeyRound size={10} className="text-yellow-400" />}
+                    <ChevronDown size={12} className={`text-zinc-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                   </div>
                   <div className="flex gap-1">
                     <button onClick={() => toggleFunction(fn.id)} className="p-1 hover:bg-zinc-700 rounded">
@@ -285,12 +421,28 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                     </button>
                   </div>
                 </div>
-                <div className="text-[9px] text-zinc-500">{fn.endpoint}</div>
-                {fn.description && <div className="text-[9px] text-zinc-400 mt-0.5">{fn.description}</div>}
+                <div className="px-3 pb-1 text-[9px] text-zinc-500">{fn.endpoint}</div>
+                {fn.description && <div className="px-3 pb-1 text-[9px] text-zinc-400">{fn.description}</div>}
                 {st && (
-                  <div className="flex items-center gap-1.5 mt-1">
+                  <div className="flex items-center gap-1.5 px-3 pb-2">
                     <div className={`w-1.5 h-1.5 rounded-full ${st.alive ? "bg-green-400" : "bg-red-400"}`} />
                     <span className="text-[9px] text-zinc-400">{st.alive ? `${st.latency}ms` : "Down"}</span>
+                  </div>
+                )}
+                {isExpanded && (
+                  <div className="px-3 pb-3 space-y-2 border-t border-zinc-700/30 pt-2">
+                    <div>
+                      <label className="text-[9px] text-zinc-500 block mb-1">🔑 API Key</label>
+                      <input
+                        defaultValue={fn.apiKey || ""}
+                        onBlur={(e) => saveCustomFnApiKey(fn.id, e.target.value)}
+                        placeholder="API key এখানে দাও"
+                        className={`${inputClass} !text-[11px]`}
+                      />
+                    </div>
+                    <button onClick={() => testFunction(fn.endpoint, fn.apiKey)} className={`${btnSecondary} w-full !py-1.5 !text-[10px]`}>
+                      <Activity size={10} /> Test
+                    </button>
                   </div>
                 )}
               </div>
@@ -308,8 +460,9 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
           <p>১. Cloudflare Worker Base URL সেট করো</p>
           <p>২. Built-in ফাংশনগুলো অটো কানেক্ট হবে</p>
           <p>৩. "নতুন যোগ করো" দিয়ে নতুন ফাংশন endpoint যোগ করো</p>
-          <p>৪. Full URL দিলে আলাদা worker-এও পাঠানো যাবে</p>
-          <p className="text-yellow-400 mt-2">💡 ভবিষ্যতে যতো ফাংশন চাও, লিংক দিয়ে যোগ করতে পারবে!</p>
+          <p>৪. প্রতিটি ফাংশনে আলাদা API Key দিতে পারবে 🔑</p>
+          <p>৫. Full URL দিলে আলাদা worker-এও পাঠানো যাবে</p>
+          <p className="text-yellow-400 mt-2">💡 Proxy সেটিংসে API Key দিলে ভিডিও URL-এ অটো &apikey= যোগ হবে!</p>
         </div>
       </div>
     </div>
