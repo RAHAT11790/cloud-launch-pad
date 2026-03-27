@@ -455,7 +455,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   useEffect(() => {
     if (!playbackRouteReady) return;
     activeSourceBaseRef.current = src;
-    setCurrentSrc(getPrimaryPlaybackSrc(src, cdnEnabled, proxyUrl || undefined));
+    setCurrentSrc(getPrimaryPlaybackSrc(src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined));
     setCurrentQuality("Auto");
     setVideoError(false);
     setQualityFailMsg(null);
@@ -651,7 +651,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
 
         const nextOption = availableQualities.find((q) => {
-          const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined);
+          const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
           return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
         });
 
@@ -659,7 +659,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           setQualityFailMsg(`"${failedQualityLabel}" quality not available. Switching to "${nextOption.label}"...`);
           setTimeout(() => setQualityFailMsg(null), 4000);
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined);
+          const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
           activeSourceBaseRef.current = nextOption.src;
           if (newFallbackSrc === currentSrc) {
             v.currentTime = pendingSeek.current;
@@ -886,7 +886,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     activeSourceBaseRef.current = option.src;
-    const newSrc = getPrimaryPlaybackSrc(option.src, cdnEnabled, proxyUrl || undefined);
+    const newSrc = getPrimaryPlaybackSrc(option.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
 
     if (newSrc === currentSrc) {
       setCurrentQuality(option.label);
@@ -1426,7 +1426,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               </div>
               <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
                 <video
-                  src={getPrimaryPlaybackSrc(tutorialLink, cdnEnabled, proxyUrl || undefined)}
+                  src={getPrimaryPlaybackSrc(tutorialLink, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined)}
                   className="w-full h-full"
                   controls
                   autoPlay
@@ -1480,7 +1480,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
             const dlId = createDownloadId(title, subtitle, quality, qualitySrc);
-            const proxiedUrl = getPrimaryPlaybackSrc(qualitySrc, cdnEnabled, proxyUrl || undefined);
+            const proxiedUrl = getPrimaryPlaybackSrc(qualitySrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
             const { downloadManager } = await import("@/lib/downloadManager");
             downloadManager.startDownload({
               id: dlId,
