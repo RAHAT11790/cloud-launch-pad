@@ -19,17 +19,23 @@ interface QualityOption {
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
-const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string): string => {
+const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
   const encoded = encodeURIComponent(targetUrl);
   if (!base) return targetUrl;
+  let url: string;
   // Support {url} placeholder: https://proxy.example.com/?url={url}
-  if (base.includes('{url}')) return base.split('{url}').join(encoded);
+  if (base.includes('{url}')) url = base.split('{url}').join(encoded);
   // Support ending with = or ?url= or &url=
-  if (/[?&]url=$/.test(base) || base.endsWith('=')) return `${base}${encoded}`;
-  if (base.includes('?url=') || base.includes('&url=')) return `${base}${encoded}`;
+  else if (/[?&]url=$/.test(base) || base.endsWith('=')) url = `${base}${encoded}`;
+  else if (base.includes('?url=') || base.includes('&url=')) url = `${base}${encoded}`;
   // Default: append ?url=
-  return `${base.replace(/\/$/, '')}?url=${encoded}`;
+  else url = `${base.replace(/\/$/, '')}?url=${encoded}`;
+  // Append API key if provided
+  if (apiKey) {
+    url += (url.includes('?') ? '&' : '?') + `apikey=${encodeURIComponent(apiKey)}`;
+  }
+  return url;
 };
 
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string): string[] => {
