@@ -157,12 +157,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       markReady();
     });
 
+    const SUPABASE_PROXY_DEFAULT = "https://dolsyjysfcxvbfstojnk.supabase.co/functions/v1/rs-video-proxy?url=";
     const unsub2 = onValue(ref(db, "settings/proxyServer"), (snap) => {
       const val = snap.val();
       if (val && val.url) {
         setProxyUrl(val.url);
       } else {
-        setProxyUrl('');
+        setProxyUrl(SUPABASE_PROXY_DEFAULT);
       }
       proxyLoaded = true;
       markReady();
