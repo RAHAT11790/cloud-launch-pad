@@ -7905,6 +7905,19 @@ const CdnToggle = ({ glassCard }: { glassCard: string }) => {
   );
 };
 
+// Proxy URL builder helper
+const buildProxyTestUrl = (proxyBase: string, testUrl: string, apiKey?: string): string => {
+  if (!proxyBase) return testUrl;
+  const encoded = encodeURIComponent(testUrl);
+  let url: string;
+  if (proxyBase.includes('{url}')) url = proxyBase.split('{url}').join(encoded);
+  else if (/[?&]url=$/.test(proxyBase) || proxyBase.endsWith('=')) url = `${proxyBase}${encoded}`;
+  else if (proxyBase.includes('?url=') || proxyBase.includes('&url=')) url = `${proxyBase}${encoded}`;
+  else url = `${proxyBase.replace(/\/$/, '')}?url=${encoded}`;
+  if (apiKey) url += (url.includes('?') ? '&' : '?') + `apikey=${encodeURIComponent(apiKey)}`;
+  return url;
+};
+
 // Proxy Server presets - only range-safe proxies for reliable seek/skip
 const PROXY_SERVERS = [
   { id: 'supabase', name: 'Built-in Proxy (Default)', region: '🌐 Auto Region • Range ✓', url: '' },
