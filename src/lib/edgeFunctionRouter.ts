@@ -32,6 +32,7 @@ export interface CloudFunction {
   endpoint: string;          // path segment or full URL
   method: "GET" | "POST" | "GET/POST";
   description?: string;
+  apiKey?: string;            // optional API key appended to requests
   enabled: boolean;
   addedAt: number;
 }

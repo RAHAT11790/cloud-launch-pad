@@ -19,20 +19,26 @@ interface QualityOption {
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
-const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string): string => {
+const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
   const encoded = encodeURIComponent(targetUrl);
   if (!base) return targetUrl;
+  let url: string;
   // Support {url} placeholder: https://proxy.example.com/?url={url}
-  if (base.includes('{url}')) return base.split('{url}').join(encoded);
+  if (base.includes('{url}')) url = base.split('{url}').join(encoded);
   // Support ending with = or ?url= or &url=
-  if (/[?&]url=$/.test(base) || base.endsWith('=')) return `${base}${encoded}`;
-  if (base.includes('?url=') || base.includes('&url=')) return `${base}${encoded}`;
+  else if (/[?&]url=$/.test(base) || base.endsWith('=')) url = `${base}${encoded}`;
+  else if (base.includes('?url=') || base.includes('&url=')) url = `${base}${encoded}`;
   // Default: append ?url=
-  return `${base.replace(/\/$/, '')}?url=${encoded}`;
+  else url = `${base.replace(/\/$/, '')}?url=${encoded}`;
+  // Append API key if provided
+  if (apiKey) {
+    url += (url.includes('?') ? '&' : '?') + `apikey=${encodeURIComponent(apiKey)}`;
+  }
+  return url;
 };
 
-const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string): string[] => {
+const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
   if (!url) return [];
 
   const candidates: string[] = [];
@@ -43,7 +49,7 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
 
   const encoded = encodeURIComponent(url);
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
-  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url) : null;
+  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
 
   if (cdnEnabled) {
     addCandidate(cloudflareCandidate);
@@ -52,13 +58,11 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
 
   // http:// cannot be loaded directly on https pages (mixed content)
   if (url.startsWith('http://')) {
-    // When Cloudflare is off, only the configured proxy can safely load http sources
     addCandidate(customProxyCandidate);
     return candidates;
   }
 
   if (url.startsWith('https://')) {
-    // When Cloudflare is off, prefer the custom proxy, then allow direct playback
     addCandidate(customProxyCandidate);
     addCandidate(url);
     return candidates;
@@ -68,8 +72,8 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   return candidates;
 };
 
-const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string): string => {
-  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl)[0] || url;
+const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
+  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
 };
 
 interface VideoPlayerProps {
@@ -135,6 +139,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentQuality, setCurrentQuality] = useState<string>("Auto");
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>('');
+  const [proxyApiKey, setProxyApiKey] = useState<string>('');
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
@@ -158,12 +163,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     });
 
     const SUPABASE_PROXY_DEFAULT = "https://dolsyjysfcxvbfstojnk.supabase.co/functions/v1/rs-video-proxy?url=";
+    const SUPABASE_PROXY_DEFAULT_KEY = "sb_publishable_1CrDdQ9DiAnaZ2ch7Nnj5A_4-Sy1sES";
     const unsub2 = onValue(ref(db, "settings/proxyServer"), (snap) => {
       const val = snap.val();
       if (val && val.url) {
         setProxyUrl(val.url);
+        setProxyApiKey(val.apiKey || '');
       } else {
         setProxyUrl(SUPABASE_PROXY_DEFAULT);
+        setProxyApiKey(SUPABASE_PROXY_DEFAULT_KEY);
       }
       proxyLoaded = true;
       markReady();
@@ -447,12 +455,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   useEffect(() => {
     if (!playbackRouteReady) return;
     activeSourceBaseRef.current = src;
-    setCurrentSrc(getPrimaryPlaybackSrc(src, cdnEnabled, proxyUrl || undefined));
+    setCurrentSrc(getPrimaryPlaybackSrc(src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined));
     setCurrentQuality("Auto");
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
-  }, [src, qualityOptions, cdnEnabled, proxyUrl, playbackRouteReady]);
+  }, [src, qualityOptions, cdnEnabled, proxyUrl, proxyApiKey, playbackRouteReady]);
 
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
@@ -631,7 +639,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         const sameQualityRouteFallback = buildPlaybackCandidates(
           activeSourceBaseRef.current,
           cdnEnabled,
-          proxyUrl || undefined
+          proxyUrl || undefined,
+          proxyApiKey || undefined
         ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
 
         if (sameQualityRouteFallback) {
@@ -643,7 +652,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
 
         const nextOption = availableQualities.find((q) => {
-          const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined);
+          const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
           return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
         });
 
@@ -651,7 +660,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           setQualityFailMsg(`"${failedQualityLabel}" quality not available. Switching to "${nextOption.label}"...`);
           setTimeout(() => setQualityFailMsg(null), 4000);
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined);
+          const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
           activeSourceBaseRef.current = nextOption.src;
           if (newFallbackSrc === currentSrc) {
             v.currentTime = pendingSeek.current;
@@ -878,7 +887,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     activeSourceBaseRef.current = option.src;
-    const newSrc = getPrimaryPlaybackSrc(option.src, cdnEnabled, proxyUrl || undefined);
+    const newSrc = getPrimaryPlaybackSrc(option.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
 
     if (newSrc === currentSrc) {
       setCurrentQuality(option.label);
@@ -1418,7 +1427,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               </div>
               <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
                 <video
-                  src={getPrimaryPlaybackSrc(tutorialLink, cdnEnabled, proxyUrl || undefined)}
+                  src={getPrimaryPlaybackSrc(tutorialLink, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined)}
                   className="w-full h-full"
                   controls
                   autoPlay
@@ -1472,7 +1481,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
             const dlId = createDownloadId(title, subtitle, quality, qualitySrc);
-            const proxiedUrl = getPrimaryPlaybackSrc(qualitySrc, cdnEnabled, proxyUrl || undefined);
+            const proxiedUrl = getPrimaryPlaybackSrc(qualitySrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
             const { downloadManager } = await import("@/lib/downloadManager");
             downloadManager.startDownload({
               id: dlId,
