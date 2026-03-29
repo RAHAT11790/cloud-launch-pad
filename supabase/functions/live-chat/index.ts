@@ -24,8 +24,8 @@ Deno.serve(async (req) => {
     const systemPrompt = typeof body.systemPrompt === "string" ? body.systemPrompt : "";
     const userMessage = typeof body.message === "string" ? body.message.trim() : "";
 
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
-    if (!GROK_API_KEY) {
+    const GROQ_API_KEY = Deno.env.get("GROK_API_KEY");
+    if (!GROQ_API_KEY) {
       throw new Error("GROK_API_KEY is not configured");
     }
 
