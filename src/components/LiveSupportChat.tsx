@@ -270,10 +270,19 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
         timestamp: Date.now(),
       };
       setMessages(prev => [...prev, aiMsg]);
-    } catch {
-      setAiStatus("offline");
-      const errMsg: ChatMessage = { id: `err_${Date.now()}`, role: "assistant", content: "⚠️ সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করুন। সরাসরি Admin-এর কাছে পৌঁছাতে @RS লিখে মেসেজ করুন।", timestamp: Date.now() };
+    } catch (err: any) {
+      const isRateLimit = err?.message?.includes("429") || err?.message?.toLowerCase().includes("too many");
+      const errMsg: ChatMessage = {
+        id: `err_${Date.now()}`,
+        role: "assistant",
+        content: isRateLimit
+          ? "⏳ এই মুহূর্তে অনেক বেশি রিকোয়েস্ট হচ্ছে। ১০-১৫ সেকেন্ড পর আবার চেষ্টা করুন।"
+          : "⚠️ সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করুন। সরাসরি Admin-এর কাছে পৌঁছাতে @RS লিখে মেসেজ করুন।",
+        timestamp: Date.now(),
+      };
       setMessages(prev => [...prev, errMsg]);
+      // Don't set offline for rate limits — the service is still alive
+      if (!isRateLimit) setAiStatus("offline");
     }
     setLoading(false);
   };
