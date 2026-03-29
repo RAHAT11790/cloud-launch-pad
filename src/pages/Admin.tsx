@@ -7662,13 +7662,22 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
                           {/* Device Limit Control */}
                           <div className="flex items-center gap-2 mb-3 bg-black/20 rounded-lg p-2">
                             <span className="text-[10px] text-zinc-400 flex-shrink-0">Max Devices:</span>
-                            <div className="flex gap-1">
-                              {[1, 2, 3, 4, 5].map(n => (
+                            <div className="flex gap-1 items-center">
+                              {[1, 2, 3, 5, 10].map(n => (
                                 <button key={n} onClick={(e) => { e.stopPropagation(); updateMaxDevices(user.id, n); }}
                                   className={`w-7 h-7 rounded-lg text-[11px] font-bold transition-colors ${
                                     maxDev === n ? "bg-yellow-500 text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10"
                                   }`}>{n}</button>
                               ))}
+                              <input
+                                type="number"
+                                min="1"
+                                max="100"
+                                value={maxDev}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => { e.stopPropagation(); const v = parseInt(e.target.value); if (v > 0) updateMaxDevices(user.id, v); }}
+                                className="w-12 h-7 rounded-lg text-[11px] font-bold text-center bg-white/5 text-zinc-300 border border-white/10 focus:border-yellow-500 outline-none"
+                              />
                             </div>
                           </div>
 
