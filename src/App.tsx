@@ -14,6 +14,7 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      <DynamicMeta />
       <Toaster />
       <Sonner />
       <BrowserRouter>
