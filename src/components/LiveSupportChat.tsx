@@ -199,12 +199,17 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       context += `${cat} (${items.length}টি), `;
     });
 
-    context += `\n\nAnime তালিকা (প্রথম ৫০টি):\n`;
-    animeList.slice(0, 50).forEach((a) => {
-      context += `- ${a.title} (${a.type === "movie" ? "Movie" : "Series"})${a.id ? ` [ID:${a.id}]` : ""}\n`;
+    context += `\n\nRS Catalog (direct link allowed, প্রথম ৪০টি):\n`;
+    primaryItems.slice(0, 40).forEach((a) => {
+      context += `- [RS] ${a.title} (${a.type === "movie" ? "Movie" : "Series"})${a.id ? ` [ID:${a.id}]` : ""}\n`;
     });
 
-    return context.substring(0, 3000);
+    context += `\nAN Catalog (info only, direct link নিষিদ্ধ, প্রথম ২০টি):\n`;
+    altItems.slice(0, 20).forEach((a) => {
+      context += `- [AN_ONLY] ${a.title} (${a.type === "movie" ? "Movie" : "Series"})${a.id ? ` [ID:${a.id}]` : ""}\n`;
+    });
+
+    return context.substring(0, 3200);
   }, [animeList]);
 
   const sendMessage = async () => {
@@ -237,7 +242,7 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       // Use Cloudflare Worker AI endpoint
       const { getEdgeFunctionUrl } = await import("@/lib/edgeFunctionRouter");
       const aiEndpoint = await getEdgeFunctionUrl("ai-chat");
-      const systemPrompt = `তুমি ${branding.siteName} এর AI support assistant। ইউজারের প্রশ্নের উত্তর পরিষ্কার, সংক্ষিপ্ত এবং সহায়কভাবে দাও। Anime/website সম্পর্কিত তথ্য থাকলে সেটার ভিত্তিতে উত্তর দাও।`;
+      const systemPrompt = `তুমি ${branding.siteName} এর AI support assistant। খুব strict ভাবে সঠিক তথ্য দেবে, কিছুই বানিয়ে বলবে না। Rules: (1) শুধুমাত্র [RS] catalog-এর anime হলে direct link/button দেবে। (2) [AN_ONLY] বা AnimeSalt কন্টেন্টের জন্য কখনো direct link/button দেবে না। তথ্য দিতে পারো, কিন্তু বলবে: "Search bar-এ anime নামটি search করুন। কিছু technical limitation-এর কারণে direct link এখন দিতে পারছি না।" (3) direct link দিতে হলে শুধু এই format ব্যবহার করবে: [BTN:🎬 এখনই দেখুন:ANIME_ID:ANIME_ID_HERE] — id না থাকলে button দেবে না। (4) RS catalog-এ anime না থাকলে স্পষ্টভাবে বলবে যে আমার RS catalog-এ direct link নেই। (5) নতুন release, watch link, বা available জিজ্ঞেস করলে সবসময় RS catalog আগে check করবে। (6) ভুল result, fake availability, fake link, fake button, fake claim কোনোভাবেই দেবে না। (7) Anime সম্পর্কে info চাইলে available context থেকে title/type/year/storyline ইত্যাদি জানাতে পারো, even if direct link available না থাকে। ইউজারের প্রশ্নের উত্তর পরিষ্কার, সংক্ষিপ্ত এবং সহায়কভাবে দাও।`;
 
       const res = await fetch(aiEndpoint, {
         method: "POST",

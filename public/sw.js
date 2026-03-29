@@ -1,5 +1,6 @@
 // Service Worker for RS ANIME - Push Notifications + Offline Downloads Page
 const CACHE_NAME = 'rs-anime-offline-v1';
+const MAIN_DOMAIN = 'https://rsanime03.lovable.app';
 const OFFLINE_URLS = [
   '/',
   '/index.html',
@@ -45,12 +46,17 @@ self.addEventListener('fetch', (event) => {
 // Handle notification click - open the app
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const urlToOpen = event.notification.data?.url || '/';
+  const rawUrl = event.notification.data?.url || '/';
+  const urlToOpen = rawUrl.startsWith('http://') || rawUrl.startsWith('https://')
+    ? rawUrl
+    : `${MAIN_DOMAIN}${rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`}`;
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          return client.focus();
+        if (client.url.includes(MAIN_DOMAIN) && 'focus' in client) {
+          client.focus();
+          if ('navigate' in client) return client.navigate(urlToOpen);
+          return client;
         }
       }
       return self.clients.openWindow(urlToOpen);

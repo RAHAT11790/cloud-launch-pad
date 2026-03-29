@@ -618,6 +618,36 @@ export const sendPushToUsers = async (
   };
 };
 
+export const sendPushToAllUsers = async (
+  payload: PushPayload,
+  onProgress?: (progress: PushProgress) => void
+) => {
+  onProgress?.({
+    phase: "tokens",
+    totalTokens: 0,
+    sent: 0,
+    success: 0,
+    failed: 0,
+    invalidRemoved: 0,
+  });
+
+  const tokens = await getAllFCMTokens();
+
+  if (tokens.length === 0) {
+    onProgress?.({
+      phase: "done",
+      totalTokens: 0,
+      sent: 0,
+      success: 0,
+      failed: 0,
+      invalidRemoved: 0,
+    });
+    return { skipped: true, success: 0, failed: 0, total: 0, invalidTokensRemoved: 0, reason: "NO_TOKENS" };
+  }
+
+  return sendPushToTokens(tokens, payload, onProgress);
+};
+
 // Listen for foreground messages
 export const onForegroundMessage = (callback: (payload: any) => void) => {
   const msg = getMessagingInstance();
