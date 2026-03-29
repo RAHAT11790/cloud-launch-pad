@@ -137,7 +137,7 @@ ${animeContext ? `\n## বর্তমানে সাইটে যে anime গ
         system_instruction: {
           parts: [{ text: finalSystemPrompt }],
         },
-        contents: geminiContents,
+        contents: mergedContents,
         generationConfig: {
           temperature: 0.7,
           maxOutputTokens: 1024,
