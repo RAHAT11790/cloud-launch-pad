@@ -213,6 +213,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
     const asksEmail = hasAny(["email", "gmail", "mail", "ইমেইল", "id", "আইডি"]);
     const asksPremium = hasAny(["premium", "প্রিমিয়াম", "subscription", "সাবস্ক্রিপশন", "মেয়াদ", "দিন বাকি", "device", "ডিভাইস", "limit", "লিমিট"]);
     const asksAccountInfo = asksPassword || asksEmail || asksPremium;
+    const asksAnime = hasAny(["anime", "অ্যানিমে", "এনিমে", "movie", "মুভি", "series", "সিরিজ", "episode", "এপিসোড", "দেখ", "দেও", "link", "লিংক", "দাও", "suggest", "recommend", "naruto", "one piece", "dragon ball", "attack on titan", "demon slayer"]);
     const isGreeting = hasAny(["hi", "hello", "hey", "assalamu alaikum", "আসসালামু আলাইকুম", "আসসালামু আলাইকুম", "সালাম", "হ্যালো", "হাই"]);
     const isTinyMessage = normalizedText.split(" ").filter(Boolean).length <= 3;
     const buildLocalReply = () => {
