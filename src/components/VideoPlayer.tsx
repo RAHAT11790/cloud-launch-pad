@@ -1158,7 +1158,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
                     <circle cx="18" cy="18" r="16" fill="none" stroke="hsla(176,65%,48%,0.15)" strokeWidth="2" />
                     <circle cx="18" cy="18" r="16" fill="none" stroke="hsl(176,65%,48%)" strokeWidth="2.5"
-                      strokeDasharray={`${(nextEpCountdown / 90) * 100} 100`}
+                      strokeDasharray={`${(nextEpCountdown / 60) * 100} 100`}
                       strokeLinecap="round" className="transition-all duration-1000" />
                   </svg>
                   <span className="absolute text-[10px] font-bold text-primary">{nextEpCountdown}s</span>
