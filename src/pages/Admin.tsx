@@ -4979,6 +4979,11 @@ Pᴏᴡᴇʀ Bʏ :
           <EdgeRouterSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
+        {/* ==================== AI CONFIG ==================== */}
+        {activeSection === "ai-config" && (
+          <AiConfigSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+        )}
+
         {/* ==================== BRANDING ==================== */}
         {activeSection === "branding" && (
           <BrandingSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
