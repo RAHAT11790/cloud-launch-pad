@@ -985,7 +985,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
             <div className="premium-card-glow p-5 rounded-2xl text-center mb-4 relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-1 premium-gradient" />
               <Crown className="w-14 h-14 mx-auto mb-3" style={{ color: "hsl(45,90%,55%)", animation: "crownFloat 3s ease-in-out infinite" }} />
-              <h3 className="text-xl font-bold premium-text mb-3">RS ANIME Premium</h3>
+              <h3 className="text-xl font-bold premium-text mb-3">{brandingCfg.premiumTitle}</h3>
               <div className="space-y-2.5 text-left">
                 {[
                   { icon: "🚫", text: "বিজ্ঞাপন ছাড়া দেখুন" },
