@@ -6561,8 +6561,8 @@ const AnimeSaltManagerSection = ({
     // Load from AnimeSalt API and add as a new season
     try {
       const result = await animeSaltApi.getSeries(slug);
-      if (result?.success && result.seasons?.length > 0) {
-        const apiSeasons = result.seasons.map((s: any, sIdx: number) => ({
+      if (result?.success && result.data?.seasons?.length > 0) {
+        const apiSeasons = result.data.seasons.map((s: any, sIdx: number) => ({
           name: s.name || `Season ${sIdx + 1}`,
           episodes: s.episodes.map((ep: any, eIdx: number) => ({
             number: ep.number || eIdx + 1,
