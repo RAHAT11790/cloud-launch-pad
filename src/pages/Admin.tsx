@@ -97,16 +97,26 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         const start = Date.now();
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch(`${base}/${fn.endpoint}`, { method: "GET", signal: controller.signal });
+        const res = await fetch(`${base}/${fn.endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ test: true }), signal: controller.signal });
         clearTimeout(t);
-        results[fn.key] = { alive: res.status < 500, latency: Date.now() - start };
+        // Only consider 200-299 as alive; 404/405/500 = dead
+        const latency = Date.now() - start;
+        if (res.ok) {
+          results[fn.key] = { alive: true, latency };
+        } else {
+          // Check if it's a valid worker response (not a generic error page)
+          const text = await res.text().catch(() => "");
+          const isWorkerResponse = text.includes('"error"') || text.includes('"reply"') || text.includes('"result"') || res.status === 400 || res.status === 401 || res.status === 405;
+          results[fn.key] = { alive: isWorkerResponse, latency };
+        }
       } catch {
         results[fn.key] = { alive: false, latency: 0 };
       }
     }));
     setStatuses(results);
     setChecking(false);
-    toast.success("Status check done!");
+    const aliveCount = Object.values(results).filter(r => r?.alive).length;
+    toast.success(`Status check done! ${aliveCount}/${CORE_FUNCTIONS.length} active`);
   };
 
   const saveProxySettings = async () => {
