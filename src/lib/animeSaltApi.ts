@@ -176,7 +176,9 @@ const tryDirectApi = async (proxyUrl: string, body: any): Promise<any | null> =>
     });
     if (!res.ok) return null;
     const data = await res.json();
+    // Support both { data: ... } and { items: ... } response formats
     if (data.success && data.data) return data.data;
+    if (data.success && data.items) return { items: data.items };
     return null;
   } catch { return null; }
 };
