@@ -728,12 +728,21 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </div>
-          <div className="glass-card px-4 py-4 rounded-xl flex items-center gap-3">
+          <div onClick={() => setActivePanel("about")} className="glass-card px-4 py-4 rounded-xl cursor-pointer transition-all hover:border-primary flex items-center gap-3">
             <Info className="w-5 h-5 text-primary" />
             <div className="flex-1">
-              <p className="text-sm font-medium">About RS ANIME</p>
+              <p className="text-sm font-medium">About</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">Version 2.0</p>
             </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </div>
+          <div onClick={() => setActivePanel("privacy")} className="glass-card px-4 py-4 rounded-xl cursor-pointer transition-all hover:border-primary flex items-center gap-3">
+            <Shield className="w-5 h-5 text-primary" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">Privacy Policy</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Terms & data usage</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </div>
         </div>
       </motion.div>
