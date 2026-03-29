@@ -259,13 +259,17 @@ const AiConfigSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "ping", messages: [], systemPrompt: "Reply with one word." }),
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "ping" }],
+          animeContext: "",
+          userContext: "",
+        }),
         signal: controller.signal,
       });
       clearTimeout(t);
       const latency = Date.now() - start;
       const data = await res.json().catch(() => ({}));
-      setTestResult({ alive: !!data?.reply || !!data?.choices, latency });
+      setTestResult({ alive: res.ok && !!data?.reply, latency });
     } catch {
       setTestResult({ alive: false, latency: Date.now() - start });
     }
