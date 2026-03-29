@@ -171,19 +171,25 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
     const primaryItems = animeList.filter((a) => a.source !== "animesalt");
     const altItems = animeList.filter((a) => a.source === "animesalt");
 
-    let context = `মোট Anime: ${animeList.length}\n`;
-    context += `RS Catalog: ${primaryItems.length}টি | AN Catalog: ${altItems.length}টি\n`;
-    context += `Series: ${animeList.filter((a) => a.type === "webseries").length} | Movies: ${animeList.filter((a) => a.type === "movie").length}\n\n`;
+    const siteUrl = "https://rsanime03.lovable.app";
 
-    context += `RS Catalog (direct link allowed):\n`;
+    let context = `SITE: ${siteUrl}\n`;
+    context += `LINK FORMAT:\n`;
+    context += `- RS anime: ${siteUrl}/?anime={ID}  (example: ${siteUrl}/?anime=-Om5HMaACidSU8kEkq1k)\n`;
+    context += `- AN anime: ${siteUrl}/?anime=as_{slug}  (example: ${siteUrl}/?anime=as_welcome-to-demon-school-iruma-kun)\n`;
+    context += `RULE: ONLY give links from this list. NEVER give external links like crunchyroll/funimation.\n`;
+    context += `Use [BTN:AnimeName:LINK:url] format for buttons.\n\n`;
+
+    context += `RS Catalog (${primaryItems.length}টি):\n`;
     primaryItems.slice(0, 50).forEach((a) => {
-      context += `- [RS] ${a.title} (${a.type === "movie" ? "Movie" : "Series"})${a.id ? ` [ID:${a.id}]` : ""}\n`;
+      if (a.id) context += `- ${a.title} | ${siteUrl}/?anime=${a.id}\n`;
     });
 
     if (altItems.length > 0) {
-      context += `\nAN Catalog (info only, NO direct link):\n`;
+      context += `\nAN Catalog (${altItems.length}টি):\n`;
       altItems.slice(0, 30).forEach((a) => {
-        context += `- [AN_ONLY] ${a.title} (${a.type === "movie" ? "Movie" : "Series"})\n`;
+        const slug = a.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "";
+        context += `- ${a.title} | ${siteUrl}/?anime=as_${slug}\n`;
       });
     }
 
