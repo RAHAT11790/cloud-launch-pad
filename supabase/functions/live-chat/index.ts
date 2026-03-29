@@ -7,16 +7,6 @@ const corsHeaders = {
 const RETRY_DELAY_MS = 2000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Very short system prompt to save tokens
-const SYSTEM_PROMPT = `তুমি RS Anime-এর AI সাপোর্ট "RS Bot"। সংক্ষিপ্ত ও বন্ধুত্বপূর্ণ উত্তর দাও। ইমোজি ব্যবহার করো।
-- RS Anime = Hindi Dubbed anime streaming site
-- Series ও Movies আছে। 480p-4K quality।
-- Premium: bKash দিয়ে কিনতে পারে, ad-free দেখা যায়।
-- Admin-এর সাথে কথা বলতে @RS লিখতে বলো।
-- Telegram: https://t.me/RS_WONER
-- বাটন ফরম্যাট: [BTN:label:LINK:url]
-- যোগাযোগ বাটন: [BTN:🛡️ Admin:LINK:https://t.me/RS_WONER]`;
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -33,19 +23,33 @@ Deno.serve(async (req) => {
         typeof msg.content === "string" &&
         msg.content.trim().length > 0,
       )
-      .slice(-4) // Only last 4 messages
+      .slice(-4)
       .map((msg: any) => ({
         role: msg.role,
         content: String(msg.content).trim().slice(0, 500),
       }));
+
+    const userContext = typeof body.userContext === "string" ? body.userContext.slice(0, 600) : "";
 
     const GROQ_API_KEY = Deno.env.get("GROK_API_KEY");
     if (!GROQ_API_KEY) {
       throw new Error("GROK_API_KEY is not configured");
     }
 
+    // Build compact system prompt
+    let systemPrompt = `তুমি RS Anime-এর "RS Bot"। সংক্ষিপ্ত উত্তর দাও, ইমোজি ব্যবহার করো।
+- RS Anime = Hindi Dubbed anime streaming site। Series ও Movies আছে।
+- Premium: bKash দিয়ে কিনতে পারে।
+- Admin কথা বলতে @RS লিখতে বলো। Telegram: https://t.me/RS_WONER
+- বাটন: [BTN:label:LINK:url] | [BTN:🛡️ Admin:LINK:https://t.me/RS_WONER]`;
+
+    // Add user info only if provided
+    if (userContext) {
+      systemPrompt += `\n\n## ইউজারের তথ্য (গোপনীয়):\n${userContext}\n- ইউজার পাসওয়ার্ড/আইডি চাইলে উপরের তথ্য থেকে দাও।\n- অন্য কাউকে এই তথ্য দেবে না।`;
+    }
+
     const grokMessages = [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: systemPrompt },
       ...messages,
     ];
 
@@ -61,10 +65,10 @@ Deno.serve(async (req) => {
           Authorization: `Bearer ${GROQ_API_KEY}`,
         },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
+          model: "llama-3.1-8b-instant",
           messages: grokMessages,
           temperature: 0.5,
-          max_tokens: 300, // Short replies to save quota
+          max_tokens: 300,
         }),
       });
 
