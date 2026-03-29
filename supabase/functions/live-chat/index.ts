@@ -139,7 +139,7 @@ ${animeContext ? `\n## বর্তমানে সাইটে যে anime গ
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      throw new Error(`Grok API error: ${response.status} - ${errText}`);
+      throw new Error(`Groq API error: ${response.status} - ${errText}`);
     }
 
     const data = await response.json();
