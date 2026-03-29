@@ -221,22 +221,13 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
 
     setLoading(true);
     try {
-      const trimmedText = text.slice(0, 700);
-      const chatHistory = messages.slice(-6).map(m => ({
+      const trimmedText = text.slice(0, 500);
+      // Only send last 3 messages for minimal context
+      const chatHistory = messages.slice(-3).map(m => ({
         role: m.role === "admin" ? "user" : m.role,
-        content: (m.role === "admin" ? `[Admin Reply]: ${m.content}` : m.content).slice(0, 700),
+        content: (m.role === "admin" ? `[Admin Reply]: ${m.content}` : m.content).slice(0, 300),
       }));
       chatHistory.push({ role: "user", content: trimmedText });
-
-      const { get: fbGet } = await import("@/lib/firebase");
-      const dbRef = (await import("@/lib/firebase")).ref;
-      const dbInst = (await import("@/lib/firebase")).db;
-      const aiConfigSnap = await fbGet(dbRef(dbInst, "settings/aiChat"));
-      const aiConfig = aiConfigSnap.val();
-
-      if (!aiConfig?.enabled || !aiConfig?.url) {
-        throw new Error("AI not configured");
-      }
 
       const res = await fetch(aiConfig.url, {
         method: "POST",
@@ -245,8 +236,6 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
         },
         body: JSON.stringify({
           messages: chatHistory,
-          animeContext: buildAnimeContext().slice(0, 2200),
-          userContext: userContext.slice(0, 900),
         }),
       });
 
