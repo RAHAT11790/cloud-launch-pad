@@ -4564,6 +4564,34 @@ Pᴏᴡᴇʀ Bʏ :
                   <label className="block text-xs text-zinc-400 mb-1.5">ডাউনলোড/ওয়াচ লিংক (ঐচ্ছিক)</label>
                   <input value={tgButtonLink} onChange={e => setTgButtonLink(e.target.value)} className={inputClass} placeholder={SITE_URL} />
                 </div>
+                {tgButtonLink && (
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5">ডিফল্ট বাটন নাম</label>
+                    <input value={tgDefaultButtonName} onChange={e => setTgDefaultButtonName(e.target.value)} className={inputClass} placeholder="📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥" />
+                  </div>
+                )}
+                {/* Extra buttons */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs text-zinc-400 font-medium">অতিরিক্ত বাটন (ঐচ্ছিক)</label>
+                    <button type="button" onClick={() => setTgButtons([...tgButtons, { name: "", url: "" }])}
+                      className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                      <Plus size={12} /> বাটন যোগ করুন
+                    </button>
+                  </div>
+                  {tgButtons.map((btn, i) => (
+                    <div key={i} className="flex gap-2 mb-2 items-start">
+                      <div className="flex-1 space-y-1.5">
+                        <input value={btn.name} onChange={e => { const nb = [...tgButtons]; nb[i].name = e.target.value; setTgButtons(nb); }}
+                          className={inputClass} placeholder="বাটন নাম" />
+                        <input value={btn.url} onChange={e => { const nb = [...tgButtons]; nb[i].url = e.target.value; setTgButtons(nb); }}
+                          className={inputClass} placeholder="https://..." />
+                      </div>
+                      <button type="button" onClick={() => setTgButtons(tgButtons.filter((_, j) => j !== i))}
+                        className="mt-2 text-red-400 hover:text-red-300 p-1.5"><Trash2 size={14} /></button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
