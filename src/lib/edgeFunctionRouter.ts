@@ -6,12 +6,10 @@
 // ডাইনামিকভাবে নতুন ফাংশন যোগ করা যায়
 
 import { db, ref, get } from "@/lib/firebase";
-import { SUPABASE_URL } from "@/lib/siteConfig";
 
 // ---- Default built-in Cloudflare Worker endpoints ----
 export const DEFAULT_CF_FUNCTIONS = [
   "telegram-post",
-  "video-proxy",
   "shorten",
   "clean-embed",
   "animesalt",
@@ -84,15 +82,11 @@ export async function getEdgeRouterConfig(): Promise<EdgeRouterConfig> {
 export function buildFunctionUrl(endpoint: string, config: EdgeRouterConfig): string {
   if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) return endpoint;
 
-  if (config.platform === "cloudflare" && config.cloudflareBaseUrl) {
+  if (config.cloudflareBaseUrl) {
     return `${config.cloudflareBaseUrl.replace(/\/$/, "")}/${endpoint}`;
   }
-  // No base URL configured → no fallback, return empty so callers can detect
-  if (!config.cloudflareBaseUrl) {
-    console.warn(`[EdgeRouter] No base URL configured — function "${endpoint}" will not work`);
-    return "";
-  }
-  return `${config.cloudflareBaseUrl.replace(/\/$/, "")}/${endpoint}`;
+  console.warn(`[EdgeRouter] No base URL — "${endpoint}" disabled`);
+  return "";
 }
 
 /** Get URL for a named function */
@@ -162,7 +156,6 @@ export async function checkFunctionStatus(
 function getBuiltInDescription(fn: string): string {
   const d: Record<string, string> = {
     "telegram-post": "Send Telegram message",
-    "video-proxy": "Video proxy",
     "shorten": "URL shortener",
     "clean-embed": "Clean embed page",
     "animesalt": "AnimeSalt scraper",
@@ -180,7 +173,7 @@ export async function getAllFunctions(): Promise<CloudFunction[]> {
     id: `builtin-${fn}`,
     name: fn,
     endpoint: fn,
-    method: (fn === "video-proxy" || fn === "clean-embed" ? "GET/POST" : "POST") as CloudFunction["method"],
+    method: (fn === "clean-embed" ? "GET/POST" : "POST") as CloudFunction["method"],
     description: getBuiltInDescription(fn),
     enabled: true,
     addedAt: 0,

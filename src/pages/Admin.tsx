@@ -54,7 +54,6 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
 
   const CORE_FUNCTIONS = [
     { key: "shorten", label: "🔗 URL Shortener", endpoint: "shorten" },
-    { key: "video-proxy", label: "🎬 Video Proxy", endpoint: "video-proxy" },
     { key: "send-fcm", label: "🔔 FCM Push", endpoint: "send-fcm" },
     { key: "telegram-post", label: "📨 Telegram Post", endpoint: "telegram-post" },
     { key: "ai-chat", label: "🤖 AI Chat", endpoint: "ai-chat" },

@@ -194,23 +194,17 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       byCategory[cat].push(a);
     });
 
-    context += `ক্যাটাগরি অনুযায়ী (ID সহ):\n`;
+    context += `ক্যাটাগরি:\n`;
     Object.entries(byCategory).forEach(([cat, items]) => {
-      context += `\n📁 ${cat} (${items.length}টি):\n`;
-      items.forEach((a) => {
-        const sourceKey = a.source === "animesalt" ? "AN" : "RS";
-        let line = `  - [ID:${a.id || a.title}] [SRC:${sourceKey}] ${a.title} (${a.type === "movie" ? "Movie" : "Series"}`;
-        if (a.year) line += `, ${a.year}`;
-        if (a.rating) line += `, Rating: ${a.rating}`;
-        if (a.dubType) line += `, ${a.dubType === "fandub" ? "Fan Dub" : "Official Dub"}`;
-        if (a.seasonCount) line += `, ${a.seasonCount} Seasons`;
-        if (a.episodeCount) line += `, ${a.episodeCount} Episodes`;
-        line += `)`;
-        context += line + "\n";
-      });
+      context += `${cat} (${items.length}টি), `;
     });
 
-    return context;
+    context += `\n\nAnime তালিকা (প্রথম ৫০টি):\n`;
+    animeList.slice(0, 50).forEach((a) => {
+      context += `- ${a.title} (${a.type === "movie" ? "Movie" : "Series"})${a.id ? ` [ID:${a.id}]` : ""}\n`;
+    });
+
+    return context.substring(0, 3000);
   }, [animeList]);
 
   const sendMessage = async () => {
