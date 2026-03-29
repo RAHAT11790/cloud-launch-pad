@@ -7333,6 +7333,26 @@ const AnimeSaltManagerSection = ({
         {asCustomUrl && <p className="text-[9px] text-cyan-400">⚡ কাস্টম URL: {asCustomUrl}</p>}
       </div>
 
+      {/* Global AnimeSalt ON/OFF Toggle */}
+      <div className={`${glassCard} p-4 mb-4`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-3 h-3 rounded-full ${animeSaltGlobalEnabled ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className="text-xs font-semibold">{animeSaltGlobalEnabled ? 'AnimeSalt কন্টেন্ট চালু আছে' : 'AnimeSalt কন্টেন্ট বন্ধ আছে'}</span>
+          </div>
+          <button onClick={async () => {
+            const next = !animeSaltGlobalEnabled;
+            setAnimeSaltGlobalEnabled(next);
+            await set(ref(db, "settings/animeSaltEnabled"), next);
+            toast.success(next ? "✅ AnimeSalt কন্টেন্ট চালু হয়েছে" : "AnimeSalt কন্টেন্ট বন্ধ হয়েছে");
+          }}
+            className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${animeSaltGlobalEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${animeSaltGlobalEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+        <p className="text-[10px] text-zinc-400 mt-2">বন্ধ করলে সাইটে AnimeSalt-এর সকল কন্টেন্ট হাইড হয়ে যাবে। শুধু RS কন্টেন্ট দেখাবে।</p>
+      </div>
+
       <div className={`${glassCard} p-4 mb-4`}>
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-semibold flex items-center gap-2">
