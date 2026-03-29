@@ -225,27 +225,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         )}
       </div>
 
-      {/* Video Proxy Settings */}
-      <div className={`${glassCard} p-4 mb-4`}>
-        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-          <Video size={14} className="text-blue-400" /> 🎬 Video Proxy
-        </h3>
-        <div className="space-y-2">
-          <div>
-            <label className="text-[10px] text-zinc-400 block mb-1">Proxy URL</label>
-            <input value={proxyUrl} onChange={(e) => setProxyUrl(e.target.value)}
-              placeholder="https://your-proxy.com/functions/v1/rs-video-proxy?url=" className={inputClass} />
-          </div>
-          <div>
-            <label className="text-[10px] text-zinc-400 block mb-1">🔑 API Key (optional)</label>
-            <input value={proxyApiKey} onChange={(e) => setProxyApiKey(e.target.value)}
-              placeholder="API key থাকলে দাও" className={inputClass} />
-          </div>
-          <button onClick={saveProxySettings} className={`${btnPrimary} w-full`}>
-            <Save size={12} /> Save Proxy
-          </button>
-        </div>
-      </div>
+      {/* Video Proxy removed — use Settings > Custom Proxy instead */}
     </div>
   );
 };
