@@ -1168,7 +1168,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   <span className="text-xs font-semibold text-foreground">Next Episode</span>
                 </div>
                 <div className="flex gap-1.5 ml-1">
-                  <button onClick={() => setShowNextEpOverlay(false)} className="text-[9px] text-muted-foreground hover:text-foreground px-2 py-1 rounded bg-foreground/10">
+                  <button onClick={() => { nextEpCancelledRef.current = true; setShowNextEpOverlay(false); }} className="text-[9px] text-muted-foreground hover:text-foreground px-2 py-1 rounded bg-foreground/10">
                     Cancel
                   </button>
                   <button onClick={() => onNextEpisode()} className="text-[10px] font-bold px-3 py-1 rounded-lg gradient-primary btn-glow flex items-center gap-1">
