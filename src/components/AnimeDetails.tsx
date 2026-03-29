@@ -189,10 +189,10 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
       transition={{ type: "tween", duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
     >
       {/* Header Image */}
-      <div className="relative w-full h-[50vh] min-h-[350px] overflow-hidden">
+      <div className="relative w-full h-[45vh] min-h-[300px] overflow-hidden">
         <img src={anime.backdrop} alt={anime.title} className="w-full h-full object-cover" />
         <div className="absolute inset-0" style={{
-          background: "linear-gradient(to top, hsl(240 20% 6%) 0%, rgba(0,0,0,0.2) 40%, transparent 60%), linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 25%)"
+          background: "linear-gradient(to top, hsl(var(--background)) 0%, hsl(var(--background) / 0.4) 40%, transparent 60%), linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 25%)"
         }} />
         <div className="absolute bottom-6 left-0 right-0 px-5 text-center">
           <h1 className="text-2xl font-extrabold mb-2" style={{ ...getAnimeTitleStyle(anime.title), textShadow: "0 4px 20px rgba(0,0,0,0.9)" }}>
