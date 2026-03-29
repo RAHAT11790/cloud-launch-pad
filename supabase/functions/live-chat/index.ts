@@ -24,8 +24,8 @@ Deno.serve(async (req) => {
     const systemPrompt = typeof body.systemPrompt === "string" ? body.systemPrompt : "";
     const userMessage = typeof body.message === "string" ? body.message.trim() : "";
 
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
-    if (!GROK_API_KEY) {
+    const GROQ_API_KEY = Deno.env.get("GROK_API_KEY");
+    if (!GROQ_API_KEY) {
       throw new Error("GROK_API_KEY is not configured");
     }
 
@@ -115,14 +115,14 @@ ${animeContext ? `\n## বর্তমানে সাইটে যে anime গ
     }
 
     // Call Grok API (OpenAI-compatible)
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROK_API_KEY}`,
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-3-mini-fast",
+        model: "llama-3.3-70b-versatile",
         messages: grokMessages,
         temperature: 0.7,
         max_tokens: 1024,
@@ -131,7 +131,7 @@ ${animeContext ? `\n## বর্তমানে সাইটে যে anime গ
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("Grok API error:", response.status, errText);
+      console.error("Groq API error:", response.status, errText);
       
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Too many requests, please try again later." }), {
@@ -139,7 +139,7 @@ ${animeContext ? `\n## বর্তমানে সাইটে যে anime গ
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      throw new Error(`Grok API error: ${response.status} - ${errText}`);
+      throw new Error(`Groq API error: ${response.status} - ${errText}`);
     }
 
     const data = await response.json();
