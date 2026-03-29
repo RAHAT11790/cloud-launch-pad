@@ -280,18 +280,41 @@ const Index = () => {
     return false;
   }, [isLoggedIn, unlockBlocked, saltIsPremium, hasFreeAccess]);
 
-  const [activePage, setActivePage] = useState("home");
+  const [activePage, setActivePage] = useState(() => {
+    try { return sessionStorage.getItem("rs_activePage") || "home"; } catch { return "home"; }
+  });
   const [activeCategory, setActiveCategory] = useState("All");
   const [dubFilter, setDubFilter] = useState<"all" | "official" | "fandub">("all");
   const [selectedAnime, setSelectedAnime] = useState<AnimeItem | null>(null);
   const [customPostDetail, setCustomPostDetail] = useState<{ title: string; backdrop: string; description: string } | null>(null);
   const [pendingAnimeId, setPendingAnimeId] = useState<string | null>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("anime");
+    const fromUrl = params.get("anime");
+    if (fromUrl) return fromUrl;
+    // Restore from sessionStorage on refresh
+    try { return sessionStorage.getItem("rs_selectedAnimeId"); } catch { return null; }
   });
   const [showSearch, setShowSearch] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
+  const [showProfile, setShowProfile] = useState(() => {
+    try { return sessionStorage.getItem("rs_activePage") === "profile"; } catch { return false; }
+  });
   const [chatOpen, setChatOpen] = useState(false);
+
+  // Persist activePage to sessionStorage
+  useEffect(() => {
+    try { sessionStorage.setItem("rs_activePage", activePage); } catch {}
+  }, [activePage]);
+
+  // Persist selectedAnime ID to sessionStorage
+  useEffect(() => {
+    try {
+      if (selectedAnime) {
+        sessionStorage.setItem("rs_selectedAnimeId", selectedAnime.id);
+      } else {
+        sessionStorage.removeItem("rs_selectedAnimeId");
+      }
+    } catch {}
+  }, [selectedAnime]);
   const [playerState, setPlayerState] = useState<{
     src: string;
     title: string;
