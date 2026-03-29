@@ -144,19 +144,25 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
     const verifyAi = async () => {
       setAiStatus("checking");
       try {
-        const { getEdgeFunctionUrl } = await import("@/lib/edgeFunctionRouter");
-        const aiEndpoint = await getEdgeFunctionUrl("ai-chat");
-        if (!aiEndpoint) {
-          throw new Error("AI endpoint not configured");
+        // Read AI config from Firebase
+        const { get: fbGet } = await import("@/lib/firebase");
+        const dbRef = (await import("@/lib/firebase")).ref;
+        const dbInst = (await import("@/lib/firebase")).db;
+        const aiConfigSnap = await fbGet(dbRef(dbInst, "settings/aiChat"));
+        const aiConfig = aiConfigSnap.val();
+
+        if (!aiConfig?.enabled || !aiConfig?.url) {
+          if (!cancelled) setAiStatus("offline");
+          return;
         }
-        const res = await fetch(aiEndpoint, {
+
+        const res = await fetch(aiConfig.url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message: "ping",
-            history: [],
-            systemPrompt: `You are ${branding.siteName} AI support assistant. Reply with one short word.`,
-            siteContext: { healthcheck: true, siteName: branding.siteName },
+            messages: [],
+            systemPrompt: `You are ${branding.siteName} AI. Reply with one word.`,
           }),
         });
 
@@ -225,9 +231,14 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       }));
       chatHistory.push({ role: "user", content: text });
 
-      const { getEdgeFunctionUrl } = await import("@/lib/edgeFunctionRouter");
-      const aiEndpoint = await getEdgeFunctionUrl("ai-chat");
-      if (!aiEndpoint) throw new Error("AI endpoint not configured");
+      // Get AI endpoint from Firebase config
+      const { get: fbGet } = await import("@/lib/firebase");
+      const dbRef = (await import("@/lib/firebase")).ref;
+      const dbInst = (await import("@/lib/firebase")).db;
+      const aiConfigSnap = await fbGet(dbRef(dbInst, "settings/aiChat"));
+      const aiConfig = aiConfigSnap.val();
+      if (!aiConfig?.enabled || !aiConfig?.url) throw new Error("AI not configured");
+      const aiEndpoint = aiConfig.url;
 
       const systemPrompt = [
         `তুমি ${branding.siteName} এর AI support assistant।`,

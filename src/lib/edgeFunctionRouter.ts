@@ -11,11 +11,8 @@ import { db, ref, get } from "@/lib/firebase";
 export const DEFAULT_CF_FUNCTIONS = [
   "telegram-post",
   "shorten",
-  "clean-embed",
-  "animesalt",
   "send-fcm",
-  "ai-chat",
-  "webhook",
+  "animesalt",
 ] as const;
 
 export type DefaultCFFunction = typeof DEFAULT_CF_FUNCTIONS[number];
@@ -89,8 +86,16 @@ export function buildFunctionUrl(endpoint: string, config: EdgeRouterConfig): st
   return "";
 }
 
-/** Get URL for a named function */
+/** Get URL for a named function — checks per-function overrides first */
 export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
+  // Check per-function override from Firebase
+  try {
+    const overrideSnap = await get(ref(db, `settings/functionOverrides/${fnName}`));
+    const override = overrideSnap.val();
+    if (override?.enabled === false) return "";
+    if (override?.customUrl) return override.customUrl;
+  } catch {}
+
   const config = await getEdgeRouterConfig();
   // Check dynamic functions first
   const dynFn = Object.values(config.functions).find(f => f.name === fnName || f.endpoint === fnName);
@@ -157,11 +162,8 @@ function getBuiltInDescription(fn: string): string {
   const d: Record<string, string> = {
     "telegram-post": "Send Telegram message",
     "shorten": "URL shortener",
-    "clean-embed": "Clean embed page",
     "animesalt": "AnimeSalt scraper",
     "send-fcm": "Push notification sender",
-    "ai-chat": "AI chat assistant",
-    "webhook": "Telegram webhook",
   };
   return d[fn] || fn;
 }
@@ -173,7 +175,7 @@ export async function getAllFunctions(): Promise<CloudFunction[]> {
     id: `builtin-${fn}`,
     name: fn,
     endpoint: fn,
-    method: (fn === "clean-embed" ? "GET/POST" : "POST") as CloudFunction["method"],
+    method: "POST" as CloudFunction["method"],
     description: getBuiltInDescription(fn),
     enabled: true,
     addedAt: 0,
