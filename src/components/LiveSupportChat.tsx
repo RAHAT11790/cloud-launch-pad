@@ -302,10 +302,10 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       {/* Header */}
       <div className="px-4 py-3 flex items-center gap-3 bg-card" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
         <div className="w-9 h-9 rounded-lg overflow-hidden p-0.5 bg-card" style={{ boxShadow: "var(--neu-shadow-sm)" }}>
-          <img src={logoImg} alt="RS" className="w-full h-full object-contain" />
+          <img src={branding.logoUrl || logoImg} alt={branding.siteName} className="w-full h-full object-contain" />
         </div>
         <div className="flex-1">
-          <h3 className="text-sm font-bold text-foreground">RS Support</h3>
+          <h3 className="text-sm font-bold text-foreground">{branding.siteName} Support</h3>
           <div className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
             <p className="text-[10px] text-green-600">AI Assistant • Online</p>
