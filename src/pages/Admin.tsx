@@ -41,55 +41,21 @@ interface Season {
 
 import { THEME_PRESETS, type ThemePreset } from "@/lib/themePresets";
 
-// ==================== CLOUDFLARE WORKER ROUTER SECTION (NEW) ====================
+// ==================== CLOUDFLARE WORKER ROUTER SECTION ====================
 const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
   const [baseUrl, setBaseUrl] = useState("");
   const [baseUrlInput, setBaseUrlInput] = useState("");
   const [statuses, setStatuses] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
   const [checking, setChecking] = useState(false);
 
-  // Proxy settings
-  const [proxyUrl, setProxyUrl] = useState("");
-  const [proxyApiKey, setProxyApiKey] = useState("");
+  // Per-function overrides from Firebase
+  const [fnOverrides, setFnOverrides] = useState<Record<string, { enabled: boolean; customUrl: string }>>({});
 
   const CORE_FUNCTIONS = [
+    { key: "telegram-post", label: "📨 Telegram Post", endpoint: "telegram-post" },
     { key: "shorten", label: "🔗 URL Shortener", endpoint: "shorten" },
     { key: "send-fcm", label: "🔔 FCM Push", endpoint: "send-fcm" },
-    { key: "telegram-post", label: "📨 Telegram Post", endpoint: "telegram-post" },
-    { key: "ai-chat", label: "🤖 AI Chat", endpoint: "ai-chat" },
-    { key: "video-proxy", label: "🎬 Video Proxy", endpoint: "video-proxy" },
   ];
-
-  const getHealthCheckConfig = (endpoint: string) => {
-    if (endpoint === "video-proxy") {
-      return {
-        method: "GET",
-        body: undefined,
-        isHealthy: (status: number, text: string, data: any) =>
-          !!data?.error || !!data?.message || status === 206 || text.toLowerCase().includes("error"),
-      };
-    }
-
-    if (endpoint === "ai-chat") {
-      return {
-        method: "POST",
-        body: {
-          message: "ping",
-          history: [],
-          systemPrompt: "Reply with one short word.",
-          siteContext: { healthcheck: true },
-        },
-        isHealthy: (_status: number, _text: string, data: any) => typeof data?.reply === "string" || !!data?.error,
-      };
-    }
-
-    return {
-      method: "POST",
-      body: { test: true },
-      isHealthy: (_status: number, text: string, data: any) =>
-        !!data?.success || !!data?.error || !!data?.result || !!data?.shortUrl || text.includes('"error"') || text.includes('"success"'),
-    };
-  };
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/edgeRouter"), (snap) => {
@@ -100,10 +66,8 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         setBaseUrlInput(url);
       }
     });
-    const unsub2 = onValue(ref(db, "settings/proxyServer"), (snap) => {
-      const val = snap.val();
-      setProxyUrl(val?.url || "");
-      setProxyApiKey(val?.apiKey || "");
+    const unsub2 = onValue(ref(db, "settings/functionOverrides"), (snap) => {
+      setFnOverrides(snap.val() || {});
     });
     return () => { unsub(); unsub2(); };
   }, []);
@@ -114,25 +78,32 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     await set(ref(db, "settings/edgeRouter/platform"), "cloudflare");
     setBaseUrl(url);
     toast.success("✅ Base URL সেভ হয়েছে!");
-    // Auto check statuses
     checkStatuses(url);
   };
 
+  const getFunctionUrl = (fn: typeof CORE_FUNCTIONS[0]) => {
+    const override = fnOverrides[fn.key];
+    if (override?.customUrl) return override.customUrl;
+    if (!baseUrl) return "";
+    return `${baseUrl.replace(/\/$/, "")}/${fn.endpoint}`;
+  };
+
   const checkStatuses = async (url?: string) => {
-    const base = (url || baseUrl).replace(/\/$/, "");
-    if (!base) { toast.error("Base URL দাও আগে"); return; }
     setChecking(true);
     const results: typeof statuses = {};
     await Promise.all(CORE_FUNCTIONS.map(async (fn) => {
+      const override = fnOverrides[fn.key];
+      if (override?.enabled === false) { results[fn.key] = null; return; }
+      const fnUrl = override?.customUrl || ((url || baseUrl).replace(/\/$/, "") + "/" + fn.endpoint);
+      if (!fnUrl || fnUrl === "/" + fn.endpoint) { results[fn.key] = null; return; }
       try {
-        const testConfig = getHealthCheckConfig(fn.endpoint);
         const start = Date.now();
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch(`${base}/${fn.endpoint}`, {
-          method: testConfig.method,
+        const res = await fetch(fnUrl, {
+          method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: testConfig.method === "GET" ? undefined : JSON.stringify(testConfig.body),
+          body: JSON.stringify({ test: true }),
           signal: controller.signal,
         });
         clearTimeout(t);
@@ -140,7 +111,8 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         const text = await res.text().catch(() => "");
         let data: any = null;
         try { data = text ? JSON.parse(text) : null; } catch {}
-        results[fn.key] = { alive: testConfig.isHealthy(res.status, text, data), latency };
+        const alive = !!data?.success || !!data?.error || !!data?.result || !!data?.shortUrl || text.includes('"error"') || text.includes('"success"') || res.status < 500;
+        results[fn.key] = { alive, latency };
       } catch {
         results[fn.key] = { alive: false, latency: 0 };
       }
@@ -151,34 +123,32 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     toast.success(`Status check done! ${aliveCount}/${CORE_FUNCTIONS.length} active`);
   };
 
-  const saveProxySettings = async () => {
-    await set(ref(db, "settings/proxyServer"), {
-      url: proxyUrl.trim() || null,
-      apiKey: proxyApiKey.trim() || null,
-    });
-    toast.success("✅ Proxy সেটিংস সেভ হয়েছে!");
+  const toggleFunction = async (key: string) => {
+    const current = fnOverrides[key] || { enabled: true, customUrl: "" };
+    await set(ref(db, `settings/functionOverrides/${key}`), { ...current, enabled: !current.enabled });
+  };
+
+  const saveCustomUrl = async (key: string, customUrl: string) => {
+    const current = fnOverrides[key] || { enabled: true, customUrl: "" };
+    await set(ref(db, `settings/functionOverrides/${key}`), { ...current, customUrl: customUrl.trim() });
+    toast.success("✅ কাস্টম URL সেভ হয়েছে!");
   };
 
   return (
     <div>
-      {/* Base URL Config */}
+      {/* Cloudflare Base URL */}
       <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
           <Activity size={14} className="text-cyan-400" /> ☁️ Cloudflare Worker Config
         </h3>
         <p className="text-[10px] text-zinc-400 mb-4">
-          Cloudflare Worker ডিপ্লয় করে Base URL এখানে দাও। সব ফাংশন এই URL থেকে কাজ করবে।
+          Cloudflare Worker ডিপ্লয় করে Base URL এখানে দাও। প্রতিটি ফাংশনের জন্য আলাদা কাস্টম URL-ও দেওয়া যাবে।
         </p>
-
         <div className="mb-4">
           <label className="text-[10px] text-zinc-400 block mb-1">Worker Base URL</label>
           <div className="flex gap-2">
-            <input
-              value={baseUrlInput}
-              onChange={(e) => setBaseUrlInput(e.target.value)}
-              placeholder="https://your-worker.workers.dev"
-              className={`${inputClass} flex-1`}
-            />
+            <input value={baseUrlInput} onChange={(e) => setBaseUrlInput(e.target.value)}
+              placeholder="https://your-worker.workers.dev" className={`${inputClass} flex-1`} />
             <button onClick={saveBaseUrl} className={`${btnPrimary} !px-3`}>
               <Save size={12} /> Save & Test
             </button>
@@ -187,45 +157,166 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         </div>
       </div>
 
-      {/* Function Status Cards */}
+      {/* Per-Function Cards with On/Off + Custom URL */}
       <div className={`${glassCard} p-4 mb-4`}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold flex items-center gap-2">
-            <Zap size={14} className="text-orange-400" /> Functions Status
+            <Zap size={14} className="text-orange-400" /> Functions
           </h3>
-          <button onClick={() => checkStatuses()} disabled={checking || !baseUrl} className={`${btnSecondary} !py-1 !px-3 !text-[10px]`}>
-            {checking ? <><RefreshCw size={10} className="animate-spin" /> Checking...</> : <><Activity size={10} /> Refresh</>}
+          <button onClick={() => checkStatuses()} disabled={checking} className={`${btnSecondary} !py-1 !px-3 !text-[10px]`}>
+            {checking ? <><RefreshCw size={10} className="animate-spin" /> Checking...</> : <><Activity size={10} /> Test All</>}
           </button>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {CORE_FUNCTIONS.map((fn) => {
+            const override = fnOverrides[fn.key] || { enabled: true, customUrl: "" };
+            const isEnabled = override.enabled !== false;
             const st = statuses[fn.key];
+            const activeUrl = getFunctionUrl(fn);
             return (
-              <div key={fn.key} className="flex items-center justify-between bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40">
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-2.5 h-2.5 rounded-full ${
-                    st ? (st.alive ? "bg-green-500" : "bg-red-500") : "bg-zinc-600"
-                  }`} />
-                  <span className="text-xs font-semibold text-white">{fn.label}</span>
+              <div key={fn.key} className="bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-2.5 h-2.5 rounded-full ${!isEnabled ? "bg-zinc-600" : st ? (st.alive ? "bg-green-500" : "bg-red-500") : "bg-yellow-500"}`} />
+                    <span className="text-xs font-semibold text-white">{fn.label}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {st && isEnabled && (
+                      <span className={`text-[10px] font-mono ${st.alive ? "text-green-400" : "text-red-400"}`}>
+                        {st.alive ? `${st.latency}ms ✓` : "Down ✕"}
+                      </span>
+                    )}
+                    <button onClick={() => toggleFunction(fn.key)}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${isEnabled ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {st && (
-                    <span className={`text-[10px] font-mono ${st.alive ? "text-green-400" : "text-red-400"}`}>
-                      {st.alive ? `${st.latency}ms ✓` : "Down ✕"}
-                    </span>
-                  )}
-                  {!st && <span className="text-[10px] text-zinc-500">—</span>}
+                {/* Custom URL */}
+                <div className="flex gap-1.5">
+                  <input
+                    value={override.customUrl || ""}
+                    onChange={(e) => setFnOverrides(prev => ({ ...prev, [fn.key]: { ...override, customUrl: e.target.value } }))}
+                    placeholder={activeUrl || "কাস্টম URL (ঐচ্ছিক)"}
+                    className={`${inputClass} !text-[10px] !py-1.5 flex-1`}
+                  />
+                  <button onClick={() => saveCustomUrl(fn.key, override.customUrl || "")}
+                    className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
+                    <Save size={10} />
+                  </button>
                 </div>
+                {override.customUrl && <p className="text-[9px] text-cyan-400 mt-1">⚡ কাস্টম URL ব্যবহার হচ্ছে</p>}
+                {!isEnabled && <p className="text-[9px] text-red-400 mt-1">🚫 বন্ধ আছে</p>}
               </div>
             );
           })}
         </div>
-        {!baseUrl && (
-          <p className="text-[10px] text-yellow-400 mt-3 text-center">⚠️ আগে Base URL সেট করো</p>
+      </div>
+    </div>
+  );
+};
+
+// ==================== AI CONFIG SECTION ====================
+const AiConfigSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiUrl, setAiUrl] = useState("");
+  const [aiUrlInput, setAiUrlInput] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ alive: boolean; latency: number } | null>(null);
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/aiChat"), (snap) => {
+      const val = snap.val();
+      setAiEnabled(val?.enabled === true);
+      setAiUrl(val?.url || "");
+      setAiUrlInput(val?.url || "");
+    });
+    return () => unsub();
+  }, []);
+
+  const save = async () => {
+    await set(ref(db, "settings/aiChat"), { enabled: aiEnabled, url: aiUrlInput.trim() });
+    setAiUrl(aiUrlInput.trim());
+    toast.success("✅ AI সেটিংস সেভ হয়েছে!");
+  };
+
+  const toggle = async () => {
+    const next = !aiEnabled;
+    setAiEnabled(next);
+    await set(ref(db, "settings/aiChat/enabled"), next);
+    toast.success(next ? "🤖 AI চালু হয়েছে" : "AI বন্ধ হয়েছে");
+  };
+
+  const testAi = async () => {
+    const url = aiUrlInput.trim();
+    if (!url) { toast.error("AI URL দাও আগে"); return; }
+    setTesting(true);
+    setTestResult(null);
+    const start = Date.now();
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "ping", messages: [], systemPrompt: "Reply with one word." }),
+        signal: controller.signal,
+      });
+      clearTimeout(t);
+      const latency = Date.now() - start;
+      const data = await res.json().catch(() => ({}));
+      setTestResult({ alive: !!data?.reply || !!data?.choices, latency });
+    } catch {
+      setTestResult({ alive: false, latency: Date.now() - start });
+    }
+    setTesting(false);
+  };
+
+  return (
+    <div>
+      <div className={`${glassCard} p-4 mb-4`}>
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          🤖 AI Chat Config
+        </h3>
+        <p className="text-[10px] text-zinc-400 mb-4">
+          AI Chat বন্ধ করলে ইউজারের কাছে AI বাটন দেখা যাবে না। চালু করতে URL দিয়ে সেভ করো।
+        </p>
+
+        {/* On/Off Toggle */}
+        <div className="flex items-center justify-between mb-4 bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40">
+          <div className="flex items-center gap-3">
+            <div className={`w-3 h-3 rounded-full ${aiEnabled ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className="text-xs font-medium">{aiEnabled ? 'AI চালু আছে' : 'AI বন্ধ আছে'}</span>
+          </div>
+          <button onClick={toggle}
+            className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${aiEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${aiEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+
+        {/* AI URL */}
+        <div className="mb-3">
+          <label className="text-[10px] text-zinc-400 block mb-1">AI Endpoint URL</label>
+          <input value={aiUrlInput} onChange={(e) => setAiUrlInput(e.target.value)}
+            placeholder="https://your-worker.workers.dev/ai-chat" className={inputClass} />
+        </div>
+
+        <div className="flex gap-2">
+          <button onClick={save} className={`${btnPrimary} !px-4 !py-2 flex-1`}>
+            <Save size={14} /> সেভ করো
+          </button>
+          <button onClick={testAi} disabled={testing || !aiUrlInput.trim()}
+            className={`${btnPrimary} !px-4 !py-2 bg-cyan-700 hover:bg-cyan-600`}>
+            {testing ? <RefreshCw size={14} className="animate-spin" /> : <Activity size={14} />} টেস্ট
+          </button>
+        </div>
+
+        {testResult && (
+          <div className={`mt-3 p-2.5 rounded-lg text-xs font-medium ${testResult.alive ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+            {testResult.alive ? `✅ AI কাজ করছে (${testResult.latency}ms)` : `❌ AI রেসপন্স করছে না`}
+          </div>
         )}
       </div>
-
-      {/* Video Proxy removed — use Settings > Custom Proxy instead */}
     </div>
   );
 };
