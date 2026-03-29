@@ -913,7 +913,14 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [newPinInput, setNewPinInput] = useState("");
   const [currentPin, setCurrentPin] = useState("");
 
-  const [activeSection, setActiveSection] = useState<Section>("dashboard");
+  const [activeSection, setActiveSection] = useState<Section>(() => {
+    try { return (sessionStorage.getItem("rs_adminSection") as Section) || "dashboard"; } catch { return "dashboard"; }
+  });
+
+  // Persist admin section
+  useEffect(() => {
+    try { sessionStorage.setItem("rs_adminSection", activeSection); } catch {}
+  }, [activeSection]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [firebaseConnected, setFirebaseConnected] = useState(false);
