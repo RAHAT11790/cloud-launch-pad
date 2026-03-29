@@ -800,6 +800,16 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
     );
   }
 
+  // About Panel
+  if (activePanel === "about") {
+    return <AboutPage onBack={() => setActivePanel("settings")} siteName={brandingCfg.siteName} />;
+  }
+
+  // Privacy Policy Panel
+  if (activePanel === "privacy") {
+    return <PrivacyPolicyPage onBack={() => setActivePanel("settings")} siteName={brandingCfg.siteName} />;
+  }
+
   // Notification Settings
   if (activePanel === "notification-settings") {
     return (
