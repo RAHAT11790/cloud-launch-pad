@@ -246,19 +246,16 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
         `8. Premium/account প্রশ্নে userContext ব্যবহার করো।`,
       ].join("\n");
 
+      // Combine system prompt with anime context for the AI
+      const fullSystemPrompt = `${systemPrompt}\n\n--- Context ---\n${animeContext()}\n${userContext}`;
+
       const res = await fetch(aiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          history: chatHistory,
-          systemPrompt,
-          siteContext: {
-            siteName: branding.siteName,
-            animeContext: animeContext(),
-            userContext,
-            userName,
-          },
+          messages: chatHistory,
+          systemPrompt: fullSystemPrompt,
         }),
       });
       if (!res.ok) {
