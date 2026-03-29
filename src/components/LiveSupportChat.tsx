@@ -3,6 +3,7 @@ import { X, Send } from "lucide-react";
 
 import { db, ref, push, set, onValue } from "@/lib/firebase";
 import { toast } from "sonner";
+import { useBranding } from "@/hooks/useBranding";
 import logoImg from "@/assets/logo.png";
 
 interface ChatMessage {
