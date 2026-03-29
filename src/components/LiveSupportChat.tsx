@@ -165,7 +165,8 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
     };
   }, [isOpen]);
 
-  const animeContext = useCallback(() => {
+  const buildAnimeContext = useCallback(() => {
+    const animeList = getAnimeList?.() || [];
     if (animeList.length === 0) return "";
     const primaryItems = animeList.filter((a) => a.source !== "animesalt");
     const altItems = animeList.filter((a) => a.source === "animesalt");
@@ -187,7 +188,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
     }
 
     return context.substring(0, 3500);
-  }, [animeList]);
+  }, [getAnimeList]);
 
   const sendMessage = async () => {
     const text = input.trim();
