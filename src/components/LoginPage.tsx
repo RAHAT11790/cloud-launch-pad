@@ -39,6 +39,8 @@ const FloatingParticles = () => (
 );
 
 const LoginPage = ({ onLogin }: LoginPageProps) => {
+  const branding = useBranding();
+  const logoSrc = branding.logoUrl || logoImg;
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
