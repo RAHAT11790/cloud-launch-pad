@@ -13,11 +13,11 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 const brandIcon = 'https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png';
+// Main published domain — always use this for notification clicks
+const MAIN_DOMAIN = 'https://rsanime03.lovable.app';
 
-// Handle background messages (both notification+data and data-only)
+// Handle background messages
 messaging.onBackgroundMessage((payload) => {
-  // If notification payload exists, FCM SDK may auto-show it
-  // For data-only messages, we must show manually
   const notification = payload.notification || {};
   const data = payload.data || {};
   
@@ -26,6 +26,9 @@ messaging.onBackgroundMessage((payload) => {
   const notifImage = notification.image || data.image || undefined;
   const notifIcon = notification.icon || data.icon || brandIcon;
   
+  // Use content-based tag to prevent duplicate notifications
+  const contentTag = data.contentId || data.type || 'general';
+  
   const notifOptions = {
     body: notifBody,
     icon: notifIcon,
@@ -33,23 +36,23 @@ messaging.onBackgroundMessage((payload) => {
     badge: brandIcon,
     vibrate: [200, 100, 200],
     data: data,
-    tag: `rsanime-bg-${Date.now()}`,
+    tag: 'rsanime-' + contentTag,
+    renotify: true,
     requireInteraction: false,
   };
   
   return self.registration.showNotification(notifTitle, notifOptions);
 });
 
-// Also listen for raw push events as fallback
+// Raw push event fallback
 self.addEventListener('push', (event) => {
-  // Only handle if FCM SDK didn't already handle it
   if (event.data) {
     try {
       const payload = event.data.json();
-      // If there's no notification key, FCM SDK won't auto-show, handle here
       if (!payload.notification && payload.data) {
         const data = payload.data;
         const title = data.title || 'RS ANIME';
+        const contentTag = data.contentId || data.type || 'general';
         const options = {
           body: data.body || '',
           icon: data.icon || brandIcon,
@@ -57,7 +60,8 @@ self.addEventListener('push', (event) => {
           badge: brandIcon,
           vibrate: [200, 100, 200],
           data: data,
-          tag: `rsanime-push-${Date.now()}`,
+          tag: 'rsanime-' + contentTag,
+          renotify: true,
         };
         event.waitUntil(self.registration.showNotification(title, options));
       }
@@ -67,18 +71,23 @@ self.addEventListener('push', (event) => {
   }
 });
 
-// Handle notification click
+// Handle notification click — ALWAYS open main domain
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const rawUrl = event.notification.data?.url || '/';
+  const data = event.notification.data || {};
+  const rawUrl = data.url || '/';
+  
+  // Always use main domain or baseUrl from payload, never self.location.origin
+  const baseDomain = data.baseUrl || MAIN_DOMAIN;
   const url = rawUrl.startsWith('http://') || rawUrl.startsWith('https://')
     ? rawUrl
-    : `${self.location.origin}${rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`}`;
+    : baseDomain + (rawUrl.startsWith('/') ? rawUrl : '/' + rawUrl);
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Try to focus an existing window on the main domain
       for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
+        if (client.url.includes(baseDomain) && 'focus' in client) {
           client.focus();
           if ('navigate' in client) return client.navigate(url);
           return client;
@@ -89,7 +98,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Activate immediately without waiting
+// Activate immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
