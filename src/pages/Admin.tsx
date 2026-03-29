@@ -1699,7 +1699,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       }
 
       const pushPayload = {
-        title: savedTitle || "RS ANIME",
+        title: savedTitle || adminBranding.siteName,
         body: savedMessage,
         image: contentPoster || undefined,
         url: contentId ? `/?anime=${contentId}` : "/",
