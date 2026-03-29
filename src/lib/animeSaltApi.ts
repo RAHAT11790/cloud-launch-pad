@@ -2,6 +2,9 @@ import { getEdgeFunctionUrl } from '@/lib/edgeFunctionRouter';
 
 const callAnimeSalt = async (body: Record<string, any>) => {
   const url = await getEdgeFunctionUrl('animesalt');
+  if (!url) {
+    throw new Error('AnimeSalt endpoint not configured. Set Base URL in Edge Router first.');
+  }
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
