@@ -226,7 +226,8 @@ export const animeSaltApi = {
 
   async getSeries(slug: string) {
     const proxyUrl = await getAnimeSaltProxyUrl();
-    const directResult = await tryDirectApi(proxyUrl, { action: 'detail', slug, type: 'series' });
+    // Use 'series' action (not 'detail') to match edge function
+    const directResult = await tryDirectApi(proxyUrl, { action: 'series', slug });
     if (directResult?.seasons) return { success: true, ...directResult };
     
     const html = await fetchPage(`${ANIMESALT_BASE}/series/${slug}/`);
@@ -235,8 +236,9 @@ export const animeSaltApi = {
 
   async getMovie(slug: string) {
     const proxyUrl = await getAnimeSaltProxyUrl();
-    const directResult = await tryDirectApi(proxyUrl, { action: 'detail', slug, type: 'movies' });
-    if (directResult?.links) return { success: true, ...directResult };
+    // Use 'movie' action (not 'detail') to match edge function
+    const directResult = await tryDirectApi(proxyUrl, { action: 'movie', slug });
+    if (directResult) return { success: true, ...directResult };
     
     const html = await fetchPage(`${ANIMESALT_BASE}/movies/${slug}/`);
     return { success: true, ...parseEpisodePage(html) };
