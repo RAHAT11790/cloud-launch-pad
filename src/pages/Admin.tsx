@@ -7566,6 +7566,28 @@ const AnimeSaltManagerSection = ({
   );
 };
 
+// Device Limit Input with local state for live UI update
+const DeviceLimitInput = ({ currentValue, userId, onUpdate }: { currentValue: number; userId: string; onUpdate: (userId: string, v: number) => void }) => {
+  const [val, setVal] = useState(String(currentValue));
+  useEffect(() => { setVal(String(currentValue)); }, [currentValue]);
+  return (
+    <input
+      type="number"
+      min="1"
+      max="1000"
+      value={val}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        e.stopPropagation();
+        setVal(e.target.value);
+        const v = parseInt(e.target.value);
+        if (v > 0) onUpdate(userId, v);
+      }}
+      className="w-14 h-7 rounded-lg text-[11px] font-bold text-center bg-white/5 text-zinc-300 border border-white/10 focus:border-yellow-500 outline-none"
+    />
+  );
+};
+
 // Device Limits Section
 const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, usersData, formatTime }: {
   glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string; usersData: any[]; formatTime: (ts: number) => string;
