@@ -245,7 +245,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
         },
         body: JSON.stringify({
           messages: chatHistory,
-          animeContext: animeContext().slice(0, 2200),
+          animeContext: buildAnimeContext().slice(0, 2200),
           userContext: userContext.slice(0, 900),
         }),
       });
