@@ -1559,9 +1559,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
             const seasonRes = await fetch(`${TMDB_BASE_URL}/tv/${data.id}/season/${season.season_number}?api_key=${TMDB_API_KEY}&language=en-US`);
             const seasonDetail = seasonRes.ok ? await seasonRes.json() : null;
             const episodes = seasonDetail?.episodes || [];
+            const epCount = episodes.length > 0 ? Math.max(season.episode_count, episodes.length) : season.episode_count;
             newSeasons.push({
               name: season.name, seasonNumber: season.season_number,
-              episodes: Array(season.episode_count).fill(null).map((_, i) => ({
+              episodes: Array(epCount).fill(null).map((_, i) => ({
                 episodeNumber: i + 1,
                 title: episodes[i]?.name || `Episode ${i + 1}`,
                 link: ""
