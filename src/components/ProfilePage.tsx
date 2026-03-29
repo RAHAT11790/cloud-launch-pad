@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { registerFCMToken } from "@/lib/fcm";
 import { TELEGRAM_ADMIN_URL, TELEGRAM_CHANNEL_URL, SITE_NAME } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
+import AboutPage from "./AboutPage";
+import PrivacyPolicyPage from "./PrivacyPolicyPage";
 
 const VideoPlayer = lazy(() => import("@/components/VideoPlayer"));
 
