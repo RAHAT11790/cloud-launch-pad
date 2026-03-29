@@ -928,11 +928,11 @@ const Index = () => {
           // API didn't return data — show anime with metadata from Firebase
           const fallbackAnime: AnimeItem = {
             ...anime,
-            poster: anime.poster || firebaseMeta?.poster || '',
-            backdrop: anime.backdrop || firebaseMeta?.backdrop || anime.poster || '',
-            storyline: firebaseMeta?.storyline || anime.storyline || '',
-            year: firebaseMeta?.year || anime.year,
-            language: firebaseMeta?.language || anime.language || '',
+            poster: anime.poster || '',
+            backdrop: anime.backdrop || anime.poster || '',
+            storyline: anime.storyline || '',
+            year: anime.year || '',
+            language: anime.language || '',
           };
           detailsCacheRef.current.set(anime.id, fallbackAnime);
           setSelectedAnime(fallbackAnime);
@@ -942,7 +942,7 @@ const Index = () => {
           // Show anime with available metadata instead of error
           const fallbackAnime: AnimeItem = {
             ...anime,
-            storyline: firebaseMeta?.storyline || anime.storyline || '',
+            storyline: anime.storyline || '',
           };
           setSelectedAnime(fallbackAnime);
         }
