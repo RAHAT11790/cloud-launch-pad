@@ -638,16 +638,16 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                   transition={{ delay: 0.1 }}
                 >
                   <motion.img 
-                    src={logoImg} 
-                    alt="RS ANIME" 
+                    src={logoSrc} 
+                    alt={branding.loginTitle} 
                     className="w-16 h-16 mx-auto mb-3 rounded-2xl"
                     style={{ boxShadow: "0 10px 40px hsla(176,65%,48%,0.3)" }}
                     whileHover={{ scale: 1.1, rotate: 5 }}
                   />
                   <h1 className="text-2xl font-black text-primary" style={{ fontFamily: "'Russo One', sans-serif", textShadow: "0 0 30px hsla(176,65%,48%,0.4)" }}>
-                    RS ANIME
+                    {branding.loginTitle}
                   </h1>
-                  <p className="text-[11px] text-muted-foreground mt-1 tracking-wider uppercase">Premium Anime Streaming</p>
+                  <p className="text-[11px] text-muted-foreground mt-1 tracking-wider uppercase">{branding.loginSubtitle}</p>
                 </motion.div>
 
                 <motion.div className="flex gap-1 mb-5 bg-foreground/5 rounded-xl p-1 relative z-10"
