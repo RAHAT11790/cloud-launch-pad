@@ -6241,6 +6241,16 @@ const AnimeSaltManagerSection = ({
   const [addingSlug, setAddingSlug] = useState<string | null>(null);
   const [removingSlug, setRemovingSlug] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [animeSaltGlobalEnabled, setAnimeSaltGlobalEnabled] = useState(true);
+
+  // Listen to global AnimeSalt enabled state
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/animeSaltEnabled"), (snap) => {
+      const val = snap.val();
+      setAnimeSaltGlobalEnabled(val !== false);
+    });
+    return () => unsub();
+  }, []);
 
   // TMDB selection modal
   const [tmdbResults, setTmdbResults] = useState<any[]>([]);
@@ -7333,6 +7343,26 @@ const AnimeSaltManagerSection = ({
         {asCustomUrl && <p className="text-[9px] text-cyan-400">⚡ কাস্টম URL: {asCustomUrl}</p>}
       </div>
 
+      {/* Global AnimeSalt ON/OFF Toggle */}
+      <div className={`${glassCard} p-4 mb-4`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-3 h-3 rounded-full ${animeSaltGlobalEnabled ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className="text-xs font-semibold">{animeSaltGlobalEnabled ? 'AnimeSalt কন্টেন্ট চালু আছে' : 'AnimeSalt কন্টেন্ট বন্ধ আছে'}</span>
+          </div>
+          <button onClick={async () => {
+            const next = !animeSaltGlobalEnabled;
+            setAnimeSaltGlobalEnabled(next);
+            await set(ref(db, "settings/animeSaltEnabled"), next);
+            toast.success(next ? "✅ AnimeSalt কন্টেন্ট চালু হয়েছে" : "AnimeSalt কন্টেন্ট বন্ধ হয়েছে");
+          }}
+            className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${animeSaltGlobalEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${animeSaltGlobalEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+        <p className="text-[10px] text-zinc-400 mt-2">বন্ধ করলে সাইটে AnimeSalt-এর সকল কন্টেন্ট হাইড হয়ে যাবে। শুধু RS কন্টেন্ট দেখাবে।</p>
+      </div>
+
       <div className={`${glassCard} p-4 mb-4`}>
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -7563,6 +7593,28 @@ const AnimeSaltManagerSection = ({
         </div>
       )}
     </div>
+  );
+};
+
+// Device Limit Input with local state for live UI update
+const DeviceLimitInput = ({ currentValue, userId, onUpdate }: { currentValue: number; userId: string; onUpdate: (userId: string, v: number) => void }) => {
+  const [val, setVal] = useState(String(currentValue));
+  useEffect(() => { setVal(String(currentValue)); }, [currentValue]);
+  return (
+    <input
+      type="number"
+      min="1"
+      max="1000"
+      value={val}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        e.stopPropagation();
+        setVal(e.target.value);
+        const v = parseInt(e.target.value);
+        if (v > 0) onUpdate(userId, v);
+      }}
+      className="w-14 h-7 rounded-lg text-[11px] font-bold text-center bg-white/5 text-zinc-300 border border-white/10 focus:border-yellow-500 outline-none"
+    />
   );
 };
 
@@ -7813,15 +7865,7 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
                                     maxDev === n ? "bg-yellow-500 text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10"
                                   }`}>{n}</button>
                               ))}
-                              <input
-                                type="number"
-                                min="1"
-                                max="100"
-                                value={maxDev}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => { e.stopPropagation(); const v = parseInt(e.target.value); if (v > 0) updateMaxDevices(user.id, v); }}
-                                className="w-12 h-7 rounded-lg text-[11px] font-bold text-center bg-white/5 text-zinc-300 border border-white/10 focus:border-yellow-500 outline-none"
-                              />
+                              <DeviceLimitInput currentValue={maxDev} userId={user.id} onUpdate={updateMaxDevices} />
                             </div>
                           </div>
 
