@@ -559,10 +559,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
     if (!onNextEpisode || duration <= 0 || currentTime <= 0) return;
+    // Don't show if user cancelled it for this episode
+    if (nextEpCancelledRef.current) return;
     const remaining = duration - currentTime;
-    // Only show in the last 90 seconds (or 5% of video + 10s, whichever is smaller)
+    // Only show in the last 90 seconds, BUT also require that at least 30% of the video has been watched
+    // This prevents showing immediately when a new episode loads
     const threshold = Math.min(90, duration * 0.05 + 10);
-    if (remaining <= threshold && remaining > 0 && !showNextEpOverlay) {
+    const watchedEnough = currentTime > duration * 0.3;
+    if (remaining <= threshold && remaining > 0 && !showNextEpOverlay && watchedEnough) {
       setShowNextEpOverlay(true);
       setNextEpCountdown(Math.ceil(remaining));
     }
@@ -575,6 +579,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   useEffect(() => {
     setShowNextEpOverlay(false);
     setNextEpCountdown(0);
+    nextEpCancelledRef.current = false;
   }, [src, currentSrc]);
 
   useEffect(() => {
