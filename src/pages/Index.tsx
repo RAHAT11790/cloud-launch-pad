@@ -1941,7 +1941,7 @@ const Index = () => {
             handleCardClick(preferred);
           }
         }}
-        animeList={allAnime.map(a => ({
+        getAnimeList={() => allAnime.map(a => ({
           title: a.title,
           type: a.type,
           category: a.category,

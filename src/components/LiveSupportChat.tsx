@@ -28,13 +28,13 @@ interface AnimeInfo {
 }
 
 interface LiveSupportChatProps {
-  animeList?: AnimeInfo[];
+  getAnimeList?: () => AnimeInfo[];
   isOpen: boolean;
   onClose: () => void;
   onAnimeSelect?: (animeKey: string) => void;
 }
 
-const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: LiveSupportChatProps) => {
+const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveSupportChatProps) => {
   const branding = useBranding();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -165,7 +165,8 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
     };
   }, [isOpen]);
 
-  const animeContext = useCallback(() => {
+  const buildAnimeContext = useCallback(() => {
+    const animeList = getAnimeList?.() || [];
     if (animeList.length === 0) return "";
     const primaryItems = animeList.filter((a) => a.source !== "animesalt");
     const altItems = animeList.filter((a) => a.source === "animesalt");
@@ -187,7 +188,7 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
     }
 
     return context.substring(0, 3500);
-  }, [animeList]);
+  }, [getAnimeList]);
 
   const sendMessage = async () => {
     const text = input.trim();
@@ -244,7 +245,7 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
         },
         body: JSON.stringify({
           messages: chatHistory,
-          animeContext: animeContext().slice(0, 2200),
+          animeContext: buildAnimeContext().slice(0, 2200),
           userContext: userContext.slice(0, 900),
         }),
       });
