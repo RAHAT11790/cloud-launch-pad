@@ -87,7 +87,12 @@ export function buildFunctionUrl(endpoint: string, config: EdgeRouterConfig): st
   if (config.platform === "cloudflare" && config.cloudflareBaseUrl) {
     return `${config.cloudflareBaseUrl.replace(/\/$/, "")}/${endpoint}`;
   }
-  return `${SUPABASE_URL}/functions/v1/${endpoint}`;
+  // No base URL configured → no fallback, return empty so callers can detect
+  if (!config.cloudflareBaseUrl) {
+    console.warn(`[EdgeRouter] No base URL configured — function "${endpoint}" will not work`);
+    return "";
+  }
+  return `${config.cloudflareBaseUrl.replace(/\/$/, "")}/${endpoint}`;
 }
 
 /** Get URL for a named function */
