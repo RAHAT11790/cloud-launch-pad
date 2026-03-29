@@ -258,7 +258,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
               setTimeout(() => setShareCopied(false), 2000);
             });
           }}
-          className="w-full py-3 rounded-[10px] bg-secondary border border-foreground/20 font-semibold text-sm flex items-center justify-center gap-2 mb-5 transition-all hover:-translate-y-0.5 hover:border-primary"
+          className="w-full py-3 rounded-xl bg-secondary border border-foreground/20 font-semibold text-sm flex items-center justify-center gap-2 mb-5 transition-all hover:-translate-y-0.5 hover:border-primary"
         >
           {shareCopied ? <><Check className="w-4 h-4 text-green-400" /> Link Copied!</> : <><Share2 className="w-4 h-4" /> Share</>}
         </button>
