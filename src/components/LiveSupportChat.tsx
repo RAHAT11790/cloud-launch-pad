@@ -45,6 +45,7 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
   const [userName, setUserName] = useState("Guest");
   const [userContext, setUserContext] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const cooldownUntilRef = useRef(0);
   const logoSrc = !logoFailed && branding.logoUrl ? branding.logoUrl : logoImg;
 
   useEffect(() => {
@@ -191,6 +192,14 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
   const sendMessage = async () => {
     const text = input.trim();
     if (!text || loading) return;
+
+    const now = Date.now();
+    if (cooldownUntilRef.current > now) {
+      const waitSeconds = Math.ceil((cooldownUntilRef.current - now) / 1000);
+      toast.error(`⏳ ${waitSeconds} সেকেন্ড পরে আবার চেষ্টা করুন`);
+      return;
+    }
+
     setInput("");
     const userMsg: ChatMessage = { id: `u_${Date.now()}`, role: "user", content: text, timestamp: Date.now() };
     setMessages(prev => [...prev, userMsg]);
@@ -211,11 +220,12 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
 
     setLoading(true);
     try {
-      const chatHistory = messages.slice(-10).map(m => ({
+      const trimmedText = text.slice(0, 700);
+      const chatHistory = messages.slice(-6).map(m => ({
         role: m.role === "admin" ? "user" : m.role,
-        content: m.role === "admin" ? `[Admin Reply]: ${m.content}` : m.content,
+        content: (m.role === "admin" ? `[Admin Reply]: ${m.content}` : m.content).slice(0, 700),
       }));
-      chatHistory.push({ role: "user", content: text });
+      chatHistory.push({ role: "user", content: trimmedText });
 
       const { get: fbGet } = await import("@/lib/firebase");
       const dbRef = (await import("@/lib/firebase")).ref;
@@ -234,8 +244,8 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
         },
         body: JSON.stringify({
           messages: chatHistory,
-          animeContext: animeContext(),
-          userContext,
+          animeContext: animeContext().slice(0, 2200),
+          userContext: userContext.slice(0, 900),
         }),
       });
 
@@ -247,6 +257,7 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
         throw new Error("Empty AI reply");
       }
 
+      cooldownUntilRef.current = 0;
       setAiStatus("ready");
 
       const sanitizeReply = (raw: string) =>
@@ -261,11 +272,14 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       setMessages(prev => [...prev, aiMsg]);
     } catch (err: any) {
       const isRateLimit = err?.message?.includes("429") || err?.message?.toLowerCase().includes("too many");
+      if (isRateLimit) {
+        cooldownUntilRef.current = Date.now() + 15000;
+      }
       const errMsg: ChatMessage = {
         id: `err_${Date.now()}`,
         role: "assistant",
         content: isRateLimit
-          ? "⏳ এই মুহূর্তে অনেক বেশি রিকোয়েস্ট হচ্ছে। ১০-১৫ সেকেন্ড পর আবার চেষ্টা করুন।"
+          ? "⏳ এই মুহূর্তে অনেক বেশি রিকোয়েস্ট হচ্ছে। ১৫ সেকেন্ড পরে আবার চেষ্টা করুন।"
           : "⚠️ সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করুন। সরাসরি Admin-এর কাছে পৌঁছাতে @RS লিখে মেসেজ করুন।",
         timestamp: Date.now(),
       };

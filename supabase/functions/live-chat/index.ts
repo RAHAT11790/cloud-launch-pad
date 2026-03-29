@@ -4,6 +4,29 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const MAX_HISTORY_MESSAGES = 8;
+const MAX_MESSAGE_CHARS = 700;
+const MAX_CONTEXT_CHARS = 2200;
+const RETRY_DELAY_MS = 1800;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function callGroq(messages: { role: string; content: string }[], apiKey: string) {
+  return fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages,
+      temperature: 0.5,
+      max_tokens: 420,
+    }),
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -11,25 +34,35 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    
+
     const rawMessages = Array.isArray(body.messages) ? body.messages : [];
-    const messages = rawMessages.filter((msg: any) =>
-      msg &&
-      (msg.role === "user" || msg.role === "assistant") &&
-      typeof msg.content === "string" &&
-      msg.content.trim().length > 0
-    );
-    const animeContext = typeof body.animeContext === "string" ? body.animeContext : "";
-    const userContext = typeof body.userContext === "string" ? body.userContext : "";
+    const messages = rawMessages
+      .filter((msg: any) =>
+        msg &&
+        (msg.role === "user" || msg.role === "assistant") &&
+        typeof msg.content === "string" &&
+        msg.content.trim().length > 0,
+      )
+      .slice(-MAX_HISTORY_MESSAGES)
+      .map((msg: any) => ({
+        role: msg.role,
+        content: String(msg.content).trim().slice(0, MAX_MESSAGE_CHARS),
+      }));
+
+    const animeContext = typeof body.animeContext === "string"
+      ? body.animeContext.slice(0, MAX_CONTEXT_CHARS)
+      : "";
+    const userContext = typeof body.userContext === "string"
+      ? body.userContext.slice(0, 900)
+      : "";
     const systemPrompt = typeof body.systemPrompt === "string" ? body.systemPrompt : "";
-    const userMessage = typeof body.message === "string" ? body.message.trim() : "";
+    const userMessage = typeof body.message === "string" ? body.message.trim().slice(0, MAX_MESSAGE_CHARS) : "";
 
     const GROQ_API_KEY = Deno.env.get("GROK_API_KEY");
     if (!GROQ_API_KEY) {
       throw new Error("GROK_API_KEY is not configured");
     }
 
-    // Build user section
     const userSection = userContext
       ? `\n## 🔐 বর্তমান লগইন করা ইউজারের ব্যক্তিগত তথ্য:
 ${userContext}
@@ -95,50 +128,37 @@ ${userSection}
 
 ${animeContext ? `\n## বর্তমানে সাইটে যে anime গুলো আছে (ID সহ):\n${animeContext}` : ""}`;
 
-    // Build OpenAI-compatible messages
     const grokMessages: { role: string; content: string }[] = [
       { role: "system", content: finalSystemPrompt },
+      ...messages,
     ];
 
-    for (const msg of messages) {
-      grokMessages.push({ role: msg.role, content: msg.content });
-    }
-
-    // If old format with single `message`, add it
     if (userMessage && !messages.some((m: any) => m.content === userMessage)) {
       grokMessages.push({ role: "user", content: userMessage });
     }
 
-    // Ensure at least one user message
-    if (!grokMessages.some(m => m.role === "user")) {
+    if (!grokMessages.some((m) => m.role === "user")) {
       grokMessages.push({ role: "user", content: "হ্যালো" });
     }
 
-    // Call Grok API (OpenAI-compatible)
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: grokMessages,
-        temperature: 0.7,
-        max_tokens: 1024,
-      }),
-    });
+    let response = await callGroq(grokMessages, GROQ_API_KEY);
+
+    if (response.status === 429) {
+      await sleep(RETRY_DELAY_MS);
+      response = await callGroq(grokMessages, GROQ_API_KEY);
+    }
 
     if (!response.ok) {
       const errText = await response.text();
       console.error("Groq API error:", response.status, errText);
-      
+
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Too many requests, please try again later." }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
       throw new Error(`Groq API error: ${response.status} - ${errText}`);
     }
 
