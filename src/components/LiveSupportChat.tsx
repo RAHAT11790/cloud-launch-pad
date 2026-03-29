@@ -321,10 +321,10 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
         {messages.length === 0 && (
           <div className="text-center py-8">
             <div className="w-12 h-12 rounded-lg overflow-hidden mx-auto mb-3 bg-card p-1" style={{ boxShadow: "var(--neu-shadow-sm)" }}>
-              <img src={logoImg} alt="RS" className="w-full h-full object-contain" />
+              <img src={branding.logoUrl || logoImg} alt={branding.siteName} className="w-full h-full object-contain" />
             </div>
             <p className="text-sm text-foreground font-medium">হ্যালো! 👋</p>
-            <p className="text-xs text-muted-foreground mt-1">আমি RS Bot, আপনাকে সাহায্য করতে এখানে আছি!</p>
+            <p className="text-xs text-muted-foreground mt-1">আমি {branding.siteName} Bot, আপনাকে সাহায্য করতে এখানে আছি!</p>
             <p className="text-[10px] text-primary/60 mt-2">Admin-এর সাথে কথা বলতে @RS লিখুন</p>
           </div>
         )}
