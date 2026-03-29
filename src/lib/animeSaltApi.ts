@@ -176,7 +176,9 @@ const tryDirectApi = async (proxyUrl: string, body: any): Promise<any | null> =>
     });
     if (!res.ok) return null;
     const data = await res.json();
+    // Support both { data: ... } and { items: ... } response formats
     if (data.success && data.data) return data.data;
+    if (data.success && data.items) return { items: data.items };
     return null;
   } catch { return null; }
 };
@@ -188,7 +190,7 @@ export const animeSaltApi = {
     // Try old API format first
     const proxyUrl = await getAnimeSaltProxyUrl();
     const directResult = await tryDirectApi(proxyUrl, { action: 'browse', type, page });
-    if (directResult?.items) {
+    if (directResult?.items?.length) {
       return { success: true, items: directResult.items };
     }
     
@@ -206,8 +208,10 @@ export const animeSaltApi = {
       tryDirectApi(proxyUrl, { action: 'browse', type: 'movies', page: 1 }),
     ]);
     
-    if (seriesDirect?.items || moviesDirect?.items) {
-      return { success: true, items: [...(seriesDirect?.items || []), ...(moviesDirect?.items || [])] };
+    const sItems = seriesDirect?.items || [];
+    const mItems = moviesDirect?.items || [];
+    if (sItems.length || mItems.length) {
+      return { success: true, items: [...sItems, ...mItems] };
     }
     
     // Fallback to HTML scraping
