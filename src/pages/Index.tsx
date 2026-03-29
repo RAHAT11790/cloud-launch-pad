@@ -1370,7 +1370,7 @@ const Index = () => {
             </a>
           </div>
 
-          <p className="text-[10px] text-muted-foreground mt-6">RS ANIME • Please wait</p>
+          <p className="text-[10px] text-muted-foreground mt-6">{brandingConfig.siteName} • Please wait</p>
         </div>
       </div>
     );
