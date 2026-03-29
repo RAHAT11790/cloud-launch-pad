@@ -155,19 +155,18 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
           return;
         }
 
+        // Just check if the URL is reachable via OPTIONS/HEAD — don't waste Groq API quota
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 5000);
         const res = await fetch(aiConfig.url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: [{ role: "user", content: "ping" }],
-            animeContext: "",
-            userContext: "",
-          }),
+          method: "OPTIONS",
+          signal: controller.signal,
         });
+        clearTimeout(t);
 
-        const data = await res.json().catch(() => null);
         if (!cancelled) {
-          setAiStatus(res.ok && !!data?.reply ? "ready" : "offline");
+          // OPTIONS returning 200/204 means the endpoint is alive
+          setAiStatus(res.ok || res.status === 204 ? "ready" : "offline");
         }
       } catch {
         if (!cancelled) setAiStatus("offline");
@@ -271,10 +270,19 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
         timestamp: Date.now(),
       };
       setMessages(prev => [...prev, aiMsg]);
-    } catch {
-      setAiStatus("offline");
-      const errMsg: ChatMessage = { id: `err_${Date.now()}`, role: "assistant", content: "⚠️ সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করুন। সরাসরি Admin-এর কাছে পৌঁছাতে @RS লিখে মেসেজ করুন।", timestamp: Date.now() };
+    } catch (err: any) {
+      const isRateLimit = err?.message?.includes("429") || err?.message?.toLowerCase().includes("too many");
+      const errMsg: ChatMessage = {
+        id: `err_${Date.now()}`,
+        role: "assistant",
+        content: isRateLimit
+          ? "⏳ এই মুহূর্তে অনেক বেশি রিকোয়েস্ট হচ্ছে। ১০-১৫ সেকেন্ড পর আবার চেষ্টা করুন।"
+          : "⚠️ সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করুন। সরাসরি Admin-এর কাছে পৌঁছাতে @RS লিখে মেসেজ করুন।",
+        timestamp: Date.now(),
+      };
       setMessages(prev => [...prev, errMsg]);
+      // Don't set offline for rate limits — the service is still alive
+      if (!isRateLimit) setAiStatus("offline");
     }
     setLoading(false);
   };
