@@ -28,13 +28,13 @@ interface AnimeInfo {
 }
 
 interface LiveSupportChatProps {
-  animeList?: AnimeInfo[];
+  getAnimeList?: () => AnimeInfo[];
   isOpen: boolean;
   onClose: () => void;
   onAnimeSelect?: (animeKey: string) => void;
 }
 
-const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: LiveSupportChatProps) => {
+const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveSupportChatProps) => {
   const branding = useBranding();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
