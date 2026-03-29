@@ -2594,9 +2594,9 @@ Pᴏᴡᴇʀ Bʏ :
       <div className="min-h-screen bg-[#0D0D1A] flex items-center justify-center p-4">
         <div className={`${glassCard} p-8 w-full max-w-[400px]`}>
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4">RS</div>
+            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4">{adminBranding.siteName.charAt(0)}</div>
             <h1 className="text-xl font-bold text-white">Admin Login</h1>
-            <p className="text-sm text-zinc-400 mt-1">RS ANIME Control Panel</p>
+            <p className="text-sm text-zinc-400 mt-1">{adminBranding.adminTitle || "Admin Panel"}</p>
           </div>
           <div className="space-y-4">
             <input value={loginPinInput} onChange={e => setLoginPinInput(e.target.value.replace(/\D/g, ""))}
