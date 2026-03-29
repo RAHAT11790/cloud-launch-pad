@@ -1,34 +1,147 @@
 import { getEdgeFunctionUrl } from '@/lib/edgeFunctionRouter';
 
-const callAnimeSalt = async (body: Record<string, any>) => {
-  const url = await getEdgeFunctionUrl('animesalt');
-  const res = await fetch(url, {
+const ANIMESALT_BASE = 'https://animesalt.ac';
+
+const fetchPage = async (url: string): Promise<string> => {
+  const proxyUrl = await getEdgeFunctionUrl('animesalt');
+  if (!proxyUrl) {
+    throw new Error('AnimeSalt endpoint not configured. Set Base URL in Edge Router first.');
+  }
+  const res = await fetch(proxyUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ url }),
   });
-  if (!res.ok) throw new Error(`AnimeSalt API error: ${res.status}`);
-  return res.json();
+  if (!res.ok) throw new Error(`AnimeSalt proxy error: ${res.status}`);
+  const data = await res.json();
+  if (!data.success || !data.html) throw new Error('No HTML returned');
+  return data.html;
+};
+
+/** Parse anime items from AnimeSalt HTML listing page */
+const parseListPage = (html: string): { slug: string; title: string; poster: string; type: string; year: string }[] => {
+  const items: { slug: string; title: string; poster: string; type: string; year: string }[] = [];
+  // Match article/card patterns - AnimeSalt uses WordPress-style cards
+  const cardRegex = /<article[^>]*>[\s\S]*?<\/article>/gi;
+  const cards = html.match(cardRegex) || [];
+  
+  for (const card of cards) {
+    // Extract link/slug
+    const linkMatch = card.match(/href="https?:\/\/animesalt\.[^/]+\/(series|movies)\/([^/"]+)/i);
+    if (!linkMatch) continue;
+    
+    const type = linkMatch[1]; // 'series' or 'movies'
+    const slug = linkMatch[2];
+    
+    // Extract title
+    const titleMatch = card.match(/title="([^"]+)"/i) || card.match(/<h[23][^>]*>([^<]+)<\/h[23]>/i);
+    const title = titleMatch ? titleMatch[1].replace(/&#8217;/g, "'").replace(/&#8211;/g, "-").replace(/&amp;/g, "&") : slug;
+    
+    // Extract poster image
+    const imgMatch = card.match(/src="([^"]+)"/i) || card.match(/data-src="([^"]+)"/i);
+    const poster = imgMatch ? imgMatch[1] : '';
+    
+    // Extract year if available
+    const yearMatch = card.match(/(\d{4})/);
+    const year = yearMatch ? yearMatch[1] : '';
+    
+    if (!items.some(i => i.slug === slug)) {
+      items.push({ slug, title, poster, type, year });
+    }
+  }
+  
+  return items;
+};
+
+/** Parse series detail page for episodes */
+const parseSeriesDetail = (html: string) => {
+  const seasons: { name: string; episodes: { number: number; title: string; slug: string }[] }[] = [];
+  
+  // Find season sections
+  const seasonRegex = /class="[^"]*season[^"]*"[^>]*>[\s\S]*?(?=class="[^"]*season[^"]*"|$)/gi;
+  const seasonBlocks = html.match(seasonRegex) || [html];
+  
+  seasonBlocks.forEach((block, idx) => {
+    const seasonNameMatch = block.match(/Season\s*(\d+)/i);
+    const seasonName = seasonNameMatch ? `Season ${seasonNameMatch[1]}` : `Season ${idx + 1}`;
+    
+    const episodes: { number: number; title: string; slug: string }[] = [];
+    const epRegex = /href="https?:\/\/animesalt\.[^/]+\/episode\/([^/"]+)/gi;
+    let epMatch;
+    let epNum = 1;
+    
+    while ((epMatch = epRegex.exec(block)) !== null) {
+      const epSlug = epMatch[1];
+      const epTitleMatch = block.slice(epMatch.index).match(/title="([^"]+)"/i);
+      episodes.push({
+        number: epNum++,
+        title: epTitleMatch ? epTitleMatch[1] : `Episode ${epNum - 1}`,
+        slug: epSlug,
+      });
+    }
+    
+    if (episodes.length > 0) {
+      seasons.push({ name: seasonName, episodes });
+    }
+  });
+  
+  return { seasons };
+};
+
+/** Parse episode page for video links */
+const parseEpisodePage = (html: string) => {
+  const links: { quality: string; url: string }[] = [];
+  
+  // Look for iframe src or video source
+  const iframeMatch = html.match(/iframe[^>]+src="([^"]+)"/gi) || [];
+  iframeMatch.forEach(m => {
+    const src = m.match(/src="([^"]+)"/i);
+    if (src) links.push({ quality: 'default', url: src[1] });
+  });
+  
+  // Look for direct video links
+  const videoRegex = /href="([^"]*(?:mp4|m3u8|stream)[^"]*)"/gi;
+  let vMatch;
+  while ((vMatch = videoRegex.exec(html)) !== null) {
+    links.push({ quality: 'direct', url: vMatch[1] });
+  }
+  
+  return { links };
 };
 
 export const animeSaltApi = {
   async browse(page = 1, language?: string, contentType?: string) {
-    return callAnimeSalt({ action: 'browse', page, language, contentType });
+    const type = contentType === 'movies' ? 'movies' : 'series';
+    const url = page > 1 ? `${ANIMESALT_BASE}/${type}/page/${page}/` : `${ANIMESALT_BASE}/${type}/`;
+    const html = await fetchPage(url);
+    return { success: true, items: parseListPage(html) };
   },
 
   async browseAll() {
-    return callAnimeSalt({ action: 'browse_all' });
+    // Fetch first pages of both series and movies
+    const [seriesHtml, moviesHtml] = await Promise.all([
+      fetchPage(`${ANIMESALT_BASE}/series/`),
+      fetchPage(`${ANIMESALT_BASE}/movies/`),
+    ]);
+    
+    const seriesItems = parseListPage(seriesHtml);
+    const movieItems = parseListPage(moviesHtml);
+    
+    return { success: true, items: [...seriesItems, ...movieItems] };
   },
 
   async getSeries(slug: string) {
-    return callAnimeSalt({ action: 'series', slug });
+    const html = await fetchPage(`${ANIMESALT_BASE}/series/${slug}/`);
+    return { success: true, ...parseSeriesDetail(html) };
   },
 
   async getMovie(slug: string) {
-    return callAnimeSalt({ action: 'movie', slug });
+    const html = await fetchPage(`${ANIMESALT_BASE}/movies/${slug}/`);
+    return { success: true, ...parseEpisodePage(html) };
   },
 
   async getEpisode(slug: string) {
-    return callAnimeSalt({ action: 'episode', slug });
+    const html = await fetchPage(`${ANIMESALT_BASE}/episode/${slug}/`);
+    return { success: true, ...parseEpisodePage(html) };
   },
 };

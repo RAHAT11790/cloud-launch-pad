@@ -55,7 +55,6 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
     } catch {}
   }, []);
 
-  // Fetch user-specific data from Firebase for personalized AI
   useEffect(() => {
     if (!userId) return;
     const commaKey = (() => {
@@ -66,7 +65,6 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
     })();
     if (!commaKey) return;
 
-    // Fetch appUsers data
     const appUserRef = ref(db, `appUsers/${commaKey}`);
     const premiumRef = ref(db, `users/${userId}/premium`);
 
@@ -148,9 +146,9 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       try {
         const { getEdgeFunctionUrl } = await import("@/lib/edgeFunctionRouter");
         const aiEndpoint = await getEdgeFunctionUrl("ai-chat");
-      if (!aiEndpoint) {
-        throw new Error("AI endpoint not configured");
-      }
+        if (!aiEndpoint) {
+          throw new Error("AI endpoint not configured");
+        }
         const res = await fetch(aiEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -181,35 +179,23 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
     const primaryItems = animeList.filter((a) => a.source !== "animesalt");
     const altItems = animeList.filter((a) => a.source === "animesalt");
 
-    let context = `মোট Anime সংখ্যা: ${animeList.length}\n`;
-    context += `RS Catalog: ${primaryItems.length}টি\n`;
-    context += `AN Catalog: ${altItems.length}টি\n`;
-    context += `মোট Series: ${animeList.filter((a) => a.type === "webseries").length}টি\n`;
-    context += `মোট Movies: ${animeList.filter((a) => a.type === "movie").length}টি\n\n`;
+    let context = `মোট Anime: ${animeList.length}\n`;
+    context += `RS Catalog: ${primaryItems.length}টি | AN Catalog: ${altItems.length}টি\n`;
+    context += `Series: ${animeList.filter((a) => a.type === "webseries").length} | Movies: ${animeList.filter((a) => a.type === "movie").length}\n\n`;
 
-    const byCategory: Record<string, AnimeInfo[]> = {};
-    animeList.forEach((a) => {
-      const cat = a.category || "Other";
-      if (!byCategory[cat]) byCategory[cat] = [];
-      byCategory[cat].push(a);
-    });
-
-    context += `ক্যাটাগরি:\n`;
-    Object.entries(byCategory).forEach(([cat, items]) => {
-      context += `${cat} (${items.length}টি), `;
-    });
-
-    context += `\n\nRS Catalog (direct link allowed, প্রথম ৪০টি):\n`;
-    primaryItems.slice(0, 40).forEach((a) => {
+    context += `RS Catalog (direct link allowed):\n`;
+    primaryItems.slice(0, 50).forEach((a) => {
       context += `- [RS] ${a.title} (${a.type === "movie" ? "Movie" : "Series"})${a.id ? ` [ID:${a.id}]` : ""}\n`;
     });
 
-    context += `\nAN Catalog (info only, direct link নিষিদ্ধ, প্রথম ২০টি):\n`;
-    altItems.slice(0, 20).forEach((a) => {
-      context += `- [AN_ONLY] ${a.title} (${a.type === "movie" ? "Movie" : "Series"})${a.id ? ` [ID:${a.id}]` : ""}\n`;
-    });
+    if (altItems.length > 0) {
+      context += `\nAN Catalog (info only, NO direct link):\n`;
+      altItems.slice(0, 30).forEach((a) => {
+        context += `- [AN_ONLY] ${a.title} (${a.type === "movie" ? "Movie" : "Series"})\n`;
+      });
+    }
 
-    return context.substring(0, 3200);
+    return context.substring(0, 3500);
   }, [animeList]);
 
   const sendMessage = async () => {
@@ -239,10 +225,26 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       }));
       chatHistory.push({ role: "user", content: text });
 
-      // Use Cloudflare Worker AI endpoint
       const { getEdgeFunctionUrl } = await import("@/lib/edgeFunctionRouter");
       const aiEndpoint = await getEdgeFunctionUrl("ai-chat");
-      const systemPrompt = `তুমি ${branding.siteName} এর AI support assistant। খুব strict ভাবে সঠিক তথ্য দেবে, কিছুই বানিয়ে বলবে না। Rules: (1) শুধুমাত্র [RS] catalog-এর anime হলে direct link/button দেবে। (2) [AN_ONLY] বা AnimeSalt কন্টেন্টের জন্য কখনো direct link/button দেবে না। তথ্য দিতে পারো, কিন্তু বলবে: "Search bar-এ anime নামটি search করুন। কিছু technical limitation-এর কারণে direct link এখন দিতে পারছি না।" (3) direct link দিতে হলে শুধু এই format ব্যবহার করবে: [BTN:🎬 এখনই দেখুন:ANIME_ID:ANIME_ID_HERE] — id না থাকলে button দেবে না। (4) RS catalog-এ anime না থাকলে স্পষ্টভাবে বলবে যে আমার RS catalog-এ direct link নেই। (5) নতুন release, watch link, বা available জিজ্ঞেস করলে সবসময় RS catalog আগে check করবে। (6) ভুল result, fake availability, fake link, fake button, fake claim কোনোভাবেই দেবে না। (7) Anime সম্পর্কে info চাইলে available context থেকে title/type/year/storyline ইত্যাদি জানাতে পারো, even if direct link available না থাকে। ইউজারের প্রশ্নের উত্তর পরিষ্কার, সংক্ষিপ্ত এবং সহায়কভাবে দাও।`;
+      if (!aiEndpoint) throw new Error("AI endpoint not configured");
+
+      const systemPrompt = [
+        `তুমি ${branding.siteName} এর AI support assistant।`,
+        `Rules:`,
+        `1. শুধু [RS] marked anime-এর জন্য clickable button দাও।`,
+        `   Format: [BTN:🎬 দেখুন: ANIME_TITLE:ANIME_ID:ACTUAL_ID_VALUE]`,
+        `   Example: [BTN:🎬 দেখুন: One Piece:ANIME_ID:-Nxyz123]`,
+        `2. [AN_ONLY] anime-এর button/link দেবে না। বলো: "এই anime আমাদের সাইটে আছে। Search bar-এ নাম লিখে search করুন।"`,
+        `3. ইউজার anime নাম বললে context-এর [RS] list-এ partial match খোঁজো। পেলে button দাও।`,
+        `   না পেলে [AN_ONLY]-তে খোঁজো, পেলে search recommend করো।`,
+        `   কোথাও না পেলে বলো catalog-এ নেই।`,
+        `4. কখনো ভুয়া ID, link বা তথ্য দেবে না।`,
+        `5. RS catalog থেকে similar anime recommend করতে পারো।`,
+        `6. বাংলা ও English দুটোতেই উত্তর দাও - ইউজারের ভাষা অনুসরণ করো।`,
+        `7. সংক্ষিপ্ত ও বন্ধুসুলভ হও।`,
+        `8. Premium/account প্রশ্নে userContext ব্যবহার করো।`,
+      ].join("\n");
 
       const res = await fetch(aiEndpoint, {
         method: "POST",
@@ -267,16 +269,13 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       const data = await res.json();
       setAiStatus("ready");
 
-      const sanitizeAssistantReply = (raw: string) =>
-        raw
-          .replace(/\bAnimeSalt\b/gi, "AN")
-          .replace(/\[AS\]/g, "[AN]")
-          .replace(/\bAS\b/g, "AN");
+      const sanitizeReply = (raw: string) =>
+        raw.replace(/\bAnimeSalt\b/gi, "AN").replace(/\[AS\]/g, "[AN]");
 
       const aiMsg: ChatMessage = {
         id: `ai_${Date.now()}`,
         role: "assistant",
-        content: sanitizeAssistantReply(data?.reply || "দুঃখিত, উত্তর দিতে পারছি না।"),
+        content: sanitizeReply(data?.reply || "দুঃখিত, উত্তর দিতে পারছি না।"),
         timestamp: Date.now(),
       };
       setMessages(prev => [...prev, aiMsg]);
@@ -293,7 +292,8 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
   };
 
   const renderMessageContent = (content: string) => {
-    const btnRegex = /\[BTN:(.+?):(ANIME_ID|ANIME|LINK):(.+?)\]/g;
+    // Match various BTN formats the AI might produce
+    const btnRegex = /\[BTN:(.+?):(ANIME_ID|ANIME|LINK|ID):([^\]]+)\]/g;
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;

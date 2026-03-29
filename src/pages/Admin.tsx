@@ -225,27 +225,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         )}
       </div>
 
-      {/* Video Proxy Settings */}
-      <div className={`${glassCard} p-4 mb-4`}>
-        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-          <Video size={14} className="text-blue-400" /> 🎬 Video Proxy
-        </h3>
-        <div className="space-y-2">
-          <div>
-            <label className="text-[10px] text-zinc-400 block mb-1">Proxy URL</label>
-            <input value={proxyUrl} onChange={(e) => setProxyUrl(e.target.value)}
-              placeholder="https://your-proxy.com/functions/v1/rs-video-proxy?url=" className={inputClass} />
-          </div>
-          <div>
-            <label className="text-[10px] text-zinc-400 block mb-1">🔑 API Key (optional)</label>
-            <input value={proxyApiKey} onChange={(e) => setProxyApiKey(e.target.value)}
-              placeholder="API key থাকলে দাও" className={inputClass} />
-          </div>
-          <button onClick={saveProxySettings} className={`${btnPrimary} w-full`}>
-            <Save size={12} /> Save Proxy
-          </button>
-        </div>
-      </div>
+      {/* Video Proxy removed — use Settings > Custom Proxy instead */}
     </div>
   );
 };
@@ -6448,8 +6428,8 @@ const AnimeSaltManagerSection = ({
     // Load from AnimeSalt API and add as a new season
     try {
       const result = await animeSaltApi.getSeries(slug);
-      if (result?.success && result.data?.seasons?.length > 0) {
-        const apiSeasons = result.data.seasons.map((s: any, sIdx: number) => ({
+      if (result?.success && result.seasons?.length > 0) {
+        const apiSeasons = result.seasons.map((s: any, sIdx: number) => ({
           name: s.name || `Season ${sIdx + 1}`,
           episodes: s.episodes.map((ep: any, eIdx: number) => ({
             number: ep.number || eIdx + 1,
@@ -7682,13 +7662,22 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
                           {/* Device Limit Control */}
                           <div className="flex items-center gap-2 mb-3 bg-black/20 rounded-lg p-2">
                             <span className="text-[10px] text-zinc-400 flex-shrink-0">Max Devices:</span>
-                            <div className="flex gap-1">
-                              {[1, 2, 3, 4, 5].map(n => (
+                            <div className="flex gap-1 items-center">
+                              {[1, 2, 3, 5, 10].map(n => (
                                 <button key={n} onClick={(e) => { e.stopPropagation(); updateMaxDevices(user.id, n); }}
                                   className={`w-7 h-7 rounded-lg text-[11px] font-bold transition-colors ${
                                     maxDev === n ? "bg-yellow-500 text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10"
                                   }`}>{n}</button>
                               ))}
+                              <input
+                                type="number"
+                                min="1"
+                                max="100"
+                                value={maxDev}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => { e.stopPropagation(); const v = parseInt(e.target.value); if (v > 0) updateMaxDevices(user.id, v); }}
+                                className="w-12 h-7 rounded-lg text-[11px] font-bold text-center bg-white/5 text-zinc-300 border border-white/10 focus:border-yellow-500 outline-none"
+                              />
                             </div>
                           </div>
 

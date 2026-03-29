@@ -377,4 +377,19 @@ div[style*="z-index: 2147483647"],
     0% { background-position: 0% 50%; }
     100% { background-position: 300% 50%; }
   }
+
+  /* Fix horizontal scroll blocking on touch devices */
+  .overflow-x-auto,
+  .overflow-x-scroll {
+    touch-action: pan-x pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
