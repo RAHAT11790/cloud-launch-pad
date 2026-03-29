@@ -201,6 +201,49 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
       return;
     }
 
+    const normalize = (value: string) => value.toLowerCase().replace(/[!?.,/\\-]/g, " ").replace(/\s+/g, " ").trim();
+    const extractField = (label: string) => {
+      const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const match = userContext.match(new RegExp(`^${escaped}:\\s*(.+)$`, "mi"));
+      return match?.[1]?.trim() || "";
+    };
+    const hasAny = (patterns: string[]) => patterns.some((pattern) => normalize(text).includes(pattern));
+    const buildLocalReply = () => {
+      if (!userContext) return "";
+
+      const name = extractField("ইউজার নাম") || "আপনি";
+      const email = extractField("ইমেইল");
+      const password = extractField("বর্তমান পাসওয়ার্ড");
+      const premiumStatus = extractField("প্রিমিয়াম স্ট্যাটাস");
+      const premiumExpiry = extractField("প্রিমিয়াম মেয়াদ");
+      const deviceLimit = extractField("ডিভাইস লিমিট");
+      const activeDevices = extractField("সক্রিয় ডিভাইস");
+
+      const asksPassword = hasAny(["password", "pass", "পাসওয়ার্ড", "পাস", "id pass", "আইডি পাস"]);
+      const asksEmail = hasAny(["email", "gmail", "mail", "ইমেইল", "id", "আইডি"]);
+      const asksPremium = hasAny(["premium", "প্রিমিয়াম", "subscription", "সাবস্ক্রিপশন", "মেয়াদ", "দিন বাকি", "device", "ডিভাইস", "limit", "লিমিট"]);
+
+      if (asksPassword && asksEmail) {
+        return `${name}, আপনার লগইন তথ্য:\n• ইমেইল/আইডি: ${email || "পাওয়া যায়নি"}\n• পাসওয়ার্ড: ${password || "সেট করা নেই"} 🔐`;
+      }
+      if (asksPassword) {
+        return password ? `${name}, আপনার বর্তমান পাসওয়ার্ড: ${password} 🔐` : `${name}, আপনার অ্যাকাউন্টে কোনো পাসওয়ার্ড সেট করা নেই।`;
+      }
+      if (asksEmail) {
+        return email ? `${name}, আপনার লগইন ইমেইল/আইডি: ${email} 📩` : `${name}, আপনার লগইন ইমেইল/আইডি পাওয়া যায়নি।`;
+      }
+      if (asksPremium) {
+        const info = [
+          premiumStatus ? `• ${premiumStatus}` : "",
+          premiumExpiry ? `• ${premiumExpiry}` : "",
+          deviceLimit ? `• ডিভাইস লিমিট: ${deviceLimit}` : "",
+          activeDevices ? `• সক্রিয় ডিভাইস: ${activeDevices}` : "",
+        ].filter(Boolean);
+        return info.length ? `${name}, আপনার প্রিমিয়াম তথ্য:\n${info.join("\n")} ✨` : "";
+      }
+      return "";
+    };
+
     setInput("");
     const userMsg: ChatMessage = { id: `u_${Date.now()}`, role: "user", content: text, timestamp: Date.now() };
     setMessages(prev => [...prev, userMsg]);
@@ -216,6 +259,19 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
       } catch {
         toast.error("মেসেজ পাঠাতে ব্যর্থ");
       }
+      return;
+    }
+
+    const localReply = buildLocalReply();
+    if (localReply) {
+      setAiStatus("ready");
+      const localMsg: ChatMessage = {
+        id: `local_${Date.now()}`,
+        role: "assistant",
+        content: localReply,
+        timestamp: Date.now(),
+      };
+      setMessages(prev => [...prev, localMsg]);
       return;
     }
 
@@ -245,7 +301,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      if (!res.ok && !data?.reply) {
         throw new Error(data?.error || `AI error ${res.status}`);
       }
       if (!data?.reply) {
