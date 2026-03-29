@@ -1751,7 +1751,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       const result = await sendPushToAllUsers(pushPayload, (p) => setPushProgress({ ...p }));
       console.log("FCM result:", result);
       if ((result?.total || 0) === 0) {
-        const reason = result?.reason ? ` [${result.reason}]` : "";
+        const reason = "reason" in result && result.reason ? ` [${result.reason}]` : "";
         toast.warning(`Push token পাওয়া যায়নি${reason} — শুধু in-app notification গেছে`);
       } else {
         toast.success(`Push: ${result?.success || 0} delivered, ${result?.failed || 0} failed`);
@@ -1922,7 +1922,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         const result = await sendPushToAllUsers(pushPayload, (p) => setPushProgress({ ...p }));
         console.log("FCM new release result:", result);
         if ((result?.total || 0) === 0) {
-          const reason = result?.reason ? ` [${result.reason}]` : "";
+          const reason = "reason" in result && result.reason ? ` [${result.reason}]` : "";
           toast.warning(`Push token পাওয়া যায়নি${reason} — শুধু in-app notification গেছে`);
         } else {
           toast.success(`Push: ${result?.success || 0} delivered, ${result?.failed || 0} failed`);

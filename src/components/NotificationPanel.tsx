@@ -32,7 +32,6 @@ const showBrowserNotification = (title: string, body: string, contentId?: string
 
   if (typeof window === "undefined" || window.location.origin !== PRIMARY_SITE_ORIGIN) return false;
   if (typeof document !== "undefined" && document.visibilityState !== "hidden") return false;
-  if ("serviceWorker" in navigator) return false;
 
   if (!("Notification" in window) || Notification.permission !== "granted") return false;
 
@@ -48,11 +47,7 @@ const showBrowserNotification = (title: string, body: string, contentId?: string
       requireInteraction: false,
     } as NotificationOptions;
 
-    if (navigator.serviceWorker?.controller) {
-      navigator.serviceWorker.ready.then((reg) => { reg.showNotification(title, options); });
-    } else {
-      new Notification(title, options);
-    }
+    new Notification(title, options);
     return true;
   } catch { return false; }
 };
