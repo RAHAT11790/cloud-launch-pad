@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Search, User } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import NotificationPanel from "./NotificationPanel";
+import { useBranding } from "@/hooks/useBranding";
 import ThemeToggle from "./ThemeToggle";
 import { db, ref, set, update } from "@/lib/firebase";
 
@@ -39,6 +40,8 @@ interface HeaderProps {
 }
 
 const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = [], onLogoClick, chatOpen }: HeaderProps) => {
+  const branding = useBranding();
+  const logoSrc = branding.logoUrl || logoImg;
   const [userId, setUserId] = useState<string | undefined>(undefined);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
@@ -110,7 +113,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       
       {/* Logo - clickable for chat */}
       <button onClick={onLogoClick} className="relative group flex-shrink-0">
-        <img src={logoImg} alt="RS ANIME" className="h-10 w-10 rounded-lg object-contain transition-transform group-hover:scale-110 group-active:scale-95" style={{ boxShadow: "var(--neu-shadow-sm)" }} />
+        <img src={logoSrc} alt={branding.siteName} className="h-10 w-10 rounded-lg object-contain transition-transform group-hover:scale-110 group-active:scale-95" style={{ boxShadow: "var(--neu-shadow-sm)" }} />
         {/* Live dot indicator */}
         <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 border-2 border-background animate-pulse" />
         {chatOpen && (

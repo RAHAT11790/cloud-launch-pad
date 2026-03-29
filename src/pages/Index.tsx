@@ -28,6 +28,7 @@ import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
 import { animeSaltApi } from "@/lib/animeSaltApi";
 import LiveSupportChat from "@/components/LiveSupportChat";
 import { initializeUiTheme } from "@/lib/uiTheme";
+import { useBranding } from "@/hooks/useBranding";
 
 // Session cache for API responses to speed up continue watching
 const apiCache = new Map<string, { data: any; ts: number }>();
@@ -48,6 +49,7 @@ import { createUnlockLinkForCurrentUser } from "@/lib/unlockAccess";
 const Index = () => {
   const { webseries, movies, allAnime: firebaseAnime, categories, loading } = useFirebaseData();
   const { items: animeSaltItems, loading: saltLoading } = useSelectedAnimeSalt();
+  const brandingConfig = useBranding();
 
   // Merge AnimeSalt items into main data lists
   const allAnime = useMemo(() => {
@@ -1370,7 +1372,7 @@ const Index = () => {
             </a>
           </div>
 
-          <p className="text-[10px] text-muted-foreground mt-6">RS ANIME • Please wait</p>
+          <p className="text-[10px] text-muted-foreground mt-6">{brandingConfig.siteName} • Please wait</p>
         </div>
       </div>
     );
@@ -1539,9 +1541,9 @@ const Index = () => {
               </>
             )}
             <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
-              <div className="text-2xl font-black text-primary text-glow tracking-wide mb-2">RS ANIME</div>
-              <p className="text-xs text-muted-foreground mb-3">Unlimited Anime Series & Movies</p>
-              <p className="text-[10px] text-muted-foreground">© 2026 RS ANIME. All rights reserved.</p>
+              <div className="text-2xl font-black text-primary text-glow tracking-wide mb-2">{brandingConfig.siteName}</div>
+              <p className="text-xs text-muted-foreground mb-3">{brandingConfig.footerText}</p>
+              <p className="text-[10px] text-muted-foreground">{brandingConfig.footerCopyright}</p>
             </footer>
           </>
         );

@@ -6,6 +6,9 @@ import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
 import { registerFCMToken } from "@/lib/fcm";
 import { TELEGRAM_ADMIN_URL, TELEGRAM_CHANNEL_URL, SITE_NAME } from "@/lib/siteConfig";
+import { useBranding } from "@/hooks/useBranding";
+import AboutPage from "./AboutPage";
+import PrivacyPolicyPage from "./PrivacyPolicyPage";
 
 const VideoPlayer = lazy(() => import("@/components/VideoPlayer"));
 
@@ -424,7 +427,8 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
 };
 
 const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: ProfilePageProps) => {
-  const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads">("main");
+  const brandingCfg = useBranding();
+  const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy">("main");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(() => {
     try { return localStorage.getItem("rs_profile_photo"); } catch { return null; }
   });
@@ -727,12 +731,21 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </div>
-          <div className="glass-card px-4 py-4 rounded-xl flex items-center gap-3">
+          <div onClick={() => setActivePanel("about")} className="glass-card px-4 py-4 rounded-xl cursor-pointer transition-all hover:border-primary flex items-center gap-3">
             <Info className="w-5 h-5 text-primary" />
             <div className="flex-1">
-              <p className="text-sm font-medium">About RS ANIME</p>
+              <p className="text-sm font-medium">About</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">Version 2.0</p>
             </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </div>
+          <div onClick={() => setActivePanel("privacy")} className="glass-card px-4 py-4 rounded-xl cursor-pointer transition-all hover:border-primary flex items-center gap-3">
+            <Shield className="w-5 h-5 text-primary" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">Privacy Policy</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Terms & data usage</p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </div>
         </div>
       </motion.div>
@@ -787,6 +800,16 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
         </div>
       </motion.div>
     );
+  }
+
+  // About Panel
+  if (activePanel === "about") {
+    return <AboutPage onBack={() => setActivePanel("settings")} siteName={brandingCfg.siteName} />;
+  }
+
+  // Privacy Policy Panel
+  if (activePanel === "privacy") {
+    return <PrivacyPolicyPage onBack={() => setActivePanel("settings")} siteName={brandingCfg.siteName} />;
   }
 
   // Notification Settings
@@ -975,7 +998,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
             <div className="premium-card-glow p-5 rounded-2xl text-center mb-4 relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-1 premium-gradient" />
               <Crown className="w-14 h-14 mx-auto mb-3" style={{ color: "hsl(45,90%,55%)", animation: "crownFloat 3s ease-in-out infinite" }} />
-              <h3 className="text-xl font-bold premium-text mb-3">RS ANIME Premium</h3>
+              <h3 className="text-xl font-bold premium-text mb-3">{brandingCfg.premiumTitle}</h3>
               <div className="space-y-2.5 text-left">
                 {[
                   { icon: "🚫", text: "বিজ্ঞাপন ছাড়া দেখুন" },
@@ -1357,7 +1380,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
           </svg>
           Join Our Telegram Channel
         </a>
-        <p className="text-[10px] text-muted-foreground text-center mt-1 mb-2">Get all updates, news & details about {SITE_NAME}</p>
+        <p className="text-[10px] text-muted-foreground text-center mt-1 mb-2">Get all updates, news & details about {brandingCfg.siteName}</p>
       </div>
     </motion.div>
   );

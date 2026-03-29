@@ -5,6 +5,7 @@ import logoImg from "@/assets/logo.png";
 import { db, auth, googleProvider, ref, set, get, signInWithPopup, sendPasswordResetEmail } from "@/lib/firebase";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
+import { useBranding } from "@/hooks/useBranding";
 
 interface LoginPageProps {
   onLogin: (userId: string) => void;
@@ -38,6 +39,8 @@ const FloatingParticles = () => (
 );
 
 const LoginPage = ({ onLogin }: LoginPageProps) => {
+  const branding = useBranding();
+  const logoSrc = branding.logoUrl || logoImg;
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -585,7 +588,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
               }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              <img src={logoImg} alt="RS ANIME" className="w-24 h-24 rounded-3xl" />
+              <img src={logoSrc} alt={branding.loginTitle} className="w-24 h-24 rounded-3xl" />
             </motion.div>
             <motion.h1
               className="text-4xl font-black gradient-text"
@@ -594,7 +597,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.3 }}
             >
-              RS ANIME
+              {branding.loginTitle}
             </motion.h1>
             <motion.p
               className="text-sm text-muted-foreground"
@@ -602,7 +605,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5 }}
             >
-              Welcome to {SITE_NAME}
+              Welcome to {branding.siteName}
             </motion.p>
           </motion.div>
         ) : (
@@ -635,16 +638,16 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                   transition={{ delay: 0.1 }}
                 >
                   <motion.img 
-                    src={logoImg} 
-                    alt="RS ANIME" 
+                    src={logoSrc} 
+                    alt={branding.loginTitle} 
                     className="w-16 h-16 mx-auto mb-3 rounded-2xl"
                     style={{ boxShadow: "0 10px 40px hsla(176,65%,48%,0.3)" }}
                     whileHover={{ scale: 1.1, rotate: 5 }}
                   />
                   <h1 className="text-2xl font-black text-primary" style={{ fontFamily: "'Russo One', sans-serif", textShadow: "0 0 30px hsla(176,65%,48%,0.4)" }}>
-                    RS ANIME
+                    {branding.loginTitle}
                   </h1>
-                  <p className="text-[11px] text-muted-foreground mt-1 tracking-wider uppercase">Premium Anime Streaming</p>
+                  <p className="text-[11px] text-muted-foreground mt-1 tracking-wider uppercase">{branding.loginSubtitle}</p>
                 </motion.div>
 
                 <motion.div className="flex gap-1 mb-5 bg-foreground/5 rounded-xl p-1 relative z-10"

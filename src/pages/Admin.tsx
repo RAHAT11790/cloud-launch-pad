@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, forwardRef } from "r
 import { db, ref, onValue, push, set, remove, update, get, auth, googleProvider, signInWithPopup } from "@/lib/firebase";
 import { supabase } from "@/integrations/supabase/client";
 import { animeSaltApi } from '@/lib/animeSaltApi';
+import { useBranding } from "@/hooks/useBranding";
 import { sendPushToUsers, type PushProgress } from "@/lib/fcm";
 import { toast } from "sonner";
 import {
@@ -14,7 +15,7 @@ import {
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding";
 
 interface CastMember {
   name: string;
@@ -40,42 +41,32 @@ interface Season {
 
 import { THEME_PRESETS, type ThemePreset } from "@/lib/themePresets";
 
-// ==================== CLOUDFLARE WORKER ROUTER SECTION ====================
+// ==================== CLOUDFLARE WORKER ROUTER SECTION (NEW) ====================
 const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
-  const [config, setConfig] = useState<EdgeRouterConfig>({ platform: "cloudflare", cloudflareBaseUrl: "https://rs-anime-03.rahatsarker224.workers.dev", functions: {} });
-  const [cfUrlInput, setCfUrlInput] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [baseUrlInput, setBaseUrlInput] = useState("");
   const [statuses, setStatuses] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
   const [checking, setChecking] = useState(false);
-  
-  // Add new function form
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newFnName, setNewFnName] = useState("");
-  const [newFnEndpoint, setNewFnEndpoint] = useState("");
-  const [newFnMethod, setNewFnMethod] = useState<"GET" | "POST" | "GET/POST">("POST");
-  const [newFnDesc, setNewFnDesc] = useState("");
-  const [newFnApiKey, setNewFnApiKey] = useState("");
 
   // Proxy settings
   const [proxyUrl, setProxyUrl] = useState("");
   const [proxyApiKey, setProxyApiKey] = useState("");
 
-  // Expanded built-in function for editing apiKey
-  const [expandedBuiltIn, setExpandedBuiltIn] = useState<string | null>(null);
-  const [builtInApiKeys, setBuiltInApiKeys] = useState<Record<string, string>>({});
-
-  // Expanded custom function for editing
-  const [expandedCustom, setExpandedCustom] = useState<string | null>(null);
+  const CORE_FUNCTIONS = [
+    { key: "shorten", label: "🔗 URL Shortener", endpoint: "shorten" },
+    { key: "video-proxy", label: "🎬 Video Proxy", endpoint: "video-proxy" },
+    { key: "send-fcm", label: "🔔 FCM Push", endpoint: "send-fcm" },
+    { key: "telegram-post", label: "📨 Telegram Post", endpoint: "telegram-post" },
+    { key: "ai-chat", label: "🤖 AI Chat", endpoint: "ai-chat" },
+  ];
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/edgeRouter"), (snap) => {
       const val = snap.val();
       if (val) {
-        setConfig({
-          platform: val.platform === "deno" ? "cloudflare" : (val.platform || "cloudflare"),
-          cloudflareBaseUrl: val.cloudflareBaseUrl || val.denoBaseUrl || "https://rs-anime-03.rahatsarker224.workers.dev",
-          functions: val.functions || {},
-        });
-        setCfUrlInput(val.cloudflareBaseUrl || val.denoBaseUrl || "");
+        const url = val.cloudflareBaseUrl || val.denoBaseUrl || "";
+        setBaseUrl(url);
+        setBaseUrlInput(url);
       }
     });
     const unsub2 = onValue(ref(db, "settings/proxyServer"), (snap) => {
@@ -83,86 +74,39 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
       setProxyUrl(val?.url || "");
       setProxyApiKey(val?.apiKey || "");
     });
-    const unsub3 = onValue(ref(db, "settings/builtInApiKeys"), (snap) => {
-      setBuiltInApiKeys(snap.val() || {});
-    });
-    return () => { unsub(); unsub2(); unsub3(); };
+    return () => { unsub(); unsub2(); };
   }, []);
 
-  const saveConfig = async (updates: Partial<EdgeRouterConfig>) => {
-    const newConfig = { ...config, ...updates };
-    await set(ref(db, "settings/edgeRouter"), newConfig);
-    toast.success("Config saved!");
+  const saveBaseUrl = async () => {
+    const url = baseUrlInput.trim();
+    await set(ref(db, "settings/edgeRouter/cloudflareBaseUrl"), url);
+    await set(ref(db, "settings/edgeRouter/platform"), "cloudflare");
+    setBaseUrl(url);
+    toast.success("✅ Base URL সেভ হয়েছে!");
+    // Auto check statuses
+    checkStatuses(url);
   };
 
-  const togglePlatform = () => {
-    const next = config.platform === "lovable" ? "cloudflare" : "lovable";
-    saveConfig({ platform: next });
-  };
-
-  const checkAllStatuses = async () => {
+  const checkStatuses = async (url?: string) => {
+    const base = (url || baseUrl).replace(/\/$/, "");
+    if (!base) { toast.error("Base URL দাও আগে"); return; }
     setChecking(true);
     const results: typeof statuses = {};
-    const allFns = [...DEFAULT_CF_FUNCTIONS, ...Object.values(config.functions).map(f => f.endpoint)];
-    const promises = allFns.map(async (fn) => {
-      const result = await checkFunctionStatus(fn, config.cloudflareBaseUrl);
-      results[fn] = { alive: result.alive, latency: result.latency };
-    });
-    await Promise.all(promises);
+    await Promise.all(CORE_FUNCTIONS.map(async (fn) => {
+      try {
+        const start = Date.now();
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 8000);
+        const res = await fetch(`${base}/${fn.endpoint}`, { method: "GET", signal: controller.signal });
+        clearTimeout(t);
+        results[fn.key] = { alive: res.status < 500, latency: Date.now() - start };
+      } catch {
+        results[fn.key] = { alive: false, latency: 0 };
+      }
+    }));
     setStatuses(results);
     setChecking(false);
-    toast.success("Status check complete!");
-  };
-
-  const addNewFunction = async () => {
-    if (!newFnName.trim() || !newFnEndpoint.trim()) {
-      toast.error("নাম এবং Endpoint দাও");
-      return;
-    }
-    const id = `cf-${Date.now()}`;
-    const newFn: CloudFunction = {
-      id,
-      name: newFnName.trim(),
-      endpoint: newFnEndpoint.trim(),
-      method: newFnMethod,
-      description: newFnDesc.trim() || undefined,
-      apiKey: newFnApiKey.trim() || undefined,
-      enabled: true,
-      addedAt: Date.now(),
-    };
-    const functions = { ...config.functions, [id]: newFn };
-    await saveConfig({ functions });
-    setNewFnName(""); setNewFnEndpoint(""); setNewFnDesc(""); setNewFnApiKey(""); setShowAddForm(false);
-    toast.success(`✅ ${newFnName} ফাংশন যোগ হয়েছে!`);
-  };
-
-  const removeFunction = async (fnId: string) => {
-    const functions = { ...config.functions };
-    delete functions[fnId];
-    await saveConfig({ functions });
-    toast.success("ফাংশন রিমুভ হয়েছে");
-  };
-
-  const toggleFunction = async (fnId: string) => {
-    const fn = config.functions[fnId];
-    if (!fn) return;
-    const functions = { ...config.functions, [fnId]: { ...fn, enabled: !fn.enabled } };
-    await saveConfig({ functions });
-  };
-
-  const saveCustomFnApiKey = async (fnId: string, apiKey: string) => {
-    const fn = config.functions[fnId];
-    if (!fn) return;
-    const functions = { ...config.functions, [fnId]: { ...fn, apiKey: apiKey.trim() || undefined } };
-    await saveConfig({ functions });
-    toast.success("API Key সেভ হয়েছে!");
-  };
-
-  const saveBuiltInApiKey = async (fnName: string, apiKey: string) => {
-    const keys = { ...builtInApiKeys, [fnName]: apiKey.trim() };
-    if (!apiKey.trim()) delete keys[fnName];
-    await set(ref(db, "settings/builtInApiKeys"), keys);
-    toast.success(`${fnName} API Key সেভ হয়েছে!`);
+    toast.success("Status check done!");
   };
 
   const saveProxySettings = async () => {
@@ -173,298 +117,205 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     toast.success("✅ Proxy সেটিংস সেভ হয়েছে!");
   };
 
-  const testFunction = async (endpoint: string, apiKey?: string) => {
-    try {
-      let url = endpoint.startsWith("http") ? endpoint : `${config.cloudflareBaseUrl.replace(/\/$/, "")}/${endpoint}`;
-      if (apiKey) url += (url.includes('?') ? '&' : '?') + `apikey=${encodeURIComponent(apiKey)}`;
-      const start = Date.now();
-      const res = await fetch(url, { method: "GET" });
-      const latency = Date.now() - start;
-      toast.success(`✅ ${res.status} — ${latency}ms`);
-    } catch (e: any) {
-      toast.error(`❌ Test failed: ${e.message}`);
-    }
-  };
-
-  const dynamicFunctions = Object.values(config.functions);
-
   return (
     <div>
-      {/* Global Config */}
+      {/* Base URL Config */}
       <div className={`${glassCard} p-4 mb-4`}>
-        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
-          <Activity size={14} className="text-cyan-400" /> ☁️ Cloudflare Worker Router
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <Activity size={14} className="text-cyan-400" /> ☁️ Cloudflare Worker Config
         </h3>
         <p className="text-[10px] text-zinc-400 mb-4">
-          Cloudflare Worker এ সব ফাংশন চলে। নতুন ফাংশন লিংক দিয়ে যোগ করো।
+          Cloudflare Worker ডিপ্লয় করে Base URL এখানে দাও। সব ফাংশন এই URL থেকে কাজ করবে।
         </p>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-2.5 text-center">
-            <div className="text-lg font-bold text-orange-400">{DEFAULT_CF_FUNCTIONS.length}</div>
-            <div className="text-[9px] text-zinc-400">Built-in</div>
-          </div>
-          <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2.5 text-center">
-            <div className="text-lg font-bold text-purple-400">{dynamicFunctions.length}</div>
-            <div className="text-[9px] text-zinc-400">Custom</div>
-          </div>
-          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-2.5 text-center">
-            <div className="text-lg font-bold text-green-400">{config.platform === "cloudflare" ? "CF" : "LC"}</div>
-            <div className="text-[9px] text-zinc-400">Platform</div>
-          </div>
-        </div>
-
-        {/* Platform Toggle */}
-        <div className="flex items-center justify-between bg-zinc-800/50 rounded-xl p-3 mb-4">
-          <div>
-            <div className="text-xs font-semibold text-white">ডিফল্ট প্ল্যাটফর্ম</div>
-            <div className="text-[10px] text-zinc-400">ফাংশন কোথায় চলবে</div>
-          </div>
-          <button
-            onClick={togglePlatform}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-              config.platform === "cloudflare"
-                ? "bg-orange-600 text-white"
-                : "bg-indigo-600 text-white"
-            }`}
-          >
-            {config.platform === "cloudflare" ? "☁️ Cloudflare" : "☁️ Lovable Cloud"}
-          </button>
-        </div>
-
-        {/* CF Base URL */}
         <div className="mb-4">
-          <label className="text-[10px] text-zinc-400 block mb-1">Cloudflare Worker Base URL</label>
+          <label className="text-[10px] text-zinc-400 block mb-1">Worker Base URL</label>
           <div className="flex gap-2">
             <input
-              value={cfUrlInput}
-              onChange={(e) => setCfUrlInput(e.target.value)}
+              value={baseUrlInput}
+              onChange={(e) => setBaseUrlInput(e.target.value)}
               placeholder="https://your-worker.workers.dev"
               className={`${inputClass} flex-1`}
             />
-            <button
-              onClick={() => saveConfig({ cloudflareBaseUrl: cfUrlInput.trim() })}
-              className={`${btnPrimary} !px-3`}
-            >
-              <Save size={12} /> Save
+            <button onClick={saveBaseUrl} className={`${btnPrimary} !px-3`}>
+              <Save size={12} /> Save & Test
             </button>
           </div>
-          {config.cloudflareBaseUrl && (
-            <div className="mt-1.5 text-[10px] text-green-400">✓ {config.cloudflareBaseUrl}</div>
-          )}
-        </div>
-
-        {/* Check Status */}
-        <button onClick={checkAllStatuses} disabled={checking} className={`${btnPrimary} w-full !py-2.5 mb-4`}>
-          {checking ? <><RefreshCw size={14} className="animate-spin" /> Checking...</> : <><Activity size={14} /> Live Status চেক করো</>}
-        </button>
-      </div>
-
-      {/* ====== Video Proxy Settings ====== */}
-      <div className={`${glassCard} p-4 mb-4`}>
-        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-          <Video size={14} className="text-blue-400" /> 🎬 Video Proxy সেটিংস
-        </h3>
-        <p className="text-[10px] text-zinc-400 mb-3">ভিডিও প্লেব্যাকের জন্য প্রক্সি URL ও API Key সেট করো</p>
-        <div className="space-y-2">
-          <div>
-            <label className="text-[10px] text-zinc-400 block mb-1">Proxy URL</label>
-            <input
-              value={proxyUrl}
-              onChange={(e) => setProxyUrl(e.target.value)}
-              placeholder="https://your-proxy.com/functions/v1/rs-video-proxy?url="
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label className="text-[10px] text-zinc-400 block mb-1">🔑 API Key (optional)</label>
-            <input
-              value={proxyApiKey}
-              onChange={(e) => setProxyApiKey(e.target.value)}
-              placeholder="API key থাকলে এখানে দাও"
-              className={inputClass}
-            />
-          </div>
-          <div className="flex gap-2">
-            <button onClick={saveProxySettings} className={`${btnPrimary} flex-1`}>
-              <Save size={12} /> Save Proxy
-            </button>
-            <button
-              onClick={() => testFunction(proxyUrl || "https://dolsyjysfcxvbfstojnk.supabase.co/functions/v1/rs-video-proxy", proxyApiKey)}
-              className={`${btnSecondary} flex-1`}
-            >
-              <Activity size={12} /> Test
-            </button>
-          </div>
-          <div className="text-[9px] text-zinc-500 mt-1">
-            💡 খালি রাখলে ডিফল্ট Supabase proxy ব্যবহার হবে। API Key থাকলে URL-এ <code>&apikey=...</code> যোগ হবে।
-          </div>
+          {baseUrl && <p className="mt-1.5 text-[10px] text-green-400">✓ {baseUrl}</p>}
         </div>
       </div>
 
-      {/* Built-in Functions */}
-      <div className={`${glassCard} p-4 mb-4`}>
-        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-          <Zap size={14} className="text-orange-400" /> Built-in Functions
-        </h3>
-        <div className="space-y-2">
-          {DEFAULT_CF_FUNCTIONS.map((fn) => {
-            const st = statuses[fn];
-            const isExpanded = expandedBuiltIn === fn;
-            return (
-              <div key={fn} className="bg-zinc-800/40 rounded-xl border border-zinc-700/40 overflow-hidden">
-                <div
-                  className="p-3 flex items-center justify-between cursor-pointer"
-                  onClick={() => setExpandedBuiltIn(isExpanded ? null : fn)}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-orange-500" />
-                    <span className="text-xs font-semibold text-white">{fn}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {st && (
-                      <div className="flex items-center gap-1.5">
-                        <div className={`w-1.5 h-1.5 rounded-full ${st.alive ? "bg-green-400" : "bg-red-400"}`} />
-                        <span className="text-[9px] text-zinc-400">{st.alive ? `${st.latency}ms` : "Down"}</span>
-                      </div>
-                    )}
-                    <ChevronDown size={12} className={`text-zinc-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                  </div>
-                </div>
-                {isExpanded && (
-                  <div className="px-3 pb-3 pt-0 space-y-2 border-t border-zinc-700/30">
-                    <div>
-                      <label className="text-[9px] text-zinc-500 block mb-1">🔑 API Key (optional)</label>
-                      <input
-                        value={builtInApiKeys[fn] || ""}
-                        onChange={(e) => setBuiltInApiKeys(prev => ({ ...prev, [fn]: e.target.value }))}
-                        placeholder="API key এখানে দাও"
-                        className={`${inputClass} !text-[11px]`}
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => saveBuiltInApiKey(fn, builtInApiKeys[fn] || "")} className={`${btnPrimary} flex-1 !py-1.5 !text-[10px]`}>
-                        <Save size={10} /> Save Key
-                      </button>
-                      <button onClick={() => testFunction(fn, builtInApiKeys[fn])} className={`${btnSecondary} flex-1 !py-1.5 !text-[10px]`}>
-                        <Activity size={10} /> Test
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Dynamic / Custom Functions */}
+      {/* Function Status Cards */}
       <div className={`${glassCard} p-4 mb-4`}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold flex items-center gap-2">
-            <PlusCircle size={14} className="text-purple-400" /> Custom Functions
+            <Zap size={14} className="text-orange-400" /> Functions Status
           </h3>
-          <button onClick={() => setShowAddForm(!showAddForm)} className={`${btnPrimary} !py-1 !px-3 !text-[10px]`}>
-            <Plus size={12} /> নতুন যোগ করো
+          <button onClick={() => checkStatuses()} disabled={checking || !baseUrl} className={`${btnSecondary} !py-1 !px-3 !text-[10px]`}>
+            {checking ? <><RefreshCw size={10} className="animate-spin" /> Checking...</> : <><Activity size={10} /> Refresh</>}
           </button>
         </div>
-
-        {/* Add Form */}
-        {showAddForm && (
-          <div className="bg-zinc-800/60 rounded-xl p-3 mb-4 border border-purple-500/30 space-y-2">
-            <input value={newFnName} onChange={e => setNewFnName(e.target.value)} placeholder="ফাংশনের নাম (e.g. my-api)" className={inputClass} />
-            <input value={newFnEndpoint} onChange={e => setNewFnEndpoint(e.target.value)} placeholder="Endpoint (e.g. my-api অথবা https://full-url.com/api)" className={inputClass} />
-            <input value={newFnDesc} onChange={e => setNewFnDesc(e.target.value)} placeholder="বিবরণ (optional)" className={inputClass} />
-            <input value={newFnApiKey} onChange={e => setNewFnApiKey(e.target.value)} placeholder="🔑 API Key (optional)" className={inputClass} />
-            <div className="flex gap-2">
-              {(["GET", "POST", "GET/POST"] as const).map(m => (
-                <button key={m} onClick={() => setNewFnMethod(m)} className={`px-3 py-1 rounded-full text-[10px] font-bold ${newFnMethod === m ? "bg-purple-600 text-white" : "bg-zinc-700 text-zinc-400"}`}>
-                  {m}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2 mt-2">
-              <button onClick={addNewFunction} className={`${btnPrimary} flex-1`}><Plus size={12} /> যোগ করো</button>
-              <button onClick={() => setShowAddForm(false)} className={`${btnSecondary} flex-1`}><X size={12} /> বাতিল</button>
-            </div>
-          </div>
-        )}
-
-        {/* List of dynamic functions */}
-        {dynamicFunctions.length === 0 && !showAddForm && (
-          <p className="text-[10px] text-zinc-500 text-center py-4">কোনো custom function নেই। উপরে "নতুন যোগ করো" চাপো।</p>
-        )}
         <div className="space-y-2">
-          {dynamicFunctions.map((fn) => {
-            const st = statuses[fn.endpoint];
-            const isExpanded = expandedCustom === fn.id;
+          {CORE_FUNCTIONS.map((fn) => {
+            const st = statuses[fn.key];
             return (
-              <div key={fn.id} className={`bg-zinc-800/40 rounded-xl border ${fn.enabled ? "border-purple-500/30" : "border-zinc-700/40 opacity-50"} overflow-hidden`}>
-                <div className="p-3 flex items-center justify-between">
-                  <div
-                    className="flex items-center gap-2 cursor-pointer flex-1"
-                    onClick={() => setExpandedCustom(isExpanded ? null : fn.id)}
-                  >
-                    <div className={`w-2 h-2 rounded-full ${fn.enabled ? "bg-purple-500" : "bg-zinc-600"}`} />
-                    <span className="text-xs font-semibold text-white">{fn.name}</span>
-                    <span className="text-[9px] px-1.5 py-0.5 bg-zinc-700 rounded text-zinc-400">{fn.method}</span>
-                    {fn.apiKey && <KeyRound size={10} className="text-yellow-400" />}
-                    <ChevronDown size={12} className={`text-zinc-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                  </div>
-                  <div className="flex gap-1">
-                    <button onClick={() => toggleFunction(fn.id)} className="p-1 hover:bg-zinc-700 rounded">
-                      {fn.enabled ? <Eye size={12} className="text-green-400" /> : <EyeOff size={12} className="text-zinc-500" />}
-                    </button>
-                    <button onClick={() => removeFunction(fn.id)} className="p-1 hover:bg-red-900/50 rounded">
-                      <Trash2 size={12} className="text-red-400" />
-                    </button>
-                  </div>
+              <div key={fn.key} className="flex items-center justify-between bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40">
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-2.5 h-2.5 rounded-full ${
+                    st ? (st.alive ? "bg-green-500" : "bg-red-500") : "bg-zinc-600"
+                  }`} />
+                  <span className="text-xs font-semibold text-white">{fn.label}</span>
                 </div>
-                <div className="px-3 pb-1 text-[9px] text-zinc-500">{fn.endpoint}</div>
-                {fn.description && <div className="px-3 pb-1 text-[9px] text-zinc-400">{fn.description}</div>}
-                {st && (
-                  <div className="flex items-center gap-1.5 px-3 pb-2">
-                    <div className={`w-1.5 h-1.5 rounded-full ${st.alive ? "bg-green-400" : "bg-red-400"}`} />
-                    <span className="text-[9px] text-zinc-400">{st.alive ? `${st.latency}ms` : "Down"}</span>
-                  </div>
-                )}
-                {isExpanded && (
-                  <div className="px-3 pb-3 space-y-2 border-t border-zinc-700/30 pt-2">
-                    <div>
-                      <label className="text-[9px] text-zinc-500 block mb-1">🔑 API Key</label>
-                      <input
-                        defaultValue={fn.apiKey || ""}
-                        onBlur={(e) => saveCustomFnApiKey(fn.id, e.target.value)}
-                        placeholder="API key এখানে দাও"
-                        className={`${inputClass} !text-[11px]`}
-                      />
-                    </div>
-                    <button onClick={() => testFunction(fn.endpoint, fn.apiKey)} className={`${btnSecondary} w-full !py-1.5 !text-[10px]`}>
-                      <Activity size={10} /> Test
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  {st && (
+                    <span className={`text-[10px] font-mono ${st.alive ? "text-green-400" : "text-red-400"}`}>
+                      {st.alive ? `${st.latency}ms ✓` : "Down ✕"}
+                    </span>
+                  )}
+                  {!st && <span className="text-[10px] text-zinc-500">—</span>}
+                </div>
               </div>
             );
           })}
         </div>
+        {!baseUrl && (
+          <p className="text-[10px] text-yellow-400 mt-3 text-center">⚠️ আগে Base URL সেট করো</p>
+        )}
       </div>
 
-      {/* Guide */}
-      <div className={`${glassCard} p-4`}>
-        <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-          📖 Cloudflare Worker গাইড
+      {/* Video Proxy Settings */}
+      <div className={`${glassCard} p-4 mb-4`}>
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          <Video size={14} className="text-blue-400" /> 🎬 Video Proxy
         </h3>
-        <div className="text-[10px] text-zinc-400 space-y-1.5">
-          <p>১. Cloudflare Worker Base URL সেট করো</p>
-          <p>২. Built-in ফাংশনগুলো অটো কানেক্ট হবে</p>
-          <p>৩. "নতুন যোগ করো" দিয়ে নতুন ফাংশন endpoint যোগ করো</p>
-          <p>৪. প্রতিটি ফাংশনে আলাদা API Key দিতে পারবে 🔑</p>
-          <p>৫. Full URL দিলে আলাদা worker-এও পাঠানো যাবে</p>
-          <p className="text-yellow-400 mt-2">💡 Proxy সেটিংসে API Key দিলে ভিডিও URL-এ অটো &apikey= যোগ হবে!</p>
+        <div className="space-y-2">
+          <div>
+            <label className="text-[10px] text-zinc-400 block mb-1">Proxy URL</label>
+            <input value={proxyUrl} onChange={(e) => setProxyUrl(e.target.value)}
+              placeholder="https://your-proxy.com/functions/v1/rs-video-proxy?url=" className={inputClass} />
+          </div>
+          <div>
+            <label className="text-[10px] text-zinc-400 block mb-1">🔑 API Key (optional)</label>
+            <input value={proxyApiKey} onChange={(e) => setProxyApiKey(e.target.value)}
+              placeholder="API key থাকলে দাও" className={inputClass} />
+          </div>
+          <button onClick={saveProxySettings} className={`${btnPrimary} w-full`}>
+            <Save size={12} /> Save Proxy
+          </button>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ==================== BRANDING CONFIG SECTION ====================
+const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
+  const [config, setConfig] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const FIELDS = [
+    { key: "siteName", label: "সাইটের নাম", placeholder: "RS ANIME" },
+    { key: "siteDescription", label: "সাইটের বিবরণ", placeholder: "Your ultimate destination..." },
+    { key: "siteTagline", label: "ট্যাগলাইন", placeholder: "Premium Anime Streaming" },
+    { key: "loginTitle", label: "লগইন পেজের টাইটেল", placeholder: "RS ANIME" },
+    { key: "loginSubtitle", label: "লগইন সাবটাইটেল", placeholder: "Premium Anime Streaming" },
+    { key: "premiumTitle", label: "প্রিমিয়াম টাইটেল", placeholder: "RS ANIME Premium" },
+    { key: "footerText", label: "ফুটার টেক্সট", placeholder: "Unlimited Anime Series & Movies" },
+    { key: "footerCopyright", label: "কপিরাইট টেক্সট", placeholder: "© 2026 RS ANIME..." },
+    { key: "splashText", label: "স্প্ল্যাশ স্ক্রিন টেক্সট", placeholder: "RS ANIME" },
+    { key: "adminTitle", label: "অ্যাডমিন প্যানেল টাইটেল", placeholder: "RS ANIME Admin" },
+    { key: "aboutTitle", label: "About পেজ টাইটেল", placeholder: "About RS ANIME" },
+  ];
+
+  const LOGO_FIELDS = [
+    { key: "logoUrl", label: "ডিফল্ট লোগো URL", placeholder: "https://..." },
+    { key: "playerLogoUrl", label: "ভিডিও প্লেয়ার লোডিং লোগো URL", placeholder: "https://..." },
+  ];
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/branding"), (snap) => {
+      setConfig(snap.val() || {});
+    });
+    return () => unsub();
+  }, []);
+
+  const updateField = (key: string, value: string) => {
+    setConfig(prev => ({ ...prev, [key]: value }));
+  };
+
+  const saveAll = async () => {
+    setSaving(true);
+    try {
+      // Clean empty values
+      const cleaned: Record<string, string> = {};
+      Object.entries(config).forEach(([k, v]) => {
+        if (v && v.trim()) cleaned[k] = v.trim();
+      });
+      await set(ref(db, "settings/branding"), cleaned);
+      toast.success("✅ ব্র্যান্ডিং সেভ হয়েছে! সব জায়গায় আপডেট হবে।");
+    } catch {
+      toast.error("সেভ ব্যর্থ");
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div>
+      <div className={`${glassCard} p-4 mb-4`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
+          <Edit size={14} className="text-purple-400" /> 🏷️ UI+AD Branding
+        </h3>
+        <p className="text-[10px] text-zinc-400 mb-4">
+          সাইটের সব নাম, লোগো এখান থেকে বদলানো যাবে। কোডে কিছু এডিট করা লাগবে না।
+        </p>
+      </div>
+
+      {/* Logo URLs */}
+      <div className={`${glassCard} p-4 mb-4`}>
+        <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">🎨 লোগো সেটিংস</h4>
+        <div className="space-y-3">
+          {LOGO_FIELDS.map(({ key, label, placeholder }) => (
+            <div key={key}>
+              <label className="text-[10px] text-zinc-400 block mb-1">{label}</label>
+              <input
+                value={config[key] || ""}
+                onChange={(e) => updateField(key, e.target.value)}
+                placeholder={placeholder}
+                className={inputClass}
+              />
+              {config[key] && (
+                <div className="mt-2 flex items-center gap-2">
+                  <img src={config[key]} alt="preview" className="w-10 h-10 rounded-lg object-contain bg-zinc-800" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <span className="text-[9px] text-green-400">✓ Preview</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Text Fields */}
+      <div className={`${glassCard} p-4 mb-4`}>
+        <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">📝 নাম সেটিংস</h4>
+        <div className="space-y-3">
+          {FIELDS.map(({ key, label, placeholder }) => (
+            <div key={key}>
+              <label className="text-[10px] text-zinc-400 block mb-1">{label}</label>
+              <input
+                value={config[key] || ""}
+                onChange={(e) => updateField(key, e.target.value)}
+                placeholder={placeholder}
+                className={inputClass}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Save Button */}
+      <button onClick={saveAll} disabled={saving} className={`${btnPrimary} w-full !py-3 text-sm`}>
+        {saving ? <><RefreshCw size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> সব সেভ করো</>}
+      </button>
     </div>
   );
 };
@@ -925,6 +776,7 @@ const HeroPinnedPostsSection = ({
 };
 
 const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
+  const adminBranding = useBranding();
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     try {
@@ -1473,6 +1325,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "ui-themes": "UI Themes",
     "hero-pinned": "Hero Pinned Posts",
     "edge-router": "Edge Function Router",
+    "branding": "UI+AD Branding",
   };
 
   // ==================== CATEGORIES ====================
@@ -1846,7 +1699,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       }
 
       const pushPayload = {
-        title: savedTitle || "RS ANIME",
+        title: savedTitle || adminBranding.siteName,
         body: savedMessage,
         image: contentPoster || undefined,
         url: contentId ? `/?anime=${contentId}` : "/",
@@ -2691,6 +2544,7 @@ Pᴏᴡᴇʀ Bʏ :
     { section: "analytics", icon: <BarChart3 size={16} />, label: "Analytics & Views" },
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
+    { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "ui-themes", icon: <Zap size={16} />, label: "UI Themes", group: "Customization" },
     { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
     { section: "settings", icon: <Settings size={16} />, label: "Settings" },
@@ -2740,9 +2594,9 @@ Pᴏᴡᴇʀ Bʏ :
       <div className="min-h-screen bg-[#0D0D1A] flex items-center justify-center p-4">
         <div className={`${glassCard} p-8 w-full max-w-[400px]`}>
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4">RS</div>
+            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4">{adminBranding.siteName.charAt(0)}</div>
             <h1 className="text-xl font-bold text-white">Admin Login</h1>
-            <p className="text-sm text-zinc-400 mt-1">RS ANIME Control Panel</p>
+            <p className="text-sm text-zinc-400 mt-1">{adminBranding.adminTitle || "Admin Panel"}</p>
           </div>
           <div className="space-y-4">
             <input value={loginPinInput} onChange={e => setLoginPinInput(e.target.value.replace(/\D/g, ""))}
@@ -2887,10 +2741,10 @@ Pᴏᴡᴇʀ Bʏ :
       <div className={`fixed top-0 ${sidebarOpen ? "left-0" : "-left-[260px]"} w-[260px] h-screen bg-[#111120] z-[1000] transition-all duration-200 border-r border-white/6 flex flex-col`}>
         <div className="p-4 border-b border-white/6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-lg font-black">RS</div>
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-lg font-black">{adminBranding.siteName.charAt(0)}</div>
             <div>
               <h2 className="text-base font-bold text-white">Admin Panel</h2>
-              <p className="text-[10px] text-zinc-500">RS ANIME</p>
+              <p className="text-[10px] text-zinc-500">{adminBranding.siteName}</p>
             </div>
           </div>
         </div>
@@ -5008,6 +4862,11 @@ Pᴏᴡᴇʀ Bʏ :
         {/* ==================== EDGE FUNCTION ROUTER ==================== */}
         {activeSection === "edge-router" && (
           <EdgeRouterSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+        )}
+
+        {/* ==================== BRANDING ==================== */}
+        {activeSection === "branding" && (
+          <BrandingSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
         )}
 
         {/* ==================== COMMENTS ==================== */}

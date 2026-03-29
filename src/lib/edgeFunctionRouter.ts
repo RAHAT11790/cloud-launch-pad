@@ -48,7 +48,7 @@ export interface EdgeRouterConfig {
 
 const DEFAULT_CONFIG: EdgeRouterConfig = {
   platform: "cloudflare",
-  cloudflareBaseUrl: "https://rs-anime-03.rahatsarker224.workers.dev",
+  cloudflareBaseUrl: "",
   functions: {},
 };
 
