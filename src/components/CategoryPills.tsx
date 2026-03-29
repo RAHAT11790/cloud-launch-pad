@@ -5,6 +5,8 @@ interface CategoryPillsProps {
 }
 
 const CategoryPills = ({ active, onSelect, categories }: CategoryPillsProps) => {
+  const uniqueCategories = categories.filter((cat, index) => Boolean(cat) && categories.indexOf(cat) === index);
+
   return (
     <div className="flex gap-2 overflow-x-auto px-4 py-4 no-scrollbar">
       <button
@@ -21,9 +23,9 @@ const CategoryPills = ({ active, onSelect, categories }: CategoryPillsProps) => 
       >
         All
       </button>
-      {categories.map((cat) => (
+      {uniqueCategories.map((cat, index) => (
         <button
-          key={cat}
+          key={`${cat}-${index}`}
           onClick={() => onSelect(cat)}
           className={`flex-shrink-0 px-5 py-2 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
             active === cat
