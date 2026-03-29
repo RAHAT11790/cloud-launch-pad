@@ -190,7 +190,7 @@ export const animeSaltApi = {
     // Try old API format first
     const proxyUrl = await getAnimeSaltProxyUrl();
     const directResult = await tryDirectApi(proxyUrl, { action: 'browse', type, page });
-    if (directResult?.items) {
+    if (directResult?.items?.length) {
       return { success: true, items: directResult.items };
     }
     
