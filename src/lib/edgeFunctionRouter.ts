@@ -175,7 +175,7 @@ export async function getAllFunctions(): Promise<CloudFunction[]> {
     id: `builtin-${fn}`,
     name: fn,
     endpoint: fn,
-    method: (fn === "clean-embed" ? "GET/POST" : "POST") as CloudFunction["method"],
+    method: "POST" as CloudFunction["method"],
     description: getBuiltInDescription(fn),
     enabled: true,
     addedAt: 0,
