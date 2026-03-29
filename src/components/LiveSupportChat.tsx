@@ -301,10 +301,15 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
         throw new Error("AI not configured");
       }
 
+      const payload: Record<string, unknown> = { messages: chatHistory };
+      if (asksAccountInfo && userContext) {
+        payload.userContext = userContext.slice(0, 600);
+      }
+
       const res = await fetch(aiConfig.url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: chatHistory, userContext: userContext.slice(0, 600) }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json().catch(() => ({}));
