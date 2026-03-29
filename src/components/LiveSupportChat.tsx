@@ -319,7 +319,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
       const aiMsg: ChatMessage = {
         id: `ai_${Date.now()}`,
         role: "assistant",
-        content: sanitizeReply(data.reply),
+        content: sanitizeReply(aiReply),
         timestamp: Date.now(),
       };
       setMessages(prev => [...prev, aiMsg]);
