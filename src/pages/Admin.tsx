@@ -7305,6 +7305,34 @@ const AnimeSaltManagerSection = ({
         </div>
       )}
 
+      {/* AnimeSalt Custom URL Config */}
+      <div className={`${glassCard} p-4 mb-4`}>
+        <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+          ⚙️ AnimeSalt Source Config
+        </h3>
+        <p className="text-[10px] text-zinc-400 mb-3">
+          কাস্টম URL দিলে সেটা থেকে AnimeSalt ডাটা আসবে। Cloudflare, Supabase, বা যেকোনো সাইটের URL দিন।
+        </p>
+        <div className="flex items-center justify-between mb-3 bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40">
+          <div className="flex items-center gap-3">
+            <div className={`w-3 h-3 rounded-full ${asEnabled ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className="text-xs font-medium">{asEnabled ? 'চালু' : 'বন্ধ'}</span>
+          </div>
+          <button onClick={toggleAs}
+            className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors ${asEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${asEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
+          </button>
+        </div>
+        <div className="flex gap-2 mb-2">
+          <input value={asCustomUrlInput} onChange={e => setAsCustomUrlInput(e.target.value)}
+            placeholder="https://your-worker.dev/animesalt" className={`${inputClass} flex-1`} />
+          <button onClick={saveAsConfig} className={`${btnPrimary} !px-3`}>
+            <Save size={12} /> সেভ
+          </button>
+        </div>
+        {asCustomUrl && <p className="text-[9px] text-cyan-400">⚡ কাস্টম URL: {asCustomUrl}</p>}
+      </div>
+
       <div className={`${glassCard} p-4 mb-4`}>
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-semibold flex items-center gap-2">
