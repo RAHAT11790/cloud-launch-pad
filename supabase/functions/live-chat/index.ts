@@ -144,7 +144,7 @@ ${animeContext ? `\n## বর্তমানে সাইটে যে anime গ
           parts: [{ text: finalSystemPrompt }],
         },
         contents: mergedContents,
-        generationConfig: {
+        generation_config: {
           temperature: 0.7,
           maxOutputTokens: 1024,
           topP: 0.9,
