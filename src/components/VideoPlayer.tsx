@@ -200,6 +200,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [showNextEpOverlay, setShowNextEpOverlay] = useState(false);
   const [nextEpCountdown, setNextEpCountdown] = useState(0);
   const nextEpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const nextEpCancelledRef = useRef(false);
   // Global download manager state
   const [activeDownloads, setActiveDownloads] = useState<Map<string, any>>(new Map());
   const [globalFreeAccess, setGlobalFreeAccess] = useState<boolean>(false);
@@ -558,10 +559,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
     if (!onNextEpisode || duration <= 0 || currentTime <= 0) return;
+    // Don't show if user cancelled it for this episode
+    if (nextEpCancelledRef.current) return;
     const remaining = duration - currentTime;
-    // Only show in the last 90 seconds (or 5% of video + 10s, whichever is smaller)
+    // Only show in the last 90 seconds, BUT also require that at least 30% of the video has been watched
+    // This prevents showing immediately when a new episode loads
     const threshold = Math.min(90, duration * 0.05 + 10);
-    if (remaining <= threshold && remaining > 0 && !showNextEpOverlay) {
+    const watchedEnough = currentTime > duration * 0.3;
+    if (remaining <= threshold && remaining > 0 && !showNextEpOverlay && watchedEnough) {
       setShowNextEpOverlay(true);
       setNextEpCountdown(Math.ceil(remaining));
     }
@@ -574,6 +579,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   useEffect(() => {
     setShowNextEpOverlay(false);
     setNextEpCountdown(0);
+    nextEpCancelledRef.current = false;
   }, [src, currentSrc]);
 
   useEffect(() => {
@@ -1162,7 +1168,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   <span className="text-xs font-semibold text-foreground">Next Episode</span>
                 </div>
                 <div className="flex gap-1.5 ml-1">
-                  <button onClick={() => setShowNextEpOverlay(false)} className="text-[9px] text-muted-foreground hover:text-foreground px-2 py-1 rounded bg-foreground/10">
+                  <button onClick={() => { nextEpCancelledRef.current = true; setShowNextEpOverlay(false); }} className="text-[9px] text-muted-foreground hover:text-foreground px-2 py-1 rounded bg-foreground/10">
                     Cancel
                   </button>
                   <button onClick={() => onNextEpisode()} className="text-[10px] font-bold px-3 py-1 rounded-lg gradient-primary btn-glow flex items-center gap-1">
