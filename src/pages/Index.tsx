@@ -49,6 +49,7 @@ import { createUnlockLinkForCurrentUser } from "@/lib/unlockAccess";
 const Index = () => {
   const { webseries, movies, allAnime: firebaseAnime, categories, loading } = useFirebaseData();
   const { items: animeSaltItems, loading: saltLoading } = useSelectedAnimeSalt();
+  const brandingConfig = useBranding();
 
   // Merge AnimeSalt items into main data lists
   const allAnime = useMemo(() => {
