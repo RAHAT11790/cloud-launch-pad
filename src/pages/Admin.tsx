@@ -2741,10 +2741,10 @@ Pᴏᴡᴇʀ Bʏ :
       <div className={`fixed top-0 ${sidebarOpen ? "left-0" : "-left-[260px]"} w-[260px] h-screen bg-[#111120] z-[1000] transition-all duration-200 border-r border-white/6 flex flex-col`}>
         <div className="p-4 border-b border-white/6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-lg font-black">RS</div>
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-lg font-black">{adminBranding.siteName.charAt(0)}</div>
             <div>
               <h2 className="text-base font-bold text-white">Admin Panel</h2>
-              <p className="text-[10px] text-zinc-500">RS ANIME</p>
+              <p className="text-[10px] text-zinc-500">{adminBranding.siteName}</p>
             </div>
           </div>
         </div>
