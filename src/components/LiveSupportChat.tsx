@@ -3,6 +3,7 @@ import { X, Send } from "lucide-react";
 
 import { db, ref, push, set, onValue } from "@/lib/firebase";
 import { toast } from "sonner";
+import { useBranding } from "@/hooks/useBranding";
 import logoImg from "@/assets/logo.png";
 
 interface ChatMessage {
@@ -34,6 +35,7 @@ interface LiveSupportChatProps {
 }
 
 const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: LiveSupportChatProps) => {
+  const branding = useBranding();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -300,10 +302,10 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       {/* Header */}
       <div className="px-4 py-3 flex items-center gap-3 bg-card" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
         <div className="w-9 h-9 rounded-lg overflow-hidden p-0.5 bg-card" style={{ boxShadow: "var(--neu-shadow-sm)" }}>
-          <img src={logoImg} alt="RS" className="w-full h-full object-contain" />
+          <img src={branding.logoUrl || logoImg} alt={branding.siteName} className="w-full h-full object-contain" />
         </div>
         <div className="flex-1">
-          <h3 className="text-sm font-bold text-foreground">RS Support</h3>
+          <h3 className="text-sm font-bold text-foreground">{branding.siteName} Support</h3>
           <div className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
             <p className="text-[10px] text-green-600">AI Assistant • Online</p>
@@ -319,10 +321,10 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
         {messages.length === 0 && (
           <div className="text-center py-8">
             <div className="w-12 h-12 rounded-lg overflow-hidden mx-auto mb-3 bg-card p-1" style={{ boxShadow: "var(--neu-shadow-sm)" }}>
-              <img src={logoImg} alt="RS" className="w-full h-full object-contain" />
+              <img src={branding.logoUrl || logoImg} alt={branding.siteName} className="w-full h-full object-contain" />
             </div>
             <p className="text-sm text-foreground font-medium">হ্যালো! 👋</p>
-            <p className="text-xs text-muted-foreground mt-1">আমি RS Bot, আপনাকে সাহায্য করতে এখানে আছি!</p>
+            <p className="text-xs text-muted-foreground mt-1">আমি {branding.siteName} Bot, আপনাকে সাহায্য করতে এখানে আছি!</p>
             <p className="text-[10px] text-primary/60 mt-2">Admin-এর সাথে কথা বলতে @RS লিখুন</p>
           </div>
         )}
