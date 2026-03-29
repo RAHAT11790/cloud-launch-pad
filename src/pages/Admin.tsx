@@ -1084,6 +1084,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [tgNewEpAdded, setTgNewEpAdded] = useState("");
   const [tgPosterUrl, setTgPosterUrl] = useState("");
   const [tgButtonLink, setTgButtonLink] = useState("");
+  const [tgButtons, setTgButtons] = useState<{ name: string; url: string }[]>([]);
+  const [tgDefaultButtonName, setTgDefaultButtonName] = useState("📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥");
   const [tgSending, setTgSending] = useState(false);
   const [tgDropdownOpen, setTgDropdownOpen] = useState(false);
   const [tgContentSearch, setTgContentSearch] = useState("");
@@ -2490,13 +2492,25 @@ Pᴏᴡᴇʀ Bʏ :
 
       const results: { id: string; ok: boolean; error?: string }[] = [];
 
+      // Build inline keyboard buttons array
+      const inlineButtons: { text: string; url: string }[] = [];
+      if (tgButtonLink) {
+        inlineButtons.push({ text: tgDefaultButtonName || "📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥", url: tgButtonLink });
+      }
+      tgButtons.forEach(btn => {
+        if (btn.name.trim() && btn.url.trim()) {
+          inlineButtons.push({ text: btn.name.trim(), url: btn.url.trim() });
+        }
+      });
+
       for (const chatId of channelIds) {
         const payload = {
           chatId,
           caption,
           photoUrl: tgPosterUrl || undefined,
-          buttonText: tgButtonLink ? "📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥" : undefined,
-          buttonUrl: tgButtonLink || undefined,
+          buttonText: inlineButtons.length > 0 ? inlineButtons[0].text : undefined,
+          buttonUrl: inlineButtons.length > 0 ? inlineButtons[0].url : undefined,
+          inlineButtons: inlineButtons.length > 1 ? inlineButtons : undefined,
         };
         try {
           const endpoint = await getEdgeFunctionUrl('telegram-post');
@@ -4550,6 +4564,34 @@ Pᴏᴡᴇʀ Bʏ :
                   <label className="block text-xs text-zinc-400 mb-1.5">ডাউনলোড/ওয়াচ লিংক (ঐচ্ছিক)</label>
                   <input value={tgButtonLink} onChange={e => setTgButtonLink(e.target.value)} className={inputClass} placeholder={SITE_URL} />
                 </div>
+                {tgButtonLink && (
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5">ডিফল্ট বাটন নাম</label>
+                    <input value={tgDefaultButtonName} onChange={e => setTgDefaultButtonName(e.target.value)} className={inputClass} placeholder="📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥" />
+                  </div>
+                )}
+                {/* Extra buttons */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs text-zinc-400 font-medium">অতিরিক্ত বাটন (ঐচ্ছিক)</label>
+                    <button type="button" onClick={() => setTgButtons([...tgButtons, { name: "", url: "" }])}
+                      className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                      <Plus size={12} /> বাটন যোগ করুন
+                    </button>
+                  </div>
+                  {tgButtons.map((btn, i) => (
+                    <div key={i} className="flex gap-2 mb-2 items-start">
+                      <div className="flex-1 space-y-1.5">
+                        <input value={btn.name} onChange={e => { const nb = [...tgButtons]; nb[i].name = e.target.value; setTgButtons(nb); }}
+                          className={inputClass} placeholder="বাটন নাম" />
+                        <input value={btn.url} onChange={e => { const nb = [...tgButtons]; nb[i].url = e.target.value; setTgButtons(nb); }}
+                          className={inputClass} placeholder="https://..." />
+                      </div>
+                      <button type="button" onClick={() => setTgButtons(tgButtons.filter((_, j) => j !== i))}
+                        className="mt-2 text-red-400 hover:text-red-300 p-1.5"><Trash2 size={14} /></button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -4577,9 +4619,14 @@ Pᴏᴡᴇʀ Bʏ :
                 </div>
                 {tgButtonLink && (
                   <div className="mt-3 bg-blue-500/20 border border-blue-500/40 rounded-lg py-2.5 text-center text-[12px] font-bold text-blue-300">
-                    📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥
+                    {tgDefaultButtonName || "📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥"}
                   </div>
                 )}
+                {tgButtons.filter(b => b.name.trim()).map((btn, i) => (
+                  <div key={i} className="mt-1.5 bg-blue-500/15 border border-blue-500/30 rounded-lg py-2 text-center text-[11px] font-bold text-blue-300">
+                    {btn.name}
+                  </div>
+                ))}
               </div>
             </div>
 

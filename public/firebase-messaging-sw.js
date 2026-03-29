@@ -12,22 +12,59 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
+const brandIcon = 'https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png';
 
-// Handle background messages
+// Handle background messages (both notification+data and data-only)
 messaging.onBackgroundMessage((payload) => {
-  const { title, body, icon, image } = payload.notification || {};
-  const notifTitle = title || 'RS ANIME';
-  const brandIcon = 'https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png';
+  // If notification payload exists, FCM SDK may auto-show it
+  // For data-only messages, we must show manually
+  const notification = payload.notification || {};
+  const data = payload.data || {};
+  
+  const notifTitle = notification.title || data.title || 'RS ANIME';
+  const notifBody = notification.body || data.body || '';
+  const notifImage = notification.image || data.image || undefined;
+  const notifIcon = notification.icon || data.icon || brandIcon;
+  
   const notifOptions = {
-    body: body || '',
-    icon: icon || brandIcon,
-    image: image || undefined,
+    body: notifBody,
+    icon: notifIcon,
+    image: notifImage,
     badge: brandIcon,
     vibrate: [200, 100, 200],
-    data: payload.data || {},
+    data: data,
     tag: `rsanime-bg-${Date.now()}`,
+    requireInteraction: false,
   };
-  self.registration.showNotification(notifTitle, notifOptions);
+  
+  return self.registration.showNotification(notifTitle, notifOptions);
+});
+
+// Also listen for raw push events as fallback
+self.addEventListener('push', (event) => {
+  // Only handle if FCM SDK didn't already handle it
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      // If there's no notification key, FCM SDK won't auto-show, handle here
+      if (!payload.notification && payload.data) {
+        const data = payload.data;
+        const title = data.title || 'RS ANIME';
+        const options = {
+          body: data.body || '',
+          icon: data.icon || brandIcon,
+          image: data.image || undefined,
+          badge: brandIcon,
+          vibrate: [200, 100, 200],
+          data: data,
+          tag: `rsanime-push-${Date.now()}`,
+        };
+        event.waitUntil(self.registration.showNotification(title, options));
+      }
+    } catch (e) {
+      // Not JSON, ignore
+    }
+  }
 });
 
 // Handle notification click
@@ -50,4 +87,9 @@ self.addEventListener('notificationclick', (event) => {
       return self.clients.openWindow(url);
     })
   );
+});
+
+// Activate immediately without waiting
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
 });
