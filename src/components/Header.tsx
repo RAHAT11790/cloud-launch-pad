@@ -46,6 +46,15 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const [animating, setAnimating] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
+
+  // Listen to AI chat enabled status from Firebase
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/aiChat/enabled"), (snap) => {
+      setAiEnabled(snap.val() === true);
+    });
+    return () => unsub();
+  }, []);
 
   // Pick random titles for placeholder rotation
   const displayTitles = useMemo(() => {
