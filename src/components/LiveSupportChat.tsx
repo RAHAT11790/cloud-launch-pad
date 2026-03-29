@@ -409,7 +409,46 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
       parts.push(<span key={`t${lastIndex}`} className="whitespace-pre-wrap">{content.slice(lastIndex)}</span>);
     }
 
-    return <div>{parts.length > 0 ? parts : <span className="whitespace-pre-wrap">{content}</span>}</div>;
+    // Auto-detect plain URLs and make them clickable
+    const renderWithLinks = (nodes: React.ReactNode[]): React.ReactNode[] => {
+      const urlRegex = /(https?:\/\/[^\s*<>]+)/g;
+      const result: React.ReactNode[] = [];
+      nodes.forEach((node, i) => {
+        if (typeof node === "string" || (node && typeof node === "object" && "props" in node && node.props?.className?.includes("whitespace-pre-wrap"))) {
+          const text = typeof node === "string" ? node : (node as any).props.children;
+          if (typeof text !== "string") { result.push(node); return; }
+          const textParts: React.ReactNode[] = [];
+          let lastIdx = 0;
+          let urlMatch: RegExpExecArray | null;
+          const r = new RegExp(urlRegex);
+          while ((urlMatch = r.exec(text)) !== null) {
+            if (urlMatch.index > lastIdx) {
+              textParts.push(text.slice(lastIdx, urlMatch.index));
+            }
+            const url = urlMatch[1].replace(/\*+$/, "");
+            textParts.push(
+              <a key={`url_${i}_${urlMatch.index}`} href={url} target="_blank" rel="noopener noreferrer"
+                className="inline-block mt-1 mb-1 px-3 py-1.5 rounded-lg text-primary-foreground text-xs font-medium text-center hover:opacity-90 active:scale-[0.98] transition-all gradient-primary underline-offset-2">
+                🔗 {new URL(url).hostname.replace("www.", "")}
+              </a>
+            );
+            lastIdx = urlMatch.index + urlMatch[0].length;
+          }
+          if (lastIdx < text.length) textParts.push(text.slice(lastIdx));
+          if (textParts.length > 0) {
+            result.push(<span key={`wl_${i}`} className="whitespace-pre-wrap">{textParts}</span>);
+          } else {
+            result.push(node);
+          }
+        } else {
+          result.push(node);
+        }
+      });
+      return result;
+    };
+
+    const finalParts = parts.length > 0 ? renderWithLinks(parts) : [<span key="raw" className="whitespace-pre-wrap">{content}</span>];
+    return <div>{finalParts}</div>;
   };
 
   if (!isOpen) return null;
