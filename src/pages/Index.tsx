@@ -1520,7 +1520,7 @@ const Index = () => {
     );
   }
 
-  if (loading) {
+  if (loading && !playerState && !saltPlayerState) {
     return <SplashLoader />;
   }
 
