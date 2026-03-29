@@ -426,10 +426,18 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
               textParts.push(text.slice(lastIdx, urlMatch.index));
             }
             const url = urlMatch[1].replace(/\*+$/, "");
+            // Extract anime name from URL path
+            const pathName = (() => {
+              try {
+                const segments = new URL(url).pathname.split("/").filter(Boolean);
+                const last = segments[segments.length - 1] || "";
+                return last.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase()).slice(0, 25);
+              } catch { return "Link"; }
+            })();
             textParts.push(
               <a key={`url_${i}_${urlMatch.index}`} href={url} target="_blank" rel="noopener noreferrer"
-                className="inline-block mt-1 mb-1 px-3 py-1.5 rounded-lg text-primary-foreground text-xs font-medium text-center hover:opacity-90 active:scale-[0.98] transition-all gradient-primary underline-offset-2">
-                🔗 {new URL(url).hostname.replace("www.", "")}
+                className="inline-flex items-center gap-1 mt-1 mb-1 px-3 py-1.5 rounded-lg text-primary-foreground text-xs font-medium hover:opacity-90 active:scale-[0.98] transition-all gradient-primary max-w-[200px] truncate">
+                ▶ {pathName || "Open"}
               </a>
             );
             lastIdx = urlMatch.index + urlMatch[0].length;
