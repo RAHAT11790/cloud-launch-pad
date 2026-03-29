@@ -232,11 +232,11 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
             onClick={() => {
               if (anime.type === "webseries" && anime.seasons) { onPlay(anime, 0, 0); } else { onPlay(anime); }
             }}
-            className="flex-1 py-3 rounded-[10px] gradient-primary font-bold text-sm flex items-center justify-center gap-2 btn-glow">
+            className="flex-1 py-3 rounded-xl gradient-primary font-bold text-sm flex items-center justify-center gap-2 btn-glow">
             {anime.type === "webseries" ? <><List className="w-4 h-4" /> Watch</> : <><Play className="w-4 h-4" /> Play</>}
           </button>
           <button onClick={toggleWatchlist}
-            className={`flex-1 py-3 rounded-[10px] font-semibold text-sm flex items-center justify-center gap-2 border transition-all hover:-translate-y-0.5 ${
+            className={`flex-1 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 border transition-all hover:-translate-y-0.5 ${
               isInWatchlist ? "bg-primary/20 border-primary text-primary" : "bg-foreground/10 backdrop-blur-[20px] border-foreground/20 hover:bg-foreground/20"
             }`}>
             <Heart className={`w-4 h-4 ${isInWatchlist ? "fill-primary" : ""}`} />
