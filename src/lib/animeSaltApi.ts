@@ -69,7 +69,9 @@ const fetchPage = async (url: string): Promise<string> => {
   if (isEpisodePage && slugMatch) {
     fallbackBody = { action: 'episode', slug: slugMatch[2] };
   } else if (slugMatch && !pageMatch) {
-    fallbackBody = { action: 'detail', slug: slugMatch[2], type: slugMatch[1] };
+    // Map type to correct action name matching edge function
+    const actionName = slugMatch[1] === 'series' ? 'series' : 'movie';
+    fallbackBody = { action: actionName, slug: slugMatch[2] };
   } else {
     fallbackBody = {
       action: 'browse',
@@ -226,7 +228,8 @@ export const animeSaltApi = {
 
   async getSeries(slug: string) {
     const proxyUrl = await getAnimeSaltProxyUrl();
-    const directResult = await tryDirectApi(proxyUrl, { action: 'detail', slug, type: 'series' });
+    // Use 'series' action (not 'detail') to match edge function
+    const directResult = await tryDirectApi(proxyUrl, { action: 'series', slug });
     if (directResult?.seasons) return { success: true, ...directResult };
     
     const html = await fetchPage(`${ANIMESALT_BASE}/series/${slug}/`);
@@ -235,8 +238,9 @@ export const animeSaltApi = {
 
   async getMovie(slug: string) {
     const proxyUrl = await getAnimeSaltProxyUrl();
-    const directResult = await tryDirectApi(proxyUrl, { action: 'detail', slug, type: 'movies' });
-    if (directResult?.links) return { success: true, ...directResult };
+    // Use 'movie' action (not 'detail') to match edge function
+    const directResult = await tryDirectApi(proxyUrl, { action: 'movie', slug });
+    if (directResult) return { success: true, ...directResult };
     
     const html = await fetchPage(`${ANIMESALT_BASE}/movies/${slug}/`);
     return { success: true, ...parseEpisodePage(html) };
