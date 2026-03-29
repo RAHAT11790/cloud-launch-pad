@@ -294,9 +294,11 @@ const Index = () => {
     // Restore from sessionStorage on refresh
     try { return sessionStorage.getItem("rs_selectedAnimeId"); } catch { return null; }
   });
-  const [showSearch, setShowSearch] = useState(false);
+  const [showSearch, setShowSearch] = useState(() => {
+    try { return sessionStorage.getItem("rs_uiLayer") === "search"; } catch { return false; }
+  });
   const [showProfile, setShowProfile] = useState(() => {
-    try { return sessionStorage.getItem("rs_activePage") === "profile"; } catch { return false; }
+    try { return sessionStorage.getItem("rs_uiLayer") === "profile"; } catch { return false; }
   });
   const [chatOpen, setChatOpen] = useState(false);
 
@@ -376,6 +378,26 @@ const Index = () => {
       }
     } catch {}
   }, [saltPlayerState]);
+
+  // Persist exact current UI layer so refresh returns to the same screen
+  useEffect(() => {
+    try {
+      const layer = playerState
+        ? "player"
+        : saltPlayerState
+          ? "saltPlayer"
+          : selectedAnime
+            ? "details"
+            : showSearch
+              ? "search"
+              : showProfile
+                ? "profile"
+                : (activePage === "series" || activePage === "movies")
+                  ? activePage
+                  : "home";
+      sessionStorage.setItem("rs_uiLayer", layer);
+    } catch {}
+  }, [playerState, saltPlayerState, selectedAnime, showSearch, showProfile, activePage]);
 
   // AnimeSalt details request control + cache (avoid stale loading toast on cached reopen)
   const detailsCacheRef = useRef<Map<string, AnimeItem>>(new Map());
@@ -549,6 +571,19 @@ const Index = () => {
     if (activePage === "series" || activePage === "movies") return activePage;
     return "home";
   }, [playerState, saltPlayerState, selectedAnime, showSearch, showProfile, activePage]);
+
+
+  useEffect(() => {
+    try {
+      const layer = sessionStorage.getItem("rs_uiLayer");
+      if (layer === "search") setShowSearch(true);
+      if (layer === "profile") {
+        setShowProfile(true);
+        setActivePage("home");
+      }
+      if (layer === "series" || layer === "movies") setActivePage(layer);
+    } catch {}
+  }, []);
 
   const handleBackPress = useCallback(() => {
     const layer = getCurrentLayer();
