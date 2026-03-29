@@ -185,6 +185,15 @@ const pruneUserTokens = async (userId: string, currentTokenKey: string, deviceId
   }
 };
 
+/** Get email-based key for fcmTokens (matches existing Firebase structure) */
+const getEmailKey = (): string | null => {
+  try {
+    const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
+    if (u.email) return u.email.replace(/\./g, ",");
+  } catch {}
+  return null;
+};
+
 // Register FCM token for a user
 export const registerFCMToken = async (userId: string, showDiagnostics = false) => {
   // If permission is already granted, skip all diagnostic toasts
@@ -233,7 +242,7 @@ export const registerFCMToken = async (userId: string, showDiagnostics = false) 
     }
 
     diag("Step 2: Registering service worker...");
-      const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/", updateViaCache: "none" });
+    const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/", updateViaCache: "none" });
     await navigator.serviceWorker.ready;
     diag(`SW registered ✓ scope: ${registration.scope}`, "success");
 
@@ -269,20 +278,33 @@ export const registerFCMToken = async (userId: string, showDiagnostics = false) 
       const deviceId = getDeviceId();
       const origin = window.location.origin;
 
-      diag(`Step 5: Token received ✓ Saving to DB at fcmTokens/${userId}/${tokenKey}...`);
+      // Store under email key (matches existing Firebase structure)
+      // Also store under userId as fallback
+      const emailKey = getEmailKey();
+      const storageKey = emailKey || userId;
+      
+      diag(`Step 5: Token received ✓ Saving to DB at fcmTokens/${storageKey}/${tokenKey}...`);
 
-      await set(ref(db, `fcmTokens/${userId}/${tokenKey}`), {
+      const tokenData = {
         token,
         deviceId,
         origin,
         updatedAt: Date.now(),
         userAgent: navigator.userAgent.substring(0, 160),
-      });
+      };
+
+      // Save under primary key (email-based if available)
+      await set(ref(db, `fcmTokens/${storageKey}/${tokenKey}`), tokenData);
+      
+      // If email key is different from userId, also save under userId for redundancy
+      if (emailKey && emailKey !== userId) {
+        await set(ref(db, `fcmTokens/${userId}/${tokenKey}`), tokenData).catch(() => {});
+      }
 
       // Prune old tokens from same device + enforce max cap
-      const pruned = await pruneUserTokens(userId, tokenKey, deviceId);
+      const pruned = await pruneUserTokens(storageKey, tokenKey, deviceId);
       if (pruned > 0) {
-        console.log(`[FCM] Pruned ${pruned} old token(s) for user ${userId}`);
+        console.log(`[FCM] Pruned ${pruned} old token(s) for ${storageKey}`);
       }
 
       await persistPushState({
@@ -521,19 +543,11 @@ export const sendPushToUsers = async (
     return { skipped: true, success: 0, failed: 0, total: 0, invalidTokensRemoved: 0, reason: "NO_TARGET_USERS" };
   }
 
-  // First try per-user tokens, then fall back to ALL tokens from fcmTokens node
-  let tokens = await getFCMTokens(uniqueUserIds);
-  
-  // If per-user lookup found very few tokens, also grab ALL tokens from fcmTokens
-  // This handles the case where user IDs in "users" node don't match keys in "fcmTokens"
-  if (tokens.length < 5) {
-    console.log(`[FCM] Per-user lookup found only ${tokens.length} tokens, fetching ALL fcmTokens...`);
-    const allTokens = await getAllFCMTokens();
-    // Merge unique
-    const tokenSet = new Set([...tokens, ...allTokens]);
-    tokens = [...tokenSet];
-    console.log(`[FCM] Total unique tokens after merge: ${tokens.length}`);
-  }
+  // Always fetch ALL tokens from fcmTokens node
+  // Because fcmTokens keys are email-based but userIds are user_xxx format
+  console.log(`[FCM] Fetching ALL fcmTokens for ${uniqueUserIds.length} target users...`);
+  const tokens = await getAllFCMTokens();
+  console.log(`[FCM] Found ${tokens.length} total unique tokens`);
 
   if (tokens.length === 0) {
     onProgress?.({
