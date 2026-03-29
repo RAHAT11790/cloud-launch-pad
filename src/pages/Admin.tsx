@@ -1473,6 +1473,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "ui-themes": "UI Themes",
     "hero-pinned": "Hero Pinned Posts",
     "edge-router": "Edge Function Router",
+    "branding": "UI+AD Branding",
   };
 
   // ==================== CATEGORIES ====================
