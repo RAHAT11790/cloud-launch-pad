@@ -138,17 +138,20 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
 
   useEffect(() => {
     if (!isOpen) return;
+
     let cancelled = false;
 
     const verifyAi = async () => {
       setAiStatus("checking");
       try {
-        // Quick test call to check if edge function is alive
-        const { data, error } = await supabase.functions.invoke('live-chat', {
-          body: { messages: [{ role: "user", content: "ping" }], animeContext: "", userContext: "" },
-        });
+        const { get: fbGet } = await import("@/lib/firebase");
+        const dbRef = (await import("@/lib/firebase")).ref;
+        const dbInst = (await import("@/lib/firebase")).db;
+        const aiConfigSnap = await fbGet(dbRef(dbInst, "settings/aiChat"));
+        const aiConfig = aiConfigSnap.val();
+
         if (!cancelled) {
-          setAiStatus(error ? "offline" : "ready");
+          setAiStatus(aiConfig?.enabled && aiConfig?.url ? "ready" : "offline");
         }
       } catch {
         if (!cancelled) setAiStatus("offline");
@@ -156,7 +159,9 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
     };
 
     verifyAi();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
   const animeContext = useCallback(() => {
@@ -198,7 +203,9 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
         await set(ref(db, `supportChats/${userId}/meta`), { userName, lastMessage: cleanMsg || text, lastTimestamp: Date.now(), unread: true });
         const adminReply: ChatMessage = { id: `a_${Date.now()}`, role: "assistant", content: "✅ আপনার মেসেজ Admin-এর কাছে পাঠানো হয়েছে! Admin রিপ্লাই দিলে এখানেই দেখতে পাবেন। 😊", timestamp: Date.now() };
         setMessages(prev => [...prev, adminReply]);
-      } catch { toast.error("মেসেজ পাঠাতে ব্যর্থ"); }
+      } catch {
+        toast.error("মেসেজ পাঠাতে ব্যর্থ");
+      }
       return;
     }
 
@@ -210,16 +217,35 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       }));
       chatHistory.push({ role: "user", content: text });
 
-      const { data, error } = await supabase.functions.invoke('live-chat', {
-        body: {
+      const { get: fbGet } = await import("@/lib/firebase");
+      const dbRef = (await import("@/lib/firebase")).ref;
+      const dbInst = (await import("@/lib/firebase")).db;
+      const aiConfigSnap = await fbGet(dbRef(dbInst, "settings/aiChat"));
+      const aiConfig = aiConfigSnap.val();
+
+      if (!aiConfig?.enabled || !aiConfig?.url) {
+        throw new Error("AI not configured");
+      }
+
+      const res = await fetch(aiConfig.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           messages: chatHistory,
           animeContext: animeContext(),
           userContext,
-        },
+        }),
       });
 
-      if (error) throw new Error(error.message || "AI error");
-      if (!data?.reply) throw new Error("Empty AI reply");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || `AI error ${res.status}`);
+      }
+      if (!data?.reply) {
+        throw new Error("Empty AI reply");
+      }
 
       setAiStatus("ready");
 
