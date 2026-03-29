@@ -131,7 +131,7 @@ ${animeContext ? `\n## বর্তমানে সাইটে যে anime গ
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("Grok API error:", response.status, errText);
+      console.error("Groq API error:", response.status, errText);
       
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Too many requests, please try again later." }), {
