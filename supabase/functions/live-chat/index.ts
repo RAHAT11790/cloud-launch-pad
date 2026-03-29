@@ -4,28 +4,18 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const MAX_HISTORY_MESSAGES = 8;
-const MAX_MESSAGE_CHARS = 700;
-const MAX_CONTEXT_CHARS = 2200;
-const RETRY_DELAY_MS = 1800;
-
+const RETRY_DELAY_MS = 2000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function callGroq(messages: { role: string; content: string }[], apiKey: string) {
-  return fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages,
-      temperature: 0.5,
-      max_tokens: 420,
-    }),
-  });
-}
+// Very short system prompt to save tokens
+const SYSTEM_PROMPT = `তুমি RS Anime-এর AI সাপোর্ট "RS Bot"। সংক্ষিপ্ত ও বন্ধুত্বপূর্ণ উত্তর দাও। ইমোজি ব্যবহার করো।
+- RS Anime = Hindi Dubbed anime streaming site
+- Series ও Movies আছে। 480p-4K quality।
+- Premium: bKash দিয়ে কিনতে পারে, ad-free দেখা যায়।
+- Admin-এর সাথে কথা বলতে @RS লিখতে বলো।
+- Telegram: https://t.me/RS_WONER
+- বাটন ফরম্যাট: [BTN:label:LINK:url]
+- যোগাযোগ বাটন: [BTN:🛡️ Admin:LINK:https://t.me/RS_WONER]`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -43,109 +33,46 @@ Deno.serve(async (req) => {
         typeof msg.content === "string" &&
         msg.content.trim().length > 0,
       )
-      .slice(-MAX_HISTORY_MESSAGES)
+      .slice(-4) // Only last 4 messages
       .map((msg: any) => ({
         role: msg.role,
-        content: String(msg.content).trim().slice(0, MAX_MESSAGE_CHARS),
+        content: String(msg.content).trim().slice(0, 500),
       }));
-
-    const animeContext = typeof body.animeContext === "string"
-      ? body.animeContext.slice(0, MAX_CONTEXT_CHARS)
-      : "";
-    const userContext = typeof body.userContext === "string"
-      ? body.userContext.slice(0, 900)
-      : "";
-    const systemPrompt = typeof body.systemPrompt === "string" ? body.systemPrompt : "";
-    const userMessage = typeof body.message === "string" ? body.message.trim().slice(0, MAX_MESSAGE_CHARS) : "";
 
     const GROQ_API_KEY = Deno.env.get("GROK_API_KEY");
     if (!GROQ_API_KEY) {
       throw new Error("GROK_API_KEY is not configured");
     }
 
-    const userSection = userContext
-      ? `\n## 🔐 বর্তমান লগইন করা ইউজারের ব্যক্তিগত তথ্য:
-${userContext}
-
-### ইউজার সহায়তা নিয়ম (অত্যন্ত গুরুত্বপূর্ণ):
-- এই তথ্য শুধুমাত্র বর্তমান ইউজারের। এটি অন্য কাউকে দেওয়া যাবে না।
-- ইউজার যদি তার পাসওয়ার্ড জানতে চায়, তাকে তার নিজের পাসওয়ার্ড বলে দাও।
-- ইউজার যদি পাসওয়ার্ড পরিবর্তন করতে চায়, তাকে Profile পেজে যেতে বলো।
-- ইউজার যদি তার প্রিমিয়াম স্ট্যাটাস, বাকি দিন, ডিভাইস লিমিট জানতে চায় — উপরের তথ্য থেকে বলে দাও।
-- কখনোই অন্য কোনো ইউজারের তথ্য বলবে না বা অনুমান করবে না।
-- ইউজারকে তার নাম ধরে সম্বোধন করো (যদি নাম থাকে)।
-`
-      : "";
-
-    const finalSystemPrompt = systemPrompt || `তুমি RS Anime-এর AI সাপোর্ট অ্যাসিস্ট্যান্ট। তোমার নাম "RS Bot"। তুমি যেকোনো ভাষায় উত্তর দিতে পারো - ইউজার যে ভাষায় জিজ্ঞেস করবে সেই ভাষায় উত্তর দাও।
-${userSection}
-## RS Anime সম্পর্কে বিস্তারিত তথ্য:
-
-### সাইট পরিচিতি:
-- RS Anime হলো একটি Hindi Dubbed anime streaming ওয়েবসাইট
-- Series (ওয়েব সিরিজ) এবং Movies দুই ধরনের কন্টেন্ট আছে
-- ক্যাটাগরি: Action/Battle, Adventure/Fantasy, Romance, Sci-Fi, Horror, Comedy, Isekai ইত্যাদি
-
-### 🔴 কন্টেন্ট রাউটিং (অত্যন্ত গুরুত্বপূর্ণ):
-একই নামের anime একাধিক আইডিতে থাকতে পারে।
-
-⚠️ রুলস:
-- একই নামের একাধিক আইটেম থাকলে সবগুলোর বাটন আলাদা আলাদা দেবে
-- primary catalog আইটেম আগে দেখাবে
-
-### সাইট ব্যবহার:
-- হোম পেজে Hero Slider-এ ফিচার্ড anime দেখা যায়
-- সার্চ বাটনে ক্লিক করে যেকোনো anime খুঁজে পাওয়া যায়
-- Continue Watching ফিচার আছে
-- New Episode Releases সেকশনে সর্বশেষ রিলিজ হওয়া এপিসোড দেখা যায়
-
-### Video Quality:
-- 480p, 720p, 1080p এবং 4K quality পাওয়া যায়
-
-### Premium সিস্টেম:
-- ফ্রি ইউজাররা ad-supported লিংকে ক্লিক করে ভিডিও দেখতে পারেন
-- Premium ইউজাররা সরাসরি বিজ্ঞাপন ছাড়া দেখতে পারেন
-- bKash এর মাধ্যমে পেমেন্ট করা যায়
-
-### যোগাযোগ:
-- এই চ্যাটে @RS লিখে মেসেজ করলে সরাসরি Admin-এর কাছে পৌঁছায়
-- Telegram: https://t.me/rs_woner
-
-## 🔘 বাটন ফরম্যাট:
-- anime-এর জন্য: [BTN:anime_title:ANIME_ID:anime_exact_id]
-- External লিংকের জন্য: [BTN:button_label:LINK:url]
-
-### যোগাযোগ বাটন:
-[BTN:📢 Official Channel:LINK:https://t.me/CARTOONFUNNY03]
-[BTN:💬 Anime Group:LINK:https://t.me/HINDIANIME03]
-[BTN:🛡️ Admin (RS):LINK:https://t.me/RS_WONER]
-
-⚠️ গুরুত্বপূর্ণ নিয়ম:
-- কোনো anime recommend করলে অবশ্যই [BTN:...] ফরম্যাটে বাটন দেবে
-- একই নামের anime একাধিক থাকলে সবগুলোর বাটন দেবে
-- বন্ধুত্বপূর্ণ এবং সংক্ষিপ্ত উত্তর দাও
-- ইমোজি ব্যবহার করো
-
-${animeContext ? `\n## বর্তমানে সাইটে যে anime গুলো আছে (ID সহ):\n${animeContext}` : ""}`;
-
-    const grokMessages: { role: string; content: string }[] = [
-      { role: "system", content: finalSystemPrompt },
+    const grokMessages = [
+      { role: "system", content: SYSTEM_PROMPT },
       ...messages,
     ];
-
-    if (userMessage && !messages.some((m: any) => m.content === userMessage)) {
-      grokMessages.push({ role: "user", content: userMessage });
-    }
 
     if (!grokMessages.some((m) => m.role === "user")) {
       grokMessages.push({ role: "user", content: "হ্যালো" });
     }
 
-    let response = await callGroq(grokMessages, GROQ_API_KEY);
+    const callGroq = () =>
+      fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: grokMessages,
+          temperature: 0.5,
+          max_tokens: 300, // Short replies to save quota
+        }),
+      });
+
+    let response = await callGroq();
 
     if (response.status === 429) {
       await sleep(RETRY_DELAY_MS);
-      response = await callGroq(grokMessages, GROQ_API_KEY);
+      response = await callGroq();
     }
 
     if (!response.ok) {
@@ -159,11 +86,11 @@ ${animeContext ? `\n## বর্তমানে সাইটে যে anime গ
         });
       }
 
-      throw new Error(`Groq API error: ${response.status} - ${errText}`);
+      throw new Error(`Groq API error: ${response.status}`);
     }
 
     const data = await response.json();
-    const reply = data?.choices?.[0]?.message?.content || "দুঃখিত, এই মুহূর্তে উত্তর দিতে পারছি না।";
+    const reply = data?.choices?.[0]?.message?.content || "দুঃখিত, উত্তর দিতে পারছি না।";
 
     return new Response(JSON.stringify({ reply }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
