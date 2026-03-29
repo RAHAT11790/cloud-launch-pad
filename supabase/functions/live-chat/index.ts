@@ -105,6 +105,28 @@ ${animeContext ? `\n## বর্তমানে সাইটে যে anime গ
       geminiContents.push({ role: "user", parts: [{ text: userMessage }] });
     }
 
+    // Gemini requires at least one content entry
+    if (geminiContents.length === 0) {
+      geminiContents.push({ role: "user", parts: [{ text: "হ্যালো" }] });
+    }
+
+    // Gemini requires first message to be "user" role and alternating roles
+    // Fix: ensure first message is user role
+    if (geminiContents[0]?.role === "model") {
+      geminiContents.unshift({ role: "user", parts: [{ text: "পূর্ববর্তী কথোপকথন থেকে চালিয়ে যাও।" }] });
+    }
+
+    // Fix consecutive same-role messages by merging them
+    const mergedContents: typeof geminiContents = [];
+    for (const c of geminiContents) {
+      if (mergedContents.length > 0 && mergedContents[mergedContents.length - 1].role === c.role) {
+        mergedContents[mergedContents.length - 1].parts[0].text += "\n" + c.parts[0].text;
+      } else {
+        mergedContents.push({ ...c });
+      }
+    }
+
+
     // Call Gemini API
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
     
@@ -115,7 +137,7 @@ ${animeContext ? `\n## বর্তমানে সাইটে যে anime গ
         system_instruction: {
           parts: [{ text: finalSystemPrompt }],
         },
-        contents: geminiContents,
+        contents: mergedContents,
         generationConfig: {
           temperature: 0.7,
           maxOutputTokens: 1024,
