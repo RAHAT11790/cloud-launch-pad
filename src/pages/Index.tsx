@@ -294,9 +294,11 @@ const Index = () => {
     // Restore from sessionStorage on refresh
     try { return sessionStorage.getItem("rs_selectedAnimeId"); } catch { return null; }
   });
-  const [showSearch, setShowSearch] = useState(false);
+  const [showSearch, setShowSearch] = useState(() => {
+    try { return sessionStorage.getItem("rs_uiLayer") === "search"; } catch { return false; }
+  });
   const [showProfile, setShowProfile] = useState(() => {
-    try { return sessionStorage.getItem("rs_activePage") === "profile"; } catch { return false; }
+    try { return sessionStorage.getItem("rs_uiLayer") === "profile"; } catch { return false; }
   });
   const [chatOpen, setChatOpen] = useState(false);
 
