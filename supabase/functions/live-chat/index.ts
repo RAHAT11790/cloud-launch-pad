@@ -12,7 +12,6 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     
-    // Support both old format (message + systemPrompt + messages) and new format (messages + animeContext + userContext)
     const rawMessages = Array.isArray(body.messages) ? body.messages : [];
     const messages = rawMessages.filter((msg: any) =>
       msg &&
@@ -25,12 +24,12 @@ Deno.serve(async (req) => {
     const systemPrompt = typeof body.systemPrompt === "string" ? body.systemPrompt : "";
     const userMessage = typeof body.message === "string" ? body.message.trim() : "";
 
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY is not configured");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
+    if (!GROK_API_KEY) {
+      throw new Error("GROK_API_KEY is not configured");
     }
 
-    // Build user section from userContext
+    // Build user section
     const userSection = userContext
       ? `\n## 🔐 বর্তমান লগইন করা ইউজারের ব্যক্তিগত তথ্য:
 ${userContext}
@@ -45,7 +44,6 @@ ${userContext}
 `
       : "";
 
-    // Build the full system prompt — use provided systemPrompt if available, otherwise build default
     const finalSystemPrompt = systemPrompt || `তুমি RS Anime-এর AI সাপোর্ট অ্যাসিস্ট্যান্ট। তোমার নাম "RS Bot"। তুমি যেকোনো ভাষায় উত্তর দিতে পারো - ইউজার যে ভাষায় জিজ্ঞেস করবে সেই ভাষায় উত্তর দাও।
 ${userSection}
 ## RS Anime সম্পর্কে বিস্তারিত তথ্য:
@@ -97,64 +95,43 @@ ${userSection}
 
 ${animeContext ? `\n## বর্তমানে সাইটে যে anime গুলো আছে (ID সহ):\n${animeContext}` : ""}`;
 
-    // Build Gemini-compatible messages
-    const geminiContents: { role: string; parts: { text: string }[] }[] = [];
+    // Build OpenAI-compatible messages
+    const grokMessages: { role: string; content: string }[] = [
+      { role: "system", content: finalSystemPrompt },
+    ];
 
-    // Add system instruction as first user turn context
     for (const msg of messages) {
-      const role = msg.role === "assistant" ? "model" : "user";
-      geminiContents.push({ role, parts: [{ text: msg.content }] });
+      grokMessages.push({ role: msg.role, content: msg.content });
     }
 
     // If old format with single `message`, add it
     if (userMessage && !messages.some((m: any) => m.content === userMessage)) {
-      geminiContents.push({ role: "user", parts: [{ text: userMessage }] });
+      grokMessages.push({ role: "user", content: userMessage });
     }
 
-    // Gemini requires at least one content entry
-    if (geminiContents.length === 0) {
-      geminiContents.push({ role: "user", parts: [{ text: "হ্যালো" }] });
+    // Ensure at least one user message
+    if (!grokMessages.some(m => m.role === "user")) {
+      grokMessages.push({ role: "user", content: "হ্যালো" });
     }
 
-    // Gemini requires first message to be "user" role and alternating roles
-    // Fix: ensure first message is user role
-    if (geminiContents[0]?.role === "model") {
-      geminiContents.unshift({ role: "user", parts: [{ text: "পূর্ববর্তী কথোপকথন থেকে চালিয়ে যাও।" }] });
-    }
-
-    // Fix consecutive same-role messages by merging them
-    const mergedContents: typeof geminiContents = [];
-    for (const c of geminiContents) {
-      if (mergedContents.length > 0 && mergedContents[mergedContents.length - 1].role === c.role) {
-        mergedContents[mergedContents.length - 1].parts[0].text += "\n" + c.parts[0].text;
-      } else {
-        mergedContents.push({ ...c });
-      }
-    }
-
-
-    // Call Gemini API
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-    
-    const response = await fetch(geminiUrl, {
+    // Call Grok API (OpenAI-compatible)
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROK_API_KEY}`,
+      },
       body: JSON.stringify({
-        system_instruction: {
-          parts: [{ text: finalSystemPrompt }],
-        },
-        contents: mergedContents,
-        generation_config: {
-          temperature: 0.7,
-          maxOutputTokens: 1024,
-          topP: 0.9,
-        },
+        model: "grok-3-mini-fast",
+        messages: grokMessages,
+        temperature: 0.7,
+        max_tokens: 1024,
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("Gemini API error:", response.status, errText);
+      console.error("Grok API error:", response.status, errText);
       
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Too many requests, please try again later." }), {
@@ -162,11 +139,11 @@ ${animeContext ? `\n## বর্তমানে সাইটে যে anime গ
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      throw new Error(`Gemini API error: ${response.status}`);
+      throw new Error(`Grok API error: ${response.status} - ${errText}`);
     }
 
     const data = await response.json();
-    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || "দুঃখিত, এই মুহূর্তে উত্তর দিতে পারছি না।";
+    const reply = data?.choices?.[0]?.message?.content || "দুঃখিত, এই মুহূর্তে উত্তর দিতে পারছি না।";
 
     return new Response(JSON.stringify({ reply }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
