@@ -41,15 +41,60 @@ const getAnimeSaltProxyUrl = async (): Promise<string> => {
 
 const fetchPage = async (url: string): Promise<string> => {
   const proxyUrl = await getAnimeSaltProxyUrl();
-  const res = await fetch(proxyUrl, {
+  
+  // Try new format first (url-based), then old format (action-based)
+  let res = await fetch(proxyUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),
   });
+  
+  let data: any;
+  
+  if (res.ok) {
+    data = await res.json();
+    if (data.success && data.html) return data.html;
+  }
+  
+  // Fallback: try old action-based format
+  const isSeriesPage = url.includes('/series');
+  const isMoviesPage = url.includes('/movies');
+  const isEpisodePage = url.includes('/episode/');
+  const pageMatch = url.match(/\/page\/(\d+)/);
+  const slugMatch = url.match(/\/(series|movies|episode)\/([^/]+)/);
+  
+  let action = 'browse';
+  let fallbackBody: any = { action };
+  
+  if (isEpisodePage && slugMatch) {
+    fallbackBody = { action: 'episode', slug: slugMatch[2] };
+  } else if (slugMatch && !pageMatch) {
+    fallbackBody = { action: 'detail', slug: slugMatch[2], type: slugMatch[1] };
+  } else {
+    fallbackBody = {
+      action: 'browse',
+      type: isMoviesPage ? 'movies' : 'series',
+      page: pageMatch ? parseInt(pageMatch[1]) : 1,
+    };
+  }
+  
+  res = await fetch(proxyUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fallbackBody),
+  });
+  
   if (!res.ok) throw new Error(`AnimeSalt proxy error: ${res.status}`);
-  const data = await res.json();
-  if (!data.success || !data.html) throw new Error('No HTML returned');
-  return data.html;
+  data = await res.json();
+  
+  // Old format returns data differently
+  if (data.success && data.html) return data.html;
+  if (data.success && data.data) {
+    // Reconstruct HTML-like response for compatibility
+    return JSON.stringify(data);
+  }
+  
+  throw new Error('No HTML returned from AnimeSalt proxy');
 };
 
 /** Parse anime items from AnimeSalt HTML listing page */
