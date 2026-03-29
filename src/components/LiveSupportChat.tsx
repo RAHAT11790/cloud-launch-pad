@@ -4,6 +4,7 @@ import { X, Send } from "lucide-react";
 import { db, ref, push, set, onValue } from "@/lib/firebase";
 import { toast } from "sonner";
 import { useBranding } from "@/hooks/useBranding";
+import { supabase } from "@/integrations/supabase/client";
 import logoImg from "@/assets/logo.png";
 
 interface ChatMessage {
@@ -138,35 +139,17 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
 
   useEffect(() => {
     if (!isOpen) return;
-
     let cancelled = false;
 
     const verifyAi = async () => {
       setAiStatus("checking");
       try {
-        const { get: fbGet } = await import("@/lib/firebase");
-        const dbRef = (await import("@/lib/firebase")).ref;
-        const dbInst = (await import("@/lib/firebase")).db;
-        const aiConfigSnap = await fbGet(dbRef(dbInst, "settings/aiChat"));
-        const aiConfig = aiConfigSnap.val();
-
-        if (!aiConfig?.enabled || !aiConfig?.url) {
-          if (!cancelled) setAiStatus("offline");
-          return;
-        }
-
-        // Just check if the URL is reachable via OPTIONS/HEAD — don't waste Groq API quota
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 5000);
-        const res = await fetch(aiConfig.url, {
-          method: "OPTIONS",
-          signal: controller.signal,
+        // Quick test call to check if edge function is alive
+        const { data, error } = await supabase.functions.invoke('live-chat', {
+          body: { messages: [{ role: "user", content: "ping" }], animeContext: "", userContext: "" },
         });
-        clearTimeout(t);
-
         if (!cancelled) {
-          // OPTIONS returning 200/204 means the endpoint is alive
-          setAiStatus(res.ok || res.status === 204 ? "ready" : "offline");
+          setAiStatus(error ? "offline" : "ready");
         }
       } catch {
         if (!cancelled) setAiStatus("offline");
@@ -174,10 +157,8 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
     };
 
     verifyAi();
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, branding.siteName]);
+    return () => { cancelled = true; };
+  }, [isOpen]);
 
   const animeContext = useCallback(() => {
     if (animeList.length === 0) return "";
@@ -230,34 +211,17 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       }));
       chatHistory.push({ role: "user", content: text });
 
-      // Get AI endpoint from Firebase config
-      const { get: fbGet } = await import("@/lib/firebase");
-      const dbRef = (await import("@/lib/firebase")).ref;
-      const dbInst = (await import("@/lib/firebase")).db;
-      const aiConfigSnap = await fbGet(dbRef(dbInst, "settings/aiChat"));
-      const aiConfig = aiConfigSnap.val();
-      if (!aiConfig?.enabled || !aiConfig?.url) throw new Error("AI not configured");
-      const aiEndpoint = aiConfig.url;
-
-      const res = await fetch(aiEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('live-chat', {
+        body: {
           messages: chatHistory,
           animeContext: animeContext(),
           userContext,
-        }),
+        },
       });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        setAiStatus("offline");
-        throw new Error(errData?.error || `AI error ${res.status}`);
-      }
-      const data = await res.json();
-      if (!data?.reply) {
-        setAiStatus("offline");
-        throw new Error("Empty AI reply");
-      }
+
+      if (error) throw new Error(error.message || "AI error");
+      if (!data?.reply) throw new Error("Empty AI reply");
+
       setAiStatus("ready");
 
       const sanitizeReply = (raw: string) =>
@@ -266,7 +230,7 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       const aiMsg: ChatMessage = {
         id: `ai_${Date.now()}`,
         role: "assistant",
-        content: sanitizeReply(data?.reply || "দুঃখিত, উত্তর দিতে পারছি না।"),
+        content: sanitizeReply(data.reply),
         timestamp: Date.now(),
       };
       setMessages(prev => [...prev, aiMsg]);
@@ -281,7 +245,6 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
         timestamp: Date.now(),
       };
       setMessages(prev => [...prev, errMsg]);
-      // Don't set offline for rate limits — the service is still alive
       if (!isRateLimit) setAiStatus("offline");
     }
     setLoading(false);
