@@ -6272,6 +6272,34 @@ const AnimeSaltManagerSection = ({
   const epSeasonJsonFileRef = useRef<HTMLInputElement>(null);
   const [epSeasonJsonTarget, setEpSeasonJsonTarget] = useState<number>(-1);
 
+  // AnimeSalt custom URL config
+  const [asEnabled, setAsEnabled] = useState(true);
+  const [asCustomUrl, setAsCustomUrl] = useState("");
+  const [asCustomUrlInput, setAsCustomUrlInput] = useState("");
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/animesaltConfig"), (snap) => {
+      const val = snap.val();
+      setAsEnabled(val?.enabled !== false);
+      setAsCustomUrl(val?.customUrl || "");
+      setAsCustomUrlInput(val?.customUrl || "");
+    });
+    return () => unsub();
+  }, []);
+
+  const saveAsConfig = async () => {
+    await set(ref(db, "settings/animesaltConfig"), { enabled: asEnabled, customUrl: asCustomUrlInput.trim() });
+    setAsCustomUrl(asCustomUrlInput.trim());
+    toast.success("✅ AnimeSalt কনফিগ সেভ হয়েছে!");
+  };
+
+  const toggleAs = async () => {
+    const next = !asEnabled;
+    setAsEnabled(next);
+    await set(ref(db, "settings/animesaltConfig/enabled"), next);
+    toast.success(next ? "AnimeSalt চালু" : "AnimeSalt বন্ধ");
+  };
+
   const loadItems = async () => {
     setLoading(true);
     try {
