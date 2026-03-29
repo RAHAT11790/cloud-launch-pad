@@ -301,10 +301,12 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok && !data?.reply) {
+      // Support both Supabase edge ({ reply }) and Cloudflare worker ({ response }) formats
+      const aiReply = data?.reply || data?.response;
+      if (!res.ok && !aiReply) {
         throw new Error(data?.error || `AI error ${res.status}`);
       }
-      if (!data?.reply) {
+      if (!aiReply) {
         throw new Error("Empty AI reply");
       }
 
@@ -317,7 +319,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
       const aiMsg: ChatMessage = {
         id: `ai_${Date.now()}`,
         role: "assistant",
-        content: sanitizeReply(data.reply),
+        content: sanitizeReply(aiReply),
         timestamp: Date.now(),
       };
       setMessages(prev => [...prev, aiMsg]);
