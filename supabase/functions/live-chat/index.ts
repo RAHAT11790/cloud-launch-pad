@@ -13,11 +13,17 @@ Deno.serve(async (req) => {
     const body = await req.json();
     
     // Support both old format (message + systemPrompt + messages) and new format (messages + animeContext + userContext)
-    const messages = body.messages || [];
-    const animeContext = body.animeContext || "";
-    const userContext = body.userContext || "";
-    const systemPrompt = body.systemPrompt || "";
-    const userMessage = body.message || "";
+    const rawMessages = Array.isArray(body.messages) ? body.messages : [];
+    const messages = rawMessages.filter((msg: any) =>
+      msg &&
+      (msg.role === "user" || msg.role === "assistant") &&
+      typeof msg.content === "string" &&
+      msg.content.trim().length > 0
+    );
+    const animeContext = typeof body.animeContext === "string" ? body.animeContext : "";
+    const userContext = typeof body.userContext === "string" ? body.userContext : "";
+    const systemPrompt = typeof body.systemPrompt === "string" ? body.systemPrompt : "";
+    const userMessage = typeof body.message === "string" ? body.message.trim() : "";
 
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) {
@@ -138,7 +144,7 @@ ${animeContext ? `\n## বর্তমানে সাইটে যে anime গ
           parts: [{ text: finalSystemPrompt }],
         },
         contents: mergedContents,
-        generationConfig: {
+        generation_config: {
           temperature: 0.7,
           maxOutputTokens: 1024,
           topP: 0.9,
