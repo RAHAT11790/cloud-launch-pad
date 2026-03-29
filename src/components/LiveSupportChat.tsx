@@ -45,6 +45,7 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
   const [userName, setUserName] = useState("Guest");
   const [userContext, setUserContext] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const cooldownUntilRef = useRef(0);
   const logoSrc = !logoFailed && branding.logoUrl ? branding.logoUrl : logoImg;
 
   useEffect(() => {
