@@ -465,7 +465,7 @@ const Index = () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       clearInterval(refreshTimer);
     };
-  }, [isLoggedIn]);
+  }, []);
 
   // Back button handler
   const getCurrentLayer = useCallback(() => {
