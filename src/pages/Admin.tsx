@@ -2692,6 +2692,7 @@ Pᴏᴡᴇʀ Bʏ :
     { section: "analytics", icon: <BarChart3 size={16} />, label: "Analytics & Views" },
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
+    { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "ui-themes", icon: <Zap size={16} />, label: "UI Themes", group: "Customization" },
     { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
     { section: "settings", icon: <Settings size={16} />, label: "Settings" },
