@@ -1606,9 +1606,16 @@ const PushDebugInfo = () => {
       const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
       if (u.id) {
         import("@/lib/firebase").then(({ db, ref, get }) => {
-          get(ref(db, `fcmTokens/${u.id}`)).then((snap: any) => {
-            const tokens = snap.val() || {};
-            const entries = Object.values(tokens) as any[];
+          const emailKey = u.email ? String(u.email).replace(/\./g, ",") : null;
+          Promise.all([
+            get(ref(db, `fcmTokens/${u.id}`)),
+            emailKey ? get(ref(db, `fcmTokens/${emailKey}`)) : Promise.resolve({ val: () => null }),
+          ]).then(([idSnap, emailSnap]: any[]) => {
+            const merged = {
+              ...(idSnap?.val?.() || {}),
+              ...(emailSnap?.val?.() || {}),
+            };
+            const entries = Object.values(merged) as any[];
             info["Token Count"] = String(entries.length);
             if (entries.length > 0) {
               const latest = entries.reduce((a: any, b: any) => (a.updatedAt || 0) > (b.updatedAt || 0) ? a : b);
@@ -1711,6 +1718,9 @@ const NotificationToggle = ({ label, desc, defaultOn, storageKey }: { label: str
             lastPushCheckAt: Date.now(),
           });
           await remove(ref(db, `fcmTokens/${u.id}`));
+          if (u.email) {
+            await remove(ref(db, `fcmTokens/${String(u.email).replace(/\./g, ",")}`)).catch(() => {});
+          }
         } catch {
           toast.error("Push disable sync ব্যর্থ");
         }
