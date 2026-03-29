@@ -379,6 +379,26 @@ const Index = () => {
     } catch {}
   }, [saltPlayerState]);
 
+  // Persist exact current UI layer so refresh returns to the same screen
+  useEffect(() => {
+    try {
+      const layer = playerState
+        ? "player"
+        : saltPlayerState
+          ? "saltPlayer"
+          : selectedAnime
+            ? "details"
+            : showSearch
+              ? "search"
+              : showProfile
+                ? "profile"
+                : (activePage === "series" || activePage === "movies")
+                  ? activePage
+                  : "home";
+      sessionStorage.setItem("rs_uiLayer", layer);
+    } catch {}
+  }, [playerState, saltPlayerState, selectedAnime, showSearch, showProfile, activePage]);
+
   // AnimeSalt details request control + cache (avoid stale loading toast on cached reopen)
   const detailsCacheRef = useRef<Map<string, AnimeItem>>(new Map());
   const detailsLoadingToastRef = useRef<string | number | null>(null);
