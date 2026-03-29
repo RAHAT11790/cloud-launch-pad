@@ -942,7 +942,7 @@ const Index = () => {
           // Show anime with available metadata instead of error
           const fallbackAnime: AnimeItem = {
             ...anime,
-            storyline: firebaseMeta?.storyline || anime.storyline || '',
+            storyline: anime.storyline || '',
           };
           setSelectedAnime(fallbackAnime);
         }
