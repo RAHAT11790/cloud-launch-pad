@@ -4619,9 +4619,14 @@ Pᴏᴡᴇʀ Bʏ :
                 </div>
                 {tgButtonLink && (
                   <div className="mt-3 bg-blue-500/20 border border-blue-500/40 rounded-lg py-2.5 text-center text-[12px] font-bold text-blue-300">
-                    📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥
+                    {tgDefaultButtonName || "📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥"}
                   </div>
                 )}
+                {tgButtons.filter(b => b.name.trim()).map((btn, i) => (
+                  <div key={i} className="mt-1.5 bg-blue-500/15 border border-blue-500/30 rounded-lg py-2 text-center text-[11px] font-bold text-blue-300">
+                    {btn.name}
+                  </div>
+                ))}
               </div>
             </div>
 
