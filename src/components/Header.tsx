@@ -4,7 +4,7 @@ import logoImg from "@/assets/logo.png";
 import NotificationPanel from "./NotificationPanel";
 import { useBranding } from "@/hooks/useBranding";
 import ThemeToggle from "./ThemeToggle";
-import { db, ref, set, update } from "@/lib/firebase";
+import { db, ref, set, update, onValue } from "@/lib/firebase";
 
 // Generate a persistent device ID for this user
 const getOrCreateUserId = (): string => {
