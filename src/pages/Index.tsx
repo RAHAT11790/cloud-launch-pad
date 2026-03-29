@@ -323,7 +323,13 @@ const Index = () => {
     seasonIdx?: number;
     epIdx?: number;
     qualityOptions?: { label: string; src: string }[];
-  } | null>(null);
+  } | null>(() => {
+    try {
+      const saved = sessionStorage.getItem("rs_playerState");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
 
   // AnimeSalt iframe player state
   const [saltPlayerState, setSaltPlayerState] = useState<{
@@ -340,7 +346,36 @@ const Index = () => {
     cropW?: number;
     cropH?: number;
     loading?: boolean;
-  } | null>(null);
+  } | null>(() => {
+    try {
+      const saved = sessionStorage.getItem("rs_saltPlayerState");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
+
+  // Persist player states to sessionStorage for refresh recovery
+  useEffect(() => {
+    try {
+      if (playerState) {
+        const { qualityOptions, ...rest } = playerState;
+        sessionStorage.setItem("rs_playerState", JSON.stringify(rest));
+      } else {
+        sessionStorage.removeItem("rs_playerState");
+      }
+    } catch {}
+  }, [playerState]);
+
+  useEffect(() => {
+    try {
+      if (saltPlayerState) {
+        const { loading, ...rest } = saltPlayerState;
+        sessionStorage.setItem("rs_saltPlayerState", JSON.stringify(rest));
+      } else {
+        sessionStorage.removeItem("rs_saltPlayerState");
+      }
+    } catch {}
+  }, [saltPlayerState]);
 
   // AnimeSalt details request control + cache (avoid stale loading toast on cached reopen)
   const detailsCacheRef = useRef<Map<string, AnimeItem>>(new Map());
@@ -1485,7 +1520,7 @@ const Index = () => {
     );
   }
 
-  if (loading) {
+  if (loading && !playerState && !saltPlayerState) {
     return <SplashLoader />;
   }
 
