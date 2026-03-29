@@ -3,7 +3,7 @@ import { db, ref, onValue, push, set, remove, update, get, auth, googleProvider,
 import { supabase } from "@/integrations/supabase/client";
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import { useBranding } from "@/hooks/useBranding";
-import { sendPushToUsers, type PushProgress } from "@/lib/fcm";
+import { sendPushToUsers, sendPushToAllUsers, type PushProgress } from "@/lib/fcm";
 import { toast } from "sonner";
 import {
   LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
@@ -57,7 +57,39 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     { key: "send-fcm", label: "🔔 FCM Push", endpoint: "send-fcm" },
     { key: "telegram-post", label: "📨 Telegram Post", endpoint: "telegram-post" },
     { key: "ai-chat", label: "🤖 AI Chat", endpoint: "ai-chat" },
+    { key: "video-proxy", label: "🎬 Video Proxy", endpoint: "video-proxy" },
   ];
+
+  const getHealthCheckConfig = (endpoint: string) => {
+    if (endpoint === "video-proxy") {
+      return {
+        method: "GET",
+        body: undefined,
+        isHealthy: (status: number, text: string, data: any) =>
+          !!data?.error || !!data?.message || status === 206 || text.toLowerCase().includes("error"),
+      };
+    }
+
+    if (endpoint === "ai-chat") {
+      return {
+        method: "POST",
+        body: {
+          message: "ping",
+          history: [],
+          systemPrompt: "Reply with one short word.",
+          siteContext: { healthcheck: true },
+        },
+        isHealthy: (_status: number, _text: string, data: any) => typeof data?.reply === "string" || !!data?.error,
+      };
+    }
+
+    return {
+      method: "POST",
+      body: { test: true },
+      isHealthy: (_status: number, text: string, data: any) =>
+        !!data?.success || !!data?.error || !!data?.result || !!data?.shortUrl || text.includes('"error"') || text.includes('"success"'),
+    };
+  };
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/edgeRouter"), (snap) => {
@@ -93,21 +125,22 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     const results: typeof statuses = {};
     await Promise.all(CORE_FUNCTIONS.map(async (fn) => {
       try {
+        const testConfig = getHealthCheckConfig(fn.endpoint);
         const start = Date.now();
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch(`${base}/${fn.endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ test: true }), signal: controller.signal });
+        const res = await fetch(`${base}/${fn.endpoint}`, {
+          method: testConfig.method,
+          headers: { "Content-Type": "application/json" },
+          body: testConfig.method === "GET" ? undefined : JSON.stringify(testConfig.body),
+          signal: controller.signal,
+        });
         clearTimeout(t);
-        // Only consider 200-299 as alive; 404/405/500 = dead
         const latency = Date.now() - start;
-        if (res.ok) {
-          results[fn.key] = { alive: true, latency };
-        } else {
-          // Check if it's a valid worker response (not a generic error page)
-          const text = await res.text().catch(() => "");
-          const isWorkerResponse = text.includes('"error"') || text.includes('"reply"') || text.includes('"result"');
-          results[fn.key] = { alive: isWorkerResponse, latency };
-        }
+        const text = await res.text().catch(() => "");
+        let data: any = null;
+        try { data = text ? JSON.parse(text) : null; } catch {}
+        results[fn.key] = { alive: testConfig.isHealthy(res.status, text, data), latency };
       } catch {
         results[fn.key] = { alive: false, latency: 0 };
       }
@@ -1715,7 +1748,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         data: { url: contentId ? `/?anime=${contentId}` : "/", type: notifType || "info", contentId },
       };
 
-      const result = await sendPushToUsers(targetUserIds, pushPayload, (p) => setPushProgress({ ...p }));
+      const result = await sendPushToAllUsers(pushPayload, (p) => setPushProgress({ ...p }));
       console.log("FCM result:", result);
       if ((result?.total || 0) === 0) {
         const reason = result?.reason ? ` [${result.reason}]` : "";
@@ -1886,7 +1919,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
             .map(([userKey, userData]: any) => String(userData?.id || userKey || "").trim())
             .filter(Boolean)
         ));
-        const result = await sendPushToUsers(targetUserIds, pushPayload, (p) => setPushProgress({ ...p }));
+        const result = await sendPushToAllUsers(pushPayload, (p) => setPushProgress({ ...p }));
         console.log("FCM new release result:", result);
         if ((result?.total || 0) === 0) {
           const reason = result?.reason ? ` [${result.reason}]` : "";
@@ -3421,7 +3454,7 @@ Pᴏᴡᴇʀ Bʏ :
                         };
                         setPushSending(true);
                         setPushProgress({ phase: "tokens", totalTokens: 0, sent: 0, success: 0, failed: 0, invalidRemoved: 0 });
-                        const result = await sendPushToUsers(targetUserIds, pushPayload, (p) => setPushProgress({ ...p }));
+                        const result = await sendPushToAllUsers(pushPayload, (p) => setPushProgress({ ...p }));
                         if ((result?.total || 0) > 0) toast.success(`Push: ${result?.success || 0} delivered`);
                         setTimeout(() => { setPushSending(false); setPushProgress(null); }, 4000);
                       } catch { toast.warning("Push delivery failed - শুধু in-app notification গেছে"); setPushSending(false); setPushProgress(null); }

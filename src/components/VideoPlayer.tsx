@@ -162,16 +162,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       markReady();
     });
 
-    const SUPABASE_PROXY_DEFAULT = "https://dolsyjysfcxvbfstojnk.supabase.co/functions/v1/rs-video-proxy?url=";
-    const SUPABASE_PROXY_DEFAULT_KEY = "sb_publishable_1CrDdQ9DiAnaZ2ch7Nnj5A_4-Sy1sES";
     const unsub2 = onValue(ref(db, "settings/proxyServer"), (snap) => {
       const val = snap.val();
       if (val && val.url) {
         setProxyUrl(val.url);
         setProxyApiKey(val.apiKey || '');
       } else {
-        setProxyUrl(SUPABASE_PROXY_DEFAULT);
-        setProxyApiKey(SUPABASE_PROXY_DEFAULT_KEY);
+        setProxyUrl('');
+        setProxyApiKey('');
       }
       proxyLoaded = true;
       markReady();

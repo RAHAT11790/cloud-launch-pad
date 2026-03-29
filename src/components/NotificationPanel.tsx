@@ -2,7 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import { Bell, X, Check, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, set, update } from "@/lib/firebase";
-import { SITE_ICON_URL } from "@/lib/siteConfig";
+import { SITE_ICON_URL, SITE_URL } from "@/lib/siteConfig";
+
+const PRIMARY_SITE_ORIGIN = (() => {
+  try {
+    return new URL(SITE_URL).origin;
+  } catch {
+    return SITE_URL;
+  }
+})();
 
 // Request notification permission and register FCM SW
 const requestNotificationPermission = async () => {
@@ -21,6 +29,10 @@ const showBrowserNotification = (title: string, body: string, contentId?: string
     const pushPref = localStorage.getItem("rs_notif_push");
     if (pushPref === "false") return false;
   } catch {}
+
+  if (typeof window === "undefined" || window.location.origin !== PRIMARY_SITE_ORIGIN) return false;
+  if (typeof document !== "undefined" && document.visibilityState !== "hidden") return false;
+  if ("serviceWorker" in navigator) return false;
 
   if (!("Notification" in window) || Notification.permission !== "granted") return false;
 
