@@ -39,10 +39,13 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [aiStatus, setAiStatus] = useState<"checking" | "ready" | "offline">("checking");
+  const [logoFailed, setLogoFailed] = useState(false);
   const [userId, setUserId] = useState("");
   const [userName, setUserName] = useState("Guest");
   const [userContext, setUserContext] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const logoSrc = !logoFailed && branding.logoUrl ? branding.logoUrl : logoImg;
 
   useEffect(() => {
     try {
@@ -135,6 +138,41 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let cancelled = false;
+
+    const verifyAi = async () => {
+      setAiStatus("checking");
+      try {
+        const { getEdgeFunctionUrl } = await import("@/lib/edgeFunctionRouter");
+        const aiEndpoint = await getEdgeFunctionUrl("ai-chat");
+        const res = await fetch(aiEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: "ping",
+            history: [],
+            systemPrompt: `You are ${branding.siteName} AI support assistant. Reply with one short word.`,
+            siteContext: { healthcheck: true, siteName: branding.siteName },
+          }),
+        });
+
+        if (!cancelled) {
+          setAiStatus(res.ok ? "ready" : "offline");
+        }
+      } catch {
+        if (!cancelled) setAiStatus("offline");
+      }
+    };
+
+    verifyAi();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, branding.siteName]);
+
   const animeContext = useCallback(() => {
     if (animeList.length === 0) return "";
     const primaryItems = animeList.filter((a) => a.source !== "animesalt");
@@ -221,9 +259,11 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
+        setAiStatus("offline");
         throw new Error(errData?.error || `AI error ${res.status}`);
       }
       const data = await res.json();
+      setAiStatus("ready");
 
       const sanitizeAssistantReply = (raw: string) =>
         raw
@@ -239,6 +279,7 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       };
       setMessages(prev => [...prev, aiMsg]);
     } catch {
+      setAiStatus("offline");
       const errMsg: ChatMessage = { id: `err_${Date.now()}`, role: "assistant", content: "⚠️ সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করুন। সরাসরি Admin-এর কাছে পৌঁছাতে @RS লিখে মেসেজ করুন।", timestamp: Date.now() };
       setMessages(prev => [...prev, errMsg]);
     }
@@ -314,13 +355,15 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       {/* Header */}
       <div className="px-4 py-3 flex items-center gap-3 bg-card" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
         <div className="w-9 h-9 rounded-lg overflow-hidden p-0.5 bg-card" style={{ boxShadow: "var(--neu-shadow-sm)" }}>
-          <img src={branding.logoUrl || logoImg} alt={branding.siteName} className="w-full h-full object-contain" />
+          <img src={logoSrc} alt={branding.siteName} className="w-full h-full object-contain" onError={() => setLogoFailed(true)} />
         </div>
         <div className="flex-1">
           <h3 className="text-sm font-bold text-foreground">{branding.siteName} Support</h3>
           <div className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-            <p className="text-[10px] text-green-600">AI Assistant • Online</p>
+            <span className={`w-1.5 h-1.5 rounded-full ${aiStatus === "ready" ? "bg-primary animate-pulse" : aiStatus === "offline" ? "bg-destructive" : "bg-muted-foreground/60"}`} />
+            <p className={`text-[10px] ${aiStatus === "ready" ? "text-primary" : aiStatus === "offline" ? "text-destructive" : "text-muted-foreground"}`}>
+              {aiStatus === "ready" ? "AI Assistant • Ready" : aiStatus === "offline" ? "AI Assistant • Offline" : "AI Assistant • Checking"}
+            </p>
           </div>
         </div>
         <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-lg transition-colors">
@@ -333,7 +376,7 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
         {messages.length === 0 && (
           <div className="text-center py-8">
             <div className="w-12 h-12 rounded-lg overflow-hidden mx-auto mb-3 bg-card p-1" style={{ boxShadow: "var(--neu-shadow-sm)" }}>
-              <img src={branding.logoUrl || logoImg} alt={branding.siteName} className="w-full h-full object-contain" />
+              <img src={logoSrc} alt={branding.siteName} className="w-full h-full object-contain" onError={() => setLogoFailed(true)} />
             </div>
             <p className="text-sm text-foreground font-medium">হ্যালো! 👋</p>
             <p className="text-xs text-muted-foreground mt-1">আমি {branding.siteName} Bot, আপনাকে সাহায্য করতে এখানে আছি!</p>
