@@ -241,7 +241,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
       const res = await fetch(aiConfig.url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: chatHistory }),
+        body: JSON.stringify({ messages: chatHistory, userContext: userContext.slice(0, 600) }),
       });
 
       const data = await res.json().catch(() => ({}));
