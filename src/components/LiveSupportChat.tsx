@@ -306,6 +306,10 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
       if (asksAccountInfo && userContext) {
         payload.userContext = userContext.slice(0, 600);
       }
+      if (asksAnime) {
+        const animeCtx = buildAnimeContext();
+        if (animeCtx) payload.animeContext = animeCtx;
+      }
 
       const res = await fetch(aiConfig.url, {
         method: "POST",
