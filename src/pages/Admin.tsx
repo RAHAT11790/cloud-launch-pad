@@ -2492,13 +2492,25 @@ Pᴏᴡᴇʀ Bʏ :
 
       const results: { id: string; ok: boolean; error?: string }[] = [];
 
+      // Build inline keyboard buttons array
+      const inlineButtons: { text: string; url: string }[] = [];
+      if (tgButtonLink) {
+        inlineButtons.push({ text: tgDefaultButtonName || "📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥", url: tgButtonLink });
+      }
+      tgButtons.forEach(btn => {
+        if (btn.name.trim() && btn.url.trim()) {
+          inlineButtons.push({ text: btn.name.trim(), url: btn.url.trim() });
+        }
+      });
+
       for (const chatId of channelIds) {
         const payload = {
           chatId,
           caption,
           photoUrl: tgPosterUrl || undefined,
-          buttonText: tgButtonLink ? "📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥" : undefined,
-          buttonUrl: tgButtonLink || undefined,
+          buttonText: inlineButtons.length > 0 ? inlineButtons[0].text : undefined,
+          buttonUrl: inlineButtons.length > 0 ? inlineButtons[0].url : undefined,
+          inlineButtons: inlineButtons.length > 1 ? inlineButtons : undefined,
         };
         try {
           const endpoint = await getEdgeFunctionUrl('telegram-post');
