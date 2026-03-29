@@ -572,6 +572,19 @@ const Index = () => {
     return "home";
   }, [playerState, saltPlayerState, selectedAnime, showSearch, showProfile, activePage]);
 
+
+  useEffect(() => {
+    try {
+      const layer = sessionStorage.getItem("rs_uiLayer");
+      if (layer === "search") setShowSearch(true);
+      if (layer === "profile") {
+        setShowProfile(true);
+        setActivePage("home");
+      }
+      if (layer === "series" || layer === "movies") setActivePage(layer);
+    } catch {}
+  }, []);
+
   const handleBackPress = useCallback(() => {
     const layer = getCurrentLayer();
     if (layer === "player") { setPlayerState(null); return true; }
