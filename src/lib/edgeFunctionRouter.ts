@@ -162,11 +162,8 @@ function getBuiltInDescription(fn: string): string {
   const d: Record<string, string> = {
     "telegram-post": "Send Telegram message",
     "shorten": "URL shortener",
-    "clean-embed": "Clean embed page",
     "animesalt": "AnimeSalt scraper",
     "send-fcm": "Push notification sender",
-    "ai-chat": "AI chat assistant",
-    "webhook": "Telegram webhook",
   };
   return d[fn] || fn;
 }
