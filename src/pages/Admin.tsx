@@ -4927,16 +4927,6 @@ Pᴏᴡᴇʀ Bʏ :
               <ForceNotifToggle glassCard={glassCard} />
             </div>
 
-            {/* Cloudflare CDN Toggle */}
-            <div className={`${glassCard} p-4 mb-4`}>
-              <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <Zap size={14} className="text-orange-400" /> Cloudflare CDN প্রক্সি
-              </h3>
-              <p className="text-[11px] text-zinc-400 mb-4">
-                ভিডিও স্ট্রিমিং Cloudflare CDN দিয়ে প্রক্সি করা হবে কিনা। অন করলে সব ভিডিও Cloudflare Workers দিয়ে যাবে, অফ করলে সরাসরি সোর্স থেকে প্লে হবে।
-              </p>
-              <CdnToggle glassCard={glassCard} />
-            </div>
 
             {/* Proxy Server Selector */}
             <div className={`${glassCard} p-4 mb-4`}>
