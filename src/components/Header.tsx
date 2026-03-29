@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Search, User } from "lucide-react";
 import logoImg from "@/assets/logo.png";
 import NotificationPanel from "./NotificationPanel";
+import { useBranding } from "@/hooks/useBranding";
 import ThemeToggle from "./ThemeToggle";
 import { db, ref, set, update } from "@/lib/firebase";
 
