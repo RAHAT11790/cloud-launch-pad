@@ -925,11 +925,26 @@ const Index = () => {
           detailsCacheRef.current.set(anime.id, fullAnime);
           setSelectedAnime(fullAnime);
         } else {
-          toast.error("Failed to load");
+          // API didn't return data — show anime with metadata from Firebase
+          const fallbackAnime: AnimeItem = {
+            ...anime,
+            poster: anime.poster || firebaseMeta?.poster || '',
+            backdrop: anime.backdrop || firebaseMeta?.backdrop || anime.poster || '',
+            storyline: firebaseMeta?.storyline || anime.storyline || '',
+            year: firebaseMeta?.year || anime.year,
+            language: firebaseMeta?.language || anime.language || '',
+          };
+          detailsCacheRef.current.set(anime.id, fallbackAnime);
+          setSelectedAnime(fallbackAnime);
         }
       } catch {
         if (requestId === detailsRequestRef.current) {
-          toast.error("Failed to load details");
+          // Show anime with available metadata instead of error
+          const fallbackAnime: AnimeItem = {
+            ...anime,
+            storyline: firebaseMeta?.storyline || anime.storyline || '',
+          };
+          setSelectedAnime(fallbackAnime);
         }
       } finally {
         if (detailsLoadingToastRef.current === toastId) dismissDetailsLoadingToast();
