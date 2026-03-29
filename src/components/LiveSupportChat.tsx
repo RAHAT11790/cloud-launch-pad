@@ -231,9 +231,14 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       }));
       chatHistory.push({ role: "user", content: text });
 
-      const { getEdgeFunctionUrl } = await import("@/lib/edgeFunctionRouter");
-      const aiEndpoint = await getEdgeFunctionUrl("ai-chat");
-      if (!aiEndpoint) throw new Error("AI endpoint not configured");
+      // Get AI endpoint from Firebase config
+      const { get: fbGet } = await import("@/lib/firebase");
+      const dbRef = (await import("@/lib/firebase")).ref;
+      const dbInst = (await import("@/lib/firebase")).db;
+      const aiConfigSnap = await fbGet(dbRef(dbInst, "settings/aiChat"));
+      const aiConfig = aiConfigSnap.val();
+      if (!aiConfig?.enabled || !aiConfig?.url) throw new Error("AI not configured");
+      const aiEndpoint = aiConfig.url;
 
       const systemPrompt = [
         `তুমি ${branding.siteName} এর AI support assistant।`,
