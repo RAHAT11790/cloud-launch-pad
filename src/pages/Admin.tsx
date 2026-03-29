@@ -6241,6 +6241,16 @@ const AnimeSaltManagerSection = ({
   const [addingSlug, setAddingSlug] = useState<string | null>(null);
   const [removingSlug, setRemovingSlug] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [animeSaltGlobalEnabled, setAnimeSaltGlobalEnabled] = useState(true);
+
+  // Listen to global AnimeSalt enabled state
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/animeSaltEnabled"), (snap) => {
+      const val = snap.val();
+      setAnimeSaltGlobalEnabled(val !== false);
+    });
+    return () => unsub();
+  }, []);
 
   // TMDB selection modal
   const [tmdbResults, setTmdbResults] = useState<any[]>([]);
