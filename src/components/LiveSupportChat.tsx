@@ -202,10 +202,22 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       // Use Cloudflare Worker AI endpoint
       const { getEdgeFunctionUrl } = await import("@/lib/edgeFunctionRouter");
       const aiEndpoint = await getEdgeFunctionUrl("ai-chat");
+      const systemPrompt = `তুমি ${branding.siteName} এর AI support assistant। ইউজারের প্রশ্নের উত্তর পরিষ্কার, সংক্ষিপ্ত এবং সহায়কভাবে দাও। Anime/website সম্পর্কিত তথ্য থাকলে সেটার ভিত্তিতে উত্তর দাও।`;
+
       const res = await fetch(aiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: chatHistory, animeContext: animeContext(), userContext }),
+        body: JSON.stringify({
+          message: text,
+          history: chatHistory,
+          systemPrompt,
+          siteContext: {
+            siteName: branding.siteName,
+            animeContext: animeContext(),
+            userContext,
+            userName,
+          },
+        }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));

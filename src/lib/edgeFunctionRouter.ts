@@ -16,6 +16,7 @@ export const DEFAULT_CF_FUNCTIONS = [
   "clean-embed",
   "animesalt",
   "send-fcm",
+  "ai-chat",
   "webhook",
 ] as const;
 
@@ -161,6 +162,7 @@ function getBuiltInDescription(fn: string): string {
     "clean-embed": "Clean embed page",
     "animesalt": "AnimeSalt scraper",
     "send-fcm": "Push notification sender",
+    "ai-chat": "AI chat assistant",
     "webhook": "Telegram webhook",
   };
   return d[fn] || fn;

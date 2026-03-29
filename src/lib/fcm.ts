@@ -16,6 +16,13 @@ const firebaseConfig = {
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BDMR1Q2pzEWQZtt-E_g_T4GD0AN0_DkGfpDDs2_4a0Oy27INY1LPUGeR8n6NPmIDG3_dBL1OwHbN4a-Toku0Xs4";
 const APP_ICON_URL = SITE_ICON_URL;
+const PRIMARY_SITE_ORIGIN = (() => {
+  try {
+    return new URL(SITE_URL).origin;
+  } catch {
+    return SITE_URL;
+  }
+})();
 const CHUNK_SIZE = 180;
 const CHUNK_CONCURRENCY = 3;
 const REQUEST_TIMEOUT_MS = 30000;
@@ -194,6 +201,51 @@ const getEmailKey = (): string | null => {
   return null;
 };
 
+const toEmailKey = (email?: string | null): string | null => {
+  if (!email || typeof email !== "string") return null;
+  return email.replace(/\./g, ",");
+};
+
+const isPrimaryOriginToken = (entry: any) => {
+  const origin = typeof entry?.origin === "string" ? entry.origin : "";
+  return !origin || origin === PRIMARY_SITE_ORIGIN;
+};
+
+const extractTokensFromMap = (data: Record<string, any> | null | undefined): string[] => {
+  if (!data || typeof data !== "object") return [];
+  return Object.values(data)
+    .filter((entry: any) => entry?.token && isPrimaryOriginToken(entry))
+    .map((entry: any) => entry.token);
+};
+
+const getUserTokenStorageKeys = async (userIds: string[]): Promise<string[]> => {
+  const uniqueIds = [...new Set(userIds.filter(Boolean))];
+  if (uniqueIds.length === 0) return [];
+
+  try {
+    const snaps = await Promise.all(uniqueIds.map((uid) => get(ref(db, `users/${uid}`))));
+    const keys = new Set<string>();
+
+    uniqueIds.forEach((uid, index) => {
+      keys.add(uid);
+
+      if (uid.includes("@") || uid.includes(",")) {
+        keys.add(uid.replace(/\./g, ","));
+      }
+
+      const user = snaps[index]?.val?.();
+      const emailKey = toEmailKey(user?.email);
+      if (emailKey) keys.add(emailKey);
+      if (typeof user?.id === "string" && user.id) keys.add(user.id);
+    });
+
+    return [...keys];
+  } catch (err) {
+    console.warn("Failed to resolve FCM storage keys:", err);
+    return uniqueIds;
+  }
+};
+
 // Register FCM token for a user
 export const registerFCMToken = async (userId: string, showDiagnostics = false) => {
   // If permission is already granted, skip all diagnostic toasts
@@ -346,15 +398,12 @@ export const registerFCMToken = async (userId: string, showDiagnostics = false) 
 // Get all FCM tokens for specific user IDs
 export const getFCMTokens = async (userIds: string[]): Promise<string[]> => {
   try {
-    const snaps = await Promise.all(userIds.map((uid) => get(ref(db, `fcmTokens/${uid}`))));
+    const storageKeys = await getUserTokenStorageKeys(userIds);
+    const snaps = await Promise.all(storageKeys.map((key) => get(ref(db, `fcmTokens/${key}`))));
     const tokens: string[] = [];
 
     snaps.forEach((snap) => {
-      const data = snap.val();
-      if (!data) return;
-      Object.values(data).forEach((entry: any) => {
-        if (entry?.token) tokens.push(entry.token);
-      });
+      tokens.push(...extractTokensFromMap(snap.val()));
     });
 
     return [...new Set(tokens)];
@@ -372,9 +421,7 @@ export const getAllFCMTokens = async (): Promise<string[]> => {
     const data = snap.val();
     if (data) {
       Object.values(data).forEach((userTokens: any) => {
-        Object.values(userTokens).forEach((entry: any) => {
-          if (entry?.token) tokens.push(entry.token);
-        });
+        tokens.push(...extractTokensFromMap(userTokens));
       });
     }
   } catch (err) {
@@ -527,6 +574,7 @@ export const sendPushToUsers = async (
   onProgress?: (progress: PushProgress) => void
 ) => {
   const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+  const eligibleUserIds = await getPushEligibleUserIds(uniqueUserIds);
 
   onProgress?.({
     phase: "tokens",
@@ -535,19 +583,17 @@ export const sendPushToUsers = async (
     success: 0,
     failed: 0,
     invalidRemoved: 0,
-    totalUsers: uniqueUserIds.length,
+    totalUsers: eligibleUserIds.length,
   });
 
-  if (uniqueUserIds.length === 0) {
+  if (eligibleUserIds.length === 0) {
     onProgress?.({ phase: "done", totalTokens: 0, sent: 0, success: 0, failed: 0, invalidRemoved: 0, totalUsers: 0 });
     return { skipped: true, success: 0, failed: 0, total: 0, invalidTokensRemoved: 0, reason: "NO_TARGET_USERS" };
   }
 
-  // Always fetch ALL tokens from fcmTokens node
-  // Because fcmTokens keys are email-based but userIds are user_xxx format
-  console.log(`[FCM] Fetching ALL fcmTokens for ${uniqueUserIds.length} target users...`);
-  const tokens = await getAllFCMTokens();
-  console.log(`[FCM] Found ${tokens.length} total unique tokens`);
+  console.log(`[FCM] Resolving tokens for ${eligibleUserIds.length} target users on ${PRIMARY_SITE_ORIGIN}...`);
+  const tokens = await getFCMTokens(eligibleUserIds);
+  console.log(`[FCM] Found ${tokens.length} matching tokens for target users`);
 
   if (tokens.length === 0) {
     onProgress?.({
@@ -557,13 +603,13 @@ export const sendPushToUsers = async (
       success: 0,
       failed: 0,
       invalidRemoved: 0,
-      totalUsers: uniqueUserIds.length,
+      totalUsers: eligibleUserIds.length,
     });
     return { skipped: true, success: 0, failed: 0, total: 0, invalidTokensRemoved: 0, reason: "NO_TOKENS" };
   }
 
   const result = await sendPushToTokens(tokens, payload, (progress) => {
-    onProgress?.({ ...progress, totalUsers: uniqueUserIds.length });
+    onProgress?.({ ...progress, totalUsers: eligibleUserIds.length });
   });
 
   return {
