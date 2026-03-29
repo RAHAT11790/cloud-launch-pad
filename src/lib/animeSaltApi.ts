@@ -208,8 +208,10 @@ export const animeSaltApi = {
       tryDirectApi(proxyUrl, { action: 'browse', type: 'movies', page: 1 }),
     ]);
     
-    if (seriesDirect?.items || moviesDirect?.items) {
-      return { success: true, items: [...(seriesDirect?.items || []), ...(moviesDirect?.items || [])] };
+    const sItems = seriesDirect?.items || [];
+    const mItems = moviesDirect?.items || [];
+    if (sItems.length || mItems.length) {
+      return { success: true, items: [...sItems, ...mItems] };
     }
     
     // Fallback to HTML scraping
