@@ -4862,6 +4862,11 @@ Pᴏᴡᴇʀ Bʏ :
           <EdgeRouterSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
+        {/* ==================== BRANDING ==================== */}
+        {activeSection === "branding" && (
+          <BrandingSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+        )}
+
         {/* ==================== COMMENTS ==================== */}
         {activeSection === "comments" && (
           <AdminCommentsSection
