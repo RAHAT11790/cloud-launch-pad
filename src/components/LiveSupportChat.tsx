@@ -196,8 +196,20 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
         content: m.role === "admin" ? `[Admin Reply]: ${m.content}` : m.content,
       }));
       chatHistory.push({ role: "user", content: text });
-      const { data, error } = await supabase.functions.invoke("live-chat", { body: { messages: chatHistory, animeContext: animeContext(), userContext } });
-      if (error) throw error;
+
+      // Use Cloudflare Worker AI endpoint
+      const { getEdgeFunctionUrl } = await import("@/lib/edgeFunctionRouter");
+      const aiEndpoint = await getEdgeFunctionUrl("ai-chat");
+      const res = await fetch(aiEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: chatHistory, animeContext: animeContext(), userContext }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.error || `AI error ${res.status}`);
+      }
+      const data = await res.json();
 
       const sanitizeAssistantReply = (raw: string) =>
         raw
