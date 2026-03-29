@@ -155,19 +155,18 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
           return;
         }
 
+        // Just check if the URL is reachable via OPTIONS/HEAD — don't waste Groq API quota
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 5000);
         const res = await fetch(aiConfig.url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: [{ role: "user", content: "ping" }],
-            animeContext: "",
-            userContext: "",
-          }),
+          method: "OPTIONS",
+          signal: controller.signal,
         });
+        clearTimeout(t);
 
-        const data = await res.json().catch(() => null);
         if (!cancelled) {
-          setAiStatus(res.ok && !!data?.reply ? "ready" : "offline");
+          // OPTIONS returning 200/204 means the endpoint is alive
+          setAiStatus(res.ok || res.status === 204 ? "ready" : "offline");
         }
       } catch {
         if (!cancelled) setAiStatus("offline");
