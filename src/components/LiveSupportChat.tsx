@@ -144,7 +144,6 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
     const verifyAi = async () => {
       setAiStatus("checking");
       try {
-        // Read AI config from Firebase
         const { get: fbGet } = await import("@/lib/firebase");
         const dbRef = (await import("@/lib/firebase")).ref;
         const dbInst = (await import("@/lib/firebase")).db;
@@ -160,14 +159,15 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message: "ping",
-            messages: [],
-            systemPrompt: `You are ${branding.siteName} AI. Reply with one word.`,
+            messages: [{ role: "user", content: "ping" }],
+            animeContext: "",
+            userContext: "",
           }),
         });
 
+        const data = await res.json().catch(() => null);
         if (!cancelled) {
-          setAiStatus(res.ok ? "ready" : "offline");
+          setAiStatus(res.ok && !!data?.reply ? "ready" : "offline");
         }
       } catch {
         if (!cancelled) setAiStatus("offline");
@@ -240,33 +240,13 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       if (!aiConfig?.enabled || !aiConfig?.url) throw new Error("AI not configured");
       const aiEndpoint = aiConfig.url;
 
-      const systemPrompt = [
-        `তুমি ${branding.siteName} এর AI support assistant।`,
-        `Rules:`,
-        `1. শুধু [RS] marked anime-এর জন্য clickable button দাও।`,
-        `   Format: [BTN:🎬 দেখুন: ANIME_TITLE:ANIME_ID:ACTUAL_ID_VALUE]`,
-        `   Example: [BTN:🎬 দেখুন: One Piece:ANIME_ID:-Nxyz123]`,
-        `2. [AN_ONLY] anime-এর button/link দেবে না। বলো: "এই anime আমাদের সাইটে আছে। Search bar-এ নাম লিখে search করুন।"`,
-        `3. ইউজার anime নাম বললে context-এর [RS] list-এ partial match খোঁজো। পেলে button দাও।`,
-        `   না পেলে [AN_ONLY]-তে খোঁজো, পেলে search recommend করো।`,
-        `   কোথাও না পেলে বলো catalog-এ নেই।`,
-        `4. কখনো ভুয়া ID, link বা তথ্য দেবে না।`,
-        `5. RS catalog থেকে similar anime recommend করতে পারো।`,
-        `6. বাংলা ও English দুটোতেই উত্তর দাও - ইউজারের ভাষা অনুসরণ করো।`,
-        `7. সংক্ষিপ্ত ও বন্ধুসুলভ হও।`,
-        `8. Premium/account প্রশ্নে userContext ব্যবহার করো।`,
-      ].join("\n");
-
-      // Combine system prompt with anime context for the AI
-      const fullSystemPrompt = `${systemPrompt}\n\n--- Context ---\n${animeContext()}\n${userContext}`;
-
       const res = await fetch(aiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: text,
           messages: chatHistory,
-          systemPrompt: fullSystemPrompt,
+          animeContext: animeContext(),
+          userContext,
         }),
       });
       if (!res.ok) {
@@ -275,6 +255,10 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
         throw new Error(errData?.error || `AI error ${res.status}`);
       }
       const data = await res.json();
+      if (!data?.reply) {
+        setAiStatus("offline");
+        throw new Error("Empty AI reply");
+      }
       setAiStatus("ready");
 
       const sanitizeReply = (raw: string) =>
