@@ -144,7 +144,6 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
     const verifyAi = async () => {
       setAiStatus("checking");
       try {
-        // Read AI config from Firebase
         const { get: fbGet } = await import("@/lib/firebase");
         const dbRef = (await import("@/lib/firebase")).ref;
         const dbInst = (await import("@/lib/firebase")).db;
@@ -160,14 +159,15 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message: "ping",
-            messages: [],
-            systemPrompt: `You are ${branding.siteName} AI. Reply with one word.`,
+            messages: [{ role: "user", content: "ping" }],
+            animeContext: "",
+            userContext: "",
           }),
         });
 
+        const data = await res.json().catch(() => null);
         if (!cancelled) {
-          setAiStatus(res.ok ? "ready" : "offline");
+          setAiStatus(res.ok && !!data?.reply ? "ready" : "offline");
         }
       } catch {
         if (!cancelled) setAiStatus("offline");
