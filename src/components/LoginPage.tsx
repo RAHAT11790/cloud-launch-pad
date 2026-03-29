@@ -588,7 +588,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
               }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              <img src={logoImg} alt="RS ANIME" className="w-24 h-24 rounded-3xl" />
+              <img src={logoSrc} alt={branding.loginTitle} className="w-24 h-24 rounded-3xl" />
             </motion.div>
             <motion.h1
               className="text-4xl font-black gradient-text"
@@ -597,7 +597,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.3 }}
             >
-              RS ANIME
+              {branding.loginTitle}
             </motion.h1>
             <motion.p
               className="text-sm text-muted-foreground"
@@ -605,7 +605,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5 }}
             >
-              Welcome to {SITE_NAME}
+              Welcome to {branding.siteName}
             </motion.p>
           </motion.div>
         ) : (
