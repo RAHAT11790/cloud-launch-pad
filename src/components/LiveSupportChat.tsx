@@ -202,13 +202,24 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
     }
 
     const normalize = (value: string) => value.toLowerCase().replace(/[!?.,/\\-]/g, " ").replace(/\s+/g, " ").trim();
+    const normalizedText = normalize(text);
     const extractField = (label: string) => {
       const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const match = userContext.match(new RegExp(`^${escaped}:\\s*(.+)$`, "mi"));
       return match?.[1]?.trim() || "";
     };
-    const hasAny = (patterns: string[]) => patterns.some((pattern) => normalize(text).includes(pattern));
+    const hasAny = (patterns: string[]) => patterns.some((pattern) => normalizedText.includes(pattern));
+    const asksPassword = hasAny(["password", "pass", "পাসওয়ার্ড", "পাস", "id pass", "আইডি পাস"]);
+    const asksEmail = hasAny(["email", "gmail", "mail", "ইমেইল", "id", "আইডি"]);
+    const asksPremium = hasAny(["premium", "প্রিমিয়াম", "subscription", "সাবস্ক্রিপশন", "মেয়াদ", "দিন বাকি", "device", "ডিভাইস", "limit", "লিমিট"]);
+    const asksAccountInfo = asksPassword || asksEmail || asksPremium;
+    const isGreeting = hasAny(["hi", "hello", "hey", "assalamu alaikum", "আসসালামু আলাইকুম", "আসসালামু আলাইকুম", "সালাম", "হ্যালো", "হাই"]);
+    const isTinyMessage = normalizedText.split(" ").filter(Boolean).length <= 3;
     const buildLocalReply = () => {
+      if (isGreeting && isTinyMessage) {
+        return `আসসালামু আলাইকুম ${userName || "ভাই"}! 👋\nআমি RS AI। anime, episode, premium, ID/password—যা জানতে চান লিখুন।`;
+      }
+
       if (!userContext) return "";
 
       const name = extractField("ইউজার নাম") || "আপনি";
@@ -218,10 +229,6 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
       const premiumExpiry = extractField("প্রিমিয়াম মেয়াদ");
       const deviceLimit = extractField("ডিভাইস লিমিট");
       const activeDevices = extractField("সক্রিয় ডিভাইস");
-
-      const asksPassword = hasAny(["password", "pass", "পাসওয়ার্ড", "পাস", "id pass", "আইডি পাস"]);
-      const asksEmail = hasAny(["email", "gmail", "mail", "ইমেইল", "id", "আইডি"]);
-      const asksPremium = hasAny(["premium", "প্রিমিয়াম", "subscription", "সাবস্ক্রিপশন", "মেয়াদ", "দিন বাকি", "device", "ডিভাইস", "limit", "লিমিট"]);
 
       if (asksPassword && asksEmail) {
         return `${name}, আপনার লগইন তথ্য:\n• ইমেইল/আইডি: ${email || "পাওয়া যায়নি"}\n• পাসওয়ার্ড: ${password || "সেট করা নেই"} 🔐`;
