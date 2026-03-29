@@ -5,6 +5,7 @@ import logoImg from "@/assets/logo.png";
 import { db, auth, googleProvider, ref, set, get, signInWithPopup, sendPasswordResetEmail } from "@/lib/firebase";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
+import { useBranding } from "@/hooks/useBranding";
 
 interface LoginPageProps {
   onLogin: (userId: string) => void;
