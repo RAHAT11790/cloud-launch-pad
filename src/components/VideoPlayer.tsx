@@ -559,19 +559,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
     if (!onNextEpisode || duration <= 0 || currentTime <= 0) return;
-    // Don't show if user cancelled it for this episode
     if (nextEpCancelledRef.current) return;
     const remaining = duration - currentTime;
-    // Only show in the last 90 seconds, BUT also require that at least 30% of the video has been watched
-    // This prevents showing immediately when a new episode loads
-    const threshold = Math.min(90, duration * 0.05 + 10);
-    const watchedEnough = currentTime > duration * 0.3;
-    if (remaining <= threshold && remaining > 0 && !showNextEpOverlay && watchedEnough) {
+    // ONLY show in the last 60 seconds - strict check
+    const inLast60 = remaining <= 60 && remaining > 0;
+    if (inLast60 && !showNextEpOverlay) {
       setShowNextEpOverlay(true);
       setNextEpCountdown(Math.ceil(remaining));
-    }
-    if (showNextEpOverlay && remaining > 0) {
+    } else if (inLast60 && showNextEpOverlay) {
       setNextEpCountdown(Math.ceil(remaining));
+    } else if (!inLast60 && showNextEpOverlay) {
+      // User seeked back out of the last 60s zone - hide timer
+      setShowNextEpOverlay(false);
+      setNextEpCountdown(0);
     }
   }, [currentTime, duration, onNextEpisode, showNextEpOverlay]);
 
@@ -1158,7 +1158,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
                     <circle cx="18" cy="18" r="16" fill="none" stroke="hsla(176,65%,48%,0.15)" strokeWidth="2" />
                     <circle cx="18" cy="18" r="16" fill="none" stroke="hsl(176,65%,48%)" strokeWidth="2.5"
-                      strokeDasharray={`${(nextEpCountdown / 90) * 100} 100`}
+                      strokeDasharray={`${(nextEpCountdown / 60) * 100} 100`}
                       strokeLinecap="round" className="transition-all duration-1000" />
                   </svg>
                   <span className="absolute text-[10px] font-bold text-primary">{nextEpCountdown}s</span>
@@ -1201,9 +1201,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
-          {/* Controls Overlay - no heavy animations for smooth feel */}
+          {/* Controls Overlay - always dark bg for visibility in all themes */}
           {showControls && !locked && (
-            <div className="absolute inset-0 player-controls-overlay flex flex-col justify-between" style={{ willChange: "opacity", transition: "opacity 0.15s ease" }}>
+            <div className="absolute inset-0 flex flex-col justify-between text-white" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)", willChange: "opacity", transition: "opacity 0.15s ease" }}>
               {/* Top controls */}
               <div className="flex justify-end gap-2 p-3">
                 <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1">

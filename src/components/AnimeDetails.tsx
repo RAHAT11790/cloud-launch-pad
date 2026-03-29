@@ -189,10 +189,10 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
       transition={{ type: "tween", duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
     >
       {/* Header Image */}
-      <div className="relative w-full h-[50vh] min-h-[350px] overflow-hidden">
+      <div className="relative w-full h-[45vh] min-h-[300px] overflow-hidden">
         <img src={anime.backdrop} alt={anime.title} className="w-full h-full object-cover" />
         <div className="absolute inset-0" style={{
-          background: "linear-gradient(to top, hsl(240 20% 6%) 0%, rgba(0,0,0,0.2) 40%, transparent 60%), linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 25%)"
+          background: "linear-gradient(to top, hsl(var(--background)) 0%, hsl(var(--background) / 0.4) 40%, transparent 60%), linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 25%)"
         }} />
         <div className="absolute bottom-6 left-0 right-0 px-5 text-center">
           <h1 className="text-2xl font-extrabold mb-2" style={{ ...getAnimeTitleStyle(anime.title), textShadow: "0 4px 20px rgba(0,0,0,0.9)" }}>
@@ -232,11 +232,11 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
             onClick={() => {
               if (anime.type === "webseries" && anime.seasons) { onPlay(anime, 0, 0); } else { onPlay(anime); }
             }}
-            className="flex-1 py-3 rounded-[10px] gradient-primary font-bold text-sm flex items-center justify-center gap-2 btn-glow">
+            className="flex-1 py-3 rounded-xl gradient-primary font-bold text-sm flex items-center justify-center gap-2 btn-glow">
             {anime.type === "webseries" ? <><List className="w-4 h-4" /> Watch</> : <><Play className="w-4 h-4" /> Play</>}
           </button>
           <button onClick={toggleWatchlist}
-            className={`flex-1 py-3 rounded-[10px] font-semibold text-sm flex items-center justify-center gap-2 border transition-all hover:-translate-y-0.5 ${
+            className={`flex-1 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 border transition-all hover:-translate-y-0.5 ${
               isInWatchlist ? "bg-primary/20 border-primary text-primary" : "bg-foreground/10 backdrop-blur-[20px] border-foreground/20 hover:bg-foreground/20"
             }`}>
             <Heart className={`w-4 h-4 ${isInWatchlist ? "fill-primary" : ""}`} />
@@ -258,7 +258,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
               setTimeout(() => setShareCopied(false), 2000);
             });
           }}
-          className="w-full py-3 rounded-[10px] bg-secondary border border-foreground/20 font-semibold text-sm flex items-center justify-center gap-2 mb-5 transition-all hover:-translate-y-0.5 hover:border-primary"
+          className="w-full py-3 rounded-xl bg-secondary border border-foreground/20 font-semibold text-sm flex items-center justify-center gap-2 mb-5 transition-all hover:-translate-y-0.5 hover:border-primary"
         >
           {shareCopied ? <><Check className="w-4 h-4 text-green-400" /> Link Copied!</> : <><Share2 className="w-4 h-4" /> Share</>}
         </button>
