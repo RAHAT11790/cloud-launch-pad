@@ -744,17 +744,74 @@ const Index = () => {
       const toastId = showDetailsLoadingToast();
 
       try {
+        // Step 1: Try Firebase customSeasons first (no API needed)
+        let firebaseSeasons: any[] | null = null;
+        let firebaseMeta: any = null;
+        try {
+          const [csSnap, metaSnap] = await Promise.all([
+            get(ref(db, `animesaltSelected/${anime.slug}/customSeasons`)),
+            get(ref(db, `animesaltSelected/${anime.slug}`)),
+          ]);
+          const cs = csSnap.val();
+          if (cs && Array.isArray(cs) && cs.length > 0) firebaseSeasons = cs;
+          firebaseMeta = metaSnap.val() || {};
+        } catch {}
+
+        // If Firebase has customSeasons, use directly without API
+        if (firebaseSeasons) {
+          if (requestId !== detailsRequestRef.current) return;
+          const fullAnime: AnimeItem = {
+            ...anime,
+            poster: anime.poster || firebaseMeta?.poster || '',
+            backdrop: anime.backdrop || firebaseMeta?.backdrop || anime.poster || '',
+            storyline: firebaseMeta?.storyline || anime.storyline || '',
+            year: firebaseMeta?.year || anime.year,
+            language: firebaseMeta?.language || anime.language || '',
+            type: 'webseries',
+            seasons: firebaseSeasons.map((s: any) => ({
+              name: s.name,
+              episodes: (s.episodes || []).map((ep: any) => {
+                if (ep.link) {
+                  return {
+                    episodeNumber: ep.number,
+                    title: `Episode ${ep.number}`,
+                    link: ep.link,
+                    link480: ep.link480 || '',
+                    link720: ep.link720 || '',
+                    link1080: ep.link1080 || '',
+                    link4k: ep.link4k || '',
+                  };
+                }
+                if (ep.hasAnimeSaltLink && ep.slug) {
+                  return { episodeNumber: ep.number, title: `Episode ${ep.number}`, link: `animesalt://${ep.slug}` };
+                }
+                return { episodeNumber: ep.number, title: `Episode ${ep.number}`, link: '' };
+              }),
+            })),
+          };
+          detailsCacheRef.current.set(anime.id, fullAnime);
+          setSelectedAnime(fullAnime);
+          dismissDetailsLoadingToast();
+          return;
+        }
+
+        // Step 2: Try API call as fallback
         let result: any = null;
-        if (anime.type === 'movie') {
-          result = await cachedApiCall(`movie_${anime.slug}`, () => animeSaltApi.getMovie(anime.slug));
-          if (!result.success || !result.data) {
-            result = await cachedApiCall(`series_${anime.slug}`, () => animeSaltApi.getSeries(anime.slug));
-          }
-        } else {
-          result = await cachedApiCall(`series_${anime.slug}`, () => animeSaltApi.getSeries(anime.slug));
-          if (!result.success || !result.data || (!result.data.seasons?.length && !result.data.movieEmbedUrl)) {
+        try {
+          if (anime.type === 'movie') {
             result = await cachedApiCall(`movie_${anime.slug}`, () => animeSaltApi.getMovie(anime.slug));
+            if (!result.success || !result.data) {
+              result = await cachedApiCall(`series_${anime.slug}`, () => animeSaltApi.getSeries(anime.slug));
+            }
+          } else {
+            result = await cachedApiCall(`series_${anime.slug}`, () => animeSaltApi.getSeries(anime.slug));
+            if (!result.success || !result.data || (!result.data.seasons?.length && !result.data.movieEmbedUrl)) {
+              result = await cachedApiCall(`movie_${anime.slug}`, () => animeSaltApi.getMovie(anime.slug));
+            }
           }
+        } catch {
+          // API failed — use metadata-only fallback below
+          result = null;
         }
 
         if (requestId !== detailsRequestRef.current) return;
@@ -868,11 +925,26 @@ const Index = () => {
           detailsCacheRef.current.set(anime.id, fullAnime);
           setSelectedAnime(fullAnime);
         } else {
-          toast.error("Failed to load");
+          // API didn't return data — show anime with metadata from Firebase
+          const fallbackAnime: AnimeItem = {
+            ...anime,
+            poster: anime.poster || firebaseMeta?.poster || '',
+            backdrop: anime.backdrop || firebaseMeta?.backdrop || anime.poster || '',
+            storyline: firebaseMeta?.storyline || anime.storyline || '',
+            year: firebaseMeta?.year || anime.year,
+            language: firebaseMeta?.language || anime.language || '',
+          };
+          detailsCacheRef.current.set(anime.id, fallbackAnime);
+          setSelectedAnime(fallbackAnime);
         }
       } catch {
         if (requestId === detailsRequestRef.current) {
-          toast.error("Failed to load details");
+          // Show anime with available metadata instead of error
+          const fallbackAnime: AnimeItem = {
+            ...anime,
+            storyline: firebaseMeta?.storyline || anime.storyline || '',
+          };
+          setSelectedAnime(fallbackAnime);
         }
       } finally {
         if (detailsLoadingToastRef.current === toastId) dismissDetailsLoadingToast();
