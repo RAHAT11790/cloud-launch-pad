@@ -11,11 +11,8 @@ import { db, ref, get } from "@/lib/firebase";
 export const DEFAULT_CF_FUNCTIONS = [
   "telegram-post",
   "shorten",
-  "clean-embed",
-  "animesalt",
   "send-fcm",
-  "ai-chat",
-  "webhook",
+  "animesalt",
 ] as const;
 
 export type DefaultCFFunction = typeof DEFAULT_CF_FUNCTIONS[number];
