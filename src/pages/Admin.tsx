@@ -7813,15 +7813,7 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
                                     maxDev === n ? "bg-yellow-500 text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10"
                                   }`}>{n}</button>
                               ))}
-                              <input
-                                type="number"
-                                min="1"
-                                max="100"
-                                value={maxDev}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => { e.stopPropagation(); const v = parseInt(e.target.value); if (v > 0) updateMaxDevices(user.id, v); }}
-                                className="w-12 h-7 rounded-lg text-[11px] font-bold text-center bg-white/5 text-zinc-300 border border-white/10 focus:border-yellow-500 outline-none"
-                              />
+                              <DeviceLimitInput currentValue={maxDev} userId={user.id} onUpdate={updateMaxDevices} />
                             </div>
                           </div>
 

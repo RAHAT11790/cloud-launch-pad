@@ -51,22 +51,34 @@ const Index = () => {
   const { items: animeSaltItems, loading: saltLoading } = useSelectedAnimeSalt();
   const brandingConfig = useBranding();
 
-  // Merge AnimeSalt items into main data lists
+  // AnimeSalt enabled state from Firebase
+  const [animeSaltEnabled, setAnimeSaltEnabled] = useState(true);
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/animeSaltEnabled"), (snap) => {
+      const val = snap.val();
+      setAnimeSaltEnabled(val !== false); // default true
+    });
+    return () => unsub();
+  }, []);
+
+  // Merge AnimeSalt items into main data lists (only when enabled)
+  const activeSaltItems = useMemo(() => animeSaltEnabled ? animeSaltItems : [], [animeSaltEnabled, animeSaltItems]);
+
   const allAnime = useMemo(() => {
-    const combined = [...firebaseAnime, ...animeSaltItems];
+    const combined = [...firebaseAnime, ...activeSaltItems];
     combined.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
     return combined;
-  }, [firebaseAnime, animeSaltItems]);
+  }, [firebaseAnime, activeSaltItems]);
 
   const allSeries = useMemo(() => {
-    const saltSeries = animeSaltItems.filter(i => i.type === 'webseries');
+    const saltSeries = activeSaltItems.filter(i => i.type === 'webseries');
     return [...webseries, ...saltSeries];
-  }, [webseries, animeSaltItems]);
+  }, [webseries, activeSaltItems]);
 
   const allMovies = useMemo(() => {
-    const saltMovies = animeSaltItems.filter(i => i.type === 'movie');
+    const saltMovies = activeSaltItems.filter(i => i.type === 'movie');
     return [...movies, ...saltMovies];
-  }, [movies, animeSaltItems]);
+  }, [movies, activeSaltItems]);
   
   // Maintenance mode check
   const [maintenance, setMaintenance] = useState<any>(null);

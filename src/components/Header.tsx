@@ -120,15 +120,20 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
     <header className="fixed top-0 left-0 right-0 h-[60px] z-50 flex items-center justify-between px-4 transition-all duration-300 bg-background"
       style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
       
-      {/* Logo - clickable for chat */}
-      <button onClick={onLogoClick} className="relative group flex-shrink-0">
-        <img src={logoSrc} alt={branding.siteName} className="h-10 w-10 rounded-lg object-contain transition-transform group-hover:scale-110 group-active:scale-95" style={{ boxShadow: "var(--neu-shadow-sm)" }} />
-        {/* Live dot indicator */}
-        <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 border-2 border-background animate-pulse" />
-        {chatOpen && (
-          <span className="absolute -top-1 -left-1 w-3 h-3 rounded-full bg-primary animate-ping" />
-        )}
-      </button>
+      {/* Logo - clickable for chat only when AI is enabled */}
+      {aiEnabled ? (
+        <button onClick={onLogoClick} className="relative group flex-shrink-0">
+          <img src={logoSrc} alt={branding.siteName} className="h-10 w-10 rounded-lg object-contain transition-transform group-hover:scale-110 group-active:scale-95" style={{ boxShadow: "var(--neu-shadow-sm)" }} />
+          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 border-2 border-background animate-pulse" />
+          {chatOpen && (
+            <span className="absolute -top-1 -left-1 w-3 h-3 rounded-full bg-primary animate-ping" />
+          )}
+        </button>
+      ) : (
+        <div className="relative flex-shrink-0">
+          <img src={logoSrc} alt={branding.siteName} className="h-10 w-10 rounded-lg object-contain" style={{ boxShadow: "var(--neu-shadow-sm)" }} />
+        </div>
+      )}
 
       <div className="relative flex-1 mx-3 cursor-pointer" onClick={onSearchClick} style={{ maxWidth: 200, minWidth: 120 }}>
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4 z-10" />
