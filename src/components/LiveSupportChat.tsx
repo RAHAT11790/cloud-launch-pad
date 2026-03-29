@@ -148,6 +148,9 @@ const LiveSupportChat = ({ animeList = [], isOpen, onClose, onAnimeSelect }: Liv
       try {
         const { getEdgeFunctionUrl } = await import("@/lib/edgeFunctionRouter");
         const aiEndpoint = await getEdgeFunctionUrl("ai-chat");
+      if (!aiEndpoint) {
+        throw new Error("AI endpoint not configured");
+      }
         const res = await fetch(aiEndpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

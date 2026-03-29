@@ -106,7 +106,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         } else {
           // Check if it's a valid worker response (not a generic error page)
           const text = await res.text().catch(() => "");
-          const isWorkerResponse = text.includes('"error"') || text.includes('"reply"') || text.includes('"result"') || res.status === 400 || res.status === 401 || res.status === 405;
+          const isWorkerResponse = text.includes('"error"') || text.includes('"reply"') || text.includes('"result"');
           results[fn.key] = { alive: isWorkerResponse, latency };
         }
       } catch {
