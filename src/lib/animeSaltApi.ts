@@ -69,7 +69,9 @@ const fetchPage = async (url: string): Promise<string> => {
   if (isEpisodePage && slugMatch) {
     fallbackBody = { action: 'episode', slug: slugMatch[2] };
   } else if (slugMatch && !pageMatch) {
-    fallbackBody = { action: 'detail', slug: slugMatch[2], type: slugMatch[1] };
+    // Map type to correct action name matching edge function
+    const actionName = slugMatch[1] === 'series' ? 'series' : 'movie';
+    fallbackBody = { action: actionName, slug: slugMatch[2] };
   } else {
     fallbackBody = {
       action: 'browse',
