@@ -400,19 +400,29 @@ const Index = () => {
   // Register/refresh FCM token silently (no prompts, no diagnostics)
   // Also check admin "forceNotifPrompt" setting to prompt users who haven't allowed yet
   useEffect(() => {
-    if (!isLoggedIn) return;
-
     const registerPushToken = async () => {
       try {
         const pushPref = localStorage.getItem("rs_notif_push");
         if (pushPref === "false") return;
 
-        const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-        if (!u?.id) return;
+        // Get or create user ID even for non-logged-in visitors
+        let userId: string | undefined;
+        try {
+          const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
+          userId = u?.id;
+        } catch {}
+
+        // If no userId yet, create one for FCM registration
+        if (!userId) {
+          const newId = "user_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
+          const userData = { id: newId, createdAt: Date.now() };
+          localStorage.setItem("rsanime_user", JSON.stringify(userData));
+          userId = newId;
+        }
 
         // If permission already granted, just refresh token silently
         if ("Notification" in window && Notification.permission === "granted") {
-          await registerFCMToken(u.id, false);
+          await registerFCMToken(userId, false);
           return;
         }
 
@@ -429,7 +439,7 @@ const Index = () => {
                 await new Promise(r => setTimeout(r, 2000));
                 const permission = await Notification.requestPermission();
                 if (permission === "granted") {
-                  await registerFCMToken(u.id, false);
+                  await registerFCMToken(userId, false);
                   toast.success("✅ নোটিফিকেশন চালু হয়েছে!", { duration: 3000 });
                 }
               }
@@ -439,6 +449,7 @@ const Index = () => {
       } catch {}
     };
 
+    // Run for ALL visitors, not just logged-in
     registerPushToken();
 
     const onVisibilityChange = () => {
