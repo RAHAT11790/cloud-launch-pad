@@ -193,6 +193,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [qualityFailMsg, setQualityFailMsg] = useState<string | null>(null);
   const failedSrcsRef = useRef<Set<string>>(new Set());
   const [isBuffering, setIsBuffering] = useState(true);
+
+  // ===== ADAPTIVE BITRATE (ABR) STATE =====
+  const abrEnabledRef = useRef(true); // true when user is on "Auto"
+  const abrBufferCountRef = useRef(0); // buffering events in recent window
+  const abrLastDowngradeRef = useRef(0); // timestamp of last downgrade
+  const abrLastUpgradeRef = useRef(0);
+  const abrStableStartRef = useRef(0); // when stable playback started
+  const abrCurrentTierRef = useRef<number>(-1); // -1 = not set yet (use default)
   const [tutorialLink, setTutorialLink] = useState<string | null>(null);
   const [showTutorialVideo, setShowTutorialVideo] = useState(false);
   const [showNextEpOverlay, setShowNextEpOverlay] = useState(false);
@@ -885,10 +893,145 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setShowSettings(false);
   }, []);
 
+  // ===== ADAPTIVE BITRATE LOGIC =====
+  // Quality tiers ordered: lowest → highest (480p, 720p, 1080p/Auto, 4K)
+  const abrTiers = useMemo(() => {
+    const tiers: { label: string; src: string; priority: number }[] = [];
+    availableQualities.forEach((q) => {
+      let priority = 2; // default (1080p / Auto)
+      const lbl = q.label.toLowerCase();
+      if (/480/.test(lbl)) priority = 0;
+      else if (/720/.test(lbl)) priority = 1;
+      else if (/4k|2160|uhd/i.test(lbl)) priority = 3;
+      else if (lbl === "auto") priority = 2; // Auto = 1080p default
+      tiers.push({ ...q, priority });
+    });
+    return tiers.sort((a, b) => a.priority - b.priority);
+  }, [availableQualities]);
+
+  const abrSwitchToTier = useCallback((tierIdx: number, reason: "downgrade" | "upgrade") => {
+    const tier = abrTiers[tierIdx];
+    if (!tier) return;
+    
+    const newSrc = getPrimaryPlaybackSrc(tier.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+    if (newSrc === currentSrc) {
+      setCurrentQuality(tier.label);
+      abrCurrentTierRef.current = tierIdx;
+      return;
+    }
+
+    const v = videoRef.current;
+    pendingSeek.current = v?.currentTime || 0;
+    activeSourceBaseRef.current = tier.src;
+    setIsBuffering(true);
+    setCurrentSrc(newSrc);
+    setCurrentQuality(tier.label);
+    abrCurrentTierRef.current = tierIdx;
+
+    if (reason === "downgrade") {
+      abrLastDowngradeRef.current = Date.now();
+      abrBufferCountRef.current = 0;
+    } else {
+      abrLastUpgradeRef.current = Date.now();
+    }
+  }, [abrTiers, currentSrc, cdnEnabled, proxyUrl]);
+
+  // Monitor buffering for ABR auto-downgrade
+  useEffect(() => {
+    if (!abrEnabledRef.current) return;
+    if (!isBuffering) {
+      // Playback is smooth - track stable duration for upgrade
+      if (abrStableStartRef.current === 0) abrStableStartRef.current = Date.now();
+      
+      // Upgrade after 30s of stable playback (no buffering)
+      const stableDuration = Date.now() - abrStableStartRef.current;
+      const timeSinceLastChange = Math.min(
+        Date.now() - abrLastDowngradeRef.current,
+        Date.now() - abrLastUpgradeRef.current
+      );
+      
+      if (stableDuration > 30000 && timeSinceLastChange > 45000) {
+        const currentTier = abrCurrentTierRef.current;
+        const maxTier = abrTiers.length - 1;
+        // Find next higher tier that isn't 4K (unless premium)
+        let nextTier = currentTier + 1;
+        while (nextTier <= maxTier) {
+          if (is4KLabel(abrTiers[nextTier]?.label || "") && !isPremium) {
+            nextTier++;
+            continue;
+          }
+          break;
+        }
+        if (nextTier <= maxTier && nextTier !== currentTier) {
+          abrStableStartRef.current = 0;
+          abrSwitchToTier(nextTier, "upgrade");
+        }
+      }
+      return;
+    }
+
+    // Buffering detected
+    abrStableStartRef.current = 0;
+    abrBufferCountRef.current++;
+
+    const timeSinceDowngrade = Date.now() - abrLastDowngradeRef.current;
+    
+    // Downgrade if: 2+ buffering events OR first buffer lasts > 5s, with cooldown
+    if (timeSinceDowngrade < 20000) return; // cooldown: don't downgrade within 20s
+
+    const shouldDowngrade = abrBufferCountRef.current >= 2;
+    if (!shouldDowngrade) {
+      // Set a timer: if still buffering after 5s, downgrade
+      const timer = setTimeout(() => {
+        if (abrEnabledRef.current && abrCurrentTierRef.current > 0) {
+          abrSwitchToTier(abrCurrentTierRef.current - 1, "downgrade");
+        }
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+
+    const currentTier = abrCurrentTierRef.current;
+    if (currentTier > 0) {
+      abrSwitchToTier(currentTier - 1, "downgrade");
+    }
+  }, [isBuffering, abrSwitchToTier, abrTiers, isPremium]);
+
+  // Initialize ABR tier on first load
+  useEffect(() => {
+    if (abrCurrentTierRef.current === -1 && abrTiers.length > 0) {
+      // Find the "Auto" tier or the highest non-4K tier
+      const autoIdx = abrTiers.findIndex(t => t.label === "Auto");
+      if (autoIdx >= 0) {
+        abrCurrentTierRef.current = autoIdx;
+      } else {
+        // Use highest non-4K
+        for (let i = abrTiers.length - 1; i >= 0; i--) {
+          if (!is4KLabel(abrTiers[i].label) || isPremium) {
+            abrCurrentTierRef.current = i;
+            break;
+          }
+        }
+        if (abrCurrentTierRef.current === -1) abrCurrentTierRef.current = 0;
+      }
+    }
+  }, [abrTiers, isPremium]);
+
   const switchQuality = useCallback((option: QualityOption) => {
     // Block 4K for non-premium users
     if (is4KLabel(option.label) && !isPremium) return;
     if (option.label === currentQuality) { setShowSettings(false); return; }
+
+    // If user manually selects a quality, disable ABR (unless they pick Auto)
+    if (option.label === "Auto") {
+      abrEnabledRef.current = true;
+      abrBufferCountRef.current = 0;
+      abrStableStartRef.current = 0;
+      // Reset to default high quality
+      const autoIdx = abrTiers.findIndex(t => t.label === "Auto");
+      if (autoIdx >= 0) abrCurrentTierRef.current = autoIdx;
+    } else {
+      abrEnabledRef.current = false;
+    }
 
     activeSourceBaseRef.current = option.src;
     const newSrc = getPrimaryPlaybackSrc(option.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
@@ -904,7 +1047,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);
     setShowSettings(false);
-  }, [currentQuality, currentSrc, cdnEnabled, proxyUrl, isPremium]);
+  }, [currentQuality, currentSrc, cdnEnabled, proxyUrl, isPremium, abrTiers]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;

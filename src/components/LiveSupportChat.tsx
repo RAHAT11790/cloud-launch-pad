@@ -386,17 +386,35 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
       const payload = match[3];
 
       if (type === "LINK") {
-        parts.push(
-          <a
-            key={`link${match.index}`}
-            href={payload}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block w-full mt-1.5 mb-1 px-3 py-2 rounded-lg text-primary-foreground text-xs font-medium text-center hover:opacity-90 active:scale-[0.98] transition-all gradient-primary"
-          >
-            {label}
-          </a>
-        );
+        // Check if it's an internal RS Anime link
+        const internalAnimeMatch = payload.match(/[?&]anime=([^&\s]+)/);
+        if (internalAnimeMatch && payload.includes("rsanime03.lovable.app")) {
+          const animeKey = decodeURIComponent(internalAnimeMatch[1]);
+          parts.push(
+            <button
+              key={`link${match.index}`}
+              onClick={() => {
+                onAnimeSelect?.(animeKey);
+                onClose();
+              }}
+              className="block w-full mt-1.5 mb-1 px-3 py-2 rounded-lg text-primary-foreground text-xs font-medium text-center hover:opacity-90 active:scale-[0.98] transition-all gradient-primary"
+            >
+              ▶ {label.slice(0, 20)}
+            </button>
+          );
+        } else {
+          parts.push(
+            <a
+              key={`link${match.index}`}
+              href={payload}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full mt-1.5 mb-1 px-3 py-2 rounded-lg text-primary-foreground text-xs font-medium text-center hover:opacity-90 active:scale-[0.98] transition-all gradient-primary"
+            >
+              {label}
+            </a>
+          );
+        }
       } else {
         parts.push(
           <button
@@ -445,12 +463,25 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
                 return last.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase()).slice(0, 25);
               } catch { return "Link"; }
             })();
-            textParts.push(
-              <a key={`url_${i}_${urlMatch.index}`} href={url} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 mt-1 mb-1 px-3 py-1.5 rounded-lg text-primary-foreground text-xs font-medium hover:opacity-90 active:scale-[0.98] transition-all gradient-primary max-w-[200px] truncate">
-                ▶ {pathName || "Open"}
-              </a>
-            );
+            // Internal RS Anime link → use onAnimeSelect for in-app navigation
+            const internalMatch = url.match(/[?&]anime=([^&\s]+)/);
+            if (internalMatch && url.includes("rsanime03.lovable.app")) {
+              const animeKey = decodeURIComponent(internalMatch[1]);
+              textParts.push(
+                <button key={`url_${i}_${urlMatch.index}`}
+                  onClick={() => { onAnimeSelect?.(animeKey); onClose(); }}
+                  className="inline-flex items-center gap-1 mt-1 mb-1 px-3 py-1.5 rounded-lg text-primary-foreground text-xs font-medium hover:opacity-90 active:scale-[0.98] transition-all gradient-primary max-w-[200px] truncate">
+                  ▶ {pathName || "Open"}
+                </button>
+              );
+            } else {
+              textParts.push(
+                <a key={`url_${i}_${urlMatch.index}`} href={url} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 mt-1 mb-1 px-3 py-1.5 rounded-lg text-primary-foreground text-xs font-medium hover:opacity-90 active:scale-[0.98] transition-all gradient-primary max-w-[200px] truncate">
+                  ▶ {pathName || "Open"}
+                </a>
+              );
+            }
             lastIdx = urlMatch.index + urlMatch[0].length;
           }
           if (lastIdx < text.length) textParts.push(text.slice(lastIdx));
