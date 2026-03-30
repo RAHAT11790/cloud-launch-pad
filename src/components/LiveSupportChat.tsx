@@ -4,6 +4,7 @@ import { X, Send } from "lucide-react";
 import { db, ref, push, set, onValue } from "@/lib/firebase";
 import { toast } from "sonner";
 import { useBranding } from "@/hooks/useBranding";
+import { SITE_URL } from "@/lib/siteConfig";
 import logoImg from "@/assets/logo.png";
 
 interface ChatMessage {
@@ -25,6 +26,8 @@ interface AnimeInfo {
   seasonCount?: number;
   source?: string;
   id?: string;
+  slug?: string;
+  shareLink?: string;
 }
 
 interface LiveSupportChatProps {
@@ -168,32 +171,39 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
   const buildAnimeContext = useCallback(() => {
     const animeList = getAnimeList?.() || [];
     if (animeList.length === 0) return "";
+    const buildShareLink = (anime: AnimeInfo) => {
+      if (anime.shareLink) return anime.shareLink;
+      const key = anime.id || (anime.source === "animesalt" && anime.slug ? `as_${anime.slug}` : "");
+      return key ? `${SITE_URL}?anime=${encodeURIComponent(key)}` : "";
+    };
+
     const primaryItems = animeList.filter((a) => a.source !== "animesalt");
     const altItems = animeList.filter((a) => a.source === "animesalt");
 
-    const siteUrl = "https://rsanime03.lovable.app";
-
-    let context = `SITE: ${siteUrl}\n`;
-    context += `LINK FORMAT:\n`;
-    context += `- RS anime: ${siteUrl}/?anime={ID}  (example: ${siteUrl}/?anime=-Om5HMaACidSU8kEkq1k)\n`;
-    context += `- AN anime: ${siteUrl}/?anime=as_{slug}  (example: ${siteUrl}/?anime=as_welcome-to-demon-school-iruma-kun)\n`;
-    context += `RULE: ONLY give links from this list. NEVER give external links like crunchyroll/funimation.\n`;
-    context += `Use [BTN:AnimeName:LINK:url] format for buttons.\n\n`;
+    let context = `SITE: ${SITE_URL}\n`;
+    context += `STRICT RULES:\n`;
+    context += `- ONLY use the exact SHARE_LINK from this list.\n`;
+    context += `- NEVER generate, guess, edit, shorten, or replace any link.\n`;
+    context += `- If the exact anime is not found in this list, say it is not available on our site.\n`;
+    context += `- NEVER give Crunchyroll, Funimation, YouTube, Google, or any external link.\n`;
+    context += `- Always return anime buttons in this exact format: [BTN:Short Name:LINK:exact_share_link]\n`;
+    context += `- Match anime by exact title first. Do not give another anime's link.\n\n`;
 
     context += `RS Catalog (${primaryItems.length}টি):\n`;
-    primaryItems.slice(0, 50).forEach((a) => {
-      if (a.id) context += `- ${a.title} | ${siteUrl}/?anime=${a.id}\n`;
+    primaryItems.slice(0, 80).forEach((a) => {
+      const shareLink = buildShareLink(a);
+      if (a.id && shareLink) context += `- TITLE: ${a.title} | ID: ${a.id} | SHARE_LINK: ${shareLink}\n`;
     });
 
     if (altItems.length > 0) {
       context += `\nAN Catalog (${altItems.length}টি):\n`;
-      altItems.slice(0, 30).forEach((a) => {
-        const slug = a.title?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "";
-        context += `- ${a.title} | ${siteUrl}/?anime=as_${slug}\n`;
+      altItems.slice(0, 80).forEach((a) => {
+        const shareLink = buildShareLink(a);
+        if (a.id && shareLink) context += `- TITLE: ${a.title} | ID: ${a.id} | SHARE_LINK: ${shareLink}\n`;
       });
     }
 
-    return context.substring(0, 3500);
+    return context.substring(0, 6000);
   }, [getAnimeList]);
 
   const sendMessage = async () => {
@@ -370,6 +380,29 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
   };
 
   const renderMessageContent = (content: string) => {
+    const normalizeAnimeKey = (value: string) =>
+      decodeURIComponent(value)
+        .trim()
+        .replace(/[\])}>.,!?]+$/g, "")
+        .replace(/^['"(\[]+/, "");
+
+    const getInternalAnimeKey = (value: string) => {
+      const cleaned = value.trim().replace(/[\])}>.,!?]+$/g, "");
+      const animeMatch = cleaned.match(/[?&]anime=([^&\s]+)/i);
+      return animeMatch ? normalizeAnimeKey(animeMatch[1]) : "";
+    };
+
+    const isInternalSiteUrl = (value: string) => {
+      try {
+        const url = new URL(value.trim().replace(/[\])}>.,!?]+$/g, ""));
+        const appOrigin = typeof window !== "undefined" ? window.location.origin : SITE_URL;
+        const siteOrigin = new URL(SITE_URL).origin;
+        return url.origin === appOrigin || url.origin === siteOrigin;
+      } catch {
+        return false;
+      }
+    };
+
     // Match various BTN formats the AI might produce
     const btnRegex = /\[BTN:(.+?):(ANIME_ID|ANIME|LINK|ID):([^\]]+)\]/g;
     const parts: React.ReactNode[] = [];
@@ -386,10 +419,8 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
       const payload = match[3];
 
       if (type === "LINK") {
-        // Check if it's an internal RS Anime link
-        const internalAnimeMatch = payload.match(/[?&]anime=([^&\s]+)/);
-        if (internalAnimeMatch && payload.includes("rsanime03.lovable.app")) {
-          const animeKey = decodeURIComponent(internalAnimeMatch[1]);
+        const animeKey = getInternalAnimeKey(payload);
+        if (animeKey && isInternalSiteUrl(payload)) {
           parts.push(
             <button
               key={`link${match.index}`}
@@ -399,7 +430,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
               }}
               className="block w-full mt-1.5 mb-1 px-3 py-2 rounded-lg text-primary-foreground text-xs font-medium text-center hover:opacity-90 active:scale-[0.98] transition-all gradient-primary"
             >
-              ▶ {label.slice(0, 20)}
+              ▶ {label.slice(0, 20).trim() || "Open"}
             </button>
           );
         } else {
@@ -454,7 +485,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
             if (urlMatch.index > lastIdx) {
               textParts.push(text.slice(lastIdx, urlMatch.index));
             }
-            const url = urlMatch[1].replace(/\*+$/, "");
+            const url = urlMatch[1].replace(/[\]*+$/, "").replace(/[\])}>.,!?]+$/g, "");
             // Extract anime name from URL path
             const pathName = (() => {
               try {
@@ -464,9 +495,8 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
               } catch { return "Link"; }
             })();
             // Internal RS Anime link → use onAnimeSelect for in-app navigation
-            const internalMatch = url.match(/[?&]anime=([^&\s]+)/);
-            if (internalMatch && url.includes("rsanime03.lovable.app")) {
-              const animeKey = decodeURIComponent(internalMatch[1]);
+            const animeKey = getInternalAnimeKey(url);
+            if (animeKey && isInternalSiteUrl(url)) {
               textParts.push(
                 <button key={`url_${i}_${urlMatch.index}`}
                   onClick={() => { onAnimeSelect?.(animeKey); onClose(); }}
