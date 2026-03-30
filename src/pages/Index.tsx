@@ -1928,14 +1928,23 @@ const Index = () => {
         isOpen={chatOpen}
         onClose={() => setChatOpen(false)}
         onAnimeSelect={(animeKey) => {
-          const normalized = animeKey.trim().toLowerCase();
+          const normalized = decodeURIComponent(animeKey).trim().toLowerCase();
           const byId = allAnime.find((a) => a.id.toLowerCase() === normalized);
           if (byId) {
             handleCardClick(byId);
             return;
           }
 
-          const byTitle = allAnime.filter((a) => a.title.toLowerCase() === normalized);
+          const bySlug = allAnime.find((a) => {
+            const slug = a.slug?.toLowerCase();
+            return slug === normalized || `as_${slug}` === normalized;
+          });
+          if (bySlug) {
+            handleCardClick(bySlug);
+            return;
+          }
+
+          const byTitle = allAnime.filter((a) => a.title.trim().toLowerCase() === normalized);
           const preferred = byTitle.find((a) => a.source !== "animesalt") || byTitle[0];
           if (preferred) {
             handleCardClick(preferred);
@@ -1951,6 +1960,8 @@ const Index = () => {
           dubType: a.dubType,
           source: a.source || "firebase",
           id: a.id,
+          slug: a.slug,
+          shareLink: `${window.location.origin}/?anime=${encodeURIComponent(a.id)}`,
           seasonCount: a.seasons?.length,
           episodeCount: a.seasons?.reduce((sum, s) => sum + (s.episodes?.length || 0), 0),
         }))}
