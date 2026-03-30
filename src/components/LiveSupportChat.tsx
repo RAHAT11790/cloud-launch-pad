@@ -383,18 +383,18 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
     const normalizeAnimeKey = (value: string) =>
       decodeURIComponent(value)
         .trim()
-        .replace(/[\])}>.,!?]+$/g, "")
-        .replace(/^['"(\[]+/, "");
+        .replace(/[\]\)}>,.!?]+$/g, "")
+        .replace(/^["'(\[]+/, "");
 
     const getInternalAnimeKey = (value: string) => {
-      const cleaned = value.trim().replace(/[\])}>.,!?]+$/g, "");
+      const cleaned = value.trim().replace(/[\]\)}>,.!?]+$/g, "");
       const animeMatch = cleaned.match(/[?&]anime=([^&\s]+)/i);
       return animeMatch ? normalizeAnimeKey(animeMatch[1]) : "";
     };
 
     const isInternalSiteUrl = (value: string) => {
       try {
-        const url = new URL(value.trim().replace(/[\])}>.,!?]+$/g, ""));
+        const url = new URL(value.trim().replace(/[\]\)}>,.!?]+$/g, ""));
         const appOrigin = typeof window !== "undefined" ? window.location.origin : SITE_URL;
         const siteOrigin = new URL(SITE_URL).origin;
         return url.origin === appOrigin || url.origin === siteOrigin;
@@ -485,7 +485,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
             if (urlMatch.index > lastIdx) {
               textParts.push(text.slice(lastIdx, urlMatch.index));
             }
-            const url = urlMatch[1].replace(/[\]*+$/, "").replace(/[\])}>.,!?]+$/g, "");
+            const url = urlMatch[1].replace(/\*+$/g, "").replace(/[\]\)}>,.!?]+$/g, "");
             // Extract anime name from URL path
             const pathName = (() => {
               try {
