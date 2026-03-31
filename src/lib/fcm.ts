@@ -43,11 +43,17 @@ const getFcmProviderConfig = async (): Promise<FcmProviderConfig> => {
   try {
     const snap = await get(ref(db, "settings/fcmProvider"));
     const val = snap.val();
-    if (val?.url && val?.active) {
-      cachedFcmProvider = { provider: val.active, url: val.url };
-      // Auto-expire cache after 30s
-      setTimeout(() => { cachedFcmProvider = null; }, 30000);
-      return cachedFcmProvider;
+    if (val?.active) {
+      // Read the correct URL based on active provider
+      const activeProvider = val.active as "cloudflare" | "supabase";
+      const url = activeProvider === "supabase" 
+        ? (val.supabaseUrl || val.url || "")
+        : (val.cloudflareUrl || val.url || "");
+      if (url) {
+        cachedFcmProvider = { provider: activeProvider, url };
+        setTimeout(() => { cachedFcmProvider = null; }, 30000);
+        return cachedFcmProvider;
+      }
     }
   } catch {}
   // Fallback to edge router (Cloudflare)
