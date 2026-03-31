@@ -30,11 +30,36 @@ const MAX_TOKENS_PER_USER = 3;
 
 let messaging: any = null;
 let cachedSendFcmEndpoint: string | null = null;
+let cachedFcmProvider: { provider: "cloudflare" | "supabase"; url: string } | null = null;
+
+type FcmProviderConfig = {
+  provider: "cloudflare" | "supabase";
+  url: string;
+};
+
+/** Get the active FCM provider config from Firebase */
+const getFcmProviderConfig = async (): Promise<FcmProviderConfig> => {
+  if (cachedFcmProvider) return cachedFcmProvider;
+  try {
+    const snap = await get(ref(db, "settings/fcmProvider"));
+    const val = snap.val();
+    if (val?.url && val?.active) {
+      cachedFcmProvider = { provider: val.active, url: val.url };
+      // Auto-expire cache after 30s
+      setTimeout(() => { cachedFcmProvider = null; }, 30000);
+      return cachedFcmProvider;
+    }
+  } catch {}
+  // Fallback to edge router (Cloudflare)
+  const url = await getEdgeFunctionUrl("send-fcm");
+  cachedFcmProvider = { provider: "cloudflare", url };
+  setTimeout(() => { cachedFcmProvider = null; }, 30000);
+  return cachedFcmProvider;
+};
 
 const getSendFcmEndpoint = async () => {
-  if (cachedSendFcmEndpoint) return cachedSendFcmEndpoint;
-  cachedSendFcmEndpoint = await getEdgeFunctionUrl("send-fcm");
-  return cachedSendFcmEndpoint;
+  const config = await getFcmProviderConfig();
+  return config.url;
 };
 
 const getMessagingInstance = () => {
@@ -631,6 +656,91 @@ export const sendPushToAllUsers = async (
     invalidRemoved: 0,
   });
 
+  // Check if Supabase provider is active — if so, send userIds and let server fetch tokens
+  const providerConfig = await getFcmProviderConfig();
+  
+  if (providerConfig.provider === "supabase" && providerConfig.url) {
+    console.log("[FCM] Using Supabase provider — server-side token resolution");
+    try {
+      // Get all user IDs from Firebase
+      const usersSnap = await get(ref(db, "users"));
+      const usersData = usersSnap.val() || {};
+      const allUserIds: string[] = [];
+      const seenIds = new Set<string>();
+      
+      Object.entries(usersData).forEach(([key, userData]: any) => {
+        const effectiveId = String(userData?.id || key || "").trim();
+        if (effectiveId && !seenIds.has(effectiveId)) {
+          seenIds.add(effectiveId);
+          allUserIds.push(effectiveId);
+        }
+      });
+
+      // Also get email-based keys from fcmTokens
+      const tokenSnap = await get(ref(db, "fcmTokens"));
+      const tokenData = tokenSnap.val() || {};
+      Object.keys(tokenData).forEach(key => {
+        if (!seenIds.has(key)) {
+          seenIds.add(key);
+          allUserIds.push(key);
+        }
+      });
+
+      onProgress?.({
+        phase: "sending",
+        totalTokens: 0,
+        sent: 0,
+        success: 0,
+        failed: 0,
+        invalidRemoved: 0,
+        totalUsers: allUserIds.length,
+      });
+
+      const normalizedData = normalizePushData(payload);
+      const res = await fetchWithTimeout(providerConfig.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userIds: allUserIds,
+          title: payload.title,
+          body: payload.body,
+          image: payload.image,
+          icon: payload.icon || APP_ICON_URL,
+          badge: payload.badge || APP_ICON_URL,
+          data: normalizedData,
+        }),
+      }, 120000); // 2 min timeout for large sends
+
+      const result = await res.json().catch(() => ({}));
+      console.log("[FCM] Supabase result:", result);
+
+      const finalProgress: PushProgress = {
+        phase: "done",
+        totalTokens: result.totalTokens || 0,
+        sent: result.totalTokens || 0,
+        success: result.success || 0,
+        failed: result.failed || 0,
+        invalidRemoved: result.invalidRemoved || 0,
+        totalUsers: allUserIds.length,
+        failReasons: result.failReasons,
+      };
+      onProgress?.(finalProgress);
+
+      return {
+        success: result.success || 0,
+        failed: result.failed || 0,
+        total: result.totalTokens || 0,
+        invalidTokensRemoved: result.invalidRemoved || 0,
+        reason: result.reason,
+      };
+    } catch (err: any) {
+      console.error("[FCM] Supabase send failed:", err);
+      onProgress?.({ phase: "done", totalTokens: 0, sent: 0, success: 0, failed: 0, invalidRemoved: 0 });
+      throw err;
+    }
+  }
+
+  // Cloudflare mode — client-side token resolution
   const tokens = await getAllFCMTokens();
 
   if (tokens.length === 0) {
