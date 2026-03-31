@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { User, Lock, Eye, EyeOff, LogIn, Mail, AlertTriangle, Smartphone, ArrowLeft, KeyRound, Check } from "lucide-react";
 import logoImg from "@/assets/logo.png";
-import { db, auth, googleProvider, ref, set, get, update, signInWithPopup, sendPasswordResetEmail } from "@/lib/firebase";
+import { db, auth, googleProvider, ref, set, get, signInWithPopup, sendPasswordResetEmail } from "@/lib/firebase";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
@@ -144,12 +144,6 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             id: uid, name: gName, email: gEmail, online: true,
             lastSeen: Date.now(), createdAt: existingData?.createdAt || Date.now(),
           });
-          // Also update users/${uid} to fix "Guest User" display
-          if (uid !== commaKey) {
-            await update(ref(db, `users/${uid}`), {
-              name: gName, email: gEmail, online: true, lastSeen: Date.now(),
-            }).catch(() => {});
-          }
         } catch (e) {}
 
         localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
@@ -194,11 +188,6 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
           id: uid, name: gName, email: gEmail, online: true,
           lastSeen: Date.now(), createdAt: existingData?.createdAt || Date.now(),
         });
-        if (uid !== commaKey) {
-          await update(ref(db, `users/${uid}`), {
-            name: gName, email: gEmail, online: true, lastSeen: Date.now(),
-          }).catch(() => {});
-        }
       } catch (e) {}
 
       localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
@@ -335,9 +324,8 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: displayName, email: loginEmail }));
         localStorage.setItem("rs_display_name", displayName);
         try {
-          await update(ref(db, `users/${uid}`), {
-            name: displayName, email: loginEmail, online: true, lastSeen: Date.now(),
-          });
+          await set(ref(db, `users/${uid}/online`), true);
+          await set(ref(db, `users/${uid}/lastSeen`), Date.now());
         } catch (e) {}
         toast.success(`Welcome back, ${displayName}!`);
         onLogin(uid);

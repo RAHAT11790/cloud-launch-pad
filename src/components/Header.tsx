@@ -12,18 +12,7 @@ const getOrCreateUserId = (): string => {
     const existing = localStorage.getItem("rsanime_user");
     if (existing) {
       const parsed = JSON.parse(existing);
-      if (parsed.id) {
-        // Update Firebase with actual name (fix "Guest User" issue)
-        const displayName = parsed.name || localStorage.getItem("rs_display_name") || "";
-        if (displayName && displayName !== "Guest User") {
-          update(ref(db, `users/${parsed.id}`), {
-            name: displayName,
-            online: true,
-            lastSeen: Date.now(),
-          }).catch(() => {});
-        }
-        return parsed.id;
-      }
+      if (parsed.id) return parsed.id;
     }
   } catch {}
   
