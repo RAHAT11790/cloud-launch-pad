@@ -335,8 +335,9 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: displayName, email: loginEmail }));
         localStorage.setItem("rs_display_name", displayName);
         try {
-          await set(ref(db, `users/${uid}/online`), true);
-          await set(ref(db, `users/${uid}/lastSeen`), Date.now());
+          await update(ref(db, `users/${uid}`), {
+            name: displayName, email: loginEmail, online: true, lastSeen: Date.now(),
+          });
         } catch (e) {}
         toast.success(`Welcome back, ${displayName}!`);
         onLogin(uid);
