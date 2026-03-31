@@ -144,6 +144,12 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             id: uid, name: gName, email: gEmail, online: true,
             lastSeen: Date.now(), createdAt: existingData?.createdAt || Date.now(),
           });
+          // Also update users/${uid} to fix "Guest User" display
+          if (uid !== commaKey) {
+            await update(ref(db, `users/${uid}`), {
+              name: gName, email: gEmail, online: true, lastSeen: Date.now(),
+            }).catch(() => {});
+          }
         } catch (e) {}
 
         localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
