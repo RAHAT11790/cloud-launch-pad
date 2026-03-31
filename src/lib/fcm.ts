@@ -30,11 +30,36 @@ const MAX_TOKENS_PER_USER = 3;
 
 let messaging: any = null;
 let cachedSendFcmEndpoint: string | null = null;
+let cachedFcmProvider: { provider: "cloudflare" | "supabase"; url: string } | null = null;
+
+type FcmProviderConfig = {
+  provider: "cloudflare" | "supabase";
+  url: string;
+};
+
+/** Get the active FCM provider config from Firebase */
+const getFcmProviderConfig = async (): Promise<FcmProviderConfig> => {
+  if (cachedFcmProvider) return cachedFcmProvider;
+  try {
+    const snap = await get(ref(db, "settings/fcmProvider"));
+    const val = snap.val();
+    if (val?.url && val?.active) {
+      cachedFcmProvider = { provider: val.active, url: val.url };
+      // Auto-expire cache after 30s
+      setTimeout(() => { cachedFcmProvider = null; }, 30000);
+      return cachedFcmProvider;
+    }
+  } catch {}
+  // Fallback to edge router (Cloudflare)
+  const url = await getEdgeFunctionUrl("send-fcm");
+  cachedFcmProvider = { provider: "cloudflare", url };
+  setTimeout(() => { cachedFcmProvider = null; }, 30000);
+  return cachedFcmProvider;
+};
 
 const getSendFcmEndpoint = async () => {
-  if (cachedSendFcmEndpoint) return cachedSendFcmEndpoint;
-  cachedSendFcmEndpoint = await getEdgeFunctionUrl("send-fcm");
-  return cachedSendFcmEndpoint;
+  const config = await getFcmProviderConfig();
+  return config.url;
 };
 
 const getMessagingInstance = () => {
