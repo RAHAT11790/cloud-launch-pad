@@ -18,6 +18,9 @@ export interface BrandingConfig {
   aboutTitle: string;
   logoUrl: string;           // Default logo (header, splash, etc.)
   playerLogoUrl: string;     // Video player loading logo
+  playerName: string;        // Video player title (e.g. "RS ANIME PLAYER")
+  rsCardLabel: string;       // RS source card label
+  anCardLabel: string;       // AnimeSalt source card label
 }
 
 const DEFAULT_BRANDING: BrandingConfig = {
