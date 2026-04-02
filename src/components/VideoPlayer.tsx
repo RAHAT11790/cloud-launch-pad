@@ -103,6 +103,7 @@ const formatTime = (t: number) => {
 };
 
 const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, animeId, onSaveProgress, hideDownload, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
+  const branding = useBranding();
   // Preload anime character image to prevent loading glitch
   useEffect(() => {
     const img = new Image();
