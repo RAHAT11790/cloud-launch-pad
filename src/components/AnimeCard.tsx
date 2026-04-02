@@ -12,6 +12,7 @@ interface AnimeCardProps {
 
 const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   const [isInWatchlist, setIsInWatchlist] = useState(false);
+  const branding = useBranding();
 
   const getUserId = (): string | null => {
     try { const u = localStorage.getItem("rsanime_user"); if (u) return JSON.parse(u).id; } catch {} return null;
