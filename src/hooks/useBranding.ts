@@ -37,6 +37,9 @@ const DEFAULT_BRANDING: BrandingConfig = {
   aboutTitle: "About RS ANIME",
   logoUrl: "",
   playerLogoUrl: "",
+  playerName: "RS ANIME PLAYER",
+  rsCardLabel: "RS",
+  anCardLabel: "AN",
 };
 
 let cachedBranding: BrandingConfig | null = null;
