@@ -92,19 +92,27 @@ export const createRandomPrizeLink = async (): Promise<{
   const token = randomToken();
   const now = Date.now();
 
+  // Deactivate old prize link if exists
+  try {
+    const oldSnap = await get(ref(db, `activePrizeLink`));
+    const old = oldSnap.val();
+    if (old?.token) {
+      await set(ref(db, `unlockTokens/${old.token}/status`), "deactivated");
+    }
+  } catch {}
+
   // Prize links: unlimited uses, no expiry until new link generated
   await set(ref(db, `unlockTokens/${token}`), {
     token,
     ownerUserId: userId,
     createdAt: now,
-    expiresAt: 0, // 0 = never expires
+    expiresAt: 0,
     status: "active",
     consumed: false,
     mode: "prize",
     unlimited: true,
   });
 
-  // Also store as the active prize link so we can deactivate old ones
   await set(ref(db, `activePrizeLink`), {
     token,
     createdAt: now,
