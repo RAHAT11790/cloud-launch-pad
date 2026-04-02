@@ -109,7 +109,7 @@ const Index = () => {
     const syncLoginState = () => {
       try {
         const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-        setIsLoggedIn(!!u?.id);
+        setIsLoggedIn(!!(u?.id && u?.email));
       } catch {
         setIsLoggedIn(false);
       }
