@@ -3,6 +3,7 @@ import { Star, Heart } from "lucide-react";
 import type { AnimeItem } from "@/data/animeData";
 import { db, ref, set, remove, onValue } from "@/lib/firebase";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
+import { useBranding } from "@/hooks/useBranding";
 
 interface AnimeCardProps {
   anime: AnimeItem;
