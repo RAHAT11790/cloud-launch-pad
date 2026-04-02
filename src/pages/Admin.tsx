@@ -512,6 +512,9 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
     { key: "splashText", label: "স্প্ল্যাশ স্ক্রিন টেক্সট", placeholder: "RS ANIME" },
     { key: "adminTitle", label: "অ্যাডমিন প্যানেল টাইটেল", placeholder: "RS ANIME Admin" },
     { key: "aboutTitle", label: "About পেজ টাইটেল", placeholder: "About RS ANIME" },
+    { key: "playerName", label: "ভিডিও প্লেয়ার টাইটেল", placeholder: "RS ANIME PLAYER" },
+    { key: "rsCardLabel", label: "RS কার্ড লেবেল", placeholder: "RS" },
+    { key: "anCardLabel", label: "AnimeSalt কার্ড লেবেল", placeholder: "AN" },
   ];
 
   const LOGO_FIELDS = [

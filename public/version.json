@@ -1,0 +1,15 @@
+{
+  "version": "3.5.0",
+  "build": "2026-04-02",
+  "name": "RS ANIME",
+  "features": [
+    "Adaptive Bitrate Video Player",
+    "Dual FCM Provider (Cloudflare/Supabase)",
+    "AnimeSalt Integration",
+    "Dynamic Branding",
+    "Premium Device Management",
+    "Push Notifications",
+    "AI Chat Support",
+    "Edge Function Router"
+  ]
+}

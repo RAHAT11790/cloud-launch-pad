@@ -94,11 +94,13 @@ const Index = () => {
     initializeUiTheme();
   }, []);
 
-  // Check if user is logged in
+  // Check if user is logged in (must have email - no guest accounts)
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     try {
       const u = localStorage.getItem("rsanime_user");
-      return !!(u && JSON.parse(u).id);
+      if (!u) return false;
+      const parsed = JSON.parse(u);
+      return !!(parsed.id && parsed.email);
     } catch { return false; }
   });
 
@@ -107,7 +109,7 @@ const Index = () => {
     const syncLoginState = () => {
       try {
         const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-        setIsLoggedIn(!!u?.id);
+        setIsLoggedIn(!!(u?.id && u?.email));
       } catch {
         setIsLoggedIn(false);
       }
@@ -499,20 +501,15 @@ const Index = () => {
         const pushPref = localStorage.getItem("rs_notif_push");
         if (pushPref === "false") return;
 
-        // Get or create user ID even for non-logged-in visitors
+        // Get existing user ID (don't create guest accounts)
         let userId: string | undefined;
         try {
           const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-          userId = u?.id;
+          if (u?.id && u?.email) userId = u.id;
         } catch {}
 
-        // If no userId yet, create one for FCM registration
-        if (!userId) {
-          const newId = "user_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
-          const userData = { id: newId, createdAt: Date.now() };
-          localStorage.setItem("rsanime_user", JSON.stringify(userData));
-          userId = newId;
-        }
+        // If no real user, skip FCM registration
+        if (!userId) return;
 
         // If permission already granted, just refresh token silently
         if ("Notification" in window && Notification.permission === "granted") {

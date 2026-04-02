@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
+import { useBranding } from "@/hooks/useBranding";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock,
@@ -51,24 +52,29 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
 
-  if (cdnEnabled) {
+  if (cdnEnabled && cloudflareCandidate) {
     addCandidate(cloudflareCandidate);
     return candidates;
   }
 
-  // http:// cannot be loaded directly on https pages (mixed content)
-  if (url.startsWith('http://')) {
+  // Always try proxy first if available
+  if (customProxyCandidate) {
     addCandidate(customProxyCandidate);
-    return candidates;
   }
 
+  // For HTTPS URLs, also try direct as fallback
   if (url.startsWith('https://')) {
-    addCandidate(customProxyCandidate);
     addCandidate(url);
-    return candidates;
   }
 
-  addCandidate(url);
+  // http:// cannot be loaded directly on https pages (mixed content)
+  // so only proxy candidates are valid
+
+  // If no proxy and direct URL, use direct
+  if (candidates.length === 0) {
+    addCandidate(url);
+  }
+
   return candidates;
 };
 
@@ -102,6 +108,7 @@ const formatTime = (t: number) => {
 };
 
 const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, animeId, onSaveProgress, hideDownload, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
+  const branding = useBranding();
   // Preload anime character image to prevent loading glitch
   useEffect(() => {
     const img = new Image();
@@ -1174,7 +1181,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full p-5'}`}>
         {!isFullscreen && (
           <div className="text-center mb-2.5">
-            <h1 className="text-2xl font-extrabold text-primary text-glow tracking-wider">RS ANIME PLAYER</h1>
+            <h1 className="text-2xl font-extrabold text-primary text-glow tracking-wider">{branding.playerName}</h1>
           </div>
         )}
 

@@ -6,6 +6,7 @@ import { db, ref, set, remove, onValue, push } from "@/lib/firebase";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
 import { sendPushToUsers } from "@/lib/fcm";
 import { SITE_URL } from "@/lib/siteConfig";
+import { useBranding } from "@/hooks/useBranding";
 
 interface AnimeDetailsProps {
   anime: AnimeItem;
@@ -31,6 +32,7 @@ interface ReplyData {
 }
 
 const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onClose, onPlay }, _ref) => {
+  const branding = useBranding();
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [comments, setComments] = useState<CommentData[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -212,7 +214,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
                 ? "bg-accent/85 text-accent-foreground"
                 : "bg-primary/85 text-primary-foreground"
             }`}>
-              {anime.source === "animesalt" ? "AN" : "RS"}
+              {anime.source === "animesalt" ? branding.anCardLabel : branding.rsCardLabel}
             </span>
           </div>
         </div>
@@ -271,13 +273,13 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
         }`}>
           {anime.source === "animesalt" ? (
             <p className="text-[13px] leading-relaxed text-center font-medium text-foreground">
-              😥 Sorry, You Cannot Download <span className="font-bold text-accent">AN</span> Video For Some Reason.
+              😥 Sorry, You Cannot Download <span className="font-bold text-accent">{branding.anCardLabel}</span> Video For Some Reason.
               <br />
-              <span className="text-muted-foreground text-[12px]">Please Find <span className="font-bold text-primary">RS</span> Video And Watch With Offline Player. 🥰</span>
+              <span className="text-muted-foreground text-[12px]">Please Find <span className="font-bold text-primary">{branding.rsCardLabel}</span> Video And Watch With Offline Player. 🥰</span>
             </p>
           ) : (
             <p className="text-[13px] leading-relaxed text-center font-medium text-foreground">
-              😍 You Can Download <span className="font-bold text-primary">RS</span> Video And Also Watch With Offline Player! 🫠
+              😍 You Can Download <span className="font-bold text-primary">{branding.rsCardLabel}</span> Video And Also Watch With Offline Player! 🫠
             </p>
           )}
         </div>
