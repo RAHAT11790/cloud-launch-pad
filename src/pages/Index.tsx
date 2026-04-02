@@ -501,20 +501,15 @@ const Index = () => {
         const pushPref = localStorage.getItem("rs_notif_push");
         if (pushPref === "false") return;
 
-        // Get or create user ID even for non-logged-in visitors
+        // Get existing user ID (don't create guest accounts)
         let userId: string | undefined;
         try {
           const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-          userId = u?.id;
+          if (u?.id && u?.email) userId = u.id;
         } catch {}
 
-        // If no userId yet, create one for FCM registration
-        if (!userId) {
-          const newId = "user_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
-          const userData = { id: newId, createdAt: Date.now() };
-          localStorage.setItem("rsanime_user", JSON.stringify(userData));
-          userId = newId;
-        }
+        // If no real user, skip FCM registration
+        if (!userId) return;
 
         // If permission already granted, just refresh token silently
         if ("Notification" in window && Notification.permission === "granted") {
