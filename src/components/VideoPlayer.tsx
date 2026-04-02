@@ -9,7 +9,7 @@ import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
 import animeCharImg from "@/assets/anime-loading-char.png";
-import { createUnlockLinkForCurrentUser, getLocalUserId } from "@/lib/unlockAccess";
+import { createUnlockLinkForCurrentUser, createRandomPrizeLink, getLocalUserId } from "@/lib/unlockAccess";
 
 interface QualityOption {
   label: string;
