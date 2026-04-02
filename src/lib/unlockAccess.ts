@@ -5,6 +5,23 @@ import { SITE_URL } from "@/lib/siteConfig";
 const UNLOCK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const FREE_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
 
+// --- Random Prize Duration Logic ---
+// Weighted random: 5% chance of 48h, rest distributed 24-47h
+function getRandomPrizeDurationMs(): { hours: number; ms: number } {
+  const roll = Math.random();
+  let hours: number;
+  if (roll < 0.05) {
+    // 5% chance → 48 hours (jackpot!)
+    hours = 48;
+  } else {
+    // 95% → random between 24-47 hours (weighted toward lower)
+    // Use a curve that favors lower values
+    const t = Math.random();
+    hours = Math.floor(24 + t * t * 23); // quadratic curve, favors 24-30h
+  }
+  return { hours, ms: hours * 60 * 60 * 1000 };
+}
+
 const randomToken = () => `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
 
 export const getLocalUserId = (): string | null => {
@@ -47,6 +64,44 @@ export const createUnlockLinkForCurrentUser = async (): Promise<{ ok: boolean; s
   if (!shortUrl) return { ok: false, error: "shortener_empty" };
 
   return { ok: true, shortUrl };
+};
+
+// --- Random Prize Link Creator ---
+export const createRandomPrizeLink = async (): Promise<{
+  ok: boolean; shortUrl?: string; hours?: number; error?: string;
+}> => {
+  const userId = getLocalUserId();
+  if (!userId) return { ok: false, error: "login_required" };
+
+  const token = randomToken();
+  const now = Date.now();
+  const tokenExpiresAt = now + UNLOCK_TOKEN_TTL_MS;
+  const prize = getRandomPrizeDurationMs();
+
+  await set(ref(db, `unlockTokens/${token}`), {
+    token,
+    ownerUserId: userId,
+    createdAt: now,
+    expiresAt: tokenExpiresAt,
+    status: "pending",
+    consumed: false,
+    mode: "prize",
+    prizeHours: prize.hours,
+    prizeDurationMs: prize.ms,
+  });
+
+  const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}&mode=prize`;
+  let data: any;
+  try {
+    data = await callEdgeFunction("shorten", { url: callbackUrl });
+  } catch {
+    return { ok: false, error: "shortener_failed" };
+  }
+
+  const shortUrl = typeof data === "string" ? data : data?.shortenedUrl || data?.short || data?.url;
+  if (!shortUrl) return { ok: false, error: "shortener_empty" };
+
+  return { ok: true, shortUrl, hours: prize.hours };
 };
 
 export const consumeUnlockTokenForCurrentUser = async (
