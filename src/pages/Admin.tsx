@@ -4384,6 +4384,7 @@ Pᴏᴡᴇʀ Bʏ :
         {/* ==================== REDEEM CODES ==================== */}
         {activeSection === "redeem-codes" && (
           <div>
+            {/* Generate Redeem Code */}
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
                 <Shield size={14} className="text-purple-500" /> Generate Redeem Code
@@ -4417,6 +4418,10 @@ Pᴏᴡᴇʀ Bʏ :
               </div>
             </div>
 
+            {/* ===== Random Prize Link Generator ===== */}
+            <RandomPrizeLinkGenerator glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+
+            {/* All Codes */}
             <div className={`${glassCard} p-4`}>
               <h3 className="text-sm font-semibold mb-3.5">All Codes ({redeemCodesData.length})</h3>
               <div className="space-y-2.5">
