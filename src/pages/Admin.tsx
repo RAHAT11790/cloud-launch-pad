@@ -1065,7 +1065,91 @@ const HeroPinnedPostsSection = ({
   );
 };
 
-const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
+// ==================== RANDOM PRIZE LINK GENERATOR ====================
+const RandomPrizeLinkGenerator = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
+  const [generating, setGenerating] = useState(false);
+  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [prizeHours, setPrizeHours] = useState<number | null>(null);
+
+  const generatePrizeLink = async () => {
+    setGenerating(true);
+    setGeneratedLink(null);
+    setPrizeHours(null);
+    try {
+      const { createRandomPrizeLink } = await import("@/lib/unlockAccess");
+      const result = await createRandomPrizeLink();
+      if (result.ok && result.shortUrl) {
+        setGeneratedLink(result.shortUrl);
+        setPrizeHours(result.hours || null);
+        toast.success(`🎁 Prize link generated! (${result.hours}h)`);
+      } else {
+        toast.error("Failed: " + (result.error || "Unknown error"));
+      }
+    } catch (err: any) {
+      toast.error("Error: " + err.message);
+    }
+    setGenerating(false);
+  };
+
+  return (
+    <div className={`${glassCard} p-4 mb-4`}>
+      <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
+        <Star size={14} className="text-yellow-400" /> 🎁 Random Prize Link
+      </h3>
+      <p className="text-[11px] text-muted-foreground mb-3">
+        এই লিংক যেকোনো জায়গায় শেয়ার করতে পারবেন (Facebook, Telegram ইত্যাদি)। যে ওপেন করবে সে ২৪-৪৮ ঘণ্টার মধ্যে র‍্যান্ডম ফ্রি এক্সেস পাবে। ৪৮ ঘণ্টা পাওয়ার চান্স মাত্র ৫%!
+      </p>
+      <div className="space-y-3">
+        <button
+          onClick={generatePrizeLink}
+          disabled={generating}
+          className={`${btnPrimary} w-full py-3.5 flex items-center justify-center gap-2 disabled:opacity-50`}
+        >
+          {generating ? (
+            <><RefreshCw size={16} className="animate-spin" /> Generating...</>
+          ) : (
+            <><Star size={16} /> Generate Prize Link</>
+          )}
+        </button>
+
+        {generatedLink && (
+          <div className="space-y-2">
+            {prizeHours && (
+              <div className={`text-center py-2 px-3 rounded-lg ${prizeHours >= 48 ? "bg-yellow-500/20 border border-yellow-500/40" : "bg-green-500/20 border border-green-500/40"}`}>
+                <span className="text-xs font-semibold">
+                  {prizeHours >= 48 ? "🏆 JACKPOT! " : "🎊 "} 
+                  এই লিংকে {prizeHours} ঘণ্টা ফ্রি এক্সেস আছে
+                </span>
+              </div>
+            )}
+            <div className="relative">
+              <input
+                value={generatedLink}
+                readOnly
+                className={inputClass + " pr-16 text-xs font-mono"}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(generatedLink);
+                  toast.success("Link copied!");
+                }}
+                className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] bg-primary/20 hover:bg-primary/40 px-2.5 py-1.5 rounded-lg font-semibold transition-all"
+              >
+                Copy
+              </button>
+            </div>
+            <p className="text-[10px] text-muted-foreground text-center">
+              ⚠️ এই লিংক শুধুমাত্র একবারই ব্যবহার করা যাবে এবং ১৫ মিনিটের মধ্যে ওপেন করতে হবে
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
   const adminBranding = useBranding();
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
