@@ -91,17 +91,24 @@ export const createRandomPrizeLink = async (): Promise<{
 
   const token = randomToken();
   const now = Date.now();
-  const tokenExpiresAt = now + UNLOCK_TOKEN_TTL_MS;
 
-  // No prizeHours stored - it's determined when someone opens the link
+  // Prize links: unlimited uses, no expiry until new link generated
   await set(ref(db, `unlockTokens/${token}`), {
     token,
     ownerUserId: userId,
     createdAt: now,
-    expiresAt: tokenExpiresAt,
-    status: "pending",
+    expiresAt: 0, // 0 = never expires
+    status: "active",
     consumed: false,
     mode: "prize",
+    unlimited: true,
+  });
+
+  // Also store as the active prize link so we can deactivate old ones
+  await set(ref(db, `activePrizeLink`), {
+    token,
+    createdAt: now,
+    createdBy: userId,
   });
 
   const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}&mode=prize`;
