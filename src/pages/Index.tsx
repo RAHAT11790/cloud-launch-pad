@@ -94,11 +94,13 @@ const Index = () => {
     initializeUiTheme();
   }, []);
 
-  // Check if user is logged in
+  // Check if user is logged in (must have email - no guest accounts)
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     try {
       const u = localStorage.getItem("rsanime_user");
-      return !!(u && JSON.parse(u).id);
+      if (!u) return false;
+      const parsed = JSON.parse(u);
+      return !!(parsed.id && parsed.email);
     } catch { return false; }
   });
 
