@@ -5045,6 +5045,8 @@ Pᴏᴡᴇʀ Bʏ :
                   })}
                 </div>
               )}
+            </div>
+
             {/* Prize Pool - Users who claimed via prize links */}
             <div className={`${glassCard} p-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
