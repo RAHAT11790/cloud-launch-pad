@@ -201,13 +201,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const failedSrcsRef = useRef<Set<string>>(new Set());
   const [isBuffering, setIsBuffering] = useState(true);
 
-  // ===== ADAPTIVE BITRATE (ABR) STATE =====
-  const abrEnabledRef = useRef(true); // true when user is on "Auto"
-  const abrBufferCountRef = useRef(0); // buffering events in recent window
-  const abrLastDowngradeRef = useRef(0); // timestamp of last downgrade
-  const abrLastUpgradeRef = useRef(0);
-  const abrStableStartRef = useRef(0); // when stable playback started
-  const abrCurrentTierRef = useRef<number>(-1); // -1 = not set yet (use default)
   const [tutorialLink, setTutorialLink] = useState<string | null>(null);
   const [showTutorialVideo, setShowTutorialVideo] = useState(false);
   const [showNextEpOverlay, setShowNextEpOverlay] = useState(false);
