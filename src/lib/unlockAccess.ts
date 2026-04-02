@@ -1,4 +1,4 @@
-import { db, ref, set, runTransaction } from "@/lib/firebase";
+import { db, ref, set, get, runTransaction } from "@/lib/firebase";
 import { callEdgeFunction } from "@/lib/edgeFunctionRouter";
 import { SITE_URL } from "@/lib/siteConfig";
 
@@ -91,17 +91,32 @@ export const createRandomPrizeLink = async (): Promise<{
 
   const token = randomToken();
   const now = Date.now();
-  const tokenExpiresAt = now + UNLOCK_TOKEN_TTL_MS;
 
-  // No prizeHours stored - it's determined when someone opens the link
+  // Deactivate old prize link if exists
+  try {
+    const oldSnap = await get(ref(db, `activePrizeLink`));
+    const old = oldSnap.val();
+    if (old?.token) {
+      await set(ref(db, `unlockTokens/${old.token}/status`), "deactivated");
+    }
+  } catch {}
+
+  // Prize links: unlimited uses, no expiry until new link generated
   await set(ref(db, `unlockTokens/${token}`), {
     token,
     ownerUserId: userId,
     createdAt: now,
-    expiresAt: tokenExpiresAt,
-    status: "pending",
+    expiresAt: 0,
+    status: "active",
     consumed: false,
     mode: "prize",
+    unlimited: true,
+  });
+
+  await set(ref(db, `activePrizeLink`), {
+    token,
+    createdAt: now,
+    createdBy: userId,
   });
 
   const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}&mode=prize`;
@@ -135,8 +150,27 @@ export const consumeUnlockTokenForCurrentUser = async (
     }
 
     const now = Date.now();
+    const isPrizeToken = current.mode === "prize" && current.unlimited;
 
-    if (Number(current.expiresAt || 0) < now) {
+    // Prize tokens: skip expiry, owner, and consumed checks
+    if (isPrizeToken) {
+      // Check if deactivated
+      if (current.status === "deactivated" || current.status === "expired") {
+        decision = "expired";
+        return current;
+      }
+      // Track usage count but don't block
+      decision = "claimed";
+      return {
+        ...current,
+        usageCount: (current.usageCount || 0) + 1,
+        lastUsedAt: now,
+        lastUsedBy: userId,
+      };
+    }
+
+    // Normal token logic below
+    if (Number(current.expiresAt || 0) < now && current.expiresAt !== 0) {
       decision = "expired";
       return {
         ...current,
