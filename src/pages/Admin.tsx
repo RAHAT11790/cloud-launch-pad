@@ -1069,19 +1069,16 @@ const HeroPinnedPostsSection = ({
 const RandomPrizeLinkGenerator = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
   const [generating, setGenerating] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
-  const [prizeHours, setPrizeHours] = useState<number | null>(null);
 
   const generatePrizeLink = async () => {
     setGenerating(true);
     setGeneratedLink(null);
-    setPrizeHours(null);
     try {
       const { createRandomPrizeLink } = await import("@/lib/unlockAccess");
       const result = await createRandomPrizeLink();
       if (result.ok && result.shortUrl) {
         setGeneratedLink(result.shortUrl);
-        setPrizeHours(result.hours || null);
-        toast.success(`🎁 Prize link generated! (${result.hours}h)`);
+        toast.success("🎁 Prize link generated!");
       } else {
         toast.error("Failed: " + (result.error || "Unknown error"));
       }
@@ -1096,9 +1093,17 @@ const RandomPrizeLinkGenerator = ({ glassCard, inputClass, btnPrimary }: { glass
       <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
         <Star size={14} className="text-yellow-400" /> 🎁 Random Prize Link
       </h3>
-      <p className="text-[11px] text-muted-foreground mb-3">
-        এই লিংক যেকোনো জায়গায় শেয়ার করতে পারবেন (Facebook, Telegram ইত্যাদি)। যে ওপেন করবে সে ২৪-৪৮ ঘণ্টার মধ্যে র‍্যান্ডম ফ্রি এক্সেস পাবে। ৪৮ ঘণ্টা পাওয়ার চান্স মাত্র ৫%!
+      <p className="text-[11px] text-muted-foreground mb-2">
+        এই লিংক যেকোনো জায়গায় শেয়ার করুন। প্রতিটি ইউজার ওপেন করলে ভিন্ন ভিন্ন র‍্যান্ডম সময় পাবে (২৪h - ৪৮h)।
       </p>
+      <div className="text-[10px] text-muted-foreground mb-3 space-y-0.5">
+        <p>🟢 ৭০% চান্স: ২৪-২৬ ঘন্টা</p>
+        <p>🔵 ১৮% চান্স: ২৭-৩০ ঘন্টা</p>
+        <p>🟣 ৭% চান্স: ৩১-৩৫ ঘন্টা</p>
+        <p>🟡 ৩% চান্স: ৩৬-৪১ ঘন্টা</p>
+        <p>🔴 ১.৫% চান্স: ৪২-৪৭ ঘন্টা</p>
+        <p>🏆 ০.৫% চান্স: ৪৮ ঘন্টা (JACKPOT!)</p>
+      </div>
       <div className="space-y-3">
         <button
           onClick={generatePrizeLink}
@@ -1114,14 +1119,11 @@ const RandomPrizeLinkGenerator = ({ glassCard, inputClass, btnPrimary }: { glass
 
         {generatedLink && (
           <div className="space-y-2">
-            {prizeHours && (
-              <div className={`text-center py-2 px-3 rounded-lg ${prizeHours >= 48 ? "bg-yellow-500/20 border border-yellow-500/40" : "bg-green-500/20 border border-green-500/40"}`}>
-                <span className="text-xs font-semibold">
-                  {prizeHours >= 48 ? "🏆 JACKPOT! " : "🎊 "} 
-                  এই লিংকে {prizeHours} ঘণ্টা ফ্রি এক্সেস আছে
-                </span>
-              </div>
-            )}
+            <div className="text-center py-2 px-3 rounded-lg bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30">
+              <span className="text-xs font-semibold">
+                🎲 প্রতিটি ইউজার ভিন্ন ভিন্ন র‍্যান্ডম সময় পাবে!
+              </span>
+            </div>
             <div className="relative">
               <input
                 value={generatedLink}
