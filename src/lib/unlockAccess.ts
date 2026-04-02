@@ -1,4 +1,4 @@
-import { db, ref, set, runTransaction } from "@/lib/firebase";
+import { db, ref, set, get, runTransaction } from "@/lib/firebase";
 import { callEdgeFunction } from "@/lib/edgeFunctionRouter";
 import { SITE_URL } from "@/lib/siteConfig";
 
