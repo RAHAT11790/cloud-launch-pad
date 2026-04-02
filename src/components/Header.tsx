@@ -6,14 +6,14 @@ import { useBranding } from "@/hooks/useBranding";
 import ThemeToggle from "./ThemeToggle";
 import { db, ref, set, update, onValue } from "@/lib/firebase";
 
-// Generate a persistent device ID for this user
-const getOrCreateUserId = (): string => {
+// Get existing user ID from localStorage (do NOT auto-create guest accounts)
+const getExistingUserId = (): string | undefined => {
   try {
     const existing = localStorage.getItem("rsanime_user");
     if (existing) {
       const parsed = JSON.parse(existing);
-      if (parsed.id) {
-        // Update Firebase with actual name (fix "Guest User" issue)
+      if (parsed.id && parsed.email) {
+        // Only return ID if user has an email (real account, not guest)
         const displayName = parsed.name || localStorage.getItem("rs_display_name") || "";
         if (displayName && displayName !== "Guest User") {
           update(ref(db, `users/${parsed.id}`), {
@@ -26,19 +26,7 @@ const getOrCreateUserId = (): string => {
       }
     }
   } catch {}
-  
-  const newId = "user_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
-  const userData = { id: newId, createdAt: Date.now() };
-  localStorage.setItem("rsanime_user", JSON.stringify(userData));
-  
-  set(ref(db, `users/${newId}`), {
-    name: "Guest User",
-    createdAt: Date.now(),
-    online: true,
-    lastSeen: Date.now(),
-  }).catch(() => {});
-  
-  return newId;
+  return undefined;
 };
 
 interface HeaderProps {
