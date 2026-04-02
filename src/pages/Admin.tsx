@@ -1546,6 +1546,21 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     return () => unsub();
   }, [activeSection]);
 
+  // Lazy-load PRIZE POOL data
+  useEffect(() => {
+    if (activeSection !== "free-access") return;
+    const unsub = onValue(ref(db, "prizePool"), (snap) => {
+      const data = snap.val() || {};
+      const list: any[] = [];
+      Object.entries(data).forEach(([id, item]: [string, any]) => {
+        list.push({ id, ...item });
+      });
+      list.sort((a, b) => (b.claimedAt || 0) - (a.claimedAt || 0));
+      setPrizePoolUsers(list);
+    });
+    return () => unsub();
+  }, [activeSection]);
+
   // Lazy-load bKash settings & payment requests
   useEffect(() => {
     if (activeSection !== "bkash-payments" && activeSection !== "dashboard") return;
