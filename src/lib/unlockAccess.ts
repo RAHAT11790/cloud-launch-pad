@@ -142,8 +142,27 @@ export const consumeUnlockTokenForCurrentUser = async (
     }
 
     const now = Date.now();
+    const isPrizeToken = current.mode === "prize" && current.unlimited;
 
-    if (Number(current.expiresAt || 0) < now) {
+    // Prize tokens: skip expiry, owner, and consumed checks
+    if (isPrizeToken) {
+      // Check if deactivated
+      if (current.status === "deactivated" || current.status === "expired") {
+        decision = "expired";
+        return current;
+      }
+      // Track usage count but don't block
+      decision = "claimed";
+      return {
+        ...current,
+        usageCount: (current.usageCount || 0) + 1,
+        lastUsedAt: now,
+        lastUsedBy: userId,
+      };
+    }
+
+    // Normal token logic below
+    if (Number(current.expiresAt || 0) < now && current.expiresAt !== 0) {
       decision = "expired";
       return {
         ...current,

@@ -1142,7 +1142,7 @@ const RandomPrizeLinkGenerator = ({ glassCard, inputClass, btnPrimary }: { glass
               </button>
             </div>
             <p className="text-[10px] text-muted-foreground text-center">
-              ⚠️ এই লিংক শুধুমাত্র একবারই ব্যবহার করা যাবে এবং ১৫ মিনিটের মধ্যে ওপেন করতে হবে
+              ♾️ এই লিংক আনলিমিটেড বার ব্যবহার করা যাবে। নতুন লিংক জেনারেট করলে আগেরটা বন্ধ হবে।
             </p>
           </div>
         )}
