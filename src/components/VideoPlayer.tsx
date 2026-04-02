@@ -1176,7 +1176,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full p-5'}`}>
         {!isFullscreen && (
           <div className="text-center mb-2.5">
-            <h1 className="text-2xl font-extrabold text-primary text-glow tracking-wider">RS ANIME PLAYER</h1>
+            <h1 className="text-2xl font-extrabold text-primary text-glow tracking-wider">{branding.playerName}</h1>
           </div>
         )}
 
