@@ -6,20 +6,35 @@ const UNLOCK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const FREE_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
 
 // --- Random Prize Duration Logic ---
-// Weighted random: 5% chance of 48h, rest distributed 24-47h
-function getRandomPrizeDurationMs(): { hours: number; ms: number } {
+// Weighted: heavily favors 24-30h range, very rarely gives high hours
+// Returns hours and minutes for more exciting display
+export function getRandomPrizeDuration(): { hours: number; minutes: number; totalMs: number } {
   const roll = Math.random();
-  let hours: number;
-  if (roll < 0.05) {
-    // 5% chance → 48 hours (jackpot!)
-    hours = 48;
+  let totalMinutes: number;
+
+  if (roll < 0.005) {
+    // 0.5% → 48h exactly (ultra jackpot!)
+    totalMinutes = 48 * 60;
+  } else if (roll < 0.02) {
+    // 1.5% → 42-47h range
+    totalMinutes = Math.floor((42 + Math.random() * 5) * 60 + Math.random() * 60);
+  } else if (roll < 0.05) {
+    // 3% → 36-41h range
+    totalMinutes = Math.floor((36 + Math.random() * 5) * 60 + Math.random() * 60);
+  } else if (roll < 0.12) {
+    // 7% → 31-35h range
+    totalMinutes = Math.floor((31 + Math.random() * 4) * 60 + Math.random() * 60);
+  } else if (roll < 0.30) {
+    // 18% → 27-30h range
+    totalMinutes = Math.floor((27 + Math.random() * 3) * 60 + Math.random() * 60);
   } else {
-    // 95% → random between 24-47 hours (weighted toward lower)
-    // Use a curve that favors lower values
-    const t = Math.random();
-    hours = Math.floor(24 + t * t * 23); // quadratic curve, favors 24-30h
+    // 70% → 24h 0m to 26h 59m (most common)
+    totalMinutes = Math.floor(24 * 60 + Math.random() * 3 * 60);
   }
-  return { hours, ms: hours * 60 * 60 * 1000 };
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return { hours, minutes, totalMs: totalMinutes * 60 * 1000 };
 }
 
 const randomToken = () => `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
@@ -67,8 +82,9 @@ export const createUnlockLinkForCurrentUser = async (): Promise<{ ok: boolean; s
 };
 
 // --- Random Prize Link Creator ---
+// Creates a single reusable prize link. Duration is determined at OPEN time, not here.
 export const createRandomPrizeLink = async (): Promise<{
-  ok: boolean; shortUrl?: string; hours?: number; error?: string;
+  ok: boolean; shortUrl?: string; error?: string;
 }> => {
   const userId = getLocalUserId();
   if (!userId) return { ok: false, error: "login_required" };
@@ -76,8 +92,8 @@ export const createRandomPrizeLink = async (): Promise<{
   const token = randomToken();
   const now = Date.now();
   const tokenExpiresAt = now + UNLOCK_TOKEN_TTL_MS;
-  const prize = getRandomPrizeDurationMs();
 
+  // No prizeHours stored - it's determined when someone opens the link
   await set(ref(db, `unlockTokens/${token}`), {
     token,
     ownerUserId: userId,
@@ -86,8 +102,6 @@ export const createRandomPrizeLink = async (): Promise<{
     status: "pending",
     consumed: false,
     mode: "prize",
-    prizeHours: prize.hours,
-    prizeDurationMs: prize.ms,
   });
 
   const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}&mode=prize`;
@@ -101,7 +115,7 @@ export const createRandomPrizeLink = async (): Promise<{
   const shortUrl = typeof data === "string" ? data : data?.shortenedUrl || data?.short || data?.url;
   if (!shortUrl) return { ok: false, error: "shortener_empty" };
 
-  return { ok: true, shortUrl, hours: prize.hours };
+  return { ok: true, shortUrl };
 };
 
 export const consumeUnlockTokenForCurrentUser = async (
