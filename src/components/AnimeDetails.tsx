@@ -32,6 +32,7 @@ interface ReplyData {
 }
 
 const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onClose, onPlay }, _ref) => {
+  const branding = useBranding();
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [comments, setComments] = useState<CommentData[]>([]);
   const [commentText, setCommentText] = useState("");
