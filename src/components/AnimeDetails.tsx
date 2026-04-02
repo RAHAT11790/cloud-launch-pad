@@ -6,6 +6,7 @@ import { db, ref, set, remove, onValue, push } from "@/lib/firebase";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
 import { sendPushToUsers } from "@/lib/fcm";
 import { SITE_URL } from "@/lib/siteConfig";
+import { useBranding } from "@/hooks/useBranding";
 
 interface AnimeDetailsProps {
   anime: AnimeItem;
