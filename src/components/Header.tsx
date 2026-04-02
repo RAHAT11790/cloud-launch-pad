@@ -76,7 +76,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
   }, [displayTitles.length]);
 
   useEffect(() => {
-    const id = getOrCreateUserId();
+    const id = getExistingUserId();
     setUserId(id);
 
     // Load profile photo
@@ -94,22 +94,28 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
     };
     const interval = setInterval(checkPhoto, 2000);
 
-    // Update online status
-    const updateOnline = () => {
-      update(ref(db, `users/${id}`), { online: true, lastSeen: Date.now() }).catch(() => {});
-    };
-    updateOnline();
-    const heartbeat = setInterval(updateOnline, 30000);
-    
-    const onUnload = () => {
-      update(ref(db, `users/${id}`), { online: false, lastSeen: Date.now() }).catch(() => {});
-    };
-    window.addEventListener("beforeunload", onUnload);
+    // Update online status only for real users
+    if (id) {
+      const updateOnline = () => {
+        update(ref(db, `users/${id}`), { online: true, lastSeen: Date.now() }).catch(() => {});
+      };
+      updateOnline();
+      const heartbeat = setInterval(updateOnline, 30000);
+      
+      const onUnload = () => {
+        update(ref(db, `users/${id}`), { online: false, lastSeen: Date.now() }).catch(() => {});
+      };
+      window.addEventListener("beforeunload", onUnload);
+
+      return () => {
+        clearInterval(interval);
+        clearInterval(heartbeat);
+        window.removeEventListener("beforeunload", onUnload);
+      };
+    }
 
     return () => {
       clearInterval(interval);
-      clearInterval(heartbeat);
-      window.removeEventListener("beforeunload", onUnload);
     };
   }, []);
 
