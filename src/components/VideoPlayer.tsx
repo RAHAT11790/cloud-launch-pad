@@ -9,7 +9,7 @@ import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
 import animeCharImg from "@/assets/anime-loading-char.png";
-import { createUnlockLinkForCurrentUser, createRandomPrizeLink, getLocalUserId } from "@/lib/unlockAccess";
+import { createUnlockLinkForCurrentUser, getLocalUserId } from "@/lib/unlockAccess";
 
 interface QualityOption {
   label: string;
@@ -191,7 +191,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [adGateActive, setAdGateActive] = useState(false);
   const [shortenedLink, setShortenedLink] = useState<string | null>(null);
   const [shortenLoading, setShortenLoading] = useState(false);
-  const [prizeLoading, setPrizeLoading] = useState(false);
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
@@ -1534,39 +1533,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         {adGateActive && !deviceBlocked && !unlockBlocked && (
           <div className="fixed inset-0 z-[400] bg-black/90 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-card rounded-2xl p-6 max-w-sm w-[90%] text-center space-y-4 shadow-2xl border border-border">
-              <h3 className="text-lg font-bold text-foreground">🔓 Unlock Free Access</h3>
-              <p className="text-sm text-muted-foreground">ফ্রি এক্সেস পেতে নিচের একটি অপশন বেছে নিন</p>
+              <h3 className="text-lg font-bold text-foreground">Unlock 24 Hours Access</h3>
+              <p className="text-sm text-muted-foreground">Click the link below to get 24 hours of free access to all videos</p>
               {shortenLoading ? (
                 <div className="flex items-center justify-center gap-2 py-3">
                   <Loader2 className="w-5 h-5 animate-spin text-primary" />
                   <span className="text-sm text-muted-foreground">Preparing link...</span>
                 </div>
               ) : (
-                <>
-                  <button onClick={handleOpenAdLink} className="w-full py-3 rounded-xl gradient-primary text-white font-semibold flex items-center justify-center gap-2 btn-glow transition-all hover:scale-105">
-                    <ExternalLink className="w-4 h-4" />
-                    Unlock 24h Access
-                  </button>
-                  <button
-                    disabled={prizeLoading}
-                    onClick={async () => {
-                      setPrizeLoading(true);
-                      try {
-                        const result = await createRandomPrizeLink();
-                        if (result.ok && result.shortUrl) {
-                          window.location.href = result.shortUrl;
-                        } else {
-                          alert("Failed to create prize link. Try again.");
-                        }
-                      } catch { alert("Error creating prize link."); }
-                      setPrizeLoading(false);
-                    }}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-semibold flex items-center justify-center gap-2 transition-all hover:scale-105 disabled:opacity-50"
-                  >
-                    {prizeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>🎁</span>}
-                    Random Prize (24-48h)
-                  </button>
-                </>
+                <button onClick={handleOpenAdLink} className="w-full py-3 rounded-xl gradient-primary text-white font-semibold flex items-center justify-center gap-2 btn-glow transition-all hover:scale-105">
+                  <ExternalLink className="w-4 h-4" />
+                  Unlock Now
+                </button>
               )}
               <button
                 onClick={() => {
