@@ -66,6 +66,44 @@ export const createUnlockLinkForCurrentUser = async (): Promise<{ ok: boolean; s
   return { ok: true, shortUrl };
 };
 
+// --- Random Prize Link Creator ---
+export const createRandomPrizeLink = async (): Promise<{
+  ok: boolean; shortUrl?: string; hours?: number; error?: string;
+}> => {
+  const userId = getLocalUserId();
+  if (!userId) return { ok: false, error: "login_required" };
+
+  const token = randomToken();
+  const now = Date.now();
+  const tokenExpiresAt = now + UNLOCK_TOKEN_TTL_MS;
+  const prize = getRandomPrizeDurationMs();
+
+  await set(ref(db, `unlockTokens/${token}`), {
+    token,
+    ownerUserId: userId,
+    createdAt: now,
+    expiresAt: tokenExpiresAt,
+    status: "pending",
+    consumed: false,
+    mode: "prize",
+    prizeHours: prize.hours,
+    prizeDurationMs: prize.ms,
+  });
+
+  const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}&mode=prize`;
+  let data: any;
+  try {
+    data = await callEdgeFunction("shorten", { url: callbackUrl });
+  } catch {
+    return { ok: false, error: "shortener_failed" };
+  }
+
+  const shortUrl = typeof data === "string" ? data : data?.shortenedUrl || data?.short || data?.url;
+  if (!shortUrl) return { ok: false, error: "shortener_empty" };
+
+  return { ok: true, shortUrl, hours: prize.hours };
+};
+
 export const consumeUnlockTokenForCurrentUser = async (
   token: string,
 ): Promise<{ ok: boolean; reason?: "login_required" | "invalid_token" | "expired" | "not_owner" | "already_used" | "claimed" }> => {
