@@ -5045,6 +5045,56 @@ Pᴏᴡᴇʀ Bʏ :
                   })}
                 </div>
               )}
+            {/* Prize Pool - Users who claimed via prize links */}
+            <div className={`${glassCard} p-4`}>
+              <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
+                <Star size={14} className="text-yellow-400" /> 🎁 Prize Pool ({prizePoolUsers.length})
+              </h3>
+              <p className="text-[11px] text-muted-foreground mb-4">
+                যারা Random Prize লিংক থেকে ফ্রি এক্সেস নিয়েছে তাদের লিস্ট।
+              </p>
+              {prizePoolUsers.length === 0 ? (
+                <p className="text-muted-foreground text-[13px] text-center py-8">কোনো প্রাইজ ক্লেইম হয়নি</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {prizePoolUsers.map((user) => {
+                    const isExpired = user.expiresAt < Date.now();
+                    const isJackpot = user.hours >= 42;
+                    return (
+                      <div key={user.id} className={`p-3 rounded-xl border transition-all ${
+                        isExpired ? "bg-muted/30 border-border opacity-60" 
+                        : isJackpot ? "bg-yellow-500/10 border-yellow-500/30" 
+                        : "bg-purple-500/10 border-purple-500/30"
+                      }`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-[38px] h-[38px] rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 ${
+                            isJackpot ? "bg-gradient-to-br from-yellow-400 to-orange-500" : "bg-gradient-to-br from-purple-500 to-pink-500"
+                          }`}>
+                            {isJackpot ? "🏆" : "🎁"}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate">{user.name || "Unknown"}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">{user.email || "No email"}</p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                              isExpired ? "bg-muted text-muted-foreground" 
+                              : isJackpot ? "bg-yellow-500/20 text-yellow-400"
+                              : "bg-purple-500/20 text-purple-400"
+                            }`}>
+                              {user.hours}h {user.minutes || 0}m
+                            </div>
+                            {isExpired && <span className="text-[9px] text-muted-foreground">expired</span>}
+                          </div>
+                        </div>
+                        <div className="mt-2 text-[10px] text-muted-foreground">
+                          ক্লেইম: {new Date(user.claimedAt).toLocaleString("bn-BD", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
