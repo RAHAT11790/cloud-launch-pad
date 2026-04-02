@@ -1149,7 +1149,7 @@ const RandomPrizeLinkGenerator = ({ glassCard, inputClass, btnPrimary }: { glass
   );
 };
 
-
+const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const adminBranding = useBranding();
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
