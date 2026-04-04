@@ -1403,6 +1403,7 @@ const Index = () => {
 
   const handleNavigate = (page: string) => {
     setShowProfile(page === "profile");
+    setShowLiveTV(page === "livetv");
     setActivePage(page);
     setDubFilter("all");
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
