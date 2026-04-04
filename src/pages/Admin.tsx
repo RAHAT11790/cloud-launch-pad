@@ -5321,6 +5321,11 @@ Pᴏᴡᴇʀ Bʏ :
           <AiConfigSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
         )}
 
+        {/* ==================== LIVE TV ==================== */}
+        {activeSection === "live-tv" && (
+          <LiveTvSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+        )}
+
         {/* ==================== BRANDING ==================== */}
         {activeSection === "branding" && (
           <BrandingSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
