@@ -569,9 +569,10 @@ const Index = () => {
     if (selectedAnime) return "details";
     if (showSearch) return "search";
     if (showProfile) return "profile";
+    if (showLiveTV) return "livetv";
     if (activePage === "series" || activePage === "movies") return activePage;
     return "home";
-  }, [playerState, saltPlayerState, selectedAnime, showSearch, showProfile, activePage]);
+  }, [playerState, saltPlayerState, selectedAnime, showSearch, showProfile, showLiveTV, activePage]);
 
 
   useEffect(() => {
