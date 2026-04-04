@@ -436,8 +436,8 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
                 </div>
               </motion.div>
             ))}
+          </div>
         )}
-      </div>
       </div>
     </motion.div>
   );
