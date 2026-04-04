@@ -1748,6 +1748,12 @@ const Index = () => {
       </AnimatePresence>
 
       <AnimatePresence>
+        {showLiveTV && (
+          <LiveTV onClose={() => { setShowLiveTV(false); setActivePage("home"); }} />
+        )}
+      </AnimatePresence>
+
+
         {selectedAnime && (
           <AnimeDetails anime={selectedAnime} onClose={() => setSelectedAnime(null)} onPlay={handlePlay} />
         )}
