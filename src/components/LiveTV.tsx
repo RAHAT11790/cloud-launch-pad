@@ -211,7 +211,10 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
     const unsub = onValue(ref(db, "settings/liveTvApiEnabled"), (snap) => {
       setApiEnabled(snap.val() !== false);
     });
-    return () => unsub();
+    const unsub2 = onValue(ref(db, "settings/liveTvProxyUrl"), (snap) => {
+      setProxyUrl(snap.val() || "");
+    });
+    return () => { unsub(); unsub2(); };
   }, []);
 
   useEffect(() => {
