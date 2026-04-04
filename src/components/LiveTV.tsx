@@ -110,13 +110,15 @@ const ChannelPlayer = ({
   onBack,
   suggestedChannels,
   onSelectChannel,
+  proxyUrl,
 }: {
   channel: TVChannel;
   onBack: () => void;
   suggestedChannels: TVChannel[];
   onSelectChannel: (ch: TVChannel) => void;
+  proxyUrl?: string;
 }) => {
-  const iframeHtml = useMemo(() => buildIframeHtml(channel), [channel]);
+  const iframeHtml = useMemo(() => buildIframeHtml(channel, proxyUrl), [channel, proxyUrl]);
   const iframeSrc = useMemo(
     () => `data:text/html;charset=utf-8,${encodeURIComponent(iframeHtml)}`,
     [iframeHtml]
