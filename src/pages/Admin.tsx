@@ -438,6 +438,47 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     toast.success("চ্যানেল আপডেট করা হয়েছে");
   };
 
+  const importFromJson = async () => {
+    if (!jsonPaste.trim()) { toast.error("JSON পেস্ট করুন"); return; }
+    setJsonParsing(true);
+    try {
+      let parsed = JSON.parse(jsonPaste.trim());
+      // Support single object or array
+      const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
+      let added = 0;
+      for (const item of items) {
+        if (!item.name) continue;
+        const channelData: any = {
+          name: item.name || "",
+          logo: item.logo || "",
+          category: item.category || "General",
+          streamUrl: item.streamUrl || "",
+          mpd: item.mpd || "",
+          token: item.token || "",
+          referer: item.referer || "",
+          userAgent: item.userAgent || "",
+          addedAt: Date.now(),
+        };
+        // Handle DRM object
+        if (item.drm && typeof item.drm === "object" && Object.keys(item.drm).length > 0) {
+          channelData.drm = item.drm;
+        }
+        await push(ref(db, "liveTvChannels"), channelData);
+        added++;
+      }
+      if (added > 0) {
+        toast.success(`✅ ${added}টি চ্যানেল যোগ করা হয়েছে!`);
+        setJsonPaste("");
+      } else {
+        toast.error("কোন ভ্যালিড চ্যানেল পাওয়া যায়নি");
+      }
+    } catch (e) {
+      toast.error("❌ JSON পার্স করা যায়নি। সঠিক JSON দিন।");
+    } finally {
+      setJsonParsing(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-bold flex items-center gap-2"><Tv size={20} /> Live TV চ্যানেল ম্যানেজার</h2>
