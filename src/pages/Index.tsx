@@ -304,6 +304,9 @@ const Index = () => {
     try { return sessionStorage.getItem("rs_uiLayer") === "profile"; } catch { return false; }
   });
   const [chatOpen, setChatOpen] = useState(false);
+  const [showLiveTV, setShowLiveTV] = useState(() => {
+    try { return sessionStorage.getItem("rs_uiLayer") === "livetv"; } catch { return false; }
+  });
 
   // Persist activePage to sessionStorage
   useEffect(() => {
