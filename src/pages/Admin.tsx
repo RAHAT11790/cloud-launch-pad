@@ -392,6 +392,8 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
   const [apiEnabled, setApiEnabled] = useState(true);
   const [newChannel, setNewChannel] = useState({ name: "", logo: "", category: "", streamUrl: "", mpd: "", token: "", referer: "", userAgent: "" });
   const [editing, setEditing] = useState<string | null>(null);
+  const [jsonPaste, setJsonPaste] = useState("");
+  const [jsonParsing, setJsonParsing] = useState(false);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "liveTvChannels"), (snap) => {
