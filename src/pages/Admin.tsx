@@ -394,6 +394,9 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
   const [editing, setEditing] = useState<string | null>(null);
   const [jsonPaste, setJsonPaste] = useState("");
   const [jsonParsing, setJsonParsing] = useState(false);
+  const [proxyUrl, setProxyUrl] = useState("");
+  const [proxyUrlInput, setProxyUrlInput] = useState("");
+  const [testingProxy, setTestingProxy] = useState(false);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "liveTvChannels"), (snap) => {
