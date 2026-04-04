@@ -496,6 +496,21 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         </div>
       </div>
 
+      {/* JSON Import */}
+      <div className={`${glassCard} p-4`}>
+        <h3 className="text-sm font-semibold mb-2">📋 JSON পেস্ট করে চ্যানেল ইম্পোর্ট</h3>
+        <p className="text-[10px] text-muted-foreground mb-3">একটি চ্যানেল অবজেক্ট অথবা চ্যানেলের অ্যারে পেস্ট করুন</p>
+        <textarea
+          className={`${inputClass} min-h-[120px] w-full font-mono text-[11px] mb-3`}
+          placeholder={`{\n  "name": "Channel Name",\n  "logo": "https://...",\n  "category": "Entertainment",\n  "mpd": "https://...",\n  "token": "...",\n  "drm": { "kid": "key" }\n}`}
+          value={jsonPaste}
+          onChange={e => setJsonPaste(e.target.value)}
+        />
+        <button onClick={importFromJson} disabled={jsonParsing} className={`${btnPrimary} w-full flex items-center justify-center gap-2`}>
+          {jsonParsing ? <><Loader2 size={14} className="animate-spin" /> ইম্পোর্ট হচ্ছে...</> : "📥 JSON থেকে ইম্পোর্ট করুন"}
+        </button>
+      </div>
+
       {/* Add New Channel */}
       <div className={`${glassCard} p-4`}>
         <h3 className="text-sm font-semibold mb-3">➕ নতুন চ্যানেল যোগ করুন</h3>
