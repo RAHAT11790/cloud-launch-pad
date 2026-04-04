@@ -20,14 +20,17 @@ interface TVChannel {
 const API_URL = "https://servertvhub.site/api/channels.json";
 
 /* ── helpers ── */
-const buildIframeHtml = (ch: TVChannel): string => {
-  const mpdUrl = ch.mpd || "";
+const buildIframeHtml = (ch: TVChannel, proxyUrl?: string): string => {
+  const applyProxy = (url: string) => {
+    if (!proxyUrl || !url) return url;
+    return proxyUrl.includes("{url}") ? proxyUrl.replace("{url}", encodeURIComponent(url)) : `${proxyUrl}${encodeURIComponent(url)}`;
+  };
+
+  const mpdUrl = ch.mpd ? applyProxy(ch.mpd) : "";
   const tokenPart = ch.token ? (mpdUrl.includes("?") ? "&" : "?") + ch.token : "";
   const fullMpd = mpdUrl + tokenPart;
   const hasDrm = ch.drm && Object.keys(ch.drm).length > 0;
-
-  // For HLS / direct streams
-  const hlsUrl = ch.streamUrl || "";
+  const hlsUrl = ch.streamUrl ? applyProxy(ch.streamUrl) : "";
 
   const html = `<!DOCTYPE html>
 <html><head>
