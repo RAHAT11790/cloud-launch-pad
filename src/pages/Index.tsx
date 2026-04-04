@@ -1753,7 +1753,7 @@ const Index = () => {
         )}
       </AnimatePresence>
 
-
+      <AnimatePresence>
         {selectedAnime && (
           <AnimeDetails anime={selectedAnime} onClose={() => setSelectedAnime(null)} onPlay={handlePlay} />
         )}
