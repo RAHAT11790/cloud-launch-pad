@@ -1726,6 +1726,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "edge-router": "Edge Function Router",
     "branding": "UI+AD Branding",
     "ai-config": "AI Chat Config",
+    "live-tv": "Live TV Channels",
   };
 
   // ==================== CATEGORIES ====================
