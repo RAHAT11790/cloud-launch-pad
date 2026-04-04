@@ -584,6 +584,7 @@ const Index = () => {
         setActivePage("home");
       }
       if (layer === "series" || layer === "movies") setActivePage(layer);
+      if (layer === "livetv") { setShowLiveTV(true); setActivePage("livetv"); }
     } catch {}
   }, []);
 
