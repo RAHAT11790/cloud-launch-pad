@@ -410,8 +410,34 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     const unsub2 = onValue(ref(db, "settings/liveTvApiEnabled"), (snap) => {
       setApiEnabled(snap.val() !== false);
     });
-    return () => { unsub(); unsub2(); };
+    const unsub3 = onValue(ref(db, "settings/liveTvProxyUrl"), (snap) => {
+      const val = snap.val() || "";
+      setProxyUrl(val);
+      setProxyUrlInput(val);
+    });
+    return () => { unsub(); unsub2(); unsub3(); };
   }, []);
+
+  const saveProxyUrl = async () => {
+    await set(ref(db, "settings/liveTvProxyUrl"), proxyUrlInput.trim());
+    toast.success("প্রক্সি URL সেভ করা হয়েছে");
+  };
+
+  const testProxy = async () => {
+    if (!proxyUrlInput.trim()) { toast.error("প্রক্সি URL দিন"); return; }
+    setTestingProxy(true);
+    try {
+      const testUrl = proxyUrlInput.includes("{url}")
+        ? proxyUrlInput.replace("{url}", encodeURIComponent("https://www.google.com"))
+        : `${proxyUrlInput}${encodeURIComponent("https://www.google.com")}`;
+      const res = await fetch(testUrl, { method: "HEAD", mode: "no-cors" });
+      toast.success("✅ প্রক্সি সম্ভবত কাজ করছে (no-cors check passed)");
+    } catch {
+      toast.error("❌ প্রক্সি কাজ করছে না");
+    } finally {
+      setTestingProxy(false);
+    }
+  };
 
   const toggleApi = async () => {
     await set(ref(db, "settings/liveTvApiEnabled"), !apiEnabled);
