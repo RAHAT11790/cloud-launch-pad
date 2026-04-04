@@ -5273,10 +5273,7 @@ Pᴏᴡᴇʀ Bʏ :
               <ForceNotifToggle glassCard={glassCard} />
             </div>
 
-        {/* ==================== LIVE TV ==================== */}
-        {activeSection === "live-tv" && (
-          <LiveTvSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
-        )}
+
 
             {/* Proxy Server Selector */}
             <div className={`${glassCard} p-4 mb-4`}>
