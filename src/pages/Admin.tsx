@@ -2947,6 +2947,7 @@ Pᴏᴡᴇʀ Bʏ :
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
+    { section: "live-tv", icon: <Tv size={16} />, label: "Live TV" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "ui-themes", icon: <Zap size={16} />, label: "UI Themes", group: "Customization" },
     { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
