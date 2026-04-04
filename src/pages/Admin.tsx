@@ -9,7 +9,7 @@ import {
   LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
   Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
   Shield, LogOut, Search, Save, ChevronDown, Send, Link, ChevronLeft, ChevronRight,
-  Lock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin, Tv
+  Lock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin, Tv, Loader2
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
@@ -392,6 +392,8 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
   const [apiEnabled, setApiEnabled] = useState(true);
   const [newChannel, setNewChannel] = useState({ name: "", logo: "", category: "", streamUrl: "", mpd: "", token: "", referer: "", userAgent: "" });
   const [editing, setEditing] = useState<string | null>(null);
+  const [jsonPaste, setJsonPaste] = useState("");
+  const [jsonParsing, setJsonParsing] = useState(false);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "liveTvChannels"), (snap) => {
@@ -436,6 +438,47 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     toast.success("চ্যানেল আপডেট করা হয়েছে");
   };
 
+  const importFromJson = async () => {
+    if (!jsonPaste.trim()) { toast.error("JSON পেস্ট করুন"); return; }
+    setJsonParsing(true);
+    try {
+      let parsed = JSON.parse(jsonPaste.trim());
+      // Support single object or array
+      const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
+      let added = 0;
+      for (const item of items) {
+        if (!item.name) continue;
+        const channelData: any = {
+          name: item.name || "",
+          logo: item.logo || "",
+          category: item.category || "General",
+          streamUrl: item.streamUrl || "",
+          mpd: item.mpd || "",
+          token: item.token || "",
+          referer: item.referer || "",
+          userAgent: item.userAgent || "",
+          addedAt: Date.now(),
+        };
+        // Handle DRM object
+        if (item.drm && typeof item.drm === "object" && Object.keys(item.drm).length > 0) {
+          channelData.drm = item.drm;
+        }
+        await push(ref(db, "liveTvChannels"), channelData);
+        added++;
+      }
+      if (added > 0) {
+        toast.success(`✅ ${added}টি চ্যানেল যোগ করা হয়েছে!`);
+        setJsonPaste("");
+      } else {
+        toast.error("কোন ভ্যালিড চ্যানেল পাওয়া যায়নি");
+      }
+    } catch (e) {
+      toast.error("❌ JSON পার্স করা যায়নি। সঠিক JSON দিন।");
+    } finally {
+      setJsonParsing(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-bold flex items-center gap-2"><Tv size={20} /> Live TV চ্যানেল ম্যানেজার</h2>
@@ -451,6 +494,21 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
             {apiEnabled ? "✅ ON" : "❌ OFF"}
           </button>
         </div>
+      </div>
+
+      {/* JSON Import */}
+      <div className={`${glassCard} p-4`}>
+        <h3 className="text-sm font-semibold mb-2">📋 JSON পেস্ট করে চ্যানেল ইম্পোর্ট</h3>
+        <p className="text-[10px] text-muted-foreground mb-3">একটি চ্যানেল অবজেক্ট অথবা চ্যানেলের অ্যারে পেস্ট করুন</p>
+        <textarea
+          className={`${inputClass} min-h-[120px] w-full font-mono text-[11px] mb-3`}
+          placeholder={`{\n  "name": "Channel Name",\n  "logo": "https://...",\n  "category": "Entertainment",\n  "mpd": "https://...",\n  "token": "...",\n  "drm": { "kid": "key" }\n}`}
+          value={jsonPaste}
+          onChange={e => setJsonPaste(e.target.value)}
+        />
+        <button onClick={importFromJson} disabled={jsonParsing} className={`${btnPrimary} w-full flex items-center justify-center gap-2`}>
+          {jsonParsing ? <><Loader2 size={14} className="animate-spin" /> ইম্পোর্ট হচ্ছে...</> : "📥 JSON থেকে ইম্পোর্ট করুন"}
+        </button>
       </div>
 
       {/* Add New Channel */}
