@@ -205,6 +205,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
   const [showSearch, setShowSearch] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<TVChannel | null>(null);
   const [apiEnabled, setApiEnabled] = useState(true);
+  const [proxyUrl, setProxyUrl] = useState("");
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/liveTvApiEnabled"), (snap) => {
