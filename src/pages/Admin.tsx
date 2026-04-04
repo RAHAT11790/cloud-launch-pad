@@ -9,13 +9,13 @@ import {
   LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
   Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
   Shield, LogOut, Search, Save, ChevronDown, Send, Link, ChevronLeft, ChevronRight,
-  Lock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin
+  Lock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin, Tv
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv";
 
 interface CastMember {
   name: string;
@@ -386,7 +386,133 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   );
 };
 
-// ==================== AI CONFIG SECTION ====================
+// ==================== LIVE TV SECTION ====================
+const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
+  const [channels, setChannels] = useState<any[]>([]);
+  const [apiEnabled, setApiEnabled] = useState(true);
+  const [newChannel, setNewChannel] = useState({ name: "", logo: "", category: "", streamUrl: "", mpd: "", token: "", referer: "", userAgent: "" });
+  const [editing, setEditing] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "liveTvChannels"), (snap) => {
+      const data = snap.val();
+      if (data) {
+        setChannels(Object.entries(data).map(([key, val]: any) => ({ _key: key, ...val })));
+      } else {
+        setChannels([]);
+      }
+    });
+    const unsub2 = onValue(ref(db, "settings/liveTvApiEnabled"), (snap) => {
+      setApiEnabled(snap.val() !== false);
+    });
+    return () => { unsub(); unsub2(); };
+  }, []);
+
+  const toggleApi = async () => {
+    await set(ref(db, "settings/liveTvApiEnabled"), !apiEnabled);
+    toast.success(apiEnabled ? "API চ্যানেল বন্ধ করা হয়েছে" : "API চ্যানেল চালু করা হয়েছে");
+  };
+
+  const addChannel = async () => {
+    if (!newChannel.name.trim()) { toast.error("চ্যানেলের নাম দিন"); return; }
+    if (!newChannel.streamUrl.trim() && !newChannel.mpd.trim()) { toast.error("Stream URL বা MPD দিন"); return; }
+    await push(ref(db, "liveTvChannels"), { ...newChannel, addedAt: Date.now() });
+    setNewChannel({ name: "", logo: "", category: "", streamUrl: "", mpd: "", token: "", referer: "", userAgent: "" });
+    toast.success("✅ চ্যানেল যোগ করা হয়েছে!");
+  };
+
+  const deleteChannel = async (key: string) => {
+    if (!confirm("এই চ্যানেল মুছে ফেলতে চান?")) return;
+    await remove(ref(db, `liveTvChannels/${key}`));
+    toast.success("চ্যানেল মুছে ফেলা হয়েছে");
+  };
+
+  const updateChannel = async (key: string) => {
+    const ch = channels.find(c => c._key === key);
+    if (!ch) return;
+    const { _key, ...data } = ch;
+    await set(ref(db, `liveTvChannels/${key}`), data);
+    setEditing(null);
+    toast.success("চ্যানেল আপডেট করা হয়েছে");
+  };
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xl font-bold flex items-center gap-2"><Tv size={20} /> Live TV চ্যানেল ম্যানেজার</h2>
+
+      {/* API Toggle */}
+      <div className={`${glassCard} p-4`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">ServerTV Hub API</p>
+            <p className="text-[11px] text-muted-foreground">বাহ্যিক API থেকে চ্যানেল লোড করুন</p>
+          </div>
+          <button onClick={toggleApi} className={`px-4 py-2 rounded-lg text-xs font-bold ${apiEnabled ? "bg-green-600 text-white" : "bg-zinc-700 text-zinc-400"}`}>
+            {apiEnabled ? "✅ ON" : "❌ OFF"}
+          </button>
+        </div>
+      </div>
+
+      {/* Add New Channel */}
+      <div className={`${glassCard} p-4`}>
+        <h3 className="text-sm font-semibold mb-3">➕ নতুন চ্যানেল যোগ করুন</h3>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <input className={inputClass} placeholder="চ্যানেলের নাম *" value={newChannel.name} onChange={e => setNewChannel({ ...newChannel, name: e.target.value })} />
+          <input className={inputClass} placeholder="ক্যাটাগরি" value={newChannel.category} onChange={e => setNewChannel({ ...newChannel, category: e.target.value })} />
+          <input className={inputClass} placeholder="Logo URL" value={newChannel.logo} onChange={e => setNewChannel({ ...newChannel, logo: e.target.value })} />
+          <input className={inputClass} placeholder="Stream URL (HLS/MP4)" value={newChannel.streamUrl} onChange={e => setNewChannel({ ...newChannel, streamUrl: e.target.value })} />
+          <input className={inputClass} placeholder="MPD URL (DASH)" value={newChannel.mpd} onChange={e => setNewChannel({ ...newChannel, mpd: e.target.value })} />
+          <input className={inputClass} placeholder="Token" value={newChannel.token} onChange={e => setNewChannel({ ...newChannel, token: e.target.value })} />
+          <input className={inputClass} placeholder="Referer" value={newChannel.referer} onChange={e => setNewChannel({ ...newChannel, referer: e.target.value })} />
+          <input className={inputClass} placeholder="User Agent" value={newChannel.userAgent} onChange={e => setNewChannel({ ...newChannel, userAgent: e.target.value })} />
+        </div>
+        <button onClick={addChannel} className={`${btnPrimary} w-full`}>চ্যানেল যোগ করুন</button>
+      </div>
+
+      {/* Channel List */}
+      <div className={`${glassCard} p-4`}>
+        <h3 className="text-sm font-semibold mb-3">📺 কাস্টম চ্যানেল ({channels.length})</h3>
+        {channels.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-6">কোন কাস্টম চ্যানেল নেই</p>
+        ) : (
+          <div className="space-y-2">
+            {channels.map((ch) => (
+              <div key={ch._key} className="flex items-center gap-3 p-3 rounded-xl bg-card/50 border border-border/30">
+                {ch.logo && <img src={ch.logo} alt="" className="w-10 h-10 rounded-lg object-contain bg-white/5" />}
+                <div className="flex-1 min-w-0">
+                  {editing === ch._key ? (
+                    <div className="space-y-1.5">
+                      <input className={`${inputClass} text-xs`} value={ch.name} onChange={e => setChannels(channels.map(c => c._key === ch._key ? { ...c, name: e.target.value } : c))} />
+                      <input className={`${inputClass} text-xs`} placeholder="Stream URL" value={ch.streamUrl || ""} onChange={e => setChannels(channels.map(c => c._key === ch._key ? { ...c, streamUrl: e.target.value } : c))} />
+                      <input className={`${inputClass} text-xs`} placeholder="Category" value={ch.category || ""} onChange={e => setChannels(channels.map(c => c._key === ch._key ? { ...c, category: e.target.value } : c))} />
+                      <div className="flex gap-2">
+                        <button onClick={() => updateChannel(ch._key)} className={`${btnPrimary} text-xs px-3 py-1`}>Save</button>
+                        <button onClick={() => setEditing(null)} className={`${btnSecondary} text-xs px-3 py-1`}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold truncate">{ch.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{ch.category || "Uncategorized"} • {ch.streamUrl ? "HLS/MP4" : ch.mpd ? "DASH" : "No URL"}</p>
+                    </>
+                  )}
+                </div>
+                {editing !== ch._key && (
+                  <div className="flex gap-1">
+                    <button onClick={() => setEditing(ch._key)} className="p-1.5 rounded-lg hover:bg-accent"><Edit size={14} /></button>
+                    <button onClick={() => deleteChannel(ch._key)} className="p-1.5 rounded-lg hover:bg-destructive/20 text-destructive"><Trash2 size={14} /></button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
 const AiConfigSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiUrl, setAiUrl] = useState("");
@@ -1726,6 +1852,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "edge-router": "Edge Function Router",
     "branding": "UI+AD Branding",
     "ai-config": "AI Chat Config",
+    "live-tv": "Live TV Channels",
   };
 
   // ==================== CATEGORIES ====================
@@ -2946,6 +3073,7 @@ Pᴏᴡᴇʀ Bʏ :
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
+    { section: "live-tv", icon: <Tv size={16} />, label: "Live TV" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "ui-themes", icon: <Zap size={16} />, label: "UI Themes", group: "Customization" },
     { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
@@ -5272,6 +5400,7 @@ Pᴏᴡᴇʀ Bʏ :
             </div>
 
 
+
             {/* Proxy Server Selector */}
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
@@ -5316,6 +5445,11 @@ Pᴏᴡᴇʀ Bʏ :
         {/* ==================== AI CONFIG ==================== */}
         {activeSection === "ai-config" && (
           <AiConfigSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+        )}
+
+        {/* ==================== LIVE TV ==================== */}
+        {activeSection === "live-tv" && (
+          <LiveTvSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
         {/* ==================== BRANDING ==================== */}
