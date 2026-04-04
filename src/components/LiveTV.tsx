@@ -414,23 +414,14 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
                 key={`${ch.source}_${ch.id}`}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setSelectedChannel(ch)}
-                className="relative bg-card rounded-xl border border-border/50 overflow-hidden cursor-pointer hover:border-primary/40 transition-all group"
+                className="bg-card rounded-xl border border-border/50 overflow-hidden cursor-pointer hover:border-primary/40 transition-all group"
               >
-                <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1 bg-red-600/90 px-1.5 py-0.5 rounded-md">
-                  <Radio className="w-2.5 h-2.5 animate-pulse" />
-                  <span className="text-[8px] font-bold text-white">LIVE</span>
-                </div>
-                {ch.source === "custom" && (
-                  <div className="absolute top-1.5 left-1.5 z-10 bg-primary/80 px-1.5 py-0.5 rounded-md">
-                    <span className="text-[8px] font-bold text-primary-foreground">CUSTOM</span>
-                  </div>
-                )}
-                <div className="aspect-video flex items-center justify-center p-3 bg-gradient-to-b from-white/5 to-transparent">
+                <div className="aspect-square flex items-center justify-center p-2 bg-gradient-to-b from-muted/30 to-transparent">
                   {ch.logo ? (
                     <img
                       src={ch.logo}
                       alt={ch.name}
-                      className="w-full h-full object-contain max-h-[50px] group-hover:scale-105 transition-transform"
+                      className="w-full h-full object-contain group-hover:scale-105 transition-transform"
                       loading="lazy"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";
@@ -438,12 +429,14 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
                       }}
                     />
                   ) : null}
-                  <Tv className={`w-8 h-8 text-muted-foreground/40 ${ch.logo ? "hidden" : ""}`} />
+                  <Tv className={`w-10 h-10 text-muted-foreground/40 ${ch.logo ? "hidden" : ""}`} />
                 </div>
                 <div className="px-2 pb-2">
                   <p className="text-[10px] font-semibold leading-tight line-clamp-2 text-center">{ch.name}</p>
-                  <p className="text-[8px] text-muted-foreground text-center mt-0.5 truncate">{ch.category}</p>
                 </div>
+              </motion.div>
+            ))}
+          </div>
               </motion.div>
             ))}
           </div>
