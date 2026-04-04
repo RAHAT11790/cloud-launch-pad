@@ -315,6 +315,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
         onBack={() => setSelectedChannel(null)}
         suggestedChannels={suggestedChannels}
         onSelectChannel={setSelectedChannel}
+        proxyUrl={proxyUrl}
       />
     );
   }
