@@ -394,6 +394,9 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
   const [editing, setEditing] = useState<string | null>(null);
   const [jsonPaste, setJsonPaste] = useState("");
   const [jsonParsing, setJsonParsing] = useState(false);
+  const [proxyUrl, setProxyUrl] = useState("");
+  const [proxyUrlInput, setProxyUrlInput] = useState("");
+  const [testingProxy, setTestingProxy] = useState(false);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "liveTvChannels"), (snap) => {
@@ -407,8 +410,34 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     const unsub2 = onValue(ref(db, "settings/liveTvApiEnabled"), (snap) => {
       setApiEnabled(snap.val() !== false);
     });
-    return () => { unsub(); unsub2(); };
+    const unsub3 = onValue(ref(db, "settings/liveTvProxyUrl"), (snap) => {
+      const val = snap.val() || "";
+      setProxyUrl(val);
+      setProxyUrlInput(val);
+    });
+    return () => { unsub(); unsub2(); unsub3(); };
   }, []);
+
+  const saveProxyUrl = async () => {
+    await set(ref(db, "settings/liveTvProxyUrl"), proxyUrlInput.trim());
+    toast.success("প্রক্সি URL সেভ করা হয়েছে");
+  };
+
+  const testProxy = async () => {
+    if (!proxyUrlInput.trim()) { toast.error("প্রক্সি URL দিন"); return; }
+    setTestingProxy(true);
+    try {
+      const testUrl = proxyUrlInput.includes("{url}")
+        ? proxyUrlInput.replace("{url}", encodeURIComponent("https://www.google.com"))
+        : `${proxyUrlInput}${encodeURIComponent("https://www.google.com")}`;
+      const res = await fetch(testUrl, { method: "HEAD", mode: "no-cors" });
+      toast.success("✅ প্রক্সি সম্ভবত কাজ করছে (no-cors check passed)");
+    } catch {
+      toast.error("❌ প্রক্সি কাজ করছে না");
+    } finally {
+      setTestingProxy(false);
+    }
+  };
 
   const toggleApi = async () => {
     await set(ref(db, "settings/liveTvApiEnabled"), !apiEnabled);
@@ -496,7 +525,24 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         </div>
       </div>
 
-      {/* JSON Import */}
+      {/* Proxy URL */}
+      <div className={`${glassCard} p-4`}>
+        <h3 className="text-sm font-semibold mb-2">🔗 Live TV Proxy URL</h3>
+        <p className="text-[10px] text-muted-foreground mb-3">CORS ব্লক এড়াতে প্রক্সি URL দিন। <code className="text-primary">{'{url}'}</code> প্লেসহোল্ডার ব্যবহার করুন।</p>
+        <input
+          className={`${inputClass} w-full mb-2 font-mono text-[11px]`}
+          placeholder="https://your-proxy.com/proxy?url={url}"
+          value={proxyUrlInput}
+          onChange={e => setProxyUrlInput(e.target.value)}
+        />
+        <div className="flex gap-2">
+          <button onClick={saveProxyUrl} className={`${btnPrimary} flex-1`}>💾 সেভ করুন</button>
+          <button onClick={testProxy} disabled={testingProxy} className={`${btnSecondary} flex-1 flex items-center justify-center gap-1`}>
+            {testingProxy ? <Loader2 size={14} className="animate-spin" /> : "🧪"} টেস্ট
+          </button>
+        </div>
+      </div>
+
       <div className={`${glassCard} p-4`}>
         <h3 className="text-sm font-semibold mb-2">📋 JSON পেস্ট করে চ্যানেল ইম্পোর্ট</h3>
         <p className="text-[10px] text-muted-foreground mb-3">একটি চ্যানেল অবজেক্ট অথবা চ্যানেলের অ্যারে পেস্ট করুন</p>
