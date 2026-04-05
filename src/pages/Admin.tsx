@@ -451,6 +451,34 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     }
   };
 
+  const addPlaylist = async () => {
+    const url = newPlaylistUrl.trim();
+    if (!url) { toast.error("Playlist URL দিন"); return; }
+    if (!url.endsWith(".m3u") && !url.endsWith(".m3u8") && !url.includes("m3u")) {
+      toast.error("শুধু M3U/M3U8 প্লেলিস্ট সাপোর্টেড");
+      return;
+    }
+    setM3uLoading(true);
+    try {
+      // Test if URL is reachable
+      const res = await fetch(url, { method: "HEAD", mode: "no-cors" });
+      await push(ref(db, "settings/liveTvPlaylists"), { url, name: newPlaylistName.trim() || url.split("/").pop() || "Playlist", addedAt: Date.now() });
+      setNewPlaylistUrl("");
+      setNewPlaylistName("");
+      toast.success("✅ প্লেলিস্ট যোগ করা হয়েছে!");
+    } catch {
+      toast.error("❌ URL রিচেবল নয়");
+    } finally {
+      setM3uLoading(false);
+    }
+  };
+
+  const removePlaylist = async (key: string) => {
+    if (!confirm("এই প্লেলিস্ট মুছে ফেলতে চান?")) return;
+    await remove(ref(db, `settings/liveTvPlaylists/${key}`));
+    toast.success("প্লেলিস্ট মুছে ফেলা হয়েছে");
+  };
+
   const toggleApi = async () => {
     await set(ref(db, "settings/liveTvApiEnabled"), !apiEnabled);
     toast.success(apiEnabled ? "API চ্যানেল বন্ধ করা হয়েছে" : "API চ্যানেল চালু করা হয়েছে");
