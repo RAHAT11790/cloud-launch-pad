@@ -495,6 +495,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
   const [iptvTarget, setIptvTarget] = useState("100");
   const [iptvLoading, setIptvLoading] = useState(false);
   const [iptvCountry, setIptvCountry] = useState("");
+  const [jsonCheckLimit, setJsonCheckLimit] = useState("200");
 
   // Fetch logos map from iptv-org
   const fetchLogoMap = async (): Promise<Record<string, string>> => {
@@ -648,7 +649,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     }
   };
 
-  const validateAndImport = async (items: any[], skipValidation = false, withLogos = true) => {
+  const validateAndImport = async (items: any[], skipValidation = false, withLogos = true, checkLimit?: number) => {
     // Try to fetch logos for streams format items
     let logoMap: Record<string, string> = {};
     let channelMap: Record<string, any> = {};
@@ -677,13 +678,17 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         }
       }
       return ch;
-    }).filter((ch: any) => ch && ch.logo) as any[]; // MUST have logo
+    }).filter((ch: any) => ch && ch.logo) as any[];
 
-    if (normalized.length === 0) { toast.error("লোগোসহ কোন ভ্যালিড চ্যানেল পাওয়া যায়নি"); return; }
+    // Apply check limit if provided
+    const toProcess = checkLimit && checkLimit > 0 ? normalized.slice(0, checkLimit) : normalized;
+
+    if (toProcess.length === 0) { toast.error("লোগোসহ কোন ভ্যালিড চ্যানেল পাওয়া যায়নি"); return; }
+    if (checkLimit) toast.info(`🎯 ${normalized.length}টি থেকে প্রথম ${toProcess.length}টি চেক করা হবে`);
 
     if (skipValidation) {
       let added = 0;
-      for (const ch of normalized) {
+      for (const ch of toProcess) {
         await push(ref(db, "liveTvChannels"), ch);
         added++;
       }
@@ -694,12 +699,12 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
 
     // Validate channels
     setValidating(true);
-    setValidationProgress({ checked: 0, total: normalized.length, valid: 0 });
+    setValidationProgress({ checked: 0, total: toProcess.length, valid: 0 });
     let added = 0;
     const batchSize = 10;
 
-    for (let i = 0; i < normalized.length; i += batchSize) {
-      const batch = normalized.slice(i, i + batchSize);
+    for (let i = 0; i < toProcess.length; i += batchSize) {
+      const batch = toProcess.slice(i, i + batchSize);
       const results = await Promise.allSettled(
         batch.map(async (ch) => {
           const url = ch.streamUrl || ch.mpd;
@@ -719,12 +724,12 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
           added++;
         }
       }
-      setValidationProgress({ checked: Math.min(i + batchSize, normalized.length), total: normalized.length, valid: added });
+      setValidationProgress({ checked: Math.min(i + batchSize, toProcess.length), total: toProcess.length, valid: added });
     }
 
     setValidating(false);
     if (added > 0) {
-      toast.success(`✅ ${added}/${normalized.length} ভ্যালিড চ্যানেল যোগ করা হয়েছে!`);
+      toast.success(`✅ ${added}/${toProcess.length} ভ্যালিড চ্যানেল যোগ করা হয়েছে!`);
       setJsonPaste("");
     } else {
       toast.error("কোন চ্যানেল ভ্যালিডেশন পাস করেনি");
@@ -737,7 +742,8 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     try {
       let parsed = JSON.parse(jsonPaste.trim());
       const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
-      await validateAndImport(items, false);
+      const limit = parseInt(jsonCheckLimit) || 0;
+      await validateAndImport(items, false, true, limit > 0 ? limit : undefined);
     } catch (e) {
       toast.error("❌ JSON পার্স করা যায়নি। সঠিক JSON দিন।");
     } finally {
@@ -767,8 +773,9 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
       const text = await file.text();
       const parsed = JSON.parse(text);
       const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
-      toast.info(`📂 ${items.length}টি চ্যানেল পাওয়া গেছে। লোগো খোঁজা ও ভ্যালিডেশন শুরু হচ্ছে...`);
-      await validateAndImport(items, false);
+      const limit = parseInt(jsonCheckLimit) || 0;
+      toast.info(`📂 ${items.length}টি চ্যানেল পাওয়া গেছে। ${limit > 0 ? `প্রথম ${limit}টি` : 'সব'} চেক হবে...`);
+      await validateAndImport(items, false, true, limit > 0 ? limit : undefined);
     } catch {
       toast.error("❌ ফাইল পড়া যায়নি বা JSON ভুল");
     }
@@ -816,28 +823,14 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         <p className="text-[10px] text-muted-foreground mb-3">
           iptv-org এর 14,000+ স্ট্রিম থেকে ভ্যালিড চ্যানেল বাছাই করে লোগোসহ ইম্পোর্ট করুন।
         </p>
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <div>
-            <label className="text-[10px] text-muted-foreground mb-1 block">🎯 টার্গেট (কয়টা চ্যানেল)</label>
-            <input
-              className={`${inputClass} w-full`}
-              type="number"
-              min="10"
-              max="5000"
-              placeholder="100"
-              value={iptvTarget}
-              onChange={e => setIptvTarget(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-[10px] text-muted-foreground mb-1 block">🌍 দেশ কোড (ঐচ্ছিক)</label>
-            <input
-              className={`${inputClass} w-full`}
-              placeholder="BD, IN, US..."
-              value={iptvCountry}
-              onChange={e => setIptvCountry(e.target.value)}
-            />
-          </div>
+        <div className="mb-3">
+          <label className="text-[10px] text-muted-foreground mb-1 block">🌍 দেশ কোড (ঐচ্ছিক)</label>
+          <input
+            className={`${inputClass} w-full`}
+            placeholder="BD, IN, US (খালি = সব)"
+            value={iptvCountry}
+            onChange={e => setIptvCountry(e.target.value)}
+          />
         </div>
         <button
           onClick={importFromIptvOrg}
@@ -868,11 +861,27 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         )}
       </div>
 
+      {/* Check Limit - shared for file upload & JSON paste */}
+      <div className={`${glassCard} p-4 border border-yellow-500/20`}>
+        <h3 className="text-sm font-semibold mb-2">🎯 চেক লিমিট</h3>
+        <p className="text-[10px] text-muted-foreground mb-2">
+          ফাইল আপলোড বা JSON পেস্ট করলে প্রথম কতগুলো চ্যানেল চেক করবে সেটা সেট করুন। ০ দিলে সব চেক হবে।
+        </p>
+        <input
+          className={`${inputClass} w-full`}
+          type="number"
+          min="0"
+          placeholder="200 (ডিফল্ট)"
+          value={jsonCheckLimit}
+          onChange={e => setJsonCheckLimit(e.target.value)}
+        />
+      </div>
+
       {/* JSON File Upload */}
       <div className={`${glassCard} p-4`}>
         <h3 className="text-sm font-semibold mb-2">📂 JSON ফাইল আপলোড</h3>
         <p className="text-[10px] text-muted-foreground mb-3">
-          .json ফাইল আপলোড করুন। অটোমেটিক লোগো ম্যাচ হবে iptv-org থেকে।
+          .json ফাইল আপলোড করুন। লোগো ছাড়া চ্যানেল অ্যাড হবে না।
         </p>
         <input
           type="file"
@@ -893,7 +902,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
       {/* JSON Paste */}
       <div className={`${glassCard} p-4`}>
         <h3 className="text-sm font-semibold mb-2">📋 JSON পেস্ট করে ইম্পোর্ট</h3>
-        <p className="text-[10px] text-muted-foreground mb-3">উভয় ফরম্যাট সাপোর্টেড • লোগো অটোমেটিক iptv-org থেকে আসবে</p>
+        <p className="text-[10px] text-muted-foreground mb-3">লোগোসহ ভ্যালিড চ্যানেলই শুধু অ্যাড হবে</p>
         <textarea
           className={`${inputClass} min-h-[120px] w-full font-mono text-[11px] mb-3`}
           placeholder={`// JioTV ফরম্যাট:\n{"name":"...", "mpd":"...", "drm":{...}}\n\n// Streams ফরম্যাট:\n{"title":"...", "url":"https://...m3u8"}`}
