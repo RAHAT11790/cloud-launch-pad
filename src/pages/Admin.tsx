@@ -649,7 +649,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     }
   };
 
-  const validateAndImport = async (items: any[], skipValidation = false, withLogos = true) => {
+  const validateAndImport = async (items: any[], skipValidation = false, withLogos = true, checkLimit?: number) => {
     // Try to fetch logos for streams format items
     let logoMap: Record<string, string> = {};
     let channelMap: Record<string, any> = {};
