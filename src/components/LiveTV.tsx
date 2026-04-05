@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tv, Search, X, Radio, ChevronLeft, RefreshCw, Loader2, WifiOff } from "lucide-react";
 import { db, ref, onValue } from "@/lib/firebase";
+import { fetchAllPlaylists } from "@/lib/m3uParser";
 
 interface TVChannel {
   id: number | string;
@@ -14,7 +15,7 @@ interface TVChannel {
   userAgent?: string;
   drm?: Record<string, string>;
   streamUrl?: string;
-  source: "api" | "custom";
+  source: "api" | "custom" | "m3u";
 }
 
 const API_URL = "https://servertvhub.site/api/channels.json";
