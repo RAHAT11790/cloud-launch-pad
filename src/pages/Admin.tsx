@@ -677,9 +677,9 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         }
       }
       return ch;
-    }).filter(Boolean) as any[];
+    }).filter((ch: any) => ch && ch.logo) as any[]; // MUST have logo
 
-    if (normalized.length === 0) { toast.error("কোন ভ্যালিড চ্যানেল পাওয়া যায়নি"); return; }
+    if (normalized.length === 0) { toast.error("লোগোসহ কোন ভ্যালিড চ্যানেল পাওয়া যায়নি"); return; }
 
     if (skipValidation) {
       let added = 0;
