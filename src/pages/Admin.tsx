@@ -688,7 +688,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
 
     if (skipValidation) {
       let added = 0;
-      for (const ch of normalized) {
+      for (const ch of toProcess) {
         await push(ref(db, "liveTvChannels"), ch);
         added++;
       }
