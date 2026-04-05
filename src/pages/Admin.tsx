@@ -729,7 +729,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
 
     setValidating(false);
     if (added > 0) {
-      toast.success(`✅ ${added}/${normalized.length} ভ্যালিড চ্যানেল যোগ করা হয়েছে!`);
+      toast.success(`✅ ${added}/${toProcess.length} ভ্যালিড চ্যানেল যোগ করা হয়েছে!`);
       setJsonPaste("");
     } else {
       toast.error("কোন চ্যানেল ভ্যালিডেশন পাস করেনি");
