@@ -525,7 +525,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
   };
 
   const importFromIptvOrg = async () => {
-    const target = parseInt(iptvTarget) || 100;
+    const checkLimit = parseInt(iptvTarget) || 100;
     setIptvLoading(true);
     setValidating(true);
     setValidationProgress({ checked: 0, total: 0, valid: 0 });
@@ -551,33 +551,44 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         toast.info(`🌍 ${cc} দেশের ${streams.length}টি স্ট্রিম পাওয়া গেছে`);
       }
 
-      // Limit to target
-      const toCheck = streams.slice(0, Math.min(target * 3, streams.length)); // check more to find enough valid ones
+      // Target = how many to CHECK, not how many to add
+      const toCheck = streams.slice(0, checkLimit);
       setValidationProgress({ checked: 0, total: toCheck.length, valid: 0 });
 
       let added = 0;
-      const batchSize = 15;
+      const batchSize = 10;
 
-      for (let i = 0; i < toCheck.length && added < target; i += batchSize) {
+      for (let i = 0; i < toCheck.length; i += batchSize) {
         const batch = toCheck.slice(i, i + batchSize);
         const results = await Promise.allSettled(
           batch.map(async (s: any) => {
             const url = s.url;
             if (!url) return null;
+
+            // Get logo first - skip if no logo
+            const chInfo = s.channel ? channelMap[s.channel] : null;
+            const logo = (s.channel ? logoMap[s.channel] : "") || "";
+            if (!logo) return null; // NO LOGO = SKIP
+
+            // Real validation: try to GET a small part of the stream
             try {
               const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 6000);
-              await fetch(url, { method: "HEAD", mode: "no-cors", signal: controller.signal });
+              const timeout = setTimeout(() => controller.abort(), 8000);
+              const res = await fetch(url, {
+                method: "GET",
+                headers: { "Range": "bytes=0-1024" },
+                signal: controller.signal,
+              });
               clearTimeout(timeout);
 
-              // Get logo and category from iptv-org data
-              const chInfo = s.channel ? channelMap[s.channel] : null;
-              const logo = (s.channel ? logoMap[s.channel] : "") || "";
+              // Must get a real response (not just opaque)
+              if (!res.ok && res.status !== 206) return null;
+
               const category = chInfo?.categories?.[0] || (s.label && s.label !== "null" ? s.label : "General");
               const country = chInfo?.country || "";
 
               return {
-                name: s.title || chInfo?.name || "Unknown",
+                name: chInfo?.name || s.title || "Unknown",
                 logo,
                 category: category.charAt(0).toUpperCase() + category.slice(1),
                 streamUrl: url,
@@ -589,24 +600,47 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
                 country,
                 addedAt: Date.now(),
               };
-            } catch { return null; }
+            } catch {
+              // CORS blocked - try no-cors as fallback but only if logo exists
+              try {
+                const controller2 = new AbortController();
+                const timeout2 = setTimeout(() => controller2.abort(), 5000);
+                await fetch(url, { method: "HEAD", mode: "no-cors", signal: controller2.signal });
+                clearTimeout(timeout2);
+
+                const category = chInfo?.categories?.[0] || (s.label && s.label !== "null" ? s.label : "General");
+                const country = chInfo?.country || "";
+
+                return {
+                  name: chInfo?.name || s.title || "Unknown",
+                  logo,
+                  category: category.charAt(0).toUpperCase() + category.slice(1),
+                  streamUrl: url,
+                  mpd: "",
+                  token: "",
+                  referer: s.referrer || "",
+                  userAgent: s.user_agent || "",
+                  quality: s.quality || "",
+                  country,
+                  addedAt: Date.now(),
+                };
+              } catch { return null; }
+            }
           })
         );
 
         for (const r of results) {
-          if (r.status === "fulfilled" && r.value && added < target) {
+          if (r.status === "fulfilled" && r.value) {
             await push(ref(db, "liveTvChannels"), r.value);
             added++;
           }
         }
         setValidationProgress({ checked: Math.min(i + batchSize, toCheck.length), total: toCheck.length, valid: added });
-
-        if (added >= target) break;
       }
 
       setValidating(false);
       setIptvLoading(false);
-      toast.success(`✅ ${added}টি ভ্যালিড চ্যানেল যোগ হয়েছে (লোগোসহ)!`);
+      toast.success(`✅ ${toCheck.length}টি চেক করে ${added}টি ভ্যালিড চ্যানেল যোগ হয়েছে (লোগোসহ)!`);
     } catch (err) {
       setValidating(false);
       setIptvLoading(false);
