@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tv, Search, X, Radio, ChevronLeft, RefreshCw, Loader2, WifiOff } from "lucide-react";
 import { db, ref, onValue } from "@/lib/firebase";
+import { fetchAllPlaylists } from "@/lib/m3uParser";
 
 interface TVChannel {
   id: number | string;
@@ -14,7 +15,7 @@ interface TVChannel {
   userAgent?: string;
   drm?: Record<string, string>;
   streamUrl?: string;
-  source: "api" | "custom";
+  source: "api" | "custom" | "m3u";
 }
 
 const API_URL = "https://servertvhub.site/api/channels.json";
@@ -203,6 +204,7 @@ const ChannelPlayer = ({
 const LiveTV = ({ onClose }: { onClose: () => void }) => {
   const [channels, setChannels] = useState<TVChannel[]>([]);
   const [customChannels, setCustomChannels] = useState<TVChannel[]>([]);
+  const [m3uChannels, setM3uChannels] = useState<TVChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -211,6 +213,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
   const [selectedChannel, setSelectedChannel] = useState<TVChannel | null>(null);
   const [apiEnabled, setApiEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState("");
+  const [m3uUrls, setM3uUrls] = useState<string[]>([]);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/liveTvApiEnabled"), (snap) => {
@@ -219,7 +222,16 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
     const unsub2 = onValue(ref(db, "settings/liveTvProxyUrl"), (snap) => {
       setProxyUrl(snap.val() || "");
     });
-    return () => { unsub(); unsub2(); };
+    const unsub3 = onValue(ref(db, "settings/liveTvPlaylists"), (snap) => {
+      const data = snap.val();
+      if (data) {
+        const urls = Object.values(data).map((v: any) => v.url || v).filter(Boolean) as string[];
+        setM3uUrls(urls);
+      } else {
+        setM3uUrls([]);
+      }
+    });
+    return () => { unsub(); unsub2(); unsub3(); };
   }, []);
 
   useEffect(() => {
@@ -246,6 +258,27 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
     });
     return () => unsub();
   }, []);
+
+  // Fetch M3U playlists
+  const fetchM3uPlaylists = useCallback(async () => {
+    if (m3uUrls.length === 0) { setM3uChannels([]); return; }
+    try {
+      const parsed = await fetchAllPlaylists(m3uUrls);
+      const mapped: TVChannel[] = parsed.map((ch, i) => ({
+        id: `m3u_${i}`,
+        name: ch.name,
+        logo: ch.logo,
+        category: ch.group || "M3U",
+        streamUrl: ch.url,
+        source: "m3u" as const,
+      }));
+      setM3uChannels(mapped);
+    } catch {
+      console.error("M3U playlists fetch failed");
+    }
+  }, [m3uUrls]);
+
+  useEffect(() => { fetchM3uPlaylists(); }, [fetchM3uPlaylists]);
 
   const fetchChannels = useCallback(async () => {
     if (!apiEnabled) { setChannels([]); setLoading(false); return; }
@@ -278,7 +311,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
 
   useEffect(() => { fetchChannels(); }, [fetchChannels]);
 
-  const allChannels = useMemo(() => [...customChannels, ...channels], [customChannels, channels]);
+  const allChannels = useMemo(() => [...customChannels, ...channels, ...m3uChannels], [customChannels, channels, m3uChannels]);
 
   const categories = useMemo(() => {
     const cats = new Set<string>();
