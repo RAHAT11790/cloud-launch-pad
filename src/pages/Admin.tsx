@@ -823,28 +823,14 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         <p className="text-[10px] text-muted-foreground mb-3">
           iptv-org এর 14,000+ স্ট্রিম থেকে ভ্যালিড চ্যানেল বাছাই করে লোগোসহ ইম্পোর্ট করুন।
         </p>
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <div>
-            <label className="text-[10px] text-muted-foreground mb-1 block">🎯 টার্গেট (কয়টা চ্যানেল)</label>
-            <input
-              className={`${inputClass} w-full`}
-              type="number"
-              min="10"
-              max="5000"
-              placeholder="100"
-              value={iptvTarget}
-              onChange={e => setIptvTarget(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-[10px] text-muted-foreground mb-1 block">🌍 দেশ কোড (ঐচ্ছিক)</label>
-            <input
-              className={`${inputClass} w-full`}
-              placeholder="BD, IN, US..."
-              value={iptvCountry}
-              onChange={e => setIptvCountry(e.target.value)}
-            />
-          </div>
+        <div className="mb-3">
+          <label className="text-[10px] text-muted-foreground mb-1 block">🌍 দেশ কোড (ঐচ্ছিক)</label>
+          <input
+            className={`${inputClass} w-full`}
+            placeholder="BD, IN, US (খালি = সব)"
+            value={iptvCountry}
+            onChange={e => setIptvCountry(e.target.value)}
+          />
         </div>
         <button
           onClick={importFromIptvOrg}
