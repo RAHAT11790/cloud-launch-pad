@@ -397,6 +397,10 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
   const [proxyUrl, setProxyUrl] = useState("");
   const [proxyUrlInput, setProxyUrlInput] = useState("");
   const [testingProxy, setTestingProxy] = useState(false);
+  const [playlists, setPlaylists] = useState<{ key: string; url: string; name: string }[]>([]);
+  const [newPlaylistUrl, setNewPlaylistUrl] = useState("");
+  const [newPlaylistName, setNewPlaylistName] = useState("");
+  const [m3uLoading, setM3uLoading] = useState(false);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "liveTvChannels"), (snap) => {
