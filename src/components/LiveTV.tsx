@@ -311,7 +311,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
 
   useEffect(() => { fetchChannels(); }, [fetchChannels]);
 
-  const allChannels = useMemo(() => [...customChannels, ...channels], [customChannels, channels]);
+  const allChannels = useMemo(() => [...customChannels, ...channels, ...m3uChannels], [customChannels, channels, m3uChannels]);
 
   const categories = useMemo(() => {
     const cats = new Set<string>();
