@@ -742,7 +742,8 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     try {
       let parsed = JSON.parse(jsonPaste.trim());
       const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
-      await validateAndImport(items, false);
+      const limit = parseInt(jsonCheckLimit) || 0;
+      await validateAndImport(items, false, true, limit > 0 ? limit : undefined);
     } catch (e) {
       toast.error("❌ JSON পার্স করা যায়নি। সঠিক JSON দিন।");
     } finally {
