@@ -419,7 +419,15 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
       setProxyUrl(val);
       setProxyUrlInput(val);
     });
-    return () => { unsub(); unsub2(); unsub3(); };
+    const unsub4 = onValue(ref(db, "settings/liveTvPlaylists"), (snap) => {
+      const data = snap.val();
+      if (data) {
+        setPlaylists(Object.entries(data).map(([key, val]: any) => ({ key, url: val.url || "", name: val.name || "" })));
+      } else {
+        setPlaylists([]);
+      }
+    });
+    return () => { unsub(); unsub2(); unsub3(); unsub4(); };
   }, []);
 
   const saveProxyUrl = async () => {
