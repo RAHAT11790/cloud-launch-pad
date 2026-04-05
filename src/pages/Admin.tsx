@@ -678,9 +678,13 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         }
       }
       return ch;
-    }).filter((ch: any) => ch && ch.logo) as any[]; // MUST have logo
+    }).filter((ch: any) => ch && ch.logo) as any[];
 
-    if (normalized.length === 0) { toast.error("লোগোসহ কোন ভ্যালিড চ্যানেল পাওয়া যায়নি"); return; }
+    // Apply check limit if provided
+    const toProcess = checkLimit && checkLimit > 0 ? normalized.slice(0, checkLimit) : normalized;
+
+    if (toProcess.length === 0) { toast.error("লোগোসহ কোন ভ্যালিড চ্যানেল পাওয়া যায়নি"); return; }
+    if (checkLimit) toast.info(`🎯 ${normalized.length}টি থেকে প্রথম ${toProcess.length}টি চেক করা হবে`);
 
     if (skipValidation) {
       let added = 0;
