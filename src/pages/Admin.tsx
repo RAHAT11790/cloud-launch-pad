@@ -495,6 +495,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
   const [iptvTarget, setIptvTarget] = useState("100");
   const [iptvLoading, setIptvLoading] = useState(false);
   const [iptvCountry, setIptvCountry] = useState("");
+  const [jsonCheckLimit, setJsonCheckLimit] = useState("200");
 
   // Fetch logos map from iptv-org
   const fetchLogoMap = async (): Promise<Record<string, string>> => {
