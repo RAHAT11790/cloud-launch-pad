@@ -724,7 +724,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
           added++;
         }
       }
-      setValidationProgress({ checked: Math.min(i + batchSize, normalized.length), total: normalized.length, valid: added });
+      setValidationProgress({ checked: Math.min(i + batchSize, toProcess.length), total: toProcess.length, valid: added });
     }
 
     setValidating(false);
