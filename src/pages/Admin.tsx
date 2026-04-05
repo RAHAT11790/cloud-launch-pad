@@ -773,8 +773,9 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
       const text = await file.text();
       const parsed = JSON.parse(text);
       const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
-      toast.info(`📂 ${items.length}টি চ্যানেল পাওয়া গেছে। লোগো খোঁজা ও ভ্যালিডেশন শুরু হচ্ছে...`);
-      await validateAndImport(items, false);
+      const limit = parseInt(jsonCheckLimit) || 0;
+      toast.info(`📂 ${items.length}টি চ্যানেল পাওয়া গেছে। ${limit > 0 ? `প্রথম ${limit}টি` : 'সব'} চেক হবে...`);
+      await validateAndImport(items, false, true, limit > 0 ? limit : undefined);
     } catch {
       toast.error("❌ ফাইল পড়া যায়নি বা JSON ভুল");
     }
