@@ -857,6 +857,87 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         </div>
       </div>
 
+      {/* M3U Playlist URLs */}
+      <div className={`${glassCard} p-4 border border-blue-500/20`}>
+        <h3 className="text-sm font-semibold mb-2">📡 M3U প্লেলিস্ট URL</h3>
+        <p className="text-[10px] text-muted-foreground mb-3">
+          M3U/M3U8 প্লেলিস্ট URL যোগ করুন। এক একটা URL থেকে হাজার হাজার চ্যানেল লোড হবে স্বয়ংক্রিয়ভাবে।
+        </p>
+        <input
+          className={`${inputClass} w-full mb-2`}
+          placeholder="প্লেলিস্টের নাম (ঐচ্ছিক)"
+          value={newPlaylistName}
+          onChange={e => setNewPlaylistName(e.target.value)}
+        />
+        <input
+          className={`${inputClass} w-full mb-2 font-mono text-[11px]`}
+          placeholder="https://...playlist.m3u"
+          value={newPlaylistUrl}
+          onChange={e => setNewPlaylistUrl(e.target.value)}
+        />
+        <button
+          onClick={addPlaylist}
+          disabled={m3uLoading}
+          className={`${btnPrimary} w-full flex items-center justify-center gap-2 mb-3`}
+        >
+          {m3uLoading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+          প্লেলিস্ট যোগ করুন
+        </button>
+
+        {playlists.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] font-semibold text-muted-foreground">যোগ করা প্লেলিস্ট ({playlists.length})</p>
+            {playlists.map((p) => (
+              <div key={p.key} className="flex items-center gap-2 p-2 rounded-lg bg-card/50 border border-border/30">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold truncate">{p.name || "Unnamed"}</p>
+                  <p className="text-[9px] text-muted-foreground truncate font-mono">{p.url}</p>
+                </div>
+                <button onClick={() => removePlaylist(p.key)} className="p-1.5 rounded-lg hover:bg-destructive/20 text-destructive flex-shrink-0">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Default M3U URLs for quick add */}
+      <div className={`${glassCard} p-4`}>
+        <h3 className="text-sm font-semibold mb-2">⚡ জনপ্রিয় প্লেলিস্ট</h3>
+        <p className="text-[10px] text-muted-foreground mb-3">এক ক্লিকে জনপ্রিয় IPTV প্লেলিস্ট যোগ করুন</p>
+        <div className="space-y-2">
+          {[
+            { name: "🇧🇩 Bangladesh IPTV", url: "https://raw.githubusercontent.com/abusaeeidx/Mrgify-BDIX-IPTV/refs/heads/main/playlist.m3u" },
+            { name: "🌍 Worldwide", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/Worldwide/LiveTV.m3u" },
+            { name: "🇮🇳 India", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/India/LiveTV.m3u" },
+            { name: "🇺🇸 USA", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/USA/LiveTV.m3u" },
+            { name: "🇵🇰 Pakistan", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/Pakistan/LiveTV.m3u" },
+            { name: "🎬 Combined IPTV", url: "https://raw.githubusercontent.com/time2shine/IPTV/refs/heads/master/combined.m3u" },
+          ].map((preset) => {
+            const alreadyAdded = playlists.some(p => p.url === preset.url);
+            return (
+              <button
+                key={preset.url}
+                disabled={alreadyAdded}
+                onClick={async () => {
+                  await push(ref(db, "settings/liveTvPlaylists"), { url: preset.url, name: preset.name, addedAt: Date.now() });
+                  toast.success(`✅ ${preset.name} যোগ করা হয়েছে!`);
+                }}
+                className={`w-full text-left p-2.5 rounded-lg border transition-all text-xs ${
+                  alreadyAdded
+                    ? "bg-muted/50 border-border/30 text-muted-foreground cursor-not-allowed"
+                    : "bg-card border-border/50 hover:border-primary/40 cursor-pointer"
+                }`}
+              >
+                <span className="font-semibold">{preset.name}</span>
+                {alreadyAdded && <span className="ml-2 text-[9px] text-green-500">✅ যোগ করা আছে</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* iptv-org Auto Import */}
       <div className={`${glassCard} p-4 border border-primary/20`}>
         <h3 className="text-sm font-semibold mb-2">🌐 iptv-org থেকে অটো ইম্পোর্ট</h3>
