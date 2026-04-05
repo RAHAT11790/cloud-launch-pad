@@ -875,11 +875,27 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         )}
       </div>
 
+      {/* Check Limit - shared for file upload & JSON paste */}
+      <div className={`${glassCard} p-4 border border-yellow-500/20`}>
+        <h3 className="text-sm font-semibold mb-2">🎯 চেক লিমিট</h3>
+        <p className="text-[10px] text-muted-foreground mb-2">
+          ফাইল আপলোড বা JSON পেস্ট করলে প্রথম কতগুলো চ্যানেল চেক করবে সেটা সেট করুন। ০ দিলে সব চেক হবে।
+        </p>
+        <input
+          className={`${inputClass} w-full`}
+          type="number"
+          min="0"
+          placeholder="200 (ডিফল্ট)"
+          value={jsonCheckLimit}
+          onChange={e => setJsonCheckLimit(e.target.value)}
+        />
+      </div>
+
       {/* JSON File Upload */}
       <div className={`${glassCard} p-4`}>
         <h3 className="text-sm font-semibold mb-2">📂 JSON ফাইল আপলোড</h3>
         <p className="text-[10px] text-muted-foreground mb-3">
-          .json ফাইল আপলোড করুন। অটোমেটিক লোগো ম্যাচ হবে iptv-org থেকে।
+          .json ফাইল আপলোড করুন। লোগো ছাড়া চ্যানেল অ্যাড হবে না।
         </p>
         <input
           type="file"
@@ -900,7 +916,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
       {/* JSON Paste */}
       <div className={`${glassCard} p-4`}>
         <h3 className="text-sm font-semibold mb-2">📋 JSON পেস্ট করে ইম্পোর্ট</h3>
-        <p className="text-[10px] text-muted-foreground mb-3">উভয় ফরম্যাট সাপোর্টেড • লোগো অটোমেটিক iptv-org থেকে আসবে</p>
+        <p className="text-[10px] text-muted-foreground mb-3">লোগোসহ ভ্যালিড চ্যানেলই শুধু অ্যাড হবে</p>
         <textarea
           className={`${inputClass} min-h-[120px] w-full font-mono text-[11px] mb-3`}
           placeholder={`// JioTV ফরম্যাট:\n{"name":"...", "mpd":"...", "drm":{...}}\n\n// Streams ফরম্যাট:\n{"title":"...", "url":"https://...m3u8"}`}
