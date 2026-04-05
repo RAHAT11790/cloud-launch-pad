@@ -703,8 +703,8 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     let added = 0;
     const batchSize = 10;
 
-    for (let i = 0; i < normalized.length; i += batchSize) {
-      const batch = normalized.slice(i, i + batchSize);
+    for (let i = 0; i < toProcess.length; i += batchSize) {
+      const batch = toProcess.slice(i, i + batchSize);
       const results = await Promise.allSettled(
         batch.map(async (ch) => {
           const url = ch.streamUrl || ch.mpd;
