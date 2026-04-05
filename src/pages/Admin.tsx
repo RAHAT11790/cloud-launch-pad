@@ -467,45 +467,130 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     toast.success("চ্যানেল আপডেট করা হয়েছে");
   };
 
+  // Normalize both formats: original (name/mpd/streamUrl) and streams format (title/url)
+  const normalizeChannel = (item: any) => {
+    const name = item.name || item.title || "";
+    if (!name) return null;
+    const streamUrl = item.streamUrl || item.url || "";
+    const mpd = item.mpd || "";
+    if (!streamUrl && !mpd) return null;
+    return {
+      name,
+      logo: item.logo || "",
+      category: item.category || (item.label && item.label !== "null" ? item.label : "General"),
+      streamUrl,
+      mpd,
+      token: item.token || "",
+      referer: item.referer || item.referrer || "",
+      userAgent: item.userAgent || item.user_agent || "",
+      quality: item.quality || "",
+      addedAt: Date.now(),
+      ...(item.drm && typeof item.drm === "object" && Object.keys(item.drm).length > 0 ? { drm: item.drm } : {}),
+    };
+  };
+
+  const [validating, setValidating] = useState(false);
+  const [validationProgress, setValidationProgress] = useState({ checked: 0, total: 0, valid: 0 });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const validateAndImport = async (items: any[], skipValidation = false) => {
+    const normalized = items.map(normalizeChannel).filter(Boolean) as any[];
+    if (normalized.length === 0) { toast.error("কোন ভ্যালিড চ্যানেল পাওয়া যায়নি"); return; }
+
+    if (skipValidation) {
+      let added = 0;
+      for (const ch of normalized) {
+        await push(ref(db, "liveTvChannels"), ch);
+        added++;
+      }
+      toast.success(`✅ ${added}টি চ্যানেল যোগ করা হয়েছে!`);
+      setJsonPaste("");
+      return;
+    }
+
+    // Validate channels by checking if URL is reachable
+    setValidating(true);
+    setValidationProgress({ checked: 0, total: normalized.length, valid: 0 });
+    let added = 0;
+    const batchSize = 10;
+
+    for (let i = 0; i < normalized.length; i += batchSize) {
+      const batch = normalized.slice(i, i + batchSize);
+      const results = await Promise.allSettled(
+        batch.map(async (ch) => {
+          const url = ch.streamUrl || ch.mpd;
+          try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000);
+            const res = await fetch(url, { method: "HEAD", mode: "no-cors", signal: controller.signal });
+            clearTimeout(timeout);
+            return ch; // reachable
+          } catch {
+            return null; // not reachable
+          }
+        })
+      );
+
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value) {
+          await push(ref(db, "liveTvChannels"), r.value);
+          added++;
+        }
+      }
+      setValidationProgress({ checked: Math.min(i + batchSize, normalized.length), total: normalized.length, valid: added });
+    }
+
+    setValidating(false);
+    if (added > 0) {
+      toast.success(`✅ ${added}/${normalized.length} ভ্যালিড চ্যানেল যোগ করা হয়েছে!`);
+      setJsonPaste("");
+    } else {
+      toast.error("কোন চ্যানেল ভ্যালিডেশন পাস করেনি");
+    }
+  };
+
   const importFromJson = async () => {
     if (!jsonPaste.trim()) { toast.error("JSON পেস্ট করুন"); return; }
     setJsonParsing(true);
     try {
       let parsed = JSON.parse(jsonPaste.trim());
-      // Support single object or array
       const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
-      let added = 0;
-      for (const item of items) {
-        if (!item.name) continue;
-        const channelData: any = {
-          name: item.name || "",
-          logo: item.logo || "",
-          category: item.category || "General",
-          streamUrl: item.streamUrl || "",
-          mpd: item.mpd || "",
-          token: item.token || "",
-          referer: item.referer || "",
-          userAgent: item.userAgent || "",
-          addedAt: Date.now(),
-        };
-        // Handle DRM object
-        if (item.drm && typeof item.drm === "object" && Object.keys(item.drm).length > 0) {
-          channelData.drm = item.drm;
-        }
-        await push(ref(db, "liveTvChannels"), channelData);
-        added++;
-      }
-      if (added > 0) {
-        toast.success(`✅ ${added}টি চ্যানেল যোগ করা হয়েছে!`);
-        setJsonPaste("");
-      } else {
-        toast.error("কোন ভ্যালিড চ্যানেল পাওয়া যায়নি");
-      }
+      await validateAndImport(items, false);
     } catch (e) {
       toast.error("❌ JSON পার্স করা যায়নি। সঠিক JSON দিন।");
     } finally {
       setJsonParsing(false);
     }
+  };
+
+  const importWithoutValidation = async () => {
+    if (!jsonPaste.trim()) { toast.error("JSON পেস্ট করুন"); return; }
+    setJsonParsing(true);
+    try {
+      let parsed = JSON.parse(jsonPaste.trim());
+      const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
+      await validateAndImport(items, true);
+    } catch (e) {
+      toast.error("❌ JSON পার্স করা যায়নি। সঠিক JSON দিন।");
+    } finally {
+      setJsonParsing(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".json")) { toast.error("শুধুমাত্র .json ফাইল সাপোর্টেড"); return; }
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
+      toast.info(`📂 ${items.length}টি চ্যানেল পাওয়া গেছে। ভ্যালিডেশন শুরু হচ্ছে...`);
+      await validateAndImport(items, false);
+    } catch {
+      toast.error("❌ ফাইল পড়া যায়নি বা JSON ভুল");
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   return (
@@ -543,18 +628,68 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         </div>
       </div>
 
+      {/* JSON File Upload */}
       <div className={`${glassCard} p-4`}>
-        <h3 className="text-sm font-semibold mb-2">📋 JSON পেস্ট করে চ্যানেল ইম্পোর্ট</h3>
-        <p className="text-[10px] text-muted-foreground mb-3">একটি চ্যানেল অবজেক্ট অথবা চ্যানেলের অ্যারে পেস্ট করুন</p>
+        <h3 className="text-sm font-semibold mb-2">📂 JSON ফাইল আপলোড</h3>
+        <p className="text-[10px] text-muted-foreground mb-3">
+          .json ফাইল আপলোড করুন। উভয় ফরম্যাট সাপোর্টেড:
+          <br />• <code className="text-primary">name/mpd/streamUrl/drm</code> (JioTV ফরম্যাট)
+          <br />• <code className="text-primary">title/url/quality</code> (Streams ফরম্যাট)
+        </p>
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept=".json"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={validating}
+          className={`${btnPrimary} w-full flex items-center justify-center gap-2`}
+        >
+          {validating ? (
+            <>
+              <Loader2 size={14} className="animate-spin" />
+              ভ্যালিডেট হচ্ছে... {validationProgress.checked}/{validationProgress.total} (✅ {validationProgress.valid})
+            </>
+          ) : (
+            <>📂 JSON ফাইল আপলোড করুন</>
+          )}
+        </button>
+        {validating && (
+          <div className="mt-3">
+            <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-300"
+                style={{ width: `${validationProgress.total > 0 ? (validationProgress.checked / validationProgress.total) * 100 : 0}%` }}
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1 text-center">
+              {validationProgress.checked}/{validationProgress.total} চেক করা হয়েছে • {validationProgress.valid}টি ভ্যালিড
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* JSON Paste */}
+      <div className={`${glassCard} p-4`}>
+        <h3 className="text-sm font-semibold mb-2">📋 JSON পেস্ট করে ইম্পোর্ট</h3>
+        <p className="text-[10px] text-muted-foreground mb-3">উভয় ফরম্যাট সাপোর্টেড (JioTV / Streams)</p>
         <textarea
           className={`${inputClass} min-h-[120px] w-full font-mono text-[11px] mb-3`}
-          placeholder={`{\n  "name": "Channel Name",\n  "logo": "https://...",\n  "category": "Entertainment",\n  "mpd": "https://...",\n  "token": "...",\n  "drm": { "kid": "key" }\n}`}
+          placeholder={`// JioTV ফরম্যাট:\n{"name":"...", "mpd":"...", "drm":{...}}\n\n// Streams ফরম্যাট:\n{"title":"...", "url":"https://...m3u8"}`}
           value={jsonPaste}
           onChange={e => setJsonPaste(e.target.value)}
         />
-        <button onClick={importFromJson} disabled={jsonParsing} className={`${btnPrimary} w-full flex items-center justify-center gap-2`}>
-          {jsonParsing ? <><Loader2 size={14} className="animate-spin" /> ইম্পোর্ট হচ্ছে...</> : "📥 JSON থেকে ইম্পোর্ট করুন"}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={importFromJson} disabled={jsonParsing || validating} className={`${btnPrimary} flex-1 flex items-center justify-center gap-2`}>
+            {jsonParsing || validating ? <><Loader2 size={14} className="animate-spin" /> চেক হচ্ছে...</> : "🔍 ভ্যালিডেট করে ইম্পোর্ট"}
+          </button>
+          <button onClick={importWithoutValidation} disabled={jsonParsing || validating} className={`${btnSecondary} flex-1 flex items-center justify-center gap-2`}>
+            📥 সরাসরি ইম্পোর্ট
+          </button>
+        </div>
       </div>
 
       {/* Add New Channel */}
