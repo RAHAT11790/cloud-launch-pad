@@ -492,9 +492,159 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
   const [validating, setValidating] = useState(false);
   const [validationProgress, setValidationProgress] = useState({ checked: 0, total: 0, valid: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [iptvTarget, setIptvTarget] = useState("100");
+  const [iptvLoading, setIptvLoading] = useState(false);
+  const [iptvCountry, setIptvCountry] = useState("");
 
-  const validateAndImport = async (items: any[], skipValidation = false) => {
-    const normalized = items.map(normalizeChannel).filter(Boolean) as any[];
+  // Fetch logos map from iptv-org
+  const fetchLogoMap = async (): Promise<Record<string, string>> => {
+    try {
+      const res = await fetch("https://iptv-org.github.io/api/logos.json");
+      const logos: any[] = await res.json();
+      const map: Record<string, string> = {};
+      for (const l of logos) {
+        if (l.channel && l.url) {
+          if (!map[l.channel]) map[l.channel] = l.url;
+        }
+      }
+      return map;
+    } catch { return {}; }
+  };
+
+  // Fetch channel details from iptv-org (for country/category)
+  const fetchChannelDetails = async (): Promise<Record<string, any>> => {
+    try {
+      const res = await fetch("https://iptv-org.github.io/api/channels.json");
+      const channels: any[] = await res.json();
+      const map: Record<string, any> = {};
+      for (const ch of channels) {
+        if (ch.id) map[ch.id] = ch;
+      }
+      return map;
+    } catch { return {}; }
+  };
+
+  const importFromIptvOrg = async () => {
+    const target = parseInt(iptvTarget) || 100;
+    setIptvLoading(true);
+    setValidating(true);
+    setValidationProgress({ checked: 0, total: 0, valid: 0 });
+
+    try {
+      toast.info("📡 iptv-org থেকে ডেটা লোড হচ্ছে...");
+      const [streamsRes, logoMap, channelMap] = await Promise.all([
+        fetch("https://iptv-org.github.io/api/streams.json").then(r => r.json()),
+        fetchLogoMap(),
+        fetchChannelDetails(),
+      ]);
+
+      let streams: any[] = streamsRes;
+
+      // Filter by country if specified
+      if (iptvCountry.trim()) {
+        const cc = iptvCountry.trim().toUpperCase();
+        streams = streams.filter((s: any) => {
+          if (!s.channel) return false;
+          const chInfo = channelMap[s.channel];
+          return chInfo && chInfo.country && chInfo.country.toUpperCase() === cc;
+        });
+        toast.info(`🌍 ${cc} দেশের ${streams.length}টি স্ট্রিম পাওয়া গেছে`);
+      }
+
+      // Limit to target
+      const toCheck = streams.slice(0, Math.min(target * 3, streams.length)); // check more to find enough valid ones
+      setValidationProgress({ checked: 0, total: toCheck.length, valid: 0 });
+
+      let added = 0;
+      const batchSize = 15;
+
+      for (let i = 0; i < toCheck.length && added < target; i += batchSize) {
+        const batch = toCheck.slice(i, i + batchSize);
+        const results = await Promise.allSettled(
+          batch.map(async (s: any) => {
+            const url = s.url;
+            if (!url) return null;
+            try {
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), 6000);
+              await fetch(url, { method: "HEAD", mode: "no-cors", signal: controller.signal });
+              clearTimeout(timeout);
+
+              // Get logo and category from iptv-org data
+              const chInfo = s.channel ? channelMap[s.channel] : null;
+              const logo = (s.channel ? logoMap[s.channel] : "") || "";
+              const category = chInfo?.categories?.[0] || (s.label && s.label !== "null" ? s.label : "General");
+              const country = chInfo?.country || "";
+
+              return {
+                name: s.title || chInfo?.name || "Unknown",
+                logo,
+                category: category.charAt(0).toUpperCase() + category.slice(1),
+                streamUrl: url,
+                mpd: "",
+                token: "",
+                referer: s.referrer || "",
+                userAgent: s.user_agent || "",
+                quality: s.quality || "",
+                country,
+                addedAt: Date.now(),
+              };
+            } catch { return null; }
+          })
+        );
+
+        for (const r of results) {
+          if (r.status === "fulfilled" && r.value && added < target) {
+            await push(ref(db, "liveTvChannels"), r.value);
+            added++;
+          }
+        }
+        setValidationProgress({ checked: Math.min(i + batchSize, toCheck.length), total: toCheck.length, valid: added });
+
+        if (added >= target) break;
+      }
+
+      setValidating(false);
+      setIptvLoading(false);
+      toast.success(`✅ ${added}টি ভ্যালিড চ্যানেল যোগ হয়েছে (লোগোসহ)!`);
+    } catch (err) {
+      setValidating(false);
+      setIptvLoading(false);
+      toast.error("❌ iptv-org থেকে ডেটা লোড করা যায়নি");
+    }
+  };
+
+  const validateAndImport = async (items: any[], skipValidation = false, withLogos = true) => {
+    // Try to fetch logos for streams format items
+    let logoMap: Record<string, string> = {};
+    let channelMap: Record<string, any> = {};
+    if (withLogos && items.some((i: any) => i.channel || (i.title && !i.logo))) {
+      toast.info("🔍 লোগো খোঁজা হচ্ছে...");
+      [logoMap, channelMap] = await Promise.all([fetchLogoMap(), fetchChannelDetails()]);
+    }
+
+    const normalized = items.map((item: any) => {
+      const ch = normalizeChannel(item);
+      if (!ch) return null;
+      // If no logo, try iptv-org
+      if (!ch.logo && item.channel && logoMap[item.channel]) {
+        ch.logo = logoMap[item.channel];
+      }
+      // If no logo, try matching by name
+      if (!ch.logo) {
+        for (const [chId, chInfo] of Object.entries(channelMap) as any) {
+          if (chInfo.name?.toLowerCase() === ch.name.toLowerCase()) {
+            ch.logo = logoMap[chId] || "";
+            if (!ch.category || ch.category === "General") {
+              ch.category = chInfo.categories?.[0] ? chInfo.categories[0].charAt(0).toUpperCase() + chInfo.categories[0].slice(1) : ch.category;
+            }
+            break;
+          }
+        }
+      }
+      return ch;
+    }).filter(Boolean) as any[];
+
     if (normalized.length === 0) { toast.error("কোন ভ্যালিড চ্যানেল পাওয়া যায়নি"); return; }
 
     if (skipValidation) {
@@ -508,7 +658,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
       return;
     }
 
-    // Validate channels by checking if URL is reachable
+    // Validate channels
     setValidating(true);
     setValidationProgress({ checked: 0, total: normalized.length, valid: 0 });
     let added = 0;
@@ -522,12 +672,10 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
           try {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 8000);
-            const res = await fetch(url, { method: "HEAD", mode: "no-cors", signal: controller.signal });
+            await fetch(url, { method: "HEAD", mode: "no-cors", signal: controller.signal });
             clearTimeout(timeout);
-            return ch; // reachable
-          } catch {
-            return null; // not reachable
-          }
+            return ch;
+          } catch { return null; }
         })
       );
 
@@ -585,7 +733,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
       const text = await file.text();
       const parsed = JSON.parse(text);
       const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
-      toast.info(`📂 ${items.length}টি চ্যানেল পাওয়া গেছে। ভ্যালিডেশন শুরু হচ্ছে...`);
+      toast.info(`📂 ${items.length}টি চ্যানেল পাওয়া গেছে। লোগো খোঁজা ও ভ্যালিডেশন শুরু হচ্ছে...`);
       await validateAndImport(items, false);
     } catch {
       toast.error("❌ ফাইল পড়া যায়নি বা JSON ভুল");
@@ -628,13 +776,69 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         </div>
       </div>
 
+      {/* iptv-org Auto Import */}
+      <div className={`${glassCard} p-4 border border-primary/20`}>
+        <h3 className="text-sm font-semibold mb-2">🌐 iptv-org থেকে অটো ইম্পোর্ট</h3>
+        <p className="text-[10px] text-muted-foreground mb-3">
+          iptv-org এর 14,000+ স্ট্রিম থেকে ভ্যালিড চ্যানেল বাছাই করে লোগোসহ ইম্পোর্ট করুন।
+        </p>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div>
+            <label className="text-[10px] text-muted-foreground mb-1 block">🎯 টার্গেট (কয়টা চ্যানেল)</label>
+            <input
+              className={`${inputClass} w-full`}
+              type="number"
+              min="10"
+              max="5000"
+              placeholder="100"
+              value={iptvTarget}
+              onChange={e => setIptvTarget(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-muted-foreground mb-1 block">🌍 দেশ কোড (ঐচ্ছিক)</label>
+            <input
+              className={`${inputClass} w-full`}
+              placeholder="BD, IN, US..."
+              value={iptvCountry}
+              onChange={e => setIptvCountry(e.target.value)}
+            />
+          </div>
+        </div>
+        <button
+          onClick={importFromIptvOrg}
+          disabled={iptvLoading || validating}
+          className={`${btnPrimary} w-full flex items-center justify-center gap-2`}
+        >
+          {iptvLoading ? (
+            <>
+              <Loader2 size={14} className="animate-spin" />
+              ভ্যালিডেট হচ্ছে... {validationProgress.valid}/{iptvTarget} ভ্যালিড
+            </>
+          ) : (
+            <>🚀 iptv-org থেকে ইম্পোর্ট শুরু করুন</>
+          )}
+        </button>
+        {validating && (
+          <div className="mt-3">
+            <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-300"
+                style={{ width: `${validationProgress.total > 0 ? (validationProgress.checked / validationProgress.total) * 100 : 0}%` }}
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1 text-center">
+              {validationProgress.checked}/{validationProgress.total} চেক করা হয়েছে • ✅ {validationProgress.valid}টি ভ্যালিড
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* JSON File Upload */}
       <div className={`${glassCard} p-4`}>
         <h3 className="text-sm font-semibold mb-2">📂 JSON ফাইল আপলোড</h3>
         <p className="text-[10px] text-muted-foreground mb-3">
-          .json ফাইল আপলোড করুন। উভয় ফরম্যাট সাপোর্টেড:
-          <br />• <code className="text-primary">name/mpd/streamUrl/drm</code> (JioTV ফরম্যাট)
-          <br />• <code className="text-primary">title/url/quality</code> (Streams ফরম্যাট)
+          .json ফাইল আপলোড করুন। অটোমেটিক লোগো ম্যাচ হবে iptv-org থেকে।
         </p>
         <input
           type="file"
@@ -648,34 +852,14 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
           disabled={validating}
           className={`${btnPrimary} w-full flex items-center justify-center gap-2`}
         >
-          {validating ? (
-            <>
-              <Loader2 size={14} className="animate-spin" />
-              ভ্যালিডেট হচ্ছে... {validationProgress.checked}/{validationProgress.total} (✅ {validationProgress.valid})
-            </>
-          ) : (
-            <>📂 JSON ফাইল আপলোড করুন</>
-          )}
+          📂 JSON ফাইল আপলোড করুন
         </button>
-        {validating && (
-          <div className="mt-3">
-            <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-              <div
-                className="h-full bg-primary rounded-full transition-all duration-300"
-                style={{ width: `${validationProgress.total > 0 ? (validationProgress.checked / validationProgress.total) * 100 : 0}%` }}
-              />
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1 text-center">
-              {validationProgress.checked}/{validationProgress.total} চেক করা হয়েছে • {validationProgress.valid}টি ভ্যালিড
-            </p>
-          </div>
-        )}
       </div>
 
       {/* JSON Paste */}
       <div className={`${glassCard} p-4`}>
         <h3 className="text-sm font-semibold mb-2">📋 JSON পেস্ট করে ইম্পোর্ট</h3>
-        <p className="text-[10px] text-muted-foreground mb-3">উভয় ফরম্যাট সাপোর্টেড (JioTV / Streams)</p>
+        <p className="text-[10px] text-muted-foreground mb-3">উভয় ফরম্যাট সাপোর্টেড • লোগো অটোমেটিক iptv-org থেকে আসবে</p>
         <textarea
           className={`${inputClass} min-h-[120px] w-full font-mono text-[11px] mb-3`}
           placeholder={`// JioTV ফরম্যাট:\n{"name":"...", "mpd":"...", "drm":{...}}\n\n// Streams ফরম্যাট:\n{"title":"...", "url":"https://...m3u8"}`}
