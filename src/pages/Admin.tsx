@@ -699,7 +699,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
 
     // Validate channels
     setValidating(true);
-    setValidationProgress({ checked: 0, total: normalized.length, valid: 0 });
+    setValidationProgress({ checked: 0, total: toProcess.length, valid: 0 });
     let added = 0;
     const batchSize = 10;
 
