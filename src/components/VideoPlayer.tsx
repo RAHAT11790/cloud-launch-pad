@@ -1085,10 +1085,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               <div className="w-16 h-16 rounded-full bg-destructive/20 flex items-center justify-center mb-4">
                 <X className="w-8 h-8 text-destructive" />
               </div>
-              <p className="text-base font-semibold text-foreground mb-1">Video Unavailable</p>
-              <p className="text-xs text-muted-foreground mb-4 text-center px-6">Server is not responding. Try another episode or quality.</p>
+              <p className="text-base font-semibold text-foreground mb-1">😔 Server not responding</p>
+              <p className="text-xs text-muted-foreground mb-4 text-center px-6">This TV channel server is not responding. Try again later.</p>
               <button onClick={(e) => { e.stopPropagation(); setVideoError(false); setIsBuffering(true); const v = videoRef.current; if (v) { v.load(); } }} className="px-4 py-2 rounded-lg gradient-primary text-sm font-semibold btn-glow">
-                Retry
+                Try Again
               </button>
             </div>
           )}
