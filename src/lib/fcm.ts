@@ -15,7 +15,12 @@ const firebaseConfig = {
 };
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BDMR1Q2pzEWQZtt-E_g_T4GD0AN0_DkGfpDDs2_4a0Oy27INY1LPUGeR8n6NPmIDG3_dBL1OwHbN4a-Toku0Xs4";
-const APP_ICON_URL = SITE_ICON_URL;
+const APP_ICON_URL = (() => {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/rs-icon.png`;
+  }
+  return SITE_ICON_URL;
+})();
 const PRIMARY_SITE_ORIGIN = (() => {
   try {
     return new URL(SITE_URL).origin;
