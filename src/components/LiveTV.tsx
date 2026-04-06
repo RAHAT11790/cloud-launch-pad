@@ -15,10 +15,8 @@ interface TVChannel {
   userAgent?: string;
   drm?: Record<string, string>;
   streamUrl?: string;
-  source: "api" | "custom" | "m3u";
+  source: "custom" | "m3u";
 }
-
-const API_URL = "https://servertvhub.site/api/channels.json";
 
 /* ── helpers ── */
 const buildIframeHtml = (ch: TVChannel, proxyUrl?: string): string => {
@@ -132,7 +130,6 @@ const ChannelPlayer = ({
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[70] bg-black flex flex-col"
     >
-      {/* Header */}
       <div className="flex items-center gap-3 px-3 py-2.5 bg-black/80 backdrop-blur-sm">
         <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
           <ChevronLeft className="w-5 h-5 text-white" />
@@ -153,7 +150,6 @@ const ChannelPlayer = ({
         </div>
       </div>
 
-      {/* Video */}
       <div className="w-full aspect-video bg-black relative">
         <iframe
           key={`${channel.source}_${channel.id}`}
@@ -165,7 +161,6 @@ const ChannelPlayer = ({
         />
       </div>
 
-      {/* Suggested Channels */}
       <div className="flex-1 bg-background overflow-y-auto">
         <div className="px-3 pt-3 pb-1">
           <p className="text-xs font-bold text-foreground">আরও চ্যানেল</p>
@@ -202,23 +197,17 @@ const ChannelPlayer = ({
 
 /* ── Main LiveTV ── */
 const LiveTV = ({ onClose }: { onClose: () => void }) => {
-  const [channels, setChannels] = useState<TVChannel[]>([]);
   const [customChannels, setCustomChannels] = useState<TVChannel[]>([]);
   const [m3uChannels, setM3uChannels] = useState<TVChannel[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<TVChannel | null>(null);
-  const [apiEnabled, setApiEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState("");
   const [m3uUrls, setM3uUrls] = useState<string[]>([]);
 
   useEffect(() => {
-    const unsub = onValue(ref(db, "settings/liveTvApiEnabled"), (snap) => {
-      setApiEnabled(snap.val() !== false);
-    });
     const unsub2 = onValue(ref(db, "settings/liveTvProxyUrl"), (snap) => {
       setProxyUrl(snap.val() || "");
     });
@@ -231,7 +220,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
         setM3uUrls([]);
       }
     });
-    return () => { unsub(); unsub2(); unsub3(); };
+    return () => { unsub2(); unsub3(); };
   }, []);
 
   useEffect(() => {
@@ -255,6 +244,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
       } else {
         setCustomChannels([]);
       }
+      setLoading(false);
     });
     return () => unsub();
   }, []);
@@ -262,6 +252,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
   // Fetch M3U playlists
   const fetchM3uPlaylists = useCallback(async () => {
     if (m3uUrls.length === 0) { setM3uChannels([]); return; }
+    setLoading(true);
     try {
       const parsed = await fetchAllPlaylists(m3uUrls);
       const mapped: TVChannel[] = parsed.map((ch, i) => ({
@@ -275,43 +266,14 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
       setM3uChannels(mapped);
     } catch {
       console.error("M3U playlists fetch failed");
+    } finally {
+      setLoading(false);
     }
   }, [m3uUrls]);
 
   useEffect(() => { fetchM3uPlaylists(); }, [fetchM3uPlaylists]);
 
-  const fetchChannels = useCallback(async () => {
-    if (!apiEnabled) { setChannels([]); setLoading(false); return; }
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
-      const parsed: TVChannel[] = (data as any[])
-        .filter((item: any) => item.id && item.name)
-        .map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          logo: item.logo || "",
-          category: item.category || "General",
-          mpd: item.mpd || "",
-          token: item.token || "",
-          referer: item.referer || "",
-          userAgent: item.userAgent || "",
-          drm: item.drm && typeof item.drm === "object" ? item.drm : undefined,
-          source: "api" as const,
-        }));
-      setChannels(parsed);
-    } catch {
-      setError("চ্যানেল লোড করা যায়নি");
-    } finally {
-      setLoading(false);
-    }
-  }, [apiEnabled]);
-
-  useEffect(() => { fetchChannels(); }, [fetchChannels]);
-
-  const allChannels = useMemo(() => [...customChannels, ...channels, ...m3uChannels], [customChannels, channels, m3uChannels]);
+  const allChannels = useMemo(() => [...customChannels, ...m3uChannels], [customChannels, m3uChannels]);
 
   const categories = useMemo(() => {
     const cats = new Set<string>();
@@ -329,7 +291,6 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
     return list;
   }, [allChannels, selectedCategory, searchQuery]);
 
-  // Suggested channels (same category, exclude current)
   const suggestedChannels = useMemo(() => {
     if (!selectedChannel) return [];
     const sameCat = allChannels.filter(
@@ -361,7 +322,6 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
       transition={{ type: "spring", damping: 25, stiffness: 200 }}
       className="fixed inset-0 z-[60] bg-background overflow-y-auto"
     >
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-md border-b border-border/30">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
@@ -382,7 +342,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
             <button onClick={() => setShowSearch(!showSearch)} className="p-2 rounded-lg hover:bg-accent transition-colors">
               {showSearch ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
             </button>
-            <button onClick={fetchChannels} className="p-2 rounded-lg hover:bg-accent transition-colors">
+            <button onClick={fetchM3uPlaylists} className="p-2 rounded-lg hover:bg-accent transition-colors">
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             </button>
           </div>
@@ -420,20 +380,16 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
         </div>
       </div>
 
-      {/* Content */}
       <div className="px-4 py-4 pb-24">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
             <p className="text-sm text-muted-foreground">চ্যানেল লোড হচ্ছে...</p>
           </div>
-        ) : error && allChannels.length === 0 ? (
+        ) : allChannels.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <WifiOff className="w-12 h-12 text-muted-foreground mb-3" />
-            <p className="text-sm text-muted-foreground">{error}</p>
-            <button onClick={fetchChannels} className="mt-4 px-4 py-2 gradient-primary text-primary-foreground rounded-xl text-sm font-semibold">
-              আবার চেষ্টা করুন
-            </button>
+            <p className="text-sm text-muted-foreground">কোন চ্যানেল নেই। Admin Panel থেকে চ্যানেল যোগ করুন।</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-20">
