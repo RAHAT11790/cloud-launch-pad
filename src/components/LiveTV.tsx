@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Tv, Search, X, Radio, ChevronLeft, RefreshCw, Loader2, WifiOff } from "lucide-react";
-import { db, ref, onValue } from "@/lib/firebase";
+import { Tv, Search, X, Radio, ChevronLeft, RefreshCw, Loader2, WifiOff, Shield, ShieldOff } from "lucide-react";
+import { db, ref, onValue, set } from "@/lib/firebase";
 import { fetchAllPlaylists } from "@/lib/m3uParser";
+import VideoPlayer from "@/components/VideoPlayer";
 
 interface TVChannel {
   id: number | string;
@@ -18,182 +19,7 @@ interface TVChannel {
   source: "custom" | "m3u";
 }
 
-/* ── helpers ── */
-const buildIframeHtml = (ch: TVChannel, proxyUrl?: string): string => {
-  const applyProxy = (url: string) => {
-    if (!proxyUrl || !url) return url;
-    return proxyUrl.includes("{url}") ? proxyUrl.replace("{url}", encodeURIComponent(url)) : `${proxyUrl}${encodeURIComponent(url)}`;
-  };
-
-  const mpdUrl = ch.mpd ? applyProxy(ch.mpd) : "";
-  const tokenPart = ch.token ? (mpdUrl.includes("?") ? "&" : "?") + ch.token : "";
-  const fullMpd = mpdUrl + tokenPart;
-  const hasDrm = ch.drm && Object.keys(ch.drm).length > 0;
-  const hlsUrl = ch.streamUrl ? applyProxy(ch.streamUrl) : "";
-
-  const html = `<!DOCTYPE html>
-<html><head>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>*{margin:0;padding:0;box-sizing:border-box}body,html{width:100%;height:100%;background:#000;overflow:hidden}
-video{width:100%;height:100%;object-fit:contain}
-.loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
-.loader::after{content:'';width:40px;height:40px;border:3px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.err{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888;font-family:sans-serif;font-size:14px;text-align:center;padding:20px}
-</style>
-</head><body>
-<div class="loader" id="loader"></div>
-<div class="err" id="err" style="display:none"></div>
-<video id="v" controls autoplay playsinline></video>
-${mpdUrl ? `<script src="https://cdn.dashjs.org/latest/dash.all.min.js"><\/script>` : ""}
-${hlsUrl && !mpdUrl ? `<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"><\/script>` : ""}
-<script>
-(function(){
-  var v=document.getElementById("v");
-  var loader=document.getElementById("loader");
-  var errDiv=document.getElementById("err");
-  function hide(el){el.style.display="none"}
-  function show(el){el.style.display="flex"}
-  v.addEventListener("playing",function(){hide(loader)});
-  v.addEventListener("waiting",function(){show(loader)});
-  v.addEventListener("error",function(e){
-    hide(loader);show(errDiv);
-    errDiv.textContent="Stream লোড করা যায়নি - "+((v.error&&v.error.message)||"Unknown error");
-  });
-
-  ${mpdUrl ? `
-  try{
-    var player=dashjs.MediaPlayer().create();
-    player.updateSettings({streaming:{buffer:{fastSwitchEnabled:true}}});
-    player.initialize(v,"${fullMpd}",true);
-    ${hasDrm ? `
-    player.setProtectionData({
-      "org.w3.clearkey":{
-        "clearkeys":${JSON.stringify(ch.drm)}
-      }
-    });
-    ` : ""}
-    player.on("error",function(e){
-      hide(loader);show(errDiv);
-      errDiv.textContent="Player Error: "+(e.error||"Unknown");
-    });
-  }catch(ex){
-    hide(loader);show(errDiv);
-    errDiv.textContent="Init Error: "+ex.message;
-  }
-  ` : hlsUrl ? `
-  if(v.canPlayType("application/vnd.apple.mpegurl")){
-    v.src="${hlsUrl}";
-  }else if(typeof Hls!=="undefined"&&Hls.isSupported()){
-    var hls=new Hls();
-    hls.loadSource("${hlsUrl}");
-    hls.attachMedia(v);
-    hls.on(Hls.Events.ERROR,function(ev,data){
-      if(data.fatal){hide(loader);show(errDiv);errDiv.textContent="HLS Error: "+data.type;}
-    });
-  }else{
-    v.src="${hlsUrl}";
-  }
-  ` : `
-  hide(loader);show(errDiv);errDiv.textContent="No stream URL available";
-  `}
-})();
-<\/script>
-</body></html>`;
-  return html;
-};
-
-/* ── Player Sub-Component ── */
-const ChannelPlayer = ({
-  channel,
-  onBack,
-  suggestedChannels,
-  onSelectChannel,
-  proxyUrl,
-}: {
-  channel: TVChannel;
-  onBack: () => void;
-  suggestedChannels: TVChannel[];
-  onSelectChannel: (ch: TVChannel) => void;
-  proxyUrl?: string;
-}) => {
-  const iframeHtml = useMemo(() => buildIframeHtml(channel, proxyUrl), [channel, proxyUrl]);
-  const iframeSrc = useMemo(
-    () => `data:text/html;charset=utf-8,${encodeURIComponent(iframeHtml)}`,
-    [iframeHtml]
-  );
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[70] bg-black flex flex-col"
-    >
-      <div className="flex items-center gap-3 px-3 py-2.5 bg-black/80 backdrop-blur-sm">
-        <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
-          <ChevronLeft className="w-5 h-5 text-white" />
-        </button>
-        <img
-          src={channel.logo}
-          alt=""
-          className="w-7 h-7 rounded-lg object-contain bg-white/10"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-        />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-white truncate">{channel.name}</p>
-          <div className="flex items-center gap-1.5">
-            <Radio className="w-2.5 h-2.5 text-red-500 animate-pulse" />
-            <span className="text-[9px] text-red-400 font-semibold">LIVE</span>
-            <span className="text-[9px] text-white/50 ml-1">{channel.category}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="w-full aspect-video bg-black relative">
-        <iframe
-          key={`${channel.source}_${channel.id}`}
-          src={iframeSrc}
-          className="w-full h-full border-none"
-          allow="autoplay; encrypted-media; fullscreen"
-          allowFullScreen
-          sandbox="allow-scripts allow-same-origin"
-        />
-      </div>
-
-      <div className="flex-1 bg-background overflow-y-auto">
-        <div className="px-3 pt-3 pb-1">
-          <p className="text-xs font-bold text-foreground">আরও চ্যানেল</p>
-        </div>
-        <div className="px-3 pb-20 space-y-2">
-          {suggestedChannels.map((ch) => (
-            <div
-              key={`${ch.source}_${ch.id}`}
-              onClick={() => onSelectChannel(ch)}
-              className="flex items-center gap-3 p-2.5 rounded-xl bg-card border border-border/40 cursor-pointer hover:border-primary/40 transition-all active:scale-[0.98]"
-            >
-              <div className="w-14 h-10 rounded-lg bg-black/30 flex items-center justify-center overflow-hidden flex-shrink-0">
-                {ch.logo ? (
-                  <img src={ch.logo} alt="" className="w-full h-full object-contain p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                ) : (
-                  <Tv className="w-5 h-5 text-muted-foreground/40" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold truncate">{ch.name}</p>
-                <p className="text-[10px] text-muted-foreground">{ch.category}</p>
-              </div>
-              <div className="flex items-center gap-1 bg-red-600/80 px-1.5 py-0.5 rounded">
-                <Radio className="w-2 h-2 animate-pulse text-white" />
-                <span className="text-[7px] font-bold text-white">LIVE</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </motion.div>
-  );
-};
+const CHANNELS_PER_PAGE = 60;
 
 /* ── Main LiveTV ── */
 const LiveTV = ({ onClose }: { onClose: () => void }) => {
@@ -205,11 +31,18 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
   const [showSearch, setShowSearch] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<TVChannel | null>(null);
   const [proxyUrl, setProxyUrl] = useState("");
+  const [proxyEnabled, setProxyEnabled] = useState(false);
   const [m3uUrls, setM3uUrls] = useState<string[]>([]);
+  const [visibleCount, setVisibleCount] = useState(CHANNELS_PER_PAGE);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Load settings from Firebase
   useEffect(() => {
-    const unsub2 = onValue(ref(db, "settings/liveTvProxyUrl"), (snap) => {
+    const unsub1 = onValue(ref(db, "settings/liveTvProxyUrl"), (snap) => {
       setProxyUrl(snap.val() || "");
+    });
+    const unsub2 = onValue(ref(db, "settings/liveTvProxyEnabled"), (snap) => {
+      setProxyEnabled(snap.val() === true);
     });
     const unsub3 = onValue(ref(db, "settings/liveTvPlaylists"), (snap) => {
       const data = snap.val();
@@ -220,9 +53,10 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
         setM3uUrls([]);
       }
     });
-    return () => { unsub2(); unsub3(); };
+    return () => { unsub1(); unsub2(); unsub3(); };
   }, []);
 
+  // Load custom channels
   useEffect(() => {
     const unsub = onValue(ref(db, "liveTvChannels"), (snap) => {
       const data = snap.val();
@@ -291,6 +125,48 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
     return list;
   }, [allChannels, selectedCategory, searchQuery]);
 
+  // Reset visible count on filter change
+  useEffect(() => { setVisibleCount(CHANNELS_PER_PAGE); }, [selectedCategory, searchQuery]);
+
+  const visibleChannels = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+
+  // Infinite scroll
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 300) {
+        setVisibleCount((prev) => Math.min(prev + CHANNELS_PER_PAGE, filtered.length));
+      }
+    };
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [filtered.length]);
+
+  // Build stream URL for VideoPlayer (apply proxy logic)
+  const getStreamUrl = useCallback((ch: TVChannel): string => {
+    const rawUrl = ch.mpd || ch.streamUrl || "";
+    if (!rawUrl) return "";
+
+    // If proxy disabled, play direct
+    if (!proxyEnabled || !proxyUrl) return rawUrl;
+
+    // Smart proxy: HTTPS plays direct, HTTP uses proxy
+    if (rawUrl.startsWith("https://")) return rawUrl;
+
+    // HTTP stream - apply proxy
+    const encoded = encodeURIComponent(rawUrl);
+    if (proxyUrl.includes("{url}")) return proxyUrl.replace("{url}", encoded);
+    return `${proxyUrl.replace(/\/$/, "")}?url=${encoded}`;
+  }, [proxyEnabled, proxyUrl]);
+
+  const toggleProxy = useCallback(() => {
+    const newVal = !proxyEnabled;
+    setProxyEnabled(newVal);
+    set(ref(db, "settings/liveTvProxyEnabled"), newVal);
+  }, [proxyEnabled]);
+
+  // Suggested channels for player
   const suggestedChannels = useMemo(() => {
     if (!selectedChannel) return [];
     const sameCat = allChannels.filter(
@@ -299,18 +175,60 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
     const others = allChannels.filter(
       (ch) => ch.category !== selectedChannel.category && `${ch.source}_${ch.id}` !== `${selectedChannel.source}_${selectedChannel.id}`
     );
-    return [...sameCat, ...others].slice(0, 20);
+    return [...sameCat, ...others].slice(0, 30);
   }, [selectedChannel, allChannels]);
 
+  // VideoPlayer for selected channel
   if (selectedChannel) {
+    const streamUrl = getStreamUrl(selectedChannel);
+    const tokenPart = selectedChannel.token
+      ? (streamUrl.includes("?") ? "&" : "?") + selectedChannel.token
+      : "";
+    const fullUrl = streamUrl + tokenPart;
+
     return (
-      <ChannelPlayer
-        channel={selectedChannel}
-        onBack={() => setSelectedChannel(null)}
-        suggestedChannels={suggestedChannels}
-        onSelectChannel={setSelectedChannel}
-        proxyUrl={proxyUrl}
-      />
+      <div className="fixed inset-0 z-[70] bg-black flex flex-col">
+        <VideoPlayer
+          src={fullUrl}
+          title={selectedChannel.name}
+          subtitle={selectedChannel.category}
+          poster={selectedChannel.logo}
+          onClose={() => setSelectedChannel(null)}
+          hideDownload
+        />
+
+        {/* Suggested channels below player */}
+        <div className="flex-1 bg-background overflow-y-auto">
+          <div className="px-3 pt-3 pb-1">
+            <p className="text-xs font-bold text-foreground">আরও চ্যানেল</p>
+          </div>
+          <div className="px-3 pb-20 space-y-2">
+            {suggestedChannels.map((ch) => (
+              <div
+                key={`${ch.source}_${ch.id}`}
+                onClick={() => setSelectedChannel(ch)}
+                className="flex items-center gap-3 p-2.5 rounded-xl bg-card border border-border/40 cursor-pointer hover:border-primary/40 transition-all active:scale-[0.98]"
+              >
+                <div className="w-14 h-10 rounded-lg bg-black/30 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {ch.logo ? (
+                    <img src={ch.logo} alt="" className="w-full h-full object-contain p-1" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  ) : (
+                    <Tv className="w-5 h-5 text-muted-foreground/40" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold truncate">{ch.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{ch.category}</p>
+                </div>
+                <div className="flex items-center gap-1 bg-red-600/80 px-1.5 py-0.5 rounded">
+                  <Radio className="w-2 h-2 animate-pulse text-white" />
+                  <span className="text-[7px] font-bold text-white">LIVE</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -320,8 +238,9 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
       animate={{ x: 0 }}
       exit={{ x: "100%" }}
       transition={{ type: "spring", damping: 25, stiffness: 200 }}
-      className="fixed inset-0 z-[60] bg-background overflow-y-auto"
+      className="fixed inset-0 z-[60] bg-background flex flex-col"
     >
+      {/* Header */}
       <div className="sticky top-0 z-10 bg-background/90 backdrop-blur-md border-b border-border/30">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
@@ -338,7 +257,15 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            {/* Proxy Toggle */}
+            <button
+              onClick={toggleProxy}
+              className={`p-2 rounded-lg transition-colors ${proxyEnabled ? "bg-green-600/20 text-green-500" : "hover:bg-accent text-muted-foreground"}`}
+              title={proxyEnabled ? "Proxy ON (HTTP only)" : "Proxy OFF"}
+            >
+              {proxyEnabled ? <Shield className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
+            </button>
             <button onClick={() => setShowSearch(!showSearch)} className="p-2 rounded-lg hover:bg-accent transition-colors">
               {showSearch ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
             </button>
@@ -380,7 +307,8 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
         </div>
       </div>
 
-      <div className="px-4 py-4 pb-24">
+      {/* Channel Grid with Infinite Scroll */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 pb-24">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
@@ -397,35 +325,42 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
             <p className="text-sm text-muted-foreground">কোন চ্যানেল পাওয়া যায়নি</p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3">
-            {filtered.map((ch) => (
-              <motion.div
-                key={`${ch.source}_${ch.id}`}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setSelectedChannel(ch)}
-                className="bg-card rounded-xl border border-border/50 overflow-hidden cursor-pointer hover:border-primary/40 transition-all group"
-              >
-                <div className="aspect-square flex items-center justify-center p-2 bg-gradient-to-b from-muted/30 to-transparent">
-                  {ch.logo ? (
-                    <img
-                      src={ch.logo}
-                      alt={ch.name}
-                      className="w-full h-full object-contain group-hover:scale-105 transition-transform"
-                      loading="lazy"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                        (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
-                      }}
-                    />
-                  ) : null}
-                  <Tv className={`w-10 h-10 text-muted-foreground/40 ${ch.logo ? "hidden" : ""}`} />
+          <>
+            <div className="grid grid-cols-3 gap-3">
+              {visibleChannels.map((ch) => (
+                <div
+                  key={`${ch.source}_${ch.id}`}
+                  onClick={() => setSelectedChannel(ch)}
+                  className="bg-card rounded-xl border border-border/50 overflow-hidden cursor-pointer hover:border-primary/40 transition-all active:scale-95"
+                >
+                  <div className="aspect-square flex items-center justify-center p-2 bg-gradient-to-b from-muted/30 to-transparent">
+                    {ch.logo ? (
+                      <img
+                        src={ch.logo}
+                        alt={ch.name}
+                        className="w-full h-full object-contain"
+                        loading="lazy"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                          const next = (e.target as HTMLImageElement).nextElementSibling;
+                          if (next) next.classList.remove("hidden");
+                        }}
+                      />
+                    ) : null}
+                    <Tv className={`w-10 h-10 text-muted-foreground/40 ${ch.logo ? "hidden" : ""}`} />
+                  </div>
+                  <div className="px-2 pb-2">
+                    <p className="text-[10px] font-semibold leading-tight line-clamp-2 text-center">{ch.name}</p>
+                  </div>
                 </div>
-                <div className="px-2 pb-2">
-                  <p className="text-[10px] font-semibold leading-tight line-clamp-2 text-center">{ch.name}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+              ))}
+            </div>
+            {visibleCount < filtered.length && (
+              <div className="flex justify-center py-6">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              </div>
+            )}
+          </>
         )}
       </div>
     </motion.div>

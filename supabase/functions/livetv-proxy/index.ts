@@ -1,7 +1,8 @@
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, range',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
 }
 
 Deno.serve(async (req) => {
@@ -20,7 +21,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Validate URL
     let parsedUrl: URL
     try {
       parsedUrl = new URL(targetUrl)
@@ -31,14 +31,19 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get optional headers from query params
     const referer = url.searchParams.get('referer') || ''
-    const userAgent = url.searchParams.get('ua') || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    const userAgent = url.searchParams.get('ua') || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
-    // Fetch the target URL
     const fetchHeaders: Record<string, string> = {
       'User-Agent': userAgent,
     }
+
+    // Forward range header for seeking
+    const rangeHeader = req.headers.get('range')
+    if (rangeHeader) {
+      fetchHeaders['Range'] = rangeHeader
+    }
+
     if (referer) {
       fetchHeaders['Referer'] = referer
       fetchHeaders['Origin'] = new URL(referer).origin
@@ -49,31 +54,59 @@ Deno.serve(async (req) => {
       redirect: 'follow',
     })
 
-    // Get response body
+    const contentType = response.headers.get('content-type') || ''
+    const isM3U8 = targetUrl.includes('.m3u8') || contentType.includes('mpegurl') || contentType.includes('x-mpegurl')
+
+    // For M3U8 playlists, rewrite relative URLs to absolute proxied URLs
+    if (isM3U8) {
+      const text = await response.text()
+      const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1)
+      const proxyBase = `${url.origin}${url.pathname}`
+
+      const rewritten = text.split('\n').map(line => {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith('#')) {
+          // Rewrite URI= in EXT-X-KEY etc.
+          if (trimmed.includes('URI="')) {
+            return trimmed.replace(/URI="([^"]+)"/g, (_match, uri) => {
+              const absoluteUri = uri.startsWith('http') ? uri : baseUrl + uri
+              return `URI="${proxyBase}?url=${encodeURIComponent(absoluteUri)}${referer ? '&referer=' + encodeURIComponent(referer) : ''}"`
+            })
+          }
+          return line
+        }
+        // Stream URL line
+        const absoluteUrl = trimmed.startsWith('http') ? trimmed : baseUrl + trimmed
+        return `${proxyBase}?url=${encodeURIComponent(absoluteUrl)}${referer ? '&referer=' + encodeURIComponent(referer) : ''}`
+      }).join('\n')
+
+      return new Response(rewritten, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/vnd.apple.mpegurl',
+          'Cache-Control': 'no-cache',
+        },
+      })
+    }
+
+    // For TS segments and other binary content, stream directly
     const body = await response.arrayBuffer()
 
-    // Build response headers
-    const responseHeaders: Record<string, string> = {
-      ...corsHeaders,
-    }
+    const responseHeaders: Record<string, string> = { ...corsHeaders }
 
-    // Forward content type
-    const contentType = response.headers.get('content-type')
-    if (contentType) {
-      responseHeaders['Content-Type'] = contentType
-    }
-
-    // Forward content length
+    if (contentType) responseHeaders['Content-Type'] = contentType
+    
     const contentLength = response.headers.get('content-length')
-    if (contentLength) {
-      responseHeaders['Content-Length'] = contentLength
-    }
+    if (contentLength) responseHeaders['Content-Length'] = contentLength
 
-    // Allow range requests
     responseHeaders['Accept-Ranges'] = 'bytes'
     const contentRange = response.headers.get('content-range')
-    if (contentRange) {
-      responseHeaders['Content-Range'] = contentRange
+    if (contentRange) responseHeaders['Content-Range'] = contentRange
+
+    // Cache TS segments for performance
+    if (targetUrl.includes('.ts') || contentType.includes('video/mp2t')) {
+      responseHeaders['Cache-Control'] = 'public, max-age=300'
     }
 
     return new Response(body, {
