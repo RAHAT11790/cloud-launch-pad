@@ -447,16 +447,33 @@ export const getFCMTokens = async (userIds: string[]): Promise<string[]> => {
   }
 };
 
-// Get ALL FCM tokens
+// Get ALL FCM tokens (only from primary origin)
 export const getAllFCMTokens = async (): Promise<string[]> => {
   const tokens: string[] = [];
+  const staleKeys: string[] = [];
   try {
     const snap = await get(ref(db, "fcmTokens"));
     const data = snap.val();
     if (data) {
-      Object.values(data).forEach((userTokens: any) => {
-        tokens.push(...extractTokensFromMap(userTokens));
+      Object.entries(data).forEach(([uid, userTokens]: any) => {
+        if (!userTokens || typeof userTokens !== "object") return;
+        Object.entries(userTokens).forEach(([tokenKey, entry]: any) => {
+          if (!entry?.token) return;
+          if (isPrimaryOriginToken(entry)) {
+            tokens.push(entry.token);
+          } else {
+            // Mark non-primary tokens for cleanup
+            staleKeys.push(`fcmTokens/${uid}/${tokenKey}`);
+          }
+        });
       });
+    }
+    // Auto-cleanup non-primary origin tokens (stale/old domain tokens)
+    if (staleKeys.length > 0) {
+      console.log(`[FCM] Cleaning ${staleKeys.length} stale non-primary-origin tokens...`);
+      const cleanupUpdates: Record<string, null> = {};
+      staleKeys.forEach(k => { cleanupUpdates[k] = null; });
+      await update(ref(db), cleanupUpdates).catch(() => {});
     }
   } catch (err) {
     console.warn("Failed to get all FCM tokens:", err);
