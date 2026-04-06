@@ -239,7 +239,10 @@ const toEmailKey = (email?: string | null): string | null => {
 
 const isPrimaryOriginToken = (entry: any) => {
   const origin = typeof entry?.origin === "string" ? entry.origin : "";
-  return !origin || origin === PRIMARY_SITE_ORIGIN;
+  // STRICT: only allow tokens that explicitly match the primary origin
+  // Tokens without origin are from old domains — exclude them
+  if (!origin) return false;
+  return origin === PRIMARY_SITE_ORIGIN;
 };
 
 const extractTokensFromMap = (data: Record<string, any> | null | undefined): string[] => {
