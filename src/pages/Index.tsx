@@ -1752,7 +1752,7 @@ const Index = () => {
 
       <AnimatePresence>
         {showLiveTV && (
-          <LiveTV onClose={() => { setShowLiveTV(false); setActivePage("home"); }} />
+          <LiveTV onClose={() => { setShowLiveTV(false); }} />
         )}
       </AnimatePresence>
 
