@@ -27,7 +27,6 @@ import { useFirebaseData } from "@/hooks/useFirebaseData";
 import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
 import { animeSaltApi } from "@/lib/animeSaltApi";
 import LiveSupportChat from "@/components/LiveSupportChat";
-import LiveTV from "@/components/LiveTV";
 import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
 
@@ -304,9 +303,6 @@ const Index = () => {
     try { return sessionStorage.getItem("rs_uiLayer") === "profile"; } catch { return false; }
   });
   const [chatOpen, setChatOpen] = useState(false);
-  const [showLiveTV, setShowLiveTV] = useState(() => {
-    try { return sessionStorage.getItem("rs_uiLayer") === "livetv"; } catch { return false; }
-  });
 
   // Persist activePage to sessionStorage
   useEffect(() => {
@@ -569,10 +565,9 @@ const Index = () => {
     if (selectedAnime) return "details";
     if (showSearch) return "search";
     if (showProfile) return "profile";
-    if (showLiveTV) return "livetv";
     if (activePage === "series" || activePage === "movies") return activePage;
     return "home";
-  }, [playerState, saltPlayerState, selectedAnime, showSearch, showProfile, showLiveTV, activePage]);
+  }, [playerState, saltPlayerState, selectedAnime, showSearch, showProfile, activePage]);
 
 
   useEffect(() => {
@@ -584,7 +579,6 @@ const Index = () => {
         setActivePage("home");
       }
       if (layer === "series" || layer === "movies") setActivePage(layer);
-      if (layer === "livetv") { setShowLiveTV(true); setActivePage("livetv"); }
     } catch {}
   }, []);
 
@@ -595,7 +589,6 @@ const Index = () => {
     if (layer === "details") { setSelectedAnime(null); return true; }
     if (layer === "search") { setShowSearch(false); return true; }
     if (layer === "profile") { setShowProfile(false); setActivePage("home"); return true; }
-    if (layer === "livetv") { setShowLiveTV(false); setActivePage("home"); return true; }
     if (layer === "series" || layer === "movies") { setActivePage("home"); return true; }
     return false;
   }, [getCurrentLayer]);
@@ -1406,7 +1399,6 @@ const Index = () => {
 
   const handleNavigate = (page: string) => {
     setShowProfile(page === "profile");
-    setShowLiveTV(page === "livetv");
     setActivePage(page);
     setDubFilter("all");
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
@@ -1747,12 +1739,6 @@ const Index = () => {
       <AnimatePresence>
         {showProfile && (
           <ProfilePage onClose={() => { setShowProfile(false); setActivePage("home"); }} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showLiveTV && (
-          <LiveTV onClose={() => { setShowLiveTV(false); }} />
         )}
       </AnimatePresence>
 

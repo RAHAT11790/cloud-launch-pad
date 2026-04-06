@@ -17,7 +17,7 @@ interface QualityOption {
 }
 
 // Cloudflare CDN proxy for fast video streaming
-import { CLOUDFLARE_CDN_URL, SITE_ICON_URL } from "@/lib/siteConfig";
+import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
@@ -82,23 +82,11 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
 };
 
-const cleanupMediaElement = (media: HTMLMediaElement | null | undefined) => {
-  if (!media) return;
-  try {
-    media.pause();
-    media.removeAttribute("src");
-    media.load();
-  } catch {
-    // noop
-  }
-};
-
 interface VideoPlayerProps {
   src: string;
   title: string;
   subtitle?: string;
   poster?: string;
-  disablePlaybackRouting?: boolean;
   onClose: () => void;
   onNextEpisode?: () => void;
   episodeList?: { number: number; title?: string; active: boolean; onClick: () => void }[];
@@ -119,7 +107,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = false, onClose, onNextEpisode, episodeList, qualityOptions, animeId, onSaveProgress, hideDownload, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, animeId, onSaveProgress, hideDownload, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
   const branding = useBranding();
   // Preload anime character image to prevent loading glitch
   useEffect(() => {
@@ -162,13 +150,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
-  const lastProgressUpdateRef = useRef(0);
-
-  const routingReady = disablePlaybackRouting || playbackRouteReady;
-  const resolvePlaybackSrc = useCallback((url: string) => {
-    if (disablePlaybackRouting) return url;
-    return getPrimaryPlaybackSrc(url, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-  }, [disablePlaybackRouting, cdnEnabled, proxyUrl, proxyApiKey]);
 
   // Load CDN + proxy settings from Firebase
   useEffect(() => {
@@ -479,29 +460,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
 
 
   useEffect(() => {
-    if (!routingReady) return;
-    cleanupMediaElement(videoRef.current);
+    if (!playbackRouteReady) return;
     activeSourceBaseRef.current = src;
-    setCurrentSrc(resolvePlaybackSrc(src));
+    setCurrentSrc(getPrimaryPlaybackSrc(src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined));
     setCurrentQuality("Auto");
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
-    setPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
-    setIsBuffering(true);
-  }, [src, qualityOptions, routingReady, resolvePlaybackSrc]);
+  }, [src, qualityOptions, cdnEnabled, proxyUrl, proxyApiKey, playbackRouteReady]);
 
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
     if ('mediaSession' in navigator) {
       const artworkSrc = (() => {
-        if (!poster) return SITE_ICON_URL;
+        if (!poster) return `${window.location.origin}/favicon.ico`;
         try {
           return poster.startsWith("http") ? poster : new URL(poster, window.location.origin).toString();
         } catch {
-          return SITE_ICON_URL;
+          return `${window.location.origin}/favicon.ico`;
         }
       })();
 
@@ -614,7 +590,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
 
   useEffect(() => {
     const v = videoRef.current;
-    if (!v || !routingReady || !currentSrc) return;
+    if (!v || !playbackRouteReady || !currentSrc) return;
 
     // Track last known good position for fallback recovery
     let lastKnownTime = 0;
@@ -646,10 +622,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
             timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
           }
           // Update React state less frequently (every ~500ms) for other consumers
-          if (ct - lastProgressUpdateRef.current >= 0.35 || ct === 0) {
-            lastProgressUpdateRef.current = ct;
-            setCurrentTime(ct);
-          }
+          setCurrentTime(ct);
           rafId.current = requestAnimationFrame(tick);
         }
       };
@@ -680,7 +653,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
           cdnEnabled,
           proxyUrl || undefined,
           proxyApiKey || undefined
-        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && !disablePlaybackRouting);
+        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
 
         if (sameQualityRouteFallback) {
           setQualityFailMsg(`"${failedQualityLabel}" source blocked. Trying fallback route...`);
@@ -691,7 +664,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
         }
 
         const nextOption = availableQualities.find((q) => {
-          const candidateSrc = resolvePlaybackSrc(q.src);
+          const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
           return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
         });
 
@@ -699,7 +672,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
           setQualityFailMsg(`"${failedQualityLabel}" quality not available. Switching to "${nextOption.label}"...`);
           setTimeout(() => setQualityFailMsg(null), 4000);
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          const newFallbackSrc = resolvePlaybackSrc(nextOption.src);
+          const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
           activeSourceBaseRef.current = nextOption.src;
           if (newFallbackSrc === currentSrc) {
             v.currentTime = pendingSeek.current;
@@ -779,8 +752,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
         if (v.currentTime === 0 && v.readyState <= 1 && v.networkState === 2) {
           console.log('Video stalled at 0:00 with no data, reloading source...');
           const savedSrc = v.src;
-          v.removeAttribute('src');
-          v.load();
+          v.src = '';
           v.src = savedSrc;
           v.load();
         }
@@ -816,10 +788,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
       v.removeEventListener("seeked", onSeeked);
       v.removeEventListener("stalled", onStalled);
       // Ensure video is fully stopped on unmount (prevents background playback)
-      cleanupMediaElement(v);
+      v.pause();
+      v.src = '';
+      v.load();
       if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, disablePlaybackRouting, resolvePlaybackSrc, routingReady]);
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady]);
 
   useEffect(() => {
     const onFs = () => {
@@ -925,7 +899,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     activeSourceBaseRef.current = option.src;
-    const newSrc = resolvePlaybackSrc(option.src);
+    const newSrc = getPrimaryPlaybackSrc(option.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
 
     if (newSrc === currentSrc) {
       setCurrentQuality(option.label);
@@ -938,7 +912,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);
     setShowSettings(false);
-  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc]);
+  }, [currentQuality, currentSrc, cdnEnabled, proxyUrl, isPremium]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
@@ -1053,7 +1027,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
       {!isFullscreen && (
         <button onClick={() => {
           // Stop video completely before closing
-          cleanupMediaElement(videoRef.current);
+          const v = videoRef.current;
+          if (v) { v.pause(); v.src = ''; v.load(); }
           if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
           onClose();
         }} className="absolute top-5 right-5 z-[310] w-10 h-10 rounded-full gradient-primary flex items-center justify-center btn-glow transition-all hover:rotate-90">
@@ -1110,10 +1085,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
               <div className="w-16 h-16 rounded-full bg-destructive/20 flex items-center justify-center mb-4">
                 <X className="w-8 h-8 text-destructive" />
               </div>
-              <p className="text-base font-semibold text-foreground mb-1">😔 Server not responding</p>
-              <p className="text-xs text-muted-foreground mb-4 text-center px-6">This TV channel server is not responding. Try again later.</p>
+              <p className="text-base font-semibold text-foreground mb-1">Video Unavailable</p>
+              <p className="text-xs text-muted-foreground mb-4 text-center px-6">Server is not responding. Try another episode or quality.</p>
               <button onClick={(e) => { e.stopPropagation(); setVideoError(false); setIsBuffering(true); const v = videoRef.current; if (v) { v.load(); } }} className="px-4 py-2 rounded-lg gradient-primary text-sm font-semibold btn-glow">
-                Try Again
+                Retry
               </button>
             </div>
           )}
@@ -1464,7 +1439,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
               </div>
               <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
                 <video
-                  src={resolvePlaybackSrc(tutorialLink)}
+                  src={getPrimaryPlaybackSrc(tutorialLink, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined)}
                   className="w-full h-full"
                   controls
                   autoPlay
@@ -1518,7 +1493,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
 
           const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
             const dlId = createDownloadId(title, subtitle, quality, qualitySrc);
-            const proxiedUrl = resolvePlaybackSrc(qualitySrc);
+            const proxiedUrl = getPrimaryPlaybackSrc(qualitySrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
             const { downloadManager } = await import("@/lib/downloadManager");
             downloadManager.startDownload({
               id: dlId,
@@ -1770,7 +1745,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = fa
 
         {/* Suggested Videos */}
         {suggestedAnime && suggestedAnime.length > 0 && onSuggestedClick && (
-        <div className="mt-4 bg-background rounded-xl p-4">
+          <div className="mt-4 bg-background rounded-xl p-4">
             <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5 text-foreground">
               <Play className="w-3.5 h-3.5 text-primary" /> Suggested for you
             </h3>

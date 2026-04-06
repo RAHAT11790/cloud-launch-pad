@@ -15,12 +15,7 @@ const firebaseConfig = {
 };
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || "BDMR1Q2pzEWQZtt-E_g_T4GD0AN0_DkGfpDDs2_4a0Oy27INY1LPUGeR8n6NPmIDG3_dBL1OwHbN4a-Toku0Xs4";
-const APP_ICON_URL = (() => {
-  if (typeof window !== "undefined") {
-    return `${window.location.origin}/rs-icon.png`;
-  }
-  return SITE_ICON_URL;
-})();
+const APP_ICON_URL = SITE_ICON_URL;
 const PRIMARY_SITE_ORIGIN = (() => {
   try {
     return new URL(SITE_URL).origin;
@@ -244,10 +239,7 @@ const toEmailKey = (email?: string | null): string | null => {
 
 const isPrimaryOriginToken = (entry: any) => {
   const origin = typeof entry?.origin === "string" ? entry.origin : "";
-  // STRICT: only allow tokens that explicitly match the primary origin
-  // Tokens without origin are from old domains — exclude them
-  if (!origin) return false;
-  return origin === PRIMARY_SITE_ORIGIN;
+  return !origin || origin === PRIMARY_SITE_ORIGIN;
 };
 
 const extractTokensFromMap = (data: Record<string, any> | null | undefined): string[] => {
@@ -452,33 +444,16 @@ export const getFCMTokens = async (userIds: string[]): Promise<string[]> => {
   }
 };
 
-// Get ALL FCM tokens (only from primary origin)
+// Get ALL FCM tokens
 export const getAllFCMTokens = async (): Promise<string[]> => {
   const tokens: string[] = [];
-  const staleKeys: string[] = [];
   try {
     const snap = await get(ref(db, "fcmTokens"));
     const data = snap.val();
     if (data) {
-      Object.entries(data).forEach(([uid, userTokens]: any) => {
-        if (!userTokens || typeof userTokens !== "object") return;
-        Object.entries(userTokens).forEach(([tokenKey, entry]: any) => {
-          if (!entry?.token) return;
-          if (isPrimaryOriginToken(entry)) {
-            tokens.push(entry.token);
-          } else {
-            // Mark non-primary tokens for cleanup
-            staleKeys.push(`fcmTokens/${uid}/${tokenKey}`);
-          }
-        });
+      Object.values(data).forEach((userTokens: any) => {
+        tokens.push(...extractTokensFromMap(userTokens));
       });
-    }
-    // Auto-cleanup non-primary origin tokens (stale/old domain tokens)
-    if (staleKeys.length > 0) {
-      console.log(`[FCM] Cleaning ${staleKeys.length} stale non-primary-origin tokens...`);
-      const cleanupUpdates: Record<string, null> = {};
-      staleKeys.forEach(k => { cleanupUpdates[k] = null; });
-      await update(ref(db), cleanupUpdates).catch(() => {});
     }
   } catch (err) {
     console.warn("Failed to get all FCM tokens:", err);

@@ -9,13 +9,13 @@ import {
   LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
   Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
   Shield, LogOut, Search, Save, ChevronDown, Send, Link, ChevronLeft, ChevronRight,
-  Lock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin, Tv, Loader2
+  Lock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config";
 
 interface CastMember {
   name: string;
@@ -386,280 +386,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   );
 };
 
-// ==================== LIVE TV SECTION ====================
-const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
-  const [channels, setChannels] = useState<any[]>([]);
-  const [newChannel, setNewChannel] = useState({ name: "", logo: "", streamUrl: "" });
-  const [editing, setEditing] = useState<string | null>(null);
-  const [proxyUrl, setProxyUrl] = useState("");
-  const [proxyUrlInput, setProxyUrlInput] = useState("");
-  const [playlists, setPlaylists] = useState<{ key: string; url: string; name: string }[]>([]);
-  const [newPlaylistUrl, setNewPlaylistUrl] = useState("");
-  const [newPlaylistName, setNewPlaylistName] = useState("");
-  const [m3uLoading, setM3uLoading] = useState(false);
-  const [deletingAll, setDeletingAll] = useState(false);
-
-  useEffect(() => {
-    const unsub = onValue(ref(db, "liveTvChannels"), (snap) => {
-      const data = snap.val();
-      if (data) {
-        setChannels(Object.entries(data).map(([key, val]: any) => ({ _key: key, ...val })));
-      } else {
-        setChannels([]);
-      }
-    });
-    const unsub3 = onValue(ref(db, "settings/liveTvProxyUrl"), (snap) => {
-      const val = snap.val() || "";
-      setProxyUrl(val);
-      setProxyUrlInput(val);
-    });
-    const unsub4 = onValue(ref(db, "settings/liveTvPlaylists"), (snap) => {
-      const data = snap.val();
-      if (data) {
-        setPlaylists(Object.entries(data).map(([key, val]: any) => ({ key, url: val.url || "", name: val.name || "" })));
-      } else {
-        setPlaylists([]);
-      }
-    });
-    return () => { unsub(); unsub3(); unsub4(); };
-  }, []);
-
-  const saveProxyUrl = async () => {
-    await set(ref(db, "settings/liveTvProxyUrl"), proxyUrlInput.trim());
-    toast.success("প্রক্সি URL সেভ করা হয়েছে");
-  };
-
-  const addChannel = async () => {
-    if (!newChannel.name.trim()) { toast.error("চ্যানেলের নাম দিন"); return; }
-    if (!newChannel.streamUrl.trim()) { toast.error("Stream URL দিন"); return; }
-    await push(ref(db, "liveTvChannels"), { ...newChannel, category: "Custom", addedAt: Date.now() });
-    setNewChannel({ name: "", logo: "", streamUrl: "" });
-    toast.success("✅ চ্যানেল যোগ করা হয়েছে!");
-  };
-
-  const deleteChannel = async (key: string) => {
-    if (!confirm("এই চ্যানেল মুছে ফেলতে চান?")) return;
-    await remove(ref(db, `liveTvChannels/${key}`));
-    toast.success("চ্যানেল মুছে ফেলা হয়েছে");
-  };
-
-  const deleteAllChannels = async () => {
-    if (!confirm("⚠️ সব কাস্টম চ্যানেল মুছে ফেলতে চান? এটি undo করা যাবে না!")) return;
-    setDeletingAll(true);
-    try {
-      await remove(ref(db, "liveTvChannels"));
-      toast.success("🗑️ সব চ্যানেল মুছে ফেলা হয়েছে!");
-    } catch {
-      toast.error("মুছতে সমস্যা হয়েছে");
-    } finally {
-      setDeletingAll(false);
-    }
-  };
-
-  const updateChannel = async (key: string) => {
-    const ch = channels.find(c => c._key === key);
-    if (!ch) return;
-    const { _key, ...data } = ch;
-    await set(ref(db, `liveTvChannels/${key}`), data);
-    setEditing(null);
-    toast.success("চ্যানেল আপডেট করা হয়েছে");
-  };
-
-  const addPlaylist = async () => {
-    const url = newPlaylistUrl.trim();
-    if (!url) { toast.error("Playlist URL দিন"); return; }
-    setM3uLoading(true);
-    try {
-      await push(ref(db, "settings/liveTvPlaylists"), { url, name: newPlaylistName.trim() || url.split("/").pop() || "Playlist", addedAt: Date.now() });
-      setNewPlaylistUrl("");
-      setNewPlaylistName("");
-      toast.success("✅ প্লেলিস্ট যোগ করা হয়েছে!");
-    } catch {
-      toast.error("❌ যোগ করা যায়নি");
-    } finally {
-      setM3uLoading(false);
-    }
-  };
-
-  const removePlaylist = async (key: string) => {
-    if (!confirm("এই প্লেলিস্ট মুছে ফেলতে চান?")) return;
-    await remove(ref(db, `settings/liveTvPlaylists/${key}`));
-    toast.success("প্লেলিস্ট মুছে ফেলা হয়েছে");
-  };
-
-  // Default playlists from GitHub project (AHCL / BotolMehedi)
-  const GITHUB_PLAYLISTS = [
-    { name: "🇧🇩 Bangladesh IPTV", url: "https://raw.githubusercontent.com/abusaeeidx/Mrgify-BDIX-IPTV/refs/heads/main/playlist.m3u" },
-    { name: "🌍 Combined IPTV", url: "https://raw.githubusercontent.com/time2shine/IPTV/refs/heads/master/combined.m3u" },
-    { name: "🇮🇳 India", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/India/LiveTV.m3u" },
-    { name: "🇺🇸 USA", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/USA/LiveTV.m3u" },
-    { name: "🌍 Worldwide", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/Worldwide/LiveTV.m3u" },
-    { name: "🇵🇰 Pakistan", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/Pakistan/LiveTV.m3u" },
-  ];
-
-  return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-bold flex items-center gap-2"><Tv size={20} /> Live TV চ্যানেল ম্যানেজার</h2>
-
-      {/* Proxy URL */}
-      <div className={`${glassCard} p-4`}>
-        <h3 className="text-sm font-semibold mb-2">🔗 Live TV Proxy URL</h3>
-        <p className="text-[10px] text-muted-foreground mb-3">CORS ব্লক এড়াতে প্রক্সি URL দিন। <code className="text-primary">{'{url}'}</code> প্লেসহোল্ডার ব্যবহার করুন।</p>
-        <input
-          className={`${inputClass} w-full mb-2 font-mono text-[11px]`}
-          placeholder="https://your-proxy.com/proxy?url={url}"
-          value={proxyUrlInput}
-          onChange={e => setProxyUrlInput(e.target.value)}
-        />
-        <button onClick={saveProxyUrl} className={`${btnPrimary} w-full`}>💾 সেভ করুন</button>
-      </div>
-
-      {/* 1. Custom Channel Add - 3 fields */}
-      <div className={`${glassCard} p-4 border border-green-500/20`}>
-        <h3 className="text-sm font-semibold mb-3">➕ কাস্টম চ্যানেল যোগ করুন</h3>
-        <div className="space-y-2 mb-3">
-          <input className={inputClass + " w-full"} placeholder="📺 Channel Name *" value={newChannel.name} onChange={e => setNewChannel({ ...newChannel, name: e.target.value })} />
-          <input className={inputClass + " w-full"} placeholder="🖼️ Logo URL" value={newChannel.logo} onChange={e => setNewChannel({ ...newChannel, logo: e.target.value })} />
-          <input className={inputClass + " w-full"} placeholder="🔗 Live Stream Link *" value={newChannel.streamUrl} onChange={e => setNewChannel({ ...newChannel, streamUrl: e.target.value })} />
-        </div>
-        <button onClick={addChannel} className={`${btnPrimary} w-full`}>➕ চ্যানেল যোগ করুন</button>
-      </div>
-
-      {/* 2. GitHub / M3U Playlist Import */}
-      <div className={`${glassCard} p-4 border border-blue-500/20`}>
-        <h3 className="text-sm font-semibold mb-2">📡 M3U প্লেলিস্ট (GitHub IPTV)</h3>
-        <p className="text-[10px] text-muted-foreground mb-3">
-          M3U প্লেলিস্ট URL যোগ করুন। হাজার হাজার চ্যানেল অটোমেটিক লোড হবে।
-        </p>
-
-        {/* Quick add from GitHub project */}
-        <div className="mb-4">
-          <p className="text-[10px] font-semibold text-muted-foreground mb-2">⚡ এক ক্লিকে যোগ করুন (AHCL GitHub)</p>
-          <div className="grid grid-cols-2 gap-2">
-            {GITHUB_PLAYLISTS.map((preset) => {
-              const alreadyAdded = playlists.some(p => p.url === preset.url);
-              return (
-                <button
-                  key={preset.url}
-                  disabled={alreadyAdded}
-                  onClick={async () => {
-                    await push(ref(db, "settings/liveTvPlaylists"), { url: preset.url, name: preset.name, addedAt: Date.now() });
-                    toast.success(`✅ ${preset.name} যোগ করা হয়েছে!`);
-                  }}
-                  className={`text-left p-2 rounded-lg border transition-all text-[10px] ${
-                    alreadyAdded
-                      ? "bg-muted/50 border-border/30 text-muted-foreground cursor-not-allowed"
-                      : "bg-card border-border/50 hover:border-primary/40 cursor-pointer"
-                  }`}
-                >
-                  <span className="font-semibold">{preset.name}</span>
-                  {alreadyAdded && <span className="ml-1 text-[8px] text-green-500">✅</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Custom playlist URL */}
-        <div className="border-t border-border/30 pt-3">
-          <p className="text-[10px] font-semibold text-muted-foreground mb-2">🔗 কাস্টম প্লেলিস্ট URL</p>
-          <input
-            className={`${inputClass} w-full mb-2`}
-            placeholder="প্লেলিস্টের নাম (ঐচ্ছিক)"
-            value={newPlaylistName}
-            onChange={e => setNewPlaylistName(e.target.value)}
-          />
-          <input
-            className={`${inputClass} w-full mb-2 font-mono text-[11px]`}
-            placeholder="https://...playlist.m3u"
-            value={newPlaylistUrl}
-            onChange={e => setNewPlaylistUrl(e.target.value)}
-          />
-          <button
-            onClick={addPlaylist}
-            disabled={m3uLoading}
-            className={`${btnPrimary} w-full flex items-center justify-center gap-2`}
-          >
-            {m3uLoading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            প্লেলিস্ট যোগ করুন
-          </button>
-        </div>
-
-        {/* Added playlists list */}
-        {playlists.length > 0 && (
-          <div className="mt-3 space-y-2">
-            <p className="text-[10px] font-semibold text-muted-foreground">যোগ করা প্লেলিস্ট ({playlists.length})</p>
-            {playlists.map((p) => (
-              <div key={p.key} className="flex items-center gap-2 p-2 rounded-lg bg-card/50 border border-border/30">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold truncate">{p.name || "Unnamed"}</p>
-                  <p className="text-[9px] text-muted-foreground truncate font-mono">{p.url}</p>
-                </div>
-                <button onClick={() => removePlaylist(p.key)} className="p-1.5 rounded-lg hover:bg-destructive/20 text-destructive flex-shrink-0">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Delete All + Channel List */}
-      <div className={`${glassCard} p-4`}>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold">📺 কাস্টম চ্যানেল ({channels.length})</h3>
-          {channels.length > 0 && (
-            <button
-              onClick={deleteAllChannels}
-              disabled={deletingAll}
-              className="px-3 py-1.5 rounded-lg bg-destructive/20 text-destructive text-[10px] font-bold hover:bg-destructive/30 transition-colors flex items-center gap-1"
-            >
-              {deletingAll ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-              🗑️ Delete All Channels
-            </button>
-          )}
-        </div>
-        {channels.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-6">কোন কাস্টম চ্যানেল নেই</p>
-        ) : (
-          <div className="space-y-2">
-            {channels.map((ch) => (
-              <div key={ch._key} className="flex items-center gap-3 p-3 rounded-xl bg-card/50 border border-border/30">
-                {ch.logo && <img src={ch.logo} alt="" className="w-10 h-10 rounded-lg object-contain bg-white/5" />}
-                <div className="flex-1 min-w-0">
-                  {editing === ch._key ? (
-                    <div className="space-y-1.5">
-                      <input className={`${inputClass} text-xs`} value={ch.name} onChange={e => setChannels(channels.map(c => c._key === ch._key ? { ...c, name: e.target.value } : c))} />
-                      <input className={`${inputClass} text-xs`} placeholder="Stream URL" value={ch.streamUrl || ""} onChange={e => setChannels(channels.map(c => c._key === ch._key ? { ...c, streamUrl: e.target.value } : c))} />
-                      <input className={`${inputClass} text-xs`} placeholder="Logo URL" value={ch.logo || ""} onChange={e => setChannels(channels.map(c => c._key === ch._key ? { ...c, logo: e.target.value } : c))} />
-                      <div className="flex gap-2">
-                        <button onClick={() => updateChannel(ch._key)} className={`${btnPrimary} text-xs px-3 py-1`}>Save</button>
-                        <button onClick={() => setEditing(null)} className={`${btnSecondary} text-xs px-3 py-1`}>Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-sm font-semibold truncate">{ch.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{ch.category || "Custom"} • {ch.streamUrl ? "HLS" : ch.mpd ? "DASH" : "No URL"}</p>
-                    </>
-                  )}
-                </div>
-                {editing !== ch._key && (
-                  <div className="flex gap-1">
-                    <button onClick={() => setEditing(ch._key)} className="p-1.5 rounded-lg hover:bg-accent"><Edit size={14} /></button>
-                    <button onClick={() => deleteChannel(ch._key)} className="p-1.5 rounded-lg hover:bg-destructive/20 text-destructive"><Trash2 size={14} /></button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-
+// ==================== AI CONFIG SECTION ====================
 const AiConfigSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiUrl, setAiUrl] = useState("");
@@ -1999,7 +1726,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "edge-router": "Edge Function Router",
     "branding": "UI+AD Branding",
     "ai-config": "AI Chat Config",
-    "live-tv": "Live TV Channels",
   };
 
   // ==================== CATEGORIES ====================
@@ -3220,7 +2946,6 @@ Pᴏᴡᴇʀ Bʏ :
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
-    { section: "live-tv", icon: <Tv size={16} />, label: "Live TV" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "ui-themes", icon: <Zap size={16} />, label: "UI Themes", group: "Customization" },
     { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
@@ -5547,7 +5272,6 @@ Pᴏᴡᴇʀ Bʏ :
             </div>
 
 
-
             {/* Proxy Server Selector */}
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
@@ -5592,11 +5316,6 @@ Pᴏᴡᴇʀ Bʏ :
         {/* ==================== AI CONFIG ==================== */}
         {activeSection === "ai-config" && (
           <AiConfigSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
-        )}
-
-        {/* ==================== LIVE TV ==================== */}
-        {activeSection === "live-tv" && (
-          <LiveTvSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
         {/* ==================== BRANDING ==================== */}
