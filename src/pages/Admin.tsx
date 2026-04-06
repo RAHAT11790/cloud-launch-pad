@@ -389,18 +389,15 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
 // ==================== LIVE TV SECTION ====================
 const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
   const [channels, setChannels] = useState<any[]>([]);
-  const [apiEnabled, setApiEnabled] = useState(true);
-  const [newChannel, setNewChannel] = useState({ name: "", logo: "", category: "", streamUrl: "", mpd: "", token: "", referer: "", userAgent: "" });
+  const [newChannel, setNewChannel] = useState({ name: "", logo: "", streamUrl: "" });
   const [editing, setEditing] = useState<string | null>(null);
-  const [jsonPaste, setJsonPaste] = useState("");
-  const [jsonParsing, setJsonParsing] = useState(false);
   const [proxyUrl, setProxyUrl] = useState("");
   const [proxyUrlInput, setProxyUrlInput] = useState("");
-  const [testingProxy, setTestingProxy] = useState(false);
   const [playlists, setPlaylists] = useState<{ key: string; url: string; name: string }[]>([]);
   const [newPlaylistUrl, setNewPlaylistUrl] = useState("");
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [m3uLoading, setM3uLoading] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "liveTvChannels"), (snap) => {
@@ -410,9 +407,6 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
       } else {
         setChannels([]);
       }
-    });
-    const unsub2 = onValue(ref(db, "settings/liveTvApiEnabled"), (snap) => {
-      setApiEnabled(snap.val() !== false);
     });
     const unsub3 = onValue(ref(db, "settings/liveTvProxyUrl"), (snap) => {
       const val = snap.val() || "";
@@ -427,7 +421,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         setPlaylists([]);
       }
     });
-    return () => { unsub(); unsub2(); unsub3(); unsub4(); };
+    return () => { unsub(); unsub3(); unsub4(); };
   }, []);
 
   const saveProxyUrl = async () => {
@@ -435,60 +429,11 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     toast.success("প্রক্সি URL সেভ করা হয়েছে");
   };
 
-  const testProxy = async () => {
-    if (!proxyUrlInput.trim()) { toast.error("প্রক্সি URL দিন"); return; }
-    setTestingProxy(true);
-    try {
-      const testUrl = proxyUrlInput.includes("{url}")
-        ? proxyUrlInput.replace("{url}", encodeURIComponent("https://www.google.com"))
-        : `${proxyUrlInput}${encodeURIComponent("https://www.google.com")}`;
-      const res = await fetch(testUrl, { method: "HEAD", mode: "no-cors" });
-      toast.success("✅ প্রক্সি সম্ভবত কাজ করছে (no-cors check passed)");
-    } catch {
-      toast.error("❌ প্রক্সি কাজ করছে না");
-    } finally {
-      setTestingProxy(false);
-    }
-  };
-
-  const addPlaylist = async () => {
-    const url = newPlaylistUrl.trim();
-    if (!url) { toast.error("Playlist URL দিন"); return; }
-    if (!url.endsWith(".m3u") && !url.endsWith(".m3u8") && !url.includes("m3u")) {
-      toast.error("শুধু M3U/M3U8 প্লেলিস্ট সাপোর্টেড");
-      return;
-    }
-    setM3uLoading(true);
-    try {
-      // Test if URL is reachable
-      const res = await fetch(url, { method: "HEAD", mode: "no-cors" });
-      await push(ref(db, "settings/liveTvPlaylists"), { url, name: newPlaylistName.trim() || url.split("/").pop() || "Playlist", addedAt: Date.now() });
-      setNewPlaylistUrl("");
-      setNewPlaylistName("");
-      toast.success("✅ প্লেলিস্ট যোগ করা হয়েছে!");
-    } catch {
-      toast.error("❌ URL রিচেবল নয়");
-    } finally {
-      setM3uLoading(false);
-    }
-  };
-
-  const removePlaylist = async (key: string) => {
-    if (!confirm("এই প্লেলিস্ট মুছে ফেলতে চান?")) return;
-    await remove(ref(db, `settings/liveTvPlaylists/${key}`));
-    toast.success("প্লেলিস্ট মুছে ফেলা হয়েছে");
-  };
-
-  const toggleApi = async () => {
-    await set(ref(db, "settings/liveTvApiEnabled"), !apiEnabled);
-    toast.success(apiEnabled ? "API চ্যানেল বন্ধ করা হয়েছে" : "API চ্যানেল চালু করা হয়েছে");
-  };
-
   const addChannel = async () => {
     if (!newChannel.name.trim()) { toast.error("চ্যানেলের নাম দিন"); return; }
-    if (!newChannel.streamUrl.trim() && !newChannel.mpd.trim()) { toast.error("Stream URL বা MPD দিন"); return; }
-    await push(ref(db, "liveTvChannels"), { ...newChannel, addedAt: Date.now() });
-    setNewChannel({ name: "", logo: "", category: "", streamUrl: "", mpd: "", token: "", referer: "", userAgent: "" });
+    if (!newChannel.streamUrl.trim()) { toast.error("Stream URL দিন"); return; }
+    await push(ref(db, "liveTvChannels"), { ...newChannel, category: "Custom", addedAt: Date.now() });
+    setNewChannel({ name: "", logo: "", streamUrl: "" });
     toast.success("✅ চ্যানেল যোগ করা হয়েছে!");
   };
 
@@ -496,6 +441,19 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     if (!confirm("এই চ্যানেল মুছে ফেলতে চান?")) return;
     await remove(ref(db, `liveTvChannels/${key}`));
     toast.success("চ্যানেল মুছে ফেলা হয়েছে");
+  };
+
+  const deleteAllChannels = async () => {
+    if (!confirm("⚠️ সব কাস্টম চ্যানেল মুছে ফেলতে চান? এটি undo করা যাবে না!")) return;
+    setDeletingAll(true);
+    try {
+      await remove(ref(db, "liveTvChannels"));
+      toast.success("🗑️ সব চ্যানেল মুছে ফেলা হয়েছে!");
+    } catch {
+      toast.error("মুছতে সমস্যা হয়েছে");
+    } finally {
+      setDeletingAll(false);
+    }
   };
 
   const updateChannel = async (key: string) => {
@@ -507,337 +465,41 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
     toast.success("চ্যানেল আপডেট করা হয়েছে");
   };
 
-  // Normalize both formats: original (name/mpd/streamUrl) and streams format (title/url)
-  const normalizeChannel = (item: any) => {
-    const name = item.name || item.title || "";
-    if (!name) return null;
-    const streamUrl = item.streamUrl || item.url || "";
-    const mpd = item.mpd || "";
-    if (!streamUrl && !mpd) return null;
-    return {
-      name,
-      logo: item.logo || "",
-      category: item.category || (item.label && item.label !== "null" ? item.label : "General"),
-      streamUrl,
-      mpd,
-      token: item.token || "",
-      referer: item.referer || item.referrer || "",
-      userAgent: item.userAgent || item.user_agent || "",
-      quality: item.quality || "",
-      addedAt: Date.now(),
-      ...(item.drm && typeof item.drm === "object" && Object.keys(item.drm).length > 0 ? { drm: item.drm } : {}),
-    };
-  };
-
-  const [validating, setValidating] = useState(false);
-  const [validationProgress, setValidationProgress] = useState({ checked: 0, total: 0, valid: 0 });
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [iptvTarget, setIptvTarget] = useState("100");
-  const [iptvLoading, setIptvLoading] = useState(false);
-  const [iptvCountry, setIptvCountry] = useState("");
-  const [jsonCheckLimit, setJsonCheckLimit] = useState("200");
-
-  // Fetch logos map from iptv-org
-  const fetchLogoMap = async (): Promise<Record<string, string>> => {
+  const addPlaylist = async () => {
+    const url = newPlaylistUrl.trim();
+    if (!url) { toast.error("Playlist URL দিন"); return; }
+    setM3uLoading(true);
     try {
-      const res = await fetch("https://iptv-org.github.io/api/logos.json");
-      const logos: any[] = await res.json();
-      const map: Record<string, string> = {};
-      for (const l of logos) {
-        if (l.channel && l.url) {
-          if (!map[l.channel]) map[l.channel] = l.url;
-        }
-      }
-      return map;
-    } catch { return {}; }
-  };
-
-  // Fetch channel details from iptv-org (for country/category)
-  const fetchChannelDetails = async (): Promise<Record<string, any>> => {
-    try {
-      const res = await fetch("https://iptv-org.github.io/api/channels.json");
-      const channels: any[] = await res.json();
-      const map: Record<string, any> = {};
-      for (const ch of channels) {
-        if (ch.id) map[ch.id] = ch;
-      }
-      return map;
-    } catch { return {}; }
-  };
-
-  const importFromIptvOrg = async () => {
-    const checkLimit = parseInt(iptvTarget) || 100;
-    setIptvLoading(true);
-    setValidating(true);
-    setValidationProgress({ checked: 0, total: 0, valid: 0 });
-
-    try {
-      toast.info("📡 iptv-org থেকে ডেটা লোড হচ্ছে...");
-      const [streamsRes, logoMap, channelMap] = await Promise.all([
-        fetch("https://iptv-org.github.io/api/streams.json").then(r => r.json()),
-        fetchLogoMap(),
-        fetchChannelDetails(),
-      ]);
-
-      let streams: any[] = streamsRes;
-
-      // Filter by country if specified
-      if (iptvCountry.trim()) {
-        const cc = iptvCountry.trim().toUpperCase();
-        streams = streams.filter((s: any) => {
-          if (!s.channel) return false;
-          const chInfo = channelMap[s.channel];
-          return chInfo && chInfo.country && chInfo.country.toUpperCase() === cc;
-        });
-        toast.info(`🌍 ${cc} দেশের ${streams.length}টি স্ট্রিম পাওয়া গেছে`);
-      }
-
-      // Target = how many to CHECK, not how many to add
-      const toCheck = streams.slice(0, checkLimit);
-      setValidationProgress({ checked: 0, total: toCheck.length, valid: 0 });
-
-      let added = 0;
-      const batchSize = 10;
-
-      for (let i = 0; i < toCheck.length; i += batchSize) {
-        const batch = toCheck.slice(i, i + batchSize);
-        const results = await Promise.allSettled(
-          batch.map(async (s: any) => {
-            const url = s.url;
-            if (!url) return null;
-
-            // Get logo first - skip if no logo
-            const chInfo = s.channel ? channelMap[s.channel] : null;
-            const logo = (s.channel ? logoMap[s.channel] : "") || "";
-            if (!logo) return null; // NO LOGO = SKIP
-
-            // Real validation: try to GET a small part of the stream
-            try {
-              const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 8000);
-              const res = await fetch(url, {
-                method: "GET",
-                headers: { "Range": "bytes=0-1024" },
-                signal: controller.signal,
-              });
-              clearTimeout(timeout);
-
-              // Must get a real response (not just opaque)
-              if (!res.ok && res.status !== 206) return null;
-
-              const category = chInfo?.categories?.[0] || (s.label && s.label !== "null" ? s.label : "General");
-              const country = chInfo?.country || "";
-
-              return {
-                name: chInfo?.name || s.title || "Unknown",
-                logo,
-                category: category.charAt(0).toUpperCase() + category.slice(1),
-                streamUrl: url,
-                mpd: "",
-                token: "",
-                referer: s.referrer || "",
-                userAgent: s.user_agent || "",
-                quality: s.quality || "",
-                country,
-                addedAt: Date.now(),
-              };
-            } catch {
-              // CORS blocked - try no-cors as fallback but only if logo exists
-              try {
-                const controller2 = new AbortController();
-                const timeout2 = setTimeout(() => controller2.abort(), 5000);
-                await fetch(url, { method: "HEAD", mode: "no-cors", signal: controller2.signal });
-                clearTimeout(timeout2);
-
-                const category = chInfo?.categories?.[0] || (s.label && s.label !== "null" ? s.label : "General");
-                const country = chInfo?.country || "";
-
-                return {
-                  name: chInfo?.name || s.title || "Unknown",
-                  logo,
-                  category: category.charAt(0).toUpperCase() + category.slice(1),
-                  streamUrl: url,
-                  mpd: "",
-                  token: "",
-                  referer: s.referrer || "",
-                  userAgent: s.user_agent || "",
-                  quality: s.quality || "",
-                  country,
-                  addedAt: Date.now(),
-                };
-              } catch { return null; }
-            }
-          })
-        );
-
-        for (const r of results) {
-          if (r.status === "fulfilled" && r.value) {
-            await push(ref(db, "liveTvChannels"), r.value);
-            added++;
-          }
-        }
-        setValidationProgress({ checked: Math.min(i + batchSize, toCheck.length), total: toCheck.length, valid: added });
-      }
-
-      setValidating(false);
-      setIptvLoading(false);
-      toast.success(`✅ ${toCheck.length}টি চেক করে ${added}টি ভ্যালিড চ্যানেল যোগ হয়েছে (লোগোসহ)!`);
-    } catch (err) {
-      setValidating(false);
-      setIptvLoading(false);
-      toast.error("❌ iptv-org থেকে ডেটা লোড করা যায়নি");
-    }
-  };
-
-  const validateAndImport = async (items: any[], skipValidation = false, withLogos = true, checkLimit?: number) => {
-    // Try to fetch logos for streams format items
-    let logoMap: Record<string, string> = {};
-    let channelMap: Record<string, any> = {};
-    if (withLogos && items.some((i: any) => i.channel || (i.title && !i.logo))) {
-      toast.info("🔍 লোগো খোঁজা হচ্ছে...");
-      [logoMap, channelMap] = await Promise.all([fetchLogoMap(), fetchChannelDetails()]);
-    }
-
-    const normalized = items.map((item: any) => {
-      const ch = normalizeChannel(item);
-      if (!ch) return null;
-      // If no logo, try iptv-org
-      if (!ch.logo && item.channel && logoMap[item.channel]) {
-        ch.logo = logoMap[item.channel];
-      }
-      // If no logo, try matching by name
-      if (!ch.logo) {
-        for (const [chId, chInfo] of Object.entries(channelMap) as any) {
-          if (chInfo.name?.toLowerCase() === ch.name.toLowerCase()) {
-            ch.logo = logoMap[chId] || "";
-            if (!ch.category || ch.category === "General") {
-              ch.category = chInfo.categories?.[0] ? chInfo.categories[0].charAt(0).toUpperCase() + chInfo.categories[0].slice(1) : ch.category;
-            }
-            break;
-          }
-        }
-      }
-      return ch;
-    }).filter((ch: any) => ch && ch.logo) as any[];
-
-    // Apply check limit if provided
-    const toProcess = checkLimit && checkLimit > 0 ? normalized.slice(0, checkLimit) : normalized;
-
-    if (toProcess.length === 0) { toast.error("লোগোসহ কোন ভ্যালিড চ্যানেল পাওয়া যায়নি"); return; }
-    if (checkLimit) toast.info(`🎯 ${normalized.length}টি থেকে প্রথম ${toProcess.length}টি চেক করা হবে`);
-
-    if (skipValidation) {
-      let added = 0;
-      for (const ch of toProcess) {
-        await push(ref(db, "liveTvChannels"), ch);
-        added++;
-      }
-      toast.success(`✅ ${added}টি চ্যানেল যোগ করা হয়েছে!`);
-      setJsonPaste("");
-      return;
-    }
-
-    // Validate channels
-    setValidating(true);
-    setValidationProgress({ checked: 0, total: toProcess.length, valid: 0 });
-    let added = 0;
-    const batchSize = 10;
-
-    for (let i = 0; i < toProcess.length; i += batchSize) {
-      const batch = toProcess.slice(i, i + batchSize);
-      const results = await Promise.allSettled(
-        batch.map(async (ch) => {
-          const url = ch.streamUrl || ch.mpd;
-          try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 8000);
-            await fetch(url, { method: "HEAD", mode: "no-cors", signal: controller.signal });
-            clearTimeout(timeout);
-            return ch;
-          } catch { return null; }
-        })
-      );
-
-      for (const r of results) {
-        if (r.status === "fulfilled" && r.value) {
-          await push(ref(db, "liveTvChannels"), r.value);
-          added++;
-        }
-      }
-      setValidationProgress({ checked: Math.min(i + batchSize, toProcess.length), total: toProcess.length, valid: added });
-    }
-
-    setValidating(false);
-    if (added > 0) {
-      toast.success(`✅ ${added}/${toProcess.length} ভ্যালিড চ্যানেল যোগ করা হয়েছে!`);
-      setJsonPaste("");
-    } else {
-      toast.error("কোন চ্যানেল ভ্যালিডেশন পাস করেনি");
-    }
-  };
-
-  const importFromJson = async () => {
-    if (!jsonPaste.trim()) { toast.error("JSON পেস্ট করুন"); return; }
-    setJsonParsing(true);
-    try {
-      let parsed = JSON.parse(jsonPaste.trim());
-      const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
-      const limit = parseInt(jsonCheckLimit) || 0;
-      await validateAndImport(items, false, true, limit > 0 ? limit : undefined);
-    } catch (e) {
-      toast.error("❌ JSON পার্স করা যায়নি। সঠিক JSON দিন।");
-    } finally {
-      setJsonParsing(false);
-    }
-  };
-
-  const importWithoutValidation = async () => {
-    if (!jsonPaste.trim()) { toast.error("JSON পেস্ট করুন"); return; }
-    setJsonParsing(true);
-    try {
-      let parsed = JSON.parse(jsonPaste.trim());
-      const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
-      await validateAndImport(items, true);
-    } catch (e) {
-      toast.error("❌ JSON পার্স করা যায়নি। সঠিক JSON দিন।");
-    } finally {
-      setJsonParsing(false);
-    }
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.name.endsWith(".json")) { toast.error("শুধুমাত্র .json ফাইল সাপোর্টেড"); return; }
-    try {
-      const text = await file.text();
-      const parsed = JSON.parse(text);
-      const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
-      const limit = parseInt(jsonCheckLimit) || 0;
-      toast.info(`📂 ${items.length}টি চ্যানেল পাওয়া গেছে। ${limit > 0 ? `প্রথম ${limit}টি` : 'সব'} চেক হবে...`);
-      await validateAndImport(items, false, true, limit > 0 ? limit : undefined);
+      await push(ref(db, "settings/liveTvPlaylists"), { url, name: newPlaylistName.trim() || url.split("/").pop() || "Playlist", addedAt: Date.now() });
+      setNewPlaylistUrl("");
+      setNewPlaylistName("");
+      toast.success("✅ প্লেলিস্ট যোগ করা হয়েছে!");
     } catch {
-      toast.error("❌ ফাইল পড়া যায়নি বা JSON ভুল");
+      toast.error("❌ যোগ করা যায়নি");
+    } finally {
+      setM3uLoading(false);
     }
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  const removePlaylist = async (key: string) => {
+    if (!confirm("এই প্লেলিস্ট মুছে ফেলতে চান?")) return;
+    await remove(ref(db, `settings/liveTvPlaylists/${key}`));
+    toast.success("প্লেলিস্ট মুছে ফেলা হয়েছে");
+  };
+
+  // Default playlists from GitHub project (AHCL / BotolMehedi)
+  const GITHUB_PLAYLISTS = [
+    { name: "🇧🇩 Bangladesh IPTV", url: "https://raw.githubusercontent.com/abusaeeidx/Mrgify-BDIX-IPTV/refs/heads/main/playlist.m3u" },
+    { name: "🌍 Combined IPTV", url: "https://raw.githubusercontent.com/time2shine/IPTV/refs/heads/master/combined.m3u" },
+    { name: "🇮🇳 India", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/India/LiveTV.m3u" },
+    { name: "🇺🇸 USA", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/USA/LiveTV.m3u" },
+    { name: "🌍 Worldwide", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/Worldwide/LiveTV.m3u" },
+    { name: "🇵🇰 Pakistan", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/Pakistan/LiveTV.m3u" },
+  ];
 
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-bold flex items-center gap-2"><Tv size={20} /> Live TV চ্যানেল ম্যানেজার</h2>
-
-      {/* API Toggle */}
-      <div className={`${glassCard} p-4`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">ServerTV Hub API</p>
-            <p className="text-[11px] text-muted-foreground">বাহ্যিক API থেকে চ্যানেল লোড করুন</p>
-          </div>
-          <button onClick={toggleApi} className={`px-4 py-2 rounded-lg text-xs font-bold ${apiEnabled ? "bg-green-600 text-white" : "bg-zinc-700 text-zinc-400"}`}>
-            {apiEnabled ? "✅ ON" : "❌ OFF"}
-          </button>
-        </div>
-      </div>
 
       {/* Proxy URL */}
       <div className={`${glassCard} p-4`}>
@@ -849,43 +511,83 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
           value={proxyUrlInput}
           onChange={e => setProxyUrlInput(e.target.value)}
         />
-        <div className="flex gap-2">
-          <button onClick={saveProxyUrl} className={`${btnPrimary} flex-1`}>💾 সেভ করুন</button>
-          <button onClick={testProxy} disabled={testingProxy} className={`${btnSecondary} flex-1 flex items-center justify-center gap-1`}>
-            {testingProxy ? <Loader2 size={14} className="animate-spin" /> : "🧪"} টেস্ট
-          </button>
-        </div>
+        <button onClick={saveProxyUrl} className={`${btnPrimary} w-full`}>💾 সেভ করুন</button>
       </div>
 
-      {/* M3U Playlist URLs */}
-      <div className={`${glassCard} p-4 border border-blue-500/20`}>
-        <h3 className="text-sm font-semibold mb-2">📡 M3U প্লেলিস্ট URL</h3>
-        <p className="text-[10px] text-muted-foreground mb-3">
-          M3U/M3U8 প্লেলিস্ট URL যোগ করুন। এক একটা URL থেকে হাজার হাজার চ্যানেল লোড হবে স্বয়ংক্রিয়ভাবে।
-        </p>
-        <input
-          className={`${inputClass} w-full mb-2`}
-          placeholder="প্লেলিস্টের নাম (ঐচ্ছিক)"
-          value={newPlaylistName}
-          onChange={e => setNewPlaylistName(e.target.value)}
-        />
-        <input
-          className={`${inputClass} w-full mb-2 font-mono text-[11px]`}
-          placeholder="https://...playlist.m3u"
-          value={newPlaylistUrl}
-          onChange={e => setNewPlaylistUrl(e.target.value)}
-        />
-        <button
-          onClick={addPlaylist}
-          disabled={m3uLoading}
-          className={`${btnPrimary} w-full flex items-center justify-center gap-2 mb-3`}
-        >
-          {m3uLoading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-          প্লেলিস্ট যোগ করুন
-        </button>
+      {/* 1. Custom Channel Add - 3 fields */}
+      <div className={`${glassCard} p-4 border border-green-500/20`}>
+        <h3 className="text-sm font-semibold mb-3">➕ কাস্টম চ্যানেল যোগ করুন</h3>
+        <div className="space-y-2 mb-3">
+          <input className={inputClass + " w-full"} placeholder="📺 Channel Name *" value={newChannel.name} onChange={e => setNewChannel({ ...newChannel, name: e.target.value })} />
+          <input className={inputClass + " w-full"} placeholder="🖼️ Logo URL" value={newChannel.logo} onChange={e => setNewChannel({ ...newChannel, logo: e.target.value })} />
+          <input className={inputClass + " w-full"} placeholder="🔗 Live Stream Link *" value={newChannel.streamUrl} onChange={e => setNewChannel({ ...newChannel, streamUrl: e.target.value })} />
+        </div>
+        <button onClick={addChannel} className={`${btnPrimary} w-full`}>➕ চ্যানেল যোগ করুন</button>
+      </div>
 
+      {/* 2. GitHub / M3U Playlist Import */}
+      <div className={`${glassCard} p-4 border border-blue-500/20`}>
+        <h3 className="text-sm font-semibold mb-2">📡 M3U প্লেলিস্ট (GitHub IPTV)</h3>
+        <p className="text-[10px] text-muted-foreground mb-3">
+          M3U প্লেলিস্ট URL যোগ করুন। হাজার হাজার চ্যানেল অটোমেটিক লোড হবে।
+        </p>
+
+        {/* Quick add from GitHub project */}
+        <div className="mb-4">
+          <p className="text-[10px] font-semibold text-muted-foreground mb-2">⚡ এক ক্লিকে যোগ করুন (AHCL GitHub)</p>
+          <div className="grid grid-cols-2 gap-2">
+            {GITHUB_PLAYLISTS.map((preset) => {
+              const alreadyAdded = playlists.some(p => p.url === preset.url);
+              return (
+                <button
+                  key={preset.url}
+                  disabled={alreadyAdded}
+                  onClick={async () => {
+                    await push(ref(db, "settings/liveTvPlaylists"), { url: preset.url, name: preset.name, addedAt: Date.now() });
+                    toast.success(`✅ ${preset.name} যোগ করা হয়েছে!`);
+                  }}
+                  className={`text-left p-2 rounded-lg border transition-all text-[10px] ${
+                    alreadyAdded
+                      ? "bg-muted/50 border-border/30 text-muted-foreground cursor-not-allowed"
+                      : "bg-card border-border/50 hover:border-primary/40 cursor-pointer"
+                  }`}
+                >
+                  <span className="font-semibold">{preset.name}</span>
+                  {alreadyAdded && <span className="ml-1 text-[8px] text-green-500">✅</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Custom playlist URL */}
+        <div className="border-t border-border/30 pt-3">
+          <p className="text-[10px] font-semibold text-muted-foreground mb-2">🔗 কাস্টম প্লেলিস্ট URL</p>
+          <input
+            className={`${inputClass} w-full mb-2`}
+            placeholder="প্লেলিস্টের নাম (ঐচ্ছিক)"
+            value={newPlaylistName}
+            onChange={e => setNewPlaylistName(e.target.value)}
+          />
+          <input
+            className={`${inputClass} w-full mb-2 font-mono text-[11px]`}
+            placeholder="https://...playlist.m3u"
+            value={newPlaylistUrl}
+            onChange={e => setNewPlaylistUrl(e.target.value)}
+          />
+          <button
+            onClick={addPlaylist}
+            disabled={m3uLoading}
+            className={`${btnPrimary} w-full flex items-center justify-center gap-2`}
+          >
+            {m3uLoading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            প্লেলিস্ট যোগ করুন
+          </button>
+        </div>
+
+        {/* Added playlists list */}
         {playlists.length > 0 && (
-          <div className="space-y-2">
+          <div className="mt-3 space-y-2">
             <p className="text-[10px] font-semibold text-muted-foreground">যোগ করা প্লেলিস্ট ({playlists.length})</p>
             {playlists.map((p) => (
               <div key={p.key} className="flex items-center gap-2 p-2 rounded-lg bg-card/50 border border-border/30">
@@ -902,163 +604,21 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
         )}
       </div>
 
-      {/* Default M3U URLs for quick add */}
+      {/* Delete All + Channel List */}
       <div className={`${glassCard} p-4`}>
-        <h3 className="text-sm font-semibold mb-2">⚡ জনপ্রিয় প্লেলিস্ট</h3>
-        <p className="text-[10px] text-muted-foreground mb-3">এক ক্লিকে জনপ্রিয় IPTV প্লেলিস্ট যোগ করুন</p>
-        <div className="space-y-2">
-          {[
-            { name: "🇧🇩 Bangladesh IPTV", url: "https://raw.githubusercontent.com/abusaeeidx/Mrgify-BDIX-IPTV/refs/heads/main/playlist.m3u" },
-            { name: "🌍 Worldwide", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/Worldwide/LiveTV.m3u" },
-            { name: "🇮🇳 India", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/India/LiveTV.m3u" },
-            { name: "🇺🇸 USA", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/USA/LiveTV.m3u" },
-            { name: "🇵🇰 Pakistan", url: "https://raw.githubusercontent.com/bugsfreeweb/LiveTVCollector/refs/heads/main/LiveTV/Pakistan/LiveTV.m3u" },
-            { name: "🎬 Combined IPTV", url: "https://raw.githubusercontent.com/time2shine/IPTV/refs/heads/master/combined.m3u" },
-          ].map((preset) => {
-            const alreadyAdded = playlists.some(p => p.url === preset.url);
-            return (
-              <button
-                key={preset.url}
-                disabled={alreadyAdded}
-                onClick={async () => {
-                  await push(ref(db, "settings/liveTvPlaylists"), { url: preset.url, name: preset.name, addedAt: Date.now() });
-                  toast.success(`✅ ${preset.name} যোগ করা হয়েছে!`);
-                }}
-                className={`w-full text-left p-2.5 rounded-lg border transition-all text-xs ${
-                  alreadyAdded
-                    ? "bg-muted/50 border-border/30 text-muted-foreground cursor-not-allowed"
-                    : "bg-card border-border/50 hover:border-primary/40 cursor-pointer"
-                }`}
-              >
-                <span className="font-semibold">{preset.name}</span>
-                {alreadyAdded && <span className="ml-2 text-[9px] text-green-500">✅ যোগ করা আছে</span>}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* iptv-org Auto Import */}
-      <div className={`${glassCard} p-4 border border-primary/20`}>
-        <h3 className="text-sm font-semibold mb-2">🌐 iptv-org থেকে অটো ইম্পোর্ট</h3>
-        <p className="text-[10px] text-muted-foreground mb-3">
-          iptv-org এর 14,000+ স্ট্রিম থেকে ভ্যালিড চ্যানেল বাছাই করে লোগোসহ ইম্পোর্ট করুন।
-        </p>
-        <div className="mb-3">
-          <label className="text-[10px] text-muted-foreground mb-1 block">🌍 দেশ কোড (ঐচ্ছিক)</label>
-          <input
-            className={`${inputClass} w-full`}
-            placeholder="BD, IN, US (খালি = সব)"
-            value={iptvCountry}
-            onChange={e => setIptvCountry(e.target.value)}
-          />
-        </div>
-        <button
-          onClick={importFromIptvOrg}
-          disabled={iptvLoading || validating}
-          className={`${btnPrimary} w-full flex items-center justify-center gap-2`}
-        >
-          {iptvLoading ? (
-            <>
-              <Loader2 size={14} className="animate-spin" />
-              ভ্যালিডেট হচ্ছে... {validationProgress.valid}/{iptvTarget} ভ্যালিড
-            </>
-          ) : (
-            <>🚀 iptv-org থেকে ইম্পোর্ট শুরু করুন</>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold">📺 কাস্টম চ্যানেল ({channels.length})</h3>
+          {channels.length > 0 && (
+            <button
+              onClick={deleteAllChannels}
+              disabled={deletingAll}
+              className="px-3 py-1.5 rounded-lg bg-destructive/20 text-destructive text-[10px] font-bold hover:bg-destructive/30 transition-colors flex items-center gap-1"
+            >
+              {deletingAll ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+              🗑️ Delete All Channels
+            </button>
           )}
-        </button>
-        {validating && (
-          <div className="mt-3">
-            <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-              <div
-                className="h-full bg-primary rounded-full transition-all duration-300"
-                style={{ width: `${validationProgress.total > 0 ? (validationProgress.checked / validationProgress.total) * 100 : 0}%` }}
-              />
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1 text-center">
-              {validationProgress.checked}/{validationProgress.total} চেক করা হয়েছে • ✅ {validationProgress.valid}টি ভ্যালিড
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Check Limit - shared for file upload & JSON paste */}
-      <div className={`${glassCard} p-4 border border-yellow-500/20`}>
-        <h3 className="text-sm font-semibold mb-2">🎯 চেক লিমিট</h3>
-        <p className="text-[10px] text-muted-foreground mb-2">
-          ফাইল আপলোড বা JSON পেস্ট করলে প্রথম কতগুলো চ্যানেল চেক করবে সেটা সেট করুন। ০ দিলে সব চেক হবে।
-        </p>
-        <input
-          className={`${inputClass} w-full`}
-          type="number"
-          min="0"
-          placeholder="200 (ডিফল্ট)"
-          value={jsonCheckLimit}
-          onChange={e => setJsonCheckLimit(e.target.value)}
-        />
-      </div>
-
-      {/* JSON File Upload */}
-      <div className={`${glassCard} p-4`}>
-        <h3 className="text-sm font-semibold mb-2">📂 JSON ফাইল আপলোড</h3>
-        <p className="text-[10px] text-muted-foreground mb-3">
-          .json ফাইল আপলোড করুন। লোগো ছাড়া চ্যানেল অ্যাড হবে না।
-        </p>
-        <input
-          type="file"
-          ref={fileInputRef}
-          accept=".json"
-          onChange={handleFileUpload}
-          className="hidden"
-        />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={validating}
-          className={`${btnPrimary} w-full flex items-center justify-center gap-2`}
-        >
-          📂 JSON ফাইল আপলোড করুন
-        </button>
-      </div>
-
-      {/* JSON Paste */}
-      <div className={`${glassCard} p-4`}>
-        <h3 className="text-sm font-semibold mb-2">📋 JSON পেস্ট করে ইম্পোর্ট</h3>
-        <p className="text-[10px] text-muted-foreground mb-3">লোগোসহ ভ্যালিড চ্যানেলই শুধু অ্যাড হবে</p>
-        <textarea
-          className={`${inputClass} min-h-[120px] w-full font-mono text-[11px] mb-3`}
-          placeholder={`// JioTV ফরম্যাট:\n{"name":"...", "mpd":"...", "drm":{...}}\n\n// Streams ফরম্যাট:\n{"title":"...", "url":"https://...m3u8"}`}
-          value={jsonPaste}
-          onChange={e => setJsonPaste(e.target.value)}
-        />
-        <div className="flex gap-2">
-          <button onClick={importFromJson} disabled={jsonParsing || validating} className={`${btnPrimary} flex-1 flex items-center justify-center gap-2`}>
-            {jsonParsing || validating ? <><Loader2 size={14} className="animate-spin" /> চেক হচ্ছে...</> : "🔍 ভ্যালিডেট করে ইম্পোর্ট"}
-          </button>
-          <button onClick={importWithoutValidation} disabled={jsonParsing || validating} className={`${btnSecondary} flex-1 flex items-center justify-center gap-2`}>
-            📥 সরাসরি ইম্পোর্ট
-          </button>
         </div>
-      </div>
-
-      {/* Add New Channel */}
-      <div className={`${glassCard} p-4`}>
-        <h3 className="text-sm font-semibold mb-3">➕ নতুন চ্যানেল যোগ করুন</h3>
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <input className={inputClass} placeholder="চ্যানেলের নাম *" value={newChannel.name} onChange={e => setNewChannel({ ...newChannel, name: e.target.value })} />
-          <input className={inputClass} placeholder="ক্যাটাগরি" value={newChannel.category} onChange={e => setNewChannel({ ...newChannel, category: e.target.value })} />
-          <input className={inputClass} placeholder="Logo URL" value={newChannel.logo} onChange={e => setNewChannel({ ...newChannel, logo: e.target.value })} />
-          <input className={inputClass} placeholder="Stream URL (HLS/MP4)" value={newChannel.streamUrl} onChange={e => setNewChannel({ ...newChannel, streamUrl: e.target.value })} />
-          <input className={inputClass} placeholder="MPD URL (DASH)" value={newChannel.mpd} onChange={e => setNewChannel({ ...newChannel, mpd: e.target.value })} />
-          <input className={inputClass} placeholder="Token" value={newChannel.token} onChange={e => setNewChannel({ ...newChannel, token: e.target.value })} />
-          <input className={inputClass} placeholder="Referer" value={newChannel.referer} onChange={e => setNewChannel({ ...newChannel, referer: e.target.value })} />
-          <input className={inputClass} placeholder="User Agent" value={newChannel.userAgent} onChange={e => setNewChannel({ ...newChannel, userAgent: e.target.value })} />
-        </div>
-        <button onClick={addChannel} className={`${btnPrimary} w-full`}>চ্যানেল যোগ করুন</button>
-      </div>
-
-      {/* Channel List */}
-      <div className={`${glassCard} p-4`}>
-        <h3 className="text-sm font-semibold mb-3">📺 কাস্টম চ্যানেল ({channels.length})</h3>
         {channels.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-6">কোন কাস্টম চ্যানেল নেই</p>
         ) : (
@@ -1071,7 +631,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
                     <div className="space-y-1.5">
                       <input className={`${inputClass} text-xs`} value={ch.name} onChange={e => setChannels(channels.map(c => c._key === ch._key ? { ...c, name: e.target.value } : c))} />
                       <input className={`${inputClass} text-xs`} placeholder="Stream URL" value={ch.streamUrl || ""} onChange={e => setChannels(channels.map(c => c._key === ch._key ? { ...c, streamUrl: e.target.value } : c))} />
-                      <input className={`${inputClass} text-xs`} placeholder="Category" value={ch.category || ""} onChange={e => setChannels(channels.map(c => c._key === ch._key ? { ...c, category: e.target.value } : c))} />
+                      <input className={`${inputClass} text-xs`} placeholder="Logo URL" value={ch.logo || ""} onChange={e => setChannels(channels.map(c => c._key === ch._key ? { ...c, logo: e.target.value } : c))} />
                       <div className="flex gap-2">
                         <button onClick={() => updateChannel(ch._key)} className={`${btnPrimary} text-xs px-3 py-1`}>Save</button>
                         <button onClick={() => setEditing(null)} className={`${btnSecondary} text-xs px-3 py-1`}>Cancel</button>
@@ -1080,7 +640,7 @@ const LiveTvSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { gl
                   ) : (
                     <>
                       <p className="text-sm font-semibold truncate">{ch.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{ch.category || "Uncategorized"} • {ch.streamUrl ? "HLS/MP4" : ch.mpd ? "DASH" : "No URL"}</p>
+                      <p className="text-[10px] text-muted-foreground">{ch.category || "Custom"} • {ch.streamUrl ? "HLS" : ch.mpd ? "DASH" : "No URL"}</p>
                     </>
                   )}
                 </div>
