@@ -352,6 +352,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
                 title={selectedChannel.name}
                 subtitle={selectedChannel.category}
                 poster={selectedChannel.logo}
+                disablePlaybackRouting
                 onClose={closePlayer}
                 hideDownload
               />
