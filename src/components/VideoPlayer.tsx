@@ -17,7 +17,7 @@ interface QualityOption {
 }
 
 // Cloudflare CDN proxy for fast video streaming
-import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
+import { CLOUDFLARE_CDN_URL, SITE_ICON_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
@@ -80,6 +80,17 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
 
 const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
+};
+
+const cleanupMediaElement = (media: HTMLMediaElement | null | undefined) => {
+  if (!media) return;
+  try {
+    media.pause();
+    media.removeAttribute("src");
+    media.load();
+  } catch {
+    // noop
+  }
 };
 
 interface VideoPlayerProps {
@@ -150,6 +161,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
+  const lastProgressUpdateRef = useRef(0);
 
   // Load CDN + proxy settings from Firebase
   useEffect(() => {
@@ -461,23 +473,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   useEffect(() => {
     if (!playbackRouteReady) return;
+    cleanupMediaElement(videoRef.current);
     activeSourceBaseRef.current = src;
     setCurrentSrc(getPrimaryPlaybackSrc(src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined));
     setCurrentQuality("Auto");
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
+    setPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsBuffering(true);
   }, [src, qualityOptions, cdnEnabled, proxyUrl, proxyApiKey, playbackRouteReady]);
 
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
     if ('mediaSession' in navigator) {
       const artworkSrc = (() => {
-        if (!poster) return `${window.location.origin}/favicon.ico`;
+        if (!poster) return SITE_ICON_URL;
         try {
           return poster.startsWith("http") ? poster : new URL(poster, window.location.origin).toString();
         } catch {
-          return `${window.location.origin}/favicon.ico`;
+          return SITE_ICON_URL;
         }
       })();
 
@@ -622,7 +639,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
           }
           // Update React state less frequently (every ~500ms) for other consumers
-          setCurrentTime(ct);
+          if (ct - lastProgressUpdateRef.current >= 0.35 || ct === 0) {
+            lastProgressUpdateRef.current = ct;
+            setCurrentTime(ct);
+          }
           rafId.current = requestAnimationFrame(tick);
         }
       };
@@ -752,7 +772,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         if (v.currentTime === 0 && v.readyState <= 1 && v.networkState === 2) {
           console.log('Video stalled at 0:00 with no data, reloading source...');
           const savedSrc = v.src;
-          v.src = '';
+          v.removeAttribute('src');
+          v.load();
           v.src = savedSrc;
           v.load();
         }
@@ -788,9 +809,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.removeEventListener("seeked", onSeeked);
       v.removeEventListener("stalled", onStalled);
       // Ensure video is fully stopped on unmount (prevents background playback)
-      v.pause();
-      v.src = '';
-      v.load();
+      cleanupMediaElement(v);
       if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };
   }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady]);
@@ -1027,8 +1046,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       {!isFullscreen && (
         <button onClick={() => {
           // Stop video completely before closing
-          const v = videoRef.current;
-          if (v) { v.pause(); v.src = ''; v.load(); }
+          cleanupMediaElement(videoRef.current);
           if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
           onClose();
         }} className="absolute top-5 right-5 z-[310] w-10 h-10 rounded-full gradient-primary flex items-center justify-center btn-glow transition-all hover:rotate-90">
@@ -1745,7 +1763,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
         {/* Suggested Videos */}
         {suggestedAnime && suggestedAnime.length > 0 && onSuggestedClick && (
-          <div className="mt-4 bg-background rounded-xl p-4">
+        <div className="mt-4 bg-background rounded-xl p-4">
             <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5 text-foreground">
               <Play className="w-3.5 h-3.5 text-primary" /> Suggested for you
             </h3>
