@@ -98,6 +98,7 @@ interface VideoPlayerProps {
   title: string;
   subtitle?: string;
   poster?: string;
+  disablePlaybackRouting?: boolean;
   onClose: () => void;
   onNextEpisode?: () => void;
   episodeList?: { number: number; title?: string; active: boolean; onClick: () => void }[];
@@ -118,7 +119,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, animeId, onSaveProgress, hideDownload, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, disablePlaybackRouting = false, onClose, onNextEpisode, episodeList, qualityOptions, animeId, onSaveProgress, hideDownload, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
   const branding = useBranding();
   // Preload anime character image to prevent loading glitch
   useEffect(() => {
@@ -162,6 +163,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
   const lastProgressUpdateRef = useRef(0);
+
+  const routingReady = disablePlaybackRouting || playbackRouteReady;
+  const resolvePlaybackSrc = useCallback((url: string) => {
+    if (disablePlaybackRouting) return url;
+    return getPrimaryPlaybackSrc(url, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+  }, [disablePlaybackRouting, cdnEnabled, proxyUrl, proxyApiKey]);
 
   // Load CDN + proxy settings from Firebase
   useEffect(() => {
@@ -472,10 +479,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
 
   useEffect(() => {
-    if (!playbackRouteReady) return;
+    if (!routingReady) return;
     cleanupMediaElement(videoRef.current);
     activeSourceBaseRef.current = src;
-    setCurrentSrc(getPrimaryPlaybackSrc(src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined));
+    setCurrentSrc(resolvePlaybackSrc(src));
     setCurrentQuality("Auto");
     setVideoError(false);
     setQualityFailMsg(null);
@@ -484,7 +491,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentTime(0);
     setDuration(0);
     setIsBuffering(true);
-  }, [src, qualityOptions, cdnEnabled, proxyUrl, proxyApiKey, playbackRouteReady]);
+  }, [src, qualityOptions, routingReady, resolvePlaybackSrc]);
 
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
@@ -607,7 +614,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   useEffect(() => {
     const v = videoRef.current;
-    if (!v || !playbackRouteReady || !currentSrc) return;
+    if (!v || !routingReady || !currentSrc) return;
 
     // Track last known good position for fallback recovery
     let lastKnownTime = 0;
@@ -673,7 +680,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           cdnEnabled,
           proxyUrl || undefined,
           proxyApiKey || undefined
-        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
+        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && !disablePlaybackRouting);
 
         if (sameQualityRouteFallback) {
           setQualityFailMsg(`"${failedQualityLabel}" source blocked. Trying fallback route...`);
@@ -684,7 +691,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
 
         const nextOption = availableQualities.find((q) => {
-          const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+          const candidateSrc = resolvePlaybackSrc(q.src);
           return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
         });
 
@@ -692,7 +699,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           setQualityFailMsg(`"${failedQualityLabel}" quality not available. Switching to "${nextOption.label}"...`);
           setTimeout(() => setQualityFailMsg(null), 4000);
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+          const newFallbackSrc = resolvePlaybackSrc(nextOption.src);
           activeSourceBaseRef.current = nextOption.src;
           if (newFallbackSrc === currentSrc) {
             v.currentTime = pendingSeek.current;
@@ -812,7 +819,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       cleanupMediaElement(v);
       if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady]);
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, disablePlaybackRouting, resolvePlaybackSrc, routingReady]);
 
   useEffect(() => {
     const onFs = () => {
@@ -918,7 +925,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     activeSourceBaseRef.current = option.src;
-    const newSrc = getPrimaryPlaybackSrc(option.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+    const newSrc = resolvePlaybackSrc(option.src);
 
     if (newSrc === currentSrc) {
       setCurrentQuality(option.label);
@@ -931,7 +938,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);
     setShowSettings(false);
-  }, [currentQuality, currentSrc, cdnEnabled, proxyUrl, isPremium]);
+  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
@@ -1457,7 +1464,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               </div>
               <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
                 <video
-                  src={getPrimaryPlaybackSrc(tutorialLink, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined)}
+                  src={resolvePlaybackSrc(tutorialLink)}
                   className="w-full h-full"
                   controls
                   autoPlay
@@ -1511,7 +1518,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
             const dlId = createDownloadId(title, subtitle, quality, qualitySrc);
-            const proxiedUrl = getPrimaryPlaybackSrc(qualitySrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+            const proxiedUrl = resolvePlaybackSrc(qualitySrc);
             const { downloadManager } = await import("@/lib/downloadManager");
             downloadManager.startDownload({
               id: dlId,
