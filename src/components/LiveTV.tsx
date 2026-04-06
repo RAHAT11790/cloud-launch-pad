@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Tv, Search, X, Radio, ChevronLeft, RefreshCw, Loader2, WifiOff, Shield, ShieldOff } from "lucide-react";
-import { db, ref, onValue, set } from "@/lib/firebase";
+import { Tv, Search, X, Radio, ChevronLeft, RefreshCw, Loader2, WifiOff } from "lucide-react";
+import { db, ref, onValue } from "@/lib/firebase";
 import { fetchAllPlaylists } from "@/lib/m3uParser";
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -29,39 +29,6 @@ const buildChannelTargetUrl = (channel: TVChannel): string => {
   return `${rawUrl}${rawUrl.includes("?") ? "&" : "?"}${channel.token}`;
 };
 
-const appendProxyMeta = (baseUrl: string, channel: TVChannel) => {
-  const params = new URLSearchParams();
-  if (channel.referer) params.set("referer", channel.referer);
-  if (channel.userAgent) params.set("ua", channel.userAgent);
-  if (!params.toString()) return baseUrl;
-  return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}${params.toString()}`;
-};
-
-const buildProxyUrl = (proxyBase: string, targetUrl: string, channel: TVChannel): string => {
-  const base = proxyBase.trim();
-  if (!base) return targetUrl;
-
-  const encoded = encodeURIComponent(targetUrl);
-
-  if (base.includes("{url}")) {
-    return appendProxyMeta(base.split("{url}").join(encoded), channel);
-  }
-
-  if (/[?&]url=$/.test(base) || base.endsWith("=")) {
-    return appendProxyMeta(`${base}${encoded}`, channel);
-  }
-
-  if (base.includes("?url=") || base.includes("&url=")) {
-    return appendProxyMeta(`${base}${encoded}`, channel);
-  }
-
-  const params = new URLSearchParams({ url: targetUrl });
-  if (channel.referer) params.set("referer", channel.referer);
-  if (channel.userAgent) params.set("ua", channel.userAgent);
-
-  return `${base.replace(/\/$/, "")}?${params.toString()}`;
-};
-
 const LiveTV = ({ onClose }: { onClose: () => void }) => {
   const [customChannels, setCustomChannels] = useState<TVChannel[]>([]);
   const [m3uChannels, setM3uChannels] = useState<TVChannel[]>([]);
@@ -70,20 +37,12 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [selectedChannel, setSelectedChannel] = useState<TVChannel | null>(null);
-  const [proxyUrl, setProxyUrl] = useState("");
-  const [proxyEnabled, setProxyEnabled] = useState(false);
   const [m3uUrls, setM3uUrls] = useState<string[]>([]);
   const [visibleCount, setVisibleCount] = useState(CHANNELS_PER_PAGE);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const unsub1 = onValue(ref(db, "settings/liveTvProxyUrl"), (snap) => {
-      setProxyUrl(snap.val() || "");
-    });
-    const unsub2 = onValue(ref(db, "settings/liveTvProxyEnabled"), (snap) => {
-      setProxyEnabled(snap.val() === true);
-    });
-    const unsub3 = onValue(ref(db, "settings/liveTvPlaylists"), (snap) => {
+    const unsub = onValue(ref(db, "settings/liveTvPlaylists"), (snap) => {
       const data = snap.val();
       if (data) {
         const urls = Object.values(data).map((v: any) => v.url || v).filter(Boolean) as string[];
@@ -94,9 +53,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
     });
 
     return () => {
-      unsub1();
-      unsub2();
-      unsub3();
+      unsub();
     };
   }, []);
 
@@ -188,11 +145,12 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
   }, [selectedCategory, searchQuery]);
 
   useEffect(() => {
-    if (filtered.length <= visibleCount || visibleCount > CHANNELS_PER_PAGE) return;
+    const warmLimit = Math.min(filtered.length, CHANNELS_PER_PAGE * 3);
+    if (visibleCount >= warmLimit) return;
 
     const timeoutId = window.setTimeout(() => {
-      setVisibleCount((prev) => Math.min(prev + CHANNELS_PER_PAGE, filtered.length));
-    }, 160);
+      setVisibleCount((prev) => Math.min(prev + CHANNELS_PER_PAGE, warmLimit));
+    }, 90);
 
     return () => window.clearTimeout(timeoutId);
   }, [filtered.length, visibleCount]);
@@ -215,27 +173,18 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
     return () => element.removeEventListener("scroll", handleScroll);
   }, [filtered.length]);
 
-  const getStreamUrl = useCallback((channel: TVChannel): string => {
-    const targetUrl = buildChannelTargetUrl(channel);
-    if (!targetUrl) return "";
-    if (!proxyEnabled || !proxyUrl) return targetUrl;
-    return buildProxyUrl(proxyUrl, targetUrl, channel);
-  }, [proxyEnabled, proxyUrl]);
-
-  const toggleProxy = useCallback(() => {
-    const newValue = !proxyEnabled;
-    setProxyEnabled(newValue);
-    void set(ref(db, "settings/liveTvProxyEnabled"), newValue);
-  }, [proxyEnabled]);
-
   const closePlayer = useCallback(() => {
     setSelectedChannel(null);
   }, []);
 
+  const handleChannelSelect = useCallback((channel: TVChannel) => {
+    setSelectedChannel(channel);
+  }, []);
+
   const selectedChannelStreamUrl = useMemo(() => {
     if (!selectedChannel) return "";
-    return getStreamUrl(selectedChannel);
-  }, [getStreamUrl, selectedChannel]);
+    return buildChannelTargetUrl(selectedChannel);
+  }, [selectedChannel]);
 
   const suggestedChannels = useMemo(() => {
     if (!selectedChannel) return [];
@@ -278,13 +227,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
 
           <div className="flex items-center gap-1.5">
             <button
-              onClick={toggleProxy}
-              className={`p-2 rounded-lg transition-colors ${proxyEnabled ? "bg-primary/15 text-primary" : "hover:bg-accent text-muted-foreground"}`}
-              title={proxyEnabled ? "Proxy ON" : "Proxy OFF"}
-            >
-              {proxyEnabled ? <Shield className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
-            </button>
-            <button onClick={() => setShowSearch(!showSearch)} className="p-2 rounded-lg hover:bg-accent transition-colors">
+              onClick={() => setShowSearch(!showSearch)} className="p-2 rounded-lg hover:bg-accent transition-colors">
               {showSearch ? <X className="w-4 h-4" /> : <Search className="w-4 h-4" />}
             </button>
             <button onClick={fetchM3uPlaylists} className="p-2 rounded-lg hover:bg-accent transition-colors">
@@ -352,7 +295,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
               {visibleChannels.map((channel) => (
                 <div
                   key={`${channel.source}_${channel.id}`}
-                  onClick={() => setSelectedChannel(channel)}
+                  onClick={() => handleChannelSelect(channel)}
                   className="bg-card rounded-xl border border-border/50 overflow-hidden cursor-pointer hover:border-primary/40 transition-all active:scale-95"
                 >
                   <div className="aspect-square flex items-center justify-center p-2 bg-gradient-to-b from-muted/30 to-transparent">
@@ -394,7 +337,7 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
-            className="fixed inset-0 z-[70] bg-background/95 backdrop-blur-sm"
+            className="fixed inset-0 z-[70] bg-background"
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.985, y: 20 }}
@@ -416,13 +359,12 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
 
             {suggestedChannels.length > 0 && (
               <motion.div
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", damping: 28, stiffness: 240 }}
-                className="fixed inset-x-0 bottom-0 z-[360] max-h-[38svh] rounded-t-[28px] border-t border-border bg-background/95 backdrop-blur-xl shadow-lg"
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 24 }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
+                className="fixed inset-x-0 bottom-0 z-[360] max-h-[32svh] overflow-y-auto rounded-t-[28px] border-t border-border bg-background/96 shadow-lg"
               >
-                <div className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-muted" />
                 <div className="flex items-center justify-between px-4 pt-3 pb-2">
                   <div>
                     <p className="text-sm font-bold text-foreground">আরও চ্যানেল</p>
@@ -434,35 +376,32 @@ const LiveTV = ({ onClose }: { onClose: () => void }) => {
                   </div>
                 </div>
 
-                <div className="overflow-y-auto px-3 pb-[calc(env(safe-area-inset-bottom)+14px)]">
-                  <div className="space-y-2">
+                <div className="px-3 pb-[calc(env(safe-area-inset-bottom)+14px)]">
+                  <div className="grid grid-cols-3 gap-2.5">
                     {suggestedChannels.map((channel) => (
                       <button
                         key={`${channel.source}_${channel.id}`}
-                        onClick={() => setSelectedChannel(channel)}
-                        className="w-full flex items-center gap-3 rounded-2xl border border-border/50 bg-card px-3 py-2.5 text-left transition-all hover:border-primary/40 active:scale-[0.985]"
+                        onClick={() => handleChannelSelect(channel)}
+                        className="w-full rounded-2xl border border-border/50 bg-card px-2 py-2 text-center transition-all hover:border-primary/40 active:scale-[0.985]"
                       >
-                        <div className="w-14 h-10 rounded-xl bg-muted/40 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <div className="mx-auto mb-2 flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-muted/40">
                           {channel.logo ? (
                             <img
                               src={channel.logo}
                               alt={channel.name}
-                              className="w-full h-full object-contain p-1"
+                              className="w-full h-full object-contain p-1.5"
                               loading="lazy"
                               onError={(event) => {
                                 (event.target as HTMLImageElement).style.display = "none";
                               }}
                             />
                           ) : (
-                            <Tv className="w-5 h-5 text-muted-foreground/40" />
+                            <Tv className="w-6 h-6 text-muted-foreground/40" />
                           )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold truncate text-foreground">{channel.name}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">{channel.category}</p>
-                        </div>
-                        <div className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[9px] font-bold text-primary">
-                          <Radio className="w-2.5 h-2.5 animate-pulse" />
+                        <p className="line-clamp-2 text-[10px] font-semibold leading-tight text-foreground">{channel.name}</p>
+                        <div className="mx-auto mt-1.5 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[9px] font-bold text-primary">
+                          <Radio className="h-2.5 w-2.5 animate-pulse" />
                           LIVE
                         </div>
                       </button>
