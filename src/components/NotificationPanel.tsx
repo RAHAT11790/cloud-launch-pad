@@ -12,6 +12,11 @@ const PRIMARY_SITE_ORIGIN = (() => {
   }
 })();
 
+const getNotificationIcon = () => {
+  if (typeof window !== "undefined") return `${window.location.origin}/rs-icon.png`;
+  return SITE_ICON_URL;
+};
+
 // Request notification permission and register FCM SW
 const requestNotificationPermission = async () => {
   if (!("Notification" in window) || !("serviceWorker" in navigator)) return;
@@ -38,8 +43,8 @@ const showBrowserNotification = (title: string, body: string, contentId?: string
   try {
     const options = {
       body,
-      icon: SITE_ICON_URL,
-      badge: SITE_ICON_URL,
+      icon: getNotificationIcon(),
+      badge: getNotificationIcon(),
       image: image || undefined,
       tag: contentId ? `rsanime-${contentId}` : `rsanime-${Date.now()}`,
       data: { url: contentId ? `/?anime=${contentId}` : "/" },

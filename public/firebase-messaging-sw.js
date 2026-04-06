@@ -12,7 +12,7 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
-const brandIcon = 'https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png';
+const brandIcon = '/rs-icon.png';
 // Main published domain — always use this for notification clicks
 const MAIN_DOMAIN = 'https://rsanime03.lovable.app';
 
