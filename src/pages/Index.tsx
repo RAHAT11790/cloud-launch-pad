@@ -590,7 +590,7 @@ const Index = () => {
     if (layer === "details") { setSelectedAnime(null); return true; }
     if (layer === "search") { setShowSearch(false); return true; }
     if (layer === "profile") { setShowProfile(false); setActivePage("home"); return true; }
-    if (layer === "series" || layer === "movies") { setActivePage("home"); return true; }
+    if (layer === "series" || layer === "movies" || layer === "livetv") { setActivePage("home"); return true; }
     return false;
   }, [getCurrentLayer]);
 
