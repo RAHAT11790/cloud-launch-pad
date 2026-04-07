@@ -27,6 +27,7 @@ import { useFirebaseData } from "@/hooks/useFirebaseData";
 import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
 import { animeSaltApi } from "@/lib/animeSaltApi";
 import LiveSupportChat from "@/components/LiveSupportChat";
+import LiveTvPage from "@/components/LiveTvPage";
 import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
 
@@ -565,7 +566,7 @@ const Index = () => {
     if (selectedAnime) return "details";
     if (showSearch) return "search";
     if (showProfile) return "profile";
-    if (activePage === "series" || activePage === "movies") return activePage;
+    if (activePage === "series" || activePage === "movies" || activePage === "livetv") return activePage;
     return "home";
   }, [playerState, saltPlayerState, selectedAnime, showSearch, showProfile, activePage]);
 
@@ -578,7 +579,7 @@ const Index = () => {
         setShowProfile(true);
         setActivePage("home");
       }
-      if (layer === "series" || layer === "movies") setActivePage(layer);
+      if (layer === "series" || layer === "movies" || layer === "livetv") setActivePage(layer);
     } catch {}
   }, []);
 
@@ -589,7 +590,7 @@ const Index = () => {
     if (layer === "details") { setSelectedAnime(null); return true; }
     if (layer === "search") { setShowSearch(false); return true; }
     if (layer === "profile") { setShowProfile(false); setActivePage("home"); return true; }
-    if (layer === "series" || layer === "movies") { setActivePage("home"); return true; }
+    if (layer === "series" || layer === "movies" || layer === "livetv") { setActivePage("home"); return true; }
     return false;
   }, [getCurrentLayer]);
 
@@ -1620,6 +1621,8 @@ const Index = () => {
             {filteredMovies.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
           </div>
         );
+      case "livetv":
+        return <LiveTvPage />;
       default:
         return (
           <>
