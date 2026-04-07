@@ -5472,6 +5472,9 @@ Pᴏᴡᴇʀ Bʏ :
                     </div>
                   </div>
                 </div>
+
+                <div className={`${glassCard} p-4`}>
+                  <h3 className="text-sm font-semibold mb-3">📺 All Channels ({channels.length})</h3>
                   {channels.length === 0 ? (
                     <p className="text-xs text-zinc-500 text-center py-6">কোনো চ্যানেল নেই</p>
                   ) : (
