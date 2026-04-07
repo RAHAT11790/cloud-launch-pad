@@ -152,8 +152,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
 
-  // Load CDN + proxy settings from Firebase
+  // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
+    if (noProxy) {
+      setCdnEnabled(false);
+      setProxyUrl('');
+      setProxyApiKey('');
+      setPlaybackRouteReady(true);
+      return;
+    }
+
     let cdnLoaded = false;
     let proxyLoaded = false;
     setPlaybackRouteReady(false);
@@ -187,7 +195,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       unsub1();
       unsub2();
     };
-  }, []);
+  }, [noProxy]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
   const [shortenedLink, setShortenedLink] = useState<string | null>(null);
