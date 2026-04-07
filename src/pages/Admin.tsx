@@ -1726,6 +1726,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "edge-router": "Edge Function Router",
     "branding": "UI+AD Branding",
     "ai-config": "AI Chat Config",
+    "live-tv": "Live TV Channels",
   };
 
   // ==================== CATEGORIES ====================
@@ -2947,6 +2948,7 @@ Pᴏᴡᴇʀ Bʏ :
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
+    { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
     { section: "ui-themes", icon: <Zap size={16} />, label: "UI Themes", group: "Customization" },
     { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
     { section: "settings", icon: <Settings size={16} />, label: "Settings" },
