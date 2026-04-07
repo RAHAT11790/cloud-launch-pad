@@ -5328,93 +5328,30 @@ Pᴏᴡᴇʀ Bʏ :
         {/* ==================== LIVE TV ==================== */}
         {activeSection === "live-tv" && (() => {
           const LiveTvAdmin = () => {
-            const [channels, setChannelsState] = useState<{id: string; name: string; logo: string; streamUrl: string; category: string; order: number}[]>([]);
+            const [channels, setChannelsState] = useState<{id: string; name: string; logo: string; banner: string; streamUrl: string; category: string; order: number}[]>([]);
             const [name, setName] = useState("");
             const [logo, setLogo] = useState("");
+            const [banner, setBanner] = useState("");
             const [streamUrl, setStreamUrl] = useState("");
             const [category, setCategory] = useState("General");
             const [editId, setEditId] = useState<string | null>(null);
+            const [uploadingLogo, setUploadingLogo] = useState(false);
+            const [uploadingBanner, setUploadingBanner] = useState(false);
+            const logoFileRef = useRef<HTMLInputElement>(null);
+            const bannerFileRef = useRef<HTMLInputElement>(null);
 
-            useEffect(() => {
-              const unsub = onValue(ref(db, "liveTvChannels"), (snap) => {
-                const data = snap.val();
-                if (data) {
-                  const list = Object.entries(data).map(([id, val]: any) => ({
-                    id, name: val.name || "", logo: val.logo || "", streamUrl: val.streamUrl || "",
-                    category: val.category || "General", order: val.order || 0,
-                  }));
-                  list.sort((a, b) => a.order - b.order);
-                  setChannelsState(list);
-                } else setChannelsState([]);
-              });
-              return () => unsub();
-            }, []);
-
-            const saveChannel = async () => {
-              if (!name.trim() || !streamUrl.trim()) { toast.error("নাম ও Stream URL দাও!"); return; }
-              const data = { name: name.trim(), logo: logo.trim(), streamUrl: streamUrl.trim(), category: category.trim() || "General", order: channels.length };
-              if (editId) {
-                await update(ref(db, `liveTvChannels/${editId}`), data);
-                toast.success("✅ চ্যানেল আপডেট হয়েছে!");
-                setEditId(null);
-              } else {
-                await push(ref(db, "liveTvChannels"), data);
-                toast.success("✅ চ্যানেল যোগ হয়েছে!");
-              }
-              setName(""); setLogo(""); setStreamUrl(""); setCategory("General");
+            const handleImgUpload = async (file: File, setter: (v: string) => void, setLoading: (v: boolean) => void) => {
+              if (file.size > 10 * 1024 * 1024) { toast.error("Max 10MB!"); return; }
+              if (!file.type.startsWith("image/")) { toast.error("Only images!"); return; }
+              setLoading(true);
+              try {
+                const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+                const url = await uploadToImgbb(file);
+                setter(url);
+                toast.success("✅ ছবি আপলোড হয়েছে!");
+              } catch { toast.error("❌ আপলোড ব্যর্থ!"); }
+              setLoading(false);
             };
-
-            const deleteChannel = async (id: string) => {
-              if (!confirm("Delete this channel?")) return;
-              await remove(ref(db, `liveTvChannels/${id}`));
-              toast.success("🗑️ চ্যানেল ডিলিট হয়েছে!");
-            };
-
-            const startEdit = (ch: any) => {
-              setEditId(ch.id); setName(ch.name); setLogo(ch.logo); setStreamUrl(ch.streamUrl); setCategory(ch.category);
-            };
-
-            return (
-              <div>
-                <div className={`${glassCard} p-4 mb-4`}>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    📺 {editId ? "Edit Channel" : "Add New Channel"}
-                  </h3>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-[10px] text-zinc-400 block mb-1">Channel Name *</label>
-                      <input value={name} onChange={e => setName(e.target.value)} placeholder="Channel name" className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-zinc-400 block mb-1">Logo URL</label>
-                      <input value={logo} onChange={e => setLogo(e.target.value)} placeholder="https://logo-url.png" className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-zinc-400 block mb-1">Stream URL *</label>
-                      <input value={streamUrl} onChange={e => setStreamUrl(e.target.value)} placeholder="https://stream.m3u8" className={inputClass} />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-zinc-400 block mb-1">Category</label>
-                      <input value={category} onChange={e => setCategory(e.target.value)} placeholder="Entertainment" className={inputClass} />
-                    </div>
-                    {logo && (
-                      <div className="aspect-video rounded-xl overflow-hidden bg-zinc-800/50 border border-zinc-700/40">
-                        <img src={logo} alt="Preview" className="w-full h-full object-cover" />
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <button onClick={saveChannel} className={`${btnPrimary} flex-1 py-2.5 flex items-center justify-center gap-2`}>
-                        <Save size={14} /> {editId ? "আপডেট করো" : "যোগ করো"}
-                      </button>
-                      {editId && (
-                        <button onClick={() => { setEditId(null); setName(""); setLogo(""); setStreamUrl(""); setCategory("General"); }}
-                          className={`${btnSecondary} px-4 py-2.5`}>
-                          বাতিল
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
 
                 <div className={`${glassCard} p-4`}>
                   <h3 className="text-sm font-semibold mb-3">📺 All Channels ({channels.length})</h3>
