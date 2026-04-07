@@ -1621,6 +1621,8 @@ const Index = () => {
             {filteredMovies.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
           </div>
         );
+      case "livetv":
+        return <LiveTvPage />;
       default:
         return (
           <>
