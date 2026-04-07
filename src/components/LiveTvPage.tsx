@@ -105,7 +105,7 @@ const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold flex items-center gap-2">
-          <Radio className="w-5 h-5 text-red-500 animate-pulse" />
+          <Radio className="w-5 h-5 text-destructive animate-pulse" />
           Live TV
         </h2>
         <button
@@ -206,8 +206,8 @@ const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
                   <div className="min-w-0">
                     <h3 className="text-sm font-bold text-foreground truncate">{channel.name}</h3>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                      <span className="text-[10px] text-red-400 font-medium">LIVE</span>
+                      <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                      <span className="text-[10px] text-destructive font-medium">LIVE</span>
                       {channel.category && (
                         <span className="text-[10px] text-muted-foreground ml-1">• {channel.category}</span>
                       )}

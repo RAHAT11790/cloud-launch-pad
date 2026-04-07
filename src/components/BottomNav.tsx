@@ -1,4 +1,4 @@
-import { Home, Film, Video, User } from "lucide-react";
+import { Home, Film, Video, Radio, User } from "lucide-react";
 
 interface BottomNavProps {
   activePage: string;
@@ -8,6 +8,7 @@ interface BottomNavProps {
 const navItems = [
   { id: "home", label: "Home", icon: Home },
   { id: "series", label: "Series", icon: Film },
+  { id: "livetv", label: "Live TV", icon: Radio },
   { id: "movies", label: "Movies", icon: Video },
   { id: "profile", label: "Profile", icon: User },
 ];
@@ -23,7 +24,7 @@ const BottomNav = ({ activePage, onNavigate }: BottomNavProps) => {
           <button
             key={item.id}
             onClick={() => onNavigate(item.id)}
-            className="relative flex flex-col items-center gap-1 py-2 px-4 transition-all rounded-xl"
+            className="relative flex flex-col items-center gap-1 py-2 px-3 transition-all rounded-xl"
             style={isActive ? { boxShadow: "var(--neu-shadow-inset)", background: "hsl(var(--secondary))" } : {}}
           >
             {isActive && (
