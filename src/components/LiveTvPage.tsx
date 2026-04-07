@@ -81,6 +81,7 @@ const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
         poster={activeChannel.logo}
         onClose={() => setActiveChannel(null)}
         hideDownload
+        noProxy
         suggestedAnime={suggestedChannels.map(ch => ({
           id: ch.id,
           title: ch.name,
@@ -195,11 +196,11 @@ const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
               <div className="absolute inset-0 flex items-center justify-between px-5">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   {/* Channel Logo Small */}
-                  <div className="w-12 h-12 rounded-xl bg-card/80 border border-border/50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  <div className="w-14 h-14 rounded-xl bg-white/90 border border-border/50 flex items-center justify-center overflow-hidden flex-shrink-0 p-1">
                     <img
                       src={channel.logo}
                       alt=""
-                      className="w-10 h-10 object-contain"
+                      className="w-full h-full object-contain rounded-lg"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";
                       }}
