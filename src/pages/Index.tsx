@@ -579,7 +579,7 @@ const Index = () => {
         setShowProfile(true);
         setActivePage("home");
       }
-      if (layer === "series" || layer === "movies") setActivePage(layer);
+      if (layer === "series" || layer === "movies" || layer === "livetv") setActivePage(layer);
     } catch {}
   }, []);
 
