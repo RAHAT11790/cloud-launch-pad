@@ -566,7 +566,7 @@ const Index = () => {
     if (selectedAnime) return "details";
     if (showSearch) return "search";
     if (showProfile) return "profile";
-    if (activePage === "series" || activePage === "movies") return activePage;
+    if (activePage === "series" || activePage === "movies" || activePage === "livetv") return activePage;
     return "home";
   }, [playerState, saltPlayerState, selectedAnime, showSearch, showProfile, activePage]);
 
