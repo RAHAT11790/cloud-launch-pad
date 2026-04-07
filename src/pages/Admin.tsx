@@ -5372,6 +5372,35 @@ Pᴏᴡᴇʀ Bʏ :
               return () => unsub();
             }, []);
 
+            useEffect(() => {
+              const unsub = onValue(ref(db, "liveTvCategories"), (snap) => {
+                const data = snap.val();
+                if (data && Array.isArray(data)) {
+                  setCategories(data);
+                } else if (data && typeof data === "object") {
+                  setCategories(Object.values(data));
+                } else {
+                  setCategories(["General"]);
+                }
+              });
+              return () => unsub();
+            }, []);
+
+            const addCategory = async () => {
+              if (!newCatName.trim()) return;
+              const updated = [...categories, newCatName.trim()];
+              await set(ref(db, "liveTvCategories"), updated);
+              setNewCatName("");
+              setShowAddCat(false);
+              toast.success("✅ ক্যাটাগরি যোগ হয়েছে!");
+            };
+
+            const deleteCategory = async (cat: string) => {
+              const updated = categories.filter(c => c !== cat);
+              await set(ref(db, "liveTvCategories"), updated.length ? updated : ["General"]);
+              toast.success("🗑️ ক্যাটাগরি মুছে ফেলা হয়েছে!");
+            };
+
             const saveChannel = async () => {
               if (!name.trim() || !streamUrl.trim()) { toast.error("নাম ও Stream URL দাও!"); return; }
               const data = { name: name.trim(), logo: logo.trim(), banner: banner.trim(), streamUrl: streamUrl.trim(), category: category.trim() || "General", order: channels.length };
