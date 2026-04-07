@@ -196,11 +196,11 @@ const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
               <div className="absolute inset-0 flex items-center justify-between px-5">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   {/* Channel Logo Small */}
-                  <div className="w-14 h-14 rounded-xl bg-white/90 border border-border/50 flex items-center justify-center overflow-hidden flex-shrink-0 p-1">
+                  <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0">
                     <img
                       src={channel.logo}
                       alt=""
-                      className="w-full h-full object-contain rounded-lg"
+                      className="w-full h-full object-cover"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";
                       }}

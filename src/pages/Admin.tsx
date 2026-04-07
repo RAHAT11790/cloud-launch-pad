@@ -5340,6 +5340,9 @@ Pᴏᴡᴇʀ Bʏ :
             const [uploadingBanner, setUploadingBanner] = useState(false);
             const logoFileRef = useRef<HTMLInputElement>(null);
             const bannerFileRef = useRef<HTMLInputElement>(null);
+            const [categories, setCategories] = useState<string[]>([]);
+            const [newCatName, setNewCatName] = useState("");
+            const [showAddCat, setShowAddCat] = useState(false);
 
             const handleImgUpload = async (file: File, setter: (v: string) => void, setLoading: (v: boolean) => void) => {
               if (file.size > 10 * 1024 * 1024) { toast.error("Max 10MB!"); return; }
