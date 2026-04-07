@@ -5340,6 +5340,9 @@ Pᴏᴡᴇʀ Bʏ :
             const [uploadingBanner, setUploadingBanner] = useState(false);
             const logoFileRef = useRef<HTMLInputElement>(null);
             const bannerFileRef = useRef<HTMLInputElement>(null);
+            const [categories, setCategories] = useState<string[]>([]);
+            const [newCatName, setNewCatName] = useState("");
+            const [showAddCat, setShowAddCat] = useState(false);
 
             const handleImgUpload = async (file: File, setter: (v: string) => void, setLoading: (v: boolean) => void) => {
               if (file.size > 10 * 1024 * 1024) { toast.error("Max 10MB!"); return; }
@@ -5368,6 +5371,35 @@ Pᴏᴡᴇʀ Bʏ :
               });
               return () => unsub();
             }, []);
+
+            useEffect(() => {
+              const unsub = onValue(ref(db, "liveTvCategories"), (snap) => {
+                const data = snap.val();
+                if (data && Array.isArray(data)) {
+                  setCategories(data);
+                } else if (data && typeof data === "object") {
+                  setCategories(Object.values(data));
+                } else {
+                  setCategories(["General"]);
+                }
+              });
+              return () => unsub();
+            }, []);
+
+            const addCategory = async () => {
+              if (!newCatName.trim()) return;
+              const updated = [...categories, newCatName.trim()];
+              await set(ref(db, "liveTvCategories"), updated);
+              setNewCatName("");
+              setShowAddCat(false);
+              toast.success("✅ ক্যাটাগরি যোগ হয়েছে!");
+            };
+
+            const deleteCategory = async (cat: string) => {
+              const updated = categories.filter(c => c !== cat);
+              await set(ref(db, "liveTvCategories"), updated.length ? updated : ["General"]);
+              toast.success("🗑️ ক্যাটাগরি মুছে ফেলা হয়েছে!");
+            };
 
             const saveChannel = async () => {
               if (!name.trim() || !streamUrl.trim()) { toast.error("নাম ও Stream URL দাও!"); return; }
@@ -5457,7 +5489,34 @@ Pᴏᴡᴇʀ Bʏ :
                     </div>
                     <div>
                       <label className="text-[10px] text-zinc-400 block mb-1">Category</label>
-                      <input value={category} onChange={e => setCategory(e.target.value)} placeholder="Entertainment" className={inputClass} />
+                      <div className="flex gap-2">
+                        <select value={category} onChange={e => setCategory(e.target.value)} className={`${inputClass} flex-1`}>
+                          {categories.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                        <button onClick={() => setShowAddCat(!showAddCat)} className={`${btnSecondary} px-3 py-2 text-[10px]`}>
+                          {showAddCat ? "✕" : "+ নতুন"}
+                        </button>
+                      </div>
+                      {showAddCat && (
+                        <div className="flex gap-2 mt-2">
+                          <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="নতুন ক্যাটাগরি নাম" className={`${inputClass} flex-1`} />
+                          <button onClick={addCategory} className={`${btnPrimary} px-3 py-2 text-[10px]`}>যোগ করো</button>
+                        </div>
+                      )}
+                      {categories.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {categories.map(cat => (
+                            <span key={cat} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-700/50 text-[9px] text-zinc-300">
+                              {cat}
+                              {cat !== "General" && (
+                                <button onClick={() => deleteCategory(cat)} className="hover:text-red-400">✕</button>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <button onClick={saveChannel} className={`${btnPrimary} flex-1 py-2.5 flex items-center justify-center gap-2`}>
