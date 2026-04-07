@@ -8,6 +8,7 @@ interface TvChannel {
   id: string;
   name: string;
   logo: string;
+  banner: string;
   streamUrl: string;
   category?: string;
   order?: number;
@@ -33,6 +34,7 @@ const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
           id,
           name: val.name || "",
           logo: val.logo || "",
+          banner: val.banner || "",
           streamUrl: val.streamUrl || "",
           category: val.category || "General",
           order: val.order || 0,
@@ -173,7 +175,7 @@ const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
             >
               {/* Background Logo */}
               <img
-                src={channel.logo}
+                src={channel.banner || channel.logo}
                 alt={channel.name}
                 className="w-full h-full object-cover"
                 loading="lazy"

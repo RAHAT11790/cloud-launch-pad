@@ -9,7 +9,8 @@ import {
   LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
   Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
   Shield, LogOut, Search, Save, ChevronDown, Send, Link, ChevronLeft, ChevronRight,
-  Lock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin
+  Lock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin,
+  Upload, Loader2
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
@@ -5328,19 +5329,37 @@ Pᴏᴡᴇʀ Bʏ :
         {/* ==================== LIVE TV ==================== */}
         {activeSection === "live-tv" && (() => {
           const LiveTvAdmin = () => {
-            const [channels, setChannelsState] = useState<{id: string; name: string; logo: string; streamUrl: string; category: string; order: number}[]>([]);
+            const [channels, setChannelsState] = useState<{id: string; name: string; logo: string; banner: string; streamUrl: string; category: string; order: number}[]>([]);
             const [name, setName] = useState("");
             const [logo, setLogo] = useState("");
+            const [banner, setBanner] = useState("");
             const [streamUrl, setStreamUrl] = useState("");
             const [category, setCategory] = useState("General");
             const [editId, setEditId] = useState<string | null>(null);
+            const [uploadingLogo, setUploadingLogo] = useState(false);
+            const [uploadingBanner, setUploadingBanner] = useState(false);
+            const logoFileRef = useRef<HTMLInputElement>(null);
+            const bannerFileRef = useRef<HTMLInputElement>(null);
+
+            const handleImgUpload = async (file: File, setter: (v: string) => void, setLoading: (v: boolean) => void) => {
+              if (file.size > 10 * 1024 * 1024) { toast.error("Max 10MB!"); return; }
+              if (!file.type.startsWith("image/")) { toast.error("Only images!"); return; }
+              setLoading(true);
+              try {
+                const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+                const url = await uploadToImgbb(file);
+                setter(url);
+                toast.success("✅ ছবি আপলোড হয়েছে!");
+              } catch { toast.error("❌ আপলোড ব্যর্থ!"); }
+              setLoading(false);
+            };
 
             useEffect(() => {
               const unsub = onValue(ref(db, "liveTvChannels"), (snap) => {
                 const data = snap.val();
                 if (data) {
                   const list = Object.entries(data).map(([id, val]: any) => ({
-                    id, name: val.name || "", logo: val.logo || "", streamUrl: val.streamUrl || "",
+                    id, name: val.name || "", logo: val.logo || "", banner: val.banner || "", streamUrl: val.streamUrl || "",
                     category: val.category || "General", order: val.order || 0,
                   }));
                   list.sort((a, b) => a.order - b.order);
@@ -5352,7 +5371,7 @@ Pᴏᴡᴇʀ Bʏ :
 
             const saveChannel = async () => {
               if (!name.trim() || !streamUrl.trim()) { toast.error("নাম ও Stream URL দাও!"); return; }
-              const data = { name: name.trim(), logo: logo.trim(), streamUrl: streamUrl.trim(), category: category.trim() || "General", order: channels.length };
+              const data = { name: name.trim(), logo: logo.trim(), banner: banner.trim(), streamUrl: streamUrl.trim(), category: category.trim() || "General", order: channels.length };
               if (editId) {
                 await update(ref(db, `liveTvChannels/${editId}`), data);
                 toast.success("✅ চ্যানেল আপডেট হয়েছে!");
@@ -5361,7 +5380,7 @@ Pᴏᴡᴇʀ Bʏ :
                 await push(ref(db, "liveTvChannels"), data);
                 toast.success("✅ চ্যানেল যোগ হয়েছে!");
               }
-              setName(""); setLogo(""); setStreamUrl(""); setCategory("General");
+              setName(""); setLogo(""); setBanner(""); setStreamUrl(""); setCategory("General");
             };
 
             const deleteChannel = async (id: string) => {
@@ -5371,7 +5390,7 @@ Pᴏᴡᴇʀ Bʏ :
             };
 
             const startEdit = (ch: any) => {
-              setEditId(ch.id); setName(ch.name); setLogo(ch.logo); setStreamUrl(ch.streamUrl); setCategory(ch.category);
+              setEditId(ch.id); setName(ch.name); setLogo(ch.logo); setBanner(ch.banner || ""); setStreamUrl(ch.streamUrl); setCategory(ch.category);
             };
 
             return (
@@ -5385,10 +5404,53 @@ Pᴏᴡᴇʀ Bʏ :
                       <label className="text-[10px] text-zinc-400 block mb-1">Channel Name *</label>
                       <input value={name} onChange={e => setName(e.target.value)} placeholder="Channel name" className={inputClass} />
                     </div>
+
+                    {/* Logo Upload */}
                     <div>
-                      <label className="text-[10px] text-zinc-400 block mb-1">Logo URL</label>
-                      <input value={logo} onChange={e => setLogo(e.target.value)} placeholder="https://logo-url.png" className={inputClass} />
+                      <label className="text-[10px] text-zinc-400 block mb-1">Channel Logo</label>
+                      <div className="flex gap-2">
+                        <input value={logo} onChange={e => setLogo(e.target.value)} placeholder="https://logo-url.png" className={`${inputClass} flex-1`} />
+                        <button
+                          onClick={() => logoFileRef.current?.click()}
+                          disabled={uploadingLogo}
+                          className={`${btnSecondary} px-3 py-2 text-[10px] flex items-center gap-1`}
+                        >
+                          {uploadingLogo ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                          আপলোড
+                        </button>
+                        <input ref={logoFileRef} type="file" accept="image/*" className="hidden"
+                          onChange={e => { const f = e.target.files?.[0]; if (f) handleImgUpload(f, setLogo, setUploadingLogo); e.target.value = ""; }} />
+                      </div>
+                      {logo && (
+                        <div className="mt-2 w-16 h-16 rounded-xl overflow-hidden bg-zinc-800/50 border border-zinc-700/40">
+                          <img src={logo} alt="Logo" className="w-full h-full object-contain" />
+                        </div>
+                      )}
                     </div>
+
+                    {/* Banner Upload */}
+                    <div>
+                      <label className="text-[10px] text-zinc-400 block mb-1">Channel Banner (16:9)</label>
+                      <div className="flex gap-2">
+                        <input value={banner} onChange={e => setBanner(e.target.value)} placeholder="https://banner-url.png" className={`${inputClass} flex-1`} />
+                        <button
+                          onClick={() => bannerFileRef.current?.click()}
+                          disabled={uploadingBanner}
+                          className={`${btnSecondary} px-3 py-2 text-[10px] flex items-center gap-1`}
+                        >
+                          {uploadingBanner ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                          আপলোড
+                        </button>
+                        <input ref={bannerFileRef} type="file" accept="image/*" className="hidden"
+                          onChange={e => { const f = e.target.files?.[0]; if (f) handleImgUpload(f, setBanner, setUploadingBanner); e.target.value = ""; }} />
+                      </div>
+                      {banner && (
+                        <div className="mt-2 aspect-video rounded-xl overflow-hidden bg-zinc-800/50 border border-zinc-700/40">
+                          <img src={banner} alt="Banner" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                    </div>
+
                     <div>
                       <label className="text-[10px] text-zinc-400 block mb-1">Stream URL *</label>
                       <input value={streamUrl} onChange={e => setStreamUrl(e.target.value)} placeholder="https://stream.m3u8" className={inputClass} />
@@ -5397,17 +5459,12 @@ Pᴏᴡᴇʀ Bʏ :
                       <label className="text-[10px] text-zinc-400 block mb-1">Category</label>
                       <input value={category} onChange={e => setCategory(e.target.value)} placeholder="Entertainment" className={inputClass} />
                     </div>
-                    {logo && (
-                      <div className="aspect-video rounded-xl overflow-hidden bg-zinc-800/50 border border-zinc-700/40">
-                        <img src={logo} alt="Preview" className="w-full h-full object-cover" />
-                      </div>
-                    )}
                     <div className="flex gap-2">
                       <button onClick={saveChannel} className={`${btnPrimary} flex-1 py-2.5 flex items-center justify-center gap-2`}>
                         <Save size={14} /> {editId ? "আপডেট করো" : "যোগ করো"}
                       </button>
                       {editId && (
-                        <button onClick={() => { setEditId(null); setName(""); setLogo(""); setStreamUrl(""); setCategory("General"); }}
+                        <button onClick={() => { setEditId(null); setName(""); setLogo(""); setBanner(""); setStreamUrl(""); setCategory("General"); }}
                           className={`${btnSecondary} px-4 py-2.5`}>
                           বাতিল
                         </button>

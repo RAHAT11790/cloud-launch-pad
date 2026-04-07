@@ -540,18 +540,32 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
     return () => { unsub1(); (window as any).__rs_wh_unsub?.(); unsub3(); unsub4(); };
   }, [userId]);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [photoUploading, setPhotoUploading] = useState(false);
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > MAX_PHOTO_SIZE) { alert("Image must be under 2MB!"); return; }
+    if (file.size > 5 * 1024 * 1024) { alert("Image must be under 5MB!"); return; }
     if (!file.type.startsWith("image/")) { alert("Please select an image file."); return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const result = ev.target?.result as string;
-      setProfilePhoto(result);
-      localStorage.setItem("rs_profile_photo", result);
-    };
-    reader.readAsDataURL(file);
+    setPhotoUploading(true);
+    try {
+      const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+      const url = await uploadToImgbb(file);
+      setProfilePhoto(url);
+      localStorage.setItem("rs_profile_photo", url);
+      toast.success("✅ প্রোফাইল ছবি আপলোড হয়েছে!");
+    } catch {
+      // Fallback to base64 if imgbb fails
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const result = ev.target?.result as string;
+        setProfilePhoto(result);
+        localStorage.setItem("rs_profile_photo", result);
+      };
+      reader.readAsDataURL(file);
+      toast.error("ImgBB ব্যর্থ, লোকালে সেভ হয়েছে");
+    }
+    setPhotoUploading(false);
   };
 
   const removePhoto = () => {
