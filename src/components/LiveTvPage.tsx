@@ -89,6 +89,7 @@ const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
           rating: "",
           year: "",
           storyline: "",
+          language: "",
           seasons: [],
         }))}
         onSuggestedClick={(anime) => {
