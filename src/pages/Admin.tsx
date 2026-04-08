@@ -5829,6 +5829,9 @@ ${tgHashtags}`;
             const [r2Testing, setR2Testing] = useState(false);
             const [r2TestResults, setR2TestResults] = useState<any[]>([]);
             const [r2CleanupLoading, setR2CleanupLoading] = useState(false);
+            const [r2StorageInfo, setR2StorageInfo] = useState<any[]>([]);
+            const [r2StorageLoading, setR2StorageLoading] = useState(false);
+            const [r2PurgeLoading, setR2PurgeLoading] = useState<string | null>(null);
             useEffect(() => { const unsub = onValue(ref(db, "settings/r2Cache"), (snap) => { const val = snap.val(); if (val) setR2Settings(val); }); return () => unsub(); }, []);
             const bucketList = r2Settings.buckets ? Object.entries(r2Settings.buckets).map(([id, b]: any) => ({ id, ...b })) : [];
             const totalBuckets = bucketList.length;
@@ -5838,6 +5841,9 @@ ${tgHashtags}`;
             const toggleBucket = async (id: string, en: boolean) => { await update(ref(db, `settings/r2Cache/buckets/${id}`), { enabled: en }); };
             const testBuckets = async () => { if (!r2Settings.edgeFunctionUrl) { toast.error("Edge Function URL দাও!"); return; } setR2Testing(true); try { const bkts = bucketList.filter((b: any) => b.enabled !== false); const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "status", buckets: bkts }) }); if (res.ok) { const d = await res.json(); setR2TestResults(d.results || []); } else toast.error("ফেইল!"); } catch { toast.error("এরর!"); } setR2Testing(false); };
             const runCleanup = async () => { if (!r2Settings.edgeFunctionUrl) { toast.error("URL দাও!"); return; } setR2CleanupLoading(true); try { const bkts = bucketList.filter((b: any) => b.enabled !== false); const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "cleanup", buckets: bkts }) }); if (res.ok) { const d = await res.json(); toast.success(`🧹 ${d.deleted || 0}টি মুছে ফেলা হয়েছে!`); } else toast.error("ফেইল!"); } catch { toast.error("এরর!"); } setR2CleanupLoading(false); };
+            const loadStorageInfo = async () => { if (!r2Settings.edgeFunctionUrl) { toast.error("Edge Function URL দাও!"); return; } setR2StorageLoading(true); try { const bkts = bucketList.filter((b: any) => b.enabled !== false); const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "list", buckets: bkts }) }); if (res.ok) { const d = await res.json(); setR2StorageInfo(d.results || []); } else toast.error("ফেইল!"); } catch { toast.error("এরর!"); } setR2StorageLoading(false); };
+            const purgeAllBucket = async (bucketId: string) => { if (!confirm("এই bucket-এর সব ক্যাশ মুছে ফেলবে?")) return; if (!r2Settings.edgeFunctionUrl) { toast.error("URL দাও!"); return; } setR2PurgeLoading(bucketId); try { const bkt = bucketList.find((b: any) => b.id === bucketId); if (!bkt) return; const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "purge", buckets: [bkt] }) }); if (res.ok) { const d = await res.json(); toast.success(`🗑️ ${d.deleted || 0}টি ফাইল মুছে ফেলা হয়েছে!`); loadStorageInfo(); } else toast.error("ফেইল!"); } catch { toast.error("এরর!"); } setR2PurgeLoading(null); };
+            const formatSize = (bytes: number) => { if (bytes === 0) return "0 B"; const k = 1024; const sizes = ["B", "KB", "MB", "GB"]; const i = Math.floor(Math.log(bytes) / Math.log(k)); return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]; };
             return (<div className="space-y-4">
               <div className={`${glassCard} p-4`}>
                 <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-bold flex items-center gap-2"><CloudDownload size={16} className="text-cyan-400" /> R2 Video Cache</h3>
@@ -5853,7 +5859,7 @@ ${tgHashtags}`;
                   <div><label className="text-[10px] text-zinc-400 block mb-1">Max Size (MB)</label><input type="number" value={r2Settings.maxSizeMB || 300} onChange={e => saveR2({ maxSizeMB: parseInt(e.target.value) || 300 })} className={`${inputClass} text-[10px] w-full`} /></div>
                   <div><label className="text-[10px] text-zinc-400 block mb-1">Cache (hrs)</label><input type="number" value={r2Settings.cacheHours || 12} onChange={e => saveR2({ cacheHours: parseInt(e.target.value) || 12 })} className={`${inputClass} text-[10px] w-full`} /></div>
                   <div><label className="text-[10px] text-zinc-400 block mb-1">Start Hour</label><input type="number" value={r2Settings.activeHoursStart ?? 6} min={0} max={23} onChange={e => saveR2({ activeHoursStart: parseInt(e.target.value) || 0 })} className={`${inputClass} text-[10px] w-full`} /></div>
-                  <div><label className="text-[10px] text-zinc-400 block mb-1">End Hour</label><input type="number" value={r2Settings.activeHoursEnd ?? 0} min={0} max={23} onChange={e => saveR2({ activeHoursEnd: parseInt(e.target.value) || 0 })} className={`${inputClass} text-[10px] w-full`} /></div>
+                  <div><label className="text-[10px] text-zinc-400 block mb-1">End Hour <span className="text-zinc-500">(0 = রাত ১২টা)</span></label><input type="number" value={r2Settings.activeHoursEnd ?? 0} min={0} max={23} onChange={e => saveR2({ activeHoursEnd: parseInt(e.target.value) || 0 })} className={`${inputClass} text-[10px] w-full`} /></div>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={testBuckets} disabled={r2Testing} className={`${btnPrimary} text-[10px] px-3 flex-1`}>{r2Testing ? <Loader2 size={10} className="animate-spin" /> : <Activity size={10} />} টেস্ট</button>
@@ -5875,7 +5881,27 @@ ${tgHashtags}`;
                     <input value={newBucket.publicUrl} onChange={e => setNewBucket(p => ({ ...p, publicUrl: e.target.value }))} placeholder="Public URL" className={`${inputClass} text-[10px] w-full`} />
                     <input value={newBucket.s3Endpoint} onChange={e => setNewBucket(p => ({ ...p, s3Endpoint: e.target.value }))} placeholder="S3 API Endpoint" className={`${inputClass} text-[10px] w-full`} />
                     <button onClick={addBucket} className={`${btnPrimary} w-full text-[10px]`}><Plus size={10} /> Bucket যোগ করো</button>
+              </div>
+              {/* ---- Storage Info ---- */}
+              <div className={`${glassCard} p-4`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold flex items-center gap-2"><BarChart3 size={14} className="text-purple-400" /> Storage Info</h3>
+                  <button onClick={loadStorageInfo} disabled={r2StorageLoading} className={`${btnPrimary} text-[10px] px-3`}>{r2StorageLoading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />} লোড করো</button>
+                </div>
+                {r2StorageInfo.length === 0 && <p className="text-[10px] text-zinc-500">উপরে "লোড করো" চাপো ক্যাশড ফাইল দেখতে।</p>}
+                {r2StorageInfo.length > 0 && (<div className="space-y-3">{r2StorageInfo.map((info: any) => (<div key={info.bucketId} className="border border-zinc-700 rounded-xl p-3 bg-zinc-800/30">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold text-white">{info.bucketName || info.bucketId}</span>
+                    <button onClick={() => purgeAllBucket(info.bucketId)} disabled={r2PurgeLoading === info.bucketId} className="px-2 py-1 rounded-lg text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1">{r2PurgeLoading === info.bucketId ? <Loader2 size={9} className="animate-spin" /> : <Trash2 size={9} />} সব মুছো</button>
                   </div>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div className="bg-zinc-900/50 rounded-lg p-2 text-center"><p className="text-[9px] text-zinc-400">ফাইল</p><p className="text-sm font-bold text-cyan-400">{info.totalFiles}</p></div>
+                    <div className="bg-zinc-900/50 rounded-lg p-2 text-center"><p className="text-[9px] text-zinc-400">সাইজ</p><p className="text-sm font-bold text-green-400">{formatSize(info.totalSizeBytes)}</p></div>
+                  </div>
+                  {info.error && <p className="text-[9px] text-red-400">⚠️ {info.error}</p>}
+                  {info.files && info.files.length > 0 && (<details className="mt-2"><summary className="text-[9px] text-zinc-400 cursor-pointer">ফাইল তালিকা ({info.totalFiles})</summary><div className="mt-1 max-h-40 overflow-y-auto space-y-1">{info.files.map((f: any, fi: number) => (<div key={fi} className="flex items-center justify-between text-[8px] font-mono bg-zinc-900/50 px-2 py-1 rounded"><span className="truncate flex-1 text-zinc-300">{f.key.replace("cache/", "")}</span><span className="text-zinc-500 ml-2 whitespace-nowrap">{formatSize(f.size)}</span></div>))}</div></details>)}
+                </div>))}</div>)}
+              </div>
                 </div>
               </div>
             </div>);
