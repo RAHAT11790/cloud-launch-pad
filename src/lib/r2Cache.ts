@@ -43,10 +43,10 @@ function normalizeBucketConfig(bucket: R2BucketConfig): R2BucketConfig {
   const accessKeyId = bucket.accessKeyId?.trim() || "";
   const secretAccessKey = bucket.secretAccessKey?.trim() || "";
 
-  const looksLikeShortKey = accessKeyId.length > 0 && accessKeyId.length <= 40;
-  const looksLikeLongSecret = secretAccessKey.length >= 48;
+  const looksLikeLongAccessKey = accessKeyId.length >= 48;
+  const looksLikeShortSecret = secretAccessKey.length > 0 && secretAccessKey.length <= 40;
 
-  if (looksLikeShortKey && looksLikeLongSecret) {
+  if (looksLikeLongAccessKey && looksLikeShortSecret) {
     return {
       ...bucket,
       accessKeyId: secretAccessKey,

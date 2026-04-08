@@ -25,6 +25,25 @@ interface R2Bucket {
   s3Endpoint: string;
 }
 
+function normalizeBucket(bucket: R2Bucket): R2Bucket {
+  const accessKeyId = bucket.accessKeyId?.trim() || "";
+  const secretAccessKey = bucket.secretAccessKey?.trim() || "";
+
+  if (accessKeyId.length >= 48 && secretAccessKey.length > 0 && secretAccessKey.length <= 40) {
+    return {
+      ...bucket,
+      accessKeyId: secretAccessKey,
+      secretAccessKey: accessKeyId,
+    };
+  }
+
+  return {
+    ...bucket,
+    accessKeyId,
+    secretAccessKey,
+  };
+}
+
 // ---- S3-compatible signing (AWS Signature V4) ----
 async function hmacSHA256(key: Uint8Array, message: string): Promise<Uint8Array> {
   const cryptoKey = await crypto.subtle.importKey(
@@ -294,15 +313,16 @@ Deno.serve(async (req) => {
 
   try {
     const { action, videoUrl, sourceUrl, buckets, maxSizeMB = 300 } = await req.json();
+    const bucketList = Array.isArray(buckets) ? (buckets as R2Bucket[]).map(normalizeBucket) : [];
 
-    if (!buckets || !Array.isArray(buckets) || buckets.length === 0) {
+    if (bucketList.length === 0) {
       return jsonResponse({ error: "No R2 buckets configured" }, 400);
     }
 
     // ---- CHECK ----
     if (action === "check") {
       const key = cacheKey(videoUrl);
-      for (const bucket of buckets as R2Bucket[]) {
+      for (const bucket of bucketList) {
         try {
           const res = await signedS3Request(bucket, "HEAD", key);
           if (res.ok) {
@@ -321,7 +341,7 @@ Deno.serve(async (req) => {
 
     // ---- UPLOAD ----
     if (action === "upload") {
-      const uploadTask = uploadToR2InBackground(videoUrl, sourceUrl, buckets as R2Bucket[], maxSizeMB);
+      const uploadTask = uploadToR2InBackground(videoUrl, sourceUrl, bucketList, maxSizeMB);
       const edgeRuntime = (globalThis as typeof globalThis & {
         EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
       }).EdgeRuntime;
@@ -334,7 +354,7 @@ Deno.serve(async (req) => {
         return jsonResponse({
           queued: true,
           started: true,
-          bucketId: pickBucket(buckets as R2Bucket[], videoUrl).id,
+          bucketId: pickBucket(bucketList, videoUrl).id,
         }, 202);
       }
 
@@ -345,7 +365,7 @@ Deno.serve(async (req) => {
     if (action === "delete") {
       const key = cacheKey(videoUrl);
       const results: any[] = [];
-      for (const bucket of buckets as R2Bucket[]) {
+      for (const bucket of bucketList) {
         try {
           const res = await signedS3Request(bucket, "DELETE", key);
           await res.text();
@@ -367,7 +387,7 @@ Deno.serve(async (req) => {
       const now = Date.now();
       let deleted = 0;
 
-      for (const bucket of buckets as R2Bucket[]) {
+      for (const bucket of bucketList) {
         try {
           const listRes = await signedS3Request(bucket, "GET", "", undefined, {
             "prefix": "cache/",
@@ -414,7 +434,7 @@ Deno.serve(async (req) => {
     // ---- LIST (storage info per bucket) ----
     if (action === "list") {
       const results: any[] = [];
-      for (const bucket of buckets as R2Bucket[]) {
+      for (const bucket of bucketList) {
         try {
           let totalFiles = 0;
           let totalSize = 0;
@@ -425,7 +445,10 @@ Deno.serve(async (req) => {
             const params: Record<string, string> = { "prefix": "cache/", "list-type": "2", "max-keys": "1000" };
             if (continuationToken) params["continuation-token"] = continuationToken;
             const listRes = await signedS3Request(bucket, "GET", "", undefined, params);
-            if (!listRes.ok) { await listRes.text(); break; }
+            if (!listRes.ok) {
+              const errorText = await listRes.text();
+              throw new Error(`LIST ${listRes.status}: ${errorText || "Bucket access failed"}`);
+            }
             const xml = await listRes.text();
 
             const keyMatches = xml.match(/<Key>([^<]+)<\/Key>/g) || [];
@@ -484,7 +507,7 @@ Deno.serve(async (req) => {
     // ---- PURGE (delete ALL cached files in a bucket) ----
     if (action === "purge") {
       let deleted = 0;
-      for (const bucket of buckets as R2Bucket[]) {
+      for (const bucket of bucketList) {
         try {
           let continuationToken: string | undefined;
           do {
@@ -512,7 +535,7 @@ Deno.serve(async (req) => {
     // ---- STATUS ----
     if (action === "status") {
       const results: any[] = [];
-      for (const bucket of buckets as R2Bucket[]) {
+      for (const bucket of bucketList) {
         try {
           const start = Date.now();
           const res = await signedS3Request(bucket, "GET", "", undefined, {
