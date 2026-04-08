@@ -7,8 +7,6 @@
 // - delete: ক্যাশ থেকে ফাইল মুছে ফেলে
 // - cleanup: পুরনো ক্যাশ ক্লিন করে
 // - list: ক্যাশে থাকা ফাইলগুলো দেখায়
-//
-// ডিপ্লয়: Supabase Dashboard → Edge Functions → New → Paste this code
 // ============================================
 
 const corsHeaders = {
@@ -36,7 +34,7 @@ async function hmacSHA256(key: Uint8Array, message: string): Promise<Uint8Array>
   return new Uint8Array(sig);
 }
 
-async function sha256(data: Uint8Array): Promise<string> {
+async function sha256hex(data: Uint8Array): Promise<string> {
   const hash = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
@@ -46,11 +44,29 @@ function toHex(arr: Uint8Array): string {
 }
 
 async function getSignatureKey(key: string, dateStamp: string, region: string, service: string): Promise<Uint8Array> {
-  let kDate = await hmacSHA256(new TextEncoder().encode("AWS4" + key), dateStamp);
-  let kRegion = await hmacSHA256(kDate, region);
-  let kService = await hmacSHA256(kRegion, service);
-  let kSigning = await hmacSHA256(kService, "aws4_request");
-  return kSigning;
+  const kDate = await hmacSHA256(new TextEncoder().encode("AWS4" + key), dateStamp);
+  const kRegion = await hmacSHA256(kDate, region);
+  const kService = await hmacSHA256(kRegion, service);
+  return await hmacSHA256(kService, "aws4_request");
+}
+
+// Properly encode URI component for S3 (encode everything except unreserved chars)
+function uriEncode(str: string, encodeSlash = true): string {
+  let encoded = "";
+  for (const ch of str) {
+    if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+        (ch >= '0' && ch <= '9') || ch === '_' || ch === '-' || ch === '~' || ch === '.') {
+      encoded += ch;
+    } else if (ch === '/' && !encodeSlash) {
+      encoded += ch;
+    } else {
+      const bytes = new TextEncoder().encode(ch);
+      for (const b of bytes) {
+        encoded += '%' + b.toString(16).toUpperCase().padStart(2, '0');
+      }
+    }
+  }
+  return encoded;
 }
 
 async function signedS3Request(
@@ -58,6 +74,7 @@ async function signedS3Request(
   method: string,
   objectKey: string,
   body?: Uint8Array,
+  queryParams?: Record<string, string>,
   extraHeaders?: Record<string, string>
 ): Promise<Response> {
   const now = new Date();
@@ -66,12 +83,24 @@ async function signedS3Request(
   const region = "auto";
   const service = "s3";
 
-  // Use s3Endpoint directly — it already includes bucket name
+  // Build URL properly — endpoint already includes bucket name
   const endpoint = bucket.s3Endpoint.replace(/\/$/, "");
-  const url = `${endpoint}/${objectKey}`;
-  const parsedUrl = new URL(url);
+  const path = objectKey ? `/${objectKey}` : "/";
+  const baseUrl = `${endpoint}${path}`;
+  
+  // Build query string
+  const qsParts: string[] = [];
+  if (queryParams) {
+    const sortedKeys = Object.keys(queryParams).sort();
+    for (const k of sortedKeys) {
+      qsParts.push(`${uriEncode(k)}=${uriEncode(queryParams[k])}`);
+    }
+  }
+  const queryString = qsParts.join("&");
+  const fullUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;
+  const parsedUrl = new URL(fullUrl);
 
-  const payloadHash = body ? await sha256(body) : await sha256(new Uint8Array(0));
+  const payloadHash = body ? await sha256hex(body) : await sha256hex(new Uint8Array(0));
 
   const headers: Record<string, string> = {
     "Host": parsedUrl.host,
@@ -84,15 +113,21 @@ async function signedS3Request(
   }
 
   const signedHeaderKeys = Object.keys(headers).map(k => k.toLowerCase()).sort();
-  const signedHeaders = signedHeaderKeys.join(";");
-  const canonicalHeaders = signedHeaderKeys.map(k => `${k}:${headers[Object.keys(headers).find(h => h.toLowerCase() === k)!]}`).join("\n") + "\n";
+  const signedHeadersStr = signedHeaderKeys.join(";");
+  const canonicalHeaders = signedHeaderKeys.map(k => {
+    const origKey = Object.keys(headers).find(h => h.toLowerCase() === k)!;
+    return `${k}:${headers[origKey].trim()}`;
+  }).join("\n") + "\n";
+
+  // Canonical URI — must be URI-encoded path (don't encode slashes)
+  const canonicalUri = uriEncode(parsedUrl.pathname, false) || "/";
 
   const canonicalRequest = [
     method,
-    parsedUrl.pathname,
-    parsedUrl.search.replace("?", ""),
+    canonicalUri,
+    queryString, // already sorted & encoded
     canonicalHeaders,
-    signedHeaders,
+    signedHeadersStr,
     payloadHash,
   ].join("\n");
 
@@ -101,42 +136,36 @@ async function signedS3Request(
     "AWS4-HMAC-SHA256",
     amzDate,
     credentialScope,
-    await sha256(new TextEncoder().encode(canonicalRequest)),
+    await sha256hex(new TextEncoder().encode(canonicalRequest)),
   ].join("\n");
 
   const signingKey = await getSignatureKey(bucket.secretAccessKey, dateStamp, region, service);
   const signature = toHex(await hmacSHA256(signingKey, stringToSign));
 
-  const authHeader = `AWS4-HMAC-SHA256 Credential=${bucket.accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+  const authHeader = `AWS4-HMAC-SHA256 Credential=${bucket.accessKeyId}/${credentialScope}, SignedHeaders=${signedHeadersStr}, Signature=${signature}`;
 
-  const fetchHeaders: Record<string, string> = { ...headers, Authorization: authHeader };
-
-  return fetch(url, {
+  return fetch(fullUrl, {
     method,
-    headers: fetchHeaders,
+    headers: { ...headers, Authorization: authHeader },
     body: body || undefined,
   });
 }
 
 // ---- Helper: generate cache key from video URL ----
 function cacheKey(videoUrl: string): string {
-  // Use a hash of the URL as the object key
   let hash = 0;
   for (let i = 0; i < videoUrl.length; i++) {
-    const chr = videoUrl.charCodeAt(i);
-    hash = ((hash << 5) - hash) + chr;
+    hash = ((hash << 5) - hash) + videoUrl.charCodeAt(i);
     hash |= 0;
   }
-  // Also include part of the URL for readability
   const urlParts = videoUrl.split("/");
   const fileName = urlParts[urlParts.length - 1]?.split("?")[0] || "video";
   return `cache/${Math.abs(hash).toString(36)}_${fileName}`;
 }
 
-// ---- Pick bucket with round-robin load balancing ----
+// ---- Pick bucket with hash-based load balancing ----
 function pickBucket(buckets: R2Bucket[], videoUrl: string): R2Bucket {
   if (buckets.length === 1) return buckets[0];
-  // Hash-based distribution for consistent mapping
   let hash = 0;
   for (let i = 0; i < videoUrl.length; i++) {
     hash = ((hash << 5) - hash) + videoUrl.charCodeAt(i);
@@ -159,7 +188,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ---- CHECK: Is video cached in any bucket? ----
+    // ---- CHECK ----
     if (action === "check") {
       const key = cacheKey(videoUrl);
       for (const bucket of buckets as R2Bucket[]) {
@@ -168,14 +197,12 @@ Deno.serve(async (req) => {
           if (res.ok) {
             const publicUrl = `${bucket.publicUrl.replace(/\/$/, "")}/${key}`;
             return new Response(JSON.stringify({
-              cached: true,
-              url: publicUrl,
-              bucketId: bucket.id,
+              cached: true, url: publicUrl, bucketId: bucket.id,
               size: res.headers.get("Content-Length"),
-            }), {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
           }
+          // Consume body to prevent leak
+          await res.text();
         } catch {}
       }
       return new Response(JSON.stringify({ cached: false }), {
@@ -183,111 +210,86 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ---- UPLOAD: Download from source & upload to R2 ----
+    // ---- UPLOAD ----
     if (action === "upload") {
       const bucket = pickBucket(buckets as R2Bucket[], videoUrl);
       const key = cacheKey(videoUrl);
 
-      // First check if already cached
+      // Check if already cached
       try {
         const headRes = await signedS3Request(bucket, "HEAD", key);
         if (headRes.ok) {
           const publicUrl = `${bucket.publicUrl.replace(/\/$/, "")}/${key}`;
           return new Response(JSON.stringify({
-            success: true,
-            url: publicUrl,
-            alreadyCached: true,
-            bucketId: bucket.id,
-          }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+            success: true, url: publicUrl, alreadyCached: true, bucketId: bucket.id,
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
+        await headRes.text();
       } catch {}
 
       // Download from source
       const sourceRes = await fetch(videoUrl, {
         headers: { "User-Agent": "Mozilla/5.0" },
       });
-
       if (!sourceRes.ok) {
         return new Response(JSON.stringify({ error: `Source fetch failed: ${sourceRes.status}` }), {
           status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Check file size
       const contentLength = parseInt(sourceRes.headers.get("Content-Length") || "0");
       const maxBytes = maxSizeMB * 1024 * 1024;
       if (contentLength > maxBytes) {
-        return new Response(JSON.stringify({
-          error: "File too large",
-          size: contentLength,
-          maxSize: maxBytes,
-          skipped: true,
-        }), {
+        await sourceRes.body?.cancel();
+        return new Response(JSON.stringify({ error: "File too large", size: contentLength, maxSize: maxBytes, skipped: true }), {
           status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Read the video data
       const videoData = new Uint8Array(await sourceRes.arrayBuffer());
-
-      // Double-check actual size
       if (videoData.length > maxBytes) {
-        return new Response(JSON.stringify({
-          error: "File too large after download",
-          size: videoData.length,
-          maxSize: maxBytes,
-          skipped: true,
-        }), {
+        return new Response(JSON.stringify({ error: "File too large after download", size: videoData.length, maxSize: maxBytes, skipped: true }), {
           status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       // Upload to R2
       const contentType = sourceRes.headers.get("Content-Type") || "video/mp4";
-      const uploadRes = await signedS3Request(bucket, "PUT", key, videoData, {
+      const uploadRes = await signedS3Request(bucket, "PUT", key, videoData, undefined, {
         "Content-Type": contentType,
       });
-
       if (!uploadRes.ok) {
         const errText = await uploadRes.text();
         return new Response(JSON.stringify({ error: `R2 upload failed: ${uploadRes.status}`, details: errText }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      await uploadRes.text();
 
-      // Store metadata (timestamp for cleanup)
+      // Store metadata
       const metaKey = `${key}.meta.json`;
-      const meta = JSON.stringify({
-        originalUrl: videoUrl,
-        cachedAt: Date.now(),
-        size: videoData.length,
-        contentType,
-      });
-      await signedS3Request(bucket, "PUT", metaKey, new TextEncoder().encode(meta), {
+      const meta = JSON.stringify({ originalUrl: videoUrl, cachedAt: Date.now(), size: videoData.length, contentType });
+      const metaRes = await signedS3Request(bucket, "PUT", metaKey, new TextEncoder().encode(meta), undefined, {
         "Content-Type": "application/json",
       });
+      await metaRes.text();
 
       const publicUrl = `${bucket.publicUrl.replace(/\/$/, "")}/${key}`;
-      return new Response(JSON.stringify({
-        success: true,
-        url: publicUrl,
-        size: videoData.length,
-        bucketId: bucket.id,
-      }), {
+      return new Response(JSON.stringify({ success: true, url: publicUrl, size: videoData.length, bucketId: bucket.id }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ---- DELETE: Remove a cached video ----
+    // ---- DELETE ----
     if (action === "delete") {
       const key = cacheKey(videoUrl);
       const results: any[] = [];
       for (const bucket of buckets as R2Bucket[]) {
         try {
           const res = await signedS3Request(bucket, "DELETE", key);
-          await signedS3Request(bucket, "DELETE", `${key}.meta.json`);
+          await res.text();
+          const res2 = await signedS3Request(bucket, "DELETE", `${key}.meta.json`);
+          await res2.text();
           results.push({ bucketId: bucket.id, status: res.status });
         } catch (e: any) {
           results.push({ bucketId: bucket.id, error: e.message });
@@ -298,28 +300,21 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ---- CLEANUP: Delete old cached files ----
+    // ---- CLEANUP ----
     if (action === "cleanup") {
-      const maxAgeMs = 12 * 60 * 60 * 1000; // 12 hours
+      const maxAgeMs = 12 * 60 * 60 * 1000;
       const now = Date.now();
       let deleted = 0;
 
       for (const bucket of buckets as R2Bucket[]) {
         try {
-          // List objects in cache/ prefix
-          const listRes = await signedS3Request(bucket, "GET", "", undefined, {});
-          const listUrl = `${bucket.s3Endpoint.replace(/\/$/, "")}?prefix=cache/&list-type=2`;
-
-          // Parse XML response to get keys
-          const xmlRes = await fetch(listUrl.replace(bucket.s3Endpoint.replace(/\/$/, ""), ""), {
-            headers: { "Host": new URL(bucket.s3Endpoint).host },
+          const listRes = await signedS3Request(bucket, "GET", "", undefined, {
+            "prefix": "cache/",
+            "list-type": "2",
+            "max-keys": "1000",
           });
-
-          // Simple approach: list meta files and check timestamps
-          const listRes2 = await signedS3Request(bucket, "GET", "?prefix=cache/&max-keys=1000");
-          if (listRes2.ok) {
-            const xml = await listRes2.text();
-            // Extract keys from XML
+          if (listRes.ok) {
+            const xml = await listRes.text();
             const keyMatches = xml.match(/<Key>([^<]+)<\/Key>/g) || [];
             const keys = keyMatches.map(k => k.replace(/<Key>|<\/Key>/g, ""));
 
@@ -331,32 +326,41 @@ Deno.serve(async (req) => {
                     const meta = await metaRes.json();
                     if (meta.cachedAt && (now - meta.cachedAt) > maxAgeMs) {
                       const videoKey = key.replace(".meta.json", "");
-                      await signedS3Request(bucket, "DELETE", videoKey);
-                      await signedS3Request(bucket, "DELETE", key);
+                      const d1 = await signedS3Request(bucket, "DELETE", videoKey);
+                      await d1.text();
+                      const d2 = await signedS3Request(bucket, "DELETE", key);
+                      await d2.text();
                       deleted++;
                     }
+                  } else {
+                    await metaRes.text();
                   }
                 } catch {}
               }
             }
+          } else {
+            await listRes.text();
           }
         } catch (e: any) {
           console.error(`Cleanup error for bucket ${bucket.id}:`, e.message);
         }
       }
-
       return new Response(JSON.stringify({ success: true, deleted }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ---- STATUS: Check all buckets health ----
+    // ---- STATUS ----
     if (action === "status") {
       const results: any[] = [];
       for (const bucket of buckets as R2Bucket[]) {
         try {
           const start = Date.now();
-          const res = await signedS3Request(bucket, "GET", "?max-keys=1");
+          const res = await signedS3Request(bucket, "GET", "", undefined, {
+            "list-type": "2",
+            "max-keys": "1",
+          });
+          const bodyText = await res.text();
           results.push({
             bucketId: bucket.id,
             alive: res.ok,
