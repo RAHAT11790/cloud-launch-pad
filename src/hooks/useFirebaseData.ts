@@ -58,6 +58,15 @@ export function useFirebaseData() {
                       link720: ep.link720 || undefined,
                       link1080: ep.link1080 || undefined,
                       link4k: ep.link4k || undefined,
+                      audioTracks: ep.audioTracks ? Object.values(ep.audioTracks).map((at: any) => ({
+                        language: at.language || "",
+                        label: at.label || "",
+                        link: at.link || "",
+                        link480: at.link480 || undefined,
+                        link720: at.link720 || undefined,
+                        link1080: at.link1080 || undefined,
+                        link4k: at.link4k || undefined,
+                      })) : undefined,
                     }))
                   : [],
               }))
