@@ -4870,11 +4870,21 @@ ${tgHashtags}`;
                 <div>
                   <label className="block text-xs text-zinc-400 mb-1.5">চ্যানেল আইডি (কমা দিয়ে একাধিক)</label>
                   <textarea value={tgChannelId} onChange={e => setTgChannelId(e.target.value)} onBlur={e => { try { set(ref(db, "admin/telegramChannel"), e.target.value.trim()); } catch {} }} className={`${inputClass} min-h-[60px] resize-y`} placeholder={`${TELEGRAM_CHANNEL}, @channel2, -1001234567890`} rows={2} />
-                  <p className="text-[10px] text-zinc-500 mt-1">একাধিক চ্যানেলে পাঠাতে কমা দিয়ে আলাদা করুন</p>
                 </div>
                 <div>
                   <label className="block text-xs text-zinc-400 mb-1.5">টাইটেল *</label>
                   <input value={tgTitle} onChange={e => setTgTitle(e.target.value)} className={inputClass} placeholder="Anime Title" />
+                </div>
+                {/* IMDB/TMDB ID for auto genres */}
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5">IMDB/TMDB ID (অটো Genres ও Rating)</label>
+                  <div className="flex gap-2">
+                    <input value={tgImdbId} onChange={e => setTgImdbId(e.target.value)} className={`${inputClass} flex-1`} placeholder="tt12345678 বা 12345" />
+                    <button type="button" onClick={() => fetchTmdbGenres(tgImdbId)} disabled={tgImdbLoading || !tgImdbId.trim()}
+                      className={`${btnPrimary} !px-3 !py-2 !text-[11px] disabled:opacity-50`}>
+                      {tgImdbLoading ? <RefreshCw size={12} className="animate-spin" /> : "Fetch"}
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -4889,7 +4899,25 @@ ${tgHashtags}`;
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-zinc-400 mb-1.5">কোয়ালিটি</label>
-                    <input value={tgQuality} onChange={e => setTgQuality(e.target.value)} className={inputClass} placeholder="480p,720p,1080p" />
+                    <input value={tgQuality} onChange={e => setTgQuality(e.target.value)} className={inputClass} placeholder="480p,720p,1080p,4K" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5">রেটিং ⭐</label>
+                    <input value={tgRating} onChange={e => setTgRating(e.target.value)} className={inputClass} placeholder="8.5" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5">Genres</label>
+                  <input value={tgGenres} onChange={e => setTgGenres(e.target.value)} className={inputClass} placeholder="Animation, Action & Adventure" />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5">অডিও ল্যাঙ্গুয়েজ 🎧</label>
+                  <input value={tgLanguages} onChange={e => setTgLanguages(e.target.value)} className={inputClass} placeholder="Bengali,English,Hindi,Japanese" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5">Season/Ep Label</label>
+                    <input value={tgSeasonEpLabel} onChange={e => setTgSeasonEpLabel(e.target.value)} className={inputClass} placeholder="#all" />
                   </div>
                   <div>
                     <label className="block text-xs text-zinc-400 mb-1.5">নতুন এপিসোড</label>
@@ -4908,6 +4936,10 @@ ${tgHashtags}`;
                       𝐅𝐚𝐧𝐝𝐮𝐛
                     </button>
                   </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5">Hashtags</label>
+                  <input value={tgHashtags} onChange={e => setTgHashtags(e.target.value)} onBlur={() => { try { set(ref(db, "admin/tgHashtags"), tgHashtags); } catch {} }} className={inputClass} placeholder="#anime #official" />
                 </div>
                 <div>
                   <label className="block text-xs text-zinc-400 mb-1.5">পোস্টার URL (ঐচ্ছিক)</label>
@@ -4948,6 +4980,56 @@ ${tgHashtags}`;
               </div>
             </div>
 
+            {/* Footer Links Management */}
+            <div className={`${glassCard} p-4 mb-4`}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Link size={14} className="text-purple-400" /> ফুটার লিংক (TG পোস্টে দেখাবে)
+                </h3>
+                <button type="button" onClick={() => {
+                  const newLinks = [...tgFooterLinks, { label: "New Link", url: "https://t.me/", emoji: "🔰" }];
+                  setTgFooterLinks(newLinks);
+                  set(ref(db, "admin/tgFooterLinks"), newLinks);
+                }} className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                  <Plus size={12} /> লিংক যোগ
+                </button>
+              </div>
+              <div className="space-y-2.5">
+                {tgFooterLinks.map((link, i) => (
+                  <div key={i} className="bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/30">
+                    <div className="grid grid-cols-[40px_1fr] gap-2 mb-2">
+                      <div>
+                        <label className="block text-[9px] text-zinc-500 mb-1">Emoji</label>
+                        <input value={link.emoji} onChange={e => {
+                          const nl = [...tgFooterLinks]; nl[i].emoji = e.target.value; setTgFooterLinks(nl);
+                        }} className={`${inputClass} !text-center`} />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] text-zinc-500 mb-1">লেবেল</label>
+                        <input value={link.label} onChange={e => {
+                          const nl = [...tgFooterLinks]; nl[i].label = e.target.value; setTgFooterLinks(nl);
+                        }} className={inputClass} placeholder="Link Label" />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <input value={link.url} onChange={e => {
+                        const nl = [...tgFooterLinks]; nl[i].url = e.target.value; setTgFooterLinks(nl);
+                      }} className={`${inputClass} flex-1`} placeholder="https://t.me/..." />
+                      <button type="button" onClick={() => {
+                        const nl = tgFooterLinks.filter((_, j) => j !== i);
+                        setTgFooterLinks(nl);
+                        set(ref(db, "admin/tgFooterLinks"), nl);
+                      }} className="text-red-400 hover:text-red-300 p-1.5"><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                ))}
+                <button type="button" onClick={() => set(ref(db, "admin/tgFooterLinks"), tgFooterLinks)}
+                  className={`${btnSecondary} w-full !py-2 !text-[11px] flex items-center justify-center gap-1.5`}>
+                  <Save size={12} /> ফুটার লিংক সেভ করুন
+                </button>
+              </div>
+            </div>
+
             {/* Preview */}
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
@@ -4958,17 +5040,21 @@ ${tgHashtags}`;
                   <img src={tgPosterUrl} alt="poster" className="w-full h-[200px] object-cover rounded-lg mb-3"
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 )}
-                <div className="font-mono text-[12px] text-zinc-300 whitespace-pre-line leading-relaxed">
-{`Tɪᴛʟᴇ'- ${tgTitle || '{title}'}
-╭━━━━━━━━━━━━━━━━━━➣
-┣✧ Sᴇᴀsᴏɴ : ${tgSeason || '{season}'}
-┣✧ Eᴘɪsᴏᴅᴇs: ${tgTotalEpisodes || '{total}'}
-┣✧ Qᴜᴀʟɪᴛʏ : ${tgQuality || '{quality}'} ˚.⋆
-┣✧ Aᴜᴅɪᴏ : Hɪɴᴅɪ Dᴜʙ ! ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}
-┣✧ Eᴘɪsᴏᴅᴇ Aᴅᴅᴇᴅ : ${tgNewEpAdded || '{new}'}
-╰━━━━━━━━━━━━━━━━━━➣
-Pᴏᴡᴇʀ Bʏ : 
-𓆩 ${TELEGRAM_CHANNEL} 𓆪`}
+                <div className="font-mono text-[11px] text-zinc-300 whitespace-pre-line leading-relaxed">
+{`♨️ Tɪᴛᴇʟ;- ${tgTitle || '{title}'}
+┌───────────────────
+│ ✦ Sᴇᴀsᴏɴ : ${tgSeason || '{season}'}
+│ ✦ Eᴘɪsᴏᴅᴇs : ${tgTotalEpisodes || '{total}'}
+│ ✦ Aᴜᴅɪᴏ : 🎧 ${tgLanguages} ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}
+│ ✦ Qᴜᴀʟɪᴛʏ : ${tgQuality}
+│ ✦ Rᴀᴛɪɴɢ : ⭐ ${tgRating}/10
+│ ✦ Gᴇɴʀᴇs : ${tgGenres}
+└───────────────────
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+📌 Sᴇᴀsᴏɴ ${tgSeasonEpLabel} • Eᴘɪsᴏᴅᴇ ${tgSeasonEpLabel} Aᴅᴅᴇᴅ
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰`}
+{tgFooterLinks.map(l => `\n๏ ${l.emoji} ${l.label} ${l.emoji}\n   ${l.url}`).join("")}
+{`\n▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n${tgHashtags}`}
                 </div>
                 {tgButtonLink && (
                   <div className="mt-3 bg-blue-500/20 border border-blue-500/40 rounded-lg py-2.5 text-center text-[12px] font-bold text-blue-300">
