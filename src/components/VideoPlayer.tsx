@@ -1428,6 +1428,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           </div>
                         )}
                       </div>
+                    )}
                     {onNextEpisode && (
                       <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="text-[10px] bg-primary/30 px-2 py-0.5 rounded flex items-center gap-1">
                         Next <ChevronRight className="w-3 h-3" />
