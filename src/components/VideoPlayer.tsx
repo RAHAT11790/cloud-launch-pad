@@ -539,9 +539,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       }
       setCurrentAudioTrack(track.label);
     } else if (track.src) {
+      // Pick quality-matched audio URL based on current quality selection
+      let audioUrl = track.src;
+      const q = currentQuality.toLowerCase();
+      if (q.includes('4k') || q.includes('2160') || q.includes('uhd')) audioUrl = track.src4k || track.src1080 || track.src;
+      else if (q.includes('1080')) audioUrl = track.src1080 || track.src;
+      else if (q.includes('720')) audioUrl = track.src720 || track.src;
+      else if (q.includes('480')) audioUrl = track.src480 || track.src;
       // Switch to a different URL for this language
-      const proxiedSrc = getPrimaryPlaybackSrc(track.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-      activeSourceBaseRef.current = track.src;
+      const proxiedSrc = getPrimaryPlaybackSrc(audioUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+      activeSourceBaseRef.current = audioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
       // Restore playback position after source change
