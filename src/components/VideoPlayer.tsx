@@ -567,11 +567,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   useEffect(() => {
     if (!playbackRouteReady) return;
     activeSourceBaseRef.current = src;
-    setCurrentSrc(getPrimaryPlaybackSrc(src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined));
+    const resolvedSrc = getPrimaryPlaybackSrc(src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+    setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
+
+    // R2 cache: check if cached version exists, use it; otherwise trigger background upload
+    if (!noProxy && src) {
+      import("@/lib/r2Cache").then(({ checkR2Cache, triggerR2Upload }) => {
+        checkR2Cache(src).then(cachedUrl => {
+          if (cachedUrl) {
+            console.log("[R2Cache] Using cached:", cachedUrl);
+            setCurrentSrc(cachedUrl);
+          } else {
+            // Trigger background upload for future requests
+            triggerR2Upload(src);
+          }
+        }).catch(() => {});
+      }).catch(() => {});
+    }
   }, [src, qualityOptions, cdnEnabled, proxyUrl, proxyApiKey, playbackRouteReady]);
 
   // MediaSession API - show anime title + artwork in Chrome media notification
