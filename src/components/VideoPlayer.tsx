@@ -82,6 +82,13 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
 };
 
+interface AudioTrackOption {
+  language: string;
+  label: string;
+  src?: string; // If set, switch to this URL for this language
+  nativeIndex?: number; // If set, switch native audio track
+}
+
 interface VideoPlayerProps {
   src: string;
   title: string;
@@ -91,6 +98,7 @@ interface VideoPlayerProps {
   onNextEpisode?: () => void;
   episodeList?: { number: number; title?: string; active: boolean; onClick: () => void }[];
   qualityOptions?: QualityOption[];
+  audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
   animeId?: string;
   onSaveProgress?: (currentTime: number, duration: number) => void;
   hideDownload?: boolean;
