@@ -4993,12 +4993,12 @@ ${tgHashtags}`;
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1.5">Season/Ep Label</label>
-                    <input value={tgSeasonEpLabel} onChange={e => setTgSeasonEpLabel(e.target.value)} className={inputClass} placeholder="#all" />
+                    <label className="block text-xs text-zinc-400 mb-1.5">সিজন নম্বর</label>
+                    <input value={tgSeason} onChange={e => setTgSeason(e.target.value)} className={inputClass} placeholder="01" />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1.5">নতুন এপিসোড</label>
-                    <input value={tgNewEpAdded} onChange={e => setTgNewEpAdded(e.target.value)} className={inputClass} placeholder="02" />
+                    <label className="block text-xs text-zinc-400 mb-1.5">নতুন এপিসোড নম্বর</label>
+                    <input value={tgNewEpAdded} onChange={e => setTgNewEpAdded(e.target.value)} className={inputClass} placeholder="03" />
                   </div>
                 </div>
                 <div>
