@@ -2822,7 +2822,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 │ ✦ <b>Gᴇɴʀᴇs :</b> ${tgGenres}
 └───────────────────
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
-📌 Sᴇᴀsᴏɴ ${tgSeasonEpLabel} • Eᴘɪsᴏᴅᴇ ${tgSeasonEpLabel} Aᴅᴅᴇᴅ
+📌 Sᴇᴀsᴏɴ #${tgSeason || '01'} • Eᴘɪsᴏᴅᴇ #${tgNewEpAdded || '01'} Aᴅᴅᴇᴅ
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
 ${footerLinksHtml}
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
@@ -3818,7 +3818,30 @@ ${tgHashtags}`;
                                             const updated = [...seasonsData];
                                             (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].link = e.target.value;
                                             setSeasonsData(updated);
-                                          }} className={`${inputClass} w-full !py-1.5 !text-[10px] min-h-[36px] resize-none`} placeholder="Audio link URL" rows={1} />
+                                          }} className={`${inputClass} w-full !py-1.5 !text-[10px] min-h-[36px] resize-none`} placeholder="Default Audio link URL" rows={1} />
+                                          {/* Multi-quality audio links */}
+                                          <div className="grid grid-cols-2 gap-1 mt-1">
+                                            <input value={at.link480 || ""} onChange={e => {
+                                              const updated = [...seasonsData];
+                                              (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].link480 = e.target.value;
+                                              setSeasonsData(updated);
+                                            }} className={`${inputClass} !py-1 !text-[9px]`} placeholder="480p link" />
+                                            <input value={at.link720 || ""} onChange={e => {
+                                              const updated = [...seasonsData];
+                                              (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].link720 = e.target.value;
+                                              setSeasonsData(updated);
+                                            }} className={`${inputClass} !py-1 !text-[9px]`} placeholder="720p link" />
+                                            <input value={at.link1080 || ""} onChange={e => {
+                                              const updated = [...seasonsData];
+                                              (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].link1080 = e.target.value;
+                                              setSeasonsData(updated);
+                                            }} className={`${inputClass} !py-1 !text-[9px]`} placeholder="1080p link" />
+                                            <input value={at.link4k || ""} onChange={e => {
+                                              const updated = [...seasonsData];
+                                              (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].link4k = e.target.value;
+                                              setSeasonsData(updated);
+                                            }} className={`${inputClass} !py-1 !text-[9px]`} placeholder="4K link" />
+                                          </div>
                                         </div>
                                       ))}
                                     </div>
@@ -5105,7 +5128,7 @@ ${tgHashtags}`;
 │ ✦ Gᴇɴʀᴇs : ${tgGenres}
 └───────────────────
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
-📌 Sᴇᴀsᴏɴ ${tgSeasonEpLabel} • Eᴘɪsᴏᴅᴇ ${tgSeasonEpLabel} Aᴅᴅᴇᴅ
+📌 Sᴇᴀsᴏɴ #${tgSeason || '01'} • Eᴘɪsᴏᴅᴇ #${tgNewEpAdded || '01'} Aᴅᴅᴇᴅ
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰`}
 {tgFooterLinks.map(l => `\n๏ ${l.emoji} ${l.label} ${l.emoji}\n   ${l.url}`).join("")}
 {`\n▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n${tgHashtags}`}
