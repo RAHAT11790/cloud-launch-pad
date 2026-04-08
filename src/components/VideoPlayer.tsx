@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { useBranding } from "@/hooks/useBranding";
+import { useAudioBoost } from "@/hooks/useAudioBoost";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock,
@@ -137,12 +138,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const progressRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
   const bufferingHardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { applyBoost, ensureAudioGraph, maxBoostPercent } = useAudioBoost(videoRef);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [boostedVolume, setBoostedVolume] = useState(100); // display value
+  const [boostedVolume, setBoostedVolume] = useState(100); // 0-300%
   const [muted, setMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -583,12 +585,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             setCurrentSrc(cachedUrl);
           } else {
             // Trigger background upload for future requests
-            triggerR2Upload(src);
+            triggerR2Upload(src, resolvedSrc);
           }
         }).catch(() => {});
       }).catch(() => {});
     }
   }, [src, qualityOptions, cdnEnabled, proxyUrl, proxyApiKey, playbackRouteReady]);
+
+  useEffect(() => {
+    void applyBoost(boostedVolume, muted);
+  }, [applyBoost, boostedVolume, muted, currentSrc]);
 
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
@@ -960,9 +966,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
+    void ensureAudioGraph();
     if (v.paused) v.play(); else v.pause();
     resetHideTimer();
-  }, [resetHideTimer]);
+  }, [ensureAudioGraph, resetHideTimer]);
+
+  const applyPlayerVolume = useCallback((nextBoost: number, nextMuted = muted) => {
+    const clampedBoost = Math.max(0, Math.min(maxBoostPercent, nextBoost));
+    setBoostedVolume(clampedBoost);
+    setVolume(Math.min(1, clampedBoost / 100));
+    void applyBoost(clampedBoost, nextMuted);
+  }, [applyBoost, maxBoostPercent, muted]);
 
   const getSafeSeekTime = useCallback((v: HTMLVideoElement, target: number) => {
     if (!Number.isFinite(v.duration) || v.duration <= 0) return 0;
@@ -1041,12 +1055,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           if (cachedUrl) {
             setCurrentSrc(cachedUrl);
           } else {
-            triggerR2Upload(option.src);
+            triggerR2Upload(option.src, newSrc);
           }
         }).catch(() => {});
       }).catch(() => {});
     }
-  }, [currentQuality, currentSrc, cdnEnabled, proxyUrl, isPremium, noProxy]);
+  }, [currentQuality, currentSrc, cdnEnabled, proxyUrl, proxyApiKey, isPremium, noProxy]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
@@ -1122,9 +1136,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    void ensureAudioGraph();
     const t = e.touches[0];
     setSwipeState({ startX: t.clientX, startY: t.clientY, type: null });
-  }, []);
+  }, [ensureAudioGraph]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!swipeState || locked) return;
@@ -1136,20 +1151,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setSwipeState({ ...swipeState, type: relX > 0.5 ? "volume" : "brightness" });
     }
     if (swipeState.type === "volume") {
-      // Keep native volume path for stable sound on all qualities including 4K
-      const newBoosted = Math.min(100, Math.max(0, boostedVolume - dy * 0.5));
-      setBoostedVolume(newBoosted);
-      if (videoRef.current) {
-        videoRef.current.volume = Math.min(1, newBoosted / 100);
-      }
-      setVolume(Math.min(1, newBoosted / 100));
+      const newBoosted = Math.min(maxBoostPercent, Math.max(0, boostedVolume - dy * 0.8));
+      if (muted) setMuted(false);
+      applyPlayerVolume(newBoosted, false);
       setSwipeState({ ...swipeState, startY: t.clientY });
     } else if (swipeState.type === "brightness") {
       const newBr = Math.min(1.5, Math.max(0.3, brightness - dy * 0.003));
       setBrightness(newBr);
       setSwipeState({ ...swipeState, startY: t.clientY });
     }
-  }, [swipeState, locked, volume, brightness]);
+  }, [swipeState, locked, brightness, boostedVolume, maxBoostPercent, muted, applyPlayerVolume]);
 
   const handleTouchEnd = useCallback(() => setSwipeState(null), []);
 
@@ -1329,7 +1340,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 player-glass px-6 py-3 rounded-xl text-center">
               {swipeState.type === "volume" ? (
                 <div className="flex items-center gap-2">
-                  <Volume2 className="w-5 h-5 text-primary" />
+                  {muted || boostedVolume <= 0 ? <VolumeX className="w-5 h-5 text-primary" /> : <Volume2 className="w-5 h-5 text-primary" />}
                   <span className="text-sm font-semibold">{Math.round(boostedVolume)}%</span>
                 </div>
               ) : (
@@ -1392,9 +1403,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <span ref={timeDisplayRef} className="text-[11px] font-medium">{formatTime(currentTime)} / {formatTime(duration)}</span>
-                    <button onClick={(e) => { e.stopPropagation(); setMuted(!muted); if (videoRef.current) videoRef.current.muted = !muted; }} className="w-6 h-6 flex items-center justify-center">
-                      {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                    <button onClick={(e) => {
+                      e.stopPropagation();
+                      const nextMuted = !muted;
+                      setMuted(nextMuted);
+                      void applyBoost(boostedVolume, nextMuted);
+                    }} className="w-6 h-6 flex items-center justify-center">
+                      {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
+                    <span className="text-[10px] bg-foreground/20 px-2 py-0.5 rounded font-semibold">🔊 {Math.round(boostedVolume)}%</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] bg-foreground/20 px-2 py-0.5 rounded">{playbackRate}x</span>
