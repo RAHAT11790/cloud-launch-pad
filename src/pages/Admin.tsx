@@ -5826,24 +5826,26 @@ ${tgHashtags}`;
           const R2CacheAdmin = () => {
             const [r2Settings, setR2Settings] = useState<any>({ enabled: false, maxSizeMB: 300, cacheHours: 12, activeHoursStart: 6, activeHoursEnd: 0, edgeFunctionUrl: "", buckets: {} });
             const [newBucket, setNewBucket] = useState({ accountId: "", accessKeyId: "", secretAccessKey: "", bucketName: "", publicUrl: "", s3Endpoint: "" });
-            const [r2Testing, setR2Testing] = useState(false);
-            const [r2TestResults, setR2TestResults] = useState<any[]>([]);
             const [r2CleanupLoading, setR2CleanupLoading] = useState(false);
             const [r2StorageInfo, setR2StorageInfo] = useState<any[]>([]);
             const [r2StorageLoading, setR2StorageLoading] = useState(false);
             const [r2PurgeLoading, setR2PurgeLoading] = useState<string | null>(null);
+            const [r2LastSyncAt, setR2LastSyncAt] = useState<number>(0);
             useEffect(() => { const unsub = onValue(ref(db, "settings/r2Cache"), (snap) => { const val = snap.val(); if (val) setR2Settings(val); }); return () => unsub(); }, []);
             const bucketList = r2Settings.buckets ? Object.entries(r2Settings.buckets).map(([id, b]: any) => ({ id, ...b })) : [];
+            const enabledBucketList = bucketList.filter((b: any) => b.enabled !== false);
             const totalBuckets = bucketList.length;
             const saveR2 = async (u: any) => { await update(ref(db, "settings/r2Cache"), u); toast.success("✅ সেভ হয়েছে!"); };
             const addBucket = async () => { if (!newBucket.accountId || !newBucket.accessKeyId || !newBucket.secretAccessKey || !newBucket.bucketName || !newBucket.publicUrl || !newBucket.s3Endpoint) { toast.error("সব ফিল্ড পূরণ করো!"); return; } const id = `bucket_${Date.now()}`; await set(ref(db, `settings/r2Cache/buckets/${id}`), { ...newBucket, enabled: true }); setNewBucket({ accountId: "", accessKeyId: "", secretAccessKey: "", bucketName: "", publicUrl: "", s3Endpoint: "" }); toast.success("✅ Bucket যোগ হয়েছে!"); };
             const removeBucket = async (id: string) => { if (!confirm("মুছে ফেলবে?")) return; await remove(ref(db, `settings/r2Cache/buckets/${id}`)); toast.success("🗑️ মুছে ফেলা হয়েছে!"); };
             const toggleBucket = async (id: string, en: boolean) => { await update(ref(db, `settings/r2Cache/buckets/${id}`), { enabled: en }); };
-            const testBuckets = async () => { if (!r2Settings.edgeFunctionUrl) { toast.error("Edge Function URL দাও!"); return; } setR2Testing(true); try { const bkts = bucketList.filter((b: any) => b.enabled !== false); const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "status", buckets: bkts }) }); if (res.ok) { const d = await res.json(); setR2TestResults(d.results || []); } else toast.error("ফেইল!"); } catch { toast.error("এরর!"); } setR2Testing(false); };
             const runCleanup = async () => { if (!r2Settings.edgeFunctionUrl) { toast.error("URL দাও!"); return; } setR2CleanupLoading(true); try { const bkts = bucketList.filter((b: any) => b.enabled !== false); const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "cleanup", buckets: bkts }) }); if (res.ok) { const d = await res.json(); toast.success(`🧹 ${d.deleted || 0}টি মুছে ফেলা হয়েছে!`); } else toast.error("ফেইল!"); } catch { toast.error("এরর!"); } setR2CleanupLoading(false); };
-            const loadStorageInfo = async () => { if (!r2Settings.edgeFunctionUrl) { toast.error("Edge Function URL দাও!"); return; } setR2StorageLoading(true); try { const bkts = bucketList.filter((b: any) => b.enabled !== false); const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "list", buckets: bkts }) }); if (res.ok) { const d = await res.json(); setR2StorageInfo(d.results || []); } else toast.error("ফেইল!"); } catch { toast.error("এরর!"); } setR2StorageLoading(false); };
+            const loadStorageInfo = async (silent = false) => { if (!r2Settings.edgeFunctionUrl || enabledBucketList.length === 0) { setR2StorageInfo([]); return; } if (!silent) setR2StorageLoading(true); try { const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "list", buckets: enabledBucketList }) }); if (res.ok) { const d = await res.json(); setR2StorageInfo(d.results || []); setR2LastSyncAt(Date.now()); } else if (!silent) toast.error("ফেইল!"); } catch { if (!silent) toast.error("এরর!"); } if (!silent) setR2StorageLoading(false); };
             const purgeAllBucket = async (bucketId: string) => { if (!confirm("এই bucket-এর সব ক্যাশ মুছে ফেলবে?")) return; if (!r2Settings.edgeFunctionUrl) { toast.error("URL দাও!"); return; } setR2PurgeLoading(bucketId); try { const bkt = bucketList.find((b: any) => b.id === bucketId); if (!bkt) return; const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "purge", buckets: [bkt] }) }); if (res.ok) { const d = await res.json(); toast.success(`🗑️ ${d.deleted || 0}টি ফাইল মুছে ফেলা হয়েছে!`); loadStorageInfo(); } else toast.error("ফেইল!"); } catch { toast.error("এরর!"); } setR2PurgeLoading(null); };
             const formatSize = (bytes: number) => { if (bytes === 0) return "0 B"; const k = 1024; const sizes = ["B", "KB", "MB", "GB"]; const i = Math.floor(Math.log(bytes) / Math.log(k)); return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]; };
+            useEffect(() => { if (!r2Settings.edgeFunctionUrl || enabledBucketList.length === 0) { setR2StorageInfo([]); return; } void loadStorageInfo(); const timer = window.setInterval(() => { void loadStorageInfo(true); }, 10000); return () => window.clearInterval(timer); }, [r2Settings.edgeFunctionUrl, r2Settings.buckets]);
+            const totalStoredFiles = r2StorageInfo.reduce((sum: number, info: any) => sum + (info.totalFiles || 0), 0);
+            const totalStoredBytes = r2StorageInfo.reduce((sum: number, info: any) => sum + (info.totalSizeBytes || 0), 0);
             return (<div className="space-y-4">
               <div className={`${glassCard} p-4`}>
                 <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-bold flex items-center gap-2"><CloudDownload size={16} className="text-cyan-400" /> R2 Video Cache</h3>
@@ -5862,10 +5864,12 @@ ${tgHashtags}`;
                   <div><label className="text-[10px] text-zinc-400 block mb-1">End Hour <span className="text-zinc-500">(0 = রাত ১২টা)</span></label><input type="number" value={r2Settings.activeHoursEnd ?? 0} min={0} max={23} onChange={e => saveR2({ activeHoursEnd: parseInt(e.target.value) || 0 })} className={`${inputClass} text-[10px] w-full`} /></div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={testBuckets} disabled={r2Testing} className={`${btnPrimary} text-[10px] px-3 flex-1`}>{r2Testing ? <Loader2 size={10} className="animate-spin" /> : <Activity size={10} />} টেস্ট</button>
+                  <div className="flex-1 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-[10px] text-zinc-300">
+                    <div className="flex items-center gap-2 font-semibold"><Activity size={10} className="text-cyan-400" /> Live Storage Monitor</div>
+                    <p className="mt-1 text-[9px] text-zinc-400">Auto refresh every 10s • Last sync {r2LastSyncAt ? new Date(r2LastSyncAt).toLocaleTimeString() : "pending"}</p>
+                  </div>
                   <button onClick={runCleanup} disabled={r2CleanupLoading} className={`${btnSecondary} text-[10px] px-3 flex-1`}>{r2CleanupLoading ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />} Cleanup</button>
                 </div>
-                {r2TestResults.length > 0 && (<div className="mt-3 space-y-1">{r2TestResults.map((r: any, i: number) => (<div key={i} className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-[10px] ${r.alive ? "bg-green-500/10 border border-green-500/20" : "bg-red-500/10 border border-red-500/20"}`}><span className="font-mono text-zinc-300">{r.bucketId?.slice(0, 15)}...</span><span className={r.alive ? "text-green-400" : "text-red-400"}>{r.alive ? `✅ ${r.latency}ms` : "❌ Offline"}</span></div>))}</div>)}
               </div>
               <div className={`${glassCard} p-4`}>
                 <h3 className="text-sm font-bold mb-3 flex items-center gap-2"><List size={14} className="text-blue-400" /> Buckets ({totalBuckets})</h3>
@@ -5886,9 +5890,9 @@ ${tgHashtags}`;
               <div className={`${glassCard} p-4`}>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-bold flex items-center gap-2"><BarChart3 size={14} className="text-purple-400" /> Storage Info</h3>
-                  <button onClick={loadStorageInfo} disabled={r2StorageLoading} className={`${btnPrimary} text-[10px] px-3`}>{r2StorageLoading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />} লোড করো</button>
+                  <span className="text-[9px] text-zinc-400">{r2StorageLoading ? "syncing..." : `Live • ${totalStoredFiles} files • ${formatSize(totalStoredBytes)}`}</span>
                 </div>
-                {r2StorageInfo.length === 0 && <p className="text-[10px] text-zinc-500">উপরে "লোড করো" চাপো ক্যাশড ফাইল দেখতে।</p>}
+                {r2StorageInfo.length === 0 && <p className="text-[10px] text-zinc-500">Enabled bucket পেলে স্টোরেজ অটো লাইভ দেখাবে।</p>}
                 {r2StorageInfo.length > 0 && (<div className="space-y-3">{r2StorageInfo.map((info: any) => (<div key={info.bucketId} className="border border-zinc-700 rounded-xl p-3 bg-zinc-800/30">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[11px] font-bold text-white">{info.bucketName || info.bucketId}</span>
@@ -5899,7 +5903,7 @@ ${tgHashtags}`;
                     <div className="bg-zinc-900/50 rounded-lg p-2 text-center"><p className="text-[9px] text-zinc-400">সাইজ</p><p className="text-sm font-bold text-green-400">{formatSize(info.totalSizeBytes)}</p></div>
                   </div>
                   {info.error && <p className="text-[9px] text-red-400">⚠️ {info.error}</p>}
-                  {info.files && info.files.length > 0 && (<details className="mt-2"><summary className="text-[9px] text-zinc-400 cursor-pointer">ফাইল তালিকা ({info.totalFiles})</summary><div className="mt-1 max-h-40 overflow-y-auto space-y-1">{info.files.map((f: any, fi: number) => (<div key={fi} className="flex items-center justify-between text-[8px] font-mono bg-zinc-900/50 px-2 py-1 rounded"><span className="truncate flex-1 text-zinc-300">{f.key.replace("cache/", "")}</span><span className="text-zinc-500 ml-2 whitespace-nowrap">{formatSize(f.size)}</span></div>))}</div></details>)}
+                  {info.files && info.files.length > 0 && (<details className="mt-2" open><summary className="text-[9px] text-zinc-400 cursor-pointer">লাইভ ফাইল তালিকা ({info.totalFiles})</summary><div className="mt-1 max-h-56 overflow-y-auto space-y-1.5">{info.files.map((f: any, fi: number) => (<div key={fi} className="bg-zinc-900/50 px-2 py-2 rounded"><div className="flex items-center justify-between text-[8px] font-mono"><span className="truncate flex-1 text-zinc-300">{f.key.replace("cache/", "")}</span><span className="text-zinc-500 ml-2 whitespace-nowrap">{formatSize(f.size)}</span></div>{f.originalUrl && <p className="text-[8px] text-cyan-400 truncate mt-1">{f.originalUrl}</p>}<p className="text-[8px] text-zinc-500 mt-1">{new Date(f.cachedAt || f.lastModified || Date.now()).toLocaleString()}</p></div>))}</div></details>)}
                 </div>))}</div>)}
               </div>
                 </div>

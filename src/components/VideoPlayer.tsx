@@ -1055,9 +1055,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const applyPlayerVolume = useCallback((nextBoost: number, nextMuted = muted) => {
     const clampedBoost = Math.max(0, Math.min(maxBoostPercent, nextBoost));
+    const effectiveMuted = nextMuted || clampedBoost <= 0;
     setBoostedVolume(clampedBoost);
+    setMuted(effectiveMuted);
     setVolume(Math.min(1, clampedBoost / 100));
-    void applyBoost(clampedBoost, nextMuted);
+    void applyBoost(clampedBoost, effectiveMuted);
   }, [applyBoost, maxBoostPercent, muted]);
 
   const getSafeSeekTime = useCallback((v: HTMLVideoElement, target: number) => {
@@ -1225,7 +1227,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
     if (swipeState.type === "volume") {
       const newBoosted = Math.min(maxBoostPercent, Math.max(0, boostedVolume - dy * 0.8));
-      if (muted) setMuted(false);
       applyPlayerVolume(newBoosted, false);
       setSwipeState({ ...swipeState, startY: t.clientY });
     } else if (swipeState.type === "brightness") {
@@ -1478,9 +1479,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     <span ref={timeDisplayRef} className="text-[11px] font-medium">{formatTime(currentTime)} / {formatTime(duration)}</span>
                     <button onClick={(e) => {
                       e.stopPropagation();
-                      const nextMuted = !muted;
-                      setMuted(nextMuted);
-                      void applyBoost(boostedVolume, nextMuted);
+                      applyPlayerVolume(boostedVolume, !muted);
                     }} className="w-6 h-6 flex items-center justify-center">
                       {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
