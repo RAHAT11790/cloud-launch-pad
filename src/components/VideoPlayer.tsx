@@ -1471,6 +1471,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 <button onClick={() => setSettingsTab("quality")} className={`text-[11px] px-3 py-1.5 rounded-full font-medium transition-all ${settingsTab === "quality" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
                   Quality
                 </button>
+                {audioTrackOptions.length > 0 && (
+                  <button onClick={() => setSettingsTab("audio")} className={`text-[11px] px-3 py-1.5 rounded-full font-medium transition-all ${settingsTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
+                    🎧 Audio
+                  </button>
+                )}
               </div>
 
               {settingsTab === "speed" && (
