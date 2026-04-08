@@ -1808,6 +1808,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "branding": "UI+AD Branding",
     "ai-config": "AI Chat Config",
     "live-tv": "Live TV Channels",
+    "r2-cache": "R2 Video Cache",
   };
 
   // ==================== CATEGORIES ====================
