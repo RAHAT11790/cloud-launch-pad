@@ -567,11 +567,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   useEffect(() => {
     if (!playbackRouteReady) return;
     activeSourceBaseRef.current = src;
-    setCurrentSrc(getPrimaryPlaybackSrc(src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined));
+    const resolvedSrc = getPrimaryPlaybackSrc(src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+    setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
+
+    // R2 cache: check if cached version exists, use it; otherwise trigger background upload
+    if (!noProxy && src) {
+      import("@/lib/r2Cache").then(({ checkR2Cache, triggerR2Upload }) => {
+        checkR2Cache(src).then(cachedUrl => {
+          if (cachedUrl) {
+            console.log("[R2Cache] Using cached:", cachedUrl);
+            setCurrentSrc(cachedUrl);
+          } else {
+            // Trigger background upload for future requests
+            triggerR2Upload(src);
+          }
+        }).catch(() => {});
+      }).catch(() => {});
+    }
   }, [src, qualityOptions, cdnEnabled, proxyUrl, proxyApiKey, playbackRouteReady]);
 
   // MediaSession API - show anime title + artwork in Chrome media notification
@@ -1017,7 +1033,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);
     setShowSettings(false);
-  }, [currentQuality, currentSrc, cdnEnabled, proxyUrl, isPremium]);
+
+    // R2 cache: check for cached version of new quality
+    if (!noProxy && option.src && !is4KLabel(option.label)) {
+      import("@/lib/r2Cache").then(({ checkR2Cache, triggerR2Upload }) => {
+        checkR2Cache(option.src).then(cachedUrl => {
+          if (cachedUrl) {
+            setCurrentSrc(cachedUrl);
+          } else {
+            triggerR2Upload(option.src);
+          }
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+  }, [currentQuality, currentSrc, cdnEnabled, proxyUrl, isPremium, noProxy]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;

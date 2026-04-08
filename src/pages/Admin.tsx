@@ -16,7 +16,7 @@ import {
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "r2-cache";
 
 interface CastMember {
   name: string;
@@ -1808,6 +1808,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "branding": "UI+AD Branding",
     "ai-config": "AI Chat Config",
     "live-tv": "Live TV Channels",
+    "r2-cache": "R2 Video Cache",
   };
 
   // ==================== CATEGORIES ====================
@@ -3052,6 +3053,7 @@ ${tgHashtags}`;
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
+    { section: "r2-cache", icon: <CloudDownload size={16} />, label: "R2 Video Cache" },
     { section: "ui-themes", icon: <Zap size={16} />, label: "UI Themes", group: "Customization" },
     { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
     { section: "settings", icon: <Settings size={16} />, label: "Settings" },
@@ -5819,6 +5821,67 @@ ${tgHashtags}`;
           return <LiveTvAdmin />;
         })()}
 
+        {/* ==================== R2 VIDEO CACHE ==================== */}
+        {activeSection === "r2-cache" && (() => {
+          const R2CacheAdmin = () => {
+            const [r2Settings, setR2Settings] = useState<any>({ enabled: false, maxSizeMB: 300, cacheHours: 12, activeHoursStart: 6, activeHoursEnd: 0, edgeFunctionUrl: "", buckets: {} });
+            const [newBucket, setNewBucket] = useState({ accountId: "", accessKeyId: "", secretAccessKey: "", bucketName: "", publicUrl: "", s3Endpoint: "" });
+            const [r2Testing, setR2Testing] = useState(false);
+            const [r2TestResults, setR2TestResults] = useState<any[]>([]);
+            const [r2CleanupLoading, setR2CleanupLoading] = useState(false);
+            useEffect(() => { const unsub = onValue(ref(db, "settings/r2Cache"), (snap) => { const val = snap.val(); if (val) setR2Settings(val); }); return () => unsub(); }, []);
+            const bucketList = r2Settings.buckets ? Object.entries(r2Settings.buckets).map(([id, b]: any) => ({ id, ...b })) : [];
+            const totalBuckets = bucketList.length;
+            const saveR2 = async (u: any) => { await update(ref(db, "settings/r2Cache"), u); toast.success("✅ সেভ হয়েছে!"); };
+            const addBucket = async () => { if (!newBucket.accountId || !newBucket.accessKeyId || !newBucket.secretAccessKey || !newBucket.bucketName || !newBucket.publicUrl || !newBucket.s3Endpoint) { toast.error("সব ফিল্ড পূরণ করো!"); return; } const id = `bucket_${Date.now()}`; await set(ref(db, `settings/r2Cache/buckets/${id}`), { ...newBucket, enabled: true }); setNewBucket({ accountId: "", accessKeyId: "", secretAccessKey: "", bucketName: "", publicUrl: "", s3Endpoint: "" }); toast.success("✅ Bucket যোগ হয়েছে!"); };
+            const removeBucket = async (id: string) => { if (!confirm("মুছে ফেলবে?")) return; await remove(ref(db, `settings/r2Cache/buckets/${id}`)); toast.success("🗑️ মুছে ফেলা হয়েছে!"); };
+            const toggleBucket = async (id: string, en: boolean) => { await update(ref(db, `settings/r2Cache/buckets/${id}`), { enabled: en }); };
+            const testBuckets = async () => { if (!r2Settings.edgeFunctionUrl) { toast.error("Edge Function URL দাও!"); return; } setR2Testing(true); try { const bkts = bucketList.filter((b: any) => b.enabled !== false); const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "status", buckets: bkts }) }); if (res.ok) { const d = await res.json(); setR2TestResults(d.results || []); } else toast.error("ফেইল!"); } catch { toast.error("এরর!"); } setR2Testing(false); };
+            const runCleanup = async () => { if (!r2Settings.edgeFunctionUrl) { toast.error("URL দাও!"); return; } setR2CleanupLoading(true); try { const bkts = bucketList.filter((b: any) => b.enabled !== false); const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "cleanup", buckets: bkts }) }); if (res.ok) { const d = await res.json(); toast.success(`🧹 ${d.deleted || 0}টি মুছে ফেলা হয়েছে!`); } else toast.error("ফেইল!"); } catch { toast.error("এরর!"); } setR2CleanupLoading(false); };
+            return (<div className="space-y-4">
+              <div className={`${glassCard} p-4`}>
+                <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-bold flex items-center gap-2"><CloudDownload size={16} className="text-cyan-400" /> R2 Video Cache</h3>
+                  <button onClick={() => saveR2({ enabled: !r2Settings.enabled })} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${r2Settings.enabled ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-zinc-700 text-zinc-400 border border-zinc-600"}`}>{r2Settings.enabled ? "✅ চালু" : "⏸️ বন্ধ"}</button>
+                </div>
+                <p className="text-[10px] text-zinc-400 mb-3">পিক আওয়ারে ভিডিও R2-তে ক্যাশ করে বাফারিং কমায়। লোড {totalBuckets}টি bucket-এ সমান ভাগ।</p>
+                <label className="text-[10px] text-zinc-400 block mb-1">Edge Function URL</label>
+                <div className="flex gap-2 mb-3">
+                  <input value={r2Settings.edgeFunctionUrl || ""} onChange={e => setR2Settings((p: any) => ({ ...p, edgeFunctionUrl: e.target.value }))} placeholder="https://xxx.supabase.co/functions/v1/r2-cache" className={`${inputClass} flex-1 text-[10px]`} />
+                  <button onClick={() => saveR2({ edgeFunctionUrl: r2Settings.edgeFunctionUrl })} className={`${btnPrimary} text-[10px] px-3`}><Save size={10} /></button>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <div><label className="text-[10px] text-zinc-400 block mb-1">Max Size (MB)</label><input type="number" value={r2Settings.maxSizeMB || 300} onChange={e => saveR2({ maxSizeMB: parseInt(e.target.value) || 300 })} className={`${inputClass} text-[10px] w-full`} /></div>
+                  <div><label className="text-[10px] text-zinc-400 block mb-1">Cache (hrs)</label><input type="number" value={r2Settings.cacheHours || 12} onChange={e => saveR2({ cacheHours: parseInt(e.target.value) || 12 })} className={`${inputClass} text-[10px] w-full`} /></div>
+                  <div><label className="text-[10px] text-zinc-400 block mb-1">Start Hour</label><input type="number" value={r2Settings.activeHoursStart ?? 6} min={0} max={23} onChange={e => saveR2({ activeHoursStart: parseInt(e.target.value) || 0 })} className={`${inputClass} text-[10px] w-full`} /></div>
+                  <div><label className="text-[10px] text-zinc-400 block mb-1">End Hour</label><input type="number" value={r2Settings.activeHoursEnd ?? 0} min={0} max={23} onChange={e => saveR2({ activeHoursEnd: parseInt(e.target.value) || 0 })} className={`${inputClass} text-[10px] w-full`} /></div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={testBuckets} disabled={r2Testing} className={`${btnPrimary} text-[10px] px-3 flex-1`}>{r2Testing ? <Loader2 size={10} className="animate-spin" /> : <Activity size={10} />} টেস্ট</button>
+                  <button onClick={runCleanup} disabled={r2CleanupLoading} className={`${btnSecondary} text-[10px] px-3 flex-1`}>{r2CleanupLoading ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />} Cleanup</button>
+                </div>
+                {r2TestResults.length > 0 && (<div className="mt-3 space-y-1">{r2TestResults.map((r: any, i: number) => (<div key={i} className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-[10px] ${r.alive ? "bg-green-500/10 border border-green-500/20" : "bg-red-500/10 border border-red-500/20"}`}><span className="font-mono text-zinc-300">{r.bucketId?.slice(0, 15)}...</span><span className={r.alive ? "text-green-400" : "text-red-400"}>{r.alive ? `✅ ${r.latency}ms` : "❌ Offline"}</span></div>))}</div>)}
+              </div>
+              <div className={`${glassCard} p-4`}>
+                <h3 className="text-sm font-bold mb-3 flex items-center gap-2"><List size={14} className="text-blue-400" /> Buckets ({totalBuckets})</h3>
+                <p className="text-[10px] text-zinc-400 mb-3">যতগুলো bucket, সবাই সমান লোড পাবে।</p>
+                {bucketList.length > 0 && (<div className="space-y-2 mb-4">{bucketList.map((b: any) => (<div key={b.id} className={`border rounded-xl p-3 ${b.enabled !== false ? "border-cyan-500/20 bg-cyan-500/5" : "border-zinc-600 bg-zinc-800/50 opacity-60"}`}><div className="flex items-center justify-between mb-1"><span className="text-[11px] font-bold text-white">{b.bucketName || "Unnamed"}</span><div className="flex gap-1"><button onClick={() => toggleBucket(b.id, b.enabled === false)} className={`px-2 py-0.5 rounded text-[9px] font-bold ${b.enabled !== false ? "bg-green-500/20 text-green-400" : "bg-zinc-600 text-zinc-400"}`}>{b.enabled !== false ? "ON" : "OFF"}</button><button onClick={() => removeBucket(b.id)} className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400"><Trash2 size={9} /></button></div></div><div className="text-[9px] text-zinc-400 font-mono"><p>Account: {b.accountId?.slice(0, 12)}... | Load: {totalBuckets > 0 ? Math.round(100 / totalBuckets) : 0}%</p><p className="truncate">Public: {b.publicUrl}</p></div></div>))}</div>)}
+                <div className="border border-dashed border-zinc-600 rounded-xl p-3">
+                  <h4 className="text-[11px] font-bold text-zinc-300 mb-2"><Plus size={12} className="inline" /> নতুন Bucket</h4>
+                  <div className="space-y-2">
+                    <input value={newBucket.accountId} onChange={e => setNewBucket(p => ({ ...p, accountId: e.target.value }))} placeholder="Account ID" className={`${inputClass} text-[10px] w-full`} />
+                    <input value={newBucket.accessKeyId} onChange={e => setNewBucket(p => ({ ...p, accessKeyId: e.target.value }))} placeholder="Access Key ID" className={`${inputClass} text-[10px] w-full`} />
+                    <input value={newBucket.secretAccessKey} onChange={e => setNewBucket(p => ({ ...p, secretAccessKey: e.target.value }))} placeholder="Secret Access Key" className={`${inputClass} text-[10px] w-full`} type="password" />
+                    <input value={newBucket.bucketName} onChange={e => setNewBucket(p => ({ ...p, bucketName: e.target.value }))} placeholder="Bucket Name" className={`${inputClass} text-[10px] w-full`} />
+                    <input value={newBucket.publicUrl} onChange={e => setNewBucket(p => ({ ...p, publicUrl: e.target.value }))} placeholder="Public URL" className={`${inputClass} text-[10px] w-full`} />
+                    <input value={newBucket.s3Endpoint} onChange={e => setNewBucket(p => ({ ...p, s3Endpoint: e.target.value }))} placeholder="S3 API Endpoint" className={`${inputClass} text-[10px] w-full`} />
+                    <button onClick={addBucket} className={`${btnPrimary} w-full text-[10px]`}><Plus size={10} /> Bucket যোগ করো</button>
+                  </div>
+                </div>
+              </div>
+            </div>);
+          };
+          return <R2CacheAdmin />;
+        })()}
 
         {activeSection === "comments" && (
           <AdminCommentsSection
