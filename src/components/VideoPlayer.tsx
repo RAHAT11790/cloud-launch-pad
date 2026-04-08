@@ -86,6 +86,10 @@ interface AudioTrackOption {
   language: string;
   label: string;
   src?: string; // If set, switch to this URL for this language
+  src480?: string;
+  src720?: string;
+  src1080?: string;
+  src4k?: string;
   nativeIndex?: number; // If set, switch native audio track
 }
 
@@ -485,7 +489,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     // Add manual audio tracks from props
     if (propAudioTracks?.length) {
       propAudioTracks.forEach(t => {
-        tracks.push({ language: t.language, label: t.label, src: t.link });
+        tracks.push({ language: t.language, label: t.label, src: t.link, src480: t.link480, src720: t.link720, src1080: t.link1080, src4k: t.link4k });
       });
     }
     setAudioTrackOptions(tracks);
