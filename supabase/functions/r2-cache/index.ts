@@ -174,6 +174,15 @@ function pickBucket(buckets: R2Bucket[], videoUrl: string): R2Bucket {
   return buckets[Math.abs(hash) % buckets.length];
 }
 
+function getBucketCandidates(buckets: R2Bucket[], videoUrl: string): R2Bucket[] {
+  if (buckets.length <= 1) return buckets;
+
+  const startBucket = pickBucket(buckets, videoUrl);
+  const startIndex = buckets.findIndex((bucket) => bucket.id === startBucket.id);
+
+  return buckets.map((_, index) => buckets[(startIndex + index) % buckets.length]);
+}
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -187,22 +196,24 @@ async function uploadToR2InBackground(
   buckets: R2Bucket[],
   maxSizeMB: number,
 ): Promise<Response> {
-  const bucket = pickBucket(buckets, videoUrl);
+  const candidateBuckets = getBucketCandidates(buckets, videoUrl);
   const key = cacheKey(videoUrl);
 
-  try {
-    const headRes = await signedS3Request(bucket, "HEAD", key);
-    if (headRes.ok) {
-      const publicUrl = `${bucket.publicUrl.replace(/\/$/, "")}/${key}`;
-      return jsonResponse({
-        success: true,
-        url: publicUrl,
-        alreadyCached: true,
-        bucketId: bucket.id,
-      });
-    }
-    await headRes.text();
-  } catch {}
+  for (const bucket of candidateBuckets) {
+    try {
+      const headRes = await signedS3Request(bucket, "HEAD", key);
+      if (headRes.ok) {
+        const publicUrl = `${bucket.publicUrl.replace(/\/$/, "")}/${key}`;
+        return jsonResponse({
+          success: true,
+          url: publicUrl,
+          alreadyCached: true,
+          bucketId: bucket.id,
+        });
+      }
+      await headRes.text();
+    } catch {}
+  }
 
   const fetchUrl = sourceUrl || videoUrl;
   const sourceRes = await fetch(fetchUrl, {
@@ -229,30 +240,51 @@ async function uploadToR2InBackground(
   }
 
   const contentType = sourceRes.headers.get("Content-Type") || "video/mp4";
-  const uploadRes = await signedS3Request(bucket, "PUT", key, videoData, undefined, {
-    "Content-Type": contentType,
-  });
-  if (!uploadRes.ok) {
-    const errText = await uploadRes.text();
-    return jsonResponse({ error: `R2 upload failed: ${uploadRes.status}`, details: errText }, 500);
+  const failedBuckets: { bucketId: string; error: string }[] = [];
+
+  for (const bucket of candidateBuckets) {
+    try {
+      const uploadRes = await signedS3Request(bucket, "PUT", key, videoData, undefined, {
+        "Content-Type": contentType,
+      });
+
+      if (!uploadRes.ok) {
+        const errText = await uploadRes.text();
+        failedBuckets.push({ bucketId: bucket.id, error: `PUT ${uploadRes.status}: ${errText}` });
+        continue;
+      }
+      await uploadRes.text();
+
+      let metaSaved = false;
+      try {
+        const metaKey = `${key}.meta.json`;
+        const meta = JSON.stringify({
+          originalUrl: videoUrl,
+          sourceUrl: fetchUrl,
+          cachedAt: Date.now(),
+          size: videoData.length,
+          contentType,
+        });
+        const metaRes = await signedS3Request(bucket, "PUT", metaKey, new TextEncoder().encode(meta), undefined, {
+          "Content-Type": "application/json",
+        });
+        metaSaved = metaRes.ok;
+        await metaRes.text();
+      } catch {
+        metaSaved = false;
+      }
+
+      const publicUrl = `${bucket.publicUrl.replace(/\/$/, "")}/${key}`;
+      return jsonResponse({ success: true, url: publicUrl, size: videoData.length, bucketId: bucket.id, metaSaved });
+    } catch (error) {
+      failedBuckets.push({
+        bucketId: bucket.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
-  await uploadRes.text();
 
-  const metaKey = `${key}.meta.json`;
-  const meta = JSON.stringify({
-    originalUrl: videoUrl,
-    sourceUrl: fetchUrl,
-    cachedAt: Date.now(),
-    size: videoData.length,
-    contentType,
-  });
-  const metaRes = await signedS3Request(bucket, "PUT", metaKey, new TextEncoder().encode(meta), undefined, {
-    "Content-Type": "application/json",
-  });
-  await metaRes.text();
-
-  const publicUrl = `${bucket.publicUrl.replace(/\/$/, "")}/${key}`;
-  return jsonResponse({ success: true, url: publicUrl, size: videoData.length, bucketId: bucket.id });
+  return jsonResponse({ error: "R2 upload failed for all buckets", failedBuckets }, 500);
 }
 
 Deno.serve(async (req) => {
@@ -415,7 +447,31 @@ Deno.serve(async (req) => {
             continuationToken = truncated && tokenMatch ? tokenMatch[1] : undefined;
           } while (continuationToken);
 
-          results.push({ bucketId: bucket.id, bucketName: bucket.bucketName, totalFiles, totalSizeBytes: totalSize, files: files.slice(0, 50) });
+          const recentFiles = files
+            .sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime())
+            .slice(0, 50);
+
+          const filesWithMeta = await Promise.all(recentFiles.map(async (file) => {
+            try {
+              const metaRes = await signedS3Request(bucket, "GET", `${file.key}.meta.json`);
+              if (!metaRes.ok) {
+                await metaRes.text();
+                return file;
+              }
+
+              const meta = await metaRes.json();
+              return {
+                ...file,
+                originalUrl: meta.originalUrl || "",
+                sourceUrl: meta.sourceUrl || "",
+                cachedAt: meta.cachedAt || null,
+              };
+            } catch {
+              return file;
+            }
+          }));
+
+          results.push({ bucketId: bucket.id, bucketName: bucket.bucketName, totalFiles, totalSizeBytes: totalSize, files: filesWithMeta });
         } catch (e: any) {
           results.push({ bucketId: bucket.id, bucketName: bucket.bucketName, error: e.message, totalFiles: 0, totalSizeBytes: 0, files: [] });
         }

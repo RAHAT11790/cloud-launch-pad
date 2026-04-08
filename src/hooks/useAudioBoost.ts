@@ -2,6 +2,17 @@ import { useCallback, useEffect, useRef, type RefObject } from "react";
 
 const MAX_BOOST_MULTIPLIER = 3;
 
+const isBoostSafeSource = (src: string) => {
+  if (!src || typeof window === "undefined") return false;
+  if (src.startsWith("blob:") || src.startsWith("data:")) return true;
+
+  try {
+    return new URL(src, window.location.href).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+};
+
 export function useAudioBoost(mediaRef: RefObject<HTMLMediaElement>) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
@@ -10,6 +21,7 @@ export function useAudioBoost(mediaRef: RefObject<HTMLMediaElement>) {
   const ensureAudioGraph = useCallback(async () => {
     const media = mediaRef.current;
     if (!media || typeof window === "undefined") return null;
+    if (!isBoostSafeSource(media.currentSrc || media.src || "")) return null;
 
     const AudioContextCtor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextCtor) return null;
@@ -18,7 +30,11 @@ export function useAudioBoost(mediaRef: RefObject<HTMLMediaElement>) {
     audioContextRef.current = context;
 
     if (!sourceNodeRef.current) {
-      sourceNodeRef.current = context.createMediaElementSource(media);
+      try {
+        sourceNodeRef.current = context.createMediaElementSource(media);
+      } catch {
+        return null;
+      }
     }
 
     if (!gainNodeRef.current) {
