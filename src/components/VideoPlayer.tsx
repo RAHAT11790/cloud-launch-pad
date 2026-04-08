@@ -1393,6 +1393,41 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         )}
                       </div>
                     )}
+                    {/* Audio track button */}
+                    {audioTrackOptions.length > 0 && (
+                      <div className="relative">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); }}
+                          className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
+                            currentAudioTrack !== "Default" ? "gradient-primary text-white" : "bg-foreground/20"
+                          }`}
+                        >
+                          🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}
+                        </button>
+                        {showAudioPanel && (
+                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
+                            <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
+                            <button onClick={() => { setCurrentAudioTrack("Default"); setShowAudioPanel(false); }}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                              }`}>
+                              <span>Default</span>
+                              {currentAudioTrack === "Default" && <Check className="w-3 h-3" />}
+                            </button>
+                            {audioTrackOptions.map((track, idx) => (
+                              <button key={idx} onClick={() => switchAudioTrack(track)}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                  currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                                }`}>
+                                <span className="flex items-center gap-1.5">
+                                  🎧 {track.label}
+                                </span>
+                                {currentAudioTrack === track.label && <Check className="w-3 h-3" />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     {onNextEpisode && (
                       <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="text-[10px] bg-primary/30 px-2 py-0.5 rounded flex items-center gap-1">
                         Next <ChevronRight className="w-3 h-3" />
