@@ -3780,6 +3780,47 @@ ${tgHashtags}`;
                                           className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder={`${q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"} link (optional)`} rows={2} />
                                       </div>
                                     ))}
+                                    {/* Audio Track Links */}
+                                    <div className="mt-2 border-t border-white/5 pt-2">
+                                      <div className="flex items-center justify-between mb-1.5">
+                                        <span className="text-[10px] text-cyan-400 font-semibold">🎧 Audio Tracks</span>
+                                        <button type="button" onClick={() => {
+                                          const updated = [...seasonsData];
+                                          const epRef = updated[sIdx].episodes[eIdx];
+                                          if (!epRef.audioTracks) (epRef as any).audioTracks = [];
+                                          (epRef as any).audioTracks.push({ language: "", label: "", link: "" });
+                                          setSeasonsData(updated);
+                                        }} className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5">
+                                          <Plus size={10} /> Add Audio
+                                        </button>
+                                      </div>
+                                      {((ep as any).audioTracks || []).map((at: any, atIdx: number) => (
+                                        <div key={atIdx} className="bg-zinc-800/30 rounded-lg p-2 mb-1.5 border border-white/5">
+                                          <div className="flex gap-1.5 mb-1">
+                                            <input value={at.label || ""} onChange={e => {
+                                              const updated = [...seasonsData];
+                                              (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].label = e.target.value;
+                                              setSeasonsData(updated);
+                                            }} className={`${inputClass} flex-1 !py-1.5 !text-[10px]`} placeholder="Label (e.g. Hindi)" />
+                                            <input value={at.language || ""} onChange={e => {
+                                              const updated = [...seasonsData];
+                                              (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].language = e.target.value;
+                                              setSeasonsData(updated);
+                                            }} className={`${inputClass} w-20 !py-1.5 !text-[10px]`} placeholder="Lang code" />
+                                            <button type="button" onClick={() => {
+                                              const updated = [...seasonsData];
+                                              (updated[sIdx].episodes[eIdx] as any).audioTracks.splice(atIdx, 1);
+                                              setSeasonsData(updated);
+                                            }} className="text-red-400 hover:text-red-300 p-1"><Trash2 size={10} /></button>
+                                          </div>
+                                          <textarea value={at.link || ""} onChange={e => {
+                                            const updated = [...seasonsData];
+                                            (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].link = e.target.value;
+                                            setSeasonsData(updated);
+                                          }} className={`${inputClass} w-full !py-1.5 !text-[10px] min-h-[36px] resize-none`} placeholder="Audio link URL" rows={1} />
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
                                 </div>
                               ))}
