@@ -671,6 +671,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, checkR2CacheForSource]);
 
   useEffect(() => {
+    if (!playbackRouteReady || !currentSrc) return;
+
+    const rawSource = activeSourceBaseRef.current;
+    if (!rawSource) return;
+
+    queueR2UploadForPlayback(rawSource, currentSrc, currentQuality);
+  }, [currentQuality, currentSrc, playbackRouteReady, queueR2UploadForPlayback]);
+
+  useEffect(() => {
     void applyBoost(boostedVolume, muted);
   }, [applyBoost, boostedVolume, muted, currentSrc]);
 

@@ -5832,7 +5832,15 @@ ${tgHashtags}`;
             const [r2PurgeLoading, setR2PurgeLoading] = useState<string | null>(null);
             const [r2LastSyncAt, setR2LastSyncAt] = useState<number>(0);
             useEffect(() => { const unsub = onValue(ref(db, "settings/r2Cache"), (snap) => { const val = snap.val(); if (val) setR2Settings(val); }); return () => unsub(); }, []);
-            const bucketList = r2Settings.buckets ? Object.entries(r2Settings.buckets).map(([id, b]: any) => ({ id, ...b })) : [];
+            const normalizeBucket = (bucket: any) => {
+              const accessKeyId = bucket.accessKeyId?.trim() || "";
+              const secretAccessKey = bucket.secretAccessKey?.trim() || "";
+              if (accessKeyId.length >= 48 && secretAccessKey.length > 0 && secretAccessKey.length <= 40) {
+                return { ...bucket, accessKeyId: secretAccessKey, secretAccessKey: accessKeyId };
+              }
+              return { ...bucket, accessKeyId, secretAccessKey };
+            };
+            const bucketList = r2Settings.buckets ? Object.entries(r2Settings.buckets).map(([id, b]: any) => normalizeBucket({ id, ...b })) : [];
             const enabledBucketList = bucketList.filter((b: any) => b.enabled !== false);
             const totalBuckets = bucketList.length;
             const saveR2 = async (u: any) => { await update(ref(db, "settings/r2Cache"), u); toast.success("✅ সেভ হয়েছে!"); };
