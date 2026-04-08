@@ -129,7 +129,7 @@ export async function checkR2Cache(videoUrl: string): Promise<string | null> {
 }
 
 // Trigger background upload of a video to R2
-export async function triggerR2Upload(videoUrl: string): Promise<void> {
+export async function triggerR2Upload(videoUrl: string, sourceUrl?: string): Promise<void> {
   const settings = await getR2Settings();
   if (!settings.enabled || !settings.edgeFunctionUrl || settings.buckets.length === 0) return;
   if (!isActiveHours(settings)) return;
@@ -142,6 +142,7 @@ export async function triggerR2Upload(videoUrl: string): Promise<void> {
       body: JSON.stringify({
         action: "upload",
         videoUrl,
+        sourceUrl,
         buckets: settings.buckets,
         maxSizeMB: settings.maxSizeMB,
       }),

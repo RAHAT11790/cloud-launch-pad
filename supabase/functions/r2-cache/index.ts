@@ -180,7 +180,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { action, videoUrl, buckets, maxSizeMB = 300 } = await req.json();
+    const { action, videoUrl, sourceUrl, buckets, maxSizeMB = 300 } = await req.json();
 
     if (!buckets || !Array.isArray(buckets) || buckets.length === 0) {
       return new Response(JSON.stringify({ error: "No R2 buckets configured" }), {
@@ -228,11 +228,12 @@ Deno.serve(async (req) => {
       } catch {}
 
       // Download from source
-      const sourceRes = await fetch(videoUrl, {
+      const fetchUrl = sourceUrl || videoUrl;
+      const sourceRes = await fetch(fetchUrl, {
         headers: { "User-Agent": "Mozilla/5.0" },
       });
       if (!sourceRes.ok) {
-        return new Response(JSON.stringify({ error: `Source fetch failed: ${sourceRes.status}` }), {
+        return new Response(JSON.stringify({ error: `Source fetch failed: ${sourceRes.status}`, sourceUrl: fetchUrl }), {
           status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -268,7 +269,7 @@ Deno.serve(async (req) => {
 
       // Store metadata
       const metaKey = `${key}.meta.json`;
-      const meta = JSON.stringify({ originalUrl: videoUrl, cachedAt: Date.now(), size: videoData.length, contentType });
+      const meta = JSON.stringify({ originalUrl: videoUrl, sourceUrl: fetchUrl, cachedAt: Date.now(), size: videoData.length, contentType });
       const metaRes = await signedS3Request(bucket, "PUT", metaKey, new TextEncoder().encode(meta), undefined, {
         "Content-Type": "application/json",
       });
