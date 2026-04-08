@@ -39,49 +39,41 @@ const DEFAULT_SETTINGS: R2CacheSettings = {
 
 let cachedSettings: R2CacheSettings | null = null;
 
-export function subscribeR2Settings(cb: (settings: R2CacheSettings) => void): () => void {
-  const unsub = onValue(ref(db, "settings/r2Cache"), (snap) => {
-    const val = snap.val();
-    if (val) {
-      const buckets: R2BucketConfig[] = [];
-      if (val.buckets) {
-        Object.entries(val.buckets).forEach(([id, b]: any) => {
-          if (b.enabled !== false) {
-            buckets.push({ ...b, id });
-          }
-        });
-      }
-      cachedSettings = {
-        enabled: val.enabled !== false,
-        maxSizeMB: val.maxSizeMB || 300,
-        cacheHours: val.cacheHours || 12,
-        activeHoursStart: val.activeHoursStart ?? 6,
-        activeHoursEnd: val.activeHoursEnd ?? 0,
-        edgeFunctionUrl: val.edgeFunctionUrl || "",
-        buckets,
-      };
-    } else {
-      cachedSettings = DEFAULT_SETTINGS;
-    }
-    cb(cachedSettings);
-  });
-  return unsub;
+function normalizeBucketConfig(bucket: R2BucketConfig): R2BucketConfig {
+  const accessKeyId = bucket.accessKeyId?.trim() || "";
+  const secretAccessKey = bucket.secretAccessKey?.trim() || "";
+
+  const looksLikeShortKey = accessKeyId.length > 0 && accessKeyId.length <= 40;
+  const looksLikeLongSecret = secretAccessKey.length >= 48;
+
+  if (looksLikeShortKey && looksLikeLongSecret) {
+    return {
+      ...bucket,
+      accessKeyId: secretAccessKey,
+      secretAccessKey: accessKeyId,
+    };
+  }
+
+  return {
+    ...bucket,
+    accessKeyId,
+    secretAccessKey,
+  };
 }
 
-export async function getR2Settings(): Promise<R2CacheSettings> {
-  if (cachedSettings) return cachedSettings;
-  const snap = await get(ref(db, "settings/r2Cache"));
-  const val = snap.val();
+function buildR2Settings(val: any): R2CacheSettings {
   if (!val) return DEFAULT_SETTINGS;
+
   const buckets: R2BucketConfig[] = [];
   if (val.buckets) {
     Object.entries(val.buckets).forEach(([id, b]: any) => {
       if (b.enabled !== false) {
-        buckets.push({ ...b, id });
+        buckets.push(normalizeBucketConfig({ ...b, id }));
       }
     });
   }
-  cachedSettings = {
+
+  return {
     enabled: val.enabled !== false,
     maxSizeMB: val.maxSizeMB || 300,
     cacheHours: val.cacheHours || 12,
@@ -90,6 +82,20 @@ export async function getR2Settings(): Promise<R2CacheSettings> {
     edgeFunctionUrl: val.edgeFunctionUrl || "",
     buckets,
   };
+}
+
+export function subscribeR2Settings(cb: (settings: R2CacheSettings) => void): () => void {
+  const unsub = onValue(ref(db, "settings/r2Cache"), (snap) => {
+    cachedSettings = buildR2Settings(snap.val());
+    cb(cachedSettings);
+  });
+  return unsub;
+}
+
+export async function getR2Settings(): Promise<R2CacheSettings> {
+  if (cachedSettings) return cachedSettings;
+  const snap = await get(ref(db, "settings/r2Cache"));
+  cachedSettings = buildR2Settings(snap.val());
   return cachedSettings;
 }
 
