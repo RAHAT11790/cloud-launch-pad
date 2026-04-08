@@ -479,6 +479,80 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [src, qualityOptions]);
 
 
+  // Build audio track options from props + detect native audio tracks on video load
+  useEffect(() => {
+    const tracks: AudioTrackOption[] = [];
+    // Add manual audio tracks from props
+    if (propAudioTracks?.length) {
+      propAudioTracks.forEach(t => {
+        tracks.push({ language: t.language, label: t.label, src: t.link });
+      });
+    }
+    setAudioTrackOptions(tracks);
+    setCurrentAudioTrack("Default");
+  }, [propAudioTracks, src]);
+
+  // Detect native audio tracks when video loads
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const detectNativeTracks = () => {
+      const audioTracks = (v as any).audioTracks;
+      if (audioTracks && audioTracks.length > 1) {
+        const nativeTracks: AudioTrackOption[] = [];
+        for (let i = 0; i < audioTracks.length; i++) {
+          const t = audioTracks[i];
+          nativeTracks.push({
+            language: t.language || `Track ${i + 1}`,
+            label: t.label || t.language || `Audio ${i + 1}`,
+            nativeIndex: i,
+          });
+        }
+        setAudioTrackOptions(prev => {
+          // Merge: native tracks first, then manual tracks
+          const manualTracks = prev.filter(t => t.src);
+          return [...nativeTracks, ...manualTracks];
+        });
+      }
+    };
+    v.addEventListener("loadedmetadata", detectNativeTracks);
+    return () => v.removeEventListener("loadedmetadata", detectNativeTracks);
+  }, [currentSrc]);
+
+  const switchAudioTrack = useCallback((track: AudioTrackOption) => {
+    const v = videoRef.current;
+    if (!v) return;
+    const savedTime = v.currentTime;
+    const wasPlaying = !v.paused;
+
+    if (track.nativeIndex !== undefined) {
+      // Switch native audio track
+      const audioTracks = (v as any).audioTracks;
+      if (audioTracks) {
+        for (let i = 0; i < audioTracks.length; i++) {
+          audioTracks[i].enabled = i === track.nativeIndex;
+        }
+      }
+      setCurrentAudioTrack(track.label);
+    } else if (track.src) {
+      // Switch to a different URL for this language
+      const proxiedSrc = getPrimaryPlaybackSrc(track.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+      activeSourceBaseRef.current = track.src;
+      setCurrentSrc(proxiedSrc);
+      setCurrentAudioTrack(track.label);
+      // Restore playback position after source change
+      const restoreTime = () => {
+        if (v.duration > 0) {
+          v.currentTime = savedTime;
+          if (wasPlaying) v.play().catch(() => {});
+          v.removeEventListener("loadedmetadata", restoreTime);
+        }
+      };
+      v.addEventListener("loadedmetadata", restoreTime);
+    }
+    setShowAudioPanel(false);
+  }, [cdnEnabled, proxyUrl, proxyApiKey]);
+
   useEffect(() => {
     if (!playbackRouteReady) return;
     activeSourceBaseRef.current = src;
