@@ -1538,15 +1538,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     <span>Default</span>
                     {currentAudioTrack === "Default" && <Check className="w-3.5 h-3.5" />}
                   </button>
-                  {audioTrackOptions.map((track, idx) => (
+                  {audioTrackOptions.map((track, idx) => {
+                    const qualityCount = [track.src480, track.src720, track.src1080, track.src4k].filter(Boolean).length;
+                    return (
                     <button key={idx} onClick={() => switchAudioTrack(track)}
                       className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
                         currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                       }`}>
-                      <span className="flex items-center gap-1.5">🎧 {track.label}</span>
+                      <span className="flex items-center gap-1.5">
+                        🎧 {track.label}
+                        {qualityCount > 0 && <span className="text-[9px] opacity-60 ml-1">({qualityCount + 1} qualities)</span>}
+                      </span>
                       {currentAudioTrack === track.label && <Check className="w-3.5 h-3.5" />}
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
