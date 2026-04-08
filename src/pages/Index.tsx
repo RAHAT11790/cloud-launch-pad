@@ -328,6 +328,7 @@ const Index = () => {
     seasonIdx?: number;
     epIdx?: number;
     qualityOptions?: { label: string; src: string }[];
+    audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
   } | null>(() => {
     try {
       const saved = sessionStorage.getItem("rs_playerState");
@@ -1035,6 +1036,7 @@ const Index = () => {
     let src = "";
     let subtitle = "";
     let qualityOptions: { label: string; src: string }[] = [];
+    let audioTracks: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[] | undefined;
     if (anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined) {
       const season = anime.seasons[seasonIdx];
       const episode = season.episodes[epIdx];
@@ -1044,6 +1046,7 @@ const Index = () => {
       if (episode.link720) qualityOptions.push({ label: "720p", src: episode.link720 });
       if (episode.link1080) qualityOptions.push({ label: "1080p", src: episode.link1080 });
       if (episode.link4k) qualityOptions.push({ label: "4K", src: episode.link4k });
+      if (episode.audioTracks?.length) audioTracks = episode.audioTracks;
     } else if (anime.movieLink) {
       src = anime.movieLink;
       subtitle = "Movie";
@@ -1124,7 +1127,7 @@ const Index = () => {
 
     if (src) {
       addToWatchHistory(anime, seasonIdx, epIdx);
-      setPlayerState({ src, title: anime.title, subtitle, anime, seasonIdx, epIdx, qualityOptions });
+      setPlayerState({ src, title: anime.title, subtitle, anime, seasonIdx, epIdx, qualityOptions, audioTracks });
       setSelectedAnime(null);
     }
   };
@@ -1800,6 +1803,7 @@ const Index = () => {
           poster={playerState.anime.poster}
           onClose={() => { setPlayerState(null); }}
           qualityOptions={playerState.qualityOptions}
+          audioTracks={playerState.audioTracks}
           animeId={playerState.anime.id}
           onSaveProgress={saveVideoProgress}
           onNextEpisode={

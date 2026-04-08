@@ -82,6 +82,13 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
 };
 
+interface AudioTrackOption {
+  language: string;
+  label: string;
+  src?: string; // If set, switch to this URL for this language
+  nativeIndex?: number; // If set, switch native audio track
+}
+
 interface VideoPlayerProps {
   src: string;
   title: string;
@@ -91,6 +98,7 @@ interface VideoPlayerProps {
   onNextEpisode?: () => void;
   episodeList?: { number: number; title?: string; active: boolean; onClick: () => void }[];
   qualityOptions?: QualityOption[];
+  audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
   animeId?: string;
   onSaveProgress?: (currentTime: number, duration: number) => void;
   hideDownload?: boolean;
@@ -108,7 +116,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, animeId, onSaveProgress, hideDownload, noProxy, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
   const branding = useBranding();
   // Preload anime character image to prevent loading glitch
   useEffect(() => {
@@ -143,7 +151,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const cropModes = ["contain", "cover", "fill"] as const;
   const cropLabels = ["Fit", "Crop", "Stretch"];
   const [cropIndex, setCropIndex] = useState(0);
-  const [settingsTab, setSettingsTab] = useState<"speed" | "quality">("speed");
+  const [settingsTab, setSettingsTab] = useState<"speed" | "quality" | "audio">("speed");
   const [currentQuality, setCurrentQuality] = useState<string>("Auto");
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>('');
@@ -151,6 +159,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
+  const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
+  const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
+  const [showAudioPanel, setShowAudioPanel] = useState(false);
 
   // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
@@ -467,6 +478,80 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return list;
   }, [src, qualityOptions]);
 
+
+  // Build audio track options from props + detect native audio tracks on video load
+  useEffect(() => {
+    const tracks: AudioTrackOption[] = [];
+    // Add manual audio tracks from props
+    if (propAudioTracks?.length) {
+      propAudioTracks.forEach(t => {
+        tracks.push({ language: t.language, label: t.label, src: t.link });
+      });
+    }
+    setAudioTrackOptions(tracks);
+    setCurrentAudioTrack("Default");
+  }, [propAudioTracks, src]);
+
+  // Detect native audio tracks when video loads
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const detectNativeTracks = () => {
+      const audioTracks = (v as any).audioTracks;
+      if (audioTracks && audioTracks.length > 1) {
+        const nativeTracks: AudioTrackOption[] = [];
+        for (let i = 0; i < audioTracks.length; i++) {
+          const t = audioTracks[i];
+          nativeTracks.push({
+            language: t.language || `Track ${i + 1}`,
+            label: t.label || t.language || `Audio ${i + 1}`,
+            nativeIndex: i,
+          });
+        }
+        setAudioTrackOptions(prev => {
+          // Merge: native tracks first, then manual tracks
+          const manualTracks = prev.filter(t => t.src);
+          return [...nativeTracks, ...manualTracks];
+        });
+      }
+    };
+    v.addEventListener("loadedmetadata", detectNativeTracks);
+    return () => v.removeEventListener("loadedmetadata", detectNativeTracks);
+  }, [currentSrc]);
+
+  const switchAudioTrack = useCallback((track: AudioTrackOption) => {
+    const v = videoRef.current;
+    if (!v) return;
+    const savedTime = v.currentTime;
+    const wasPlaying = !v.paused;
+
+    if (track.nativeIndex !== undefined) {
+      // Switch native audio track
+      const audioTracks = (v as any).audioTracks;
+      if (audioTracks) {
+        for (let i = 0; i < audioTracks.length; i++) {
+          audioTracks[i].enabled = i === track.nativeIndex;
+        }
+      }
+      setCurrentAudioTrack(track.label);
+    } else if (track.src) {
+      // Switch to a different URL for this language
+      const proxiedSrc = getPrimaryPlaybackSrc(track.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+      activeSourceBaseRef.current = track.src;
+      setCurrentSrc(proxiedSrc);
+      setCurrentAudioTrack(track.label);
+      // Restore playback position after source change
+      const restoreTime = () => {
+        if (v.duration > 0) {
+          v.currentTime = savedTime;
+          if (wasPlaying) v.play().catch(() => {});
+          v.removeEventListener("loadedmetadata", restoreTime);
+        }
+      };
+      v.addEventListener("loadedmetadata", restoreTime);
+    }
+    setShowAudioPanel(false);
+  }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
   useEffect(() => {
     if (!playbackRouteReady) return;
@@ -1308,6 +1393,42 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         )}
                       </div>
                     )}
+                    {/* Audio track button */}
+                    {audioTrackOptions.length > 0 && (
+                      <div className="relative">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); }}
+                          className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
+                            currentAudioTrack !== "Default" ? "gradient-primary text-white" : "bg-foreground/20"
+                          }`}
+                        >
+                          🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}
+                        </button>
+                        {showAudioPanel && (
+                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
+                            <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
+                            <button onClick={() => { setCurrentAudioTrack("Default"); setShowAudioPanel(false); }}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                              }`}>
+                              <span>Default</span>
+                              {currentAudioTrack === "Default" && <Check className="w-3 h-3" />}
+                            </button>
+                            {audioTrackOptions.map((track, idx) => (
+                              <button key={idx} onClick={() => switchAudioTrack(track)}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                  currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                                }`}>
+                                <span className="flex items-center gap-1.5">
+                                  🎧 {track.label}
+                                </span>
+                                {currentAudioTrack === track.label && <Check className="w-3 h-3" />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {onNextEpisode && (
                       <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="text-[10px] bg-primary/30 px-2 py-0.5 rounded flex items-center gap-1">
                         Next <ChevronRight className="w-3 h-3" />
@@ -1350,6 +1471,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 <button onClick={() => setSettingsTab("quality")} className={`text-[11px] px-3 py-1.5 rounded-full font-medium transition-all ${settingsTab === "quality" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
                   Quality
                 </button>
+                {audioTrackOptions.length > 0 && (
+                  <button onClick={() => setSettingsTab("audio")} className={`text-[11px] px-3 py-1.5 rounded-full font-medium transition-all ${settingsTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
+                    🎧 Audio
+                  </button>
+                )}
               </div>
 
               {settingsTab === "speed" && (
@@ -1388,6 +1514,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   {availableQualities.length <= 1 && (
                     <p className="text-[10px] text-muted-foreground/60 text-center py-2">No additional qualities available</p>
                   )}
+                </div>
+              )}
+
+              {settingsTab === "audio" && (
+                <div className="space-y-0.5">
+                  <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider font-medium">Audio Language</p>
+                  <button onClick={() => { setCurrentAudioTrack("Default"); }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                      currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                    }`}>
+                    <span>Default</span>
+                    {currentAudioTrack === "Default" && <Check className="w-3.5 h-3.5" />}
+                  </button>
+                  {audioTrackOptions.map((track, idx) => (
+                    <button key={idx} onClick={() => switchAudioTrack(track)}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                        currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                      }`}>
+                      <span className="flex items-center gap-1.5">🎧 {track.label}</span>
+                      {currentAudioTrack === track.label && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>

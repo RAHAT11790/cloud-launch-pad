@@ -8,6 +8,16 @@ import hero1 from "@/assets/hero-1.jpg";
 import hero2 from "@/assets/hero-2.jpg";
 import hero3 from "@/assets/hero-3.jpg";
 
+export interface AudioTrack {
+  language: string;
+  label: string;
+  link: string;
+  link480?: string;
+  link720?: string;
+  link1080?: string;
+  link4k?: string;
+}
+
 export interface Episode {
   episodeNumber: number;
   title: string;
@@ -16,6 +26,7 @@ export interface Episode {
   link720?: string;
   link1080?: string;
   link4k?: string;
+  audioTracks?: AudioTrack[];
 }
 
 export interface Season {
