@@ -2999,11 +2999,23 @@ ${tgHashtags}`;
     if (cType === "webseries") {
       const ws = webseriesData.find(s => s.id === cId);
       setTgDubType(ws?.dubType === "fandub" ? "fandub" : "official");
+      // Auto-set language from content
+      if (ws?.language) setTgLanguages(ws.language);
+      // Auto-fetch genres from TMDB if tmdbId available
+      if (ws?.tmdbId) {
+        setTgImdbId(String(ws.tmdbId));
+        fetchTmdbGenres(String(ws.tmdbId));
+      }
     } else if (cType === "movie") {
       const mv = moviesData.find(m => m.id === cId);
       setTgDubType(mv?.dubType === "fandub" ? "fandub" : "official");
+      if (mv?.language) setTgLanguages(mv.language);
+      if (mv?.tmdbId) {
+        setTgImdbId(String(mv.tmdbId));
+        fetchTmdbGenres(String(mv.tmdbId));
+      }
     } else if (cType === "animesalt") {
-      setTgDubType("official"); // AnimeSalt always official
+      setTgDubType("official");
     }
   };
 
