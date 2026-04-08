@@ -1033,7 +1033,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);
     setShowSettings(false);
-  }, [currentQuality, currentSrc, cdnEnabled, proxyUrl, isPremium]);
+
+    // R2 cache: check for cached version of new quality
+    if (!noProxy && option.src && !is4KLabel(option.label)) {
+      import("@/lib/r2Cache").then(({ checkR2Cache, triggerR2Upload }) => {
+        checkR2Cache(option.src).then(cachedUrl => {
+          if (cachedUrl) {
+            setCurrentSrc(cachedUrl);
+          } else {
+            triggerR2Upload(option.src);
+          }
+        }).catch(() => {});
+      }).catch(() => {});
+    }
+  }, [currentQuality, currentSrc, cdnEnabled, proxyUrl, isPremium, noProxy]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
