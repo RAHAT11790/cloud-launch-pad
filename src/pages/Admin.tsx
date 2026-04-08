@@ -1317,7 +1317,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [tgTitle, setTgTitle] = useState("");
   const [tgSeason, setTgSeason] = useState("");
   const [tgTotalEpisodes, setTgTotalEpisodes] = useState("");
-  const [tgQuality, setTgQuality] = useState("480p,720p,1080p");
+  const [tgQuality, setTgQuality] = useState("480p,720p,1080p,4K");
   const [tgNewEpAdded, setTgNewEpAdded] = useState("");
   const [tgPosterUrl, setTgPosterUrl] = useState("");
   const [tgButtonLink, setTgButtonLink] = useState("");
@@ -1328,6 +1328,85 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [tgContentSearch, setTgContentSearch] = useState("");
   const tgDropdownRef = useRef<HTMLDivElement>(null);
   const [tgDubType, setTgDubType] = useState<"official" | "fandub">("official");
+  const [tgLanguages, setTgLanguages] = useState("Bengali,English,Hindi,Japanese,Malayalam,Tamil,Telugu");
+  const [tgRating, setTgRating] = useState("8.5");
+  const [tgGenres, setTgGenres] = useState("Animation, Action & Adventure, Sci-Fi & Fantasy");
+  const [tgImdbId, setTgImdbId] = useState("");
+  const [tgImdbLoading, setTgImdbLoading] = useState(false);
+  const [tgSeasonEpLabel, setTgSeasonEpLabel] = useState("#all");
+  // Telegram footer links (admin-managed)
+  const [tgFooterLinks, setTgFooterLinks] = useState<{ label: string; url: string; emoji: string }[]>([]);
+  const [tgHashtags, setTgHashtags] = useState("#ɪᴄғᴀɴɪᴍᴇ #ᴀɴɪᴍᴇ #ᴏғғɪᴄɪᴀʟ");
+
+  // Load saved TG footer links from Firebase
+  useEffect(() => {
+    const unsub = onValue(ref(db, "admin/tgFooterLinks"), (snap) => {
+      const data = snap.val();
+      if (data) {
+        setTgFooterLinks(Object.values(data));
+      } else {
+        // Default links
+        setTgFooterLinks([
+          { label: "Jᴏɪɴ Mᴀɪɴ Cʜᴀɴɴᴇʟ", url: "https://t.me/CARTOONFUNNY03", emoji: "🔰" },
+          { label: "Jᴏɪɴ Cʜᴀᴛ Gʀᴏᴜᴘ", url: "https://t.me/HINDIANIME03", emoji: "🔰" },
+          { label: "Sᴜᴘᴘᴏʀᴛ & Cᴏɴᴛᴀᴄᴛ", url: "https://t.me/RS_WONER", emoji: "🔰" },
+        ]);
+      }
+    });
+    const unsub2 = onValue(ref(db, "admin/tgHashtags"), (snap) => {
+      if (snap.val()) setTgHashtags(snap.val());
+    });
+    return () => { unsub(); unsub2(); };
+  }, []);
+
+  // Fetch genres & rating from TMDB using IMDB/TMDB ID
+  const fetchTmdbGenres = async (tmdbIdOrImdb: string) => {
+    if (!tmdbIdOrImdb.trim()) return;
+    setTgImdbLoading(true);
+    try {
+      let tmdbData: any = null;
+      const idTrimmed = tmdbIdOrImdb.trim();
+      if (idTrimmed.startsWith("tt")) {
+        // IMDB ID → find TMDB ID first
+        const findRes = await fetch(`${TMDB_BASE_URL}/find/${idTrimmed}?api_key=${TMDB_API_KEY}&external_source=imdb_id`);
+        const findData = await findRes.json();
+        const tvResult = findData.tv_results?.[0];
+        const movieResult = findData.movie_results?.[0];
+        if (tvResult) {
+          const detailRes = await fetch(`${TMDB_BASE_URL}/tv/${tvResult.id}?api_key=${TMDB_API_KEY}&language=en-US`);
+          tmdbData = await detailRes.json();
+        } else if (movieResult) {
+          const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${movieResult.id}?api_key=${TMDB_API_KEY}&language=en-US`);
+          tmdbData = await detailRes.json();
+        }
+      } else {
+        // Try as TMDB TV ID first
+        try {
+          const res = await fetch(`${TMDB_BASE_URL}/tv/${idTrimmed}?api_key=${TMDB_API_KEY}&language=en-US`);
+          if (res.ok) tmdbData = await res.json();
+        } catch {}
+        if (!tmdbData) {
+          const res = await fetch(`${TMDB_BASE_URL}/movie/${idTrimmed}?api_key=${TMDB_API_KEY}&language=en-US`);
+          if (res.ok) tmdbData = await res.json();
+        }
+      }
+      if (tmdbData) {
+        if (tmdbData.genres?.length) {
+          setTgGenres(tmdbData.genres.map((g: any) => g.name).join(", "));
+        }
+        if (tmdbData.vote_average) {
+          setTgRating((tmdbData.vote_average).toFixed(1));
+        }
+        toast.success("✅ TMDB থেকে genres ও rating আনা হয়েছে!");
+      } else {
+        toast.error("TMDB তে এই ID পাওয়া যায়নি");
+      }
+    } catch (err) {
+      toast.error("TMDB fetch failed");
+    } finally {
+      setTgImdbLoading(false);
+    }
+  };
 
   // Category bulk assignment states
   const [catBulkSearch, setCatBulkSearch] = useState("");
@@ -2727,16 +2806,26 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     if (!tgChannelId.trim()) { toast.error("Enter channel ID(s)"); return; }
     setTgSending(true);
     try {
-      const caption = `Tɪᴛʟᴇ'- <b>${tgTitle}</b>
-╭━━━━━━━━━━━━━━━━━━➣
-┣✧ Sᴇᴀsᴏɴ : ${tgSeason || 'N/A'}
-┣✧ Eᴘɪsᴏᴅᴇs: ${tgTotalEpisodes || 'N/A'}
-┣✧ Qᴜᴀʟɪᴛʏ : ${tgQuality} ˚.⋆
-┣✧ Aᴜᴅɪᴏ : Hɪɴᴅɪ Dᴜʙ ! ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}
-┣✧ Eᴘɪsᴏᴅᴇ Aᴅᴅᴇᴅ : ${tgNewEpAdded || 'N/A'}
-╰━━━━━━━━━━━━━━━━━━➣
-Pᴏᴡᴇʀ Bʏ : 
-𓆩 ${TELEGRAM_CHANNEL} 𓆪`;
+      // Build footer links HTML
+      const footerLinksHtml = tgFooterLinks.map(l =>
+        `๏ ${l.emoji} <a href="${l.url}">${l.label}</a> ${l.emoji}`
+      ).join("\n");
+
+      const caption = `♨️ <b>Tɪᴛᴇʟ;-</b> ${tgTitle}
+┌───────────────────
+│ ✦ <b>Sᴇᴀsᴏɴ :</b> ${tgSeason || 'N/A'}
+│ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> ${tgTotalEpisodes || 'N/A'}
+│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${tgLanguages} ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}
+│ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> ${tgQuality}
+│ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ ${tgRating}/10
+│ ✦ <b>Gᴇɴʀᴇs :</b> ${tgGenres}
+└───────────────────
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+📌 Sᴇᴀsᴏɴ ${tgSeasonEpLabel} • Eᴘɪsᴏᴅᴇ ${tgSeasonEpLabel} Aᴅᴅᴇᴅ
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+${footerLinksHtml}
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+${tgHashtags}`;
 
       // Support multiple channel IDs separated by comma, newline, or space
       const channelIds = tgChannelId
