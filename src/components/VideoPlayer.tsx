@@ -151,7 +151,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const cropModes = ["contain", "cover", "fill"] as const;
   const cropLabels = ["Fit", "Crop", "Stretch"];
   const [cropIndex, setCropIndex] = useState(0);
-  const [settingsTab, setSettingsTab] = useState<"speed" | "quality">("speed");
+  const [settingsTab, setSettingsTab] = useState<"speed" | "quality" | "audio">("speed");
   const [currentQuality, setCurrentQuality] = useState<string>("Auto");
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>('');
@@ -159,6 +159,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
+  const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
+  const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
+  const [showAudioPanel, setShowAudioPanel] = useState(false);
 
   // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
