@@ -32,6 +32,7 @@ interface Episode {
   link720?: string;
   link1080?: string;
   link4k?: string;
+  audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
 }
 
 interface Season {
