@@ -5881,7 +5881,27 @@ ${tgHashtags}`;
                     <input value={newBucket.publicUrl} onChange={e => setNewBucket(p => ({ ...p, publicUrl: e.target.value }))} placeholder="Public URL" className={`${inputClass} text-[10px] w-full`} />
                     <input value={newBucket.s3Endpoint} onChange={e => setNewBucket(p => ({ ...p, s3Endpoint: e.target.value }))} placeholder="S3 API Endpoint" className={`${inputClass} text-[10px] w-full`} />
                     <button onClick={addBucket} className={`${btnPrimary} w-full text-[10px]`}><Plus size={10} /> Bucket যোগ করো</button>
+              </div>
+              {/* ---- Storage Info ---- */}
+              <div className={`${glassCard} p-4`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold flex items-center gap-2"><BarChart3 size={14} className="text-purple-400" /> Storage Info</h3>
+                  <button onClick={loadStorageInfo} disabled={r2StorageLoading} className={`${btnPrimary} text-[10px] px-3`}>{r2StorageLoading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />} লোড করো</button>
+                </div>
+                {r2StorageInfo.length === 0 && <p className="text-[10px] text-zinc-500">উপরে "লোড করো" চাপো ক্যাশড ফাইল দেখতে।</p>}
+                {r2StorageInfo.length > 0 && (<div className="space-y-3">{r2StorageInfo.map((info: any) => (<div key={info.bucketId} className="border border-zinc-700 rounded-xl p-3 bg-zinc-800/30">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold text-white">{info.bucketName || info.bucketId}</span>
+                    <button onClick={() => purgeAllBucket(info.bucketId)} disabled={r2PurgeLoading === info.bucketId} className="px-2 py-1 rounded-lg text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1">{r2PurgeLoading === info.bucketId ? <Loader2 size={9} className="animate-spin" /> : <Trash2 size={9} />} সব মুছো</button>
                   </div>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div className="bg-zinc-900/50 rounded-lg p-2 text-center"><p className="text-[9px] text-zinc-400">ফাইল</p><p className="text-sm font-bold text-cyan-400">{info.totalFiles}</p></div>
+                    <div className="bg-zinc-900/50 rounded-lg p-2 text-center"><p className="text-[9px] text-zinc-400">সাইজ</p><p className="text-sm font-bold text-green-400">{formatSize(info.totalSizeBytes)}</p></div>
+                  </div>
+                  {info.error && <p className="text-[9px] text-red-400">⚠️ {info.error}</p>}
+                  {info.files && info.files.length > 0 && (<details className="mt-2"><summary className="text-[9px] text-zinc-400 cursor-pointer">ফাইল তালিকা ({info.totalFiles})</summary><div className="mt-1 max-h-40 overflow-y-auto space-y-1">{info.files.map((f: any, fi: number) => (<div key={fi} className="flex items-center justify-between text-[8px] font-mono bg-zinc-900/50 px-2 py-1 rounded"><span className="truncate flex-1 text-zinc-300">{f.key.replace("cache/", "")}</span><span className="text-zinc-500 ml-2 whitespace-nowrap">{formatSize(f.size)}</span></div>))}</div></details>)}
+                </div>))}</div>)}
+              </div>
                 </div>
               </div>
             </div>);
