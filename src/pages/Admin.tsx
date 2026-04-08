@@ -1329,7 +1329,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [tgContentSearch, setTgContentSearch] = useState("");
   const tgDropdownRef = useRef<HTMLDivElement>(null);
   const [tgDubType, setTgDubType] = useState<"official" | "fandub">("official");
-  const [tgLanguages, setTgLanguages] = useState("Bengali,English,Hindi,Japanese,Malayalam,Tamil,Telugu");
+  const [tgLanguages, setTgLanguages] = useState("Hindi");
   const [tgRating, setTgRating] = useState("8.5");
   const [tgGenres, setTgGenres] = useState("Animation, Action & Adventure, Sci-Fi & Fantasy");
   const [tgImdbId, setTgImdbId] = useState("");
@@ -2813,19 +2813,19 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       ).join("\n");
 
       const caption = `♨️ <b>Tɪᴛᴇʟ;-</b> ${tgTitle}
-┌───────────────────
+┌──────────────────
 │ ✦ <b>Sᴇᴀsᴏɴ :</b> ${tgSeason || 'N/A'}
 │ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> ${tgTotalEpisodes || 'N/A'}
 │ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${tgLanguages} ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}
 │ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> ${tgQuality}
 │ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ ${tgRating}/10
 │ ✦ <b>Gᴇɴʀᴇs :</b> ${tgGenres}
-└───────────────────
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+└──────────────────
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
 📌 Sᴇᴀsᴏɴ #${tgSeason || '01'} • Eᴘɪsᴏᴅᴇ #${tgNewEpAdded || '01'} Aᴅᴅᴇᴅ
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
 ${footerLinksHtml}
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
 ${tgHashtags}`;
 
       // Support multiple channel IDs separated by comma, newline, or space
@@ -5119,19 +5119,19 @@ ${tgHashtags}`;
                 )}
                 <div className="font-mono text-[11px] text-zinc-300 whitespace-pre-line leading-relaxed">
 {`♨️ Tɪᴛᴇʟ;- ${tgTitle || '{title}'}
-┌───────────────────
+┌──────────────────
 │ ✦ Sᴇᴀsᴏɴ : ${tgSeason || '{season}'}
 │ ✦ Eᴘɪsᴏᴅᴇs : ${tgTotalEpisodes || '{total}'}
 │ ✦ Aᴜᴅɪᴏ : 🎧 ${tgLanguages} ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}
 │ ✦ Qᴜᴀʟɪᴛʏ : ${tgQuality}
 │ ✦ Rᴀᴛɪɴɢ : ⭐ ${tgRating}/10
 │ ✦ Gᴇɴʀᴇs : ${tgGenres}
-└───────────────────
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+└──────────────────
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
 📌 Sᴇᴀsᴏɴ #${tgSeason || '01'} • Eᴘɪsᴏᴅᴇ #${tgNewEpAdded || '01'} Aᴅᴅᴇᴅ
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰`}
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰`}
 {tgFooterLinks.map(l => `\n๏ ${l.emoji} ${l.label} ${l.emoji}\n   ${l.url}`).join("")}
-{`\n▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n${tgHashtags}`}
+{`\n▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n${tgHashtags}`}
                 </div>
                 {tgButtonLink && (
                   <div className="mt-3 bg-blue-500/20 border border-blue-500/40 rounded-lg py-2.5 text-center text-[12px] font-bold text-blue-300">
