@@ -350,6 +350,80 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ---- LIST (storage info per bucket) ----
+    if (action === "list") {
+      const results: any[] = [];
+      for (const bucket of buckets as R2Bucket[]) {
+        try {
+          let totalFiles = 0;
+          let totalSize = 0;
+          let continuationToken: string | undefined;
+          const files: { key: string; size: number; lastModified: string }[] = [];
+
+          do {
+            const params: Record<string, string> = { "prefix": "cache/", "list-type": "2", "max-keys": "1000" };
+            if (continuationToken) params["continuation-token"] = continuationToken;
+            const listRes = await signedS3Request(bucket, "GET", "", undefined, params);
+            if (!listRes.ok) { await listRes.text(); break; }
+            const xml = await listRes.text();
+
+            const keyMatches = xml.match(/<Key>([^<]+)<\/Key>/g) || [];
+            const sizeMatches = xml.match(/<Size>([^<]+)<\/Size>/g) || [];
+            const dateMatches = xml.match(/<LastModified>([^<]+)<\/LastModified>/g) || [];
+
+            for (let i = 0; i < keyMatches.length; i++) {
+              const key = keyMatches[i].replace(/<Key>|<\/Key>/g, "");
+              if (key.endsWith(".meta.json")) continue;
+              const size = parseInt(sizeMatches[i]?.replace(/<Size>|<\/Size>/g, "") || "0");
+              const lastMod = dateMatches[i]?.replace(/<LastModified>|<\/LastModified>/g, "") || "";
+              totalFiles++;
+              totalSize += size;
+              files.push({ key, size, lastModified: lastMod });
+            }
+
+            const truncated = xml.includes("<IsTruncated>true</IsTruncated>");
+            const tokenMatch = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/);
+            continuationToken = truncated && tokenMatch ? tokenMatch[1] : undefined;
+          } while (continuationToken);
+
+          results.push({ bucketId: bucket.id, bucketName: bucket.bucketName, totalFiles, totalSizeBytes: totalSize, files: files.slice(0, 50) });
+        } catch (e: any) {
+          results.push({ bucketId: bucket.id, bucketName: bucket.bucketName, error: e.message, totalFiles: 0, totalSizeBytes: 0, files: [] });
+        }
+      }
+      return new Response(JSON.stringify({ results }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ---- PURGE (delete ALL cached files in a bucket) ----
+    if (action === "purge") {
+      let deleted = 0;
+      for (const bucket of buckets as R2Bucket[]) {
+        try {
+          let continuationToken: string | undefined;
+          do {
+            const params: Record<string, string> = { "prefix": "cache/", "list-type": "2", "max-keys": "1000" };
+            if (continuationToken) params["continuation-token"] = continuationToken;
+            const listRes = await signedS3Request(bucket, "GET", "", undefined, params);
+            if (!listRes.ok) { await listRes.text(); break; }
+            const xml = await listRes.text();
+            const keyMatches = xml.match(/<Key>([^<]+)<\/Key>/g) || [];
+            const keys = keyMatches.map(k => k.replace(/<Key>|<\/Key>/g, ""));
+            for (const key of keys) {
+              try { const d = await signedS3Request(bucket, "DELETE", key); await d.text(); deleted++; } catch {}
+            }
+            const truncated = xml.includes("<IsTruncated>true</IsTruncated>");
+            const tokenMatch = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/);
+            continuationToken = truncated && tokenMatch ? tokenMatch[1] : undefined;
+          } while (continuationToken);
+        } catch {}
+      }
+      return new Response(JSON.stringify({ success: true, deleted }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ---- STATUS ----
     if (action === "status") {
       const results: any[] = [];
