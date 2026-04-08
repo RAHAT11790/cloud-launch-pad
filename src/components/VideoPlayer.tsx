@@ -562,7 +562,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.addEventListener("loadedmetadata", restoreTime);
     }
     setShowAudioPanel(false);
-  }, [cdnEnabled, proxyUrl, proxyApiKey]);
+  }, [cdnEnabled, proxyUrl, proxyApiKey, currentQuality]);
 
   useEffect(() => {
     if (!playbackRouteReady) return;
