@@ -174,6 +174,87 @@ function pickBucket(buckets: R2Bucket[], videoUrl: string): R2Bucket {
   return buckets[Math.abs(hash) % buckets.length];
 }
 
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+async function uploadToR2InBackground(
+  videoUrl: string,
+  sourceUrl: string | undefined,
+  buckets: R2Bucket[],
+  maxSizeMB: number,
+): Promise<Response> {
+  const bucket = pickBucket(buckets, videoUrl);
+  const key = cacheKey(videoUrl);
+
+  try {
+    const headRes = await signedS3Request(bucket, "HEAD", key);
+    if (headRes.ok) {
+      const publicUrl = `${bucket.publicUrl.replace(/\/$/, "")}/${key}`;
+      return jsonResponse({
+        success: true,
+        url: publicUrl,
+        alreadyCached: true,
+        bucketId: bucket.id,
+      });
+    }
+    await headRes.text();
+  } catch {}
+
+  const fetchUrl = sourceUrl || videoUrl;
+  const sourceRes = await fetch(fetchUrl, {
+    headers: {
+      "User-Agent": "Mozilla/5.0",
+      "Accept": "*/*",
+    },
+  });
+
+  if (!sourceRes.ok) {
+    return jsonResponse({ error: `Source fetch failed: ${sourceRes.status}`, sourceUrl: fetchUrl }, 502);
+  }
+
+  const contentLength = parseInt(sourceRes.headers.get("Content-Length") || "0");
+  const maxBytes = maxSizeMB * 1024 * 1024;
+  if (contentLength > maxBytes) {
+    await sourceRes.body?.cancel();
+    return jsonResponse({ error: "File too large", size: contentLength, maxSize: maxBytes, skipped: true }, 413);
+  }
+
+  const videoData = new Uint8Array(await sourceRes.arrayBuffer());
+  if (videoData.length > maxBytes) {
+    return jsonResponse({ error: "File too large after download", size: videoData.length, maxSize: maxBytes, skipped: true }, 413);
+  }
+
+  const contentType = sourceRes.headers.get("Content-Type") || "video/mp4";
+  const uploadRes = await signedS3Request(bucket, "PUT", key, videoData, undefined, {
+    "Content-Type": contentType,
+  });
+  if (!uploadRes.ok) {
+    const errText = await uploadRes.text();
+    return jsonResponse({ error: `R2 upload failed: ${uploadRes.status}`, details: errText }, 500);
+  }
+  await uploadRes.text();
+
+  const metaKey = `${key}.meta.json`;
+  const meta = JSON.stringify({
+    originalUrl: videoUrl,
+    sourceUrl: fetchUrl,
+    cachedAt: Date.now(),
+    size: videoData.length,
+    contentType,
+  });
+  const metaRes = await signedS3Request(bucket, "PUT", metaKey, new TextEncoder().encode(meta), undefined, {
+    "Content-Type": "application/json",
+  });
+  await metaRes.text();
+
+  const publicUrl = `${bucket.publicUrl.replace(/\/$/, "")}/${key}`;
+  return jsonResponse({ success: true, url: publicUrl, size: videoData.length, bucketId: bucket.id });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -183,9 +264,7 @@ Deno.serve(async (req) => {
     const { action, videoUrl, sourceUrl, buckets, maxSizeMB = 300 } = await req.json();
 
     if (!buckets || !Array.isArray(buckets) || buckets.length === 0) {
-      return new Response(JSON.stringify({ error: "No R2 buckets configured" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "No R2 buckets configured" }, 400);
     }
 
     // ---- CHECK ----
@@ -205,80 +284,29 @@ Deno.serve(async (req) => {
           await res.text();
         } catch {}
       }
-      return new Response(JSON.stringify({ cached: false }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ cached: false });
     }
 
     // ---- UPLOAD ----
     if (action === "upload") {
-      const bucket = pickBucket(buckets as R2Bucket[], videoUrl);
-      const key = cacheKey(videoUrl);
+      const uploadTask = uploadToR2InBackground(videoUrl, sourceUrl, buckets as R2Bucket[], maxSizeMB);
+      const edgeRuntime = (globalThis as typeof globalThis & {
+        EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+      }).EdgeRuntime;
 
-      // Check if already cached
-      try {
-        const headRes = await signedS3Request(bucket, "HEAD", key);
-        if (headRes.ok) {
-          const publicUrl = `${bucket.publicUrl.replace(/\/$/, "")}/${key}`;
-          return new Response(JSON.stringify({
-            success: true, url: publicUrl, alreadyCached: true, bucketId: bucket.id,
-          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-        await headRes.text();
-      } catch {}
+      if (edgeRuntime?.waitUntil) {
+        edgeRuntime.waitUntil(uploadTask.catch((error) => {
+          console.error("R2 background upload failed:", error?.message || error);
+        }));
 
-      // Download from source
-      const fetchUrl = sourceUrl || videoUrl;
-      const sourceRes = await fetch(fetchUrl, {
-        headers: { "User-Agent": "Mozilla/5.0" },
-      });
-      if (!sourceRes.ok) {
-        return new Response(JSON.stringify({ error: `Source fetch failed: ${sourceRes.status}`, sourceUrl: fetchUrl }), {
-          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResponse({
+          queued: true,
+          started: true,
+          bucketId: pickBucket(buckets as R2Bucket[], videoUrl).id,
+        }, 202);
       }
 
-      const contentLength = parseInt(sourceRes.headers.get("Content-Length") || "0");
-      const maxBytes = maxSizeMB * 1024 * 1024;
-      if (contentLength > maxBytes) {
-        await sourceRes.body?.cancel();
-        return new Response(JSON.stringify({ error: "File too large", size: contentLength, maxSize: maxBytes, skipped: true }), {
-          status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const videoData = new Uint8Array(await sourceRes.arrayBuffer());
-      if (videoData.length > maxBytes) {
-        return new Response(JSON.stringify({ error: "File too large after download", size: videoData.length, maxSize: maxBytes, skipped: true }), {
-          status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Upload to R2
-      const contentType = sourceRes.headers.get("Content-Type") || "video/mp4";
-      const uploadRes = await signedS3Request(bucket, "PUT", key, videoData, undefined, {
-        "Content-Type": contentType,
-      });
-      if (!uploadRes.ok) {
-        const errText = await uploadRes.text();
-        return new Response(JSON.stringify({ error: `R2 upload failed: ${uploadRes.status}`, details: errText }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      await uploadRes.text();
-
-      // Store metadata
-      const metaKey = `${key}.meta.json`;
-      const meta = JSON.stringify({ originalUrl: videoUrl, sourceUrl: fetchUrl, cachedAt: Date.now(), size: videoData.length, contentType });
-      const metaRes = await signedS3Request(bucket, "PUT", metaKey, new TextEncoder().encode(meta), undefined, {
-        "Content-Type": "application/json",
-      });
-      await metaRes.text();
-
-      const publicUrl = `${bucket.publicUrl.replace(/\/$/, "")}/${key}`;
-      return new Response(JSON.stringify({ success: true, url: publicUrl, size: videoData.length, bucketId: bucket.id }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return await uploadTask;
     }
 
     // ---- DELETE ----
@@ -451,13 +479,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: "Unknown action" }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+      return jsonResponse({ error: "Unknown action" }, 400);
 
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: e.message }, 500);
   }
 });

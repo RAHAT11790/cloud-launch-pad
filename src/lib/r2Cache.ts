@@ -129,14 +129,13 @@ export async function checkR2Cache(videoUrl: string): Promise<string | null> {
 }
 
 // Trigger background upload of a video to R2
-export async function triggerR2Upload(videoUrl: string, sourceUrl?: string): Promise<void> {
+export async function triggerR2Upload(videoUrl: string, sourceUrl?: string): Promise<boolean> {
   const settings = await getR2Settings();
-  if (!settings.enabled || !settings.edgeFunctionUrl || settings.buckets.length === 0) return;
-  if (!isActiveHours(settings)) return;
+  if (!settings.enabled || !settings.edgeFunctionUrl || settings.buckets.length === 0) return false;
+  if (!isActiveHours(settings)) return false;
 
   try {
-    // Fire and forget — don't block playback
-    fetch(settings.edgeFunctionUrl, {
+    const res = await fetch(settings.edgeFunctionUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -146,8 +145,13 @@ export async function triggerR2Upload(videoUrl: string, sourceUrl?: string): Pro
         buckets: settings.buckets,
         maxSizeMB: settings.maxSizeMB,
       }),
-    }).catch(() => {});
-  } catch {}
+      keepalive: true,
+    });
+
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 // Trigger cleanup of old cached files
