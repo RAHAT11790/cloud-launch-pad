@@ -1126,7 +1126,7 @@ const Index = () => {
 
     if (src) {
       addToWatchHistory(anime, seasonIdx, epIdx);
-      setPlayerState({ src, title: anime.title, subtitle, anime, seasonIdx, epIdx, qualityOptions });
+      setPlayerState({ src, title: anime.title, subtitle, anime, seasonIdx, epIdx, qualityOptions, audioTracks });
       setSelectedAnime(null);
     }
   };
