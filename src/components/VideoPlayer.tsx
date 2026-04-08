@@ -138,7 +138,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const progressRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
   const bufferingHardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { applyBoost, ensureAudioGraph, maxBoostPercent } = useAudioBoost(videoRef);
+  const { applyBoost, maxBoostPercent } = useAudioBoost(videoRef);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -165,6 +165,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
+  const queuedR2UploadsRef = useRef<Set<string>>(new Set());
+  const cachedR2SourcesRef = useRef<Set<string>>(new Set());
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
@@ -484,6 +486,57 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return list;
   }, [src, qualityOptions]);
 
+  const resolvePlaybackSrc = useCallback((rawUrl: string) => {
+    return getPrimaryPlaybackSrc(rawUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+  }, [cdnEnabled, proxyUrl, proxyApiKey]);
+
+  const checkR2CacheForSource = useCallback((rawUrl: string) => {
+    if (noProxy || !rawUrl) return;
+
+    import("@/lib/r2Cache").then(({ checkR2Cache }) => {
+      checkR2Cache(rawUrl).then((cachedUrl) => {
+        if (cachedUrl) {
+          cachedR2SourcesRef.current.add(rawUrl);
+          if (activeSourceBaseRef.current === rawUrl) {
+            setCurrentSrc(cachedUrl);
+          }
+          return;
+        }
+
+        cachedR2SourcesRef.current.delete(rawUrl);
+      }).catch(() => {
+        cachedR2SourcesRef.current.delete(rawUrl);
+      });
+    }).catch(() => {});
+  }, [noProxy]);
+
+  const queueR2UploadForPlayback = useCallback((rawUrl: string, resolvedUrl: string, qualityLabel?: string) => {
+    if (
+      noProxy ||
+      !rawUrl ||
+      !resolvedUrl ||
+      cachedR2SourcesRef.current.has(rawUrl) ||
+      queuedR2UploadsRef.current.has(rawUrl) ||
+      (qualityLabel && is4KLabel(qualityLabel))
+    ) {
+      return;
+    }
+
+    queuedR2UploadsRef.current.add(rawUrl);
+
+    import("@/lib/r2Cache").then(({ triggerR2Upload }) => {
+      triggerR2Upload(rawUrl, resolvedUrl).then((queued) => {
+        if (!queued) {
+          queuedR2UploadsRef.current.delete(rawUrl);
+        }
+      }).catch(() => {
+        queuedR2UploadsRef.current.delete(rawUrl);
+      });
+    }).catch(() => {
+      queuedR2UploadsRef.current.delete(rawUrl);
+    });
+  }, [noProxy]);
+
 
   // Build audio track options from props + detect native audio tracks on video load
   useEffect(() => {
@@ -549,10 +602,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       else if (q.includes('720')) audioUrl = track.src720 || track.src;
       else if (q.includes('480')) audioUrl = track.src480 || track.src;
       // Switch to a different URL for this language
-      const proxiedSrc = getPrimaryPlaybackSrc(audioUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+      const proxiedSrc = resolvePlaybackSrc(audioUrl);
       activeSourceBaseRef.current = audioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
+      checkR2CacheForSource(audioUrl);
       // Restore playback position after source change
       const restoreTime = () => {
         if (v.duration > 0) {
@@ -564,33 +618,57 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.addEventListener("loadedmetadata", restoreTime);
     }
     setShowAudioPanel(false);
-  }, [cdnEnabled, proxyUrl, proxyApiKey, currentQuality]);
+  }, [checkR2CacheForSource, currentQuality, resolvePlaybackSrc]);
+
+  const resetToDefaultAudio = useCallback(() => {
+    const v = videoRef.current;
+    const defaultRawSrc = src;
+    const defaultResolvedSrc = resolvePlaybackSrc(defaultRawSrc);
+    const savedTime = v?.currentTime || 0;
+    const wasPlaying = !!v && !v.paused;
+
+    const audioTracks = (v as any)?.audioTracks;
+    if (audioTracks?.length) {
+      for (let i = 0; i < audioTracks.length; i++) {
+        audioTracks[i].enabled = i === 0;
+      }
+    }
+
+    activeSourceBaseRef.current = defaultRawSrc;
+    setCurrentAudioTrack("Default");
+    setShowAudioPanel(false);
+
+    if (v && currentSrc !== defaultResolvedSrc) {
+      const restoreTime = () => {
+        if (v.duration > 0) {
+          v.currentTime = savedTime;
+          if (wasPlaying) v.play().catch(() => {});
+          v.removeEventListener("loadedmetadata", restoreTime);
+        }
+      };
+
+      v.addEventListener("loadedmetadata", restoreTime);
+      setCurrentSrc(defaultResolvedSrc);
+    }
+
+    checkR2CacheForSource(defaultRawSrc);
+  }, [checkR2CacheForSource, currentSrc, resolvePlaybackSrc, src]);
 
   useEffect(() => {
     if (!playbackRouteReady) return;
     activeSourceBaseRef.current = src;
-    const resolvedSrc = getPrimaryPlaybackSrc(src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+    const resolvedSrc = resolvePlaybackSrc(src);
     setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
 
-    // R2 cache: check if cached version exists, use it; otherwise trigger background upload
+    // R2 cache: use cached copy if available; otherwise upload starts only after real playback begins
     if (!noProxy && src) {
-      import("@/lib/r2Cache").then(({ checkR2Cache, triggerR2Upload }) => {
-        checkR2Cache(src).then(cachedUrl => {
-          if (cachedUrl) {
-            console.log("[R2Cache] Using cached:", cachedUrl);
-            setCurrentSrc(cachedUrl);
-          } else {
-            // Trigger background upload for future requests
-            triggerR2Upload(src, resolvedSrc);
-          }
-        }).catch(() => {});
-      }).catch(() => {});
+      checkR2CacheForSource(src);
     }
-  }, [src, qualityOptions, cdnEnabled, proxyUrl, proxyApiKey, playbackRouteReady]);
+  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, checkR2CacheForSource]);
 
   useEffect(() => {
     void applyBoost(boostedVolume, muted);
@@ -863,6 +941,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
       setIsBuffering(false);
+
+      const rawSource = activeSourceBaseRef.current;
+      if (rawSource) {
+        queueR2UploadForPlayback(rawSource, currentSrc, currentQuality);
+      }
     };
     const onSeeked = () => {
       // Only clear buffering if video has enough data to play
@@ -920,7 +1003,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.load();
       if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady]);
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, queueR2UploadForPlayback]);
 
   useEffect(() => {
     const onFs = () => {
@@ -966,10 +1049,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
-    void ensureAudioGraph();
     if (v.paused) v.play(); else v.pause();
     resetHideTimer();
-  }, [ensureAudioGraph, resetHideTimer]);
+  }, [resetHideTimer]);
 
   const applyPlayerVolume = useCallback((nextBoost: number, nextMuted = muted) => {
     const clampedBoost = Math.max(0, Math.min(maxBoostPercent, nextBoost));
@@ -1034,7 +1116,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     activeSourceBaseRef.current = option.src;
-    const newSrc = getPrimaryPlaybackSrc(option.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+    const newSrc = resolvePlaybackSrc(option.src);
 
     if (newSrc === currentSrc) {
       setCurrentQuality(option.label);
@@ -1048,19 +1130,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentQuality(option.label);
     setShowSettings(false);
 
-    // R2 cache: check for cached version of new quality
+    // R2 cache: check for cached version of new quality; upload starts on actual playback
     if (!noProxy && option.src && !is4KLabel(option.label)) {
-      import("@/lib/r2Cache").then(({ checkR2Cache, triggerR2Upload }) => {
-        checkR2Cache(option.src).then(cachedUrl => {
-          if (cachedUrl) {
-            setCurrentSrc(cachedUrl);
-          } else {
-            triggerR2Upload(option.src, newSrc);
-          }
-        }).catch(() => {});
-      }).catch(() => {});
+      checkR2CacheForSource(option.src);
     }
-  }, [currentQuality, currentSrc, cdnEnabled, proxyUrl, proxyApiKey, isPremium, noProxy]);
+  }, [currentQuality, currentSrc, isPremium, noProxy, resolvePlaybackSrc, checkR2CacheForSource]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
@@ -1136,10 +1210,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    void ensureAudioGraph();
     const t = e.touches[0];
     setSwipeState({ startX: t.clientX, startY: t.clientY, type: null });
-  }, [ensureAudioGraph]);
+  }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!swipeState || locked) return;
@@ -1411,7 +1484,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     }} className="w-6 h-6 flex items-center justify-center">
                       {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
-                    <span className="text-[10px] bg-foreground/20 px-2 py-0.5 rounded font-semibold">🔊 {Math.round(boostedVolume)}%</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] bg-foreground/20 px-2 py-0.5 rounded">{playbackRate}x</span>
@@ -1464,7 +1536,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         {showAudioPanel && (
                           <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
                             <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
-                            <button onClick={() => { setCurrentAudioTrack("Default"); setShowAudioPanel(false); }}
+                            <button onClick={resetToDefaultAudio}
                               className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
                                 currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                               }`}>
@@ -1577,7 +1649,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               {settingsTab === "audio" && (
                 <div className="space-y-0.5">
                   <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider font-medium">Audio Language</p>
-                  <button onClick={() => { setCurrentAudioTrack("Default"); }}
+                  <button onClick={resetToDefaultAudio}
                     className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
                       currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                     }`}>
