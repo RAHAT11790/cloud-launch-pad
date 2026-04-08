@@ -1803,6 +1803,7 @@ const Index = () => {
           poster={playerState.anime.poster}
           onClose={() => { setPlayerState(null); }}
           qualityOptions={playerState.qualityOptions}
+          audioTracks={playerState.audioTracks}
           animeId={playerState.anime.id}
           onSaveProgress={saveVideoProgress}
           onNextEpisode={
