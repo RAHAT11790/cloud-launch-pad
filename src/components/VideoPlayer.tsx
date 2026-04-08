@@ -1516,6 +1516,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   )}
                 </div>
               )}
+
+              {settingsTab === "audio" && (
+                <div className="space-y-0.5">
+                  <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider font-medium">Audio Language</p>
+                  <button onClick={() => { setCurrentAudioTrack("Default"); }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                      currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                    }`}>
+                    <span>Default</span>
+                    {currentAudioTrack === "Default" && <Check className="w-3.5 h-3.5" />}
+                  </button>
+                  {audioTrackOptions.map((track, idx) => (
+                    <button key={idx} onClick={() => switchAudioTrack(track)}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                        currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                      }`}>
+                      <span className="flex items-center gap-1.5">🎧 {track.label}</span>
+                      {currentAudioTrack === track.label && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
