@@ -86,6 +86,10 @@ interface AudioTrackOption {
   language: string;
   label: string;
   src?: string; // If set, switch to this URL for this language
+  src480?: string;
+  src720?: string;
+  src1080?: string;
+  src4k?: string;
   nativeIndex?: number; // If set, switch native audio track
 }
 
@@ -485,7 +489,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     // Add manual audio tracks from props
     if (propAudioTracks?.length) {
       propAudioTracks.forEach(t => {
-        tracks.push({ language: t.language, label: t.label, src: t.link });
+        tracks.push({ language: t.language, label: t.label, src: t.link, src480: t.link480, src720: t.link720, src1080: t.link1080, src4k: t.link4k });
       });
     }
     setAudioTrackOptions(tracks);
@@ -535,9 +539,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       }
       setCurrentAudioTrack(track.label);
     } else if (track.src) {
+      // Pick quality-matched audio URL based on current quality selection
+      let audioUrl = track.src;
+      const q = currentQuality.toLowerCase();
+      if (q.includes('4k') || q.includes('2160') || q.includes('uhd')) audioUrl = track.src4k || track.src1080 || track.src;
+      else if (q.includes('1080')) audioUrl = track.src1080 || track.src;
+      else if (q.includes('720')) audioUrl = track.src720 || track.src;
+      else if (q.includes('480')) audioUrl = track.src480 || track.src;
       // Switch to a different URL for this language
-      const proxiedSrc = getPrimaryPlaybackSrc(track.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-      activeSourceBaseRef.current = track.src;
+      const proxiedSrc = getPrimaryPlaybackSrc(audioUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+      activeSourceBaseRef.current = audioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
       // Restore playback position after source change
@@ -551,7 +562,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.addEventListener("loadedmetadata", restoreTime);
     }
     setShowAudioPanel(false);
-  }, [cdnEnabled, proxyUrl, proxyApiKey]);
+  }, [cdnEnabled, proxyUrl, proxyApiKey, currentQuality]);
 
   useEffect(() => {
     if (!playbackRouteReady) return;
@@ -1527,15 +1538,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     <span>Default</span>
                     {currentAudioTrack === "Default" && <Check className="w-3.5 h-3.5" />}
                   </button>
-                  {audioTrackOptions.map((track, idx) => (
+                  {audioTrackOptions.map((track, idx) => {
+                    const qualityCount = [track.src480, track.src720, track.src1080, track.src4k].filter(Boolean).length;
+                    return (
                     <button key={idx} onClick={() => switchAudioTrack(track)}
                       className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
                         currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                       }`}>
-                      <span className="flex items-center gap-1.5">🎧 {track.label}</span>
+                      <span className="flex items-center gap-1.5">
+                        🎧 {track.label}
+                        {qualityCount > 0 && <span className="text-[9px] opacity-60 ml-1">({qualityCount + 1} qualities)</span>}
+                      </span>
                       {currentAudioTrack === track.label && <Check className="w-3.5 h-3.5" />}
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
