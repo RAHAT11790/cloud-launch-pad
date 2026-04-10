@@ -3938,6 +3938,23 @@ ${tgHashtags}`;
                               <RefreshCw size={12} /> রিপ্লেস করো
                             </button>
                             {inlineResult && <p className="text-[10px] text-green-400 mt-2">✅ {inlineResult.replaced}/{inlineResult.total} রিপ্লেস হয়েছে</p>}
+                            
+                            {/* Quick Presets */}
+                            <div className="mt-3 pt-3 border-t border-zinc-700/30">
+                              <p className="text-[9px] text-zinc-500 mb-2">⚡ Quick Presets</p>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <button onClick={() => { setInlineOldDomain("http://fi3.bot-hosting.net:22854"); setInlineNewDomain("https://rahat1102-video-hosting-bot.hf.space"); }}
+                                  className="text-left p-2 rounded-lg bg-zinc-800/40 border border-zinc-700/40 hover:border-cyan-500/30 transition-all">
+                                  <p className="text-[9px] font-semibold text-white">Bot → HF</p>
+                                  <p className="text-[8px] text-zinc-500">fi3.bot → hf.space</p>
+                                </button>
+                                <button onClick={() => { setInlineOldDomain("https://rahat1102-video-hosting-bot.hf.space"); setInlineNewDomain("http://fi3.bot-hosting.net:22854"); }}
+                                  className="text-left p-2 rounded-lg bg-zinc-800/40 border border-zinc-700/40 hover:border-cyan-500/30 transition-all">
+                                  <p className="text-[9px] font-semibold text-white">HF → Bot</p>
+                                  <p className="text-[8px] text-zinc-500">hf.space → fi3.bot</p>
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         );
                       };
@@ -10109,6 +10126,8 @@ const LinkCheckerSection = ({
   const [jsonInput, setJsonInput] = useState("");
   const [expandedContent, setExpandedContent] = useState<Set<string>>(new Set());
   const abortRef = useRef(false);
+  const [filterSeason, setFilterSeason] = useState<string>("all");
+  const [filterEpisode, setFilterEpisode] = useState<string>("all");
 
   const allContent = useMemo(() => [
     ...webseriesData.map(w => ({ ...w, _type: 'webseries' as const })),
@@ -10120,6 +10139,21 @@ const LinkCheckerSection = ({
     const q = searchQuery.toLowerCase();
     return allContent.filter(c => c.title?.toLowerCase().includes(q));
   }, [allContent, searchQuery]);
+
+  // Get seasons/episodes for selected content (for filter)
+  const selectedContent = useMemo(() => allContent.find(c => c.id === selectedId), [allContent, selectedId]);
+  const selectedSeasons = useMemo(() => {
+    if (!selectedContent || selectedContent._type !== 'webseries' || !selectedContent.seasons) return [];
+    if (Array.isArray(selectedContent.seasons)) return selectedContent.seasons;
+    return Object.entries(selectedContent.seasons).map(([k, v]: [string, any]) => ({ ...v, _key: k }));
+  }, [selectedContent]);
+  const selectedSeasonEpisodes = useMemo(() => {
+    if (filterSeason === "all" || !selectedSeasons.length) return [];
+    const s = selectedSeasons[Number(filterSeason)];
+    if (!s?.episodes) return [];
+    if (Array.isArray(s.episodes)) return s.episodes;
+    return Object.entries(s.episodes).map(([k, v]: [string, any]) => ({ ...v, _key: k }));
+  }, [selectedSeasons, filterSeason]);
 
   const qualityFields = ['link', 'link480', 'link720', 'link1080', 'link4k'] as const;
   const qualityLabels: Record<string, string> = { link: 'Default', link480: '480p', link720: '720p', link1080: '1080p', link4k: '4K' };
@@ -10259,17 +10293,31 @@ const LinkCheckerSection = ({
     const broken: typeof brokenLinks = [];
     let totalLinks = 0;
 
+    // Helper: should we include this season/episode?
+    const shouldIncludeSeason = (sIdx: number) => {
+      if (mode !== "single" || filterSeason === "all") return true;
+      return sIdx === Number(filterSeason);
+    };
+    const shouldIncludeEpisode = (eIdx: number) => {
+      if (mode !== "single" || filterSeason === "all" || filterEpisode === "all") return true;
+      return eIdx === Number(filterEpisode);
+    };
+
     for (const content of targetContent) {
       if (content._type === 'webseries' && content.seasons) {
-        for (const [, season] of Object.entries(content.seasons as Record<string, any>)) {
+        const seasonEntries = Object.entries(content.seasons as Record<string, any>);
+        seasonEntries.forEach(([, season], sIdx) => {
+          if (!shouldIncludeSeason(sIdx)) return;
           if (season.episodes) {
-            for (const [, ep] of Object.entries(season.episodes as Record<string, any>)) {
+            const epEntries = Object.entries(season.episodes as Record<string, any>);
+            epEntries.forEach(([, ep], eIdx) => {
+              if (!shouldIncludeEpisode(eIdx)) return;
               for (const q of qualityFields) {
                 if (ep[q] && typeof ep[q] === 'string' && ep[q].trim()) totalLinks++;
               }
-            }
+            });
           }
-        }
+        });
       } else if (content._type === 'movies') {
         for (const q of qualityFields) {
           if (content[q] && typeof content[q] === 'string' && content[q].trim()) totalLinks++;
@@ -10282,9 +10330,15 @@ const LinkCheckerSection = ({
 
     for (const content of targetContent) {
       if (content._type === 'webseries' && content.seasons) {
-        for (const [seasonKey, season] of Object.entries(content.seasons as Record<string, any>)) {
+        const seasonEntries = Object.entries(content.seasons as Record<string, any>);
+        for (let sIdx = 0; sIdx < seasonEntries.length; sIdx++) {
+          if (!shouldIncludeSeason(sIdx)) continue;
+          const [seasonKey, season] = seasonEntries[sIdx];
           if (!season.episodes) continue;
-          for (const [epKey, ep] of Object.entries(season.episodes as Record<string, any>)) {
+          const epEntries = Object.entries(season.episodes as Record<string, any>);
+          for (let eIdx = 0; eIdx < epEntries.length; eIdx++) {
+            if (!shouldIncludeEpisode(eIdx)) continue;
+            const [epKey, ep] = epEntries[eIdx];
             for (const q of qualityFields) {
               const url = ep[q];
               if (!url || typeof url !== 'string' || !url.trim()) continue;
@@ -10497,7 +10551,7 @@ const LinkCheckerSection = ({
                 {filteredContent.map(c => (
                   <button
                     key={c.id}
-                    onClick={() => setSelectedId(c.id)}
+                    onClick={() => { setSelectedId(c.id); setFilterSeason("all"); setFilterEpisode("all"); }}
                     className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2 ${
                       selectedId === c.id ? 'bg-red-600/20 border border-red-500/40 text-red-300' : 'hover:bg-zinc-700/50 text-zinc-300'
                     }`}
@@ -10509,6 +10563,27 @@ const LinkCheckerSection = ({
                 ))}
                 {filteredContent.length === 0 && <p className="text-[11px] text-zinc-500 text-center py-3">কোনো কন্টেন্ট পাওয়া যায়নি</p>}
               </div>
+
+              {/* Season/Episode Filter for selected webseries */}
+              {selectedId && selectedContent?._type === 'webseries' && selectedSeasons.length > 0 && (
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <select value={filterSeason} onChange={e => { setFilterSeason(e.target.value); setFilterEpisode("all"); }}
+                    className="text-[10px] bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white">
+                    <option value="all">সব সিজন</option>
+                    {selectedSeasons.map((s: any, i: number) => (
+                      <option key={i} value={String(i)}>{s.name || `Season ${s.seasonNumber || i + 1}`}</option>
+                    ))}
+                  </select>
+                  <select value={filterEpisode} onChange={e => setFilterEpisode(e.target.value)}
+                    disabled={filterSeason === "all"}
+                    className="text-[10px] bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white disabled:opacity-40">
+                    <option value="all">সব এপিসোড</option>
+                    {selectedSeasonEpisodes.map((ep: any, i: number) => (
+                      <option key={i} value={String(i)}>EP {ep.episodeNumber || i + 1}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 
