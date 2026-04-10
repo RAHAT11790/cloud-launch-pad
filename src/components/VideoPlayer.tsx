@@ -142,7 +142,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [boostedVolume, setBoostedVolume] = useState(100); // 0-300%
+  const [boostedVolume, setBoostedVolume] = useState(100); // 0-100%
   const [muted, setMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -163,9 +163,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
-  const queuedR2UploadsRef = useRef<Set<string>>(new Set());
-  const cachedR2SourcesRef = useRef<Set<string>>(new Set());
-  const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
@@ -488,52 +485,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return getPrimaryPlaybackSrc(rawUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
-  const checkR2CacheForSource = useCallback((rawUrl: string) => {
-    if (noProxy || !rawUrl) return;
-
-    import("@/lib/r2Cache").then(({ checkR2Cache }) => {
-      checkR2Cache(rawUrl).then((cachedUrl) => {
-        if (cachedUrl) {
-          cachedR2SourcesRef.current.add(rawUrl);
-          if (activeSourceBaseRef.current === rawUrl) {
-            setCurrentSrc(cachedUrl);
-          }
-          return;
-        }
-
-        cachedR2SourcesRef.current.delete(rawUrl);
-      }).catch(() => {
-        cachedR2SourcesRef.current.delete(rawUrl);
-      });
-    }).catch(() => {});
-  }, [noProxy]);
-
-  const queueR2UploadForPlayback = useCallback((rawUrl: string, resolvedUrl: string, qualityLabel?: string) => {
-    if (
-      noProxy ||
-      !rawUrl ||
-      !resolvedUrl ||
-      cachedR2SourcesRef.current.has(rawUrl) ||
-      queuedR2UploadsRef.current.has(rawUrl) ||
-      (qualityLabel && is4KLabel(qualityLabel))
-    ) {
-      return;
-    }
-
-    queuedR2UploadsRef.current.add(rawUrl);
-
-    import("@/lib/r2Cache").then(({ triggerR2Upload }) => {
-      triggerR2Upload(rawUrl, resolvedUrl).then((queued) => {
-        if (!queued) {
-          queuedR2UploadsRef.current.delete(rawUrl);
-        }
-      }).catch(() => {
-        queuedR2UploadsRef.current.delete(rawUrl);
-      });
-    }).catch(() => {
-      queuedR2UploadsRef.current.delete(rawUrl);
-    });
-  }, [noProxy]);
+  const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
 
   // Build audio track options from props + detect native audio tracks on video load
@@ -604,8 +556,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       activeSourceBaseRef.current = audioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
-      checkR2CacheForSource(audioUrl);
-      // Restore playback position after source change
+    checkR2CacheForSource(audioUrl);
       const restoreTime = () => {
         if (v.duration > 0) {
           v.currentTime = savedTime;
