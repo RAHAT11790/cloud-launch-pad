@@ -16,7 +16,7 @@ import {
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker";
 
 interface CastMember {
   name: string;
@@ -1809,6 +1809,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "ai-config": "AI Chat Config",
     "live-tv": "Live TV Channels",
     "url-changer": "URL Changer",
+    "link-checker": "Link Checker",
   };
 
   // ==================== CATEGORIES ====================
@@ -3054,6 +3055,7 @@ ${tgHashtags}`;
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
     { section: "url-changer", icon: <Link size={16} />, label: "URL Changer" },
+    { section: "link-checker", icon: <Search size={16} />, label: "Link Checker" },
     { section: "ui-themes", icon: <Zap size={16} />, label: "UI Themes", group: "Customization" },
     { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
     { section: "settings", icon: <Settings size={16} />, label: "Settings" },
@@ -3863,6 +3865,19 @@ ${tgHashtags}`;
                         const [inlineOldDomain, setInlineOldDomain] = useState("");
                         const [inlineNewDomain, setInlineNewDomain] = useState("");
                         const [inlineResult, setInlineResult] = useState<{ total: number; replaced: number } | null>(null);
+                        const [inlineQP, setInlineQP] = useState("");
+                        const [showInlineQP, setShowInlineQP] = useState(false);
+
+                        const handleInlineQP = () => {
+                          const t = inlineQP.trim();
+                          if (!t) { toast.error("লিংক পেস্ট করো!"); return; }
+                          try {
+                            const u = new URL(t.split('\n')[0].trim());
+                            setInlineOldDomain(`${u.protocol}//${u.host}`);
+                            toast.success(`✅ ডোমেইন সেট: ${u.protocol}//${u.host}`);
+                            setShowInlineQP(false); setInlineQP("");
+                          } catch { toast.error("সঠিক URL পেস্ট করো!"); }
+                        };
 
                         const replaceInSeasonsData = () => {
                           if (!inlineOldDomain.trim() || !inlineNewDomain.trim()) { toast.error("দুটো ডোমেইনই দিতে হবে!"); return; }
@@ -3897,6 +3912,24 @@ ${tgHashtags}`;
                           <div className={`${glassCard} p-4 mb-4`}>
                             <h4 className="text-xs font-bold text-white mb-2 flex items-center gap-2"><Link size={12} className="text-cyan-400" /> 🔗 URL Replace</h4>
                             <p className="text-[9px] text-zinc-400 mb-3">এই সিরিজের সব লিংকে ডোমেইন রিপ্লেস করো। সেভ করলেই Firebase-এ যাবে।</p>
+                            
+                            {/* Quick Paste */}
+                            <button onClick={() => setShowInlineQP(!showInlineQP)}
+                              className="mb-2 text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+                              <Download size={10} /> Quick Paste (লিংক থেকে ডোমেইন বের করো)
+                            </button>
+                            {showInlineQP && (
+                              <div className="mb-3 bg-black/20 rounded-xl border border-cyan-500/20 p-2.5">
+                                <textarea value={inlineQP} onChange={e => setInlineQP(e.target.value)}
+                                  placeholder="যেকোনো ভিডিও লিংক পেস্ট করো — ডোমেইন অটো সেট হবে"
+                                  className={`${inputClass} w-full min-h-[50px] resize-none text-[10px] font-mono mb-2`} />
+                                <button onClick={handleInlineQP} disabled={!inlineQP.trim()}
+                                  className={`${btnPrimary} w-full py-1.5 text-[10px] flex items-center justify-center gap-1 disabled:opacity-30`}>
+                                  <Check size={11} /> ডোমেইন সেট করো
+                                </button>
+                              </div>
+                            )}
+
                             <div className="grid grid-cols-1 gap-2 mb-3">
                               <input value={inlineOldDomain} onChange={e => setInlineOldDomain(e.target.value)} placeholder="পুরাতন: http://fi3.bot-hosting.net:22854" className={`${inputClass} !text-[10px]`} />
                               <input value={inlineNewDomain} onChange={e => setInlineNewDomain(e.target.value)} placeholder="নতুন: https://rahat1102-video-hosting-bot.hf.space" className={`${inputClass} !text-[10px]`} />
@@ -5649,13 +5682,7 @@ ${tgHashtags}`;
               webseriesData={webseriesData}
             />
 
-            {/* Link Checker */}
-            <LinkCheckerSection
-              glassCard={glassCard}
-              btnPrimary={btnPrimary}
-              webseriesData={webseriesData}
-              moviesData={moviesData}
-            />
+            {/* Link Checker moved to dedicated section */}
           </div>
         )}
 
@@ -5927,8 +5954,18 @@ ${tgHashtags}`;
             const [showSelector, setShowSelector] = useState(false);
             const [quickPasteText, setQuickPasteText] = useState("");
             const [showQuickPaste, setShowQuickPaste] = useState(false);
+            const [selectedSeason, setSelectedSeason] = useState<string>("all");
+            const [selectedEpisode, setSelectedEpisode] = useState<string>("all");
 
-            // Sort by latest (updatedAt/createdAt) and filter
+            // Bulk mode
+            const [bulkMode, setBulkMode] = useState<"off" | "all-series" | "all-movies">("off");
+            const [bulkOldDomain, setBulkOldDomain] = useState("");
+            const [bulkNewDomain, setBulkNewDomain] = useState("");
+            const [bulkReplacing, setBulkReplacing] = useState(false);
+            const [bulkResults, setBulkResults] = useState<{ title: string; poster: string; replaced: number; total: number }[]>([]);
+            const [bulkQP, setBulkQP] = useState("");
+            const [showBulkQP, setShowBulkQP] = useState(false);
+
             const sortedSeries = useMemo(() => {
               const sorted = [...webseriesData].sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
               if (!searchFilter.trim()) return sorted;
@@ -5936,6 +5973,22 @@ ${tgHashtags}`;
             }, [webseriesData, searchFilter]);
 
             const selectedSeries = webseriesData.find(s => s.id === selectedSeriesId);
+
+            // Get seasons for selected series
+            const seriesSeasons = useMemo(() => {
+              if (!selectedSeries?.seasons) return [];
+              if (Array.isArray(selectedSeries.seasons)) return selectedSeries.seasons;
+              return Object.entries(selectedSeries.seasons).map(([k, v]: [string, any]) => ({ ...v, _key: k }));
+            }, [selectedSeries]);
+
+            // Get episodes for selected season
+            const seasonEpisodes = useMemo(() => {
+              if (selectedSeason === "all" || !seriesSeasons.length) return [];
+              const s = seriesSeasons[Number(selectedSeason)];
+              if (!s?.episodes) return [];
+              if (Array.isArray(s.episodes)) return s.episodes;
+              return Object.entries(s.episodes).map(([k, v]: [string, any]) => ({ ...v, _key: k }));
+            }, [seriesSeasons, selectedSeason]);
 
             const replaceUrls = async () => {
               if (!selectedSeriesId) { toast.error("সিরিজ সিলেক্ট করো!"); return; }
@@ -5951,41 +6004,103 @@ ${tgHashtags}`;
 
                 const old = oldDomain.trim();
                 const nw = newDomain.trim();
-                let totalLinks = 0;
-                let replacedLinks = 0;
+                let totalLinks = 0, replacedLinks = 0;
+                const linkFields = ["link", "link480", "link720", "link1080", "link4k"];
 
-                const updatedSeasons = data.seasons.map((season: any) => ({
-                  ...season,
-                  episodes: (season.episodes || []).map((ep: any) => {
-                    const updatedEp = { ...ep };
-                    const linkFields = ["link", "link480", "link720", "link1080", "link4k"];
-                    linkFields.forEach(field => {
-                      if (updatedEp[field]) {
-                        totalLinks++;
-                        if (updatedEp[field].includes(old)) {
-                          updatedEp[field] = updatedEp[field].replace(old, nw);
-                          replacedLinks++;
+                const replaceInEp = (ep: any) => {
+                  const updatedEp = { ...ep };
+                  linkFields.forEach(field => {
+                    if (updatedEp[field]) { totalLinks++; if (updatedEp[field].includes(old)) { updatedEp[field] = updatedEp[field].replace(old, nw); replacedLinks++; } }
+                  });
+                  if (updatedEp.audioTracks) {
+                    updatedEp.audioTracks = updatedEp.audioTracks.map((at: any) => {
+                      const u = { ...at };
+                      linkFields.forEach(f => { if (u[f]) { totalLinks++; if (u[f].includes(old)) { u[f] = u[f].replace(old, nw); replacedLinks++; } } });
+                      return u;
+                    });
+                  }
+                  return updatedEp;
+                };
+
+                let updatedSeasons: any;
+
+                if (selectedSeason === "all") {
+                  // Replace in all seasons
+                  if (Array.isArray(data.seasons)) {
+                    updatedSeasons = data.seasons.map((season: any) => ({
+                      ...season, episodes: (season.episodes || []).map((ep: any) => replaceInEp(ep)),
+                    }));
+                  } else {
+                    updatedSeasons = { ...data.seasons };
+                    for (const sk of Object.keys(updatedSeasons)) {
+                      const s = updatedSeasons[sk];
+                      if (s?.episodes) {
+                        if (Array.isArray(s.episodes)) {
+                          updatedSeasons[sk] = { ...s, episodes: s.episodes.map((ep: any) => replaceInEp(ep)) };
+                        } else {
+                          const updatedEps = { ...s.episodes };
+                          for (const ek of Object.keys(updatedEps)) { updatedEps[ek] = replaceInEp(updatedEps[ek]); }
+                          updatedSeasons[sk] = { ...s, episodes: updatedEps };
                         }
                       }
-                    });
-                    if (updatedEp.audioTracks) {
-                      updatedEp.audioTracks = updatedEp.audioTracks.map((at: any) => {
-                        const updatedAt = { ...at };
-                        ["link", "link480", "link720", "link1080", "link4k"].forEach(field => {
-                          if (updatedAt[field]) {
-                            totalLinks++;
-                            if (updatedAt[field].includes(old)) {
-                              updatedAt[field] = updatedAt[field].replace(old, nw);
-                              replacedLinks++;
-                            }
-                          }
-                        });
-                        return updatedAt;
-                      });
                     }
-                    return updatedEp;
-                  }),
-                }));
+                  }
+                } else if (selectedEpisode === "all") {
+                  // Replace in specific season only
+                  updatedSeasons = Array.isArray(data.seasons) ? [...data.seasons] : { ...data.seasons };
+                  const sIdx = Number(selectedSeason);
+                  if (Array.isArray(updatedSeasons)) {
+                    const s = { ...updatedSeasons[sIdx] };
+                    s.episodes = (s.episodes || []).map((ep: any) => replaceInEp(ep));
+                    updatedSeasons[sIdx] = s;
+                  } else {
+                    const sKeys = Object.keys(updatedSeasons);
+                    const sk = sKeys[sIdx];
+                    if (sk && updatedSeasons[sk]?.episodes) {
+                      const s = { ...updatedSeasons[sk] };
+                      if (Array.isArray(s.episodes)) {
+                        s.episodes = s.episodes.map((ep: any) => replaceInEp(ep));
+                      } else {
+                        const updatedEps = { ...s.episodes };
+                        for (const ek of Object.keys(updatedEps)) { updatedEps[ek] = replaceInEp(updatedEps[ek]); }
+                        s.episodes = updatedEps;
+                      }
+                      updatedSeasons[sk] = s;
+                    }
+                  }
+                } else {
+                  // Replace in specific episode only
+                  updatedSeasons = Array.isArray(data.seasons) ? [...data.seasons] : { ...data.seasons };
+                  const sIdx = Number(selectedSeason);
+                  const eIdx = Number(selectedEpisode);
+                  if (Array.isArray(updatedSeasons)) {
+                    const s = { ...updatedSeasons[sIdx] };
+                    const eps = [...(s.episodes || [])];
+                    eps[eIdx] = replaceInEp(eps[eIdx]);
+                    s.episodes = eps;
+                    updatedSeasons[sIdx] = s;
+                  } else {
+                    const sKeys = Object.keys(updatedSeasons);
+                    const sk = sKeys[sIdx];
+                    if (sk && updatedSeasons[sk]?.episodes) {
+                      const s = { ...updatedSeasons[sk] };
+                      if (Array.isArray(s.episodes)) {
+                        const eps = [...s.episodes];
+                        eps[eIdx] = replaceInEp(eps[eIdx]);
+                        s.episodes = eps;
+                      } else {
+                        const eKeys = Object.keys(s.episodes);
+                        const ek = eKeys[eIdx];
+                        if (ek) {
+                          const updatedEps = { ...s.episodes };
+                          updatedEps[ek] = replaceInEp(updatedEps[ek]);
+                          s.episodes = updatedEps;
+                        }
+                      }
+                      updatedSeasons[sk] = s;
+                    }
+                  }
+                }
 
                 await update(ref(db, `webseries/${selectedSeriesId}`), { seasons: updatedSeasons });
                 setReplaceResult({ total: totalLinks, replaced: replacedLinks });
@@ -5996,7 +6111,6 @@ ${tgHashtags}`;
               setReplacing(false);
             };
 
-            // Quick Paste: parse pasted links into old domain auto-detect
             const handleQuickPaste = () => {
               const text = quickPasteText.trim();
               if (!text) { toast.error("লিংক পেস্ট করো!"); return; }
@@ -6005,36 +6119,127 @@ ${tgHashtags}`;
                 const domain = `${url.protocol}//${url.host}`;
                 setOldDomain(domain);
                 toast.success(`✅ ডোমেইন সেট হয়েছে: ${domain}`);
-                setShowQuickPaste(false);
-                setQuickPasteText("");
-              } catch {
-                toast.error("সঠিক URL পেস্ট করো!");
+                setShowQuickPaste(false); setQuickPasteText("");
+              } catch { toast.error("সঠিক URL পেস্ট করো!"); }
+            };
+
+            const handleBulkQP = () => {
+              const t = bulkQP.trim();
+              if (!t) { toast.error("লিংক পেস্ট করো!"); return; }
+              try {
+                const u = new URL(t.split('\n')[0].trim());
+                setBulkOldDomain(`${u.protocol}//${u.host}`);
+                toast.success(`✅ ডোমেইন সেট: ${u.protocol}//${u.host}`);
+                setShowBulkQP(false); setBulkQP("");
+              } catch { toast.error("সঠিক URL পেস্ট করো!"); }
+            };
+
+            // Bulk replace all series or all movies
+            const bulkReplace = async () => {
+              if (!bulkOldDomain.trim() || !bulkNewDomain.trim()) { toast.error("Old ও New Domain দিতে হবে!"); return; }
+              const targetType = bulkMode === "all-series" ? "webseries" : "movies";
+              const items = bulkMode === "all-series" ? webseriesData : moviesData;
+              if (!confirm(`${items.length}টি ${targetType === "webseries" ? "সিরিজ" : "মুভি"}-র সব লিংক রিপ্লেস করবে?`)) return;
+
+              setBulkReplacing(true);
+              setBulkResults([]);
+              const old = bulkOldDomain.trim();
+              const nw = bulkNewDomain.trim();
+              const results: typeof bulkResults = [];
+              const linkFields = ["link", "link480", "link720", "link1080", "link4k"];
+
+              for (const item of items) {
+                try {
+                  const snap = await get(ref(db, `${targetType}/${item.id}`));
+                  const data = snap.val();
+                  if (!data) continue;
+
+                  let totalLinks = 0, replacedLinks = 0;
+
+                  if (targetType === "webseries" && data.seasons) {
+                    const processEp = (ep: any) => {
+                      const u = { ...ep };
+                      linkFields.forEach(f => { if (u[f]) { totalLinks++; if (u[f].includes(old)) { u[f] = u[f].replace(old, nw); replacedLinks++; } } });
+                      if (u.audioTracks) {
+                        u.audioTracks = u.audioTracks.map((at: any) => {
+                          const a = { ...at };
+                          linkFields.forEach(f => { if (a[f]) { totalLinks++; if (a[f].includes(old)) { a[f] = a[f].replace(old, nw); replacedLinks++; } } });
+                          return a;
+                        });
+                      }
+                      return u;
+                    };
+
+                    let updatedSeasons: any;
+                    if (Array.isArray(data.seasons)) {
+                      updatedSeasons = data.seasons.map((s: any) => ({ ...s, episodes: (s.episodes || []).map(processEp) }));
+                    } else {
+                      updatedSeasons = { ...data.seasons };
+                      for (const sk of Object.keys(updatedSeasons)) {
+                        const s = updatedSeasons[sk];
+                        if (s?.episodes) {
+                          if (Array.isArray(s.episodes)) {
+                            updatedSeasons[sk] = { ...s, episodes: s.episodes.map(processEp) };
+                          } else {
+                            const ue = { ...s.episodes };
+                            for (const ek of Object.keys(ue)) { ue[ek] = processEp(ue[ek]); }
+                            updatedSeasons[sk] = { ...s, episodes: ue };
+                          }
+                        }
+                      }
+                    }
+                    if (replacedLinks > 0) await update(ref(db, `webseries/${item.id}`), { seasons: updatedSeasons });
+                  } else if (targetType === "movies") {
+                    const updates: Record<string, string> = {};
+                    linkFields.forEach(f => {
+                      const field = f === "link" ? "movieLink" : `movieLink${f.replace("link", "")}`;
+                      const val = data[field] || data[f];
+                      if (val && typeof val === "string") {
+                        totalLinks++;
+                        if (val.includes(old)) {
+                          updates[field] = val.replace(old, nw);
+                          replacedLinks++;
+                        }
+                      }
+                    });
+                    if (replacedLinks > 0) await update(ref(db, `movies/${item.id}`), updates);
+                  }
+
+                  if (replacedLinks > 0) {
+                    results.push({ title: item.title || item.id, poster: item.poster || "", replaced: replacedLinks, total: totalLinks });
+                    setBulkResults([...results]);
+                  }
+                } catch (err) {
+                  console.error(`Error processing ${item.id}:`, err);
+                }
               }
+
+              setBulkReplacing(false);
+              if (results.length === 0) toast.info("কোনো লিংকে এই ডোমেইন পাওয়া যায়নি — সব স্কিপ হয়েছে");
+              else toast.success(`✅ ${results.length}টি ${targetType === "webseries" ? "সিরিজ" : "মুভি"}-তে লিংক রিপ্লেস হয়েছে!`);
             };
 
             return (
               <div className="space-y-4">
+                {/* Single Series URL Changer */}
                 <div className={`${glassCard} p-4`}>
                   <h3 className="text-sm font-bold mb-2 flex items-center gap-2">
                     <Link size={16} className="text-cyan-400" /> 🔗 URL Changer
                   </h3>
                   <p className="text-[10px] text-zinc-400 mb-4">
-                    নির্দিষ্ট সিরিজের সব ভিডিও লিংকে ডোমেইন/URL রিপ্লেস করো। শুধু ডোমেইন বদলাবে, বাকি path ঠিক থাকবে।
+                    নির্দিষ্ট সিরিজের সব বা নির্দিষ্ট সিজন/এপিসোডের লিংকে ডোমেইন রিপ্লেস করো।
                   </p>
 
-                  {/* Series Selector with Image */}
+                  {/* Series Selector */}
                   <label className="text-[10px] text-zinc-400 block mb-1">সিরিজ সিলেক্ট করো</label>
-                  
-                  {/* Selected series preview */}
                   <button onClick={() => setShowSelector(!showSelector)}
                     className={`${inputClass} w-full mb-2 text-left flex items-center gap-3 py-2`}>
                     {selectedSeries ? (
                       <>
-                        <img src={selectedSeries.poster} alt="" className="w-10 h-14 rounded object-cover flex-shrink-0" 
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        <img src={selectedSeries.poster} alt="" className="w-10 h-14 rounded object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         <div className="flex-1 min-w-0">
                           <p className="text-[11px] font-semibold text-white truncate">{selectedSeries.title}</p>
-                          <p className="text-[9px] text-zinc-500">{selectedSeries.seasons?.length || 0} seasons</p>
+                          <p className="text-[9px] text-zinc-500">{seriesSeasons.length} seasons</p>
                         </div>
                       </>
                     ) : (
@@ -6043,7 +6248,6 @@ ${tgHashtags}`;
                     <ChevronDown size={14} className={`text-zinc-400 transition-transform ${showSelector ? 'rotate-180' : ''}`} />
                   </button>
 
-                  {/* Dropdown with images */}
                   {showSelector && (
                     <div className="mb-3 bg-zinc-900/95 border border-zinc-700/50 rounded-xl max-h-[300px] overflow-y-auto">
                       <div className="sticky top-0 bg-zinc-900 p-2 border-b border-zinc-700/30">
@@ -6051,18 +6255,47 @@ ${tgHashtags}`;
                           placeholder="🔍 সার্চ করো..." className={`${inputClass} text-[10px] w-full`} autoFocus />
                       </div>
                       {sortedSeries.map(s => (
-                        <button key={s.id} onClick={() => { setSelectedSeriesId(s.id); setShowSelector(false); setSearchFilter(""); }}
+                        <button key={s.id} onClick={() => { setSelectedSeriesId(s.id); setShowSelector(false); setSearchFilter(""); setSelectedSeason("all"); setSelectedEpisode("all"); }}
                           className={`w-full flex items-center gap-3 p-2.5 hover:bg-zinc-800/60 transition-all border-b border-zinc-800/30 ${selectedSeriesId === s.id ? 'bg-cyan-500/10 border-cyan-500/20' : ''}`}>
-                          <img src={s.poster} alt="" className="w-9 h-12 rounded object-cover flex-shrink-0 bg-zinc-800"
-                            onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }} />
+                          <img src={s.poster} alt="" className="w-9 h-12 rounded object-cover flex-shrink-0 bg-zinc-800" onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }} />
                           <div className="flex-1 text-left min-w-0">
                             <p className="text-[11px] font-semibold text-white truncate">{s.title}</p>
-                            <p className="text-[9px] text-zinc-500">{s.seasons?.length || 0} seasons · {s.language || ''}</p>
+                            <p className="text-[9px] text-zinc-500">{s.seasons ? (Array.isArray(s.seasons) ? s.seasons.length : Object.keys(s.seasons).length) : 0} seasons</p>
                           </div>
                           {selectedSeriesId === s.id && <Check size={14} className="text-cyan-400 flex-shrink-0" />}
                         </button>
                       ))}
                       {sortedSeries.length === 0 && <p className="text-[10px] text-zinc-500 p-4 text-center">কিছু পাওয়া যায়নি</p>}
+                    </div>
+                  )}
+
+                  {/* Season / Episode Filter */}
+                  {selectedSeriesId && seriesSeasons.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <div>
+                        <label className="text-[9px] text-zinc-500 block mb-1">সিজন</label>
+                        <select value={selectedSeason} onChange={e => { setSelectedSeason(e.target.value); setSelectedEpisode("all"); }}
+                          className={`${inputClass} text-[10px] w-full`}>
+                          <option value="all">সব সিজন</option>
+                          {seriesSeasons.map((s: any, i: number) => (
+                            <option key={i} value={String(i)}>
+                              {s.name || `Season ${s.seasonNumber || i + 1}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-zinc-500 block mb-1">এপিসোড</label>
+                        <select value={selectedEpisode} onChange={e => setSelectedEpisode(e.target.value)}
+                          className={`${inputClass} text-[10px] w-full`} disabled={selectedSeason === "all"}>
+                          <option value="all">সব এপিসোড</option>
+                          {seasonEpisodes.map((ep: any, i: number) => (
+                            <option key={i} value={String(i)}>
+                              EP {ep.episodeNumber || i + 1} - {ep.title || ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   )}
 
@@ -6083,12 +6316,9 @@ ${tgHashtags}`;
                     </div>
                   )}
 
-                  {/* Old Domain */}
                   <label className="text-[10px] text-zinc-400 block mb-1">পুরাতন Domain/URL</label>
                   <input value={oldDomain} onChange={e => setOldDomain(e.target.value)}
                     placeholder="http://fi3.bot-hosting.net:22854" className={`${inputClass} mb-3 text-[10px]`} />
-
-                  {/* New Domain */}
                   <label className="text-[10px] text-zinc-400 block mb-1">নতুন Domain/URL</label>
                   <input value={newDomain} onChange={e => setNewDomain(e.target.value)}
                     placeholder="https://rahat1102-video-hosting-bot.hf.space" className={`${inputClass} mb-4 text-[10px]`} />
@@ -6102,6 +6332,7 @@ ${tgHashtags}`;
                     <div className="mt-3 p-3 rounded-xl bg-green-500/10 border border-green-500/30">
                       <p className="text-[11px] font-semibold text-green-400">
                         ✅ মোট {replaceResult.total}টি লিংকের মধ্যে {replaceResult.replaced}টি রিপ্লেস হয়েছে!
+                        {selectedSeason !== "all" && <span className="text-zinc-400 ml-1">(সিজন {Number(selectedSeason) + 1}{selectedEpisode !== "all" ? `, EP ${Number(selectedEpisode) + 1}` : ""})</span>}
                       </p>
                     </div>
                   )}
@@ -6111,23 +6342,95 @@ ${tgHashtags}`;
                 <div className={`${glassCard} p-4`}>
                   <h4 className="text-xs font-bold text-white mb-3">⚡ Quick Presets</h4>
                   <div className="space-y-2">
-                    <button onClick={() => { setOldDomain("http://fi3.bot-hosting.net:22854"); setNewDomain("https://rahat1102-video-hosting-bot.hf.space"); }}
+                    <button onClick={() => { setOldDomain("http://fi3.bot-hosting.net:22854"); setNewDomain("https://rahat1102-video-hosting-bot.hf.space"); setBulkOldDomain("http://fi3.bot-hosting.net:22854"); setBulkNewDomain("https://rahat1102-video-hosting-bot.hf.space"); }}
                       className="w-full text-left p-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/40 hover:border-cyan-500/30 transition-all">
                       <p className="text-[10px] font-semibold text-white">Bot Hosting → HF Space</p>
                       <p className="text-[9px] text-zinc-500 mt-0.5">fi3.bot-hosting.net → hf.space</p>
                     </button>
-                    <button onClick={() => { setOldDomain("https://rahat1102-video-hosting-bot.hf.space"); setNewDomain("http://fi3.bot-hosting.net:22854"); }}
+                    <button onClick={() => { setOldDomain("https://rahat1102-video-hosting-bot.hf.space"); setNewDomain("http://fi3.bot-hosting.net:22854"); setBulkOldDomain("https://rahat1102-video-hosting-bot.hf.space"); setBulkNewDomain("http://fi3.bot-hosting.net:22854"); }}
                       className="w-full text-left p-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/40 hover:border-cyan-500/30 transition-all">
                       <p className="text-[10px] font-semibold text-white">HF Space → Bot Hosting</p>
                       <p className="text-[9px] text-zinc-500 mt-0.5">hf.space → fi3.bot-hosting.net</p>
                     </button>
                   </div>
                 </div>
+
+                {/* ===== BULK ALL SERIES / ALL MOVIES ===== */}
+                <div className={`${glassCard} p-4`}>
+                  <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">🚀 Bulk Replace — সব সিরিজ / সব মুভি</h4>
+                  <p className="text-[9px] text-zinc-400 mb-3">একসাথে সব সিরিজ বা সব মুভির লিংক ডোমেইন রিপ্লেস করো। যেটাতে ডোমেইন নেই সেটা স্কিপ হবে।</p>
+
+                  <div className="flex gap-2 mb-3">
+                    <button onClick={() => setBulkMode(bulkMode === "all-series" ? "off" : "all-series")}
+                      className={`flex-1 py-2.5 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1.5 ${bulkMode === "all-series" ? "bg-purple-600 border-purple-500 text-white" : "bg-zinc-800/40 border-zinc-700/40 text-zinc-400 hover:text-white"}`}>
+                      📺 All Series ({webseriesData.length})
+                    </button>
+                    <button onClick={() => setBulkMode(bulkMode === "all-movies" ? "off" : "all-movies")}
+                      className={`flex-1 py-2.5 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1.5 ${bulkMode === "all-movies" ? "bg-orange-600 border-orange-500 text-white" : "bg-zinc-800/40 border-zinc-700/40 text-zinc-400 hover:text-white"}`}>
+                      🎬 All Movies ({moviesData.length})
+                    </button>
+                  </div>
+
+                  {bulkMode !== "off" && (
+                    <div className="space-y-3">
+                      {/* Bulk Quick Paste */}
+                      <button onClick={() => setShowBulkQP(!showBulkQP)}
+                        className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                        <Download size={10} /> Quick Paste
+                      </button>
+                      {showBulkQP && (
+                        <div className="bg-black/20 rounded-xl border border-purple-500/20 p-2.5">
+                          <textarea value={bulkQP} onChange={e => setBulkQP(e.target.value)}
+                            placeholder="যেকোনো ভিডিও লিংক পেস্ট করো" className={`${inputClass} w-full min-h-[50px] resize-none text-[10px] font-mono mb-2`} />
+                          <button onClick={handleBulkQP} disabled={!bulkQP.trim()}
+                            className={`${btnPrimary} w-full py-1.5 text-[10px] flex items-center justify-center gap-1 disabled:opacity-30`}>
+                            <Check size={11} /> ডোমেইন সেট করো
+                          </button>
+                        </div>
+                      )}
+
+                      <input value={bulkOldDomain} onChange={e => setBulkOldDomain(e.target.value)}
+                        placeholder="পুরাতন Domain" className={`${inputClass} text-[10px]`} />
+                      <input value={bulkNewDomain} onChange={e => setBulkNewDomain(e.target.value)}
+                        placeholder="নতুন Domain" className={`${inputClass} text-[10px]`} />
+
+                      <button onClick={bulkReplace} disabled={bulkReplacing}
+                        className={`${btnPrimary} w-full py-3 text-sm flex items-center justify-center gap-2 ${bulkMode === "all-series" ? "bg-gradient-to-r from-purple-600 to-indigo-600" : "bg-gradient-to-r from-orange-600 to-red-600"}`}>
+                        {bulkReplacing ? <><Loader2 size={14} className="animate-spin" /> রিপ্লেস হচ্ছে...</> : <><RefreshCw size={14} /> {bulkMode === "all-series" ? "সব সিরিজে" : "সব মুভিতে"} রিপ্লেস করো</>}
+                      </button>
+
+                      {/* Bulk Results */}
+                      {bulkResults.length > 0 && (
+                        <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                          <p className="text-[10px] text-green-400 font-bold">✅ {bulkResults.length}টি কন্টেন্টে রিপ্লেস হয়েছে:</p>
+                          {bulkResults.map((r, i) => (
+                            <div key={i} className="flex items-center gap-2.5 bg-green-500/10 border border-green-500/20 rounded-lg p-2">
+                              {r.poster && <img src={r.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-semibold text-white truncate">{r.title}</p>
+                                <p className="text-[9px] text-green-400">{r.replaced}/{r.total} লিংক রিপ্লেস</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           };
           return <UrlChangerAdmin />;
         })()}
+
+        {activeSection === "link-checker" && (
+          <LinkCheckerSection
+            glassCard={glassCard}
+            btnPrimary={btnPrimary}
+            webseriesData={webseriesData}
+            moviesData={moviesData}
+          />
+        )}
 
         {activeSection === "comments" && (
           <AdminCommentsSection
@@ -10396,6 +10699,14 @@ const WsInlineLinkChecker = ({
   const [progress, setProgress] = useState({ current: 0, total: 0, currentTitle: "" });
   const [done, setDone] = useState(false);
   const abortRef = useRef(false);
+  const [filterSeason, setFilterSeason] = useState<string>("all");
+  const [filterEpisode, setFilterEpisode] = useState<string>("all");
+
+  const filteredEpisodes = useMemo(() => {
+    if (filterSeason === "all") return [];
+    const s = seasonsData[Number(filterSeason)];
+    return s?.episodes || [];
+  }, [seasonsData, filterSeason]);
 
   const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
   const qualityFields = ['link', 'link480', 'link720', 'link1080', 'link4k'] as const;
@@ -10467,14 +10778,28 @@ const WsInlineLinkChecker = ({
     abortRef.current = false; setChecking(true); setBrokenLinks([]); setGoodCount(0); setDone(false);
     const broken: typeof brokenLinks = [];
     let totalLinks = 0, checked = 0, good = 0;
-    seasonsData.forEach(s => s.episodes?.forEach((ep: any) => {
-      for (const q of qualityFields) if (ep[q] && typeof ep[q] === 'string' && ep[q].trim()) totalLinks++;
-    }));
+
+    // Filter seasons/episodes based on selection
+    const targetSeasons = filterSeason === "all" ? seasonsData : [seasonsData[Number(filterSeason)]];
+
+    targetSeasons.forEach(s => {
+      if (!s?.episodes) return;
+      const eps = filterSeason !== "all" && filterEpisode !== "all" ? [s.episodes[Number(filterEpisode)]] : s.episodes;
+      eps.forEach((ep: any) => {
+        if (!ep) return;
+        for (const q of qualityFields) if (ep[q] && typeof ep[q] === 'string' && ep[q].trim()) totalLinks++;
+      });
+    });
+
     setProgress({ current: 0, total: totalLinks, currentTitle: "" });
-    for (let sIdx = 0; sIdx < seasonsData.length; sIdx++) {
-      const season = seasonsData[sIdx];
-      for (let eIdx = 0; eIdx < (season.episodes?.length || 0); eIdx++) {
-        const ep = season.episodes[eIdx];
+
+    for (let sIdx = 0; sIdx < targetSeasons.length; sIdx++) {
+      const season = targetSeasons[sIdx];
+      if (!season?.episodes) continue;
+      const episodes = filterSeason !== "all" && filterEpisode !== "all" ? [season.episodes[Number(filterEpisode)]] : season.episodes;
+      for (let eIdx = 0; eIdx < (episodes?.length || 0); eIdx++) {
+        const ep = episodes[eIdx];
+        if (!ep) continue;
         for (const q of qualityFields) {
           const url = ep[q];
           if (!url || typeof url !== 'string' || !url.trim()) continue;
@@ -10519,6 +10844,26 @@ const WsInlineLinkChecker = ({
           </button>
         )}
       </div>
+      {/* Season/Episode Filter */}
+      {!checking && !done && seasonsData.length > 0 && (
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <select value={filterSeason} onChange={e => { setFilterSeason(e.target.value); setFilterEpisode("all"); }}
+            className="text-[10px] bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white">
+            <option value="all">সব সিজন</option>
+            {seasonsData.map((s: any, i: number) => (
+              <option key={i} value={String(i)}>{s.name || `Season ${i + 1}`}</option>
+            ))}
+          </select>
+          <select value={filterEpisode} onChange={e => setFilterEpisode(e.target.value)}
+            disabled={filterSeason === "all"}
+            className="text-[10px] bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white disabled:opacity-40">
+            <option value="all">সব এপিসোড</option>
+            {filteredEpisodes.map((ep: any, i: number) => (
+              <option key={i} value={String(i)}>EP {ep.episodeNumber || i + 1}</option>
+            ))}
+          </select>
+        </div>
+      )}
       {checking && (
         <div className="mb-3">
           <div className="flex justify-between text-[10px] text-zinc-400 mb-1">
