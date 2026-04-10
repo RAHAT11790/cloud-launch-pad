@@ -300,6 +300,127 @@ const TelegramProviderSection = ({ glassCard, inputClass, btnPrimary, btnSeconda
   );
 };
 
+// ==================== TELEGRAM BOT WEBHOOK SECTION ====================
+const TelegramWebhookSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
+  const [tgUrl, setTgUrl] = useState("");
+  const [webhookStatus, setWebhookStatus] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/telegramProvider"), (snap) => {
+      const val = snap.val();
+      setTgUrl(val?.url || "");
+    });
+    return () => unsub();
+  }, []);
+
+  const callTgAction = async (action: string, extra: Record<string, unknown> = {}) => {
+    if (!tgUrl) { toast.error("আগে Telegram Supabase URL সেট করো!"); return null; }
+    setLoading(true);
+    try {
+      const res = await fetch(tgUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...extra }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      return data;
+    } catch (e: any) {
+      setLoading(false);
+      toast.error(e?.message || "Error");
+      return null;
+    }
+  };
+
+  const setWebhook = async () => {
+    if (!tgUrl) { toast.error("আগে Telegram Supabase URL সেট করো!"); return; }
+    // Webhook URL = same supabase function URL but with webhook action
+    // We need to set webhook to a URL that posts back to our function with action=webhook
+    const webhookUrl = tgUrl;
+    const data = await callTgAction("set-webhook", { webhookUrl });
+    if (data?.ok) {
+      toast.success("✅ Webhook সেট হয়েছে!");
+      checkWebhook();
+    } else {
+      toast.error(`❌ ${data?.description || data?.error || "Failed"}`);
+    }
+  };
+
+  const deleteWebhook = async () => {
+    const data = await callTgAction("delete-webhook");
+    if (data?.ok) {
+      toast.success("✅ Webhook ডিলিট হয়েছে!");
+      setWebhookStatus(null);
+    } else {
+      toast.error(`❌ ${data?.description || data?.error || "Failed"}`);
+    }
+  };
+
+  const checkWebhook = async () => {
+    const data = await callTgAction("webhook-info");
+    if (data?.ok !== undefined) {
+      setWebhookStatus(data?.result || data);
+    }
+  };
+
+  useEffect(() => {
+    if (tgUrl) checkWebhook();
+  }, [tgUrl]);
+
+  return (
+    <div className={`${glassCard} p-4 mb-4`}>
+      <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+        <MessageSquare size={14} className="text-purple-400" /> 🤖 Telegram Bot /start Webhook
+      </h3>
+      <p className="text-[10px] text-zinc-400 mb-3">
+        Webhook সেট করলে কেউ বটে /start দিলে সুন্দর Welcome মেসেজ পাবে — ওয়েবসাইটের ডিটেলস, চ্যানেল লিংক সহ।
+      </p>
+
+      {/* Webhook Status */}
+      {webhookStatus && (
+        <div className="bg-zinc-900/50 rounded-lg p-3 mb-3 text-[10px] space-y-1">
+          <p className="text-zinc-300">
+            <span className="text-zinc-500">URL:</span>{" "}
+            <span className={webhookStatus.url ? "text-green-400" : "text-red-400"}>
+              {webhookStatus.url || "Not Set"}
+            </span>
+          </p>
+          {webhookStatus.last_error_date && (
+            <p className="text-red-400">
+              ⚠️ Last Error: {webhookStatus.last_error_message}
+            </p>
+          )}
+          {webhookStatus.pending_update_count !== undefined && (
+            <p className="text-zinc-400">
+              Pending Updates: {webhookStatus.pending_update_count}
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={setWebhook} disabled={loading || !tgUrl} className={`${btnPrimary} !px-3 text-xs`}>
+          {loading ? "⏳" : "🔗"} Set Webhook
+        </button>
+        <button onClick={checkWebhook} disabled={loading || !tgUrl} className={`${btnSecondary} !px-3 text-xs`}>
+          🔍 Check Status
+        </button>
+        <button onClick={deleteWebhook} disabled={loading || !tgUrl}
+          className="px-3 py-1.5 rounded-lg text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all">
+          🗑️ Remove Webhook
+        </button>
+      </div>
+
+      {!tgUrl && (
+        <p className="mt-2 text-[10px] text-yellow-400">
+          ⚠️ আগে উপরে "Telegram Supabase URL" সেট করো!
+        </p>
+      )}
+    </div>
+  );
+};
+
 // ==================== CLOUDFLARE WORKER ROUTER SECTION ====================
 const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
   const [baseUrl, setBaseUrl] = useState("");
