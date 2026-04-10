@@ -617,6 +617,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     failedSrcsRef.current.clear();
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
+  // 5-second max loader: disappears when video loads OR after 5s, whichever comes first
   useEffect(() => {
     if (loaderTimeoutRef.current) {
       clearTimeout(loaderTimeoutRef.current);
@@ -629,10 +630,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
 
     setShowFixedLoader(true);
+
+    // Auto-hide after 5 seconds regardless
     loaderTimeoutRef.current = setTimeout(() => {
       setShowFixedLoader(false);
       loaderTimeoutRef.current = null;
     }, 5000);
+
+    // Also hide immediately when video fires canplay/playing
+    const v = videoRef.current;
+    if (v) {
+      const hideLoader = () => {
+        setShowFixedLoader(false);
+        if (loaderTimeoutRef.current) {
+          clearTimeout(loaderTimeoutRef.current);
+          loaderTimeoutRef.current = null;
+        }
+      };
+      v.addEventListener("canplay", hideLoader, { once: true });
+      v.addEventListener("playing", hideLoader, { once: true });
+    }
 
     return () => {
       if (loaderTimeoutRef.current) {
@@ -721,7 +738,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
   }, [resetHideTimer]);
 
-  const showLoaderOverlay = !!currentSrc && !videoError && (showFixedLoader || (isBuffering && playing));
+  // Only show loader overlay during initial fixed load period; buffering mid-playback uses just the progress bar indicator
+  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader;
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
@@ -1266,11 +1284,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           {/* Loading/Buffering Overlay - Anime themed */}
           {showLoaderOverlay && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/85 z-15 pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-center bg-black z-15 pointer-events-none" style={{ opacity: 1, transition: "opacity 0.3s ease" }}>
               <div className="flex flex-col items-center">
                 {/* RGB Spinner around anime character */}
                 <div className="relative w-20 h-20 flex items-center justify-center">
-                  {/* RGB spinning ring */}
                   <div className="absolute inset-0 rounded-full" style={{
                     background: "conic-gradient(from 0deg, #ff0000, #ff8800, #ffff00, #00ff00, #00ffff, #0088ff, #8800ff, #ff00ff, #ff0000)",
                     animation: "rgbSpin 1.5s linear infinite",
@@ -1279,7 +1296,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     mask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px))",
                     filter: "blur(0.5px) drop-shadow(0 0 8px rgba(255,0,255,0.4)) drop-shadow(0 0 15px rgba(0,255,255,0.3))"
                   }} />
-                  {/* Second glow ring */}
                   <div className="absolute inset-[-4px] rounded-full opacity-40" style={{
                     background: "conic-gradient(from 180deg, #ff0000, #00ff00, #0000ff, #ff0000)",
                     animation: "rgbSpin 2.5s linear infinite reverse",
@@ -1287,15 +1303,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     mask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))",
                     filter: "blur(3px)"
                   }} />
-                  {/* Character image - preloaded to prevent glitch */}
                   <img src={animeCharImg} alt="" className="w-14 h-14 rounded-full object-cover"
-                    loading="eager"
-                    decoding="sync"
+                    loading="eager" decoding="sync"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     style={{ animation: "charBounce 2s ease-in-out infinite", filter: "drop-shadow(0 0 6px rgba(150,100,255,0.5))" }} />
                 </div>
-
-                {/* Loading text */}
                 <div className="flex items-center gap-1.5 mt-3">
                   <span className="text-[10px] font-semibold tracking-widest uppercase" style={{
                     background: "linear-gradient(90deg, #ff0066, #00ffff, #ff00ff, #00ff88)",
