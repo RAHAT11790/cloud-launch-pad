@@ -617,6 +617,31 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     failedSrcsRef.current.clear();
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
+  useEffect(() => {
+    if (loaderTimeoutRef.current) {
+      clearTimeout(loaderTimeoutRef.current);
+      loaderTimeoutRef.current = null;
+    }
+
+    if (!currentSrc) {
+      setShowFixedLoader(false);
+      return;
+    }
+
+    setShowFixedLoader(true);
+    loaderTimeoutRef.current = setTimeout(() => {
+      setShowFixedLoader(false);
+      loaderTimeoutRef.current = null;
+    }, 5000);
+
+    return () => {
+      if (loaderTimeoutRef.current) {
+        clearTimeout(loaderTimeoutRef.current);
+        loaderTimeoutRef.current = null;
+      }
+    };
+  }, [currentSrc]);
+
   // Simple volume sync - no AudioContext needed
   useEffect(() => {
     const v = videoRef.current;
@@ -696,7 +721,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
   }, [resetHideTimer]);
 
-  // No fake timeout - loader only disappears when video actually loads (canplay/playing events)
+  const showLoaderOverlay = !!currentSrc && !videoError && (showFixedLoader || (isBuffering && playing));
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
