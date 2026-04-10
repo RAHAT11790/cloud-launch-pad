@@ -137,7 +137,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const progressRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
   const bufferingHardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { applyBoost, maxBoostPercent } = useAudioBoost(videoRef);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
