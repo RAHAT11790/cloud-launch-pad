@@ -556,7 +556,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       activeSourceBaseRef.current = audioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
-    checkR2CacheForSource(audioUrl);
+    // Restore playback position after source change
       const restoreTime = () => {
         if (v.duration > 0) {
           v.currentTime = savedTime;
@@ -567,7 +567,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.addEventListener("loadedmetadata", restoreTime);
     }
     setShowAudioPanel(false);
-  }, [checkR2CacheForSource, currentQuality, resolvePlaybackSrc]);
+  }, [currentQuality, resolvePlaybackSrc]);
 
   const resetToDefaultAudio = useCallback(() => {
     const v = videoRef.current;
@@ -600,8 +600,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setCurrentSrc(defaultResolvedSrc);
     }
 
-    checkR2CacheForSource(defaultRawSrc);
-  }, [checkR2CacheForSource, currentSrc, resolvePlaybackSrc, src]);
+  }, [currentSrc, resolvePlaybackSrc, src]);
 
   useEffect(() => {
     if (!playbackRouteReady) return;
@@ -612,25 +611,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
+  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
-    // R2 cache: use cached copy if available; otherwise upload starts only after real playback begins
-    if (!noProxy && src) {
-      checkR2CacheForSource(src);
-    }
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, checkR2CacheForSource]);
-
+  // Simple volume sync - no AudioContext needed
   useEffect(() => {
-    if (!playbackRouteReady || !currentSrc) return;
-
-    const rawSource = activeSourceBaseRef.current;
-    if (!rawSource) return;
-
-    queueR2UploadForPlayback(rawSource, currentSrc, currentQuality);
-  }, [currentQuality, currentSrc, playbackRouteReady, queueR2UploadForPlayback]);
-
-  useEffect(() => {
-    void applyBoost(boostedVolume, muted);
-  }, [applyBoost, boostedVolume, muted, currentSrc]);
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = muted;
+    v.volume = muted ? 0 : Math.min(1, boostedVolume / 100);
+  }, [boostedVolume, muted, currentSrc]);
 
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
