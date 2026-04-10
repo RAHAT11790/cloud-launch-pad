@@ -115,18 +115,27 @@ serve(async (req) => {
     const action = String(body?.action || "send");
     const telegramBase = `https://api.telegram.org/bot${botToken}`;
 
-    // ========== TELEGRAM WEBHOOK (from Telegram servers) ==========
+    // ========== AUTO-DETECT TELEGRAM WEBHOOK (update_id present = from Telegram) ==========
+    if (body?.update_id !== undefined) {
+      const message = body?.message;
+      if (message?.text === "/start") {
+        const chatId = message.chat.id;
+        const firstName = message.from?.first_name || "Friend";
+        await sendStartMessage(botToken, chatId, firstName);
+      }
+      return json({ ok: true });
+    }
+
+    // ========== MANUAL WEBHOOK (from admin panel) ==========
     if (action === "webhook") {
       const update = body?.update;
       if (!update) return json({ ok: true, skipped: true });
-
       const message = update?.message;
       if (message?.text === "/start") {
         const chatId = message.chat.id;
         const firstName = message.from?.first_name || "Friend";
         await sendStartMessage(botToken, chatId, firstName);
       }
-
       return json({ ok: true });
     }
 
