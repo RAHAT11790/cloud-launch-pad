@@ -10144,6 +10144,7 @@ const LinkCheckerSection = ({
     return Object.entries(s.episodes).map(([k, v]: [string, any]) => ({ ...v, _key: k }));
   }, [selectedSeasons, filterSeason]);
 
+  const allContent = useMemo(() => [
     ...webseriesData.map(w => ({ ...w, _type: 'webseries' as const })),
     ...moviesData.map(m => ({ ...m, _type: 'movies' as const })),
   ], [webseriesData, moviesData]);
