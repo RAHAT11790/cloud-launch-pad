@@ -157,10 +157,9 @@ serve(async (req) => {
   if (req.method === "GET") return json({ ok: true, service: "send-fcm" });
 
   try {
-    // Diagnostic mode: GET with ?diag=1 or POST with {diag:true}
-    const reqUrl = new URL(req.url);
-    const body = req.method === "POST" ? await req.clone().json().catch(() => ({})) : {};
-    if (reqUrl.searchParams.get("diag") === "1" || body.diag === true) {
+    // Diagnostic mode: POST with {diag:true}
+    const diagBody = req.method === "POST" ? await req.clone().json().catch(() => ({})) : {};
+    if (diagBody.diag === true) {
       const saRaw = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_KEY");
       if (!saRaw) return json({ diag: "NO_SECRET" });
       let sa: any;
