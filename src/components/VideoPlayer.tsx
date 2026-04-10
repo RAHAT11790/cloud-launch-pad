@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { useBranding } from "@/hooks/useBranding";
-import { useAudioBoost } from "@/hooks/useAudioBoost";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock,
@@ -137,14 +136,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const rafId = useRef<number>(0);
   const progressRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
-  const bufferingHardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { applyBoost, maxBoostPercent } = useAudioBoost(videoRef);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [boostedVolume, setBoostedVolume] = useState(100); // 0-300%
+  const [boostedVolume, setBoostedVolume] = useState(100); // 0-100%
   const [muted, setMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -165,9 +162,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
-  const queuedR2UploadsRef = useRef<Set<string>>(new Set());
-  const cachedR2SourcesRef = useRef<Set<string>>(new Set());
-  const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
@@ -490,52 +484,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return getPrimaryPlaybackSrc(rawUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
-  const checkR2CacheForSource = useCallback((rawUrl: string) => {
-    if (noProxy || !rawUrl) return;
-
-    import("@/lib/r2Cache").then(({ checkR2Cache }) => {
-      checkR2Cache(rawUrl).then((cachedUrl) => {
-        if (cachedUrl) {
-          cachedR2SourcesRef.current.add(rawUrl);
-          if (activeSourceBaseRef.current === rawUrl) {
-            setCurrentSrc(cachedUrl);
-          }
-          return;
-        }
-
-        cachedR2SourcesRef.current.delete(rawUrl);
-      }).catch(() => {
-        cachedR2SourcesRef.current.delete(rawUrl);
-      });
-    }).catch(() => {});
-  }, [noProxy]);
-
-  const queueR2UploadForPlayback = useCallback((rawUrl: string, resolvedUrl: string, qualityLabel?: string) => {
-    if (
-      noProxy ||
-      !rawUrl ||
-      !resolvedUrl ||
-      cachedR2SourcesRef.current.has(rawUrl) ||
-      queuedR2UploadsRef.current.has(rawUrl) ||
-      (qualityLabel && is4KLabel(qualityLabel))
-    ) {
-      return;
-    }
-
-    queuedR2UploadsRef.current.add(rawUrl);
-
-    import("@/lib/r2Cache").then(({ triggerR2Upload }) => {
-      triggerR2Upload(rawUrl, resolvedUrl).then((queued) => {
-        if (!queued) {
-          queuedR2UploadsRef.current.delete(rawUrl);
-        }
-      }).catch(() => {
-        queuedR2UploadsRef.current.delete(rawUrl);
-      });
-    }).catch(() => {
-      queuedR2UploadsRef.current.delete(rawUrl);
-    });
-  }, [noProxy]);
+  const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
 
   // Build audio track options from props + detect native audio tracks on video load
@@ -606,8 +555,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       activeSourceBaseRef.current = audioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
-      checkR2CacheForSource(audioUrl);
-      // Restore playback position after source change
+    // Restore playback position after source change
       const restoreTime = () => {
         if (v.duration > 0) {
           v.currentTime = savedTime;
@@ -618,7 +566,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.addEventListener("loadedmetadata", restoreTime);
     }
     setShowAudioPanel(false);
-  }, [checkR2CacheForSource, currentQuality, resolvePlaybackSrc]);
+  }, [currentQuality, resolvePlaybackSrc]);
 
   const resetToDefaultAudio = useCallback(() => {
     const v = videoRef.current;
@@ -651,8 +599,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setCurrentSrc(defaultResolvedSrc);
     }
 
-    checkR2CacheForSource(defaultRawSrc);
-  }, [checkR2CacheForSource, currentSrc, resolvePlaybackSrc, src]);
+  }, [currentSrc, resolvePlaybackSrc, src]);
 
   useEffect(() => {
     if (!playbackRouteReady) return;
@@ -663,25 +610,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
+  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
-    // R2 cache: use cached copy if available; otherwise upload starts only after real playback begins
-    if (!noProxy && src) {
-      checkR2CacheForSource(src);
-    }
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, checkR2CacheForSource]);
-
+  // Simple volume sync - no AudioContext needed
   useEffect(() => {
-    if (!playbackRouteReady || !currentSrc) return;
-
-    const rawSource = activeSourceBaseRef.current;
-    if (!rawSource) return;
-
-    queueR2UploadForPlayback(rawSource, currentSrc, currentQuality);
-  }, [currentQuality, currentSrc, playbackRouteReady, queueR2UploadForPlayback]);
-
-  useEffect(() => {
-    void applyBoost(boostedVolume, muted);
-  }, [applyBoost, boostedVolume, muted, currentSrc]);
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = muted;
+    v.volume = muted ? 0 : Math.min(1, boostedVolume / 100);
+  }, [boostedVolume, muted, currentSrc]);
 
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
@@ -754,27 +691,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
   }, [resetHideTimer]);
 
-  useEffect(() => {
-    if (!isBuffering) {
-      if (bufferingHardTimeoutRef.current) {
-        clearTimeout(bufferingHardTimeoutRef.current);
-        bufferingHardTimeoutRef.current = null;
-      }
-      return;
-    }
-
-    if (bufferingHardTimeoutRef.current) clearTimeout(bufferingHardTimeoutRef.current);
-    bufferingHardTimeoutRef.current = setTimeout(() => {
-      setIsBuffering(false);
-    }, 5000);
-
-    return () => {
-      if (bufferingHardTimeoutRef.current) {
-        clearTimeout(bufferingHardTimeoutRef.current);
-        bufferingHardTimeoutRef.current = null;
-      }
-    };
-  }, [isBuffering, currentSrc]);
+  // No fake timeout - loader only disappears when video actually loads (canplay/playing events)
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
@@ -950,11 +867,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
       setIsBuffering(false);
-
-      const rawSource = activeSourceBaseRef.current;
-      if (rawSource) {
-        queueR2UploadForPlayback(rawSource, currentSrc, currentQuality);
-      }
     };
     const onSeeked = () => {
       // Only clear buffering if video has enough data to play
@@ -1012,7 +924,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.load();
       if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, queueR2UploadForPlayback]);
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady]);
 
   useEffect(() => {
     const onFs = () => {
@@ -1062,14 +974,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     resetHideTimer();
   }, [resetHideTimer]);
 
+  const MAX_VOL = 100;
   const applyPlayerVolume = useCallback((nextBoost: number, nextMuted = muted) => {
-    const clampedBoost = Math.max(0, Math.min(maxBoostPercent, nextBoost));
+    const clampedBoost = Math.max(0, Math.min(MAX_VOL, nextBoost));
     const effectiveMuted = nextMuted || clampedBoost <= 0;
     setBoostedVolume(clampedBoost);
     setMuted(effectiveMuted);
     setVolume(Math.min(1, clampedBoost / 100));
-    void applyBoost(clampedBoost, effectiveMuted);
-  }, [applyBoost, maxBoostPercent, muted]);
+    const v = videoRef.current;
+    if (v) {
+      v.muted = effectiveMuted;
+      v.volume = effectiveMuted ? 0 : Math.min(1, clampedBoost / 100);
+    }
+  }, [muted]);
 
   const getSafeSeekTime = useCallback((v: HTMLVideoElement, target: number) => {
     if (!Number.isFinite(v.duration) || v.duration <= 0) return 0;
@@ -1141,11 +1058,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentQuality(option.label);
     setShowSettings(false);
 
-    // R2 cache: check for cached version of new quality; upload starts on actual playback
-    if (!noProxy && option.src && !is4KLabel(option.label)) {
-      checkR2CacheForSource(option.src);
-    }
-  }, [currentQuality, currentSrc, isPremium, noProxy, resolvePlaybackSrc, checkR2CacheForSource]);
+  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
@@ -1235,7 +1148,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setSwipeState({ ...swipeState, type: relX > 0.5 ? "volume" : "brightness" });
     }
     if (swipeState.type === "volume") {
-      const newBoosted = Math.min(maxBoostPercent, Math.max(0, boostedVolume - dy * 0.8));
+      const newBoosted = Math.min(MAX_VOL, Math.max(0, boostedVolume - dy * 0.8));
       applyPlayerVolume(newBoosted, false);
       setSwipeState({ ...swipeState, startY: t.clientY });
     } else if (swipeState.type === "brightness") {
@@ -1243,7 +1156,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setBrightness(newBr);
       setSwipeState({ ...swipeState, startY: t.clientY });
     }
-  }, [swipeState, locked, brightness, boostedVolume, maxBoostPercent, muted, applyPlayerVolume]);
+  }, [swipeState, locked, brightness, boostedVolume, muted, applyPlayerVolume]);
 
   const handleTouchEnd = useCallback(() => setSwipeState(null), []);
 

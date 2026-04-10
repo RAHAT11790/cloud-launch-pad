@@ -16,7 +16,7 @@ import {
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "r2-cache";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer";
 
 interface CastMember {
   name: string;
@@ -1808,7 +1808,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "branding": "UI+AD Branding",
     "ai-config": "AI Chat Config",
     "live-tv": "Live TV Channels",
-    "r2-cache": "R2 Video Cache",
+    "url-changer": "URL Changer",
   };
 
   // ==================== CATEGORIES ====================
@@ -3053,7 +3053,7 @@ ${tgHashtags}`;
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
-    { section: "r2-cache", icon: <CloudDownload size={16} />, label: "R2 Video Cache" },
+    { section: "url-changer", icon: <Link size={16} />, label: "URL Changer" },
     { section: "ui-themes", icon: <Zap size={16} />, label: "UI Themes", group: "Customization" },
     { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
     { section: "settings", icon: <Settings size={16} />, label: "Settings" },
@@ -3856,6 +3856,100 @@ ${tgHashtags}`;
                         </div>
                       ))}
                     </div>
+
+                    {/* Inline URL Changer for current series */}
+                    {seasonsData.length > 0 && (() => {
+                      const InlineUrlChanger = () => {
+                        const [inlineOldDomain, setInlineOldDomain] = useState("");
+                        const [inlineNewDomain, setInlineNewDomain] = useState("");
+                        const [inlineResult, setInlineResult] = useState<{ total: number; replaced: number } | null>(null);
+
+                        const replaceInSeasonsData = () => {
+                          if (!inlineOldDomain.trim() || !inlineNewDomain.trim()) { toast.error("দুটো ডোমেইনই দিতে হবে!"); return; }
+                          const old = inlineOldDomain.trim();
+                          const nw = inlineNewDomain.trim();
+                          let totalLinks = 0, replacedLinks = 0;
+
+                          const updatedSeasons = seasonsData.map(season => ({
+                            ...season,
+                            episodes: season.episodes.map(ep => {
+                              const updatedEp = { ...ep } as any;
+                              ["link", "link480", "link720", "link1080", "link4k"].forEach(field => {
+                                if (updatedEp[field]) { totalLinks++; if (updatedEp[field].includes(old)) { updatedEp[field] = updatedEp[field].replace(old, nw); replacedLinks++; } }
+                              });
+                              if (updatedEp.audioTracks) {
+                                updatedEp.audioTracks = updatedEp.audioTracks.map((at: any) => {
+                                  const u = { ...at };
+                                  ["link", "link480", "link720", "link1080", "link4k"].forEach(f => { if (u[f]) { totalLinks++; if (u[f].includes(old)) { u[f] = u[f].replace(old, nw); replacedLinks++; } } });
+                                  return u;
+                                });
+                              }
+                              return updatedEp;
+                            }),
+                          }));
+
+                          setSeasonsData(updatedSeasons);
+                          setInlineResult({ total: totalLinks, replaced: replacedLinks });
+                          toast.success(`✅ ${replacedLinks}/${totalLinks} লিংক রিপ্লেস হয়েছে! (সেভ করতে ভুলো না)`);
+                        };
+
+                        return (
+                          <div className={`${glassCard} p-4 mb-4`}>
+                            <h4 className="text-xs font-bold text-white mb-2 flex items-center gap-2"><Link size={12} className="text-cyan-400" /> 🔗 URL Replace</h4>
+                            <p className="text-[9px] text-zinc-400 mb-3">এই সিরিজের সব লিংকে ডোমেইন রিপ্লেস করো। সেভ করলেই Firebase-এ যাবে।</p>
+                            <div className="grid grid-cols-1 gap-2 mb-3">
+                              <input value={inlineOldDomain} onChange={e => setInlineOldDomain(e.target.value)} placeholder="পুরাতন: http://fi3.bot-hosting.net:22854" className={`${inputClass} !text-[10px]`} />
+                              <input value={inlineNewDomain} onChange={e => setInlineNewDomain(e.target.value)} placeholder="নতুন: https://rahat1102-video-hosting-bot.hf.space" className={`${inputClass} !text-[10px]`} />
+                            </div>
+                            <button onClick={replaceInSeasonsData} className={`${btnPrimary} w-full py-2 text-[11px] flex items-center justify-center gap-1.5`}>
+                              <RefreshCw size={12} /> রিপ্লেস করো
+                            </button>
+                            {inlineResult && <p className="text-[10px] text-green-400 mt-2">✅ {inlineResult.replaced}/{inlineResult.total} রিপ্লেস হয়েছে</p>}
+                          </div>
+                        );
+                      };
+                      return <InlineUrlChanger />;
+                    })()}
+
+                    {/* Export JSON for current series */}
+                    {seasonsData.length > 0 && (
+                      <div className={`${glassCard} p-4 mb-4`}>
+                        <h4 className="text-xs font-bold text-white mb-2 flex items-center gap-2"><Download size={12} className="text-green-400" /> 📦 Export JSON</h4>
+                        <p className="text-[9px] text-zinc-400 mb-3">এই সিরিজের সব সিজন ও এপিসোডের JSON ডাউনলোড করো।</p>
+                        <button onClick={() => {
+                          const exportData = {
+                            title: seriesForm?.title || "Unknown",
+                            seasons: seasonsData.map(s => ({
+                              name: s.name,
+                              seasonNumber: s.seasonNumber,
+                              episodes: s.episodes.map(ep => {
+                                const epData: any = {
+                                  episodeNumber: ep.episodeNumber,
+                                  title: ep.title,
+                                  link: ep.link,
+                                };
+                                if (ep.link480) epData.link480 = ep.link480;
+                                if (ep.link720) epData.link720 = ep.link720;
+                                if (ep.link1080) epData.link1080 = ep.link1080;
+                                if (ep.link4k) epData.link4k = ep.link4k;
+                                if ((ep as any).audioTracks?.length) epData.audioTracks = (ep as any).audioTracks;
+                                return epData;
+                              }),
+                            })),
+                          };
+                          const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `${(seriesForm?.title || "series").replace(/[^a-zA-Z0-9]/g, "_")}_export.json`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          toast.success("✅ JSON ডাউনলোড হয়েছে!");
+                        }} className={`${btnPrimary} w-full py-2.5 text-[11px] flex items-center justify-center gap-1.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500`}>
+                          <Download size={12} /> Export JSON
+                        </button>
+                      </div>
+                    )}
 
                     {/* Inline Link Checker for current series */}
                     <WsInlineLinkChecker
@@ -5821,104 +5915,146 @@ ${tgHashtags}`;
           return <LiveTvAdmin />;
         })()}
 
-        {/* ==================== R2 VIDEO CACHE ==================== */}
-        {activeSection === "r2-cache" && (() => {
-          const R2CacheAdmin = () => {
-            const [r2Settings, setR2Settings] = useState<any>({ enabled: false, maxSizeMB: 300, cacheHours: 12, activeHoursStart: 6, activeHoursEnd: 0, edgeFunctionUrl: "", buckets: {} });
-            const [newBucket, setNewBucket] = useState({ accountId: "", accessKeyId: "", secretAccessKey: "", bucketName: "", publicUrl: "", s3Endpoint: "" });
-            const [r2CleanupLoading, setR2CleanupLoading] = useState(false);
-            const [r2StorageInfo, setR2StorageInfo] = useState<any[]>([]);
-            const [r2StorageLoading, setR2StorageLoading] = useState(false);
-            const [r2PurgeLoading, setR2PurgeLoading] = useState<string | null>(null);
-            const [r2LastSyncAt, setR2LastSyncAt] = useState<number>(0);
-            useEffect(() => { const unsub = onValue(ref(db, "settings/r2Cache"), (snap) => { const val = snap.val(); if (val) setR2Settings(val); }); return () => unsub(); }, []);
-            const normalizeBucket = (bucket: any) => {
-              const accessKeyId = bucket.accessKeyId?.trim() || "";
-              const secretAccessKey = bucket.secretAccessKey?.trim() || "";
-              if (accessKeyId.length >= 48 && secretAccessKey.length > 0 && secretAccessKey.length <= 40) {
-                return { ...bucket, accessKeyId: secretAccessKey, secretAccessKey: accessKeyId };
+        {/* ==================== URL CHANGER ==================== */}
+        {activeSection === "url-changer" && (() => {
+          const UrlChangerAdmin = () => {
+            const [selectedSeriesId, setSelectedSeriesId] = useState("");
+            const [oldDomain, setOldDomain] = useState("");
+            const [newDomain, setNewDomain] = useState("");
+            const [replacing, setReplacing] = useState(false);
+            const [replaceResult, setReplaceResult] = useState<{ total: number; replaced: number } | null>(null);
+            const [searchFilter, setSearchFilter] = useState("");
+
+            const filteredSeries = searchFilter.trim()
+              ? webseriesData.filter(s => s.title?.toLowerCase().includes(searchFilter.toLowerCase()))
+              : webseriesData;
+
+            const replaceUrls = async () => {
+              if (!selectedSeriesId) { toast.error("সিরিজ সিলেক্ট করো!"); return; }
+              if (!oldDomain.trim() || !newDomain.trim()) { toast.error("Old ও New Domain দিতে হবে!"); return; }
+              if (!confirm(`"${oldDomain.trim()}" → "${newDomain.trim()}" — রিপ্লেস করবে?`)) return;
+
+              setReplacing(true);
+              setReplaceResult(null);
+              try {
+                const snap = await get(ref(db, `webseries/${selectedSeriesId}`));
+                const data = snap.val();
+                if (!data?.seasons) { toast.error("এই সিরিজে কোনো সিজন নেই!"); setReplacing(false); return; }
+
+                const old = oldDomain.trim();
+                const nw = newDomain.trim();
+                let totalLinks = 0;
+                let replacedLinks = 0;
+
+                const updatedSeasons = data.seasons.map((season: any) => ({
+                  ...season,
+                  episodes: (season.episodes || []).map((ep: any) => {
+                    const updatedEp = { ...ep };
+                    const linkFields = ["link", "link480", "link720", "link1080", "link4k"];
+                    linkFields.forEach(field => {
+                      if (updatedEp[field]) {
+                        totalLinks++;
+                        if (updatedEp[field].includes(old)) {
+                          updatedEp[field] = updatedEp[field].replace(old, nw);
+                          replacedLinks++;
+                        }
+                      }
+                    });
+                    // Also replace in audio tracks
+                    if (updatedEp.audioTracks) {
+                      updatedEp.audioTracks = updatedEp.audioTracks.map((at: any) => {
+                        const updatedAt = { ...at };
+                        ["link", "link480", "link720", "link1080", "link4k"].forEach(field => {
+                          if (updatedAt[field]) {
+                            totalLinks++;
+                            if (updatedAt[field].includes(old)) {
+                              updatedAt[field] = updatedAt[field].replace(old, nw);
+                              replacedLinks++;
+                            }
+                          }
+                        });
+                        return updatedAt;
+                      });
+                    }
+                    return updatedEp;
+                  }),
+                }));
+
+                await update(ref(db, `webseries/${selectedSeriesId}`), { seasons: updatedSeasons });
+                setReplaceResult({ total: totalLinks, replaced: replacedLinks });
+                toast.success(`✅ ${replacedLinks}/${totalLinks} লিংক রিপ্লেস হয়েছে!`);
+              } catch (err: any) {
+                toast.error("এরর: " + err.message);
               }
-              return { ...bucket, accessKeyId, secretAccessKey };
+              setReplacing(false);
             };
-            const bucketList = r2Settings.buckets ? Object.entries(r2Settings.buckets).map(([id, b]: any) => normalizeBucket({ id, ...b })) : [];
-            const enabledBucketList = bucketList.filter((b: any) => b.enabled !== false);
-            const totalBuckets = bucketList.length;
-            const saveR2 = async (u: any) => { await update(ref(db, "settings/r2Cache"), u); toast.success("✅ সেভ হয়েছে!"); };
-            const addBucket = async () => { if (!newBucket.accountId || !newBucket.accessKeyId || !newBucket.secretAccessKey || !newBucket.bucketName || !newBucket.publicUrl || !newBucket.s3Endpoint) { toast.error("সব ফিল্ড পূরণ করো!"); return; } const id = `bucket_${Date.now()}`; await set(ref(db, `settings/r2Cache/buckets/${id}`), { ...newBucket, enabled: true }); setNewBucket({ accountId: "", accessKeyId: "", secretAccessKey: "", bucketName: "", publicUrl: "", s3Endpoint: "" }); toast.success("✅ Bucket যোগ হয়েছে!"); };
-            const removeBucket = async (id: string) => { if (!confirm("মুছে ফেলবে?")) return; await remove(ref(db, `settings/r2Cache/buckets/${id}`)); toast.success("🗑️ মুছে ফেলা হয়েছে!"); };
-            const toggleBucket = async (id: string, en: boolean) => { await update(ref(db, `settings/r2Cache/buckets/${id}`), { enabled: en }); };
-            const runCleanup = async () => { if (!r2Settings.edgeFunctionUrl) { toast.error("URL দাও!"); return; } setR2CleanupLoading(true); try { const bkts = bucketList.filter((b: any) => b.enabled !== false); const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "cleanup", buckets: bkts }) }); if (res.ok) { const d = await res.json(); toast.success(`🧹 ${d.deleted || 0}টি মুছে ফেলা হয়েছে!`); } else toast.error("ফেইল!"); } catch { toast.error("এরর!"); } setR2CleanupLoading(false); };
-            const loadStorageInfo = async (silent = false) => { if (!r2Settings.edgeFunctionUrl || enabledBucketList.length === 0) { setR2StorageInfo([]); return; } if (!silent) setR2StorageLoading(true); try { const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "list", buckets: enabledBucketList }) }); if (res.ok) { const d = await res.json(); setR2StorageInfo(d.results || []); setR2LastSyncAt(Date.now()); } else if (!silent) toast.error("ফেইল!"); } catch { if (!silent) toast.error("এরর!"); } if (!silent) setR2StorageLoading(false); };
-            const purgeAllBucket = async (bucketId: string) => { if (!confirm("এই bucket-এর সব ক্যাশ মুছে ফেলবে?")) return; if (!r2Settings.edgeFunctionUrl) { toast.error("URL দাও!"); return; } setR2PurgeLoading(bucketId); try { const bkt = bucketList.find((b: any) => b.id === bucketId); if (!bkt) return; const res = await fetch(r2Settings.edgeFunctionUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "purge", buckets: [bkt] }) }); if (res.ok) { const d = await res.json(); toast.success(`🗑️ ${d.deleted || 0}টি ফাইল মুছে ফেলা হয়েছে!`); loadStorageInfo(); } else toast.error("ফেইল!"); } catch { toast.error("এরর!"); } setR2PurgeLoading(null); };
-            const formatSize = (bytes: number) => { if (bytes === 0) return "0 B"; const k = 1024; const sizes = ["B", "KB", "MB", "GB"]; const i = Math.floor(Math.log(bytes) / Math.log(k)); return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]; };
-            useEffect(() => { if (!r2Settings.edgeFunctionUrl || enabledBucketList.length === 0) { setR2StorageInfo([]); return; } void loadStorageInfo(); const timer = window.setInterval(() => { void loadStorageInfo(true); }, 10000); return () => window.clearInterval(timer); }, [r2Settings.edgeFunctionUrl, r2Settings.buckets]);
-            const totalStoredFiles = r2StorageInfo.reduce((sum: number, info: any) => sum + (info.totalFiles || 0), 0);
-            const totalStoredBytes = r2StorageInfo.reduce((sum: number, info: any) => sum + (info.totalSizeBytes || 0), 0);
-            return (<div className="space-y-4">
-              <div className={`${glassCard} p-4`}>
-                <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-bold flex items-center gap-2"><CloudDownload size={16} className="text-cyan-400" /> R2 Video Cache</h3>
-                  <button onClick={() => saveR2({ enabled: !r2Settings.enabled })} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold ${r2Settings.enabled ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-zinc-700 text-zinc-400 border border-zinc-600"}`}>{r2Settings.enabled ? "✅ চালু" : "⏸️ বন্ধ"}</button>
+
+            return (
+              <div className="space-y-4">
+                <div className={`${glassCard} p-4`}>
+                  <h3 className="text-sm font-bold mb-2 flex items-center gap-2">
+                    <Link size={16} className="text-cyan-400" /> 🔗 URL Changer
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 mb-4">
+                    নির্দিষ্ট সিরিজের সব ভিডিও লিংকে ডোমেইন/URL রিপ্লেস করো। শুধু ডোমেইন বদলাবে, বাকি path ঠিক থাকবে।
+                  </p>
+
+                  {/* Series Selector */}
+                  <label className="text-[10px] text-zinc-400 block mb-1">সিরিজ সিলেক্ট করো</label>
+                  <input value={searchFilter} onChange={e => setSearchFilter(e.target.value)}
+                    placeholder="সার্চ করো..." className={`${inputClass} mb-2 text-[10px]`} />
+                  <select value={selectedSeriesId} onChange={e => setSelectedSeriesId(e.target.value)}
+                    className={`${inputClass} w-full mb-4`}>
+                    <option value="">-- সিরিজ সিলেক্ট করো --</option>
+                    {filteredSeries.map(s => (
+                      <option key={s.id} value={s.id}>{s.title} ({s.seasons?.length || 0} seasons)</option>
+                    ))}
+                  </select>
+
+                  {/* Old Domain */}
+                  <label className="text-[10px] text-zinc-400 block mb-1">পুরাতন Domain/URL</label>
+                  <input value={oldDomain} onChange={e => setOldDomain(e.target.value)}
+                    placeholder="http://fi3.bot-hosting.net:22854" className={`${inputClass} mb-3 text-[10px]`} />
+
+                  {/* New Domain */}
+                  <label className="text-[10px] text-zinc-400 block mb-1">নতুন Domain/URL</label>
+                  <input value={newDomain} onChange={e => setNewDomain(e.target.value)}
+                    placeholder="https://rahat1102-video-hosting-bot.hf.space" className={`${inputClass} mb-4 text-[10px]`} />
+
+                  <button onClick={replaceUrls} disabled={replacing || !selectedSeriesId}
+                    className={`${btnPrimary} w-full py-3 text-sm flex items-center justify-center gap-2`}>
+                    {replacing ? <><Loader2 size={14} className="animate-spin" /> রিপ্লেস হচ্ছে...</> : <><RefreshCw size={14} /> রিপ্লেস করো</>}
+                  </button>
+
+                  {replaceResult && (
+                    <div className="mt-3 p-3 rounded-xl bg-green-500/10 border border-green-500/30">
+                      <p className="text-[11px] font-semibold text-green-400">
+                        ✅ মোট {replaceResult.total}টি লিংকের মধ্যে {replaceResult.replaced}টি রিপ্লেস হয়েছে!
+                      </p>
+                    </div>
+                  )}
                 </div>
-                <p className="text-[10px] text-zinc-400 mb-3">পিক আওয়ারে ভিডিও R2-তে ক্যাশ করে বাফারিং কমায়। লোড {totalBuckets}টি bucket-এ সমান ভাগ।</p>
-                <label className="text-[10px] text-zinc-400 block mb-1">Edge Function URL</label>
-                <div className="flex gap-2 mb-3">
-                  <input value={r2Settings.edgeFunctionUrl || ""} onChange={e => setR2Settings((p: any) => ({ ...p, edgeFunctionUrl: e.target.value }))} placeholder="https://xxx.supabase.co/functions/v1/r2-cache" className={`${inputClass} flex-1 text-[10px]`} />
-                  <button onClick={() => saveR2({ edgeFunctionUrl: r2Settings.edgeFunctionUrl })} className={`${btnPrimary} text-[10px] px-3`}><Save size={10} /></button>
-                </div>
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  <div><label className="text-[10px] text-zinc-400 block mb-1">Max Size (MB)</label><input type="number" value={r2Settings.maxSizeMB || 300} onChange={e => saveR2({ maxSizeMB: parseInt(e.target.value) || 300 })} className={`${inputClass} text-[10px] w-full`} /></div>
-                  <div><label className="text-[10px] text-zinc-400 block mb-1">Cache (hrs)</label><input type="number" value={r2Settings.cacheHours || 12} onChange={e => saveR2({ cacheHours: parseInt(e.target.value) || 12 })} className={`${inputClass} text-[10px] w-full`} /></div>
-                  <div><label className="text-[10px] text-zinc-400 block mb-1">Start Hour</label><input type="number" value={r2Settings.activeHoursStart ?? 6} min={0} max={23} onChange={e => saveR2({ activeHoursStart: parseInt(e.target.value) || 0 })} className={`${inputClass} text-[10px] w-full`} /></div>
-                  <div><label className="text-[10px] text-zinc-400 block mb-1">End Hour <span className="text-zinc-500">(0 = রাত ১২টা)</span></label><input type="number" value={r2Settings.activeHoursEnd ?? 0} min={0} max={23} onChange={e => saveR2({ activeHoursEnd: parseInt(e.target.value) || 0 })} className={`${inputClass} text-[10px] w-full`} /></div>
-                </div>
-                <div className="flex gap-2">
-                  <div className="flex-1 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-[10px] text-zinc-300">
-                    <div className="flex items-center gap-2 font-semibold"><Activity size={10} className="text-cyan-400" /> Live Storage Monitor</div>
-                    <p className="mt-1 text-[9px] text-zinc-400">Auto refresh every 10s • Last sync {r2LastSyncAt ? new Date(r2LastSyncAt).toLocaleTimeString() : "pending"}</p>
-                  </div>
-                  <button onClick={runCleanup} disabled={r2CleanupLoading} className={`${btnSecondary} text-[10px] px-3 flex-1`}>{r2CleanupLoading ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />} Cleanup</button>
-                </div>
-              </div>
-              <div className={`${glassCard} p-4`}>
-                <h3 className="text-sm font-bold mb-3 flex items-center gap-2"><List size={14} className="text-blue-400" /> Buckets ({totalBuckets})</h3>
-                <p className="text-[10px] text-zinc-400 mb-3">যতগুলো bucket, সবাই সমান লোড পাবে।</p>
-                {bucketList.length > 0 && (<div className="space-y-2 mb-4">{bucketList.map((b: any) => (<div key={b.id} className={`border rounded-xl p-3 ${b.enabled !== false ? "border-cyan-500/20 bg-cyan-500/5" : "border-zinc-600 bg-zinc-800/50 opacity-60"}`}><div className="flex items-center justify-between mb-1"><span className="text-[11px] font-bold text-white">{b.bucketName || "Unnamed"}</span><div className="flex gap-1"><button onClick={() => toggleBucket(b.id, b.enabled === false)} className={`px-2 py-0.5 rounded text-[9px] font-bold ${b.enabled !== false ? "bg-green-500/20 text-green-400" : "bg-zinc-600 text-zinc-400"}`}>{b.enabled !== false ? "ON" : "OFF"}</button><button onClick={() => removeBucket(b.id)} className="px-2 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400"><Trash2 size={9} /></button></div></div><div className="text-[9px] text-zinc-400 font-mono"><p>Account: {b.accountId?.slice(0, 12)}... | Load: {totalBuckets > 0 ? Math.round(100 / totalBuckets) : 0}%</p><p className="truncate">Public: {b.publicUrl}</p></div></div>))}</div>)}
-                <div className="border border-dashed border-zinc-600 rounded-xl p-3">
-                  <h4 className="text-[11px] font-bold text-zinc-300 mb-2"><Plus size={12} className="inline" /> নতুন Bucket</h4>
+
+                {/* Quick Presets */}
+                <div className={`${glassCard} p-4`}>
+                  <h4 className="text-xs font-bold text-white mb-3">⚡ Quick Presets</h4>
                   <div className="space-y-2">
-                    <input value={newBucket.accountId} onChange={e => setNewBucket(p => ({ ...p, accountId: e.target.value }))} placeholder="Account ID" className={`${inputClass} text-[10px] w-full`} />
-                    <input value={newBucket.accessKeyId} onChange={e => setNewBucket(p => ({ ...p, accessKeyId: e.target.value }))} placeholder="Access Key ID" className={`${inputClass} text-[10px] w-full`} />
-                    <input value={newBucket.secretAccessKey} onChange={e => setNewBucket(p => ({ ...p, secretAccessKey: e.target.value }))} placeholder="Secret Access Key" className={`${inputClass} text-[10px] w-full`} type="password" />
-                    <input value={newBucket.bucketName} onChange={e => setNewBucket(p => ({ ...p, bucketName: e.target.value }))} placeholder="Bucket Name" className={`${inputClass} text-[10px] w-full`} />
-                    <input value={newBucket.publicUrl} onChange={e => setNewBucket(p => ({ ...p, publicUrl: e.target.value }))} placeholder="Public URL" className={`${inputClass} text-[10px] w-full`} />
-                    <input value={newBucket.s3Endpoint} onChange={e => setNewBucket(p => ({ ...p, s3Endpoint: e.target.value }))} placeholder="S3 API Endpoint" className={`${inputClass} text-[10px] w-full`} />
-                    <button onClick={addBucket} className={`${btnPrimary} w-full text-[10px]`}><Plus size={10} /> Bucket যোগ করো</button>
-              </div>
-              {/* ---- Storage Info ---- */}
-              <div className={`${glassCard} p-4`}>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold flex items-center gap-2"><BarChart3 size={14} className="text-purple-400" /> Storage Info</h3>
-                  <span className="text-[9px] text-zinc-400">{r2StorageLoading ? "syncing..." : `Live • ${totalStoredFiles} files • ${formatSize(totalStoredBytes)}`}</span>
-                </div>
-                {r2StorageInfo.length === 0 && <p className="text-[10px] text-zinc-500">Enabled bucket পেলে স্টোরেজ অটো লাইভ দেখাবে।</p>}
-                {r2StorageInfo.length > 0 && (<div className="space-y-3">{r2StorageInfo.map((info: any) => (<div key={info.bucketId} className="border border-zinc-700 rounded-xl p-3 bg-zinc-800/30">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold text-white">{info.bucketName || info.bucketId}</span>
-                    <button onClick={() => purgeAllBucket(info.bucketId)} disabled={r2PurgeLoading === info.bucketId} className="px-2 py-1 rounded-lg text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1">{r2PurgeLoading === info.bucketId ? <Loader2 size={9} className="animate-spin" /> : <Trash2 size={9} />} সব মুছো</button>
+                    <button onClick={() => { setOldDomain("http://fi3.bot-hosting.net:22854"); setNewDomain("https://rahat1102-video-hosting-bot.hf.space"); }}
+                      className="w-full text-left p-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/40 hover:border-cyan-500/30 transition-all">
+                      <p className="text-[10px] font-semibold text-white">Bot Hosting → HF Space</p>
+                      <p className="text-[9px] text-zinc-500 mt-0.5">fi3.bot-hosting.net → hf.space</p>
+                    </button>
+                    <button onClick={() => { setOldDomain("https://rahat1102-video-hosting-bot.hf.space"); setNewDomain("http://fi3.bot-hosting.net:22854"); }}
+                      className="w-full text-left p-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/40 hover:border-cyan-500/30 transition-all">
+                      <p className="text-[10px] font-semibold text-white">HF Space → Bot Hosting</p>
+                      <p className="text-[9px] text-zinc-500 mt-0.5">hf.space → fi3.bot-hosting.net</p>
+                    </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    <div className="bg-zinc-900/50 rounded-lg p-2 text-center"><p className="text-[9px] text-zinc-400">ফাইল</p><p className="text-sm font-bold text-cyan-400">{info.totalFiles}</p></div>
-                    <div className="bg-zinc-900/50 rounded-lg p-2 text-center"><p className="text-[9px] text-zinc-400">সাইজ</p><p className="text-sm font-bold text-green-400">{formatSize(info.totalSizeBytes)}</p></div>
-                  </div>
-                  {info.error && <p className="text-[9px] text-red-400">⚠️ {info.error}</p>}
-                  {info.files && info.files.length > 0 && (<details className="mt-2" open><summary className="text-[9px] text-zinc-400 cursor-pointer">লাইভ ফাইল তালিকা ({info.totalFiles})</summary><div className="mt-1 max-h-56 overflow-y-auto space-y-1.5">{info.files.map((f: any, fi: number) => (<div key={fi} className="bg-zinc-900/50 px-2 py-2 rounded"><div className="flex items-center justify-between text-[8px] font-mono"><span className="truncate flex-1 text-zinc-300">{f.key.replace("cache/", "")}</span><span className="text-zinc-500 ml-2 whitespace-nowrap">{formatSize(f.size)}</span></div>{f.originalUrl && <p className="text-[8px] text-cyan-400 truncate mt-1">{f.originalUrl}</p>}<p className="text-[8px] text-zinc-500 mt-1">{new Date(f.cachedAt || f.lastModified || Date.now()).toLocaleString()}</p></div>))}</div></details>)}
-                </div>))}</div>)}
-              </div>
                 </div>
               </div>
-            </div>);
+            );
           };
-          return <R2CacheAdmin />;
+          return <UrlChangerAdmin />;
         })()}
 
         {activeSection === "comments" && (
