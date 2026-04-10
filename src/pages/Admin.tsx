@@ -10531,7 +10531,7 @@ const LinkCheckerSection = ({
                 {filteredContent.map(c => (
                   <button
                     key={c.id}
-                    onClick={() => setSelectedId(c.id)}
+                    onClick={() => { setSelectedId(c.id); setFilterSeason("all"); setFilterEpisode("all"); }}
                     className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-2 ${
                       selectedId === c.id ? 'bg-red-600/20 border border-red-500/40 text-red-300' : 'hover:bg-zinc-700/50 text-zinc-300'
                     }`}
@@ -10543,6 +10543,27 @@ const LinkCheckerSection = ({
                 ))}
                 {filteredContent.length === 0 && <p className="text-[11px] text-zinc-500 text-center py-3">কোনো কন্টেন্ট পাওয়া যায়নি</p>}
               </div>
+
+              {/* Season/Episode Filter for selected webseries */}
+              {selectedId && selectedContent?._type === 'webseries' && selectedSeasons.length > 0 && (
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <select value={filterSeason} onChange={e => { setFilterSeason(e.target.value); setFilterEpisode("all"); }}
+                    className="text-[10px] bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white">
+                    <option value="all">সব সিজন</option>
+                    {selectedSeasons.map((s: any, i: number) => (
+                      <option key={i} value={String(i)}>{s.name || `Season ${s.seasonNumber || i + 1}`}</option>
+                    ))}
+                  </select>
+                  <select value={filterEpisode} onChange={e => setFilterEpisode(e.target.value)}
+                    disabled={filterSeason === "all"}
+                    className="text-[10px] bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white disabled:opacity-40">
+                    <option value="all">সব এপিসোড</option>
+                    {selectedSeasonEpisodes.map((ep: any, i: number) => (
+                      <option key={i} value={String(i)}>EP {ep.episodeNumber || i + 1}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 
