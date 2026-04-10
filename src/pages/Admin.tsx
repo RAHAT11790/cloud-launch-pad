@@ -2839,7 +2839,7 @@ ${tgHashtags}`;
 
       if (channelIds.length === 0) { toast.error("Enter at least one channel ID"); setTgSending(false); return; }
 
-      const results: { id: string; ok: boolean; error?: string }[] = [];
+      const results: { id: string; ok: boolean; error?: string; messageId?: number }[] = [];
 
       // Build inline keyboard buttons array
       const inlineButtons: { text: string; url: string }[] = [];
