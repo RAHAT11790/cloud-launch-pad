@@ -5323,7 +5323,238 @@ ${tgHashtags}`;
           </div>
         )}
 
-        {activeSection === "free-access" && (
+        {/* ==================== TG URL CHANGER ==================== */}
+        {activeSection === "tg-url-changer" && (() => {
+          const TgUrlChanger = () => {
+            const [tgPosts, setTgPosts] = useState<any[]>([]);
+            const [tgPostsLoading, setTgPostsLoading] = useState(true);
+            const [tgOldDomain, setTgOldDomain] = useState("");
+            const [tgNewDomain, setTgNewDomain] = useState("");
+            const [tgBulkRunning, setTgBulkRunning] = useState(false);
+            const [tgBulkResults, setTgBulkResults] = useState<{title:string; poster:string; ok:boolean; error?:string}[]>([]);
+            const [tgBulkProgress, setTgBulkProgress] = useState(0);
+            const [tgQuickPaste, setTgQuickPaste] = useState("");
+            const [tgSelectedPost, setTgSelectedPost] = useState<string>("all");
+
+            // Load saved posts
+            useEffect(() => {
+              const unsub = onValue(ref(db, "telegramPosts"), (snap) => {
+                const val = snap.val() || {};
+                const arr = Object.entries(val).map(([k, v]: any) => ({ firebaseKey: k, ...v }));
+                arr.sort((a: any, b: any) => (b.sentAt || 0) - (a.sentAt || 0));
+                setTgPosts(arr);
+                setTgPostsLoading(false);
+              });
+              return () => unsub();
+            }, []);
+
+            // Quick paste domain extractor
+            const handleQuickPaste = (url: string) => {
+              setTgQuickPaste(url);
+              try {
+                const u = new URL(url);
+                setTgOldDomain(u.origin);
+              } catch {}
+            };
+
+            // Bulk replace all telegram post button URLs
+            const runBulkReplace = async () => {
+              if (!tgOldDomain.trim() || !tgNewDomain.trim()) { toast.error("Old ও New Domain দিন"); return; }
+              setTgBulkRunning(true);
+              setTgBulkResults([]);
+              setTgBulkProgress(0);
+
+              const postsToUpdate = tgSelectedPost === "all" ? tgPosts : tgPosts.filter(p => p.firebaseKey === tgSelectedPost);
+              const results: typeof tgBulkResults = [];
+              let done = 0;
+
+              for (const post of postsToUpdate) {
+                try {
+                  // Build new buttons with replaced URLs
+                  const oldButtons: { text: string; url: string }[] = post.buttons || [];
+                  const newButtons = oldButtons.map((btn: any) => ({
+                    text: btn.text,
+                    url: btn.url.includes(tgOldDomain.replace(/\/$/, ''))
+                      ? btn.url.replace(tgOldDomain.replace(/\/$/, ''), tgNewDomain.replace(/\/$/, ''))
+                      : btn.url,
+                  }));
+
+                  // Check if any URL actually changed
+                  const changed = newButtons.some((nb: any, i: number) => nb.url !== oldButtons[i]?.url);
+                  if (!changed) {
+                    done++;
+                    setTgBulkProgress(Math.round((done / postsToUpdate.length) * 100));
+                    continue; // Skip, no change needed
+                  }
+
+                  // Call Telegram API to edit message reply markup
+                  const endpoint = await getEdgeFunctionUrl('telegram-post');
+                  const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      action: "edit-buttons",
+                      chatId: post.chatId,
+                      messageId: post.messageId,
+                      inlineButtons: newButtons,
+                    }),
+                  });
+                  const data = await res.json().catch(() => ({}));
+
+                  if (res.ok && !data?.error) {
+                    // Update Firebase record
+                    await set(ref(db, `telegramPosts/${post.firebaseKey}/buttons`), newButtons);
+                    results.push({ title: post.title, poster: post.poster, ok: true });
+                  } else {
+                    results.push({ title: post.title, poster: post.poster, ok: false, error: data?.error || data?.description || `HTTP ${res.status}` });
+                  }
+                } catch (err: any) {
+                  results.push({ title: post.title, poster: post.poster, ok: false, error: err.message });
+                }
+                done++;
+                setTgBulkProgress(Math.round((done / postsToUpdate.length) * 100));
+                setTgBulkResults([...results]);
+              }
+
+              setTgBulkRunning(false);
+              const successCount = results.filter(r => r.ok).length;
+              if (successCount > 0) toast.success(`✅ ${successCount}/${results.length} পোস্টের বাটন URL আপডেট হয়েছে!`);
+              else if (results.length > 0) toast.error("কোনো পোস্ট আপডেট হয়নি");
+              else toast.info("কোনো পরিবর্তনের দরকার নেই");
+            };
+
+            // Delete a single post record
+            const deletePostRecord = async (key: string) => {
+              await set(ref(db, `telegramPosts/${key}`), null);
+              toast.success("রেকর্ড ডিলিট হয়েছে");
+            };
+
+            return (
+              <div>
+                <div className={`${glassCard} p-4 mb-4`}>
+                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                    <RefreshCw size={14} className="text-orange-400" /> টেলিগ্রাম পোস্ট বাটন URL চেঞ্জার
+                  </h3>
+                  <p className="text-[11px] text-zinc-400 mb-4">
+                    পাঠানো সব টেলিগ্রাম পোস্টের ইনলাইন বাটন URL বাল্কে পরিবর্তন করুন। ডোমেইন এক্সপায়ার বা ব্লক হলে এক ক্লিকে সব লিংক আপডেট করুন।
+                  </p>
+
+                  {/* Quick Paste */}
+                  <div className="mb-3">
+                    <label className="block text-xs text-zinc-400 mb-1">⚡ Quick Paste (লিংক পেস্ট করলে ডোমেইন অটো-সেট)</label>
+                    <input value={tgQuickPaste} onChange={e => handleQuickPaste(e.target.value)}
+                      className={inputClass} placeholder="https://old-domain.com/path/video.mp4" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">Old Domain</label>
+                      <input value={tgOldDomain} onChange={e => setTgOldDomain(e.target.value)}
+                        className={inputClass} placeholder="https://old.com" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">New Domain</label>
+                      <input value={tgNewDomain} onChange={e => setTgNewDomain(e.target.value)}
+                        className={inputClass} placeholder="https://new.com" />
+                    </div>
+                  </div>
+
+                  {/* Post selector */}
+                  <div className="mb-3">
+                    <label className="block text-xs text-zinc-400 mb-1">পোস্ট সিলেক্ট</label>
+                    <select value={tgSelectedPost} onChange={e => setTgSelectedPost(e.target.value)} className={selectClass}>
+                      <option value="all">📦 সব পোস্ট ({tgPosts.length}টি)</option>
+                      {tgPosts.map(p => (
+                        <option key={p.firebaseKey} value={p.firebaseKey}>
+                          {p.title} ({p.chatId})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button onClick={runBulkReplace} disabled={tgBulkRunning || !tgOldDomain.trim() || !tgNewDomain.trim()}
+                    className={`${btnPrimary} w-full py-3 text-[13px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50`}>
+                    {tgBulkRunning ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                        আপডেট হচ্ছে... {tgBulkProgress}%
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw size={16} /> বাটন URL আপডেট করুন
+                      </>
+                    )}
+                  </button>
+
+                  {/* Progress bar */}
+                  {tgBulkRunning && (
+                    <div className="mt-3 bg-zinc-800 rounded-full h-2 overflow-hidden">
+                      <div className="bg-gradient-to-r from-blue-500 to-purple-500 h-full transition-all duration-300" style={{ width: `${tgBulkProgress}%` }} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Results */}
+                {tgBulkResults.length > 0 && (
+                  <div className={`${glassCard} p-4 mb-4`}>
+                    <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                      <CheckCircle size={14} className="text-green-400" /> আপডেট রেজাল্ট
+                    </h3>
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                      {tgBulkResults.map((r, i) => (
+                        <div key={i} className={`flex items-center gap-2.5 p-2 rounded-lg border ${r.ok ? 'border-green-500/20 bg-green-500/5' : 'border-red-500/20 bg-red-500/5'}`}>
+                          {r.poster && <img src={r.poster} alt="" className="w-8 h-10 rounded object-cover flex-shrink-0" />}
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[12px] truncate block">{r.title}</span>
+                            {r.error && <span className="text-[10px] text-red-400">{r.error}</span>}
+                          </div>
+                          {r.ok ? <CheckCircle size={14} className="text-green-400 flex-shrink-0" /> : <XCircle size={14} className="text-red-400 flex-shrink-0" />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Saved Posts List */}
+                <div className={`${glassCard} p-4`}>
+                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                    <Send size={14} className="text-blue-400" /> সেভ করা পোস্ট ({tgPosts.length}টি)
+                  </h3>
+                  {tgPostsLoading ? (
+                    <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>
+                  ) : tgPosts.length === 0 ? (
+                    <p className="text-zinc-500 text-[11px] text-center py-4">কোনো পোস্ট রেকর্ড নেই। টেলিগ্রাম পোস্ট পাঠানোর পর এখানে দেখাবে।</p>
+                  ) : (
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {tgPosts.map(post => (
+                        <div key={post.firebaseKey} className="flex items-center gap-2.5 p-2.5 bg-zinc-800/40 rounded-xl border border-zinc-700/30">
+                          {post.poster && <img src={post.poster} alt="" className="w-10 h-13 rounded object-cover flex-shrink-0" />}
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[12px] font-medium truncate block">{post.title}</span>
+                            <span className="text-[10px] text-zinc-500 block">Chat: {post.chatId} | MSG: {post.messageId}</span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {(post.buttons || []).map((btn: any, bi: number) => (
+                                <span key={bi} className="text-[9px] bg-blue-500/15 text-blue-300 px-1.5 py-0.5 rounded truncate max-w-[140px]" title={btn.url}>
+                                  {btn.text}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <button onClick={() => deletePostRecord(post.firebaseKey)} className="text-red-400 hover:text-red-300 p-1">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          };
+          return <TgUrlChanger />;
+        })()}
+
+
           <div>
             {/* Global Free Access for All */}
             <div className={`${glassCard} p-4 mb-4`}>
