@@ -888,11 +888,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
       setIsBuffering(false);
-
-      const rawSource = activeSourceBaseRef.current;
-      if (rawSource) {
-        queueR2UploadForPlayback(rawSource, currentSrc, currentQuality);
-      }
     };
     const onSeeked = () => {
       // Only clear buffering if video has enough data to play
@@ -950,7 +945,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.load();
       if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, queueR2UploadForPlayback]);
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady]);
 
   useEffect(() => {
     const onFs = () => {
@@ -1000,14 +995,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     resetHideTimer();
   }, [resetHideTimer]);
 
+  const MAX_VOL = 100;
   const applyPlayerVolume = useCallback((nextBoost: number, nextMuted = muted) => {
-    const clampedBoost = Math.max(0, Math.min(maxBoostPercent, nextBoost));
+    const clampedBoost = Math.max(0, Math.min(MAX_VOL, nextBoost));
     const effectiveMuted = nextMuted || clampedBoost <= 0;
     setBoostedVolume(clampedBoost);
     setMuted(effectiveMuted);
     setVolume(Math.min(1, clampedBoost / 100));
-    void applyBoost(clampedBoost, effectiveMuted);
-  }, [applyBoost, maxBoostPercent, muted]);
+    const v = videoRef.current;
+    if (v) {
+      v.muted = effectiveMuted;
+      v.volume = effectiveMuted ? 0 : Math.min(1, clampedBoost / 100);
+    }
+  }, [muted]);
 
   const getSafeSeekTime = useCallback((v: HTMLVideoElement, target: number) => {
     if (!Number.isFinite(v.duration) || v.duration <= 0) return 0;
@@ -1079,11 +1079,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentQuality(option.label);
     setShowSettings(false);
 
-    // R2 cache: check for cached version of new quality; upload starts on actual playback
-    if (!noProxy && option.src && !is4KLabel(option.label)) {
-      checkR2CacheForSource(option.src);
-    }
-  }, [currentQuality, currentSrc, isPremium, noProxy, resolvePlaybackSrc, checkR2CacheForSource]);
+  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
@@ -1173,7 +1169,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setSwipeState({ ...swipeState, type: relX > 0.5 ? "volume" : "brightness" });
     }
     if (swipeState.type === "volume") {
-      const newBoosted = Math.min(maxBoostPercent, Math.max(0, boostedVolume - dy * 0.8));
+      const newBoosted = Math.min(MAX_VOL, Math.max(0, boostedVolume - dy * 0.8));
       applyPlayerVolume(newBoosted, false);
       setSwipeState({ ...swipeState, startY: t.clientY });
     } else if (swipeState.type === "brightness") {
@@ -1181,7 +1177,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setBrightness(newBr);
       setSwipeState({ ...swipeState, startY: t.clientY });
     }
-  }, [swipeState, locked, brightness, boostedVolume, maxBoostPercent, muted, applyPlayerVolume]);
+  }, [swipeState, locked, brightness, boostedVolume, muted, applyPlayerVolume]);
 
   const handleTouchEnd = useCallback(() => setSwipeState(null), []);
 
