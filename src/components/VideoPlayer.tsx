@@ -1265,7 +1265,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           )}
 
           {/* Loading/Buffering Overlay - Anime themed */}
-          {isBuffering && !videoError && (
+          {showLoaderOverlay && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/85 z-15 pointer-events-none">
               <div className="flex flex-col items-center">
                 {/* RGB Spinner around anime character */}
