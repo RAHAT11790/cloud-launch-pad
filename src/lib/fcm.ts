@@ -2,7 +2,7 @@ import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { initializeApp, getApps } from "firebase/app";
 import { db, ref, set, get, update, remove } from "@/lib/firebase";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
-import { SITE_ICON_URL, SITE_URL } from "@/lib/siteConfig";
+import { SITE_ICON_URL, SITE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { toast } from "sonner";
 
 const firebaseConfig = {
@@ -102,6 +102,20 @@ const resolvePublicUrl = (url?: string) => {
   return `${SITE_URL}${url.startsWith("/") ? url : `/${url}`}`;
 };
 
+const isSupabaseFunctionUrl = (url?: string) => {
+  if (!url) return false;
+  return /supabase\.co\/functions\/v1\//i.test(url);
+};
+
+const buildFunctionHeaders = (endpoint: string): HeadersInit => {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (isSupabaseFunctionUrl(endpoint) && SUPABASE_ANON_KEY) {
+    headers.apikey = SUPABASE_ANON_KEY;
+    headers.Authorization = `Bearer ${SUPABASE_ANON_KEY}`;
+  }
+  return headers;
+};
+
 /** Get or create a stable device ID for this browser */
 const getDeviceId = (): string => {
   const KEY = "rs_fcm_device_id";
@@ -126,11 +140,12 @@ const fetchWithTimeout = async (input: RequestInfo | URL, init: RequestInit, tim
 const requestWithRetry = async (body: unknown, retries = 2): Promise<Response> => {
   let lastError: unknown = null;
   const endpoint = await getSendFcmEndpoint();
+  if (!endpoint) throw new Error("FCM endpoint is not configured");
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await fetchWithTimeout(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: buildFunctionHeaders(endpoint),
         body: JSON.stringify(body),
         keepalive: true,
       });
@@ -484,6 +499,54 @@ export type PushProgress = {
   failReasons?: { invalid: number; transient: number; other: number };
 };
 
+type SendFcmResult = {
+  ok?: boolean;
+  error?: string;
+  totalTokens?: number;
+  success?: number;
+  failed?: number;
+  invalidRemoved?: number;
+  invalidTokens?: string[];
+  failReasons?: { invalid: number; transient: number; other: number };
+};
+
+const postFcmRequest = async (
+  endpoint: string,
+  body: Record<string, unknown>,
+  timeoutMs = 120000
+): Promise<SendFcmResult> => {
+  if (!endpoint) throw new Error("FCM endpoint is not configured");
+
+  const response = await fetchWithTimeout(endpoint, {
+    method: "POST",
+    headers: buildFunctionHeaders(endpoint),
+    body: JSON.stringify(body),
+  }, timeoutMs);
+
+  const raw = await response.text();
+  let data: SendFcmResult = {};
+
+  if (raw) {
+    try {
+      data = JSON.parse(raw) as SendFcmResult;
+    } catch {
+      if (!response.ok) {
+        throw new Error(raw || `FCM request failed with ${response.status}`);
+      }
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || raw || `FCM request failed with ${response.status}`);
+  }
+
+  if (data?.ok === false) {
+    throw new Error(data.error || "FCM endpoint returned ok=false");
+  }
+
+  return data;
+};
+
 const normalizePushData = (payload: PushPayload) => {
   const normalizedData: Record<string, string> = {};
   Object.entries(payload.data || {}).forEach(([key, value]) => {
@@ -704,9 +767,10 @@ export const sendPushToAllUsers = async (
 
       const normalizedData = normalizePushData(payload);
       const uniqueUserIds = [...new Set(allUserIds.filter(Boolean))];
-      const splitIndex = providerConfig.url2 ? Math.ceil(uniqueUserIds.length / 2) : uniqueUserIds.length;
+      const secondEndpoint = providerConfig.url2 && providerConfig.url2 !== providerConfig.url ? providerConfig.url2 : "";
+      const splitIndex = secondEndpoint ? Math.ceil(uniqueUserIds.length / 2) : uniqueUserIds.length;
       const firstHalf = uniqueUserIds.slice(0, splitIndex);
-      const secondHalf = providerConfig.url2 ? uniqueUserIds.slice(splitIndex) : [];
+      const secondHalf = secondEndpoint ? uniqueUserIds.slice(splitIndex) : [];
 
       const requestBodyBase = {
         title: payload.title,
@@ -717,24 +781,13 @@ export const sendPushToAllUsers = async (
         data: normalizedData,
       };
 
-      const requests = [
-        fetchWithTimeout(providerConfig.url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...requestBodyBase, userIds: firstHalf }),
-        }, 120000),
-      ];
+      const requests = [postFcmRequest(providerConfig.url, { ...requestBodyBase, userIds: firstHalf })];
 
-      if (providerConfig.url2 && secondHalf.length > 0) {
-        requests.push(fetchWithTimeout(providerConfig.url2, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...requestBodyBase, userIds: secondHalf }),
-        }, 120000));
+      if (secondEndpoint && secondHalf.length > 0) {
+        requests.push(postFcmRequest(secondEndpoint, { ...requestBodyBase, userIds: secondHalf }));
       }
 
-      const responses = await Promise.all(requests);
-      const results = await Promise.all(responses.map(res => res.json().catch(() => ({}))));
+      const results = await Promise.all(requests);
 
       const merged = results.reduce((acc, result) => {
         acc.totalTokens += Number(result.totalTokens || 0);
