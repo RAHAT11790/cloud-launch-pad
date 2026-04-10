@@ -1809,6 +1809,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "ai-config": "AI Chat Config",
     "live-tv": "Live TV Channels",
     "url-changer": "URL Changer",
+    "link-checker": "Link Checker",
   };
 
   // ==================== CATEGORIES ====================
