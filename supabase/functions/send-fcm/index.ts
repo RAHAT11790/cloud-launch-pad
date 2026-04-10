@@ -73,8 +73,14 @@ async function getAccessToken(sa: any): Promise<string> {
 
 // ---- RTDB helpers ----
 async function fetchRTDB(url: string, token: string) {
-  const res = await fetch(`${url}.json?access_token=${token}`);
-  if (!res.ok) throw new Error(`RTDB ${res.status}`);
+  const res = await fetch(`${url}.json`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    console.error(`RTDB error ${res.status}: ${errBody.substring(0, 200)}`);
+    throw new Error(`RTDB ${res.status}: ${errBody.substring(0, 100)}`);
+  }
   return res.json();
 }
 
@@ -136,9 +142,24 @@ serve(async (req) => {
 
   try {
     const saRaw = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_KEY");
-    if (!saRaw) return json({ error: "FIREBASE_SERVICE_ACCOUNT_KEY not set" }, 500);
+    if (!saRaw) {
+      console.error("FIREBASE_SERVICE_ACCOUNT_KEY is not set in environment");
+      return json({ error: "FIREBASE_SERVICE_ACCOUNT_KEY not set" }, 500);
+    }
 
-    const sa = JSON.parse(saRaw);
+    let sa: any;
+    try {
+      sa = JSON.parse(saRaw);
+    } catch (parseErr) {
+      console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:", parseErr);
+      return json({ error: "Invalid FIREBASE_SERVICE_ACCOUNT_KEY format" }, 500);
+    }
+
+    if (!sa.client_email || !sa.private_key || !sa.project_id) {
+      console.error("FIREBASE_SERVICE_ACCOUNT_KEY missing required fields (client_email, private_key, project_id)");
+      return json({ error: "FIREBASE_SERVICE_ACCOUNT_KEY incomplete" }, 500);
+    }
+
     const projectId = sa.project_id;
     const dbUrl = `https://${projectId}-default-rtdb.firebaseio.com`;
     const accessToken = await getAccessToken(sa);
@@ -244,6 +265,6 @@ serve(async (req) => {
     });
   } catch (err: any) {
     console.error("send-fcm error:", err);
-    return json({ error: err?.message || "Internal error" }, 500);
+    return json({ error: err?.message || "Internal error", detail: String(err).substring(0, 200) }, 500);
   }
 });
