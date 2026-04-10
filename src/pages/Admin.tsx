@@ -3938,6 +3938,23 @@ ${tgHashtags}`;
                               <RefreshCw size={12} /> রিপ্লেস করো
                             </button>
                             {inlineResult && <p className="text-[10px] text-green-400 mt-2">✅ {inlineResult.replaced}/{inlineResult.total} রিপ্লেস হয়েছে</p>}
+                            
+                            {/* Quick Presets */}
+                            <div className="mt-3 pt-3 border-t border-zinc-700/30">
+                              <p className="text-[9px] text-zinc-500 mb-2">⚡ Quick Presets</p>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <button onClick={() => { setInlineOldDomain("http://fi3.bot-hosting.net:22854"); setInlineNewDomain("https://rahat1102-video-hosting-bot.hf.space"); }}
+                                  className="text-left p-2 rounded-lg bg-zinc-800/40 border border-zinc-700/40 hover:border-cyan-500/30 transition-all">
+                                  <p className="text-[9px] font-semibold text-white">Bot → HF</p>
+                                  <p className="text-[8px] text-zinc-500">fi3.bot → hf.space</p>
+                                </button>
+                                <button onClick={() => { setInlineOldDomain("https://rahat1102-video-hosting-bot.hf.space"); setInlineNewDomain("http://fi3.bot-hosting.net:22854"); }}
+                                  className="text-left p-2 rounded-lg bg-zinc-800/40 border border-zinc-700/40 hover:border-cyan-500/30 transition-all">
+                                  <p className="text-[9px] font-semibold text-white">HF → Bot</p>
+                                  <p className="text-[8px] text-zinc-500">hf.space → fi3.bot</p>
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         );
                       };
@@ -10109,6 +10126,8 @@ const LinkCheckerSection = ({
   const [jsonInput, setJsonInput] = useState("");
   const [expandedContent, setExpandedContent] = useState<Set<string>>(new Set());
   const abortRef = useRef(false);
+  const [filterSeason, setFilterSeason] = useState<string>("all");
+  const [filterEpisode, setFilterEpisode] = useState<string>("all");
 
   const allContent = useMemo(() => [
     ...webseriesData.map(w => ({ ...w, _type: 'webseries' as const })),
