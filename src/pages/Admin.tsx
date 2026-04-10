@@ -10778,14 +10778,28 @@ const WsInlineLinkChecker = ({
     abortRef.current = false; setChecking(true); setBrokenLinks([]); setGoodCount(0); setDone(false);
     const broken: typeof brokenLinks = [];
     let totalLinks = 0, checked = 0, good = 0;
-    seasonsData.forEach(s => s.episodes?.forEach((ep: any) => {
-      for (const q of qualityFields) if (ep[q] && typeof ep[q] === 'string' && ep[q].trim()) totalLinks++;
-    }));
+
+    // Filter seasons/episodes based on selection
+    const targetSeasons = filterSeason === "all" ? seasonsData : [seasonsData[Number(filterSeason)]];
+
+    targetSeasons.forEach(s => {
+      if (!s?.episodes) return;
+      const eps = filterSeason !== "all" && filterEpisode !== "all" ? [s.episodes[Number(filterEpisode)]] : s.episodes;
+      eps.forEach((ep: any) => {
+        if (!ep) return;
+        for (const q of qualityFields) if (ep[q] && typeof ep[q] === 'string' && ep[q].trim()) totalLinks++;
+      });
+    });
+
     setProgress({ current: 0, total: totalLinks, currentTitle: "" });
-    for (let sIdx = 0; sIdx < seasonsData.length; sIdx++) {
-      const season = seasonsData[sIdx];
-      for (let eIdx = 0; eIdx < (season.episodes?.length || 0); eIdx++) {
-        const ep = season.episodes[eIdx];
+
+    for (let sIdx = 0; sIdx < targetSeasons.length; sIdx++) {
+      const season = targetSeasons[sIdx];
+      if (!season?.episodes) continue;
+      const episodes = filterSeason !== "all" && filterEpisode !== "all" ? [season.episodes[Number(filterEpisode)]] : season.episodes;
+      for (let eIdx = 0; eIdx < (episodes?.length || 0); eIdx++) {
+        const ep = episodes[eIdx];
+        if (!ep) continue;
         for (const q of qualityFields) {
           const url = ep[q];
           if (!url || typeof url !== 'string' || !url.trim()) continue;
