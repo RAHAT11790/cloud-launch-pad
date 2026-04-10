@@ -73,9 +73,7 @@ async function getAccessToken(sa: any): Promise<string> {
 
 // ---- RTDB helpers ----
 async function fetchRTDB(url: string, token: string) {
-  const res = await fetch(`${url}.json`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(`${url}.json?access_token=${encodeURIComponent(token)}`);
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
     console.error(`RTDB error ${res.status}: ${errBody.substring(0, 200)}`);
@@ -85,10 +83,9 @@ async function fetchRTDB(url: string, token: string) {
 }
 
 async function patchRTDB(url: string, token: string, body: Record<string, null>) {
-  const res = await fetch(`${url}.json`, {
+  const res = await fetch(`${url}.json?access_token=${encodeURIComponent(token)}`, {
     method: "PATCH",
     headers: {
-      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
