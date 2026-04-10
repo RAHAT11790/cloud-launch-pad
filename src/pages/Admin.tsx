@@ -16,7 +16,7 @@ import {
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker";
 
 interface CastMember {
   name: string;
@@ -3054,6 +3054,7 @@ ${tgHashtags}`;
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
     { section: "url-changer", icon: <Link size={16} />, label: "URL Changer" },
+    { section: "link-checker", icon: <Search size={16} />, label: "Link Checker" },
     { section: "ui-themes", icon: <Zap size={16} />, label: "UI Themes", group: "Customization" },
     { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
     { section: "settings", icon: <Settings size={16} />, label: "Settings" },
@@ -3863,6 +3864,19 @@ ${tgHashtags}`;
                         const [inlineOldDomain, setInlineOldDomain] = useState("");
                         const [inlineNewDomain, setInlineNewDomain] = useState("");
                         const [inlineResult, setInlineResult] = useState<{ total: number; replaced: number } | null>(null);
+                        const [inlineQP, setInlineQP] = useState("");
+                        const [showInlineQP, setShowInlineQP] = useState(false);
+
+                        const handleInlineQP = () => {
+                          const t = inlineQP.trim();
+                          if (!t) { toast.error("লিংক পেস্ট করো!"); return; }
+                          try {
+                            const u = new URL(t.split('\n')[0].trim());
+                            setInlineOldDomain(`${u.protocol}//${u.host}`);
+                            toast.success(`✅ ডোমেইন সেট: ${u.protocol}//${u.host}`);
+                            setShowInlineQP(false); setInlineQP("");
+                          } catch { toast.error("সঠিক URL পেস্ট করো!"); }
+                        };
 
                         const replaceInSeasonsData = () => {
                           if (!inlineOldDomain.trim() || !inlineNewDomain.trim()) { toast.error("দুটো ডোমেইনই দিতে হবে!"); return; }
@@ -3897,6 +3911,24 @@ ${tgHashtags}`;
                           <div className={`${glassCard} p-4 mb-4`}>
                             <h4 className="text-xs font-bold text-white mb-2 flex items-center gap-2"><Link size={12} className="text-cyan-400" /> 🔗 URL Replace</h4>
                             <p className="text-[9px] text-zinc-400 mb-3">এই সিরিজের সব লিংকে ডোমেইন রিপ্লেস করো। সেভ করলেই Firebase-এ যাবে।</p>
+                            
+                            {/* Quick Paste */}
+                            <button onClick={() => setShowInlineQP(!showInlineQP)}
+                              className="mb-2 text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+                              <Download size={10} /> Quick Paste (লিংক থেকে ডোমেইন বের করো)
+                            </button>
+                            {showInlineQP && (
+                              <div className="mb-3 bg-black/20 rounded-xl border border-cyan-500/20 p-2.5">
+                                <textarea value={inlineQP} onChange={e => setInlineQP(e.target.value)}
+                                  placeholder="যেকোনো ভিডিও লিংক পেস্ট করো — ডোমেইন অটো সেট হবে"
+                                  className={`${inputClass} w-full min-h-[50px] resize-none text-[10px] font-mono mb-2`} />
+                                <button onClick={handleInlineQP} disabled={!inlineQP.trim()}
+                                  className={`${btnPrimary} w-full py-1.5 text-[10px] flex items-center justify-center gap-1 disabled:opacity-30`}>
+                                  <Check size={11} /> ডোমেইন সেট করো
+                                </button>
+                              </div>
+                            )}
+
                             <div className="grid grid-cols-1 gap-2 mb-3">
                               <input value={inlineOldDomain} onChange={e => setInlineOldDomain(e.target.value)} placeholder="পুরাতন: http://fi3.bot-hosting.net:22854" className={`${inputClass} !text-[10px]`} />
                               <input value={inlineNewDomain} onChange={e => setInlineNewDomain(e.target.value)} placeholder="নতুন: https://rahat1102-video-hosting-bot.hf.space" className={`${inputClass} !text-[10px]`} />
@@ -5649,13 +5681,7 @@ ${tgHashtags}`;
               webseriesData={webseriesData}
             />
 
-            {/* Link Checker */}
-            <LinkCheckerSection
-              glassCard={glassCard}
-              btnPrimary={btnPrimary}
-              webseriesData={webseriesData}
-              moviesData={moviesData}
-            />
+            {/* Link Checker moved to dedicated section */}
           </div>
         )}
 
