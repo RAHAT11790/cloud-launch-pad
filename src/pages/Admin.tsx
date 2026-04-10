@@ -371,7 +371,7 @@ const TelegramWebhookSection = ({ glassCard, inputClass, btnPrimary, btnSecondar
   return (
     <div className={`${glassCard} p-4 mb-4`}>
       <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-        <MessageSquare size={14} className="text-purple-400" /> 🤖 Telegram Bot /start Webhook
+        <MessageCircle size={14} className="text-purple-400" /> 🤖 Telegram Bot /start Webhook
       </h3>
       <p className="text-[10px] text-zinc-400 mb-3">
         Webhook সেট করলে কেউ বটে /start দিলে সুন্দর Welcome মেসেজ পাবে — ওয়েবসাইটের ডিটেলস, চ্যানেল লিংক সহ।
