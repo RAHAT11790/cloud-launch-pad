@@ -64,6 +64,8 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
         setCfUrlInput(val.cloudflareUrl || "");
         setSbUrl(val.supabaseUrl || "");
         setSbUrlInput(val.supabaseUrl || "");
+        setSbUrl2(val.supabaseUrl2 || "");
+        setSbUrl2Input(val.supabaseUrl2 || "");
       }
     });
     return () => unsub();
@@ -200,14 +202,14 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
       {/* Supabase URL */}
       <div className={`p-3 rounded-xl border ${activeProvider === "supabase" ? "border-emerald-500/40 bg-zinc-800/60" : "border-zinc-700/30 bg-zinc-800/20 opacity-50"}`}>
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-[11px] font-semibold">🟢 Supabase FCM URL</span>
+          <span className="text-[11px] font-semibold">🟢 Supabase FCM URL 1</span>
           {testResults.supabase && (
             <span className={`text-[9px] font-mono ${testResults.supabase.alive ? "text-green-400" : "text-red-400"}`}>
               {testResults.supabase.alive ? `✓ ${testResults.supabase.latency}ms` : "✕ Down"}
             </span>
           )}
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 mb-2">
           <input value={sbUrlInput} onChange={(e) => setSbUrlInput(e.target.value)}
             placeholder="https://xxx.supabase.co/functions/v1/send-fcm" className={`${inputClass} !text-[10px] !py-1.5 flex-1`} />
           <button onClick={saveSbUrl} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}><Save size={10} /></button>
@@ -215,7 +217,15 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
             {testing === "supabase" ? <RefreshCw size={10} className="animate-spin" /> : <Activity size={10} />}
           </button>
         </div>
-        <p className="text-[9px] text-zinc-500 mt-1.5">⚡ Supabase সার্ভার-সাইডে সরাসরি Firebase থেকে টোকেন নেয় — বেশি reliable</p>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[11px] font-semibold">🟢 Supabase FCM URL 2</span>
+        </div>
+        <div className="flex gap-1.5">
+          <input value={sbUrl2Input} onChange={(e) => setSbUrl2Input(e.target.value)}
+            placeholder="https://xxx.supabase.co/functions/v1/send-fcm-b" className={`${inputClass} !text-[10px] !py-1.5 flex-1`} />
+          <button onClick={saveSbUrl2} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}><Save size={10} /></button>
+        </div>
+        <p className="text-[9px] text-zinc-500 mt-1.5">⚡ দুইটা Supabase URL দিলে FCM send দুই ভাগে ভাগ হয়ে যাবে, duplicate ছাড়া</p>
       </div>
     </div>
   );

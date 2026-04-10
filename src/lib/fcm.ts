@@ -30,11 +30,12 @@ const MAX_TOKENS_PER_USER = 3;
 
 let messaging: any = null;
 let cachedSendFcmEndpoint: string | null = null;
-let cachedFcmProvider: { provider: "cloudflare" | "supabase"; url: string } | null = null;
+let cachedFcmProvider: { provider: "cloudflare" | "supabase"; url: string; url2?: string } | null = null;
 
 type FcmProviderConfig = {
   provider: "cloudflare" | "supabase";
   url: string;
+  url2?: string;
 };
 
 /** Get the active FCM provider config from Firebase */
@@ -49,8 +50,9 @@ const getFcmProviderConfig = async (): Promise<FcmProviderConfig> => {
       const url = activeProvider === "supabase" 
         ? (val.supabaseUrl || val.url || "")
         : (val.cloudflareUrl || val.url || "");
+      const url2 = activeProvider === "supabase" ? (val.supabaseUrl2 || "") : "";
       if (url) {
-        cachedFcmProvider = { provider: activeProvider, url };
+        cachedFcmProvider = { provider: activeProvider, url, url2 };
         setTimeout(() => { cachedFcmProvider = null; }, 30000);
         return cachedFcmProvider;
       }
