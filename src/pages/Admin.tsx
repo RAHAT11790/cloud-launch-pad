@@ -2920,7 +2920,10 @@ ${tgHashtags}`;
           const endpoint = await getEdgeFunctionUrl('telegram-post');
           const response = await fetch(endpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+            },
             body: JSON.stringify(payload),
           });
           const rawText = await response.text();
@@ -5446,7 +5449,10 @@ ${tgHashtags}`;
                   const endpoint = await getEdgeFunctionUrl('telegram-post');
                   const res = await fetch(endpoint, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+                    },
                     body: JSON.stringify({
                       action: "edit-buttons",
                       chatId: post.chatId,
