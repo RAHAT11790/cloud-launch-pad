@@ -10293,17 +10293,31 @@ const LinkCheckerSection = ({
     const broken: typeof brokenLinks = [];
     let totalLinks = 0;
 
+    // Helper: should we include this season/episode?
+    const shouldIncludeSeason = (sIdx: number) => {
+      if (mode !== "single" || filterSeason === "all") return true;
+      return sIdx === Number(filterSeason);
+    };
+    const shouldIncludeEpisode = (eIdx: number) => {
+      if (mode !== "single" || filterSeason === "all" || filterEpisode === "all") return true;
+      return eIdx === Number(filterEpisode);
+    };
+
     for (const content of targetContent) {
       if (content._type === 'webseries' && content.seasons) {
-        for (const [, season] of Object.entries(content.seasons as Record<string, any>)) {
+        const seasonEntries = Object.entries(content.seasons as Record<string, any>);
+        seasonEntries.forEach(([, season], sIdx) => {
+          if (!shouldIncludeSeason(sIdx)) return;
           if (season.episodes) {
-            for (const [, ep] of Object.entries(season.episodes as Record<string, any>)) {
+            const epEntries = Object.entries(season.episodes as Record<string, any>);
+            epEntries.forEach(([, ep], eIdx) => {
+              if (!shouldIncludeEpisode(eIdx)) return;
               for (const q of qualityFields) {
                 if (ep[q] && typeof ep[q] === 'string' && ep[q].trim()) totalLinks++;
               }
-            }
+            });
           }
-        }
+        });
       } else if (content._type === 'movies') {
         for (const q of qualityFields) {
           if (content[q] && typeof content[q] === 'string' && content[q].trim()) totalLinks++;
