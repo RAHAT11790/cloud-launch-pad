@@ -2880,7 +2880,20 @@ ${tgHashtags}`;
           if (!response.ok || data?.error) {
             results.push({ id: chatId, ok: false, error: data?.error || 'API error' });
           } else {
-            results.push({ id: chatId, ok: true });
+            results.push({ id: chatId, ok: true, messageId: data?.result?.message_id || data?.message_id });
+            // Save to Firebase for future button URL editing
+            const msgId = data?.result?.message_id || data?.message_id;
+            if (msgId) {
+              const postRecord = {
+                chatId,
+                messageId: msgId,
+                title: tgTitle,
+                poster: tgPosterUrl || "",
+                buttons: inlineButtons,
+                sentAt: Date.now(),
+              };
+              try { await set(ref(db, `telegramPosts/${chatId.replace(/[^a-zA-Z0-9_-]/g, '_')}_${msgId}`), postRecord); } catch {}
+            }
           }
         } catch (err: any) {
           results.push({ id: chatId, ok: false, error: err.message });
