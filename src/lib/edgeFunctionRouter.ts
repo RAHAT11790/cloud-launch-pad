@@ -9,9 +9,7 @@ import { db, ref, get } from "@/lib/firebase";
 
 // ---- Default built-in Cloudflare Worker endpoints ----
 export const DEFAULT_CF_FUNCTIONS = [
-  "telegram-post",
   "shorten",
-  "send-fcm",
   "animesalt",
 ] as const;
 
@@ -88,6 +86,16 @@ export function buildFunctionUrl(endpoint: string, config: EdgeRouterConfig): st
 
 /** Get URL for a named function — checks per-function overrides first */
 export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
+  // Telegram has its own dedicated Supabase URL
+  if (fnName === "telegram-post") {
+    try {
+      const snap = await get(ref(db, "settings/telegramProvider"));
+      const val = snap.val();
+      if (val?.url) return val.url;
+    } catch {}
+    return "";
+  }
+
   // Check per-function override from Firebase
   try {
     const overrideSnap = await get(ref(db, `settings/functionOverrides/${fnName}`));
@@ -160,10 +168,8 @@ export async function checkFunctionStatus(
 /** Get built-in description */
 function getBuiltInDescription(fn: string): string {
   const d: Record<string, string> = {
-    "telegram-post": "Send Telegram message",
     "shorten": "URL shortener",
     "animesalt": "AnimeSalt scraper",
-    "send-fcm": "Push notification sender",
   };
   return d[fn] || fn;
 }
