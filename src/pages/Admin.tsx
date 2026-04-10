@@ -10844,6 +10844,26 @@ const WsInlineLinkChecker = ({
           </button>
         )}
       </div>
+      {/* Season/Episode Filter */}
+      {!checking && !done && seasonsData.length > 0 && (
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <select value={filterSeason} onChange={e => { setFilterSeason(e.target.value); setFilterEpisode("all"); }}
+            className="text-[10px] bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white">
+            <option value="all">সব সিজন</option>
+            {seasonsData.map((s: any, i: number) => (
+              <option key={i} value={String(i)}>{s.name || `Season ${i + 1}`}</option>
+            ))}
+          </select>
+          <select value={filterEpisode} onChange={e => setFilterEpisode(e.target.value)}
+            disabled={filterSeason === "all"}
+            className="text-[10px] bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white disabled:opacity-40">
+            <option value="all">সব এপিসোড</option>
+            {filteredEpisodes.map((ep: any, i: number) => (
+              <option key={i} value={String(i)}>EP {ep.episodeNumber || i + 1}</option>
+            ))}
+          </select>
+        </div>
+      )}
       {checking && (
         <div className="mb-3">
           <div className="flex justify-between text-[10px] text-zinc-400 mb-1">
