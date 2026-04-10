@@ -10699,6 +10699,14 @@ const WsInlineLinkChecker = ({
   const [progress, setProgress] = useState({ current: 0, total: 0, currentTitle: "" });
   const [done, setDone] = useState(false);
   const abortRef = useRef(false);
+  const [filterSeason, setFilterSeason] = useState<string>("all");
+  const [filterEpisode, setFilterEpisode] = useState<string>("all");
+
+  const filteredEpisodes = useMemo(() => {
+    if (filterSeason === "all") return [];
+    const s = seasonsData[Number(filterSeason)];
+    return s?.episodes || [];
+  }, [seasonsData, filterSeason]);
 
   const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
   const qualityFields = ['link', 'link480', 'link720', 'link1080', 'link4k'] as const;
