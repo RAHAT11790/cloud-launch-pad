@@ -3857,6 +3857,100 @@ ${tgHashtags}`;
                       ))}
                     </div>
 
+                    {/* Inline URL Changer for current series */}
+                    {seasonsData.length > 0 && (() => {
+                      const InlineUrlChanger = () => {
+                        const [inlineOldDomain, setInlineOldDomain] = useState("");
+                        const [inlineNewDomain, setInlineNewDomain] = useState("");
+                        const [inlineResult, setInlineResult] = useState<{ total: number; replaced: number } | null>(null);
+
+                        const replaceInSeasonsData = () => {
+                          if (!inlineOldDomain.trim() || !inlineNewDomain.trim()) { toast.error("দুটো ডোমেইনই দিতে হবে!"); return; }
+                          const old = inlineOldDomain.trim();
+                          const nw = inlineNewDomain.trim();
+                          let totalLinks = 0, replacedLinks = 0;
+
+                          const updatedSeasons = seasonsData.map(season => ({
+                            ...season,
+                            episodes: season.episodes.map(ep => {
+                              const updatedEp = { ...ep } as any;
+                              ["link", "link480", "link720", "link1080", "link4k"].forEach(field => {
+                                if (updatedEp[field]) { totalLinks++; if (updatedEp[field].includes(old)) { updatedEp[field] = updatedEp[field].replace(old, nw); replacedLinks++; } }
+                              });
+                              if (updatedEp.audioTracks) {
+                                updatedEp.audioTracks = updatedEp.audioTracks.map((at: any) => {
+                                  const u = { ...at };
+                                  ["link", "link480", "link720", "link1080", "link4k"].forEach(f => { if (u[f]) { totalLinks++; if (u[f].includes(old)) { u[f] = u[f].replace(old, nw); replacedLinks++; } } });
+                                  return u;
+                                });
+                              }
+                              return updatedEp;
+                            }),
+                          }));
+
+                          setSeasonsData(updatedSeasons);
+                          setInlineResult({ total: totalLinks, replaced: replacedLinks });
+                          toast.success(`✅ ${replacedLinks}/${totalLinks} লিংক রিপ্লেস হয়েছে! (সেভ করতে ভুলো না)`);
+                        };
+
+                        return (
+                          <div className={`${glassCard} p-4 mb-4`}>
+                            <h4 className="text-xs font-bold text-white mb-2 flex items-center gap-2"><Link size={12} className="text-cyan-400" /> 🔗 URL Replace</h4>
+                            <p className="text-[9px] text-zinc-400 mb-3">এই সিরিজের সব লিংকে ডোমেইন রিপ্লেস করো। সেভ করলেই Firebase-এ যাবে।</p>
+                            <div className="grid grid-cols-1 gap-2 mb-3">
+                              <input value={inlineOldDomain} onChange={e => setInlineOldDomain(e.target.value)} placeholder="পুরাতন: http://fi3.bot-hosting.net:22854" className={`${inputClass} !text-[10px]`} />
+                              <input value={inlineNewDomain} onChange={e => setInlineNewDomain(e.target.value)} placeholder="নতুন: https://rahat1102-video-hosting-bot.hf.space" className={`${inputClass} !text-[10px]`} />
+                            </div>
+                            <button onClick={replaceInSeasonsData} className={`${btnPrimary} w-full py-2 text-[11px] flex items-center justify-center gap-1.5`}>
+                              <RefreshCw size={12} /> রিপ্লেস করো
+                            </button>
+                            {inlineResult && <p className="text-[10px] text-green-400 mt-2">✅ {inlineResult.replaced}/{inlineResult.total} রিপ্লেস হয়েছে</p>}
+                          </div>
+                        );
+                      };
+                      return <InlineUrlChanger />;
+                    })()}
+
+                    {/* Export JSON for current series */}
+                    {seasonsData.length > 0 && (
+                      <div className={`${glassCard} p-4 mb-4`}>
+                        <h4 className="text-xs font-bold text-white mb-2 flex items-center gap-2"><Download size={12} className="text-green-400" /> 📦 Export JSON</h4>
+                        <p className="text-[9px] text-zinc-400 mb-3">এই সিরিজের সব সিজন ও এপিসোডের JSON ডাউনলোড করো।</p>
+                        <button onClick={() => {
+                          const exportData = {
+                            title: seriesForm?.title || "Unknown",
+                            seasons: seasonsData.map(s => ({
+                              name: s.name,
+                              seasonNumber: s.seasonNumber,
+                              episodes: s.episodes.map(ep => {
+                                const epData: any = {
+                                  episodeNumber: ep.episodeNumber,
+                                  title: ep.title,
+                                  link: ep.link,
+                                };
+                                if (ep.link480) epData.link480 = ep.link480;
+                                if (ep.link720) epData.link720 = ep.link720;
+                                if (ep.link1080) epData.link1080 = ep.link1080;
+                                if (ep.link4k) epData.link4k = ep.link4k;
+                                if ((ep as any).audioTracks?.length) epData.audioTracks = (ep as any).audioTracks;
+                                return epData;
+                              }),
+                            })),
+                          };
+                          const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `${(seriesForm?.title || "series").replace(/[^a-zA-Z0-9]/g, "_")}_export.json`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          toast.success("✅ JSON ডাউনলোড হয়েছে!");
+                        }} className={`${btnPrimary} w-full py-2.5 text-[11px] flex items-center justify-center gap-1.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500`}>
+                          <Download size={12} /> Export JSON
+                        </button>
+                      </div>
+                    )}
+
                     {/* Inline Link Checker for current series */}
                     <WsInlineLinkChecker
                       seasonsData={seasonsData}
