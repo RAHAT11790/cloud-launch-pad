@@ -39,6 +39,11 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   return url;
 };
 
+const isDirectPlaybackUrl = (url: string): boolean => {
+  const normalized = url.trim().toLowerCase();
+  return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
+};
+
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
   if (!url) return [];
 
@@ -51,21 +56,17 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const encoded = encodeURIComponent(url);
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+  const prefersDirectPlayback = isDirectPlaybackUrl(url);
 
-  if (cdnEnabled && cloudflareCandidate) {
-    addCandidate(cloudflareCandidate);
+  if (prefersDirectPlayback) {
+    addCandidate(url);
+    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
     return candidates;
   }
 
-  // Always try proxy first if available
-  if (customProxyCandidate) {
-    addCandidate(customProxyCandidate);
-  }
-
-  // For HTTPS URLs, also try direct as fallback
-  if (url.startsWith('https://')) {
-    addCandidate(url);
-  }
+  if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+  if (customProxyCandidate) addCandidate(customProxyCandidate);
 
   // http:// cannot be loaded directly on https pages (mixed content)
   // so only proxy candidates are valid
@@ -167,6 +168,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
+    const canStartDirectly = isDirectPlaybackUrl(src);
+
     if (noProxy) {
       setCdnEnabled(false);
       setProxyUrl('');
@@ -177,10 +180,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     let cdnLoaded = false;
     let proxyLoaded = false;
-    setPlaybackRouteReady(false);
+    setPlaybackRouteReady(canStartDirectly);
 
     const markReady = () => {
-      if (cdnLoaded && proxyLoaded) setPlaybackRouteReady(true);
+      if (canStartDirectly || (cdnLoaded && proxyLoaded)) setPlaybackRouteReady(true);
     };
 
     const unsub1 = onValue(ref(db, "settings/cdnEnabled"), (snap) => {
@@ -208,7 +211,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       unsub1();
       unsub2();
     };
-  }, [noProxy]);
+  }, [noProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
   const [shortenedLink, setShortenedLink] = useState<string | null>(null);
@@ -222,6 +225,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [qualityFailMsg, setQualityFailMsg] = useState<string | null>(null);
   const failedSrcsRef = useRef<Set<string>>(new Set());
   const [isBuffering, setIsBuffering] = useState(true);
+  const [showFixedLoader, setShowFixedLoader] = useState(true);
+  const loaderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [tutorialLink, setTutorialLink] = useState<string | null>(null);
   const [showTutorialVideo, setShowTutorialVideo] = useState(false);
@@ -612,6 +617,31 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     failedSrcsRef.current.clear();
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
+  useEffect(() => {
+    if (loaderTimeoutRef.current) {
+      clearTimeout(loaderTimeoutRef.current);
+      loaderTimeoutRef.current = null;
+    }
+
+    if (!currentSrc) {
+      setShowFixedLoader(false);
+      return;
+    }
+
+    setShowFixedLoader(true);
+    loaderTimeoutRef.current = setTimeout(() => {
+      setShowFixedLoader(false);
+      loaderTimeoutRef.current = null;
+    }, 5000);
+
+    return () => {
+      if (loaderTimeoutRef.current) {
+        clearTimeout(loaderTimeoutRef.current);
+        loaderTimeoutRef.current = null;
+      }
+    };
+  }, [currentSrc]);
+
   // Simple volume sync - no AudioContext needed
   useEffect(() => {
     const v = videoRef.current;
@@ -691,7 +721,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
   }, [resetHideTimer]);
 
-  // No fake timeout - loader only disappears when video actually loads (canplay/playing events)
+  const showLoaderOverlay = !!currentSrc && !videoError && (showFixedLoader || (isBuffering && playing));
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
@@ -1235,7 +1265,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           )}
 
           {/* Loading/Buffering Overlay - Anime themed */}
-          {isBuffering && !videoError && (
+          {showLoaderOverlay && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/85 z-15 pointer-events-none">
               <div className="flex flex-col items-center">
                 {/* RGB Spinner around anime character */}
