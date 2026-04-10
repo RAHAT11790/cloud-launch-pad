@@ -14,12 +14,17 @@ const json = (data: unknown, status = 200) =>
   });
 
 const buildKeyboard = (buttons: InlineButton[]) => ({
-  inline_keyboard: buttons.filter(btn => btn?.text && btn?.url).map((btn) => [{ text: btn.text, url: btn.url }]),
+  inline_keyboard: buttons
+    .filter((btn) => btn?.text && btn?.url)
+    .map((btn) => [{ text: btn.text, url: btn.url }]),
 });
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (req.method === "GET") return json({ ok: true, service: "telegram-post", actions: ["send", "edit-buttons"] });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
+
+  if (req.method === "GET")
+    return json({ ok: true, service: "telegram-post", actions: ["send", "edit-buttons"] });
 
   try {
     const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
@@ -29,10 +34,12 @@ serve(async (req) => {
     const action = String(body?.action || "send");
     const telegramBase = `https://api.telegram.org/bot${botToken}`;
 
+    // ========== EDIT BUTTONS ==========
     if (action === "edit-buttons") {
       const chatId = body?.chatId;
       const messageId = body?.messageId;
-      const inlineButtons = Array.isArray(body?.inlineButtons) ? body.inlineButtons : [];
+      const inlineButtons: InlineButton[] = Array.isArray(body?.inlineButtons) ? body.inlineButtons : [];
+
       if (!chatId || !messageId || inlineButtons.length === 0) {
         return json({ error: "chatId, messageId, inlineButtons required" }, 400);
       }
@@ -47,16 +54,18 @@ serve(async (req) => {
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data?.ok) return json({ error: data?.description || "Telegram API error" }, 400);
+      if (!res.ok || !data?.ok)
+        return json({ error: data?.description || "Telegram API error" }, 400);
       return json({ ok: true, result: data.result });
     }
 
+    // ========== SEND POST ==========
     const chatId = body?.chatId;
     const caption = String(body?.caption || "");
     const photoUrl = String(body?.photoUrl || "").trim();
     const buttonText = String(body?.buttonText || "").trim();
     const buttonUrl = String(body?.buttonUrl || "").trim();
-    const extraInlineButtons = Array.isArray(body?.inlineButtons) ? body.inlineButtons : [];
+    const extraInlineButtons: InlineButton[] = Array.isArray(body?.inlineButtons) ? body.inlineButtons : [];
 
     if (!chatId) return json({ error: "chatId required" }, 400);
 
@@ -83,7 +92,8 @@ serve(async (req) => {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok || !data?.ok) return json({ error: data?.description || "Telegram API error" }, 400);
+    if (!res.ok || !data?.ok)
+      return json({ error: data?.description || "Telegram API error" }, 400);
 
     return json({ ok: true, message_id: data?.result?.message_id, result: data.result });
   } catch (err: any) {
