@@ -117,7 +117,10 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
       const t = setTimeout(() => controller.abort(), 10000);
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(provider === "supabase" && SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+        },
         body: JSON.stringify({ tokens: [], title: "test", body: "test" }),
         signal: controller.signal,
       });
