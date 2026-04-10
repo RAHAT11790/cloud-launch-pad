@@ -231,6 +231,75 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
   );
 };
 
+// ==================== TELEGRAM PROVIDER SECTION ====================
+const TelegramProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
+  const [tgUrl, setTgUrl] = useState("");
+  const [tgUrlInput, setTgUrlInput] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ alive: boolean; latency: number } | null>(null);
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/telegramProvider"), (snap) => {
+      const val = snap.val();
+      setTgUrl(val?.url || "");
+      setTgUrlInput(val?.url || "");
+    });
+    return () => unsub();
+  }, []);
+
+  const saveTgUrl = async () => {
+    const url = tgUrlInput.trim();
+    await set(ref(db, "settings/telegramProvider"), { url });
+    setTgUrl(url);
+    toast.success("✅ Telegram Supabase URL সেভ হয়েছে!");
+    if (url) testTg(url);
+  };
+
+  const testTg = async (urlOverride?: string) => {
+    const url = urlOverride || tgUrl;
+    if (!url) { toast.error("URL দাও আগে"); return; }
+    setTesting(true);
+    setTestResult(null);
+    const start = Date.now();
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(url, { method: "GET", signal: controller.signal });
+      clearTimeout(t);
+      setTestResult({ alive: res.status < 500, latency: Date.now() - start });
+    } catch {
+      setTestResult({ alive: false, latency: Date.now() - start });
+    }
+    setTesting(false);
+  };
+
+  return (
+    <div className={`${glassCard} p-4 mb-4`}>
+      <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+        <Send size={14} className="text-blue-400" /> 📨 Telegram Supabase URL
+      </h3>
+      <p className="text-[10px] text-zinc-400 mb-3">
+        Supabase-এ telegram-post ফাংশন ডিপ্লয় করে URL এখানে দাও। টেলিগ্রাম পোস্ট ও বাটন এডিট সব এই URL দিয়ে হবে।
+      </p>
+      <div className="flex gap-2">
+        <input value={tgUrlInput} onChange={(e) => setTgUrlInput(e.target.value)}
+          placeholder="https://xxx.supabase.co/functions/v1/telegram-post"
+          className={`${inputClass} flex-1`} />
+        <button onClick={saveTgUrl} className={`${btnPrimary} !px-3`}>
+          <Save size={12} /> Save
+        </button>
+      </div>
+      {tgUrl && <p className="mt-1.5 text-[10px] text-green-400">✓ {tgUrl}</p>}
+      {testResult && (
+        <p className={`mt-1 text-[10px] ${testResult.alive ? "text-green-400" : "text-red-400"}`}>
+          {testResult.alive ? `✅ Live — ${testResult.latency}ms` : "❌ Down"}
+        </p>
+      )}
+      {testing && <p className="mt-1 text-[10px] text-yellow-400 animate-pulse">🔄 Testing...</p>}
+    </div>
+  );
+};
+
 // ==================== CLOUDFLARE WORKER ROUTER SECTION ====================
 const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
   const [baseUrl, setBaseUrl] = useState("");
@@ -242,7 +311,6 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const [fnOverrides, setFnOverrides] = useState<Record<string, { enabled: boolean; customUrl: string }>>({});
 
   const CORE_FUNCTIONS = [
-    { key: "telegram-post", label: "📨 Telegram Post", endpoint: "telegram-post" },
     { key: "shorten", label: "🔗 URL Shortener", endpoint: "shorten" },
   ];
 
