@@ -157,26 +157,6 @@ serve(async (req) => {
   if (req.method === "GET") return json({ ok: true, service: "send-fcm" });
 
   try {
-    // Diagnostic mode: POST with {diag:true}
-    const diagBody = req.method === "POST" ? await req.clone().json().catch(() => ({})) : {};
-    if (diagBody.diag === true) {
-      const saRaw = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_KEY");
-      if (!saRaw) return json({ diag: "NO_SECRET" });
-      let sa: any;
-      try { sa = JSON.parse(saRaw); } catch { return json({ diag: "INVALID_JSON" }); }
-      if (!sa.client_email || !sa.private_key || !sa.project_id)
-        return json({ diag: "MISSING_FIELDS", has: { email: !!sa.client_email, key: !!sa.private_key, project: !!sa.project_id } });
-      try {
-        const token = await getAccessToken(sa);
-        const dbUrl = `https://${sa.project_id}-default-rtdb.firebaseio.com`;
-        const testRes = await fetch(`${dbUrl}/fcmTokens.json?access_token=${encodeURIComponent(token)}&shallow=true`);
-        const testBody = await testRes.text();
-        return json({ diag: "OK", oauthOk: true, rtdbStatus: testRes.status, rtdbBody: testBody.substring(0, 500), projectId: sa.project_id, email: sa.client_email });
-      } catch (e: any) {
-        return json({ diag: "FAILED", error: e?.message?.substring(0, 300) });
-      }
-    }
-
     const saRaw = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_KEY");
     if (!saRaw) {
       console.error("FIREBASE_SERVICE_ACCOUNT_KEY is not set in environment");
