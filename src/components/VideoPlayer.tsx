@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { useBranding } from "@/hooks/useBranding";
-import { useAudioBoost } from "@/hooks/useAudioBoost";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock,
