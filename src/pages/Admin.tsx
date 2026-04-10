@@ -16,7 +16,7 @@ import {
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker";
 
 interface CastMember {
   name: string;
@@ -1810,6 +1810,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "live-tv": "Live TV Channels",
     "url-changer": "URL Changer",
     "link-checker": "Link Checker",
+    "tg-url-changer": "TG URL Changer",
   };
 
   // ==================== CATEGORIES ====================
@@ -3047,6 +3048,7 @@ ${tgHashtags}`;
     { section: "bkash-payments", icon: <KeyRound size={16} />, label: "bKash Payments" },
     { section: "device-limits", icon: <Lock size={16} />, label: "Device Limits" },
     { section: "telegram-post", icon: <Send size={16} />, label: "Telegram Post", group: "Sharing" },
+    { section: "tg-url-changer", icon: <RefreshCw size={16} />, label: "TG URL Changer" },
     { section: "free-access", icon: <Eye size={16} />, label: "Free Access", group: "Tracking" },
     { section: "analytics", icon: <BarChart3 size={16} />, label: "Analytics & Views" },
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
