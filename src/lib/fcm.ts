@@ -787,7 +787,20 @@ export const sendPushToAllUsers = async (
         requests.push(postFcmRequest(secondEndpoint, { ...requestBodyBase, userIds: secondHalf }));
       }
 
-      const results = await Promise.all(requests);
+      const settledResults = await Promise.allSettled(requests);
+      const results = settledResults
+        .filter((result): result is PromiseFulfilledResult<SendFcmResult> => result.status === "fulfilled")
+        .map((result) => result.value);
+
+      settledResults.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.error(`[FCM] Supabase endpoint ${index + 1} failed:`, result.reason);
+        }
+      });
+
+      if (results.length === 0) {
+        throw new Error("Both Supabase FCM endpoints failed");
+      }
 
       const merged = results.reduce((acc, result) => {
         acc.totalTokens += Number(result.totalTokens || 0);
