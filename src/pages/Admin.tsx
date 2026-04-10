@@ -10129,6 +10129,17 @@ const LinkCheckerSection = ({
   const [filterSeason, setFilterSeason] = useState<string>("all");
   const [filterEpisode, setFilterEpisode] = useState<string>("all");
 
+  const allContent = useMemo(() => [
+    ...webseriesData.map(w => ({ ...w, _type: 'webseries' as const })),
+    ...moviesData.map(m => ({ ...m, _type: 'movies' as const })),
+  ], [webseriesData, moviesData]);
+
+  const filteredContent = useMemo(() => {
+    if (!searchQuery.trim()) return allContent;
+    const q = searchQuery.toLowerCase();
+    return allContent.filter(c => c.title?.toLowerCase().includes(q));
+  }, [allContent, searchQuery]);
+
   // Get seasons/episodes for selected content (for filter)
   const selectedContent = useMemo(() => allContent.find(c => c.id === selectedId), [allContent, selectedId]);
   const selectedSeasons = useMemo(() => {
@@ -10143,17 +10154,6 @@ const LinkCheckerSection = ({
     if (Array.isArray(s.episodes)) return s.episodes;
     return Object.entries(s.episodes).map(([k, v]: [string, any]) => ({ ...v, _key: k }));
   }, [selectedSeasons, filterSeason]);
-
-  const allContent = useMemo(() => [
-    ...webseriesData.map(w => ({ ...w, _type: 'webseries' as const })),
-    ...moviesData.map(m => ({ ...m, _type: 'movies' as const })),
-  ], [webseriesData, moviesData]);
-
-  const filteredContent = useMemo(() => {
-    if (!searchQuery.trim()) return allContent;
-    const q = searchQuery.toLowerCase();
-    return allContent.filter(c => c.title?.toLowerCase().includes(q));
-  }, [allContent, searchQuery]);
 
   const qualityFields = ['link', 'link480', 'link720', 'link1080', 'link4k'] as const;
   const qualityLabels: Record<string, string> = { link: 'Default', link480: '480p', link720: '720p', link1080: '1080p', link4k: '4K' };
