@@ -10330,9 +10330,15 @@ const LinkCheckerSection = ({
 
     for (const content of targetContent) {
       if (content._type === 'webseries' && content.seasons) {
-        for (const [seasonKey, season] of Object.entries(content.seasons as Record<string, any>)) {
+        const seasonEntries = Object.entries(content.seasons as Record<string, any>);
+        for (let sIdx = 0; sIdx < seasonEntries.length; sIdx++) {
+          if (!shouldIncludeSeason(sIdx)) continue;
+          const [seasonKey, season] = seasonEntries[sIdx];
           if (!season.episodes) continue;
-          for (const [epKey, ep] of Object.entries(season.episodes as Record<string, any>)) {
+          const epEntries = Object.entries(season.episodes as Record<string, any>);
+          for (let eIdx = 0; eIdx < epEntries.length; eIdx++) {
+            if (!shouldIncludeEpisode(eIdx)) continue;
+            const [epKey, ep] = epEntries[eIdx];
             for (const q of qualityFields) {
               const url = ep[q];
               if (!url || typeof url !== 'string' || !url.trim()) continue;
