@@ -10129,7 +10129,21 @@ const LinkCheckerSection = ({
   const [filterSeason, setFilterSeason] = useState<string>("all");
   const [filterEpisode, setFilterEpisode] = useState<string>("all");
 
-  const allContent = useMemo(() => [
+  // Get seasons/episodes for selected content (for filter)
+  const selectedContent = useMemo(() => allContent.find(c => c.id === selectedId), [allContent, selectedId]);
+  const selectedSeasons = useMemo(() => {
+    if (!selectedContent || selectedContent._type !== 'webseries' || !selectedContent.seasons) return [];
+    if (Array.isArray(selectedContent.seasons)) return selectedContent.seasons;
+    return Object.entries(selectedContent.seasons).map(([k, v]: [string, any]) => ({ ...v, _key: k }));
+  }, [selectedContent]);
+  const selectedSeasonEpisodes = useMemo(() => {
+    if (filterSeason === "all" || !selectedSeasons.length) return [];
+    const s = selectedSeasons[Number(filterSeason)];
+    if (!s?.episodes) return [];
+    if (Array.isArray(s.episodes)) return s.episodes;
+    return Object.entries(s.episodes).map(([k, v]: [string, any]) => ({ ...v, _key: k }));
+  }, [selectedSeasons, filterSeason]);
+
     ...webseriesData.map(w => ({ ...w, _type: 'webseries' as const })),
     ...moviesData.map(m => ({ ...m, _type: 'movies' as const })),
   ], [webseriesData, moviesData]);
