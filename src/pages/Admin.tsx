@@ -6423,6 +6423,15 @@ ${tgHashtags}`;
           return <UrlChangerAdmin />;
         })()}
 
+        {activeSection === "link-checker" && (
+          <LinkCheckerSection
+            glassCard={glassCard}
+            btnPrimary={btnPrimary}
+            webseriesData={webseriesData}
+            moviesData={moviesData}
+          />
+        )}
+
         {activeSection === "comments" && (
           <AdminCommentsSection
             commentsData={commentsData}
