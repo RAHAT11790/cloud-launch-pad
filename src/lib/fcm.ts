@@ -2,7 +2,7 @@ import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { initializeApp, getApps } from "firebase/app";
 import { db, ref, set, get, update, remove } from "@/lib/firebase";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
-import { SITE_ICON_URL, SITE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
+import { SITE_ICON_URL, SITE_URL, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/siteConfig";
 import { toast } from "sonner";
 
 const firebaseConfig = {
@@ -38,6 +38,39 @@ type FcmProviderConfig = {
   url2?: string;
 };
 
+const getCurrentSupabaseFunctionUrl = (functionName: string) => {
+  if (!SUPABASE_URL) return "";
+  return `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/${functionName}`;
+};
+
+const isCurrentSupabaseFunctionUrl = (url?: string) => {
+  if (!url || !SUPABASE_URL) return false;
+  try {
+    return new URL(url).origin === new URL(SUPABASE_URL).origin;
+  } catch {
+    return false;
+  }
+};
+
+const normalizeSupabaseProviderUrls = (url?: string, url2?: string) => {
+  const primaryFallback = getCurrentSupabaseFunctionUrl("send-fcm");
+  const secondaryFallback = getCurrentSupabaseFunctionUrl("send-fmc-b");
+
+  const primaryUrl = !url
+    ? primaryFallback
+    : isSupabaseFunctionUrl(url) && !isCurrentSupabaseFunctionUrl(url)
+      ? primaryFallback
+      : url;
+
+  const secondaryUrl = !url2
+    ? secondaryFallback
+    : isSupabaseFunctionUrl(url2) && !isCurrentSupabaseFunctionUrl(url2)
+      ? secondaryFallback
+      : url2;
+
+  return { primaryUrl, secondaryUrl };
+};
+
 /** Get the active FCM provider config from Firebase */
 const getFcmProviderConfig = async (): Promise<FcmProviderConfig> => {
   if (cachedFcmProvider) return cachedFcmProvider;
@@ -51,8 +84,11 @@ const getFcmProviderConfig = async (): Promise<FcmProviderConfig> => {
         ? (val.supabaseUrl || val.url || "")
         : (val.cloudflareUrl || val.url || "");
       const url2 = activeProvider === "supabase" ? (val.supabaseUrl2 || "") : "";
-      if (url) {
-        cachedFcmProvider = { provider: activeProvider, url, url2 };
+      const normalized = activeProvider === "supabase"
+        ? normalizeSupabaseProviderUrls(url, url2)
+        : { primaryUrl: url, secondaryUrl: url2 };
+      if (normalized.primaryUrl) {
+        cachedFcmProvider = { provider: activeProvider, url: normalized.primaryUrl, url2: normalized.secondaryUrl };
         setTimeout(() => { cachedFcmProvider = null; }, 30000);
         return cachedFcmProvider;
       }
