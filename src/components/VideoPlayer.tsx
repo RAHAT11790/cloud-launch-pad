@@ -39,6 +39,11 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   return url;
 };
 
+const isDirectPlaybackUrl = (url: string): boolean => {
+  const normalized = url.trim().toLowerCase();
+  return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
+};
+
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
   if (!url) return [];
 
@@ -51,21 +56,17 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const encoded = encodeURIComponent(url);
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+  const prefersDirectPlayback = isDirectPlaybackUrl(url);
 
-  if (cdnEnabled && cloudflareCandidate) {
-    addCandidate(cloudflareCandidate);
+  if (prefersDirectPlayback) {
+    addCandidate(url);
+    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
     return candidates;
   }
 
-  // Always try proxy first if available
-  if (customProxyCandidate) {
-    addCandidate(customProxyCandidate);
-  }
-
-  // For HTTPS URLs, also try direct as fallback
-  if (url.startsWith('https://')) {
-    addCandidate(url);
-  }
+  if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+  if (customProxyCandidate) addCandidate(customProxyCandidate);
 
   // http:// cannot be loaded directly on https pages (mixed content)
   // so only proxy candidates are valid
@@ -222,6 +223,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [qualityFailMsg, setQualityFailMsg] = useState<string | null>(null);
   const failedSrcsRef = useRef<Set<string>>(new Set());
   const [isBuffering, setIsBuffering] = useState(true);
+  const [showFixedLoader, setShowFixedLoader] = useState(true);
+  const loaderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [tutorialLink, setTutorialLink] = useState<string | null>(null);
   const [showTutorialVideo, setShowTutorialVideo] = useState(false);
