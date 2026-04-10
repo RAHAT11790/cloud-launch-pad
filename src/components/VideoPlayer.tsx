@@ -168,6 +168,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
+    const canStartDirectly = isDirectPlaybackUrl(src);
+
     if (noProxy) {
       setCdnEnabled(false);
       setProxyUrl('');
@@ -178,10 +180,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     let cdnLoaded = false;
     let proxyLoaded = false;
-    setPlaybackRouteReady(false);
+    setPlaybackRouteReady(canStartDirectly);
 
     const markReady = () => {
-      if (cdnLoaded && proxyLoaded) setPlaybackRouteReady(true);
+      if (canStartDirectly || (cdnLoaded && proxyLoaded)) setPlaybackRouteReady(true);
     };
 
     const unsub1 = onValue(ref(db, "settings/cdnEnabled"), (snap) => {
@@ -209,7 +211,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       unsub1();
       unsub2();
     };
-  }, [noProxy]);
+  }, [noProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
   const [shortenedLink, setShortenedLink] = useState<string | null>(null);
