@@ -5924,10 +5924,18 @@ ${tgHashtags}`;
             const [replacing, setReplacing] = useState(false);
             const [replaceResult, setReplaceResult] = useState<{ total: number; replaced: number } | null>(null);
             const [searchFilter, setSearchFilter] = useState("");
+            const [showSelector, setShowSelector] = useState(false);
+            const [quickPasteText, setQuickPasteText] = useState("");
+            const [showQuickPaste, setShowQuickPaste] = useState(false);
 
-            const filteredSeries = searchFilter.trim()
-              ? webseriesData.filter(s => s.title?.toLowerCase().includes(searchFilter.toLowerCase()))
-              : webseriesData;
+            // Sort by latest (updatedAt/createdAt) and filter
+            const sortedSeries = useMemo(() => {
+              const sorted = [...webseriesData].sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+              if (!searchFilter.trim()) return sorted;
+              return sorted.filter(s => s.title?.toLowerCase().includes(searchFilter.toLowerCase()));
+            }, [webseriesData, searchFilter]);
+
+            const selectedSeries = webseriesData.find(s => s.id === selectedSeriesId);
 
             const replaceUrls = async () => {
               if (!selectedSeriesId) { toast.error("সিরিজ সিলেক্ট করো!"); return; }
@@ -5960,7 +5968,6 @@ ${tgHashtags}`;
                         }
                       }
                     });
-                    // Also replace in audio tracks
                     if (updatedEp.audioTracks) {
                       updatedEp.audioTracks = updatedEp.audioTracks.map((at: any) => {
                         const updatedAt = { ...at };
@@ -5989,6 +5996,22 @@ ${tgHashtags}`;
               setReplacing(false);
             };
 
+            // Quick Paste: parse pasted links into old domain auto-detect
+            const handleQuickPaste = () => {
+              const text = quickPasteText.trim();
+              if (!text) { toast.error("লিংক পেস্ট করো!"); return; }
+              try {
+                const url = new URL(text.split('\n')[0].trim());
+                const domain = `${url.protocol}//${url.host}`;
+                setOldDomain(domain);
+                toast.success(`✅ ডোমেইন সেট হয়েছে: ${domain}`);
+                setShowQuickPaste(false);
+                setQuickPasteText("");
+              } catch {
+                toast.error("সঠিক URL পেস্ট করো!");
+              }
+            };
+
             return (
               <div className="space-y-4">
                 <div className={`${glassCard} p-4`}>
@@ -5999,17 +6022,66 @@ ${tgHashtags}`;
                     নির্দিষ্ট সিরিজের সব ভিডিও লিংকে ডোমেইন/URL রিপ্লেস করো। শুধু ডোমেইন বদলাবে, বাকি path ঠিক থাকবে।
                   </p>
 
-                  {/* Series Selector */}
+                  {/* Series Selector with Image */}
                   <label className="text-[10px] text-zinc-400 block mb-1">সিরিজ সিলেক্ট করো</label>
-                  <input value={searchFilter} onChange={e => setSearchFilter(e.target.value)}
-                    placeholder="সার্চ করো..." className={`${inputClass} mb-2 text-[10px]`} />
-                  <select value={selectedSeriesId} onChange={e => setSelectedSeriesId(e.target.value)}
-                    className={`${inputClass} w-full mb-4`}>
-                    <option value="">-- সিরিজ সিলেক্ট করো --</option>
-                    {filteredSeries.map(s => (
-                      <option key={s.id} value={s.id}>{s.title} ({s.seasons?.length || 0} seasons)</option>
-                    ))}
-                  </select>
+                  
+                  {/* Selected series preview */}
+                  <button onClick={() => setShowSelector(!showSelector)}
+                    className={`${inputClass} w-full mb-2 text-left flex items-center gap-3 py-2`}>
+                    {selectedSeries ? (
+                      <>
+                        <img src={selectedSeries.poster} alt="" className="w-10 h-14 rounded object-cover flex-shrink-0" 
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-semibold text-white truncate">{selectedSeries.title}</p>
+                          <p className="text-[9px] text-zinc-500">{selectedSeries.seasons?.length || 0} seasons</p>
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-[11px] text-zinc-500">-- সিরিজ সিলেক্ট করো --</span>
+                    )}
+                    <ChevronDown size={14} className={`text-zinc-400 transition-transform ${showSelector ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Dropdown with images */}
+                  {showSelector && (
+                    <div className="mb-3 bg-zinc-900/95 border border-zinc-700/50 rounded-xl max-h-[300px] overflow-y-auto">
+                      <div className="sticky top-0 bg-zinc-900 p-2 border-b border-zinc-700/30">
+                        <input value={searchFilter} onChange={e => setSearchFilter(e.target.value)}
+                          placeholder="🔍 সার্চ করো..." className={`${inputClass} text-[10px] w-full`} autoFocus />
+                      </div>
+                      {sortedSeries.map(s => (
+                        <button key={s.id} onClick={() => { setSelectedSeriesId(s.id); setShowSelector(false); setSearchFilter(""); }}
+                          className={`w-full flex items-center gap-3 p-2.5 hover:bg-zinc-800/60 transition-all border-b border-zinc-800/30 ${selectedSeriesId === s.id ? 'bg-cyan-500/10 border-cyan-500/20' : ''}`}>
+                          <img src={s.poster} alt="" className="w-9 h-12 rounded object-cover flex-shrink-0 bg-zinc-800"
+                            onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }} />
+                          <div className="flex-1 text-left min-w-0">
+                            <p className="text-[11px] font-semibold text-white truncate">{s.title}</p>
+                            <p className="text-[9px] text-zinc-500">{s.seasons?.length || 0} seasons · {s.language || ''}</p>
+                          </div>
+                          {selectedSeriesId === s.id && <Check size={14} className="text-cyan-400 flex-shrink-0" />}
+                        </button>
+                      ))}
+                      {sortedSeries.length === 0 && <p className="text-[10px] text-zinc-500 p-4 text-center">কিছু পাওয়া যায়নি</p>}
+                    </div>
+                  )}
+
+                  {/* Quick Paste */}
+                  <button onClick={() => setShowQuickPaste(!showQuickPaste)}
+                    className="mb-3 text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+                    <Download size={10} /> Quick Paste (লিংক থেকে ডোমেইন বের করো)
+                  </button>
+                  {showQuickPaste && (
+                    <div className="mb-3 bg-black/20 rounded-xl border border-cyan-500/20 p-3">
+                      <textarea value={quickPasteText} onChange={e => setQuickPasteText(e.target.value)}
+                        placeholder="যেকোনো ভিডিও লিংক পেস্ট করো — ডোমেইন অটো সেট হবে"
+                        className={`${inputClass} w-full min-h-[60px] resize-none text-[10px] font-mono mb-2`} />
+                      <button onClick={handleQuickPaste} disabled={!quickPasteText.trim()}
+                        className={`${btnPrimary} w-full py-2 text-[10px] flex items-center justify-center gap-1 disabled:opacity-30`}>
+                        <Check size={11} /> ডোমেইন সেট করো
+                      </button>
+                    </div>
+                  )}
 
                   {/* Old Domain */}
                   <label className="text-[10px] text-zinc-400 block mb-1">পুরাতন Domain/URL</label>
