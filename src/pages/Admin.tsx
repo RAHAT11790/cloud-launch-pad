@@ -50,6 +50,8 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
   const [cfUrlInput, setCfUrlInput] = useState("");
   const [sbUrl, setSbUrl] = useState("");
   const [sbUrlInput, setSbUrlInput] = useState("");
+  const [sbUrl2, setSbUrl2] = useState("");
+  const [sbUrl2Input, setSbUrl2Input] = useState("");
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
 
@@ -62,6 +64,8 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
         setCfUrlInput(val.cloudflareUrl || "");
         setSbUrl(val.supabaseUrl || "");
         setSbUrlInput(val.supabaseUrl || "");
+        setSbUrl2(val.supabaseUrl2 || "");
+        setSbUrl2Input(val.supabaseUrl2 || "");
       }
     });
     return () => unsub();
@@ -94,6 +98,13 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
     if (activeProvider === "supabase") updates.url = url;
     await update(ref(db, "settings/fcmProvider"), updates);
     toast.success("✅ Supabase FCM URL সেভ হয়েছে!");
+  };
+
+  const saveSbUrl2 = async () => {
+    const url = sbUrl2Input.trim();
+    setSbUrl2(url);
+    await update(ref(db, "settings/fcmProvider"), { supabaseUrl2: url });
+    toast.success("✅ Supabase FCM URL 2 সেভ হয়েছে!");
   };
 
   const testProvider = async (provider: "cloudflare" | "supabase") => {
@@ -191,14 +202,14 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
       {/* Supabase URL */}
       <div className={`p-3 rounded-xl border ${activeProvider === "supabase" ? "border-emerald-500/40 bg-zinc-800/60" : "border-zinc-700/30 bg-zinc-800/20 opacity-50"}`}>
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-[11px] font-semibold">🟢 Supabase FCM URL</span>
+          <span className="text-[11px] font-semibold">🟢 Supabase FCM URL 1</span>
           {testResults.supabase && (
             <span className={`text-[9px] font-mono ${testResults.supabase.alive ? "text-green-400" : "text-red-400"}`}>
               {testResults.supabase.alive ? `✓ ${testResults.supabase.latency}ms` : "✕ Down"}
             </span>
           )}
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 mb-2">
           <input value={sbUrlInput} onChange={(e) => setSbUrlInput(e.target.value)}
             placeholder="https://xxx.supabase.co/functions/v1/send-fcm" className={`${inputClass} !text-[10px] !py-1.5 flex-1`} />
           <button onClick={saveSbUrl} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}><Save size={10} /></button>
@@ -206,7 +217,15 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
             {testing === "supabase" ? <RefreshCw size={10} className="animate-spin" /> : <Activity size={10} />}
           </button>
         </div>
-        <p className="text-[9px] text-zinc-500 mt-1.5">⚡ Supabase সার্ভার-সাইডে সরাসরি Firebase থেকে টোকেন নেয় — বেশি reliable</p>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[11px] font-semibold">🟢 Supabase FCM URL 2</span>
+        </div>
+        <div className="flex gap-1.5">
+          <input value={sbUrl2Input} onChange={(e) => setSbUrl2Input(e.target.value)}
+            placeholder="https://xxx.supabase.co/functions/v1/send-fcm-b" className={`${inputClass} !text-[10px] !py-1.5 flex-1`} />
+          <button onClick={saveSbUrl2} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}><Save size={10} /></button>
+        </div>
+        <p className="text-[9px] text-zinc-500 mt-1.5">⚡ দুইটা Supabase URL দিলে FCM send দুই ভাগে ভাগ হয়ে যাবে, duplicate ছাড়া</p>
       </div>
     </div>
   );
@@ -1360,50 +1379,86 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     return () => { unsub(); unsub2(); };
   }, []);
 
-  // Fetch genres & rating from TMDB using IMDB/TMDB ID
-  const fetchTmdbGenres = async (tmdbIdOrImdb: string) => {
+  // Fetch anime-accurate genres + rating using TMDB ID/IMDB ID, with AniList fallback for anime-specific genres
+  const fetchTmdbGenres = async (tmdbIdOrImdb: string, fallbackTitle?: string) => {
     if (!tmdbIdOrImdb.trim()) return;
     setTgImdbLoading(true);
     try {
       let tmdbData: any = null;
       const idTrimmed = tmdbIdOrImdb.trim();
       if (idTrimmed.startsWith("tt")) {
-        // IMDB ID → find TMDB ID first
         const findRes = await fetch(`${TMDB_BASE_URL}/find/${idTrimmed}?api_key=${TMDB_API_KEY}&external_source=imdb_id`);
         const findData = await findRes.json();
         const tvResult = findData.tv_results?.[0];
         const movieResult = findData.movie_results?.[0];
-        if (tvResult) {
+        if (tvResult?.id) {
           const detailRes = await fetch(`${TMDB_BASE_URL}/tv/${tvResult.id}?api_key=${TMDB_API_KEY}&language=en-US`);
-          tmdbData = await detailRes.json();
-        } else if (movieResult) {
+          if (detailRes.ok) tmdbData = await detailRes.json();
+        } else if (movieResult?.id) {
           const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${movieResult.id}?api_key=${TMDB_API_KEY}&language=en-US`);
-          tmdbData = await detailRes.json();
+          if (detailRes.ok) tmdbData = await detailRes.json();
         }
       } else {
-        // Try as TMDB TV ID first
+        const tvRes = await fetch(`${TMDB_BASE_URL}/tv/${idTrimmed}?api_key=${TMDB_API_KEY}&language=en-US`);
+        if (tvRes.ok) {
+          tmdbData = await tvRes.json();
+        } else {
+          const movieRes = await fetch(`${TMDB_BASE_URL}/movie/${idTrimmed}?api_key=${TMDB_API_KEY}&language=en-US`);
+          if (movieRes.ok) tmdbData = await movieRes.json();
+        }
+      }
+
+      const tmdbGenres = Array.isArray(tmdbData?.genres)
+        ? tmdbData.genres.map((g: any) => String(g?.name || "").trim()).filter(Boolean)
+        : [];
+      const genericGenreSet = new Set(["Animation", "Action & Adventure", "Sci-Fi & Fantasy", "Comedy", "Drama", "Mystery", "Family"]);
+      const isTooGenericTmdb = tmdbGenres.length > 0 && tmdbGenres.every((name: string) => genericGenreSet.has(name));
+      const animeTitle = (fallbackTitle || tmdbData?.name || tmdbData?.title || tmdbData?.original_name || tmdbData?.original_title || "").trim();
+
+      let animeGenres: string[] = [];
+      let aniListRating: string | null = null;
+
+      if (animeTitle) {
         try {
-          const res = await fetch(`${TMDB_BASE_URL}/tv/${idTrimmed}?api_key=${TMDB_API_KEY}&language=en-US`);
-          if (res.ok) tmdbData = await res.json();
+          const aniRes = await fetch("https://graphql.anilist.co", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({
+              query: `query ($search: String) { Media(search: $search, type: ANIME) { genres averageScore title { romaji english native } } }`,
+              variables: { search: animeTitle },
+            }),
+          });
+          const aniData = await aniRes.json();
+          const media = aniData?.data?.Media;
+          if (Array.isArray(media?.genres) && media.genres.length > 0) {
+            animeGenres = media.genres.map((g: any) => String(g || "").trim()).filter(Boolean);
+          }
+          if (media?.averageScore) {
+            aniListRating = (Number(media.averageScore) / 10).toFixed(1);
+          }
         } catch {}
-        if (!tmdbData) {
-          const res = await fetch(`${TMDB_BASE_URL}/movie/${idTrimmed}?api_key=${TMDB_API_KEY}&language=en-US`);
-          if (res.ok) tmdbData = await res.json();
-        }
       }
-      if (tmdbData) {
-        if (tmdbData.genres?.length) {
-          setTgGenres(tmdbData.genres.map((g: any) => g.name).join(", "));
-        }
-        if (tmdbData.vote_average) {
-          setTgRating((tmdbData.vote_average).toFixed(1));
-        }
-        toast.success("✅ TMDB থেকে genres ও rating আনা হয়েছে!");
+
+      const finalGenres = animeGenres.length > 0
+        ? animeGenres
+        : (tmdbGenres.length > 0 && !isTooGenericTmdb ? tmdbGenres : tmdbGenres);
+
+      if (finalGenres.length > 0) {
+        setTgGenres([...new Set(finalGenres)].join(", "));
+      }
+      if (tmdbData?.vote_average) {
+        setTgRating(Number(tmdbData.vote_average).toFixed(1));
+      } else if (aniListRating) {
+        setTgRating(aniListRating);
+      }
+
+      if (finalGenres.length > 0 || tmdbData || aniListRating) {
+        toast.success("✅ Anime-specific genres ও rating লোড হয়েছে");
       } else {
-        toast.error("TMDB তে এই ID পাওয়া যায়নি");
+        toast.error("এই ID থেকে genre data পাওয়া যায়নি");
       }
-    } catch (err) {
-      toast.error("TMDB fetch failed");
+    } catch {
+      toast.error("Genre fetch failed");
     } finally {
       setTgImdbLoading(false);
     }
@@ -2865,7 +2920,10 @@ ${tgHashtags}`;
           const endpoint = await getEdgeFunctionUrl('telegram-post');
           const response = await fetch(endpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+            },
             body: JSON.stringify(payload),
           });
           const rawText = await response.text();
@@ -3021,7 +3079,7 @@ ${tgHashtags}`;
       // Auto-fetch genres from TMDB if tmdbId available
       if (ws?.tmdbId) {
         setTgImdbId(String(ws.tmdbId));
-        fetchTmdbGenres(String(ws.tmdbId));
+        fetchTmdbGenres(String(ws.tmdbId), ws.title || release.title || "");
       }
     } else if (cType === "movie") {
       const mv = moviesData.find(m => m.id === cId);
@@ -3029,7 +3087,7 @@ ${tgHashtags}`;
       if (mv?.language) setTgLanguages(mv.language);
       if (mv?.tmdbId) {
         setTgImdbId(String(mv.tmdbId));
-        fetchTmdbGenres(String(mv.tmdbId));
+        fetchTmdbGenres(String(mv.tmdbId), mv.title || release.title || "");
       }
     } else if (cType === "animesalt") {
       setTgDubType("official");
@@ -5391,7 +5449,10 @@ ${tgHashtags}`;
                   const endpoint = await getEdgeFunctionUrl('telegram-post');
                   const res = await fetch(endpoint, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+                    },
                     body: JSON.stringify({
                       action: "edit-buttons",
                       chatId: post.chatId,

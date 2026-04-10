@@ -30,11 +30,12 @@ const MAX_TOKENS_PER_USER = 3;
 
 let messaging: any = null;
 let cachedSendFcmEndpoint: string | null = null;
-let cachedFcmProvider: { provider: "cloudflare" | "supabase"; url: string } | null = null;
+let cachedFcmProvider: { provider: "cloudflare" | "supabase"; url: string; url2?: string } | null = null;
 
 type FcmProviderConfig = {
   provider: "cloudflare" | "supabase";
   url: string;
+  url2?: string;
 };
 
 /** Get the active FCM provider config from Firebase */
@@ -49,8 +50,9 @@ const getFcmProviderConfig = async (): Promise<FcmProviderConfig> => {
       const url = activeProvider === "supabase" 
         ? (val.supabaseUrl || val.url || "")
         : (val.cloudflareUrl || val.url || "");
+      const url2 = activeProvider === "supabase" ? (val.supabaseUrl2 || "") : "";
       if (url) {
-        cachedFcmProvider = { provider: activeProvider, url };
+        cachedFcmProvider = { provider: activeProvider, url, url2 };
         setTimeout(() => { cachedFcmProvider = null; }, 30000);
         return cachedFcmProvider;
       }
@@ -668,7 +670,6 @@ export const sendPushToAllUsers = async (
   if (providerConfig.provider === "supabase" && providerConfig.url) {
     console.log("[FCM] Using Supabase provider — server-side token resolution");
     try {
-      // Get all user IDs from Firebase
       const usersSnap = await get(ref(db, "users"));
       const usersData = usersSnap.val() || {};
       const allUserIds: string[] = [];
@@ -682,7 +683,6 @@ export const sendPushToAllUsers = async (
         }
       });
 
-      // Also get email-based keys from fcmTokens
       const tokenSnap = await get(ref(db, "fcmTokens"));
       const tokenData = tokenSnap.val() || {};
       Object.keys(tokenData).forEach(key => {
@@ -703,41 +703,73 @@ export const sendPushToAllUsers = async (
       });
 
       const normalizedData = normalizePushData(payload);
-      const res = await fetchWithTimeout(providerConfig.url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userIds: allUserIds,
-          title: payload.title,
-          body: payload.body,
-          image: payload.image,
-          icon: payload.icon || APP_ICON_URL,
-          badge: payload.badge || APP_ICON_URL,
-          data: normalizedData,
-        }),
-      }, 120000); // 2 min timeout for large sends
+      const uniqueUserIds = [...new Set(allUserIds.filter(Boolean))];
+      const splitIndex = providerConfig.url2 ? Math.ceil(uniqueUserIds.length / 2) : uniqueUserIds.length;
+      const firstHalf = uniqueUserIds.slice(0, splitIndex);
+      const secondHalf = providerConfig.url2 ? uniqueUserIds.slice(splitIndex) : [];
 
-      const result = await res.json().catch(() => ({}));
-      console.log("[FCM] Supabase result:", result);
+      const requestBodyBase = {
+        title: payload.title,
+        body: payload.body,
+        image: payload.image,
+        icon: payload.icon || APP_ICON_URL,
+        badge: payload.badge || APP_ICON_URL,
+        data: normalizedData,
+      };
+
+      const requests = [
+        fetchWithTimeout(providerConfig.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...requestBodyBase, userIds: firstHalf }),
+        }, 120000),
+      ];
+
+      if (providerConfig.url2 && secondHalf.length > 0) {
+        requests.push(fetchWithTimeout(providerConfig.url2, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...requestBodyBase, userIds: secondHalf }),
+        }, 120000));
+      }
+
+      const responses = await Promise.all(requests);
+      const results = await Promise.all(responses.map(res => res.json().catch(() => ({}))));
+
+      const merged = results.reduce((acc, result) => {
+        acc.totalTokens += Number(result.totalTokens || 0);
+        acc.success += Number(result.success || 0);
+        acc.failed += Number(result.failed || 0);
+        acc.invalidRemoved += Number(result.invalidRemoved || 0);
+        acc.failReasons.invalid += Number(result.failReasons?.invalid || 0);
+        acc.failReasons.transient += Number(result.failReasons?.transient || 0);
+        acc.failReasons.other += Number(result.failReasons?.other || 0);
+        return acc;
+      }, {
+        totalTokens: 0,
+        success: 0,
+        failed: 0,
+        invalidRemoved: 0,
+        failReasons: { invalid: 0, transient: 0, other: 0 },
+      });
 
       const finalProgress: PushProgress = {
         phase: "done",
-        totalTokens: result.totalTokens || 0,
-        sent: result.totalTokens || 0,
-        success: result.success || 0,
-        failed: result.failed || 0,
-        invalidRemoved: result.invalidRemoved || 0,
-        totalUsers: allUserIds.length,
-        failReasons: result.failReasons,
+        totalTokens: merged.totalTokens,
+        sent: merged.totalTokens,
+        success: merged.success,
+        failed: merged.failed,
+        invalidRemoved: merged.invalidRemoved,
+        totalUsers: uniqueUserIds.length,
+        failReasons: merged.failReasons,
       };
       onProgress?.(finalProgress);
 
       return {
-        success: result.success || 0,
-        failed: result.failed || 0,
-        total: result.totalTokens || 0,
-        invalidTokensRemoved: result.invalidRemoved || 0,
-        reason: result.reason,
+        success: merged.success,
+        failed: merged.failed,
+        total: merged.totalTokens,
+        invalidTokensRemoved: merged.invalidRemoved,
       };
     } catch (err: any) {
       console.error("[FCM] Supabase send failed:", err);
