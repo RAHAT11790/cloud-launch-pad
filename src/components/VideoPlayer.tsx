@@ -483,11 +483,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             if (snap.exists()) {
               const data = snap.val();
               if (data.currentTime && data.duration && (data.currentTime / data.duration) < 0.95) {
+                // Set pendingSeek so the main effect restores position as soon as metadata loads
+                pendingSeek.current = data.currentTime;
                 const v = videoRef.current;
-                if (v) {
-                  const tryRestore = () => { if (v.duration > 0) { v.currentTime = data.currentTime; v.removeEventListener("loadedmetadata", tryRestore); } };
-                  if (v.duration > 0) v.currentTime = data.currentTime;
-                  else v.addEventListener("loadedmetadata", tryRestore);
+                if (v && v.duration > 0) {
+                  v.currentTime = data.currentTime;
                 }
               }
             }
