@@ -1630,7 +1630,6 @@ const Index = () => {
     if (swipeDx < -threshold && idx < MAIN_PAGE_ORDER.length - 1) {
       const nextIdx = idx + 1;
       const nextPage = MAIN_PAGE_ORDER[nextIdx];
-      pageScrollPositions.current[activePage] = window.scrollY;
       isSwipeAnimatingRef.current = true;
       setVisualPage(nextPage); // BottomNav updates instantly
       queueStripTransform(nextIdx, 0, true);
@@ -1644,7 +1643,6 @@ const Index = () => {
     } else if (swipeDx > threshold && idx > 0) {
       const nextIdx = idx - 1;
       const nextPage = MAIN_PAGE_ORDER[nextIdx];
-      pageScrollPositions.current[activePage] = window.scrollY;
       isSwipeAnimatingRef.current = true;
       setVisualPage(nextPage);
       queueStripTransform(nextIdx, 0, true);
