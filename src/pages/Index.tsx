@@ -1497,13 +1497,13 @@ const Index = () => {
 
   // ===== SWIPE NAVIGATION BETWEEN PAGES =====
   const pageOrder = ["home", "series", "livetv", "movies", "profile"] as const;
-  const swipeRef = useRef<{ startX: number; startY: number; startTime: number } | null>(null);
-  const swipeThreshold = 60;
-  const swipeAngleThreshold = 50;
-  const [swipeDirection, setSwipeDirection] = useState<"left" | "right">("left");
-  const [swipeFlash, setSwipeFlash] = useState(false);
+  const swipeRef = useRef<{ startX: number; startY: number; startTime: number; locked: boolean; isHorizontal: boolean | null } | null>(null);
+  const swipeThreshold = 50;
+  const [swipeDx, setSwipeDx] = useState(0); // live drag offset
+  const [isSwipeTransitioning, setIsSwipeTransitioning] = useState(false);
 
   const handleMainTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isSwipeTransitioning) return;
     const target = e.target as HTMLElement;
     let el: HTMLElement | null = target;
     while (el && el !== e.currentTarget) {
@@ -1511,29 +1511,66 @@ const Index = () => {
       el = el.parentElement;
     }
     const touch = e.touches[0];
-    swipeRef.current = { startX: touch.clientX, startY: touch.clientY, startTime: Date.now() };
-  }, []);
+    swipeRef.current = { startX: touch.clientX, startY: touch.clientY, startTime: Date.now(), locked: false, isHorizontal: null };
+  }, [isSwipeTransitioning]);
+
+  const handleMainTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!swipeRef.current || isSwipeTransitioning) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - swipeRef.current.startX;
+    const dy = touch.clientY - swipeRef.current.startY;
+
+    // Determine direction lock on first significant movement
+    if (swipeRef.current.isHorizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      swipeRef.current.isHorizontal = Math.abs(dx) > Math.abs(dy);
+    }
+    if (!swipeRef.current.isHorizontal) return;
+
+    // Prevent vertical scroll while swiping horizontally
+    e.preventDefault();
+
+    const currentIdx = pageOrder.indexOf(activePage as any);
+    // Add resistance at edges
+    const atStart = currentIdx === 0 && dx > 0;
+    const atEnd = currentIdx === pageOrder.length - 1 && dx < 0;
+    const dampened = (atStart || atEnd) ? dx * 0.2 : dx;
+    setSwipeDx(dampened);
+  }, [activePage, isSwipeTransitioning]);
 
   const handleMainTouchEnd = useCallback((e: React.TouchEvent) => {
     if (!swipeRef.current) return;
-    const touch = e.changedTouches[0];
-    const dx = touch.clientX - swipeRef.current.startX;
-    const dy = Math.abs(touch.clientY - swipeRef.current.startY);
+    const dx = swipeDx;
     const elapsed = Date.now() - swipeRef.current.startTime;
+    const isHorizontal = swipeRef.current.isHorizontal;
     swipeRef.current = null;
-    if (elapsed > 600 || dy > swipeAngleThreshold || Math.abs(dx) < swipeThreshold) return;
+
+    if (!isHorizontal || Math.abs(dx) < 5) { setSwipeDx(0); return; }
+
+    const velocity = Math.abs(dx) / Math.max(elapsed, 1);
+    const shouldSwipe = Math.abs(dx) > swipeThreshold || velocity > 0.5;
     const currentIdx = pageOrder.indexOf(activePage as any);
-    if (currentIdx === -1) return;
-    if (dx < 0 && currentIdx < pageOrder.length - 1) {
-      setSwipeDirection("left");
-      setSwipeFlash(true);
-      setTimeout(() => { handleNavigate(pageOrder[currentIdx + 1]); setSwipeFlash(false); }, 120);
-    } else if (dx > 0 && currentIdx > 0) {
-      setSwipeDirection("right");
-      setSwipeFlash(true);
-      setTimeout(() => { handleNavigate(pageOrder[currentIdx - 1]); setSwipeFlash(false); }, 120);
+
+    if (shouldSwipe && dx < 0 && currentIdx < pageOrder.length - 1) {
+      setIsSwipeTransitioning(true);
+      setSwipeDx(-window.innerWidth);
+      setTimeout(() => {
+        handleNavigate(pageOrder[currentIdx + 1]);
+        setSwipeDx(0);
+        setIsSwipeTransitioning(false);
+      }, 200);
+    } else if (shouldSwipe && dx > 0 && currentIdx > 0) {
+      setIsSwipeTransitioning(true);
+      setSwipeDx(window.innerWidth);
+      setTimeout(() => {
+        handleNavigate(pageOrder[currentIdx - 1]);
+        setSwipeDx(0);
+        setIsSwipeTransitioning(false);
+      }, 200);
+    } else {
+      // Snap back
+      setSwipeDx(0);
     }
-  }, [activePage, handleNavigate]);
+  }, [swipeDx, activePage, handleNavigate]);
 
   // Show login page if not logged in
   if (!isLoggedIn) {
@@ -1777,27 +1814,18 @@ const Index = () => {
       <Header onSearchClick={() => setShowSearch(true)} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
       <main
         onTouchStart={handleMainTouchStart}
+        onTouchMove={handleMainTouchMove}
         onTouchEnd={handleMainTouchEnd}
         className="relative overflow-hidden"
+        style={{ touchAction: "pan-y" }}
       >
-        {/* Swipe flash overlay */}
-        {swipeFlash && (
-          <div className="fixed inset-0 z-[999] pointer-events-none" style={{
-            background: "radial-gradient(circle at center, hsla(var(--primary)/0.15) 0%, transparent 70%)",
-            animation: "swipeFlash 0.25s ease-out forwards"
-          }} />
-        )}
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.div
-            key={activePage}
-            initial={{ opacity: 0, x: swipeDirection === "left" ? 60 : -60, scale: 0.97 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: swipeDirection === "left" ? -60 : 60, scale: 0.97 }}
-            transition={{ duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
-          >
-            {getPageContent()}
-          </motion.div>
-        </AnimatePresence>
+        <div style={{
+          transform: `translateX(${swipeDx}px)`,
+          transition: isSwipeTransitioning ? "transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)" : swipeDx !== 0 ? "none" : "transform 0.2s ease-out",
+          willChange: "transform",
+        }}>
+          {getPageContent()}
+        </div>
       </main>
       <BottomNav activePage={activePage} onNavigate={handleNavigate} />
 
