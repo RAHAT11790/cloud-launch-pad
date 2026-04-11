@@ -1816,14 +1816,36 @@ const Index = () => {
         onTouchMove={handleMainTouchMove}
         onTouchEnd={handleMainTouchEnd}
         className="relative overflow-hidden"
-        style={{ touchAction: "pan-y" }}
       >
         <div style={{
-          transform: `translateX(${swipeDx}px)`,
-          transition: isSwipeTransitioning ? "transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)" : swipeDx !== 0 ? "none" : "transform 0.2s ease-out",
+          display: "flex",
+          width: `${pageOrder.length * 100}vw`,
+          transform: `translateX(calc(-${activePageIdx * 100}vw + ${swipeDx}px))`,
+          transition: isSwipeAnimating ? "transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1)" : swipeDx !== 0 ? "none" : "transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1)",
           willChange: "transform",
         }}>
-          {getPageContent()}
+          {/* Page 0: Home */}
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
+            {getPageContent_home()}
+          </div>
+          {/* Page 1: Series */}
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
+            {getPageContent_series()}
+          </div>
+          {/* Page 2: Live TV */}
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
+            <LiveTvPage />
+          </div>
+          {/* Page 3: Movies */}
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
+            {getPageContent_movies()}
+          </div>
+          {/* Page 4: Profile */}
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
+            <div className="pt-[65px] pb-24">
+              <ProfilePage onClose={() => handleNavigate("home")} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
+            </div>
+          </div>
         </div>
       </main>
       <BottomNav activePage={activePage} onNavigate={handleNavigate} />
