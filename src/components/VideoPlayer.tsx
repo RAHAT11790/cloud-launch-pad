@@ -1073,6 +1073,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.pause();
       v.src = '';
       v.load();
+      // Clean up any preload element
+      if (preloadVideoRef.current) {
+        try { preloadVideoRef.current.pause(); preloadVideoRef.current.src = ""; document.body.removeChild(preloadVideoRef.current); } catch {}
+        preloadVideoRef.current = null;
+      }
       if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };
   }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady]);
