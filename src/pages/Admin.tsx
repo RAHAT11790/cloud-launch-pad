@@ -5723,7 +5723,21 @@ ${tgHashtags}`;
                   {/* Post selector */}
                   <div className="mb-3">
                     <label className="block text-xs text-zinc-400 mb-1">পোস্ট সিলেক্ট</label>
-                    <select value={tgSelectedPost} onChange={e => setTgSelectedPost(e.target.value)} className={selectClass}>
+                    <select value={tgSelectedPost} onChange={e => {
+                      const key = e.target.value;
+                      setTgSelectedPost(key);
+                      if (key !== "all") {
+                        const post = tgPosts.find(p => p.firebaseKey === key);
+                        if (post?.buttons?.length) {
+                          const firstBtnUrl = post.buttons[0]?.url || "";
+                          try {
+                            const u = new URL(firstBtnUrl);
+                            setTgOldDomain(u.origin);
+                            setTgQuickPaste(firstBtnUrl);
+                          } catch {}
+                        }
+                      }
+                    }} className={selectClass}>
                       <option value="all">📦 সব পোস্ট ({tgPosts.length}টি)</option>
                       {tgPosts.map(p => (
                         <option key={p.firebaseKey} value={p.firebaseKey}>
