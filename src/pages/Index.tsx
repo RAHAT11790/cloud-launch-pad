@@ -1665,7 +1665,7 @@ const Index = () => {
     }
   }, [activePage, activePageIdx, finishAnimatedNavigation, queueTrackTransform]);
 
-  const renderMainPage = useCallback((page: MainPage | null) => {
+  function renderMainPage(page: MainPage | null) {
     if (!page) {
       return <div className="min-h-screen bg-background" aria-hidden="true" />;
     }
@@ -1682,7 +1682,7 @@ const Index = () => {
       default:
         return null;
     }
-  }, [getPageContent_home, getPageContent_movies, getPageContent_series]);
+  }
 
   // Memoized page contents for the horizontal strip
 
