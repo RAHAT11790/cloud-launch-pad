@@ -1531,8 +1531,10 @@ const Index = () => {
     });
   }, [applyStripTransform]);
 
-  const restorePageScroll = useCallback((page: MainPage) => {
-    requestAnimationFrame(() => window.scrollTo(0, pageScrollPositions.current[page] || 0));
+  const pageContainerRefs = useRef<Record<MainPage, HTMLDivElement | null>>({ home: null, series: null, livetv: null, movies: null });
+
+  const restorePageScroll = useCallback((_page: MainPage) => {
+    // Each page has its own scroll container now — no need to restore window scroll
   }, []);
 
   const handleNavigate = useCallback((page: string) => {
