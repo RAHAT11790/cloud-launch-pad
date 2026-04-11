@@ -186,46 +186,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => unsub();
   }, []);
 
-  const switchServer = useCallback((serverIndex: number) => {
-    if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
-    const v = videoRef.current;
-    const savedTime = v?.currentTime || 0;
-    const wasPlaying = !!v && !v.paused;
-    const currentRawSrc = activeSourceBaseRef.current;
-
-    // Extract path from current URL (everything after domain)
-    let path = "";
-    try {
-      const u = new URL(currentRawSrc);
-      path = u.pathname + u.search + u.hash;
-    } catch {
-      // If not a valid URL, try to extract path after domain
-      const match = currentRawSrc.match(/^https?:\/\/[^\/]+(\/.*)/);
-      path = match ? match[1] : currentRawSrc;
-    }
-
-    // Build new URL with new server domain
-    const newDomain = videoServers[serverIndex].domain.replace(/\/$/, "");
-    const newRawSrc = newDomain + path;
-
-    setActiveServerIndex(serverIndex);
-    activeSourceBaseRef.current = newRawSrc;
-    const resolvedSrc = resolvePlaybackSrc(newRawSrc);
-    setCurrentSrc(resolvedSrc);
-    setShowServerPanel(false);
-
-    // Restore playback position
-    if (v) {
-      const restoreTime = () => {
-        if (v.duration > 0) {
-          v.currentTime = savedTime;
-          if (wasPlaying) v.play().catch(() => {});
-          v.removeEventListener("loadedmetadata", restoreTime);
-        }
-      };
-      v.addEventListener("loadedmetadata", restoreTime);
-    }
-  }, [activeServerIndex, videoServers, resolvePlaybackSrc]);
+  // switchServer is defined after resolvePlaybackSrc below
 
   // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
