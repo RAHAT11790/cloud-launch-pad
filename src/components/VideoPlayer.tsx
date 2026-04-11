@@ -186,7 +186,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => unsub();
   }, []);
 
-  // switchServer is defined after resolvePlaybackSrc below
+  
 
   // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
@@ -1458,6 +1458,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   <Crop className="w-3.5 h-3.5" />
                   <span className="text-[10px] font-medium">{cropLabels[cropIndex]}</span>
                 </button>
+                {videoServers.length > 1 && (
+                  <div className="relative">
+                    <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1 ${activeServerIndex > 0 ? 'ring-1 ring-primary' : ''}`}>
+                      <Server className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-medium">S{activeServerIndex + 1}</span>
+                    </button>
+                    {showServerPanel && (
+                      <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
+                        <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
+                        {videoServers.map((srv, idx) => (
+                          <button key={idx} onClick={() => switchServer(idx)}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                              activeServerIndex === idx ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                            }`}>
+                            <span>{srv.name || `Server ${idx + 1}`}</span>
+                            {activeServerIndex === idx && <Check className="w-3 h-3" />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-glass w-8 h-8 rounded-full flex items-center justify-center">
                   <Lock className="w-3.5 h-3.5" />
                 </button>
