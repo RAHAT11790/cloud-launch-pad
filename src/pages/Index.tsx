@@ -1828,12 +1828,8 @@ const Index = () => {
           <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
             {getPageContent_movies()}
           </div>
-          {/* Page 4: Profile */}
-          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
-            <div className="pt-[65px] pb-24">
-              <ProfilePage onClose={() => handleNavigate("home")} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
-            </div>
-          </div>
+          {/* Page 4: Profile — rendered as overlay via showProfile */}
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }} className="bg-background" />
         </div>
       </main>
       <BottomNav activePage={activePage} onNavigate={handleNavigate} />
