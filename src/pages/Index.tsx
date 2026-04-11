@@ -1896,17 +1896,32 @@ const Index = () => {
         onTouchMove={handleMainTouchMove}
         onTouchEnd={handleMainTouchEnd}
         className="relative overflow-hidden"
+        style={{ height: "calc(100vh - 65px)", marginTop: 0 }}
       >
         <div ref={swipeTrackRef} style={{
           display: "flex",
           width: `${MAIN_PAGE_ORDER.length * 100}vw`,
+          height: "100%",
           transform: `translate3d(-${activePageIdx * 100}vw, 0, 0)`,
           transition: "none",
           willChange: "transform",
           backfaceVisibility: "hidden",
         }}>
           {MAIN_PAGE_ORDER.map((page) => (
-            <div key={page} style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
+            <div
+              key={page}
+              ref={(el) => { pageContainerRefs.current[page] = el; }}
+              style={{
+                width: "100vw",
+                height: "100%",
+                flexShrink: 0,
+                overflowY: "auto",
+                overflowX: "hidden",
+                backfaceVisibility: "hidden",
+                transform: "translateZ(0)",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
               {page === "home" && getPageContent_home()}
               {page === "series" && getPageContent_series()}
               {page === "livetv" && <LiveTvPage />}
