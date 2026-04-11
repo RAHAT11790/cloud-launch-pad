@@ -601,11 +601,16 @@ const Index = () => {
     if (layer === "search") { setShowSearch(false); return true; }
     if (layer === "profile") { setShowProfile(false); return true; }
     if (layer === "series" || layer === "movies" || layer === "livetv") {
-      pageScrollPositions.current[activePage] = window.scrollY;
-      setActivePage("home");
-      window.requestAnimationFrame(() => {
-        window.scrollTo(0, pageScrollPositions.current.home || 0);
-      });
+      setVisualPage("home");
+      isSwipeAnimatingRef.current = true;
+      queueStripTransform(0, 0, true);
+      const track = swipeTrackRef.current;
+      const onDone = () => { isSwipeAnimatingRef.current = false; setActivePage("home"); };
+      if (track) {
+        const handler = () => { track.removeEventListener("transitionend", handler); onDone(); };
+        track.addEventListener("transitionend", handler);
+        setTimeout(() => { track.removeEventListener("transitionend", handler); onDone(); }, 350);
+      } else onDone();
       return true;
     }
     return false;
