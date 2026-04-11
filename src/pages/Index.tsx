@@ -1539,7 +1539,6 @@ const Index = () => {
 
   const handleNavigate = useCallback((page: string) => {
     if (page === "profile") {
-      pageScrollPositions.current[activePage] = window.scrollY;
       setShowProfile(true);
       return;
     }
@@ -1548,9 +1547,8 @@ const Index = () => {
       setShowProfile(false);
       if (nextPage === activePage) { restorePageScroll(activePage); return; }
     }
-    if (nextPage === activePage) { window.scrollTo(0, pageScrollPositions.current[nextPage] || 0); return; }
+    if (nextPage === activePage) return;
 
-    pageScrollPositions.current[activePage] = window.scrollY;
     setDubFilter("all");
 
     const nextIdx = MAIN_PAGE_ORDER.indexOf(nextPage);
