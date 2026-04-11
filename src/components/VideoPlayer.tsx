@@ -841,8 +841,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
   }, [resetHideTimer]);
 
-  // Only show loader overlay during initial fixed load period; buffering mid-playback uses just the progress bar indicator
-  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader;
+  // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
+  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !serverSwitchingRef.current;
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
