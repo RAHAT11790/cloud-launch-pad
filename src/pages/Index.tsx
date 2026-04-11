@@ -1496,10 +1496,12 @@ const Index = () => {
   }, [playerState?.anime, saltPlayerState?.anime, allAnime]);
 
   // ===== SWIPE NAVIGATION BETWEEN PAGES =====
-  const pageOrder = ["home", "series", "movies"] as const;
+  const pageOrder = ["home", "series", "livetv", "movies", "profile"] as const;
   const swipeRef = useRef<{ startX: number; startY: number; startTime: number } | null>(null);
-  const swipeThreshold = 80;
-  const swipeAngleThreshold = 30;
+  const swipeThreshold = 60;
+  const swipeAngleThreshold = 50;
+  const [swipeDirection, setSwipeDirection] = useState<"left" | "right">("left");
+  const [swipeFlash, setSwipeFlash] = useState(false);
 
   const handleMainTouchStart = useCallback((e: React.TouchEvent) => {
     const target = e.target as HTMLElement;
@@ -1519,13 +1521,17 @@ const Index = () => {
     const dy = Math.abs(touch.clientY - swipeRef.current.startY);
     const elapsed = Date.now() - swipeRef.current.startTime;
     swipeRef.current = null;
-    if (elapsed > 500 || dy > swipeAngleThreshold || Math.abs(dx) < swipeThreshold) return;
+    if (elapsed > 600 || dy > swipeAngleThreshold || Math.abs(dx) < swipeThreshold) return;
     const currentIdx = pageOrder.indexOf(activePage as any);
     if (currentIdx === -1) return;
     if (dx < 0 && currentIdx < pageOrder.length - 1) {
-      handleNavigate(pageOrder[currentIdx + 1]);
+      setSwipeDirection("left");
+      setSwipeFlash(true);
+      setTimeout(() => { handleNavigate(pageOrder[currentIdx + 1]); setSwipeFlash(false); }, 120);
     } else if (dx > 0 && currentIdx > 0) {
-      handleNavigate(pageOrder[currentIdx - 1]);
+      setSwipeDirection("right");
+      setSwipeFlash(true);
+      setTimeout(() => { handleNavigate(pageOrder[currentIdx - 1]); setSwipeFlash(false); }, 120);
     }
   }, [activePage, handleNavigate]);
 
