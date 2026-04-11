@@ -614,7 +614,7 @@ const Index = () => {
       return true;
     }
     return false;
-  }, [activePage, getCurrentLayer]);
+  }, [activePage, getCurrentLayer, queueStripTransform]);
 
   useEffect(() => {
     if (window.history.state?.rsAnime !== true) {
