@@ -3,7 +3,7 @@ import { useBranding } from "@/hooks/useBranding";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock,
-  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search
+  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
@@ -165,6 +165,67 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
+
+  // ===== SERVER CHANGER =====
+  const [videoServers, setVideoServers] = useState<{ name: string; domain: string }[]>([]);
+  const [activeServerIndex, setActiveServerIndex] = useState(0);
+  const [showServerPanel, setShowServerPanel] = useState(false);
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
+      const val = snap.val();
+      if (val && Array.isArray(val)) {
+        setVideoServers(val.filter((s: any) => s && s.domain));
+      } else if (val && typeof val === "object") {
+        const arr = Object.values(val).filter((s: any) => s && s.domain) as { name: string; domain: string }[];
+        setVideoServers(arr);
+      } else {
+        setVideoServers([]);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const switchServer = useCallback((serverIndex: number) => {
+    if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
+    const v = videoRef.current;
+    const savedTime = v?.currentTime || 0;
+    const wasPlaying = !!v && !v.paused;
+    const currentRawSrc = activeSourceBaseRef.current;
+
+    // Extract path from current URL (everything after domain)
+    let path = "";
+    try {
+      const u = new URL(currentRawSrc);
+      path = u.pathname + u.search + u.hash;
+    } catch {
+      // If not a valid URL, try to extract path after domain
+      const match = currentRawSrc.match(/^https?:\/\/[^\/]+(\/.*)/);
+      path = match ? match[1] : currentRawSrc;
+    }
+
+    // Build new URL with new server domain
+    const newDomain = videoServers[serverIndex].domain.replace(/\/$/, "");
+    const newRawSrc = newDomain + path;
+
+    setActiveServerIndex(serverIndex);
+    activeSourceBaseRef.current = newRawSrc;
+    const resolvedSrc = resolvePlaybackSrc(newRawSrc);
+    setCurrentSrc(resolvedSrc);
+    setShowServerPanel(false);
+
+    // Restore playback position
+    if (v) {
+      const restoreTime = () => {
+        if (v.duration > 0) {
+          v.currentTime = savedTime;
+          if (wasPlaying) v.play().catch(() => {});
+          v.removeEventListener("loadedmetadata", restoreTime);
+        }
+      };
+      v.addEventListener("loadedmetadata", restoreTime);
+    }
+  }, [activeServerIndex, videoServers, resolvePlaybackSrc]);
 
   // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
