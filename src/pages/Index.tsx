@@ -1669,7 +1669,7 @@ const Index = () => {
       case "profile":
         return (
           <div className="pt-[65px] pb-24">
-            <ProfilePage onClose={() => { setShowProfile(false); handleNavigate("home"); }} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} inline />
+            <ProfilePage onClose={() => { setShowProfile(false); handleNavigate("home"); }} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
           </div>
         );
       default:
