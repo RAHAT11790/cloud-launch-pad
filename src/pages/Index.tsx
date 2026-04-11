@@ -1813,11 +1813,8 @@ const Index = () => {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showProfile && (
-          <ProfilePage onClose={() => { setShowProfile(false); setActivePage("home"); }} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
-        )}
-      </AnimatePresence>
+
+
 
       <AnimatePresence>
         {selectedAnime && (
