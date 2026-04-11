@@ -1495,6 +1495,40 @@ const Index = () => {
     return scored.filter(s => s.score > 0).slice(0, 20).map(s => s.anime);
   }, [playerState?.anime, saltPlayerState?.anime, allAnime]);
 
+  // ===== SWIPE NAVIGATION BETWEEN PAGES =====
+  const pageOrder = ["home", "series", "movies"] as const;
+  const swipeRef = useRef<{ startX: number; startY: number; startTime: number } | null>(null);
+  const swipeThreshold = 80;
+  const swipeAngleThreshold = 30;
+
+  const handleMainTouchStart = useCallback((e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    let el: HTMLElement | null = target;
+    while (el && el !== e.currentTarget) {
+      if (el.scrollWidth > el.clientWidth + 5) return;
+      el = el.parentElement;
+    }
+    const touch = e.touches[0];
+    swipeRef.current = { startX: touch.clientX, startY: touch.clientY, startTime: Date.now() };
+  }, []);
+
+  const handleMainTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!swipeRef.current) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - swipeRef.current.startX;
+    const dy = Math.abs(touch.clientY - swipeRef.current.startY);
+    const elapsed = Date.now() - swipeRef.current.startTime;
+    swipeRef.current = null;
+    if (elapsed > 500 || dy > swipeAngleThreshold || Math.abs(dx) < swipeThreshold) return;
+    const currentIdx = pageOrder.indexOf(activePage as any);
+    if (currentIdx === -1) return;
+    if (dx < 0 && currentIdx < pageOrder.length - 1) {
+      handleNavigate(pageOrder[currentIdx + 1]);
+    } else if (dx > 0 && currentIdx > 0) {
+      handleNavigate(pageOrder[currentIdx - 1]);
+    }
+  }, [activePage, handleNavigate]);
+
   // Show login page if not logged in
   if (!isLoggedIn) {
     return <LoginPage onLogin={handleLogin} />;
