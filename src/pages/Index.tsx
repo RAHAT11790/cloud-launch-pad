@@ -602,19 +602,9 @@ const Index = () => {
     if (layer === "profile") { setShowProfile(false); return true; }
     if (layer === "series" || layer === "movies" || layer === "livetv") {
       setVisualPage("home");
-      isSwipeAnimatingRef.current = true;
-      queueStripTransform(0, 0, true);
-      const track = swipeTrackRef.current;
-      const onDone = () => { isSwipeAnimatingRef.current = false; setActivePage("home"); };
-      if (track) {
-        const handler = () => { track.removeEventListener("transitionend", handler); onDone(); };
-        track.addEventListener("transitionend", handler);
-        setTimeout(() => { track.removeEventListener("transitionend", handler); onDone(); }, 350);
-      } else onDone();
+      setActivePage("home");
       return true;
     }
-    return false;
-  }, [activePage, getCurrentLayer, queueStripTransform]);
 
   useEffect(() => {
     if (window.history.state?.rsAnime !== true) {
