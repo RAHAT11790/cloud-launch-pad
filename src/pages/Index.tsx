@@ -1730,10 +1730,66 @@ const Index = () => {
     }
   };
 
+  // ===== SWIPE NAVIGATION BETWEEN PAGES =====
+  const pageOrder = ["home", "series", "movies"] as const;
+  const swipeRef = useRef<{ startX: number; startY: number; startTime: number } | null>(null);
+  const swipeThreshold = 80; // min px to trigger
+  const swipeAngleThreshold = 30; // max vertical movement to keep it horizontal
+
+  const handleMainTouchStart = useCallback((e: React.TouchEvent) => {
+    // Don't capture if touch starts on a horizontally scrollable element
+    const target = e.target as HTMLElement;
+    let el: HTMLElement | null = target;
+    while (el && el !== e.currentTarget) {
+      if (el.scrollWidth > el.clientWidth + 5) return; // scrollable container, let it scroll
+      el = el.parentElement;
+    }
+    const touch = e.touches[0];
+    swipeRef.current = { startX: touch.clientX, startY: touch.clientY, startTime: Date.now() };
+  }, []);
+
+  const handleMainTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!swipeRef.current) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - swipeRef.current.startX;
+    const dy = Math.abs(touch.clientY - swipeRef.current.startY);
+    const elapsed = Date.now() - swipeRef.current.startTime;
+    swipeRef.current = null;
+
+    // Must be a quick, mostly-horizontal swipe
+    if (elapsed > 500 || dy > swipeAngleThreshold || Math.abs(dx) < swipeThreshold) return;
+
+    const currentIdx = pageOrder.indexOf(activePage as any);
+    if (currentIdx === -1) return;
+
+    if (dx < 0 && currentIdx < pageOrder.length - 1) {
+      // Swipe left → next page
+      handleNavigate(pageOrder[currentIdx + 1]);
+    } else if (dx > 0 && currentIdx > 0) {
+      // Swipe right → previous page
+      handleNavigate(pageOrder[currentIdx - 1]);
+    }
+  }, [activePage, handleNavigate]);
+
   return (
     <div className="min-h-screen bg-background" style={customBgImage ? { backgroundImage: `url(${customBgImage})`, backgroundSize: 'cover', backgroundAttachment: 'fixed', backgroundPosition: 'center' } : undefined}>
       <Header onSearchClick={() => setShowSearch(true)} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
-      <main>{getPageContent()}</main>
+      <main
+        onTouchStart={handleMainTouchStart}
+        onTouchEnd={handleMainTouchEnd}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activePage}
+            initial={{ opacity: 0, x: 30 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -30 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
+            {getPageContent()}
+          </motion.div>
+        </AnimatePresence>
+      </main>
       <BottomNav activePage={activePage} onNavigate={handleNavigate} />
 
       <AnimatePresence>
