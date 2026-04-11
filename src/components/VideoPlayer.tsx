@@ -965,6 +965,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           }
           setCurrentQuality(nextOption.label);
         } else {
+          // ===== AUTO SERVER FAILOVER =====
+          // All quality/route fallbacks exhausted — try next server automatically
+          if (videoServers.length > 1) {
+            const nextServerIdx = (activeServerIndex + 1) % videoServers.length;
+            // Only auto-failover if we haven't cycled through all servers
+            const failoverKey = `__server_failover_${nextServerIdx}`;
+            if (!failedSrcsRef.current.has(failoverKey)) {
+              failedSrcsRef.current.add(failoverKey);
+              const serverName = videoServers[nextServerIdx]?.name || `Server ${nextServerIdx + 1}`;
+              setQualityFailMsg(`Server down. Switching to ${serverName}...`);
+              setTimeout(() => setQualityFailMsg(null), 3500);
+              // Reset failed srcs for the new server (keep failover keys)
+              const failoverKeys = new Set([...failedSrcsRef.current].filter(k => k.startsWith("__server_failover_")));
+              failedSrcsRef.current = failoverKeys;
+              switchServer(nextServerIdx);
+              return;
+            }
+          }
           setVideoError(true);
         }
         return;
@@ -1080,7 +1098,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       }
       if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady]);
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, videoServers, activeServerIndex]);
 
   useEffect(() => {
     const onFs = () => {
