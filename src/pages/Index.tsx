@@ -1495,15 +1495,16 @@ const Index = () => {
     return scored.filter(s => s.score > 0).slice(0, 20).map(s => s.anime);
   }, [playerState?.anime, saltPlayerState?.anime, allAnime]);
 
-  // ===== SWIPE NAVIGATION BETWEEN PAGES =====
-  const pageOrder = ["home", "series", "livetv", "movies", "profile"] as const;
-  const swipeRef = useRef<{ startX: number; startY: number; startTime: number; locked: boolean; isHorizontal: boolean | null } | null>(null);
-  const swipeThreshold = 50;
-  const [swipeDx, setSwipeDx] = useState(0); // live drag offset
-  const [isSwipeTransitioning, setIsSwipeTransitioning] = useState(false);
+  // ===== SWIPE NAVIGATION — ALL PAGES PRE-RENDERED IN HORIZONTAL STRIP =====
+  const pageOrder = useMemo(() => ["home", "series", "livetv", "movies", "profile"] as const, []);
+  const activePageIdx = pageOrder.indexOf(activePage as any);
+  const swipeRef = useRef<{ startX: number; startY: number; isHorizontal: boolean | null } | null>(null);
+  const [swipeDx, setSwipeDx] = useState(0);
+  const [isSwipeAnimating, setIsSwipeAnimating] = useState(false);
+  const pageScrollPositions = useRef<Record<string, number>>({});
 
   const handleMainTouchStart = useCallback((e: React.TouchEvent) => {
-    if (isSwipeTransitioning) return;
+    if (isSwipeAnimating) return;
     const target = e.target as HTMLElement;
     let el: HTMLElement | null = target;
     while (el && el !== e.currentTarget) {
@@ -1511,66 +1512,65 @@ const Index = () => {
       el = el.parentElement;
     }
     const touch = e.touches[0];
-    swipeRef.current = { startX: touch.clientX, startY: touch.clientY, startTime: Date.now(), locked: false, isHorizontal: null };
-  }, [isSwipeTransitioning]);
+    swipeRef.current = { startX: touch.clientX, startY: touch.clientY, isHorizontal: null };
+  }, [isSwipeAnimating]);
 
   const handleMainTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!swipeRef.current || isSwipeTransitioning) return;
+    if (!swipeRef.current || isSwipeAnimating) return;
     const touch = e.touches[0];
     const dx = touch.clientX - swipeRef.current.startX;
     const dy = touch.clientY - swipeRef.current.startY;
-
-    // Determine direction lock on first significant movement
     if (swipeRef.current.isHorizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-      swipeRef.current.isHorizontal = Math.abs(dx) > Math.abs(dy);
+      swipeRef.current.isHorizontal = Math.abs(dx) > Math.abs(dy) * 1.2;
     }
     if (!swipeRef.current.isHorizontal) return;
-
-    // Prevent vertical scroll while swiping horizontally
     e.preventDefault();
+    const idx = activePageIdx;
+    const atStart = idx === 0 && dx > 0;
+    const atEnd = idx === pageOrder.length - 1 && dx < 0;
+    setSwipeDx((atStart || atEnd) ? dx * 0.15 : dx);
+  }, [activePageIdx, isSwipeAnimating, pageOrder]);
 
-    const currentIdx = pageOrder.indexOf(activePage as any);
-    // Add resistance at edges
-    const atStart = currentIdx === 0 && dx > 0;
-    const atEnd = currentIdx === pageOrder.length - 1 && dx < 0;
-    const dampened = (atStart || atEnd) ? dx * 0.2 : dx;
-    setSwipeDx(dampened);
-  }, [activePage, isSwipeTransitioning]);
-
-  const handleMainTouchEnd = useCallback((e: React.TouchEvent) => {
+  const handleMainTouchEnd = useCallback(() => {
     if (!swipeRef.current) return;
-    const dx = swipeDx;
-    const elapsed = Date.now() - swipeRef.current.startTime;
-    const isHorizontal = swipeRef.current.isHorizontal;
+    const isH = swipeRef.current.isHorizontal;
     swipeRef.current = null;
-
-    if (!isHorizontal || Math.abs(dx) < 5) { setSwipeDx(0); return; }
-
-    const velocity = Math.abs(dx) / Math.max(elapsed, 1);
-    const shouldSwipe = Math.abs(dx) > swipeThreshold || velocity > 0.5;
-    const currentIdx = pageOrder.indexOf(activePage as any);
-
-    if (shouldSwipe && dx < 0 && currentIdx < pageOrder.length - 1) {
-      setIsSwipeTransitioning(true);
+    if (!isH || Math.abs(swipeDx) < 5) { setSwipeDx(0); return; }
+    const threshold = window.innerWidth * 0.2;
+    const idx = activePageIdx;
+    if (swipeDx < -threshold && idx < pageOrder.length - 1) {
+      // Save scroll position before navigating
+      pageScrollPositions.current[activePage] = window.scrollY;
+      setIsSwipeAnimating(true);
       setSwipeDx(-window.innerWidth);
       setTimeout(() => {
-        handleNavigate(pageOrder[currentIdx + 1]);
+        const nextPage = pageOrder[idx + 1];
+        handleNavigate(nextPage);
         setSwipeDx(0);
-        setIsSwipeTransitioning(false);
-      }, 200);
-    } else if (shouldSwipe && dx > 0 && currentIdx > 0) {
-      setIsSwipeTransitioning(true);
+        setIsSwipeAnimating(false);
+        // Restore scroll position of target page
+        window.scrollTo(0, pageScrollPositions.current[nextPage] || 0);
+      }, 250);
+    } else if (swipeDx > threshold && idx > 0) {
+      pageScrollPositions.current[activePage] = window.scrollY;
+      setIsSwipeAnimating(true);
       setSwipeDx(window.innerWidth);
       setTimeout(() => {
-        handleNavigate(pageOrder[currentIdx - 1]);
+        const prevPage = pageOrder[idx - 1];
+        handleNavigate(prevPage);
         setSwipeDx(0);
-        setIsSwipeTransitioning(false);
-      }, 200);
+        setIsSwipeAnimating(false);
+        window.scrollTo(0, pageScrollPositions.current[prevPage] || 0);
+      }, 250);
     } else {
-      // Snap back
       setSwipeDx(0);
     }
-  }, [swipeDx, activePage, handleNavigate]);
+  }, [swipeDx, activePageIdx, activePage, handleNavigate, pageOrder]);
+
+  // Memoized page contents for the horizontal strip
+  const homeContent = useMemo(() => getHomeContent(), [activeCategory, filteredAnime, continueWatching, heroSlides, allAnime, filteredSeries, filteredMovies, allAnimeSaltUnique, allAnimeVisibleCount, brandingConfig]);
+  
+  // We'll define getHomeContent below and render all pages inline
 
   // Show login page if not logged in
   if (!isLoggedIn) {
