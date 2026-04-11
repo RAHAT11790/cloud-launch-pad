@@ -1504,55 +1504,36 @@ const Index = () => {
     return scored.filter(s => s.score > 0).slice(0, 20).map(s => s.anime);
   }, [playerState?.anime, saltPlayerState?.anime, allAnime]);
 
-  // ===== SWIPE NAVIGATION — GPU-ACCELERATED MAIN PAGES =====
+  // ===== SWIPE NAVIGATION — ALL PAGES ALWAYS RENDERED (ZERO FLASH) =====
+  const [visualPage, setVisualPage] = useState<MainPage>(activePage);
   const activePageIdx = MAIN_PAGE_ORDER.indexOf(activePage);
-  const previousPage = activePageIdx > 0 ? MAIN_PAGE_ORDER[activePageIdx - 1] : null;
-  const nextPage = activePageIdx < MAIN_PAGE_ORDER.length - 1 ? MAIN_PAGE_ORDER[activePageIdx + 1] : null;
   const swipeRef = useRef<{ startX: number; startY: number; isHorizontal: boolean | null } | null>(null);
   const swipeTrackRef = useRef<HTMLDivElement | null>(null);
   const swipeDxRef = useRef(0);
   const swipeRafRef = useRef<number | null>(null);
-  const swipeTimeoutRef = useRef<number | null>(null);
   const isSwipeAnimatingRef = useRef(false);
 
-  const applyTrackTransform = useCallback((dx = 0, animate = false) => {
+  // Sync visualPage when activePage changes
+  useEffect(() => { setVisualPage(activePage); }, [activePage]);
+
+  const applyStripTransform = useCallback((pageIdx: number, dx = 0, animate = false) => {
     const track = swipeTrackRef.current;
     if (!track) return;
-
-    track.style.transition = animate ? "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)" : "none";
-    track.style.transform = `translate3d(calc(-100vw + ${dx}px), 0, 0)`;
+    track.style.transition = animate ? "transform 280ms cubic-bezier(0.25, 0.1, 0.25, 1)" : "none";
+    track.style.transform = `translate3d(calc(-${pageIdx * 100}vw + ${dx}px), 0, 0)`;
   }, []);
 
-  const queueTrackTransform = useCallback((dx = 0, animate = false) => {
-    if (swipeRafRef.current !== null) {
-      window.cancelAnimationFrame(swipeRafRef.current);
-    }
-
-    swipeRafRef.current = window.requestAnimationFrame(() => {
-      applyTrackTransform(dx, animate);
+  const queueStripTransform = useCallback((pageIdx: number, dx = 0, animate = false) => {
+    if (swipeRafRef.current !== null) cancelAnimationFrame(swipeRafRef.current);
+    swipeRafRef.current = requestAnimationFrame(() => {
+      applyStripTransform(pageIdx, dx, animate);
       swipeRafRef.current = null;
     });
-  }, [applyTrackTransform]);
+  }, [applyStripTransform]);
 
   const restorePageScroll = useCallback((page: MainPage) => {
-    window.requestAnimationFrame(() => {
-      window.scrollTo(0, pageScrollPositions.current[page] || 0);
-    });
+    requestAnimationFrame(() => window.scrollTo(0, pageScrollPositions.current[page] || 0));
   }, []);
-
-  const finishAnimatedNavigation = useCallback((nextPage: MainPage) => {
-    if (swipeTimeoutRef.current !== null) {
-      window.clearTimeout(swipeTimeoutRef.current);
-    }
-
-    swipeTimeoutRef.current = window.setTimeout(() => {
-      swipeDxRef.current = 0;
-      isSwipeAnimatingRef.current = false;
-      setActivePage(nextPage);
-      restorePageScroll(nextPage);
-      swipeTimeoutRef.current = null;
-    }, 260);
-  }, [restorePageScroll]);
 
   const handleNavigate = useCallback((page: string) => {
     if (page === "profile") {
@@ -1560,51 +1541,48 @@ const Index = () => {
       setShowProfile(true);
       return;
     }
-
     const nextPage = isMainPage(page) ? page : "home";
-
     if (showProfile) {
       setShowProfile(false);
-      if (nextPage === activePage) {
-        restorePageScroll(activePage);
-        return;
-      }
+      if (nextPage === activePage) { restorePageScroll(activePage); return; }
     }
-
-    if (nextPage === activePage) {
-      window.scrollTo(0, pageScrollPositions.current[nextPage] || 0);
-      return;
-    }
+    if (nextPage === activePage) { window.scrollTo(0, pageScrollPositions.current[nextPage] || 0); return; }
 
     pageScrollPositions.current[activePage] = window.scrollY;
     setDubFilter("all");
 
-    const nextPageIdx = MAIN_PAGE_ORDER.indexOf(nextPage);
-    const distance = nextPageIdx - activePageIdx;
+    const nextIdx = MAIN_PAGE_ORDER.indexOf(nextPage);
+    // Update BottomNav immediately
+    setVisualPage(nextPage);
+    // Animate strip to target
+    isSwipeAnimatingRef.current = true;
+    queueStripTransform(nextIdx, 0, true);
 
-    if (Math.abs(distance) === 1) {
-      isSwipeAnimatingRef.current = true;
-      queueTrackTransform(distance > 0 ? -window.innerWidth : window.innerWidth, true);
-      finishAnimatedNavigation(nextPage);
-      return;
+    const onDone = () => {
+      isSwipeAnimatingRef.current = false;
+      swipeDxRef.current = 0;
+      setActivePage(nextPage);
+      restorePageScroll(nextPage);
+    };
+    const track = swipeTrackRef.current;
+    if (track) {
+      const handler = () => { track.removeEventListener("transitionend", handler); onDone(); };
+      track.addEventListener("transitionend", handler);
+      // Safety fallback
+      setTimeout(() => { track.removeEventListener("transitionend", handler); onDone(); }, 350);
+    } else {
+      onDone();
     }
+  }, [activePage, showProfile, queueStripTransform, restorePageScroll]);
 
-    swipeDxRef.current = 0;
-    isSwipeAnimatingRef.current = false;
-    setActivePage(nextPage);
-    restorePageScroll(nextPage);
-  }, [activePage, activePageIdx, finishAnimatedNavigation, queueTrackTransform, restorePageScroll, showProfile]);
-
+  // Set initial position without animation
   useLayoutEffect(() => {
     if (showProfile) return;
-    queueTrackTransform(0, false);
-  }, [activePage, queueTrackTransform, showProfile]);
+    applyStripTransform(activePageIdx, 0, false);
+  }, [activePage, applyStripTransform, activePageIdx, showProfile]);
 
   useEffect(() => {
-    return () => {
-      if (swipeRafRef.current !== null) window.cancelAnimationFrame(swipeRafRef.current);
-      if (swipeTimeoutRef.current !== null) window.clearTimeout(swipeTimeoutRef.current);
-    };
+    return () => { if (swipeRafRef.current !== null) cancelAnimationFrame(swipeRafRef.current); };
   }, []);
 
   const handleMainTouchStart = useCallback((e: React.TouchEvent) => {
@@ -1634,8 +1612,8 @@ const Index = () => {
     const atEnd = idx === MAIN_PAGE_ORDER.length - 1 && dx < 0;
     const nextDx = (atStart || atEnd) ? dx * 0.15 : dx;
     swipeDxRef.current = nextDx;
-    queueTrackTransform(nextDx, false);
-  }, [activePageIdx, queueTrackTransform]);
+    queueStripTransform(idx, nextDx, false);
+  }, [activePageIdx, queueStripTransform]);
 
   const handleMainTouchEnd = useCallback(() => {
     if (!swipeRef.current) return;
@@ -1644,45 +1622,44 @@ const Index = () => {
     const swipeDx = swipeDxRef.current;
     if (!isH || Math.abs(swipeDx) < 5) {
       swipeDxRef.current = 0;
-      queueTrackTransform(0, true);
+      queueStripTransform(activePageIdx, 0, true);
       return;
     }
     const threshold = window.innerWidth * 0.2;
     const idx = activePageIdx;
     if (swipeDx < -threshold && idx < MAIN_PAGE_ORDER.length - 1) {
+      const nextIdx = idx + 1;
+      const nextPage = MAIN_PAGE_ORDER[nextIdx];
       pageScrollPositions.current[activePage] = window.scrollY;
       isSwipeAnimatingRef.current = true;
-      queueTrackTransform(-window.innerWidth, true);
-      finishAnimatedNavigation(MAIN_PAGE_ORDER[idx + 1]);
+      setVisualPage(nextPage); // BottomNav updates instantly
+      queueStripTransform(nextIdx, 0, true);
+      const track = swipeTrackRef.current;
+      const onDone = () => { isSwipeAnimatingRef.current = false; swipeDxRef.current = 0; setActivePage(nextPage); restorePageScroll(nextPage); };
+      if (track) {
+        const handler = () => { track.removeEventListener("transitionend", handler); onDone(); };
+        track.addEventListener("transitionend", handler);
+        setTimeout(() => { track.removeEventListener("transitionend", handler); onDone(); }, 350);
+      } else onDone();
     } else if (swipeDx > threshold && idx > 0) {
+      const nextIdx = idx - 1;
+      const nextPage = MAIN_PAGE_ORDER[nextIdx];
       pageScrollPositions.current[activePage] = window.scrollY;
       isSwipeAnimatingRef.current = true;
-      queueTrackTransform(window.innerWidth, true);
-      finishAnimatedNavigation(MAIN_PAGE_ORDER[idx - 1]);
+      setVisualPage(nextPage);
+      queueStripTransform(nextIdx, 0, true);
+      const track = swipeTrackRef.current;
+      const onDone = () => { isSwipeAnimatingRef.current = false; swipeDxRef.current = 0; setActivePage(nextPage); restorePageScroll(nextPage); };
+      if (track) {
+        const handler = () => { track.removeEventListener("transitionend", handler); onDone(); };
+        track.addEventListener("transitionend", handler);
+        setTimeout(() => { track.removeEventListener("transitionend", handler); onDone(); }, 350);
+      } else onDone();
     } else {
       swipeDxRef.current = 0;
-      queueTrackTransform(0, true);
+      queueStripTransform(activePageIdx, 0, true);
     }
-  }, [activePage, activePageIdx, finishAnimatedNavigation, queueTrackTransform]);
-
-  function renderMainPage(page: MainPage | null) {
-    if (!page) {
-      return <div className="min-h-screen bg-background" aria-hidden="true" />;
-    }
-
-    switch (page) {
-      case "home":
-        return getPageContent_home();
-      case "series":
-        return getPageContent_series();
-      case "livetv":
-        return <LiveTvPage />;
-      case "movies":
-        return getPageContent_movies();
-      default:
-        return null;
-    }
-  }
+  }, [activePage, activePageIdx, queueStripTransform, restorePageScroll]);
 
   // Memoized page contents for the horizontal strip
 
@@ -1924,24 +1901,23 @@ const Index = () => {
       >
         <div ref={swipeTrackRef} style={{
           display: "flex",
-          width: "300vw",
-          transform: "translate3d(-100vw, 0, 0)",
+          width: `${MAIN_PAGE_ORDER.length * 100}vw`,
+          transform: `translate3d(-${activePageIdx * 100}vw, 0, 0)`,
           transition: "none",
           willChange: "transform",
           backfaceVisibility: "hidden",
         }}>
-          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
-            {renderMainPage(previousPage)}
-          </div>
-          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
-            {renderMainPage(activePage)}
-          </div>
-          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
-            {renderMainPage(nextPage)}
-          </div>
+          {MAIN_PAGE_ORDER.map((page) => (
+            <div key={page} style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
+              {page === "home" && getPageContent_home()}
+              {page === "series" && getPageContent_series()}
+              {page === "livetv" && <LiveTvPage />}
+              {page === "movies" && getPageContent_movies()}
+            </div>
+          ))}
         </div>
       </main>
-      <BottomNav activePage={showProfile ? "profile" : activePage} onNavigate={handleNavigate} />
+      <BottomNav activePage={showProfile ? "profile" : visualPage} onNavigate={handleNavigate} />
 
       <AnimatePresence>
         {showSearch && (
