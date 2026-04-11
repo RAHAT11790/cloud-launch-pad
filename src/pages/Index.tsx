@@ -1568,9 +1568,8 @@ const Index = () => {
   }, [swipeDx, activePageIdx, activePage, handleNavigate, pageOrder]);
 
   // Memoized page contents for the horizontal strip
-  const homeContent = useMemo(() => getHomeContent(), [activeCategory, filteredAnime, continueWatching, heroSlides, allAnime, filteredSeries, filteredMovies, allAnimeSaltUnique, allAnimeVisibleCount, brandingConfig]);
-  
-  // We'll define getHomeContent below and render all pages inline
+
+
 
   // Show login page if not logged in
   if (!isLoggedIn) {
