@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import type { Episode } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
@@ -1506,6 +1506,8 @@ const Index = () => {
 
   // ===== SWIPE NAVIGATION — GPU-ACCELERATED MAIN PAGES =====
   const activePageIdx = MAIN_PAGE_ORDER.indexOf(activePage);
+  const previousPage = activePageIdx > 0 ? MAIN_PAGE_ORDER[activePageIdx - 1] : null;
+  const nextPage = activePageIdx < MAIN_PAGE_ORDER.length - 1 ? MAIN_PAGE_ORDER[activePageIdx + 1] : null;
   const swipeRef = useRef<{ startX: number; startY: number; isHorizontal: boolean | null } | null>(null);
   const swipeTrackRef = useRef<HTMLDivElement | null>(null);
   const swipeDxRef = useRef(0);
@@ -1513,21 +1515,21 @@ const Index = () => {
   const swipeTimeoutRef = useRef<number | null>(null);
   const isSwipeAnimatingRef = useRef(false);
 
-  const applyTrackTransform = useCallback((page: MainPage, dx = 0, animate = false) => {
+  const applyTrackTransform = useCallback((dx = 0, animate = false) => {
     const track = swipeTrackRef.current;
     if (!track) return;
 
     track.style.transition = animate ? "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)" : "none";
-    track.style.transform = `translate3d(calc(-${MAIN_PAGE_ORDER.indexOf(page) * 100}vw + ${dx}px), 0, 0)`;
+    track.style.transform = `translate3d(calc(-100vw + ${dx}px), 0, 0)`;
   }, []);
 
-  const queueTrackTransform = useCallback((page: MainPage, dx = 0, animate = false) => {
+  const queueTrackTransform = useCallback((dx = 0, animate = false) => {
     if (swipeRafRef.current !== null) {
       window.cancelAnimationFrame(swipeRafRef.current);
     }
 
     swipeRafRef.current = window.requestAnimationFrame(() => {
-      applyTrackTransform(page, dx, animate);
+      applyTrackTransform(dx, animate);
       swipeRafRef.current = null;
     });
   }, [applyTrackTransform]);
@@ -1582,7 +1584,7 @@ const Index = () => {
 
     if (Math.abs(distance) === 1) {
       isSwipeAnimatingRef.current = true;
-      queueTrackTransform(activePage, distance > 0 ? -window.innerWidth : window.innerWidth, true);
+      queueTrackTransform(distance > 0 ? -window.innerWidth : window.innerWidth, true);
       finishAnimatedNavigation(nextPage);
       return;
     }
@@ -1593,9 +1595,9 @@ const Index = () => {
     restorePageScroll(nextPage);
   }, [activePage, activePageIdx, finishAnimatedNavigation, queueTrackTransform, restorePageScroll, showProfile]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (showProfile) return;
-    queueTrackTransform(activePage, 0, false);
+    queueTrackTransform(0, false);
   }, [activePage, queueTrackTransform, showProfile]);
 
   useEffect(() => {
@@ -1632,8 +1634,8 @@ const Index = () => {
     const atEnd = idx === MAIN_PAGE_ORDER.length - 1 && dx < 0;
     const nextDx = (atStart || atEnd) ? dx * 0.15 : dx;
     swipeDxRef.current = nextDx;
-    queueTrackTransform(activePage, nextDx, false);
-  }, [activePage, activePageIdx, queueTrackTransform]);
+    queueTrackTransform(nextDx, false);
+  }, [activePageIdx, queueTrackTransform]);
 
   const handleMainTouchEnd = useCallback(() => {
     if (!swipeRef.current) return;
@@ -1642,7 +1644,7 @@ const Index = () => {
     const swipeDx = swipeDxRef.current;
     if (!isH || Math.abs(swipeDx) < 5) {
       swipeDxRef.current = 0;
-      queueTrackTransform(activePage, 0, true);
+      queueTrackTransform(0, true);
       return;
     }
     const threshold = window.innerWidth * 0.2;
@@ -1650,18 +1652,37 @@ const Index = () => {
     if (swipeDx < -threshold && idx < MAIN_PAGE_ORDER.length - 1) {
       pageScrollPositions.current[activePage] = window.scrollY;
       isSwipeAnimatingRef.current = true;
-      queueTrackTransform(activePage, -window.innerWidth, true);
+      queueTrackTransform(-window.innerWidth, true);
       finishAnimatedNavigation(MAIN_PAGE_ORDER[idx + 1]);
     } else if (swipeDx > threshold && idx > 0) {
       pageScrollPositions.current[activePage] = window.scrollY;
       isSwipeAnimatingRef.current = true;
-      queueTrackTransform(activePage, window.innerWidth, true);
+      queueTrackTransform(window.innerWidth, true);
       finishAnimatedNavigation(MAIN_PAGE_ORDER[idx - 1]);
     } else {
       swipeDxRef.current = 0;
-      queueTrackTransform(activePage, 0, true);
+      queueTrackTransform(0, true);
     }
   }, [activePage, activePageIdx, finishAnimatedNavigation, queueTrackTransform]);
+
+  const renderMainPage = useCallback((page: MainPage | null) => {
+    if (!page) {
+      return <div className="min-h-screen bg-background" aria-hidden="true" />;
+    }
+
+    switch (page) {
+      case "home":
+        return getPageContent_home();
+      case "series":
+        return getPageContent_series();
+      case "livetv":
+        return <LiveTvPage />;
+      case "movies":
+        return getPageContent_movies();
+      default:
+        return null;
+    }
+  }, [getPageContent_home, getPageContent_movies, getPageContent_series]);
 
   // Memoized page contents for the horizontal strip
 
@@ -1903,27 +1924,20 @@ const Index = () => {
       >
         <div ref={swipeTrackRef} style={{
           display: "flex",
-          width: `${MAIN_PAGE_ORDER.length * 100}vw`,
-          transform: `translate3d(-${activePageIdx * 100}vw, 0, 0)`,
+          width: "300vw",
+          transform: "translate3d(-100vw, 0, 0)",
           transition: "none",
           willChange: "transform",
           backfaceVisibility: "hidden",
         }}>
-          {/* Page 0: Home */}
           <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
-            {getPageContent_home()}
+            {renderMainPage(previousPage)}
           </div>
-          {/* Page 1: Series */}
           <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
-            {getPageContent_series()}
+            {renderMainPage(activePage)}
           </div>
-          {/* Page 2: Live TV */}
           <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
-            <LiveTvPage />
-          </div>
-          {/* Page 3: Movies */}
-          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
-            {getPageContent_movies()}
+            {renderMainPage(nextPage)}
           </div>
         </div>
       </main>
