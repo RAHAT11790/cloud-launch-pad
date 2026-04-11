@@ -511,11 +511,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return getPrimaryPlaybackSrc(rawUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
+  const preloadVideoRef = useRef<HTMLVideoElement | null>(null);
+  const serverSwitchingRef = useRef(false);
+
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
+    if (serverSwitchingRef.current) return; // prevent double-click
     const v = videoRef.current;
-    const savedTime = v?.currentTime || 0;
-    const wasPlaying = !!v && !v.paused;
+    if (!v) return;
+
+    const savedTime = v.currentTime || 0;
+    const wasPlaying = !v.paused;
     const currentRawSrc = activeSourceBaseRef.current;
 
     let path = "";
@@ -529,23 +535,61 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     const newDomain = videoServers[serverIndex].domain.replace(/\/$/, "");
     const newRawSrc = newDomain + path;
-
-    setActiveServerIndex(serverIndex);
-    activeSourceBaseRef.current = newRawSrc;
     const resolved = resolvePlaybackSrc(newRawSrc);
-    setCurrentSrc(resolved);
-    setShowServerPanel(false);
 
-    if (v) {
-      const restoreTime = () => {
-        if (v.duration > 0) {
-          v.currentTime = savedTime;
-          if (wasPlaying) v.play().catch(() => {});
-          v.removeEventListener("loadedmetadata", restoreTime);
-        }
+    setShowServerPanel(false);
+    serverSwitchingRef.current = true;
+
+    // Create hidden preload video to load new server in background
+    const preload = document.createElement("video");
+    preload.preload = "auto";
+    preload.muted = true;
+    preload.playsInline = true;
+    preload.style.display = "none";
+    preload.src = resolved;
+    document.body.appendChild(preload);
+    preloadVideoRef.current = preload;
+
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      // Clean up preload element
+      try { preload.pause(); preload.src = ""; document.body.removeChild(preload); } catch {}
+      preloadVideoRef.current = null;
+
+      // Now swap source on the real player — it should load from cache/connection
+      setActiveServerIndex(serverIndex);
+      activeSourceBaseRef.current = newRawSrc;
+      pendingSeek.current = savedTime;
+      setCurrentSrc(resolved);
+      serverSwitchingRef.current = false;
+    };
+
+    // When preload has enough data, seek to position to verify, then swap
+    const onCanPlay = () => {
+      preload.currentTime = savedTime;
+      // Wait for seek to complete
+      const onSeeked = () => {
+        settle();
       };
-      v.addEventListener("loadedmetadata", restoreTime);
-    }
+      preload.addEventListener("seeked", onSeeked, { once: true });
+      // Safety: if seeked doesn't fire within 2s, swap anyway
+      setTimeout(() => { settle(); }, 2000);
+    };
+
+    preload.addEventListener("canplay", onCanPlay, { once: true });
+
+    // Timeout fallback: if preload takes >4s, just do a direct swap
+    setTimeout(() => {
+      if (!settled) {
+        console.log("Server preload timeout, doing direct swap");
+        settle();
+      }
+    }, 4000);
+
+    // Error fallback: if preload fails, still swap (let main player handle error)
+    preload.addEventListener("error", () => { settle(); }, { once: true });
   }, [activeServerIndex, videoServers, resolvePlaybackSrc]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
