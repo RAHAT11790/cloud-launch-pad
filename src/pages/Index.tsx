@@ -1814,27 +1814,18 @@ const Index = () => {
       <Header onSearchClick={() => setShowSearch(true)} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
       <main
         onTouchStart={handleMainTouchStart}
+        onTouchMove={handleMainTouchMove}
         onTouchEnd={handleMainTouchEnd}
         className="relative overflow-hidden"
+        style={{ touchAction: "pan-y" }}
       >
-        {/* Swipe flash overlay */}
-        {swipeFlash && (
-          <div className="fixed inset-0 z-[999] pointer-events-none" style={{
-            background: "radial-gradient(circle at center, hsla(var(--primary)/0.15) 0%, transparent 70%)",
-            animation: "swipeFlash 0.25s ease-out forwards"
-          }} />
-        )}
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.div
-            key={activePage}
-            initial={{ opacity: 0, x: swipeDirection === "left" ? 60 : -60, scale: 0.97 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: swipeDirection === "left" ? -60 : 60, scale: 0.97 }}
-            transition={{ duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
-          >
-            {getPageContent()}
-          </motion.div>
-        </AnimatePresence>
+        <div style={{
+          transform: `translateX(${swipeDx}px)`,
+          transition: isSwipeTransitioning ? "transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)" : swipeDx !== 0 ? "none" : "transform 0.2s ease-out",
+          willChange: "transform",
+        }}>
+          {getPageContent()}
+        </div>
       </main>
       <BottomNav activePage={activePage} onNavigate={handleNavigate} />
 
