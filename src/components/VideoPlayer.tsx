@@ -511,6 +511,43 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return getPrimaryPlaybackSrc(rawUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
+  const switchServer = useCallback((serverIndex: number) => {
+    if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
+    const v = videoRef.current;
+    const savedTime = v?.currentTime || 0;
+    const wasPlaying = !!v && !v.paused;
+    const currentRawSrc = activeSourceBaseRef.current;
+
+    let path = "";
+    try {
+      const u = new URL(currentRawSrc);
+      path = u.pathname + u.search + u.hash;
+    } catch {
+      const match = currentRawSrc.match(/^https?:\/\/[^\/]+(\/.*)/);
+      path = match ? match[1] : currentRawSrc;
+    }
+
+    const newDomain = videoServers[serverIndex].domain.replace(/\/$/, "");
+    const newRawSrc = newDomain + path;
+
+    setActiveServerIndex(serverIndex);
+    activeSourceBaseRef.current = newRawSrc;
+    const resolved = resolvePlaybackSrc(newRawSrc);
+    setCurrentSrc(resolved);
+    setShowServerPanel(false);
+
+    if (v) {
+      const restoreTime = () => {
+        if (v.duration > 0) {
+          v.currentTime = savedTime;
+          if (wasPlaying) v.play().catch(() => {});
+          v.removeEventListener("loadedmetadata", restoreTime);
+        }
+      };
+      v.addEventListener("loadedmetadata", restoreTime);
+    }
+  }, [activeServerIndex, videoServers, resolvePlaybackSrc]);
+
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
 
