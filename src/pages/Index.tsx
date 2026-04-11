@@ -1778,14 +1778,22 @@ const Index = () => {
       <main
         onTouchStart={handleMainTouchStart}
         onTouchEnd={handleMainTouchEnd}
+        className="relative overflow-hidden"
       >
-        <AnimatePresence mode="wait">
+        {/* Swipe flash overlay */}
+        {swipeFlash && (
+          <div className="fixed inset-0 z-[999] pointer-events-none" style={{
+            background: "radial-gradient(circle at center, hsla(var(--primary)/0.15) 0%, transparent 70%)",
+            animation: "swipeFlash 0.25s ease-out forwards"
+          }} />
+        )}
+        <AnimatePresence mode="popLayout" initial={false}>
           <motion.div
             key={activePage}
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -30 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            initial={{ opacity: 0, x: swipeDirection === "left" ? 60 : -60, scale: 0.97 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: swipeDirection === "left" ? -60 : 60, scale: 0.97 }}
+            transition={{ duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
           >
             {getPageContent()}
           </motion.div>
