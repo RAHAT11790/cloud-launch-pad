@@ -16,7 +16,7 @@ import {
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers";
 
 interface CastMember {
   name: string;
@@ -2064,6 +2064,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "url-changer": "URL Changer",
     "link-checker": "Link Checker",
     "tg-url-changer": "TG URL Changer",
+    "video-servers": "Video Servers",
   };
 
   // ==================== CATEGORIES ====================
@@ -3327,6 +3328,7 @@ ${tgHashtags}`;
     { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
     { section: "url-changer", icon: <Link size={16} />, label: "URL Changer" },
     { section: "link-checker", icon: <Search size={16} />, label: "Link Checker" },
+    { section: "video-servers", icon: <Activity size={16} />, label: "Video Servers" },
     { section: "ui-themes", icon: <Zap size={16} />, label: "UI Themes", group: "Customization" },
     { section: "hero-pinned", icon: <Star size={16} />, label: "Hero Pinned" },
     { section: "settings", icon: <Settings size={16} />, label: "Settings" },
@@ -5721,7 +5723,21 @@ ${tgHashtags}`;
                   {/* Post selector */}
                   <div className="mb-3">
                     <label className="block text-xs text-zinc-400 mb-1">পোস্ট সিলেক্ট</label>
-                    <select value={tgSelectedPost} onChange={e => setTgSelectedPost(e.target.value)} className={selectClass}>
+                    <select value={tgSelectedPost} onChange={e => {
+                      const key = e.target.value;
+                      setTgSelectedPost(key);
+                      if (key !== "all") {
+                        const post = tgPosts.find(p => p.firebaseKey === key);
+                        if (post?.buttons?.length) {
+                          const firstBtnUrl = post.buttons[0]?.url || "";
+                          try {
+                            const u = new URL(firstBtnUrl);
+                            setTgOldDomain(u.origin);
+                            setTgQuickPaste(firstBtnUrl);
+                          } catch {}
+                        }
+                      }
+                    }} className={selectClass}>
                       <option value="all">📦 সব পোস্ট ({tgPosts.length}টি)</option>
                       {tgPosts.map(p => (
                         <option key={p.firebaseKey} value={p.firebaseKey}>
@@ -6953,6 +6969,121 @@ ${tgHashtags}`;
             moviesData={moviesData}
           />
         )}
+
+        {/* ==================== VIDEO SERVERS ==================== */}
+        {activeSection === "video-servers" && (() => {
+          const VideoServersSection = () => {
+            const [servers, setServers] = useState<{ name: string; domain: string }[]>([]);
+            const [vsLoading, setVsLoading] = useState(true);
+            const [newName, setNewName] = useState("");
+            const [newDomain, setNewDomain] = useState("");
+
+            useEffect(() => {
+              const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
+                const val = snap.val();
+                if (val && Array.isArray(val)) {
+                  setServers(val.filter((s: any) => s && s.domain));
+                } else if (val && typeof val === "object") {
+                  const arr = Object.values(val).filter((s: any) => s && s.domain) as { name: string; domain: string }[];
+                  setServers(arr);
+                } else {
+                  setServers([]);
+                }
+                setVsLoading(false);
+              });
+              return () => unsub();
+            }, []);
+
+            const saveServers = async (updated: { name: string; domain: string }[]) => {
+              await set(ref(db, "settings/videoServers"), updated);
+              toast.success("✅ সার্ভার লিস্ট সেভ হয়েছে!");
+            };
+
+            const addServer = () => {
+              if (!newDomain.trim()) { toast.error("ডোমেইন দিন!"); return; }
+              const updated = [...servers, { name: newName.trim() || `Server ${servers.length + 1}`, domain: newDomain.trim() }];
+              saveServers(updated);
+              setNewName("");
+              setNewDomain("");
+            };
+
+            const removeServer = (idx: number) => {
+              const updated = servers.filter((_, i) => i !== idx);
+              saveServers(updated);
+            };
+
+            const moveServer = (idx: number, dir: -1 | 1) => {
+              const newIdx = idx + dir;
+              if (newIdx < 0 || newIdx >= servers.length) return;
+              const updated = [...servers];
+              [updated[idx], updated[newIdx]] = [updated[newIdx], updated[idx]];
+              saveServers(updated);
+            };
+
+            return (
+              <div>
+                <div className={`${glassCard} p-4 mb-4`}>
+                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                    <Activity size={14} className="text-cyan-400" /> ভিডিও সার্ভার ম্যানেজার
+                  </h3>
+                  <p className="text-[11px] text-zinc-400 mb-4">
+                    ভিডিও প্লেয়ারে সার্ভার চেঞ্জ বাটন দেখানোর জন্য কমপক্ষে ২টি সার্ভার যোগ করুন। শুধু ডোমেইন পরিবর্তন হবে, ফাইল পাথ একই থাকবে।
+                  </p>
+
+                  {vsLoading ? (
+                    <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>
+                  ) : servers.length === 0 ? (
+                    <p className="text-zinc-500 text-[11px] text-center py-4 mb-4">কোনো সার্ভার নেই। নিচে থেকে যোগ করুন।</p>
+                  ) : (
+                    <div className="space-y-2 mb-4">
+                      {servers.map((srv, idx) => (
+                        <div key={idx} className="flex items-center gap-2 p-2.5 bg-zinc-800/40 rounded-xl border border-zinc-700/30">
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[11px] font-bold text-cyan-300">S{idx + 1}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[12px] font-medium block truncate">{srv.name}</span>
+                            <span className="text-[10px] text-zinc-500 block truncate">{srv.domain}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => moveServer(idx, -1)} disabled={idx === 0} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
+                              <ChevronLeft size={12} />
+                            </button>
+                            <button onClick={() => moveServer(idx, 1)} disabled={idx === servers.length - 1} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
+                              <ChevronRight size={12} />
+                            </button>
+                            <button onClick={() => removeServer(idx)} className="text-red-400 hover:text-red-300 p-1">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="border border-dashed border-zinc-700 rounded-xl p-3 space-y-2">
+                    <p className="text-[11px] text-zinc-400 font-medium">➕ নতুন সার্ভার যোগ করুন</p>
+                    <input value={newName} onChange={e => setNewName(e.target.value)} className={inputClass} placeholder="সার্ভারের নাম (যেমন: Server 1)" />
+                    <input value={newDomain} onChange={e => setNewDomain(e.target.value)} className={inputClass} placeholder="ডোমেইন (যেমন: https://example.com)" />
+                    <button onClick={addServer} className={`${btnPrimary} w-full py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2`}>
+                      <Plus size={14} /> সার্ভার যোগ করুন
+                    </button>
+                  </div>
+                </div>
+
+                <div className={`${glassCard} p-4`}>
+                  <h4 className="text-xs font-semibold mb-2 text-zinc-300">📖 কিভাবে কাজ করে?</h4>
+                  <ul className="text-[11px] text-zinc-400 space-y-1.5 list-disc list-inside">
+                    <li>কমপক্ষে ২টি সার্ভার থাকলে প্লেয়ারে "Server" বাটন দেখাবে</li>
+                    <li>সার্ভার চেঞ্জ করলে শুধু ডোমেইন বদলাবে, চ্যানেল/ফাইল আইডি একই থাকবে</li>
+                    <li>উদাহরণ: <code className="text-cyan-400">https://s1.example.com</code>/8866/file.mkv → <code className="text-cyan-400">https://s2.example.com</code>/8866/file.mkv</li>
+                  </ul>
+                </div>
+              </div>
+            );
+          };
+          return <VideoServersSection />;
+        })()}
 
         {activeSection === "comments" && (
           <AdminCommentsSection
