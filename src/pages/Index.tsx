@@ -601,11 +601,8 @@ const Index = () => {
     if (layer === "search") { setShowSearch(false); return true; }
     if (layer === "profile") { setShowProfile(false); return true; }
     if (layer === "series" || layer === "movies" || layer === "livetv") {
-      pageScrollPositions.current[activePage] = window.scrollY;
+      setVisualPage("home");
       setActivePage("home");
-      window.requestAnimationFrame(() => {
-        window.scrollTo(0, pageScrollPositions.current.home || 0);
-      });
       return true;
     }
     return false;
@@ -1531,13 +1528,14 @@ const Index = () => {
     });
   }, [applyStripTransform]);
 
-  const restorePageScroll = useCallback((page: MainPage) => {
-    requestAnimationFrame(() => window.scrollTo(0, pageScrollPositions.current[page] || 0));
+  const pageContainerRefs = useRef<Record<MainPage, HTMLDivElement | null>>({ home: null, series: null, livetv: null, movies: null });
+
+  const restorePageScroll = useCallback((_page: MainPage) => {
+    // Each page has its own scroll container now — no need to restore window scroll
   }, []);
 
   const handleNavigate = useCallback((page: string) => {
     if (page === "profile") {
-      pageScrollPositions.current[activePage] = window.scrollY;
       setShowProfile(true);
       return;
     }
@@ -1546,9 +1544,8 @@ const Index = () => {
       setShowProfile(false);
       if (nextPage === activePage) { restorePageScroll(activePage); return; }
     }
-    if (nextPage === activePage) { window.scrollTo(0, pageScrollPositions.current[nextPage] || 0); return; }
+    if (nextPage === activePage) return;
 
-    pageScrollPositions.current[activePage] = window.scrollY;
     setDubFilter("all");
 
     const nextIdx = MAIN_PAGE_ORDER.indexOf(nextPage);
@@ -1630,7 +1627,6 @@ const Index = () => {
     if (swipeDx < -threshold && idx < MAIN_PAGE_ORDER.length - 1) {
       const nextIdx = idx + 1;
       const nextPage = MAIN_PAGE_ORDER[nextIdx];
-      pageScrollPositions.current[activePage] = window.scrollY;
       isSwipeAnimatingRef.current = true;
       setVisualPage(nextPage); // BottomNav updates instantly
       queueStripTransform(nextIdx, 0, true);
@@ -1644,7 +1640,6 @@ const Index = () => {
     } else if (swipeDx > threshold && idx > 0) {
       const nextIdx = idx - 1;
       const nextPage = MAIN_PAGE_ORDER[nextIdx];
-      pageScrollPositions.current[activePage] = window.scrollY;
       isSwipeAnimatingRef.current = true;
       setVisualPage(nextPage);
       queueStripTransform(nextIdx, 0, true);
@@ -1898,17 +1893,32 @@ const Index = () => {
         onTouchMove={handleMainTouchMove}
         onTouchEnd={handleMainTouchEnd}
         className="relative overflow-hidden"
+        style={{ height: "calc(100vh - 65px)", marginTop: 0 }}
       >
         <div ref={swipeTrackRef} style={{
           display: "flex",
           width: `${MAIN_PAGE_ORDER.length * 100}vw`,
+          height: "100%",
           transform: `translate3d(-${activePageIdx * 100}vw, 0, 0)`,
           transition: "none",
           willChange: "transform",
           backfaceVisibility: "hidden",
         }}>
           {MAIN_PAGE_ORDER.map((page) => (
-            <div key={page} style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
+            <div
+              key={page}
+              ref={(el) => { pageContainerRefs.current[page] = el; }}
+              style={{
+                width: "100vw",
+                height: "100%",
+                flexShrink: 0,
+                overflowY: "auto",
+                overflowX: "hidden",
+                backfaceVisibility: "hidden",
+                transform: "translateZ(0)",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
               {page === "home" && getPageContent_home()}
               {page === "series" && getPageContent_series()}
               {page === "livetv" && <LiveTvPage />}
