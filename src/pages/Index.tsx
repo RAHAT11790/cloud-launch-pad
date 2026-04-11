@@ -1901,24 +1901,23 @@ const Index = () => {
       >
         <div ref={swipeTrackRef} style={{
           display: "flex",
-          width: "300vw",
-          transform: "translate3d(-100vw, 0, 0)",
+          width: `${MAIN_PAGE_ORDER.length * 100}vw`,
+          transform: `translate3d(-${activePageIdx * 100}vw, 0, 0)`,
           transition: "none",
           willChange: "transform",
           backfaceVisibility: "hidden",
         }}>
-          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
-            {renderMainPage(previousPage)}
-          </div>
-          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
-            {renderMainPage(activePage)}
-          </div>
-          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
-            {renderMainPage(nextPage)}
-          </div>
+          {MAIN_PAGE_ORDER.map((page) => (
+            <div key={page} style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
+              {page === "home" && getPageContent_home()}
+              {page === "series" && getPageContent_series()}
+              {page === "livetv" && <LiveTvPage />}
+              {page === "movies" && getPageContent_movies()}
+            </div>
+          ))}
         </div>
       </main>
-      <BottomNav activePage={showProfile ? "profile" : activePage} onNavigate={handleNavigate} />
+      <BottomNav activePage={showProfile ? "profile" : visualPage} onNavigate={handleNavigate} />
 
       <AnimatePresence>
         {showSearch && (
