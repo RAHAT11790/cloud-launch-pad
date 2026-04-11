@@ -605,8 +605,10 @@ const Index = () => {
       setActivePage("home");
       return true;
     }
+    return false;
+  }, [activePage, getCurrentLayer]);
 
-  useEffect(() => {
+
     if (window.history.state?.rsAnime !== true) {
       window.history.pushState({ rsAnime: true, page: "home" }, "");
     }
