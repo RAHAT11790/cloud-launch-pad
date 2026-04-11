@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import type { Episode } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
@@ -46,6 +46,12 @@ import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
 import { registerFCMToken } from "@/lib/fcm";
 import { createUnlockLinkForCurrentUser } from "@/lib/unlockAccess";
+
+type MainPage = "home" | "series" | "livetv" | "movies";
+
+const MAIN_PAGE_ORDER: MainPage[] = ["home", "series", "livetv", "movies"];
+
+const isMainPage = (page: string): page is MainPage => MAIN_PAGE_ORDER.includes(page as MainPage);
 
 const Index = () => {
   const { webseries, movies, allAnime: firebaseAnime, categories, loading } = useFirebaseData();
@@ -283,9 +289,15 @@ const Index = () => {
     return false;
   }, [isLoggedIn, unlockBlocked, saltIsPremium, hasFreeAccess]);
 
-  const [activePage, setActivePage] = useState(() => {
-    try { return sessionStorage.getItem("rs_activePage") || "home"; } catch { return "home"; }
+  const [activePage, setActivePage] = useState<MainPage>(() => {
+    try {
+      const savedPage = sessionStorage.getItem("rs_activePage") || "home";
+      return isMainPage(savedPage) ? savedPage : "home";
+    } catch {
+      return "home";
+    }
   });
+  const pageScrollPositions = useRef<Record<MainPage, number>>({ home: 0, series: 0, livetv: 0, movies: 0 });
   const [activeCategory, setActiveCategory] = useState("All");
   const [dubFilter, setDubFilter] = useState<"all" | "official" | "fandub">("all");
   const [selectedAnime, setSelectedAnime] = useState<AnimeItem | null>(null);
@@ -576,10 +588,7 @@ const Index = () => {
     try {
       const layer = sessionStorage.getItem("rs_uiLayer");
       if (layer === "search") setShowSearch(true);
-      if (layer === "profile") {
-        setShowProfile(true);
-        setActivePage("home");
-      }
+      if (layer === "profile") setShowProfile(true);
       if (layer === "series" || layer === "movies" || layer === "livetv") setActivePage(layer);
     } catch {}
   }, []);
@@ -590,10 +599,17 @@ const Index = () => {
     if (layer === "saltPlayer") { setSaltPlayerState(null); return true; }
     if (layer === "details") { setSelectedAnime(null); return true; }
     if (layer === "search") { setShowSearch(false); return true; }
-    if (layer === "profile") { setShowProfile(false); setActivePage("home"); return true; }
-    if (layer === "series" || layer === "movies" || layer === "livetv") { setActivePage("home"); return true; }
+    if (layer === "profile") { setShowProfile(false); return true; }
+    if (layer === "series" || layer === "movies" || layer === "livetv") {
+      pageScrollPositions.current[activePage] = window.scrollY;
+      setActivePage("home");
+      window.requestAnimationFrame(() => {
+        window.scrollTo(0, pageScrollPositions.current.home || 0);
+      });
+      return true;
+    }
     return false;
-  }, [getCurrentLayer]);
+  }, [activePage, getCurrentLayer]);
 
   useEffect(() => {
     if (window.history.state?.rsAnime !== true) {
@@ -1401,13 +1417,6 @@ const Index = () => {
     if (anime) handleCardClick(anime);
   };
 
-  const handleNavigate = (page: string) => {
-    setShowProfile(page === "profile");
-    setActivePage(page);
-    setDubFilter("all");
-    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
-  };
-
   const handleLogin = (userId: string) => {
     setIsLoggedIn(true);
   };
@@ -1495,16 +1504,111 @@ const Index = () => {
     return scored.filter(s => s.score > 0).slice(0, 20).map(s => s.anime);
   }, [playerState?.anime, saltPlayerState?.anime, allAnime]);
 
-  // ===== SWIPE NAVIGATION — ALL PAGES PRE-RENDERED IN HORIZONTAL STRIP =====
-  const pageOrder = useMemo(() => ["home", "series", "livetv", "movies", "profile"] as const, []);
-  const activePageIdx = pageOrder.indexOf(activePage as any);
+  // ===== SWIPE NAVIGATION — GPU-ACCELERATED MAIN PAGES =====
+  const activePageIdx = MAIN_PAGE_ORDER.indexOf(activePage);
+  const previousPage = activePageIdx > 0 ? MAIN_PAGE_ORDER[activePageIdx - 1] : null;
+  const nextPage = activePageIdx < MAIN_PAGE_ORDER.length - 1 ? MAIN_PAGE_ORDER[activePageIdx + 1] : null;
   const swipeRef = useRef<{ startX: number; startY: number; isHorizontal: boolean | null } | null>(null);
-  const [swipeDx, setSwipeDx] = useState(0);
-  const [isSwipeAnimating, setIsSwipeAnimating] = useState(false);
-  const pageScrollPositions = useRef<Record<string, number>>({});
+  const swipeTrackRef = useRef<HTMLDivElement | null>(null);
+  const swipeDxRef = useRef(0);
+  const swipeRafRef = useRef<number | null>(null);
+  const swipeTimeoutRef = useRef<number | null>(null);
+  const isSwipeAnimatingRef = useRef(false);
+
+  const applyTrackTransform = useCallback((dx = 0, animate = false) => {
+    const track = swipeTrackRef.current;
+    if (!track) return;
+
+    track.style.transition = animate ? "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)" : "none";
+    track.style.transform = `translate3d(calc(-100vw + ${dx}px), 0, 0)`;
+  }, []);
+
+  const queueTrackTransform = useCallback((dx = 0, animate = false) => {
+    if (swipeRafRef.current !== null) {
+      window.cancelAnimationFrame(swipeRafRef.current);
+    }
+
+    swipeRafRef.current = window.requestAnimationFrame(() => {
+      applyTrackTransform(dx, animate);
+      swipeRafRef.current = null;
+    });
+  }, [applyTrackTransform]);
+
+  const restorePageScroll = useCallback((page: MainPage) => {
+    window.requestAnimationFrame(() => {
+      window.scrollTo(0, pageScrollPositions.current[page] || 0);
+    });
+  }, []);
+
+  const finishAnimatedNavigation = useCallback((nextPage: MainPage) => {
+    if (swipeTimeoutRef.current !== null) {
+      window.clearTimeout(swipeTimeoutRef.current);
+    }
+
+    swipeTimeoutRef.current = window.setTimeout(() => {
+      swipeDxRef.current = 0;
+      isSwipeAnimatingRef.current = false;
+      setActivePage(nextPage);
+      restorePageScroll(nextPage);
+      swipeTimeoutRef.current = null;
+    }, 260);
+  }, [restorePageScroll]);
+
+  const handleNavigate = useCallback((page: string) => {
+    if (page === "profile") {
+      pageScrollPositions.current[activePage] = window.scrollY;
+      setShowProfile(true);
+      return;
+    }
+
+    const nextPage = isMainPage(page) ? page : "home";
+
+    if (showProfile) {
+      setShowProfile(false);
+      if (nextPage === activePage) {
+        restorePageScroll(activePage);
+        return;
+      }
+    }
+
+    if (nextPage === activePage) {
+      window.scrollTo(0, pageScrollPositions.current[nextPage] || 0);
+      return;
+    }
+
+    pageScrollPositions.current[activePage] = window.scrollY;
+    setDubFilter("all");
+
+    const nextPageIdx = MAIN_PAGE_ORDER.indexOf(nextPage);
+    const distance = nextPageIdx - activePageIdx;
+
+    if (Math.abs(distance) === 1) {
+      isSwipeAnimatingRef.current = true;
+      queueTrackTransform(distance > 0 ? -window.innerWidth : window.innerWidth, true);
+      finishAnimatedNavigation(nextPage);
+      return;
+    }
+
+    swipeDxRef.current = 0;
+    isSwipeAnimatingRef.current = false;
+    setActivePage(nextPage);
+    restorePageScroll(nextPage);
+  }, [activePage, activePageIdx, finishAnimatedNavigation, queueTrackTransform, restorePageScroll, showProfile]);
+
+  useLayoutEffect(() => {
+    if (showProfile) return;
+    queueTrackTransform(0, false);
+  }, [activePage, queueTrackTransform, showProfile]);
+
+  useEffect(() => {
+    return () => {
+      if (swipeRafRef.current !== null) window.cancelAnimationFrame(swipeRafRef.current);
+      if (swipeTimeoutRef.current !== null) window.clearTimeout(swipeTimeoutRef.current);
+    };
+  }, []);
 
   const handleMainTouchStart = useCallback((e: React.TouchEvent) => {
-    if (isSwipeAnimating) return;
+    if (showProfile || showSearch || selectedAnime || playerState || saltPlayerState || isSwipeAnimatingRef.current) return;
     const target = e.target as HTMLElement;
     let el: HTMLElement | null = target;
     while (el && el !== e.currentTarget) {
@@ -1513,10 +1617,10 @@ const Index = () => {
     }
     const touch = e.touches[0];
     swipeRef.current = { startX: touch.clientX, startY: touch.clientY, isHorizontal: null };
-  }, [isSwipeAnimating]);
+  }, [playerState, saltPlayerState, selectedAnime, showProfile, showSearch]);
 
   const handleMainTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!swipeRef.current || isSwipeAnimating) return;
+    if (!swipeRef.current || isSwipeAnimatingRef.current) return;
     const touch = e.touches[0];
     const dx = touch.clientX - swipeRef.current.startX;
     const dy = touch.clientY - swipeRef.current.startY;
@@ -1527,45 +1631,58 @@ const Index = () => {
     e.preventDefault();
     const idx = activePageIdx;
     const atStart = idx === 0 && dx > 0;
-    const atEnd = idx === pageOrder.length - 1 && dx < 0;
-    setSwipeDx((atStart || atEnd) ? dx * 0.15 : dx);
-  }, [activePageIdx, isSwipeAnimating, pageOrder]);
+    const atEnd = idx === MAIN_PAGE_ORDER.length - 1 && dx < 0;
+    const nextDx = (atStart || atEnd) ? dx * 0.15 : dx;
+    swipeDxRef.current = nextDx;
+    queueTrackTransform(nextDx, false);
+  }, [activePageIdx, queueTrackTransform]);
 
   const handleMainTouchEnd = useCallback(() => {
     if (!swipeRef.current) return;
     const isH = swipeRef.current.isHorizontal;
     swipeRef.current = null;
-    if (!isH || Math.abs(swipeDx) < 5) { setSwipeDx(0); return; }
+    const swipeDx = swipeDxRef.current;
+    if (!isH || Math.abs(swipeDx) < 5) {
+      swipeDxRef.current = 0;
+      queueTrackTransform(0, true);
+      return;
+    }
     const threshold = window.innerWidth * 0.2;
     const idx = activePageIdx;
-    if (swipeDx < -threshold && idx < pageOrder.length - 1) {
-      // Save scroll position before navigating
+    if (swipeDx < -threshold && idx < MAIN_PAGE_ORDER.length - 1) {
       pageScrollPositions.current[activePage] = window.scrollY;
-      setIsSwipeAnimating(true);
-      setSwipeDx(-window.innerWidth);
-      setTimeout(() => {
-        const nextPage = pageOrder[idx + 1];
-        handleNavigate(nextPage);
-        setSwipeDx(0);
-        setIsSwipeAnimating(false);
-        // Restore scroll position of target page
-        window.scrollTo(0, pageScrollPositions.current[nextPage] || 0);
-      }, 250);
+      isSwipeAnimatingRef.current = true;
+      queueTrackTransform(-window.innerWidth, true);
+      finishAnimatedNavigation(MAIN_PAGE_ORDER[idx + 1]);
     } else if (swipeDx > threshold && idx > 0) {
       pageScrollPositions.current[activePage] = window.scrollY;
-      setIsSwipeAnimating(true);
-      setSwipeDx(window.innerWidth);
-      setTimeout(() => {
-        const prevPage = pageOrder[idx - 1];
-        handleNavigate(prevPage);
-        setSwipeDx(0);
-        setIsSwipeAnimating(false);
-        window.scrollTo(0, pageScrollPositions.current[prevPage] || 0);
-      }, 250);
+      isSwipeAnimatingRef.current = true;
+      queueTrackTransform(window.innerWidth, true);
+      finishAnimatedNavigation(MAIN_PAGE_ORDER[idx - 1]);
     } else {
-      setSwipeDx(0);
+      swipeDxRef.current = 0;
+      queueTrackTransform(0, true);
     }
-  }, [swipeDx, activePageIdx, activePage, handleNavigate, pageOrder]);
+  }, [activePage, activePageIdx, finishAnimatedNavigation, queueTrackTransform]);
+
+  function renderMainPage(page: MainPage | null) {
+    if (!page) {
+      return <div className="min-h-screen bg-background" aria-hidden="true" />;
+    }
+
+    switch (page) {
+      case "home":
+        return getPageContent_home();
+      case "series":
+        return getPageContent_series();
+      case "livetv":
+        return <LiveTvPage />;
+      case "movies":
+        return getPageContent_movies();
+      default:
+        return null;
+    }
+  }
 
   // Memoized page contents for the horizontal strip
 
@@ -1805,34 +1922,26 @@ const Index = () => {
         onTouchEnd={handleMainTouchEnd}
         className="relative overflow-hidden"
       >
-        <div style={{
+        <div ref={swipeTrackRef} style={{
           display: "flex",
-          width: `${pageOrder.length * 100}vw`,
-          transform: `translateX(calc(-${activePageIdx * 100}vw + ${swipeDx}px))`,
-          transition: isSwipeAnimating ? "transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1)" : swipeDx !== 0 ? "none" : "transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1)",
+          width: "300vw",
+          transform: "translate3d(-100vw, 0, 0)",
+          transition: "none",
           willChange: "transform",
+          backfaceVisibility: "hidden",
         }}>
-          {/* Page 0: Home */}
-          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
-            {getPageContent_home()}
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
+            {renderMainPage(previousPage)}
           </div>
-          {/* Page 1: Series */}
-          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
-            {getPageContent_series()}
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
+            {renderMainPage(activePage)}
           </div>
-          {/* Page 2: Live TV */}
-          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
-            <LiveTvPage />
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh", backfaceVisibility: "hidden", transform: "translateZ(0)" }}>
+            {renderMainPage(nextPage)}
           </div>
-          {/* Page 3: Movies */}
-          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
-            {getPageContent_movies()}
-          </div>
-          {/* Page 4: Profile — rendered as overlay via showProfile */}
-          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }} className="bg-background" />
         </div>
       </main>
-      <BottomNav activePage={activePage} onNavigate={handleNavigate} />
+      <BottomNav activePage={showProfile ? "profile" : activePage} onNavigate={handleNavigate} />
 
       <AnimatePresence>
         {showSearch && (
@@ -1842,7 +1951,7 @@ const Index = () => {
 
       <AnimatePresence>
         {showProfile && (
-          <ProfilePage onClose={() => { setShowProfile(false); handleNavigate("home"); }} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
+          <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
         )}
       </AnimatePresence>
 
