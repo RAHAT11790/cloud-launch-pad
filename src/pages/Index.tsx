@@ -1636,175 +1636,163 @@ const Index = () => {
     return <SplashLoader />;
   }
 
-  const getPageContent = () => {
-    switch (activePage) {
-      case "series":
-        return (
-          <div className="pt-[65px] pb-24 px-4">
-            <h2 className="text-xl font-bold mb-3 flex items-center category-bar">Anime Series</h2>
-            <div className="flex gap-2 mb-4">
-              {(["all", "official", "fandub"] as const).map(dt => (
-                <button key={dt} onClick={() => setDubFilter(dt)}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${dubFilter === dt
-                    ? dt === "fandub" ? "bg-orange-600 border-orange-500 text-white shadow-[0_2px_12px_rgba(234,88,12,0.3)]"
-                      : "gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.3)]"
-                    : "bg-card border-border text-muted-foreground"}`}>
-                  {dt === "all" ? "All" : dt === "official" ? "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛" : "𝐅𝐚𝐧𝐝𝐮𝐛"}
-                </button>
-              ))}
+  const getPageContent_series = () => (
+    <div className="pt-[65px] pb-24 px-4">
+      <h2 className="text-xl font-bold mb-3 flex items-center category-bar">Anime Series</h2>
+      <div className="flex gap-2 mb-4">
+        {(["all", "official", "fandub"] as const).map(dt => (
+          <button key={dt} onClick={() => setDubFilter(dt)}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${dubFilter === dt
+              ? dt === "fandub" ? "bg-orange-600 border-orange-500 text-white shadow-[0_2px_12px_rgba(234,88,12,0.3)]"
+                : "gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.3)]"
+              : "bg-card border-border text-muted-foreground"}`}>
+            {dt === "all" ? "All" : dt === "official" ? "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛" : "𝐅𝐚𝐧𝐝𝐮𝐛"}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-2.5">
+        {filteredSeries.map((anime) => (
+          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+            <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
+            {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
+            <div className="absolute bottom-0 left-0 right-0 p-2">
+              <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
             </div>
-            <div className="grid grid-cols-3 gap-2.5">
-              {filteredSeries.map((anime) => (
-                <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-                  <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
-                  <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                  <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
-                  {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
-                  <div className="absolute bottom-0 left-0 right-0 p-2">
-                    <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {filteredSeries.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
           </div>
-        );
-      case "movies":
-        return (
-          <div className="pt-[65px] pb-24 px-4">
-            <h2 className="text-xl font-bold mb-3 flex items-center category-bar">Anime Movies</h2>
-            <div className="flex gap-2 mb-4">
-              {(["all", "official", "fandub"] as const).map(dt => (
-                <button key={dt} onClick={() => setDubFilter(dt)}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${dubFilter === dt
-                    ? dt === "fandub" ? "bg-orange-600 border-orange-500 text-white shadow-[0_2px_12px_rgba(234,88,12,0.3)]"
-                      : "gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.3)]"
-                    : "bg-card border-border text-muted-foreground"}`}>
-                  {dt === "all" ? "All" : dt === "official" ? "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛" : "𝐅𝐚𝐧𝐝𝐮𝐛"}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-3 gap-2.5">
-              {filteredMovies.map((anime) => (
-                <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-                  <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
-                  <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                  <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
-                  {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
-                  <div className="absolute bottom-0 left-0 right-0 p-2">
-                    <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {filteredMovies.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
-          </div>
-        );
-      case "livetv":
-        return <LiveTvPage />;
-      default:
-        return (
-          <>
-            <HeroSlider slides={heroSlides} onPlay={handleHeroPlay} onInfo={handleHeroInfo} />
+        ))}
+      </div>
+      {filteredSeries.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
+    </div>
+  );
 
-            <CategoryPills active={activeCategory} onSelect={setActiveCategory} categories={categories} />
-            
-            {activeCategory !== "All" ? (
-              /* Show filtered grid when a specific category is selected */
-              <div className="px-4 pb-6">
-                <h2 className="text-base font-bold mb-3 flex items-center category-bar">{activeCategory}</h2>
-                {filteredAnime.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {filteredAnime.map((anime) => (
-                      <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-                        <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
-                        <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                        <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
-                        <div className="absolute bottom-0 left-0 right-0 p-2">
-                          <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
+  const getPageContent_movies = () => (
+    <div className="pt-[65px] pb-24 px-4">
+      <h2 className="text-xl font-bold mb-3 flex items-center category-bar">Anime Movies</h2>
+      <div className="flex gap-2 mb-4">
+        {(["all", "official", "fandub"] as const).map(dt => (
+          <button key={dt} onClick={() => setDubFilter(dt)}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${dubFilter === dt
+              ? dt === "fandub" ? "bg-orange-600 border-orange-500 text-white shadow-[0_2px_12px_rgba(234,88,12,0.3)]"
+                : "gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.3)]"
+              : "bg-card border-border text-muted-foreground"}`}>
+            {dt === "all" ? "All" : dt === "official" ? "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛" : "𝐅𝐚𝐧𝐝𝐮𝐛"}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-2.5">
+        {filteredMovies.map((anime) => (
+          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+            <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
+            {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
+            <div className="absolute bottom-0 left-0 right-0 p-2">
+              <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      {filteredMovies.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
+    </div>
+  );
+
+  const getPageContent_home = () => (
+    <>
+      <HeroSlider slides={heroSlides} onPlay={handleHeroPlay} onInfo={handleHeroInfo} />
+      <CategoryPills active={activeCategory} onSelect={setActiveCategory} categories={categories} />
+      {activeCategory !== "All" ? (
+        <div className="px-4 pb-6">
+          <h2 className="text-base font-bold mb-3 flex items-center category-bar">{activeCategory}</h2>
+          {filteredAnime.length > 0 ? (
+            <div className="grid grid-cols-3 gap-2.5">
+              {filteredAnime.map((anime) => (
+                <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+                  <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+                  <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+                  <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
+                  <div className="absolute bottom-0 left-0 right-0 p-2">
+                    <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-10">No anime found in this category</p>
+          )}
+        </div>
+      ) : (
+        <>
+          {continueWatching.length > 0 && (
+            <div className="px-4 mb-5">
+              <h3 className="text-base font-bold mb-3 flex items-center category-bar">Continue Watching</h3>
+              <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
+                {continueWatching.slice(0, 10).map((item: any) => (
+                  <div key={item.id} onClick={() => handleContinueWatching(item)}
+                    className="flex-shrink-0 w-[130px] cursor-pointer">
+                    <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card mb-1">
+                      <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                      <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+                      {item.currentTime && item.duration && (
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-foreground/20">
+                          <div className="h-full bg-primary rounded-r" style={{ width: `${Math.min((item.currentTime / item.duration) * 100, 100)}%` }} />
                         </div>
+                      )}
+                      <div className="absolute bottom-1 left-1.5 right-1.5 pb-1">
+                        <p className="text-[10px] font-semibold leading-tight line-clamp-2">{item.title}</p>
+                        {item.episodeInfo && (
+                          <p className="text-[8px] text-primary mt-0.5">
+                            S{item.episodeInfo.season} E{item.episodeInfo.episodeNumber || item.episodeInfo.episode}
+                          </p>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-10">No anime found in this category</p>
-                )}
-              </div>
-            ) : (
-              <>
-                {/* Continue Watching */}
-                {continueWatching.length > 0 && (
-                  <div className="px-4 mb-5">
-                    <h3 className="text-base font-bold mb-3 flex items-center category-bar">Continue Watching</h3>
-                    <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
-                      {continueWatching.slice(0, 10).map((item: any) => (
-                        <div key={item.id} onClick={() => handleContinueWatching(item)}
-                          className="flex-shrink-0 w-[130px] cursor-pointer">
-                          <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card mb-1">
-                            <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
-                            <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                            {item.currentTime && item.duration && (
-                              <div className="absolute bottom-0 left-0 right-0 h-1 bg-foreground/20">
-                                <div className="h-full bg-primary rounded-r" style={{ width: `${Math.min((item.currentTime / item.duration) * 100, 100)}%` }} />
-                              </div>
-                            )}
-                            <div className="absolute bottom-1 left-1.5 right-1.5 pb-1">
-                              <p className="text-[10px] font-semibold leading-tight line-clamp-2">{item.title}</p>
-                              {item.episodeInfo && (
-                                <p className="text-[8px] text-primary mt-0.5">
-                                  S{item.episodeInfo.season} E{item.episodeInfo.episodeNumber || item.episodeInfo.episode}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
                     </div>
                   </div>
-                )}
-
-                <NewEpisodeReleases allAnime={allAnime} onCardClick={handleCardClick} />
-                {filteredSeries.length > 0 && (
-                  <AnimeSection title="Trending Anime Series" items={filteredSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("series")} />
-                )}
-                {filteredMovies.length > 0 && (
-                  <AnimeSection title="Popular Anime Movies" items={filteredMovies.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("movies")} />
-                )}
-                {Object.entries(categoryGroups)
-                  .filter(([cat]) => cat !== 'AnimeSalt')
-                  .map(([cat, items]) => (
-                  <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
                 ))}
+              </div>
+            </div>
+          )}
 
-                {/* ALL ANIME - loads incrementally every 10s */}
-                {allAnimeSaltUnique.length > 0 && (
-                  <div className="px-4 mb-6">
-                    <h3 className="text-base font-bold mb-3 flex items-center category-bar">🔥 ALL ANIME</h3>
-                    <div className="grid grid-cols-3 gap-2.5">
-                      {allAnimeSaltUnique.slice(0, allAnimeVisibleCount).map((anime) => (
-                        <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-                          <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
-                          <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                          {anime.year && <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>}
-                          <div className="absolute bottom-0 left-0 right-0 p-2">
-                            <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
-                          </div>
-                        </div>
-                      ))}
+          <NewEpisodeReleases allAnime={allAnime} onCardClick={handleCardClick} />
+          {filteredSeries.length > 0 && (
+            <AnimeSection title="Trending Anime Series" items={filteredSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("series")} />
+          )}
+          {filteredMovies.length > 0 && (
+            <AnimeSection title="Popular Anime Movies" items={filteredMovies.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("movies")} />
+          )}
+          {Object.entries(categoryGroups)
+            .filter(([cat]) => cat !== 'AnimeSalt')
+            .map(([cat, items]) => (
+            <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
+          ))}
+
+          {allAnimeSaltUnique.length > 0 && (
+            <div className="px-4 mb-6">
+              <h3 className="text-base font-bold mb-3 flex items-center category-bar">🔥 ALL ANIME</h3>
+              <div className="grid grid-cols-3 gap-2.5">
+                {allAnimeSaltUnique.slice(0, allAnimeVisibleCount).map((anime) => (
+                  <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+                    <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+                    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+                    {anime.year && <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>}
+                    <div className="absolute bottom-0 left-0 right-0 p-2">
+                      <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
                     </div>
                   </div>
-                )}
-              </>
-            )}
-            <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
-              <div className="text-2xl font-black text-primary text-glow tracking-wide mb-2">{brandingConfig.siteName}</div>
-              <p className="text-xs text-muted-foreground mb-3">{brandingConfig.footerText}</p>
-              <p className="text-[10px] text-muted-foreground">{brandingConfig.footerCopyright}</p>
-            </footer>
-          </>
-        );
-    }
-  };
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
+        <div className="text-2xl font-black text-primary text-glow tracking-wide mb-2">{brandingConfig.siteName}</div>
+        <p className="text-xs text-muted-foreground mb-3">{brandingConfig.footerText}</p>
+        <p className="text-[10px] text-muted-foreground">{brandingConfig.footerCopyright}</p>
+      </footer>
+    </>
+  );
 
 
 
