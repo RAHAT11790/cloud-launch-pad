@@ -1495,15 +1495,16 @@ const Index = () => {
     return scored.filter(s => s.score > 0).slice(0, 20).map(s => s.anime);
   }, [playerState?.anime, saltPlayerState?.anime, allAnime]);
 
-  // ===== SWIPE NAVIGATION BETWEEN PAGES =====
-  const pageOrder = ["home", "series", "livetv", "movies", "profile"] as const;
-  const swipeRef = useRef<{ startX: number; startY: number; startTime: number; locked: boolean; isHorizontal: boolean | null } | null>(null);
-  const swipeThreshold = 50;
-  const [swipeDx, setSwipeDx] = useState(0); // live drag offset
-  const [isSwipeTransitioning, setIsSwipeTransitioning] = useState(false);
+  // ===== SWIPE NAVIGATION — ALL PAGES PRE-RENDERED IN HORIZONTAL STRIP =====
+  const pageOrder = useMemo(() => ["home", "series", "livetv", "movies", "profile"] as const, []);
+  const activePageIdx = pageOrder.indexOf(activePage as any);
+  const swipeRef = useRef<{ startX: number; startY: number; isHorizontal: boolean | null } | null>(null);
+  const [swipeDx, setSwipeDx] = useState(0);
+  const [isSwipeAnimating, setIsSwipeAnimating] = useState(false);
+  const pageScrollPositions = useRef<Record<string, number>>({});
 
   const handleMainTouchStart = useCallback((e: React.TouchEvent) => {
-    if (isSwipeTransitioning) return;
+    if (isSwipeAnimating) return;
     const target = e.target as HTMLElement;
     let el: HTMLElement | null = target;
     while (el && el !== e.currentTarget) {
@@ -1511,66 +1512,64 @@ const Index = () => {
       el = el.parentElement;
     }
     const touch = e.touches[0];
-    swipeRef.current = { startX: touch.clientX, startY: touch.clientY, startTime: Date.now(), locked: false, isHorizontal: null };
-  }, [isSwipeTransitioning]);
+    swipeRef.current = { startX: touch.clientX, startY: touch.clientY, isHorizontal: null };
+  }, [isSwipeAnimating]);
 
   const handleMainTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!swipeRef.current || isSwipeTransitioning) return;
+    if (!swipeRef.current || isSwipeAnimating) return;
     const touch = e.touches[0];
     const dx = touch.clientX - swipeRef.current.startX;
     const dy = touch.clientY - swipeRef.current.startY;
-
-    // Determine direction lock on first significant movement
     if (swipeRef.current.isHorizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-      swipeRef.current.isHorizontal = Math.abs(dx) > Math.abs(dy);
+      swipeRef.current.isHorizontal = Math.abs(dx) > Math.abs(dy) * 1.2;
     }
     if (!swipeRef.current.isHorizontal) return;
-
-    // Prevent vertical scroll while swiping horizontally
     e.preventDefault();
+    const idx = activePageIdx;
+    const atStart = idx === 0 && dx > 0;
+    const atEnd = idx === pageOrder.length - 1 && dx < 0;
+    setSwipeDx((atStart || atEnd) ? dx * 0.15 : dx);
+  }, [activePageIdx, isSwipeAnimating, pageOrder]);
 
-    const currentIdx = pageOrder.indexOf(activePage as any);
-    // Add resistance at edges
-    const atStart = currentIdx === 0 && dx > 0;
-    const atEnd = currentIdx === pageOrder.length - 1 && dx < 0;
-    const dampened = (atStart || atEnd) ? dx * 0.2 : dx;
-    setSwipeDx(dampened);
-  }, [activePage, isSwipeTransitioning]);
-
-  const handleMainTouchEnd = useCallback((e: React.TouchEvent) => {
+  const handleMainTouchEnd = useCallback(() => {
     if (!swipeRef.current) return;
-    const dx = swipeDx;
-    const elapsed = Date.now() - swipeRef.current.startTime;
-    const isHorizontal = swipeRef.current.isHorizontal;
+    const isH = swipeRef.current.isHorizontal;
     swipeRef.current = null;
-
-    if (!isHorizontal || Math.abs(dx) < 5) { setSwipeDx(0); return; }
-
-    const velocity = Math.abs(dx) / Math.max(elapsed, 1);
-    const shouldSwipe = Math.abs(dx) > swipeThreshold || velocity > 0.5;
-    const currentIdx = pageOrder.indexOf(activePage as any);
-
-    if (shouldSwipe && dx < 0 && currentIdx < pageOrder.length - 1) {
-      setIsSwipeTransitioning(true);
+    if (!isH || Math.abs(swipeDx) < 5) { setSwipeDx(0); return; }
+    const threshold = window.innerWidth * 0.2;
+    const idx = activePageIdx;
+    if (swipeDx < -threshold && idx < pageOrder.length - 1) {
+      // Save scroll position before navigating
+      pageScrollPositions.current[activePage] = window.scrollY;
+      setIsSwipeAnimating(true);
       setSwipeDx(-window.innerWidth);
       setTimeout(() => {
-        handleNavigate(pageOrder[currentIdx + 1]);
+        const nextPage = pageOrder[idx + 1];
+        handleNavigate(nextPage);
         setSwipeDx(0);
-        setIsSwipeTransitioning(false);
-      }, 200);
-    } else if (shouldSwipe && dx > 0 && currentIdx > 0) {
-      setIsSwipeTransitioning(true);
+        setIsSwipeAnimating(false);
+        // Restore scroll position of target page
+        window.scrollTo(0, pageScrollPositions.current[nextPage] || 0);
+      }, 250);
+    } else if (swipeDx > threshold && idx > 0) {
+      pageScrollPositions.current[activePage] = window.scrollY;
+      setIsSwipeAnimating(true);
       setSwipeDx(window.innerWidth);
       setTimeout(() => {
-        handleNavigate(pageOrder[currentIdx - 1]);
+        const prevPage = pageOrder[idx - 1];
+        handleNavigate(prevPage);
         setSwipeDx(0);
-        setIsSwipeTransitioning(false);
-      }, 200);
+        setIsSwipeAnimating(false);
+        window.scrollTo(0, pageScrollPositions.current[prevPage] || 0);
+      }, 250);
     } else {
-      // Snap back
       setSwipeDx(0);
     }
-  }, [swipeDx, activePage, handleNavigate]);
+  }, [swipeDx, activePageIdx, activePage, handleNavigate, pageOrder]);
+
+  // Memoized page contents for the horizontal strip
+
+
 
   // Show login page if not logged in
   if (!isLoggedIn) {
@@ -1637,175 +1636,163 @@ const Index = () => {
     return <SplashLoader />;
   }
 
-  const getPageContent = () => {
-    switch (activePage) {
-      case "series":
-        return (
-          <div className="pt-[65px] pb-24 px-4">
-            <h2 className="text-xl font-bold mb-3 flex items-center category-bar">Anime Series</h2>
-            <div className="flex gap-2 mb-4">
-              {(["all", "official", "fandub"] as const).map(dt => (
-                <button key={dt} onClick={() => setDubFilter(dt)}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${dubFilter === dt
-                    ? dt === "fandub" ? "bg-orange-600 border-orange-500 text-white shadow-[0_2px_12px_rgba(234,88,12,0.3)]"
-                      : "gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.3)]"
-                    : "bg-card border-border text-muted-foreground"}`}>
-                  {dt === "all" ? "All" : dt === "official" ? "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛" : "𝐅𝐚𝐧𝐝𝐮𝐛"}
-                </button>
-              ))}
+  const getPageContent_series = () => (
+    <div className="pt-[65px] pb-24 px-4">
+      <h2 className="text-xl font-bold mb-3 flex items-center category-bar">Anime Series</h2>
+      <div className="flex gap-2 mb-4">
+        {(["all", "official", "fandub"] as const).map(dt => (
+          <button key={dt} onClick={() => setDubFilter(dt)}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${dubFilter === dt
+              ? dt === "fandub" ? "bg-orange-600 border-orange-500 text-white shadow-[0_2px_12px_rgba(234,88,12,0.3)]"
+                : "gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.3)]"
+              : "bg-card border-border text-muted-foreground"}`}>
+            {dt === "all" ? "All" : dt === "official" ? "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛" : "𝐅𝐚𝐧𝐝𝐮𝐛"}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-2.5">
+        {filteredSeries.map((anime) => (
+          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+            <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
+            {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
+            <div className="absolute bottom-0 left-0 right-0 p-2">
+              <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
             </div>
-            <div className="grid grid-cols-3 gap-2.5">
-              {filteredSeries.map((anime) => (
-                <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-                  <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
-                  <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                  <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
-                  {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
-                  <div className="absolute bottom-0 left-0 right-0 p-2">
-                    <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {filteredSeries.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
           </div>
-        );
-      case "movies":
-        return (
-          <div className="pt-[65px] pb-24 px-4">
-            <h2 className="text-xl font-bold mb-3 flex items-center category-bar">Anime Movies</h2>
-            <div className="flex gap-2 mb-4">
-              {(["all", "official", "fandub"] as const).map(dt => (
-                <button key={dt} onClick={() => setDubFilter(dt)}
-                  className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${dubFilter === dt
-                    ? dt === "fandub" ? "bg-orange-600 border-orange-500 text-white shadow-[0_2px_12px_rgba(234,88,12,0.3)]"
-                      : "gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.3)]"
-                    : "bg-card border-border text-muted-foreground"}`}>
-                  {dt === "all" ? "All" : dt === "official" ? "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛" : "𝐅𝐚𝐧𝐝𝐮𝐛"}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-3 gap-2.5">
-              {filteredMovies.map((anime) => (
-                <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-                  <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
-                  <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                  <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
-                  {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
-                  <div className="absolute bottom-0 left-0 right-0 p-2">
-                    <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {filteredMovies.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
-          </div>
-        );
-      case "livetv":
-        return <LiveTvPage />;
-      default:
-        return (
-          <>
-            <HeroSlider slides={heroSlides} onPlay={handleHeroPlay} onInfo={handleHeroInfo} />
+        ))}
+      </div>
+      {filteredSeries.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
+    </div>
+  );
 
-            <CategoryPills active={activeCategory} onSelect={setActiveCategory} categories={categories} />
-            
-            {activeCategory !== "All" ? (
-              /* Show filtered grid when a specific category is selected */
-              <div className="px-4 pb-6">
-                <h2 className="text-base font-bold mb-3 flex items-center category-bar">{activeCategory}</h2>
-                {filteredAnime.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {filteredAnime.map((anime) => (
-                      <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-                        <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
-                        <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                        <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
-                        <div className="absolute bottom-0 left-0 right-0 p-2">
-                          <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
+  const getPageContent_movies = () => (
+    <div className="pt-[65px] pb-24 px-4">
+      <h2 className="text-xl font-bold mb-3 flex items-center category-bar">Anime Movies</h2>
+      <div className="flex gap-2 mb-4">
+        {(["all", "official", "fandub"] as const).map(dt => (
+          <button key={dt} onClick={() => setDubFilter(dt)}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${dubFilter === dt
+              ? dt === "fandub" ? "bg-orange-600 border-orange-500 text-white shadow-[0_2px_12px_rgba(234,88,12,0.3)]"
+                : "gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.3)]"
+              : "bg-card border-border text-muted-foreground"}`}>
+            {dt === "all" ? "All" : dt === "official" ? "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛" : "𝐅𝐚𝐧𝐝𝐮𝐛"}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-2.5">
+        {filteredMovies.map((anime) => (
+          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+            <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
+            {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
+            <div className="absolute bottom-0 left-0 right-0 p-2">
+              <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      {filteredMovies.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
+    </div>
+  );
+
+  const getPageContent_home = () => (
+    <>
+      <HeroSlider slides={heroSlides} onPlay={handleHeroPlay} onInfo={handleHeroInfo} />
+      <CategoryPills active={activeCategory} onSelect={setActiveCategory} categories={categories} />
+      {activeCategory !== "All" ? (
+        <div className="px-4 pb-6">
+          <h2 className="text-base font-bold mb-3 flex items-center category-bar">{activeCategory}</h2>
+          {filteredAnime.length > 0 ? (
+            <div className="grid grid-cols-3 gap-2.5">
+              {filteredAnime.map((anime) => (
+                <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+                  <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+                  <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+                  <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
+                  <div className="absolute bottom-0 left-0 right-0 p-2">
+                    <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-10">No anime found in this category</p>
+          )}
+        </div>
+      ) : (
+        <>
+          {continueWatching.length > 0 && (
+            <div className="px-4 mb-5">
+              <h3 className="text-base font-bold mb-3 flex items-center category-bar">Continue Watching</h3>
+              <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
+                {continueWatching.slice(0, 10).map((item: any) => (
+                  <div key={item.id} onClick={() => handleContinueWatching(item)}
+                    className="flex-shrink-0 w-[130px] cursor-pointer">
+                    <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card mb-1">
+                      <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                      <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+                      {item.currentTime && item.duration && (
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-foreground/20">
+                          <div className="h-full bg-primary rounded-r" style={{ width: `${Math.min((item.currentTime / item.duration) * 100, 100)}%` }} />
                         </div>
+                      )}
+                      <div className="absolute bottom-1 left-1.5 right-1.5 pb-1">
+                        <p className="text-[10px] font-semibold leading-tight line-clamp-2">{item.title}</p>
+                        {item.episodeInfo && (
+                          <p className="text-[8px] text-primary mt-0.5">
+                            S{item.episodeInfo.season} E{item.episodeInfo.episodeNumber || item.episodeInfo.episode}
+                          </p>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-10">No anime found in this category</p>
-                )}
-              </div>
-            ) : (
-              <>
-                {/* Continue Watching */}
-                {continueWatching.length > 0 && (
-                  <div className="px-4 mb-5">
-                    <h3 className="text-base font-bold mb-3 flex items-center category-bar">Continue Watching</h3>
-                    <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
-                      {continueWatching.slice(0, 10).map((item: any) => (
-                        <div key={item.id} onClick={() => handleContinueWatching(item)}
-                          className="flex-shrink-0 w-[130px] cursor-pointer">
-                          <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card mb-1">
-                            <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
-                            <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                            {item.currentTime && item.duration && (
-                              <div className="absolute bottom-0 left-0 right-0 h-1 bg-foreground/20">
-                                <div className="h-full bg-primary rounded-r" style={{ width: `${Math.min((item.currentTime / item.duration) * 100, 100)}%` }} />
-                              </div>
-                            )}
-                            <div className="absolute bottom-1 left-1.5 right-1.5 pb-1">
-                              <p className="text-[10px] font-semibold leading-tight line-clamp-2">{item.title}</p>
-                              {item.episodeInfo && (
-                                <p className="text-[8px] text-primary mt-0.5">
-                                  S{item.episodeInfo.season} E{item.episodeInfo.episodeNumber || item.episodeInfo.episode}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
                     </div>
                   </div>
-                )}
-
-                <NewEpisodeReleases allAnime={allAnime} onCardClick={handleCardClick} />
-                {filteredSeries.length > 0 && (
-                  <AnimeSection title="Trending Anime Series" items={filteredSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("series")} />
-                )}
-                {filteredMovies.length > 0 && (
-                  <AnimeSection title="Popular Anime Movies" items={filteredMovies.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("movies")} />
-                )}
-                {Object.entries(categoryGroups)
-                  .filter(([cat]) => cat !== 'AnimeSalt')
-                  .map(([cat, items]) => (
-                  <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
                 ))}
+              </div>
+            </div>
+          )}
 
-                {/* ALL ANIME - loads incrementally every 10s */}
-                {allAnimeSaltUnique.length > 0 && (
-                  <div className="px-4 mb-6">
-                    <h3 className="text-base font-bold mb-3 flex items-center category-bar">🔥 ALL ANIME</h3>
-                    <div className="grid grid-cols-3 gap-2.5">
-                      {allAnimeSaltUnique.slice(0, allAnimeVisibleCount).map((anime) => (
-                        <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-                          <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
-                          <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                          {anime.year && <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>}
-                          <div className="absolute bottom-0 left-0 right-0 p-2">
-                            <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
-                          </div>
-                        </div>
-                      ))}
+          <NewEpisodeReleases allAnime={allAnime} onCardClick={handleCardClick} />
+          {filteredSeries.length > 0 && (
+            <AnimeSection title="Trending Anime Series" items={filteredSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("series")} />
+          )}
+          {filteredMovies.length > 0 && (
+            <AnimeSection title="Popular Anime Movies" items={filteredMovies.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("movies")} />
+          )}
+          {Object.entries(categoryGroups)
+            .filter(([cat]) => cat !== 'AnimeSalt')
+            .map(([cat, items]) => (
+            <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
+          ))}
+
+          {allAnimeSaltUnique.length > 0 && (
+            <div className="px-4 mb-6">
+              <h3 className="text-base font-bold mb-3 flex items-center category-bar">🔥 ALL ANIME</h3>
+              <div className="grid grid-cols-3 gap-2.5">
+                {allAnimeSaltUnique.slice(0, allAnimeVisibleCount).map((anime) => (
+                  <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+                    <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+                    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+                    {anime.year && <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>}
+                    <div className="absolute bottom-0 left-0 right-0 p-2">
+                      <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
                     </div>
                   </div>
-                )}
-              </>
-            )}
-            <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
-              <div className="text-2xl font-black text-primary text-glow tracking-wide mb-2">{brandingConfig.siteName}</div>
-              <p className="text-xs text-muted-foreground mb-3">{brandingConfig.footerText}</p>
-              <p className="text-[10px] text-muted-foreground">{brandingConfig.footerCopyright}</p>
-            </footer>
-          </>
-        );
-    }
-  };
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
+        <div className="text-2xl font-black text-primary text-glow tracking-wide mb-2">{brandingConfig.siteName}</div>
+        <p className="text-xs text-muted-foreground mb-3">{brandingConfig.footerText}</p>
+        <p className="text-[10px] text-muted-foreground">{brandingConfig.footerCopyright}</p>
+      </footer>
+    </>
+  );
 
 
 
@@ -1817,14 +1804,32 @@ const Index = () => {
         onTouchMove={handleMainTouchMove}
         onTouchEnd={handleMainTouchEnd}
         className="relative overflow-hidden"
-        style={{ touchAction: "pan-y" }}
       >
         <div style={{
-          transform: `translateX(${swipeDx}px)`,
-          transition: isSwipeTransitioning ? "transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)" : swipeDx !== 0 ? "none" : "transform 0.2s ease-out",
+          display: "flex",
+          width: `${pageOrder.length * 100}vw`,
+          transform: `translateX(calc(-${activePageIdx * 100}vw + ${swipeDx}px))`,
+          transition: isSwipeAnimating ? "transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1)" : swipeDx !== 0 ? "none" : "transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1)",
           willChange: "transform",
         }}>
-          {getPageContent()}
+          {/* Page 0: Home */}
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
+            {getPageContent_home()}
+          </div>
+          {/* Page 1: Series */}
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
+            {getPageContent_series()}
+          </div>
+          {/* Page 2: Live TV */}
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
+            <LiveTvPage />
+          </div>
+          {/* Page 3: Movies */}
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }}>
+            {getPageContent_movies()}
+          </div>
+          {/* Page 4: Profile — rendered as overlay via showProfile */}
+          <div style={{ width: "100vw", flexShrink: 0, minHeight: "100vh" }} className="bg-background" />
         </div>
       </main>
       <BottomNav activePage={activePage} onNavigate={handleNavigate} />
@@ -1837,7 +1842,7 @@ const Index = () => {
 
       <AnimatePresence>
         {showProfile && (
-          <ProfilePage onClose={() => { setShowProfile(false); setActivePage("home"); }} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
+          <ProfilePage onClose={() => { setShowProfile(false); handleNavigate("home"); }} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
         )}
       </AnimatePresence>
 
