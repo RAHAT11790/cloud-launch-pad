@@ -3459,6 +3459,8 @@ ${tgHashtags}`;
     { section: "telegram-post", icon: <Send size={16} />, label: "Telegram Post", group: "Sharing" },
     { section: "tg-url-changer", icon: <RefreshCw size={16} />, label: "TG URL Changer" },
     { section: "free-access", icon: <Eye size={16} />, label: "Free Access", group: "Tracking" },
+    { section: "unlock-duration", icon: <Clock size={16} />, label: "Unlock Duration" },
+    { section: "private-content", icon: <Lock size={16} />, label: "Private Content" },
     { section: "analytics", icon: <BarChart3 size={16} />, label: "Analytics & Views" },
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
