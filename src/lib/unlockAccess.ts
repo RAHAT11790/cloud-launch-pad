@@ -2,7 +2,29 @@ import { db, ref, set, get, runTransaction } from "@/lib/firebase";
 import { SITE_URL } from "@/lib/siteConfig";
 
 const UNLOCK_TOKEN_TTL_MS = 15 * 60 * 1000;
-const FREE_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_FREE_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
+
+// Get configurable unlock duration from Firebase (cached)
+let _cachedDurationMs: number | null = null;
+let _cacheTs = 0;
+const CACHE_DURATION = 60_000; // 1 min cache
+
+export async function getUnlockDurationMs(): Promise<number> {
+  if (_cachedDurationMs !== null && Date.now() - _cacheTs < CACHE_DURATION) return _cachedDurationMs;
+  try {
+    const snap = await get(ref(db, "settings/unlockDurationHours"));
+    const hours = snap.val();
+    if (hours && typeof hours === "number" && hours > 0) {
+      _cachedDurationMs = hours * 60 * 60 * 1000;
+    } else {
+      _cachedDurationMs = DEFAULT_FREE_ACCESS_DURATION_MS;
+    }
+  } catch {
+    _cachedDurationMs = DEFAULT_FREE_ACCESS_DURATION_MS;
+  }
+  _cacheTs = Date.now();
+  return _cachedDurationMs;
+}
 
 // --- Ad Service Types ---
 export interface AdService {
@@ -256,7 +278,8 @@ export const consumeUnlockTokenForCurrentUser = async (
   }
 
   const now = Date.now();
-  const expiresAt = now + FREE_ACCESS_DURATION_MS;
+  const durationMs = await getUnlockDurationMs();
+  const expiresAt = now + durationMs;
 
   await set(ref(db, `users/${userId}/freeAccess`), {
     active: true,
