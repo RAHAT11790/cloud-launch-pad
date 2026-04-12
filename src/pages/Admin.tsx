@@ -1750,80 +1750,90 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     return () => { unsub(); unsub2(); };
   }, []);
 
+  // Resolve anime-accurate genres + rating using TMDB ID/IMDB ID, with AniList fallback for anime-specific genres
+  const resolveTelegramGenresAndRating = async (tmdbIdOrImdb: string, fallbackTitle?: string) => {
+    if (!tmdbIdOrImdb.trim()) return { genres: [] as string[], rating: "" };
+
+    let tmdbData: any = null;
+    const idTrimmed = tmdbIdOrImdb.trim();
+    if (idTrimmed.startsWith("tt")) {
+      const findRes = await fetch(`${TMDB_BASE_URL}/find/${idTrimmed}?api_key=${TMDB_API_KEY}&external_source=imdb_id`);
+      const findData = await findRes.json();
+      const tvResult = findData.tv_results?.[0];
+      const movieResult = findData.movie_results?.[0];
+      if (tvResult?.id) {
+        const detailRes = await fetch(`${TMDB_BASE_URL}/tv/${tvResult.id}?api_key=${TMDB_API_KEY}&language=en-US`);
+        if (detailRes.ok) tmdbData = await detailRes.json();
+      } else if (movieResult?.id) {
+        const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${movieResult.id}?api_key=${TMDB_API_KEY}&language=en-US`);
+        if (detailRes.ok) tmdbData = await detailRes.json();
+      }
+    } else {
+      const tvRes = await fetch(`${TMDB_BASE_URL}/tv/${idTrimmed}?api_key=${TMDB_API_KEY}&language=en-US`);
+      if (tvRes.ok) {
+        tmdbData = await tvRes.json();
+      } else {
+        const movieRes = await fetch(`${TMDB_BASE_URL}/movie/${idTrimmed}?api_key=${TMDB_API_KEY}&language=en-US`);
+        if (movieRes.ok) tmdbData = await movieRes.json();
+      }
+    }
+
+    const tmdbGenres = Array.isArray(tmdbData?.genres)
+      ? tmdbData.genres.map((g: any) => String(g?.name || "").trim()).filter(Boolean)
+      : [];
+    const genericGenreSet = new Set(["Animation", "Action & Adventure", "Sci-Fi & Fantasy", "Comedy", "Drama", "Mystery", "Family"]);
+    const isTooGenericTmdb = tmdbGenres.length > 0 && tmdbGenres.every((name: string) => genericGenreSet.has(name));
+    const animeTitle = (fallbackTitle || tmdbData?.name || tmdbData?.title || tmdbData?.original_name || tmdbData?.original_title || "").trim();
+
+    let animeGenres: string[] = [];
+    let aniListRating = "";
+
+    if (animeTitle) {
+      try {
+        const aniRes = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({
+            query: `query ($search: String) { Media(search: $search, type: ANIME) { genres averageScore title { romaji english native } } }`,
+            variables: { search: animeTitle },
+          }),
+        });
+        const aniData = await aniRes.json();
+        const media = aniData?.data?.Media;
+        if (Array.isArray(media?.genres) && media.genres.length > 0) {
+          animeGenres = media.genres.map((g: any) => String(g || "").trim()).filter(Boolean);
+        }
+        if (media?.averageScore) {
+          aniListRating = (Number(media.averageScore) / 10).toFixed(1);
+        }
+      } catch {}
+    }
+
+    const finalGenres = animeGenres.length > 0
+      ? animeGenres
+      : (tmdbGenres.length > 0 && !isTooGenericTmdb ? tmdbGenres : tmdbGenres);
+
+    return {
+      genres: [...new Set(finalGenres)],
+      rating: tmdbData?.vote_average ? Number(tmdbData.vote_average).toFixed(1) : aniListRating,
+    };
+  };
+
   // Fetch anime-accurate genres + rating using TMDB ID/IMDB ID, with AniList fallback for anime-specific genres
   const fetchTmdbGenres = async (tmdbIdOrImdb: string, fallbackTitle?: string) => {
     if (!tmdbIdOrImdb.trim()) return;
     setTgImdbLoading(true);
     try {
-      let tmdbData: any = null;
-      const idTrimmed = tmdbIdOrImdb.trim();
-      if (idTrimmed.startsWith("tt")) {
-        const findRes = await fetch(`${TMDB_BASE_URL}/find/${idTrimmed}?api_key=${TMDB_API_KEY}&external_source=imdb_id`);
-        const findData = await findRes.json();
-        const tvResult = findData.tv_results?.[0];
-        const movieResult = findData.movie_results?.[0];
-        if (tvResult?.id) {
-          const detailRes = await fetch(`${TMDB_BASE_URL}/tv/${tvResult.id}?api_key=${TMDB_API_KEY}&language=en-US`);
-          if (detailRes.ok) tmdbData = await detailRes.json();
-        } else if (movieResult?.id) {
-          const detailRes = await fetch(`${TMDB_BASE_URL}/movie/${movieResult.id}?api_key=${TMDB_API_KEY}&language=en-US`);
-          if (detailRes.ok) tmdbData = await detailRes.json();
-        }
-      } else {
-        const tvRes = await fetch(`${TMDB_BASE_URL}/tv/${idTrimmed}?api_key=${TMDB_API_KEY}&language=en-US`);
-        if (tvRes.ok) {
-          tmdbData = await tvRes.json();
-        } else {
-          const movieRes = await fetch(`${TMDB_BASE_URL}/movie/${idTrimmed}?api_key=${TMDB_API_KEY}&language=en-US`);
-          if (movieRes.ok) tmdbData = await movieRes.json();
-        }
+      const { genres, rating } = await resolveTelegramGenresAndRating(tmdbIdOrImdb, fallbackTitle);
+
+      if (genres.length > 0) {
+        setTgGenres(genres.join(", "));
+      }
+      if (rating) {
+        setTgRating(rating);
       }
 
-      const tmdbGenres = Array.isArray(tmdbData?.genres)
-        ? tmdbData.genres.map((g: any) => String(g?.name || "").trim()).filter(Boolean)
-        : [];
-      const genericGenreSet = new Set(["Animation", "Action & Adventure", "Sci-Fi & Fantasy", "Comedy", "Drama", "Mystery", "Family"]);
-      const isTooGenericTmdb = tmdbGenres.length > 0 && tmdbGenres.every((name: string) => genericGenreSet.has(name));
-      const animeTitle = (fallbackTitle || tmdbData?.name || tmdbData?.title || tmdbData?.original_name || tmdbData?.original_title || "").trim();
-
-      let animeGenres: string[] = [];
-      let aniListRating: string | null = null;
-
-      if (animeTitle) {
-        try {
-          const aniRes = await fetch("https://graphql.anilist.co", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify({
-              query: `query ($search: String) { Media(search: $search, type: ANIME) { genres averageScore title { romaji english native } } }`,
-              variables: { search: animeTitle },
-            }),
-          });
-          const aniData = await aniRes.json();
-          const media = aniData?.data?.Media;
-          if (Array.isArray(media?.genres) && media.genres.length > 0) {
-            animeGenres = media.genres.map((g: any) => String(g || "").trim()).filter(Boolean);
-          }
-          if (media?.averageScore) {
-            aniListRating = (Number(media.averageScore) / 10).toFixed(1);
-          }
-        } catch {}
-      }
-
-      const finalGenres = animeGenres.length > 0
-        ? animeGenres
-        : (tmdbGenres.length > 0 && !isTooGenericTmdb ? tmdbGenres : tmdbGenres);
-
-      if (finalGenres.length > 0) {
-        setTgGenres([...new Set(finalGenres)].join(", "));
-      }
-      if (tmdbData?.vote_average) {
-        setTgRating(Number(tmdbData.vote_average).toFixed(1));
-      } else if (aniListRating) {
-        setTgRating(aniListRating);
-      }
-
-      if (finalGenres.length > 0 || tmdbData || aniListRating) {
+      if (genres.length > 0 || rating) {
         toast.success("✅ Anime-specific genres ও rating লোড হয়েছে");
       } else {
         toast.error("এই ID থেকে genre data পাওয়া যায়নি");
@@ -3491,10 +3501,15 @@ ${tgHashtags}`;
       setTgDubType(ws?.dubType === "fandub" ? "fandub" : "official");
       // Auto-set language from content
       if (ws?.language) setTgLanguages(ws.language);
-      // Auto-fetch genres from TMDB if tmdbId available
+      // Auto-fetch exact genres/rating from TMDB/AniList if tmdbId available
       if (ws?.tmdbId) {
         setTgImdbId(String(ws.tmdbId));
-        fetchTmdbGenres(String(ws.tmdbId), ws.title || release.title || "");
+        const { genres, rating } = await resolveTelegramGenresAndRating(String(ws.tmdbId), ws.title || release.title || "");
+        if (genres.length > 0) setTgGenres(genres.join(", "));
+        if (rating) setTgRating(rating);
+      } else {
+        if (ws?.category) setTgGenres(ws.category);
+        if (ws?.rating) setTgRating(String(ws.rating));
       }
     } else if (cType === "movie") {
       const mv = moviesData.find(m => m.id === cId);
@@ -3502,7 +3517,12 @@ ${tgHashtags}`;
       if (mv?.language) setTgLanguages(mv.language);
       if (mv?.tmdbId) {
         setTgImdbId(String(mv.tmdbId));
-        fetchTmdbGenres(String(mv.tmdbId), mv.title || release.title || "");
+        const { genres, rating } = await resolveTelegramGenresAndRating(String(mv.tmdbId), mv.title || release.title || "");
+        if (genres.length > 0) setTgGenres(genres.join(", "));
+        if (rating) setTgRating(rating);
+      } else {
+        if (mv?.category) setTgGenres(mv.category);
+        if (mv?.rating) setTgRating(String(mv.rating));
       }
     } else if (cType === "animesalt") {
       setTgDubType("official");
@@ -3527,7 +3547,6 @@ ${tgHashtags}`;
     { section: "notifications", icon: <Bell size={16} />, label: "Notifications" },
     { section: "new-releases", icon: <Zap size={16} />, label: "New Releases" },
     { section: "add-content", icon: <PlusCircle size={16} />, label: "Add Content", group: "Quick Actions" },
-    { section: "auto-import", icon: <Zap size={16} />, label: "Auto Import" },
     { section: "animesalt-manager", icon: <CloudDownload size={16} />, label: "AnimeSalt" },
     { section: "tmdb-fetch", icon: <CloudDownload size={16} />, label: "TMDB Fetch" },
     { section: "redeem-codes", icon: <Shield size={16} />, label: "Redeem Codes" },
@@ -4689,6 +4708,17 @@ ${tgHashtags}`;
                         setTgTotalEpisodes(String(season?.episodes?.length || 0));
                       }
                       setTgDubType(ctxForm.dubType === "fandub" ? "fandub" : "official");
+                      if (ctxForm.language) setTgLanguages(ctxForm.language);
+                      if (ctxForm.category) setTgGenres(ctxForm.category);
+                      if (ctxForm.rating) setTgRating(String(ctxForm.rating));
+                      if (ctxForm.tmdbId) {
+                        try {
+                          setTgImdbId(String(ctxForm.tmdbId));
+                          const { genres, rating } = await resolveTelegramGenresAndRating(String(ctxForm.tmdbId), ctxForm.title || "");
+                          if (genres.length > 0) setTgGenres(genres.join(", "));
+                          if (rating) setTgRating(rating);
+                        } catch {}
+                      }
                       // Get quality info
                       const quals: string[] = [];
                       ctxSeasons.forEach((s: any) => s.episodes?.forEach((ep: any) => {
