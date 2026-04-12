@@ -4646,7 +4646,9 @@ ${tgHashtags}`;
                     };
                     try {
                       await set(push(ref(db, "newEpisodeReleases")), newRelease);
-                      toast.success("✅ New Release যোগ হয়েছে!");
+                      toast.success("✅ New Release added!");
+                      // Only send notifications for public content
+                      if (ctxForm.visibility !== "private") {
                       // Send FCM + in-app notifications
                       const usersSnap = await get(ref(db, "users"));
                       const users = usersSnap.val() || {};
@@ -4670,7 +4672,7 @@ ${tgHashtags}`;
                         };
                       });
                       if (Object.keys(userNotifUpdates).length > 0) await update(ref(db), userNotifUpdates);
-                      toast.success("In-app নোটিফিকেশন পাঠানো হয়েছে!");
+                      toast.success("In-app notifications sent!");
                       // Send FCM push
                       try {
                         const pushPayload = {
@@ -4684,7 +4686,10 @@ ${tgHashtags}`;
                         const result = await sendPushToAllUsers(pushPayload, (p) => setPushProgress({ ...p }));
                         if ((result?.total || 0) > 0) toast.success(`Push: ${result?.success || 0} delivered`);
                         setTimeout(() => { setPushSending(false); setPushProgress(null); }, 4000);
-                      } catch { toast.warning("Push delivery failed - শুধু in-app notification গেছে"); setPushSending(false); setPushProgress(null); }
+                      } catch { toast.warning("Push delivery failed"); setPushSending(false); setPushProgress(null); }
+                      } else {
+                        toast.info("Private content - notifications skipped");
+                      }
                       // Auto-fill telegram fields
                       setTgTitle(ctxForm.title);
                       const backdropUrl = ctxForm.backdrop || ctxForm.poster || "";
