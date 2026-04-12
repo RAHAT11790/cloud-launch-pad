@@ -1795,17 +1795,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           <div className="fixed inset-0 z-[400] bg-black/90 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-card rounded-2xl p-6 max-w-sm w-[90%] text-center space-y-4 shadow-2xl border border-border">
               <h3 className="text-lg font-bold text-foreground">Unlock 24 Hours Access</h3>
-              <p className="text-sm text-muted-foreground">Click the link below to get 24 hours of free access to all videos</p>
+              <p className="text-sm text-muted-foreground">যেকোনো একটা লিংকে ক্লিক করে ২৪ ঘন্টা ফ্রি এক্সেস নাও</p>
               {shortenLoading ? (
                 <div className="flex items-center justify-center gap-2 py-3">
                   <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                  <span className="text-sm text-muted-foreground">Preparing link...</span>
+                  <span className="text-sm text-muted-foreground">Preparing links...</span>
                 </div>
               ) : (
-                <button onClick={handleOpenAdLink} className="w-full py-3 rounded-xl gradient-primary text-white font-semibold flex items-center justify-center gap-2 btn-glow transition-all hover:scale-105">
-                  <ExternalLink className="w-4 h-4" />
-                  Unlock Now
-                </button>
+                <div className="space-y-2">
+                  {adLinks.map((link, i) => (
+                    <button
+                      key={link.service.id || i}
+                      onClick={() => handleOpenAdLink(link.shortUrl)}
+                      className="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all hover:scale-105 text-white"
+                      style={{ background: link.service.color || (i === 0 ? "linear-gradient(135deg, #6366f1, #8b5cf6)" : "linear-gradient(135deg, #f59e0b, #ef4444)") }}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      {link.service.icon || "🔓"} {link.service.name || `Unlock ${i + 1}`}
+                    </button>
+                  ))}
+                </div>
               )}
               <button
                 onClick={() => {
