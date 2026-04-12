@@ -3501,10 +3501,15 @@ ${tgHashtags}`;
       setTgDubType(ws?.dubType === "fandub" ? "fandub" : "official");
       // Auto-set language from content
       if (ws?.language) setTgLanguages(ws.language);
-      // Auto-fetch genres from TMDB if tmdbId available
+      // Auto-fetch exact genres/rating from TMDB/AniList if tmdbId available
       if (ws?.tmdbId) {
         setTgImdbId(String(ws.tmdbId));
-        fetchTmdbGenres(String(ws.tmdbId), ws.title || release.title || "");
+        const { genres, rating } = await resolveTelegramGenresAndRating(String(ws.tmdbId), ws.title || release.title || "");
+        if (genres.length > 0) setTgGenres(genres.join(", "));
+        if (rating) setTgRating(rating);
+      } else {
+        if (ws?.category) setTgGenres(ws.category);
+        if (ws?.rating) setTgRating(String(ws.rating));
       }
     } else if (cType === "movie") {
       const mv = moviesData.find(m => m.id === cId);
@@ -3512,7 +3517,12 @@ ${tgHashtags}`;
       if (mv?.language) setTgLanguages(mv.language);
       if (mv?.tmdbId) {
         setTgImdbId(String(mv.tmdbId));
-        fetchTmdbGenres(String(mv.tmdbId), mv.title || release.title || "");
+        const { genres, rating } = await resolveTelegramGenresAndRating(String(mv.tmdbId), mv.title || release.title || "");
+        if (genres.length > 0) setTgGenres(genres.join(", "));
+        if (rating) setTgRating(rating);
+      } else {
+        if (mv?.category) setTgGenres(mv.category);
+        if (mv?.rating) setTgRating(String(mv.rating));
       }
     } else if (cType === "animesalt") {
       setTgDubType("official");
@@ -3537,7 +3547,6 @@ ${tgHashtags}`;
     { section: "notifications", icon: <Bell size={16} />, label: "Notifications" },
     { section: "new-releases", icon: <Zap size={16} />, label: "New Releases" },
     { section: "add-content", icon: <PlusCircle size={16} />, label: "Add Content", group: "Quick Actions" },
-    { section: "auto-import", icon: <Zap size={16} />, label: "Auto Import" },
     { section: "animesalt-manager", icon: <CloudDownload size={16} />, label: "AnimeSalt" },
     { section: "tmdb-fetch", icon: <CloudDownload size={16} />, label: "TMDB Fetch" },
     { section: "redeem-codes", icon: <Shield size={16} />, label: "Redeem Codes" },
