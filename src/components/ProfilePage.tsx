@@ -1378,6 +1378,15 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
           <span className="flex-1 text-[13px] font-medium">Downloads</span>
           <ChevronRight className="w-3 h-3 text-muted-foreground" />
         </div>
+        <div onClick={() => setActivePanel("private-content")}
+          className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:border-primary hover:translate-x-1 rounded-xl">
+          <Lock className="w-5 h-5 text-primary" />
+          <div className="flex-1">
+            <span className="text-[13px] font-medium">Private Content</span>
+            <p className="text-[10px] text-muted-foreground">🔒 বিশেষ কন্টেন্ট এক্সেস</p>
+          </div>
+          <ChevronRight className="w-3 h-3 text-muted-foreground" />
+        </div>
         <div onClick={() => { setTempName(displayName); setActivePanel("edit"); }}
           className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:border-primary hover:translate-x-1 rounded-xl">
           <User className="w-5 h-5 text-primary" />
