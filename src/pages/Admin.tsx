@@ -4809,9 +4809,6 @@ ${tgHashtags}`;
                         <p className="text-[11px] text-[#D1C4E9] mb-2">{item.year || "N/A"} • {item.rating || "N/A"}⭐ • {item.language || "N/A"}</p>
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-[11px] text-[#D1C4E9]">{item.category || "Uncategorized"}</p>
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${item.visibility === "private" ? "bg-red-500/20 text-red-300 border border-red-500/30" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"}`}>
-                            {item.visibility === "private" ? "Private" : "Public"}
-                          </span>
                         </div>
                         <div className="flex flex-wrap gap-2 mt-2.5">
                           <button onClick={() => editMovie(item.id)} className={`${btnSecondary} px-3.5 py-2 text-[11px] font-semibold flex items-center gap-1.5`}>
