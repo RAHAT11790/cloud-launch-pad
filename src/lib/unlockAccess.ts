@@ -1,5 +1,6 @@
 import { db, ref, set, get, runTransaction } from "@/lib/firebase";
 import { SITE_URL } from "@/lib/siteConfig";
+import { getUnlockBlockExpiry } from "@/lib/unlockBlock";
 
 const UNLOCK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const DEFAULT_FREE_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -286,6 +287,7 @@ export const consumeUnlockTokenForCurrentUser = async (
         blocked: true,
         reason: "reused_unlock_token",
         blockedAt: Date.now(),
+        expiresAt: getUnlockBlockExpiry(),
         token,
       });
     }
