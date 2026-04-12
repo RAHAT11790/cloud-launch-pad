@@ -62,11 +62,14 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   const [showGooglePwConfirm, setShowGooglePwConfirm] = useState(false);
   const [googlePendingData, setGooglePendingData] = useState<any>(null);
 
-  // Forgot password states
+  // Forgot password states (OTP-based)
   const [showForgotPw, setShowForgotPw] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
-  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotOtpSent, setForgotOtpSent] = useState(false);
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [forgotNewPw, setForgotNewPw] = useState("");
+  const [forgotNewPwConfirm, setForgotNewPwConfirm] = useState("");
 
   // Intro animation sequence
   useEffect(() => {
@@ -218,15 +221,82 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
     if (!forgotEmail.trim()) { toast.error("ইমেইল দিন"); return; }
     setForgotLoading(true);
     try {
-      await sendPasswordResetEmail(auth, forgotEmail.trim());
-      setForgotSent(true);
-      toast.success("পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হয়েছে!");
-    } catch (err: any) {
-      if (err.code === "auth/user-not-found") {
+      // Find user by email in Firebase
+      const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
+      const snap = await get(ref(db, `appUsers/${emailKey}`));
+      if (!snap.exists()) {
         toast.error("এই ইমেইলে কোনো অ্যাকাউন্ট নেই!");
-      } else {
-        toast.error("Error: " + err.message);
+        setForgotLoading(false);
+        return;
       }
+
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const userId = snap.val()?.id || emailKey;
+      
+      // Store OTP in Firebase
+      await set(ref(db, `users/${userId}/passwordResetOtp`), {
+        code: otp,
+        expiresAt: Date.now() + 5 * 60 * 1000,
+        email: forgotEmail.trim(),
+      });
+
+      // Send OTP via edge function
+      try {
+        const { supabase } = await import("@/integrations/supabase/client");
+        await supabase.functions.invoke("send-otp-email", {
+          body: { email: forgotEmail.trim(), otp, siteName: SITE_NAME },
+        });
+      } catch {
+        console.log("Email edge function call attempted");
+      }
+
+      setForgotOtpSent(true);
+      toast.success(`📧 কোড পাঠানো হয়েছে: ${forgotEmail}`);
+    } catch (err: any) {
+      toast.error("Error: " + err.message);
+    }
+    setForgotLoading(false);
+  };
+
+  const handleResetPasswordWithOtp = async () => {
+    if (!forgotOtp.trim() || !forgotNewPw.trim()) return;
+    if (forgotNewPw.length < 4) { toast.error("পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে"); return; }
+    if (forgotNewPw !== forgotNewPwConfirm) { toast.error("পাসওয়ার্ড মিলছে না!"); return; }
+
+    setForgotLoading(true);
+    try {
+      const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
+      const snap = await get(ref(db, `appUsers/${emailKey}`));
+      if (!snap.exists()) { toast.error("অ্যাকাউন্ট পাওয়া যায়নি"); setForgotLoading(false); return; }
+
+      const userId = snap.val()?.id || emailKey;
+      const otpSnap = await get(ref(db, `users/${userId}/passwordResetOtp`));
+      const otpData = otpSnap.val();
+
+      if (!otpData || otpData.code !== forgotOtp.trim()) {
+        toast.error("❌ কোড ভুল!");
+        setForgotLoading(false);
+        return;
+      }
+      if (otpData.expiresAt < Date.now()) {
+        toast.error("⏰ কোডের মেয়াদ শেষ!");
+        setForgotLoading(false);
+        return;
+      }
+
+      // Update password in appUsers
+      await set(ref(db, `appUsers/${emailKey}/password`), forgotNewPw.trim());
+      await set(ref(db, `users/${userId}/passwordResetOtp`), null);
+
+      toast.success("✅ নতুন পাসওয়ার্ড সেট হয়েছে! এখন লগইন করুন।");
+      setShowForgotPw(false);
+      setForgotOtpSent(false);
+      setForgotOtp("");
+      setForgotNewPw("");
+      setForgotNewPwConfirm("");
+      setForgotEmail("");
+    } catch (err: any) {
+      toast.error("Error: " + err.message);
     }
     setForgotLoading(false);
   };
