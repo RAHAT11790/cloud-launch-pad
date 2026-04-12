@@ -393,7 +393,7 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
           </div>
           <h2 className="text-xl font-bold mb-1">Private Content</h2>
           <p className="text-sm text-muted-foreground">
-            {hasPin === false ? "প্রথমে একটি পাসওয়ার্ড সেট করুন" : "পাসওয়ার্ড দিয়ে এক্সেস করুন"}
+            {hasPin === false ? "Set a password first" : "Enter password to access"}
           </p>
         </div>
 
@@ -402,12 +402,12 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
             {!otpSent ? (
               <div className="space-y-4">
                 <p className="text-sm text-center text-muted-foreground">
-                  আপনার ইমেইলে ({userEmail || "N/A"}) একটি কোড পাঠানো হবে
+                  A code will be sent to your email ({userEmail || "N/A"})
                 </p>
                 <button onClick={sendOtp} disabled={otpLoading || !userEmail}
                   className="w-full py-3 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
                   {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-                  কোড পাঠান
+                  Send Code
                 </button>
                 <button onClick={() => setForgotMode(false)} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground">
                   ← Back to Login
@@ -416,21 +416,21 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">ইমেইলে পাঠানো কোড</label>
+                  <label className="text-xs text-muted-foreground mb-1 block">Code sent to email</label>
                   <input type="text" value={otpInput} onChange={e => setOtpInput(e.target.value)}
-                    placeholder="৬ ডিজিটের কোড" maxLength={6}
+                    placeholder="6-digit code" maxLength={6}
                     className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-center text-lg font-mono tracking-[8px] focus:border-primary focus:outline-none" />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">নতুন পাসওয়ার্ড</label>
+                  <label className="text-xs text-muted-foreground mb-1 block">New Password</label>
                   <input type="password" value={newPin} onChange={e => setNewPin(e.target.value)}
-                    placeholder="নতুন পাসওয়ার্ড (মিনিমাম ৪)"
+                    placeholder="New password (min 4 chars)"
                     className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none" />
                 </div>
                 <button onClick={verifyOtpAndResetPin} disabled={otpLoading || !otpInput || !newPin}
                   className="w-full py-3 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
                   {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  পাসওয়ার্ড রিসেট করুন
+                  Reset Password
                 </button>
                 <button onClick={() => { setOtpSent(false); setForgotMode(false); }} className="w-full py-2 text-sm text-muted-foreground">
                   ← Back
@@ -447,7 +447,7 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
                 <div className="relative">
                   <input
                     type={showPin ? "text" : "password"} value={pin} onChange={e => setPin(e.target.value)}
-                    placeholder={hasPin ? "পাসওয়ার্ড দিন" : "নতুন পাসওয়ার্ড সেট করুন (মিনিমাম ৪)"}
+                    placeholder={hasPin ? "Enter password" : "Set new password (min 4 chars)"}
                     className="w-full py-3 px-4 pr-12 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none"
                     onKeyDown={e => e.key === "Enter" && (hasPin ? verifyPin() : setNewPinForUser())}
                   />
@@ -458,7 +458,7 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
                 <button onClick={hasPin ? verifyPin : setNewPinForUser} disabled={loading || !pin.trim()}
                   className="w-full py-3 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-                  {hasPin ? "এক্সেস করুন" : "পাসওয়ার্ড সেট করুন"}
+                  {hasPin ? "Access" : "Set Password"}
                 </button>
                 {hasPin && (
                   <button onClick={() => setForgotMode(true)} className="w-full py-2 text-sm text-primary hover:underline">
