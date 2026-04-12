@@ -7396,7 +7396,6 @@ ${tgHashtags}`;
               setCategory(""); setRating(""); setYear(""); setContentType("webseries"); setLanguage("");
               setSeasons([]); setAddMode(false); setEditId(null); setExpandedSeason(0);
             };
-            };
 
             const addSeason = () => {
               setSeasons(prev => [...prev, { name: `Season ${prev.length + 1}`, seasonNumber: prev.length + 1, episodes: [] }]);
