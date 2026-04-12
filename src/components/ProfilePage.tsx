@@ -1145,6 +1145,16 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
     );
   }
 
+  // Private Content Panel
+  if (activePanel === "private-content") {
+    const PrivateContentPage = lazy(() => import("@/components/PrivateContentPage"));
+    return (
+      <Suspense fallback={<div className="fixed inset-0 z-[200] bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
+        <PrivateContentPage onClose={() => setActivePanel("main")} />
+      </Suspense>
+    );
+  }
+
   // Downloads Panel
   if (activePanel === "downloads") {
     return <DownloadsPanel onBack={() => setActivePanel("main")} />;
