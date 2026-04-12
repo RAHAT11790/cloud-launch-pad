@@ -4854,8 +4854,26 @@ ${tgHashtags}`;
                       {["title", "logo", "poster", "backdrop", "trailer"].map(field => (
                         <div key={field} className="mb-4">
                           <label className="block text-xs text-[#D1C4E9] mb-2 font-medium capitalize">{field === "logo" ? "Title Logo URL" : field === "trailer" ? "Trailer (YouTube Link)" : field.charAt(0).toUpperCase() + field.slice(1) + " URL"}</label>
-                          <input value={movieForm[field] || ""} onChange={e => setMovieForm({ ...movieForm, [field]: e.target.value })}
-                            className={inputClass} placeholder={`${field}...`} />
+                          <div className="flex gap-2">
+                            <input value={movieForm[field] || ""} onChange={e => setMovieForm({ ...movieForm, [field]: e.target.value })}
+                              className={`${inputClass} flex-1`} placeholder={`${field}...`} />
+                            {(field === "poster" || field === "backdrop") && (
+                              <label className={`${btnSecondary} !px-3 cursor-pointer flex items-center gap-1`}>
+                                <Image size={14} />
+                                <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  try {
+                                    toast.info("Uploading...");
+                                    const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+                                    const url = await uploadToImgbb(file);
+                                    setMovieForm(f => ({ ...f, [field]: url }));
+                                    toast.success(`${field} uploaded!`);
+                                  } catch { toast.error("Upload failed"); }
+                                }} />
+                              </label>
+                            )}
+                          </div>
                         </div>
                       ))}
                       <div className="grid grid-cols-2 gap-3">
