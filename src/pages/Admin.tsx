@@ -4041,8 +4041,9 @@ ${tgHashtags}`;
               </div>
             )}
 
-            {seriesTab === "ws-add" && (
+            {(seriesTab === "ws-add" || seriesTab === "ws-manual") && (
               <div>
+                {seriesTab === "ws-add" && (
                 <div className={`${glassCard} p-4 mb-4`}>
                   <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2"><Search size={14} className="text-purple-500" /> Search Web Series</h3>
                   <div className="flex gap-2.5 mb-3.5">
@@ -4069,6 +4070,7 @@ ${tgHashtags}`;
                     </div>
                   )}
                 </div>
+                )}
 
                 {seriesForm && (
                   <>
