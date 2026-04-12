@@ -11,6 +11,7 @@ import AboutPage from "./AboutPage";
 import PrivacyPolicyPage from "./PrivacyPolicyPage";
 
 const VideoPlayer = lazy(() => import("@/components/VideoPlayer"));
+const PrivateContentPortal = lazy(() => import("@/components/PrivateContentPage"));
 
 const DownloadVideoPlayer = ({ src, title, subtitle, poster, onClose, downloadedEpisodes, onPlayEpisode, currentId, qualityOptions, onQualityChange }: {
   src: string; title: string; subtitle?: string; poster?: string; onClose: () => void;
@@ -1147,10 +1148,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
 
   // Private Content Panel
   if (activePanel === "private-content") {
-    const PrivateContentPage = lazy(() => import("@/components/PrivateContentPage"));
     return (
       <Suspense fallback={<div className="fixed inset-0 z-[200] bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
-        <PrivateContentPage onClose={() => setActivePanel("main")} />
+        <PrivateContentPortal onClose={() => setActivePanel("main")} />
       </Suspense>
     );
   }

@@ -1565,6 +1565,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     try { return (sessionStorage.getItem("rs_adminSection") as Section) || "dashboard"; } catch { return "dashboard"; }
   });
 
+  useEffect(() => {
+    if (activeSection === "private-content") setActiveSection("webseries");
+  }, [activeSection]);
+
   // Persist admin section
   useEffect(() => {
     try { sessionStorage.setItem("rs_adminSection", activeSection); } catch {}
@@ -2330,7 +2334,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         tmdbId: data.id, title: data.name || "", logo: logoUrl, poster: data.poster_path ? TMDB_IMG_BASE + "original" + data.poster_path : "",
         backdrop: data.backdrop_path ? TMDB_IMG_BASE + "original" + data.backdrop_path : "", trailer: trailerUrl,
         year: data.first_air_date?.split("-")[0] || "", rating: data.vote_average?.toFixed(1) || "",
-        language: "English", category: autoCategory, dubType: "official", storyline: data.overview || ""
+        language: "English", category: autoCategory, dubType: "official", storyline: data.overview || "", visibility: "public"
       });
       if (autoCategory) toast.info(`অটো ক্যাটাগরি: ${autoCategory}`);
       setSeriesCast(cast);
@@ -2378,7 +2382,14 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     if (!seriesForm.title) { toast.error("Please enter title"); return; }
     if (!seriesForm.category) { toast.error("Please select category"); return; }
 
-    const data = { ...seriesForm, cast: seriesCast, seasons: seasonsData, type: "webseries", updatedAt: Date.now() };
+    const data = {
+      ...seriesForm,
+      cast: seriesCast,
+      seasons: seasonsData,
+      type: "webseries",
+      visibility: seriesForm.visibility === "private" ? "private" : "public",
+      updatedAt: Date.now(),
+    };
     let saveRef;
     let newId = seriesEditId || "";
     if (seriesEditId) {
@@ -2405,7 +2416,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     setSeriesForm({
       tmdbId: data.tmdbId || "", title: data.title || "", logo: data.logo || "", poster: data.poster || "",
       backdrop: data.backdrop || "", trailer: data.trailer || "", year: data.year || "", rating: data.rating || "",
-      language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || ""
+      language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "", visibility: data.visibility || "public"
     });
     setSeriesCast(data.cast || []);
     setSeasonsData(data.seasons || []);
@@ -2418,6 +2429,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const deleteSeries = (id: string) => {
     if (confirm("Delete this series?")) {
       remove(ref(db, `webseries/${id}`)).then(() => toast.success("Deleted!")).catch(err => toast.error("Error: " + err.message));
+    }
+  };
+
+  const updateSeriesVisibility = async (id: string, visibility: "public" | "private") => {
+    try {
+      await update(ref(db, `webseries/${id}`), { visibility, updatedAt: Date.now() });
+      toast.success(visibility === "private" ? "Series moved to Private" : "Series moved to Public");
+    } catch (err: any) {
+      toast.error("Error: " + err.message);
     }
   };
 
@@ -2488,7 +2508,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         tmdbId: data.id, title: data.title || "", logo: logoUrl, poster: data.poster_path ? TMDB_IMG_BASE + "original" + data.poster_path : "",
         backdrop: data.backdrop_path ? TMDB_IMG_BASE + "original" + data.backdrop_path : "", trailer: trailerUrl,
         year: data.release_date?.split("-")[0] || "", rating: data.vote_average?.toFixed(1) || "",
-        language: "English", category: autoCategory, dubType: "official", storyline: data.overview || "", movieLink: "", downloadLink: ""
+        language: "English", category: autoCategory, dubType: "official", storyline: data.overview || "", movieLink: "", downloadLink: "", visibility: "public"
       });
       if (autoCategory) toast.info(`অটো ক্যাটাগরি: ${autoCategory}`);
       setMovieCast(cast);
@@ -2505,7 +2525,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     if (!movieForm.category) { toast.error("Please select category"); return; }
     if (!movieForm.movieLink) { toast.error("Please enter movie link"); return; }
 
-    const data = { ...movieForm, cast: movieCast, type: "movie", updatedAt: Date.now() };
+    const data = {
+      ...movieForm,
+      cast: movieCast,
+      type: "movie",
+      visibility: movieForm.visibility === "private" ? "private" : "public",
+      updatedAt: Date.now(),
+    };
     let saveRef;
     if (movieEditId) {
       saveRef = ref(db, `movies/${movieEditId}`);
@@ -2532,7 +2558,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "",
       movieLink: data.movieLink || "", downloadLink: data.downloadLink || "",
       movieLink480: data.movieLink480 || "", movieLink720: data.movieLink720 || "",
-      movieLink1080: data.movieLink1080 || "", movieLink4k: data.movieLink4k || ""
+      movieLink1080: data.movieLink1080 || "", movieLink4k: data.movieLink4k || "", visibility: data.visibility || "public"
     });
     setMovieCast(data.cast || []);
     setMovieEditId(id);
@@ -2544,6 +2570,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const deleteMovie = (id: string) => {
     if (confirm("Delete this movie?")) {
       remove(ref(db, `movies/${id}`)).then(() => toast.success("Deleted!")).catch(err => toast.error("Error: " + err.message));
+    }
+  };
+
+  const updateMovieVisibility = async (id: string, visibility: "public" | "private") => {
+    try {
+      await update(ref(db, `movies/${id}`), { visibility, updatedAt: Date.now() });
+      toast.success(visibility === "private" ? "Movie moved to Private" : "Movie moved to Public");
+    } catch (err: any) {
+      toast.error("Error: " + err.message);
     }
   };
 
@@ -3489,7 +3524,6 @@ ${tgHashtags}`;
     { section: "tg-url-changer", icon: <RefreshCw size={16} />, label: "TG URL Changer" },
     { section: "free-access", icon: <Eye size={16} />, label: "Free Access", group: "Tracking" },
     { section: "unlock-duration", icon: <Clock size={16} />, label: "Unlock Duration" },
-    { section: "private-content", icon: <Lock size={16} />, label: "Private Content" },
     { section: "analytics", icon: <BarChart3 size={16} />, label: "Analytics & Views" },
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
@@ -3969,8 +4003,19 @@ ${tgHashtags}`;
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-semibold mb-1 truncate">{item.title || "Untitled"}</h4>
                         <p className="text-[11px] text-[#D1C4E9] mb-2">{item.year || "N/A"} • {item.rating || "N/A"}⭐ • {item.language || "N/A"}</p>
-                        <p className="text-[11px] text-[#D1C4E9]">{item.seasons?.length || 0} Seasons • {item.category || "Uncategorized"}</p>
-                        <div className="flex gap-2 mt-2.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-[11px] text-[#D1C4E9]">{item.seasons?.length || 0} Seasons • {item.category || "Uncategorized"}</p>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${item.visibility === "private" ? "bg-red-500/20 text-red-300 border border-red-500/30" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"}`}>
+                            {item.visibility === "private" ? "Private" : "Public"}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mt-2.5">
+                          <button onClick={() => updateSeriesVisibility(item.id, "public")} className={`px-3.5 py-2 rounded-xl text-[11px] font-semibold border ${item.visibility !== "private" ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-300" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                            Public
+                          </button>
+                          <button onClick={() => updateSeriesVisibility(item.id, "private")} className={`px-3.5 py-2 rounded-xl text-[11px] font-semibold border ${item.visibility === "private" ? "bg-red-500/20 border-red-500/30 text-red-300" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                            Private
+                          </button>
                           <button onClick={() => editSeries(item.id)} className={`${btnSecondary} px-3.5 py-2 text-[11px] font-semibold flex items-center gap-1.5`}>
                             <Edit size={12} /> Edit
                           </button>
@@ -4059,6 +4104,19 @@ ${tgHashtags}`;
                           <option value="">Select Category</option>
                           {categoryList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                         </select>
+                      </div>
+                      <div className="mb-4">
+                        <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Visibility</label>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => setSeriesForm({ ...seriesForm, visibility: "public" })}
+                            className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${(seriesForm.visibility || "public") !== "private" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                            Public
+                          </button>
+                          <button type="button" onClick={() => setSeriesForm({ ...seriesForm, visibility: "private" })}
+                            className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${seriesForm.visibility === "private" ? "bg-red-600 border-red-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                            Private
+                          </button>
+                        </div>
                       </div>
                       <div className="mb-4">
                         <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">ডাব টাইপ</label>
@@ -4703,8 +4761,19 @@ ${tgHashtags}`;
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-semibold mb-1 truncate">{item.title || "Untitled"}</h4>
                         <p className="text-[11px] text-[#D1C4E9] mb-2">{item.year || "N/A"} • {item.rating || "N/A"}⭐ • {item.language || "N/A"}</p>
-                        <p className="text-[11px] text-[#D1C4E9]">{item.category || "Uncategorized"}</p>
-                        <div className="flex gap-2 mt-2.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-[11px] text-[#D1C4E9]">{item.category || "Uncategorized"}</p>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${item.visibility === "private" ? "bg-red-500/20 text-red-300 border border-red-500/30" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"}`}>
+                            {item.visibility === "private" ? "Private" : "Public"}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 mt-2.5">
+                          <button onClick={() => updateMovieVisibility(item.id, "public")} className={`px-3.5 py-2 rounded-xl text-[11px] font-semibold border ${item.visibility !== "private" ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-300" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                            Public
+                          </button>
+                          <button onClick={() => updateMovieVisibility(item.id, "private")} className={`px-3.5 py-2 rounded-xl text-[11px] font-semibold border ${item.visibility === "private" ? "bg-red-500/20 border-red-500/30 text-red-300" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                            Private
+                          </button>
                           <button onClick={() => editMovie(item.id)} className={`${btnSecondary} px-3.5 py-2 text-[11px] font-semibold flex items-center gap-1.5`}>
                             <Edit size={12} /> Edit
                           </button>
@@ -4793,6 +4862,19 @@ ${tgHashtags}`;
                           <option value="">Select Category</option>
                           {categoryList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                         </select>
+                      </div>
+                      <div className="mb-4">
+                        <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Visibility</label>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => setMovieForm({ ...movieForm, visibility: "public" })}
+                            className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${(movieForm.visibility || "public") !== "private" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                            Public
+                          </button>
+                          <button type="button" onClick={() => setMovieForm({ ...movieForm, visibility: "private" })}
+                            className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${movieForm.visibility === "private" ? "bg-red-600 border-red-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                            Private
+                          </button>
+                        </div>
                       </div>
                       <div className="mb-4">
                         <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">ডাব টাইপ</label>
