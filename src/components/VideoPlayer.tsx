@@ -439,16 +439,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       videoRef.current.src = '';
     }
     setShortenLoading(true);
-    createUnlockLinkForCurrentUser().then((result) => {
+    createUnlockLinksForAllServices().then((result) => {
       setShortenLoading(false);
-      if (result.ok && result.shortUrl) setShortenedLink(result.shortUrl);
+      if (result.ok && result.links.length > 0) setAdLinks(result.links);
       else setAdGateActive(false);
     }).catch(() => { setShortenLoading(false); setAdGateActive(false); });
   }, [isPremium, has24hAccess, unlockBlocked]);
 
-  const handleOpenAdLink = useCallback(() => {
-    if (shortenedLink) window.location.href = shortenedLink;
-  }, [shortenedLink]);
+  const handleOpenAdLink = useCallback((url: string) => {
+    if (url) window.location.href = url;
+  }, []);
 
   // Save progress every 10s
   useEffect(() => {
