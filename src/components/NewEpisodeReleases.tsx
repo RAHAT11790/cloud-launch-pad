@@ -43,9 +43,13 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
   }, []);
 
   // Filter active releases within 30 days - only RS Anime content (no AnimeSalt)
+  // Also exclude private content that shouldn't show on public page
+  const allAnimeIds = new Set(allAnime.map(a => a.id));
   const activeReleases = releases.filter(
     (r) => r.active !== false && Date.now() - r.timestamp < 30 * 24 * 60 * 60 * 1000
       && (r as any).contentType !== "animesalt"
+      && (r as any).visibility !== "private"
+      && allAnimeIds.has(r.contentId) // only show releases for content that exists in public list
   );
 
   if (activeReleases.length === 0) return null;
