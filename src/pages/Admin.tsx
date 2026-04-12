@@ -6396,52 +6396,63 @@ ${tgHashtags}`;
 
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <Link size={14} className="text-purple-400" /> Tutorial Video URL
+                <Link size={14} className="text-purple-400" /> Tutorial Videos
               </h3>
               <p className="text-[11px] text-[#D1C4E9] mb-4">
-                ফ্রি ইউজারদের Unlock বাটনের নিচে "How to open my link" বাটনে এই ভিডিওটি প্লে হবে। ভিডিও URL দিন (MP4 বা embed link)।
+                Add multiple tutorial videos with custom titles. Users will see these in the unlock section.
               </p>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={tutorialLinkInput}
-                  onChange={(e) => setTutorialLinkInput(e.target.value)}
-                  placeholder="https://example.com/tutorial-video.mp4"
-                  className={`${inputClass} flex-1`}
-                />
-                <button
-                  onClick={async () => {
-                    if (!tutorialLinkInput.trim()) {
-                      toast.error("Please enter a valid URL");
-                      return;
-                    }
+
+              {/* Existing videos list */}
+              {tutorialVideos.length > 0 && (
+                <div className="space-y-2 mb-4">
+                  {tutorialVideos.map((vid: any, idx: number) => (
+                    <div key={vid.id || idx} className="flex items-center gap-2 bg-[#0E1621] rounded-lg p-2 border border-white/5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-semibold text-white truncate">{vid.title || "Untitled"}</p>
+                        <a href={vid.url} target="_blank" rel="noopener noreferrer" className="text-[9px] text-purple-400 underline truncate block">{vid.url}</a>
+                      </div>
+                      <button onClick={async () => {
+                        try {
+                          await remove(ref(db, `settings/tutorialVideos/${vid.id}`));
+                          toast.success("Removed!");
+                        } catch { toast.error("Failed"); }
+                      }} className="text-red-400 hover:text-red-300 flex-shrink-0"><Trash2 size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new video */}
+              <div className="space-y-2">
+                <input value={newTutorialTitle} onChange={e => setNewTutorialTitle(e.target.value)}
+                  placeholder="Video Title (e.g. How to open ShrinkMe)"
+                  className={inputClass} />
+                <div className="flex gap-2">
+                  <input value={newTutorialUrl} onChange={e => setNewTutorialUrl(e.target.value)}
+                    placeholder="Video URL (MP4)" className={`${inputClass} flex-1`} />
+                  <button onClick={async () => {
+                    if (!newTutorialTitle.trim() || !newTutorialUrl.trim()) { toast.error("Title & URL required"); return; }
                     try {
-                      await set(ref(db, "settings/tutorialLink"), tutorialLinkInput.trim());
-                      toast.success("Tutorial video link saved!");
-                    } catch (err) {
-                      console.error("Save failed:", err);
-                      toast.error("Failed to save. Check Firebase rules.");
-                    }
-                  }}
-                  className={`${btnPrimary} !px-4`}
-                >
-                  <Save size={14} /> Save
-                </button>
-              </div>
-              {tutorialLink && (
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="text-[11px] text-green-400">✓ Active:</span>
-                  <a href={tutorialLink} target="_blank" rel="noopener noreferrer" className="text-[11px] text-purple-400 underline truncate max-w-[250px]">{tutorialLink}</a>
-                  <button
-                    onClick={() => {
-                      set(ref(db, "settings/tutorialLink"), null);
-                      setTutorialLinkInput("");
-                      toast.success("Tutorial link removed!");
-                    }}
-                    className="text-red-400 hover:text-red-300 ml-auto"
-                  >
-                    <Trash2 size={12} />
+                      const newRef = push(ref(db, "settings/tutorialVideos"));
+                      await set(newRef, { title: newTutorialTitle.trim(), url: newTutorialUrl.trim() });
+                      setNewTutorialTitle(""); setNewTutorialUrl("");
+                      toast.success("Tutorial video added!");
+                    } catch { toast.error("Failed to save"); }
+                  }} className={`${btnPrimary} !px-4`}>
+                    <Plus size={14} /> Add
                   </button>
+                </div>
+              </div>
+
+              {/* Legacy single link */}
+              {tutorialLink && (
+                <div className="mt-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2">
+                  <p className="text-[10px] text-yellow-400 mb-1">Legacy single link (will be used if no videos above):</p>
+                  <div className="flex items-center gap-2">
+                    <a href={tutorialLink} target="_blank" rel="noopener noreferrer" className="text-[10px] text-purple-400 underline truncate flex-1">{tutorialLink}</a>
+                    <button onClick={() => { set(ref(db, "settings/tutorialLink"), null); setTutorialLinkInput(""); toast.success("Removed!"); }}
+                      className="text-red-400 hover:text-red-300"><Trash2 size={12} /></button>
+                  </div>
                 </div>
               )}
             </div>
