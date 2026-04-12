@@ -1660,6 +1660,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   // Settings state
   const [tutorialLink, setTutorialLink] = useState("");
   const [tutorialLinkInput, setTutorialLinkInput] = useState("");
+  const [tutorialVideos, setTutorialVideos] = useState<{ title: string; url: string }[]>([]);
+  const [newTutorialTitle, setNewTutorialTitle] = useState("");
+  const [newTutorialUrl, setNewTutorialUrl] = useState("");
   const [adminUserIdInput, setAdminUserIdInput] = useState("");
   const [savedAdminUserId, setSavedAdminUserId] = useState("");
 
@@ -1943,6 +1946,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       const val = snap.val() || "";
       setTutorialLink(val);
       setTutorialLinkInput(val);
+    }));
+
+    unsubs.push(onValue(ref(db, "settings/tutorialVideos"), (snap) => {
+      const val = snap.val();
+      if (val && typeof val === "object") {
+        const list = Object.entries(val).map(([k, v]: any) => ({ id: k, title: v.title || "", url: v.url || "" }));
+        setTutorialVideos(list);
+      } else {
+        setTutorialVideos([]);
+      }
     }));
 
     unsubs.push(onValue(ref(db, "admin/userId"), (snap) => {
@@ -3523,7 +3536,7 @@ ${tgHashtags}`;
     { section: "telegram-post", icon: <Send size={16} />, label: "Telegram Post", group: "Sharing" },
     { section: "tg-url-changer", icon: <RefreshCw size={16} />, label: "TG URL Changer" },
     { section: "free-access", icon: <Eye size={16} />, label: "Free Access", group: "Tracking" },
-    { section: "unlock-duration", icon: <Clock size={16} />, label: "Unlock Duration" },
+    
     { section: "analytics", icon: <BarChart3 size={16} />, label: "Analytics & Views" },
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
@@ -4078,8 +4091,26 @@ ${tgHashtags}`;
                       {["title", "logo", "poster", "backdrop", "trailer"].map(field => (
                         <div key={field} className="mb-4">
                           <label className="block text-xs text-[#D1C4E9] mb-2 font-medium capitalize">{field === "logo" ? "Title Logo URL" : field === "trailer" ? "Trailer (YouTube Link)" : field.charAt(0).toUpperCase() + field.slice(1) + " URL"}</label>
-                          <input value={seriesForm[field] || ""} onChange={e => setSeriesForm({ ...seriesForm, [field]: e.target.value })}
-                            className={inputClass} placeholder={`${field}...`} />
+                          <div className="flex gap-2">
+                            <input value={seriesForm[field] || ""} onChange={e => setSeriesForm({ ...seriesForm, [field]: e.target.value })}
+                              className={`${inputClass} flex-1`} placeholder={`${field}...`} />
+                            {(field === "poster" || field === "backdrop") && (
+                              <label className={`${btnSecondary} !px-3 cursor-pointer flex items-center gap-1`}>
+                                <Image size={14} />
+                                <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  try {
+                                    toast.info("Uploading...");
+                                    const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+                                    const url = await uploadToImgbb(file);
+                                    setSeriesForm(f => ({ ...f, [field]: url }));
+                                    toast.success(`${field} uploaded!`);
+                                  } catch { toast.error("Upload failed"); }
+                                }} />
+                              </label>
+                            )}
+                          </div>
                         </div>
                       ))}
                       <div className="grid grid-cols-2 gap-3">
@@ -4836,8 +4867,26 @@ ${tgHashtags}`;
                       {["title", "logo", "poster", "backdrop", "trailer"].map(field => (
                         <div key={field} className="mb-4">
                           <label className="block text-xs text-[#D1C4E9] mb-2 font-medium capitalize">{field === "logo" ? "Title Logo URL" : field === "trailer" ? "Trailer (YouTube Link)" : field.charAt(0).toUpperCase() + field.slice(1) + " URL"}</label>
-                          <input value={movieForm[field] || ""} onChange={e => setMovieForm({ ...movieForm, [field]: e.target.value })}
-                            className={inputClass} placeholder={`${field}...`} />
+                          <div className="flex gap-2">
+                            <input value={movieForm[field] || ""} onChange={e => setMovieForm({ ...movieForm, [field]: e.target.value })}
+                              className={`${inputClass} flex-1`} placeholder={`${field}...`} />
+                            {(field === "poster" || field === "backdrop") && (
+                              <label className={`${btnSecondary} !px-3 cursor-pointer flex items-center gap-1`}>
+                                <Image size={14} />
+                                <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  try {
+                                    toast.info("Uploading...");
+                                    const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+                                    const url = await uploadToImgbb(file);
+                                    setMovieForm(f => ({ ...f, [field]: url }));
+                                    toast.success(`${field} uploaded!`);
+                                  } catch { toast.error("Upload failed"); }
+                                }} />
+                              </label>
+                            )}
+                          </div>
                         </div>
                       ))}
                       <div className="grid grid-cols-2 gap-3">
@@ -5529,7 +5578,7 @@ ${tgHashtags}`;
                           const expiresAt = Date.now() + days * 24 * 60 * 60 * 1000;
                           await set(ref(db, `users/${req.userId}/premium`), { active: true, expiresAt, redeemedAt: Date.now(), method: "bkash", transactionId: req.transactionId, maxDevices });
                           await update(ref(db, `bkashPayments/${req.id}`), { status: "approved", approvedAt: Date.now() });
-                          // Send notification to user
+                          // Send in-app notification to user
                           const userNotifRef = push(ref(db, `notifications/${req.userId}`));
                           await set(userNotifRef, {
                             title: "Premium Activated! 🎉",
@@ -5538,6 +5587,16 @@ ${tgHashtags}`;
                             timestamp: Date.now(),
                             read: false,
                           });
+                          // Send FCM push to user
+                          try {
+                            const { sendPushToUsers } = await import("@/lib/fcm");
+                            await sendPushToUsers([req.userId], {
+                              title: "Premium Activated! 🎉",
+                              body: `আপনার ${req.planName} প্ল্যান অ্যাক্টিভেট হয়েছে। ${days} দিন Ad-free উপভোগ করুন!`,
+                              url: "/profile",
+                              data: { type: "subscription_activated" },
+                            });
+                          } catch (pushErr) { console.warn("User push failed:", pushErr); }
                           toast.success(`${req.userName} এর প্রিমিয়াম অ্যাক্টিভেট হয়েছে (${days} দিন)`);
                         }} className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors">
                           <Check size={12} /> Approve
@@ -5552,6 +5611,16 @@ ${tgHashtags}`;
                             timestamp: Date.now(),
                             read: false,
                           });
+                          // Send FCM push to user
+                          try {
+                            const { sendPushToUsers } = await import("@/lib/fcm");
+                            await sendPushToUsers([req.userId], {
+                              title: "Payment Rejected ❌",
+                              body: "আপনার পেমেন্ট রিকোয়েস্ট গ্রহণ হয়নি। সঠিক Transaction ID দিয়ে আবার চেষ্টা করুন।",
+                              url: "/profile",
+                              data: { type: "subscription_rejected" },
+                            });
+                          } catch (pushErr) { console.warn("User push failed:", pushErr); }
                           toast.success("রিকোয়েস্ট রিজেক্ট করা হয়েছে");
                         }} className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors">
                           <X size={12} /> Reject
@@ -6347,52 +6416,63 @@ ${tgHashtags}`;
 
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <Link size={14} className="text-purple-400" /> Tutorial Video URL
+                <Link size={14} className="text-purple-400" /> Tutorial Videos
               </h3>
               <p className="text-[11px] text-[#D1C4E9] mb-4">
-                ফ্রি ইউজারদের Unlock বাটনের নিচে "How to open my link" বাটনে এই ভিডিওটি প্লে হবে। ভিডিও URL দিন (MP4 বা embed link)।
+                Add multiple tutorial videos with custom titles. Users will see these in the unlock section.
               </p>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  value={tutorialLinkInput}
-                  onChange={(e) => setTutorialLinkInput(e.target.value)}
-                  placeholder="https://example.com/tutorial-video.mp4"
-                  className={`${inputClass} flex-1`}
-                />
-                <button
-                  onClick={async () => {
-                    if (!tutorialLinkInput.trim()) {
-                      toast.error("Please enter a valid URL");
-                      return;
-                    }
+
+              {/* Existing videos list */}
+              {tutorialVideos.length > 0 && (
+                <div className="space-y-2 mb-4">
+                  {tutorialVideos.map((vid: any, idx: number) => (
+                    <div key={vid.id || idx} className="flex items-center gap-2 bg-[#0E1621] rounded-lg p-2 border border-white/5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-semibold text-white truncate">{vid.title || "Untitled"}</p>
+                        <a href={vid.url} target="_blank" rel="noopener noreferrer" className="text-[9px] text-purple-400 underline truncate block">{vid.url}</a>
+                      </div>
+                      <button onClick={async () => {
+                        try {
+                          await remove(ref(db, `settings/tutorialVideos/${vid.id}`));
+                          toast.success("Removed!");
+                        } catch { toast.error("Failed"); }
+                      }} className="text-red-400 hover:text-red-300 flex-shrink-0"><Trash2 size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new video */}
+              <div className="space-y-2">
+                <input value={newTutorialTitle} onChange={e => setNewTutorialTitle(e.target.value)}
+                  placeholder="Video Title (e.g. How to open ShrinkMe)"
+                  className={inputClass} />
+                <div className="flex gap-2">
+                  <input value={newTutorialUrl} onChange={e => setNewTutorialUrl(e.target.value)}
+                    placeholder="Video URL (MP4)" className={`${inputClass} flex-1`} />
+                  <button onClick={async () => {
+                    if (!newTutorialTitle.trim() || !newTutorialUrl.trim()) { toast.error("Title & URL required"); return; }
                     try {
-                      await set(ref(db, "settings/tutorialLink"), tutorialLinkInput.trim());
-                      toast.success("Tutorial video link saved!");
-                    } catch (err) {
-                      console.error("Save failed:", err);
-                      toast.error("Failed to save. Check Firebase rules.");
-                    }
-                  }}
-                  className={`${btnPrimary} !px-4`}
-                >
-                  <Save size={14} /> Save
-                </button>
-              </div>
-              {tutorialLink && (
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="text-[11px] text-green-400">✓ Active:</span>
-                  <a href={tutorialLink} target="_blank" rel="noopener noreferrer" className="text-[11px] text-purple-400 underline truncate max-w-[250px]">{tutorialLink}</a>
-                  <button
-                    onClick={() => {
-                      set(ref(db, "settings/tutorialLink"), null);
-                      setTutorialLinkInput("");
-                      toast.success("Tutorial link removed!");
-                    }}
-                    className="text-red-400 hover:text-red-300 ml-auto"
-                  >
-                    <Trash2 size={12} />
+                      const newRef = push(ref(db, "settings/tutorialVideos"));
+                      await set(newRef, { title: newTutorialTitle.trim(), url: newTutorialUrl.trim() });
+                      setNewTutorialTitle(""); setNewTutorialUrl("");
+                      toast.success("Tutorial video added!");
+                    } catch { toast.error("Failed to save"); }
+                  }} className={`${btnPrimary} !px-4`}>
+                    <Plus size={14} /> Add
                   </button>
+                </div>
+              </div>
+
+              {/* Legacy single link */}
+              {tutorialLink && (
+                <div className="mt-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2">
+                  <p className="text-[10px] text-yellow-400 mb-1">Legacy single link (will be used if no videos above):</p>
+                  <div className="flex items-center gap-2">
+                    <a href={tutorialLink} target="_blank" rel="noopener noreferrer" className="text-[10px] text-purple-400 underline truncate flex-1">{tutorialLink}</a>
+                    <button onClick={() => { set(ref(db, "settings/tutorialLink"), null); setTutorialLinkInput(""); toast.success("Removed!"); }}
+                      className="text-red-400 hover:text-red-300"><Trash2 size={12} /></button>
+                  </div>
                 </div>
               )}
             </div>
@@ -7368,61 +7448,8 @@ ${tgHashtags}`;
           />
         )}
 
-        {/* ==================== UNLOCK DURATION ==================== */}
-        {activeSection === "unlock-duration" && (() => {
-          const UnlockDurationSection = () => {
-            const [hours, setHours] = useState(24);
-            const [saving, setSaving] = useState(false);
 
-            useEffect(() => {
-              const unsub = onValue(ref(db, "settings/unlockDurationHours"), (snap) => {
-                const val = snap.val();
-                if (val && typeof val === "number") setHours(val);
-              });
-              return () => unsub();
-            }, []);
 
-            const saveHours = async () => {
-              setSaving(true);
-              try {
-                await set(ref(db, "settings/unlockDurationHours"), hours);
-                toast.success(`✅ Unlock Duration: ${hours} ঘন্টা সেট হয়েছে!`);
-              } catch (e: any) { toast.error(e.message); }
-              setSaving(false);
-            };
-
-            return (
-              <div className={`${glassCard} p-4 mb-4`}>
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <Clock size={14} className="text-amber-400" /> Unlock Duration Settings
-                </h3>
-                <p className="text-[11px] text-zinc-400 mb-4">
-                  ইউজার অ্যাড আনলক করলে কত ঘন্টার এক্সেস পাবে সেটা এখান থেকে সেট করুন। ডিফল্ট: ২৪ ঘন্টা।
-                </p>
-                <div className="flex items-center gap-3 mb-4">
-                  <label className="text-[11px] text-zinc-400 flex-shrink-0">ঘন্টা:</label>
-                  <input type="number" min={1} max={720} value={hours} onChange={e => setHours(Number(e.target.value))}
-                    className={`${inputClass} w-24 text-center`} />
-                  <span className="text-xs text-zinc-500">({Math.floor(hours / 24)} দিন {hours % 24} ঘন্টা)</span>
-                </div>
-                <div className="flex gap-2 mb-3">
-                  {[6, 12, 24, 48, 72, 168].map(h => (
-                    <button key={h} onClick={() => setHours(h)}
-                      className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all ${hours === h ? "bg-indigo-500 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}>
-                      {h}h
-                    </button>
-                  ))}
-                </div>
-                <button onClick={saveHours} disabled={saving}
-                  className={`${btnPrimary} w-full py-2.5 text-sm flex items-center justify-center gap-2`}>
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  সেভ করুন
-                </button>
-              </div>
-            );
-          };
-          return <UnlockDurationSection />;
-        })()}
 
         {/* ==================== PRIVATE CONTENT ==================== */}
         {activeSection === "private-content" && (() => {
@@ -9836,12 +9863,30 @@ const AnimeSaltManagerSection = ({
               ].map(field => (
                 <div key={field.key}>
                   <label className="text-[11px] text-purple-400 mb-1 block">{field.label}</label>
-                  <input
-                    value={(editForm as any)[field.key]}
-                    onChange={e => setEditForm(f => ({ ...f, [field.key]: e.target.value }))}
-                    className={inputClass}
-                    placeholder={field.label}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      value={(editForm as any)[field.key]}
+                      onChange={e => setEditForm(f => ({ ...f, [field.key]: e.target.value }))}
+                      className={`${inputClass} flex-1`}
+                      placeholder={field.label}
+                    />
+                    {(field.key === "poster" || field.key === "backdrop") && (
+                      <label className="px-3 py-2 rounded-lg bg-[#151521] border border-white/10 text-[#D1C4E9] cursor-pointer flex items-center gap-1 text-[11px]">
+                        <Image size={12} />
+                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            toast.info("Uploading...");
+                            const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+                            const url = await uploadToImgbb(file);
+                            setEditForm(f => ({ ...f, [field.key]: url }));
+                            toast.success(`${field.label} uploaded!`);
+                          } catch { toast.error("Upload failed"); }
+                        }} />
+                      </label>
+                    )}
+                  </div>
                 </div>
               ))}
               <div>

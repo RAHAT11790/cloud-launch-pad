@@ -132,9 +132,9 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
       const snap = await get(ref(db, `users/${userId}/privatePin`));
       if (snap.val() === pin.trim()) {
         setIsAuthenticated(true);
-        toast.success("✅ অ্যাক্সেস দেওয়া হয়েছে!");
+        toast.success("✅ Access granted!");
       } else {
-        toast.error("❌ পাসওয়ার্ড ভুল!");
+        toast.error("❌ Wrong password!");
       }
     } catch { toast.error("Error verifying"); }
     setLoading(false);
@@ -142,7 +142,7 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
 
   const setNewPinForUser = useCallback(async () => {
     if (!userId || !pin.trim() || pin.trim().length < 4) {
-      toast.error("পাসওয়ার্ড কমপক্ষে ৪ ক্যারেক্টার হতে হবে");
+      toast.error("Password must be at least 4 characters");
       return;
     }
     setLoading(true);
@@ -150,13 +150,13 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
       await set(ref(db, `users/${userId}/privatePin`), pin.trim());
       setHasPin(true);
       setIsAuthenticated(true);
-      toast.success("✅ পাসওয়ার্ড সেট হয়েছে!");
+      toast.success("✅ Password set!");
     } catch { toast.error("Error setting password"); }
     setLoading(false);
   }, [userId, pin]);
 
   const sendOtp = useCallback(async () => {
-    if (!userId || !userEmail) { toast.error("ইমেইল পাওয়া যায়নি"); return; }
+    if (!userId || !userEmail) { toast.error("Email not found"); return; }
     setOtpLoading(true);
     try {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -170,24 +170,24 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
         });
       } catch { console.log("Email sending failed, OTP stored in Firebase"); }
       setOtpSent(true);
-      toast.success(`📧 কোড পাঠানো হয়েছে: ${userEmail}`);
+      toast.success(`📧 Code sent to: ${userEmail}`);
     } catch { toast.error("Error sending code"); }
     setOtpLoading(false);
   }, [userId, userEmail, branding.siteName]);
 
   const verifyOtpAndResetPin = useCallback(async () => {
     if (!userId || !otpInput.trim() || !newPin.trim()) return;
-    if (newPin.trim().length < 4) { toast.error("পাসওয়ার্ড কমপক্ষে ৪ ক্যারেক্টার"); return; }
+    if (newPin.trim().length < 4) { toast.error("Password must be at least 4 characters"); return; }
     setOtpLoading(true);
     try {
       const snap = await get(ref(db, `users/${userId}/pinResetOtp`));
       const otpData = snap.val();
-      if (!otpData || otpData.code !== otpInput.trim()) { toast.error("❌ কোড ভুল!"); setOtpLoading(false); return; }
-      if (otpData.expiresAt < Date.now()) { toast.error("⏰ কোডের মেয়াদ শেষ!"); setOtpLoading(false); return; }
+      if (!otpData || otpData.code !== otpInput.trim()) { toast.error("❌ Wrong code!"); setOtpLoading(false); return; }
+      if (otpData.expiresAt < Date.now()) { toast.error("⏰ Code expired!"); setOtpLoading(false); return; }
       await set(ref(db, `users/${userId}/privatePin`), newPin.trim());
       await set(ref(db, `users/${userId}/pinResetOtp`), null);
       setForgotMode(false); setOtpSent(false); setOtpInput(""); setNewPin(""); setPin("");
-      toast.success("✅ নতুন পাসওয়ার্ড সেট হয়েছে!");
+      toast.success("✅ Password reset successfully!");
     } catch { toast.error("Error resetting"); }
     setOtpLoading(false);
   }, [userId, otpInput, newPin]);
@@ -237,8 +237,8 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
     if (anime.type === "movie") {
       const src = getMovieSrc(anime);
       if (!src) {
-        toast.error("ভিডিও লিংক নেই");
-        return;
+      toast.error("No video link");
+      return;
       }
 
       setPlayerState({
@@ -257,7 +257,7 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
     const src = getEpisodeSrc(episode);
 
     if (!season || !episode || !src) {
-      toast.error("ভিডিও লিংক নেই");
+      toast.error("No video link");
       return;
     }
 
@@ -393,7 +393,7 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
           </div>
           <h2 className="text-xl font-bold mb-1">Private Content</h2>
           <p className="text-sm text-muted-foreground">
-            {hasPin === false ? "প্রথমে একটি পাসওয়ার্ড সেট করুন" : "পাসওয়ার্ড দিয়ে এক্সেস করুন"}
+            {hasPin === false ? "Set a password first" : "Enter password to access"}
           </p>
         </div>
 
@@ -402,12 +402,12 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
             {!otpSent ? (
               <div className="space-y-4">
                 <p className="text-sm text-center text-muted-foreground">
-                  আপনার ইমেইলে ({userEmail || "N/A"}) একটি কোড পাঠানো হবে
+                  A code will be sent to your email ({userEmail || "N/A"})
                 </p>
                 <button onClick={sendOtp} disabled={otpLoading || !userEmail}
                   className="w-full py-3 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
                   {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-                  কোড পাঠান
+                  Send Code
                 </button>
                 <button onClick={() => setForgotMode(false)} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground">
                   ← Back to Login
@@ -416,21 +416,21 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">ইমেইলে পাঠানো কোড</label>
+                  <label className="text-xs text-muted-foreground mb-1 block">Code sent to email</label>
                   <input type="text" value={otpInput} onChange={e => setOtpInput(e.target.value)}
-                    placeholder="৬ ডিজিটের কোড" maxLength={6}
+                    placeholder="6-digit code" maxLength={6}
                     className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-center text-lg font-mono tracking-[8px] focus:border-primary focus:outline-none" />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">নতুন পাসওয়ার্ড</label>
+                  <label className="text-xs text-muted-foreground mb-1 block">New Password</label>
                   <input type="password" value={newPin} onChange={e => setNewPin(e.target.value)}
-                    placeholder="নতুন পাসওয়ার্ড (মিনিমাম ৪)"
+                    placeholder="New password (min 4 chars)"
                     className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none" />
                 </div>
                 <button onClick={verifyOtpAndResetPin} disabled={otpLoading || !otpInput || !newPin}
                   className="w-full py-3 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
                   {otpLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  পাসওয়ার্ড রিসেট করুন
+                  Reset Password
                 </button>
                 <button onClick={() => { setOtpSent(false); setForgotMode(false); }} className="w-full py-2 text-sm text-muted-foreground">
                   ← Back
@@ -447,7 +447,7 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
                 <div className="relative">
                   <input
                     type={showPin ? "text" : "password"} value={pin} onChange={e => setPin(e.target.value)}
-                    placeholder={hasPin ? "পাসওয়ার্ড দিন" : "নতুন পাসওয়ার্ড সেট করুন (মিনিমাম ৪)"}
+                    placeholder={hasPin ? "Enter password" : "Set new password (min 4 chars)"}
                     className="w-full py-3 px-4 pr-12 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none"
                     onKeyDown={e => e.key === "Enter" && (hasPin ? verifyPin() : setNewPinForUser())}
                   />
@@ -458,11 +458,11 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
                 <button onClick={hasPin ? verifyPin : setNewPinForUser} disabled={loading || !pin.trim()}
                   className="w-full py-3 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-                  {hasPin ? "এক্সেস করুন" : "পাসওয়ার্ড সেট করুন"}
+                  {hasPin ? "Access" : "Set Password"}
                 </button>
                 {hasPin && (
                   <button onClick={() => setForgotMode(true)} className="w-full py-2 text-sm text-primary hover:underline">
-                    পাসওয়ার্ড ভুলে গেছেন?
+                    Forgot Password?
                   </button>
                 )}
               </>
@@ -567,7 +567,7 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
             {(contentLoading || privateItems.length === 0) && (
               <div className="text-center py-16">
                 {contentLoading ? <Loader2 className="w-12 h-12 text-primary mx-auto mb-3 animate-spin" /> : <Film className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />}
-                <p className="text-sm text-muted-foreground">{contentLoading ? "প্রাইভেট কন্টেন্ট লোড হচ্ছে..." : "এখনো কোনো প্রাইভেট কন্টেন্ট নেই"}</p>
+                <p className="text-sm text-muted-foreground">{contentLoading ? "Loading private content..." : "No private content yet"}</p>
               </div>
             )}
           </>

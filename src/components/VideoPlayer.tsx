@@ -251,7 +251,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const loaderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [tutorialLink, setTutorialLink] = useState<string | null>(null);
+  const [tutorialVideos, setTutorialVideos] = useState<{ title: string; url: string }[]>([]);
   const [showTutorialVideo, setShowTutorialVideo] = useState(false);
+  const [activeTutorialIdx, setActiveTutorialIdx] = useState(0);
   const [showNextEpOverlay, setShowNextEpOverlay] = useState(false);
   const [nextEpCountdown, setNextEpCountdown] = useState(0);
   const nextEpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -359,12 +361,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return userFreeAccessExpiresAt > Date.now();
   }, [globalFreeAccess, userFreeAccessExpiresAt]);
 
-  // Load tutorial link from Firebase
+  // Load tutorial videos from Firebase
   useEffect(() => {
-    const unsub = onValue(ref(db, "settings/tutorialLink"), (snap) => {
+    const unsubs: (() => void)[] = [];
+    unsubs.push(onValue(ref(db, "settings/tutorialLink"), (snap) => {
       setTutorialLink(snap.val() || null);
-    });
-    return () => unsub();
+    }));
+    unsubs.push(onValue(ref(db, "settings/tutorialVideos"), (snap) => {
+      const val = snap.val();
+      if (val && typeof val === "object") {
+        const list = Object.values(val).map((v: any) => ({ title: v.title || "", url: v.url || "" }));
+        setTutorialVideos(list);
+      } else {
+        setTutorialVideos([]);
+      }
+    }));
+    return () => unsubs.forEach(u => u());
   }, []);
 
   // Maintenance pause listener
@@ -1816,15 +1828,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   ))}
                 </div>
               )}
-              <button
-                onClick={() => {
-                  if (tutorialLink) { setShowTutorialVideo(true); } else { alert("Tutorial video not available yet. Please contact admin."); }
-                }}
-                className="w-full py-2.5 rounded-xl bg-secondary text-secondary-foreground font-medium flex items-center justify-center gap-2 transition-all hover:scale-105 text-sm"
-              >
-                <Play className="w-3.5 h-3.5" />
-                How to open my link
-              </button>
+              {/* Tutorial Video Buttons */}
+              {tutorialVideos.length > 0 ? (
+                <div className="space-y-2">
+                  {tutorialVideos.map((vid, idx) => (
+                    <button key={idx}
+                      onClick={() => { setActiveTutorialIdx(idx); setShowTutorialVideo(true); }}
+                      className="w-full py-2.5 rounded-xl bg-secondary text-secondary-foreground font-medium flex items-center justify-center gap-2 transition-all hover:scale-105 text-sm"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      {vid.title || `Tutorial ${idx + 1}`}
+                    </button>
+                  ))}
+                </div>
+              ) : tutorialLink ? (
+                <button
+                  onClick={() => { setActiveTutorialIdx(-1); setShowTutorialVideo(true); }}
+                  className="w-full py-2.5 rounded-xl bg-secondary text-secondary-foreground font-medium flex items-center justify-center gap-2 transition-all hover:scale-105 text-sm"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  How to open my link
+                </button>
+              ) : null}
             </div>
           </div>
         )}
@@ -1840,33 +1865,39 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         )}
 
         {/* Tutorial Video Modal */}
-        {showTutorialVideo && tutorialLink && (
-          <div className="fixed inset-0 z-[500] bg-black/95 flex items-center justify-center backdrop-blur-sm" onClick={() => setShowTutorialVideo(false)}>
-            <div className="w-full max-w-xs mx-4" onClick={(e) => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-semibold text-foreground">📖 How to open my link</h3>
-                <button onClick={() => setShowTutorialVideo(false)} className="w-8 h-8 rounded-full bg-foreground/20 flex items-center justify-center hover:bg-foreground/30 transition-all">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
-                <video
-                  src={getPrimaryPlaybackSrc(tutorialLink, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined)}
-                  className="w-full h-full"
-                  controls
-                  autoPlay
-                  playsInline
-                  style={{ objectFit: 'contain' }}
-                  crossOrigin={tutorialLink.startsWith("http://") ? "anonymous" : undefined}
-                  controlsList="nodownload noplaybackrate noremoteplayback"
-                  disablePictureInPicture
-                  disableRemotePlayback
-                  onContextMenu={(e) => e.preventDefault()}
-                />
+        {showTutorialVideo && (() => {
+          const activeVid = activeTutorialIdx >= 0 && tutorialVideos[activeTutorialIdx]
+            ? tutorialVideos[activeTutorialIdx]
+            : tutorialLink ? { title: "How to open my link", url: tutorialLink } : null;
+          if (!activeVid) return null;
+          return (
+            <div className="fixed inset-0 z-[500] bg-black/95 flex items-center justify-center backdrop-blur-sm" onClick={() => setShowTutorialVideo(false)}>
+              <div className="w-full max-w-xs mx-4" onClick={(e) => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-sm font-semibold text-foreground">📖 {activeVid.title}</h3>
+                  <button onClick={() => setShowTutorialVideo(false)} className="w-8 h-8 rounded-full bg-foreground/20 flex items-center justify-center hover:bg-foreground/30 transition-all">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
+                  <video
+                    src={getPrimaryPlaybackSrc(activeVid.url, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined)}
+                    className="w-full h-full"
+                    controls
+                    autoPlay
+                    playsInline
+                    style={{ objectFit: 'contain' }}
+                    crossOrigin={activeVid.url.startsWith("http://") ? "anonymous" : undefined}
+                    controlsList="nodownload noplaybackrate noremoteplayback"
+                    disablePictureInPicture
+                    disableRemotePlayback
+                    onContextMenu={(e) => e.preventDefault()}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Download Button with Quality Picker + Offline Playback */}
         {!isFullscreen && !adGateActive && !hideDownload && (() => {
