@@ -560,7 +560,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
               transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
             />
             <div className="relative glass-card-strong p-6 rounded-3xl overflow-hidden">
-              <button onClick={() => { setShowForgotPw(false); setForgotSent(false); setForgotEmail(""); }}
+              <button onClick={() => { setShowForgotPw(false); setForgotOtpSent(false); setForgotEmail(""); setForgotOtp(""); setForgotNewPw(""); setForgotNewPwConfirm(""); }}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
@@ -575,24 +575,42 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                   পাসওয়ার্ড রিসেট
                 </h2>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  আপনার ইমেইলে একটি রিসেট লিংক পাঠানো হবে
+                  {forgotOtpSent ? "ইমেইলে পাঠানো কোড দিন ও নতুন পাসওয়ার্ড সেট করুন" : "আপনার ইমেইলে একটি কোড পাঠানো হবে"}
                 </p>
               </motion.div>
 
-              {forgotSent ? (
-                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                  className="text-center py-4">
-                  <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-green-500/20 flex items-center justify-center">
-                    <Check className="w-8 h-8 text-green-500" />
+              {forgotOtpSent ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">ইমেইলে পাঠানো ৬ ডিজিটের কোড</label>
+                    <input type="text" value={forgotOtp} onChange={e => setForgotOtp(e.target.value)}
+                      placeholder="৬ ডিজিটের কোড" maxLength={6}
+                      className="w-full py-3 px-4 rounded-xl bg-secondary border border-border text-foreground text-center text-lg font-mono tracking-[8px] focus:border-primary focus:outline-none" />
                   </div>
-                  <h3 className="text-base font-bold mb-1">ইমেইল পাঠানো হয়েছে!</h3>
-                  <p className="text-xs text-muted-foreground mb-4">
-                    {forgotEmail} এ রিসেট লিংক পাঠানো হয়েছে। ইমেইল চেক করুন এবং লিংকে ক্লিক করে নতুন পাসওয়ার্ড সেট করুন।
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    ⚠️ রিসেট করার পর প্রোফাইল পেজ থেকেও পাসওয়ার্ড আপডেট করুন
-                  </p>
-                </motion.div>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input type="password" value={forgotNewPw} onChange={e => setForgotNewPw(e.target.value)}
+                      placeholder="নতুন পাসওয়ার্ড (মিনিমাম ৪)"
+                      className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none" />
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input type="password" value={forgotNewPwConfirm} onChange={e => setForgotNewPwConfirm(e.target.value)}
+                      placeholder="পাসওয়ার্ড আবার দিন"
+                      className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none" />
+                  </div>
+                  <motion.button
+                    onClick={handleResetPasswordWithOtp}
+                    disabled={forgotLoading || !forgotOtp || !forgotNewPw}
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50 transition-all"
+                  >
+                    {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><KeyRound className="w-4 h-4" /> পাসওয়ার্ড রিসেট করুন</>}
+                  </motion.button>
+                  <button onClick={() => setForgotOtpSent(false)} className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground">
+                    ← আবার কোড পাঠান
+                  </button>
+                </div>
               ) : (
                 <div className="space-y-3">
                   <div className="relative">
@@ -613,7 +631,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                     whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50 transition-all"
                   >
-                    {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><Mail className="w-4 h-4" /> রিসেট লিংক পাঠান</>}
+                    {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><Mail className="w-4 h-4" /> কোড পাঠান</>}
                   </motion.button>
 
                   <a href={TELEGRAM_ADMIN_URL} target="_blank" rel="noopener noreferrer"
