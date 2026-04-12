@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { db, ref, set, get } from "@/lib/firebase";
-import { consumeUnlockTokenForCurrentUser, getLocalUserId, getRandomPrizeDuration, getUnlockDurationMs } from "@/lib/unlockAccess";
+import { consumeUnlockTokenForCurrentUser, getLocalUserId, getRandomPrizeDuration, getServiceDurationMs } from "@/lib/unlockAccess";
 
 const Unlock = () => {
   const navigate = useNavigate();
@@ -30,7 +30,7 @@ const Unlock = () => {
         return;
       }
 
-      // Determine duration: prize mode = random, normal = configurable
+      // Determine duration: prize mode = random, normal = from consume result (per-service)
       let durationMs: number;
       let hours = 24;
       let minutes = 0;
@@ -41,7 +41,8 @@ const Unlock = () => {
         minutes = prize.minutes;
         durationMs = prize.totalMs;
       } else {
-        durationMs = await getUnlockDurationMs();
+        // consume result already set the correct per-service duration
+        durationMs = consume.durationMs || 24 * 60 * 60 * 1000;
         hours = Math.floor(durationMs / 3600000);
         minutes = Math.floor((durationMs % 3600000) / 60000);
       }

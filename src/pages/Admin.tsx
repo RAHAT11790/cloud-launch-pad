@@ -613,6 +613,7 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const [newUrl, setNewUrl] = useState("");
   const [newIcon, setNewIcon] = useState("🔓");
   const [newColor, setNewColor] = useState("linear-gradient(135deg, #6366f1, #8b5cf6)");
+  const [newDuration, setNewDuration] = useState(24);
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
 
@@ -630,8 +631,9 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     const id = `ad_${Date.now()}`;
     await set(ref(db, `settings/adServices/${id}`), {
       id, name, functionUrl: url, enabled: true, icon: newIcon || "🔓", color: newColor || "",
+      durationHours: newDuration || 24,
     });
-    setNewName(""); setNewUrl(""); setNewIcon("🔓");
+    setNewName(""); setNewUrl(""); setNewIcon("🔓"); setNewDuration(24);
     toast.success(`✅ "${name}" যোগ হয়েছে!`);
   };
 
@@ -645,6 +647,11 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const deleteService = async (id: string) => {
     await remove(ref(db, `settings/adServices/${id}`));
     toast.success("🗑️ ডিলিট হয়েছে!");
+  };
+
+  const updateDuration = async (id: string, hours: number) => {
+    await set(ref(db, `settings/adServices/${id}/durationHours`), hours);
+    toast.success(`⏱️ ${hours} ঘন্টা সেট হয়েছে!`);
   };
 
   const testService = async (id: string, url: string) => {
@@ -677,7 +684,7 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         <Link size={14} className="text-amber-400" /> 📢 Ad Link Services (Unlock বাটন)
       </h3>
       <p className="text-[10px] text-zinc-400 mb-4">
-        ভিডিও আনলক করতে ইউজার যে অ্যাড লিংকে যাবে সেগুলো এখানে ম্যানেজ করো। প্রতিটি সার্ভিসের জন্য আলাদা আনলক বাটন দেখাবে।
+        ভিডিও আনলক করতে ইউজার যে অ্যাড লিংকে যাবে সেগুলো এখানে ম্যানেজ করো। প্রতিটি সার্ভিসের জন্য আলাদা আনলক বাটন ও আলাদা সময় সেট করা যায়।
       </p>
 
       {/* Existing services */}
@@ -713,7 +720,23 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                   </button>
                 </div>
               </div>
-              <p className="text-[9px] text-zinc-400 font-mono truncate">{svc.functionUrl}</p>
+              <p className="text-[9px] text-zinc-400 font-mono truncate mb-2">{svc.functionUrl}</p>
+              {/* Per-service duration */}
+              <div className="flex items-center gap-2 bg-zinc-900/50 rounded-lg p-2">
+                <Clock size={10} className="text-amber-400 flex-shrink-0" />
+                <span className="text-[10px] text-zinc-400">Duration:</span>
+                <input type="number" min={1} max={720} value={svc.durationHours || 24}
+                  onChange={e => {
+                    const val = Number(e.target.value);
+                    setServices(prev => ({ ...prev, [svc.id]: { ...prev[svc.id], durationHours: val } }));
+                  }}
+                  className="w-14 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] text-white text-center" />
+                <span className="text-[10px] text-zinc-500">ঘন্টা</span>
+                <button onClick={() => updateDuration(svc.id, svc.durationHours || 24)}
+                  className={`${btnSecondary} !px-2 !py-0.5 !text-[9px]`}>
+                  <Save size={8} />
+                </button>
+              </div>
             </div>
           );
         })}
@@ -733,6 +756,12 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
             placeholder="Supabase Function URL (যেমন: https://xxx.supabase.co/functions/v1/shorten-arolinks)" className={inputClass} />
           <input value={newColor} onChange={(e) => setNewColor(e.target.value)}
             placeholder="বাটন কালার CSS (যেমন: linear-gradient(135deg, #f59e0b, #ef4444))" className={inputClass} />
+          <div className="flex gap-2 items-center">
+            <Clock size={12} className="text-amber-400" />
+            <input type="number" min={1} max={720} value={newDuration} onChange={e => setNewDuration(Number(e.target.value))}
+              className={`${inputClass} !w-20 text-center`} placeholder="24" />
+            <span className="text-[10px] text-zinc-400">ঘন্টা এক্সেস</span>
+          </div>
           <button onClick={addService} className={`${btnPrimary} w-full`}>
             <PlusCircle size={12} /> যোগ করো
           </button>
@@ -7323,18 +7352,34 @@ ${tgHashtags}`;
             const [description, setDescription] = useState("");
             const [backdrop, setBackdrop] = useState("");
             const [poster, setPoster] = useState("");
-            const [episodes, setEpisodes] = useState<{ episodeNumber: number; title: string; link: string }[]>([]);
+            const [seasons, setSeasons] = useState<{ name: string; seasonNumber: number; episodes: { episodeNumber: number; title: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[] }[]>([]);
             const [saving, setSaving] = useState(false);
             const [uploading, setUploading] = useState<string | null>(null);
+            const [expandedSeason, setExpandedSeason] = useState<number>(0);
 
             useEffect(() => {
               const unsub = onValue(ref(db, "privateContent"), (snap) => {
                 const data = snap.val();
                 if (!data) { setContentList([]); return; }
-                const items = Object.entries(data).map(([id, val]: [string, any]) => ({
-                  id, ...val,
-                  episodes: val.episodes ? Object.values(val.episodes) : [],
-                }));
+                const items = Object.entries(data).map(([id, val]: [string, any]) => {
+                  let parsedSeasons: any[] = [];
+                  if (val.seasons) {
+                    parsedSeasons = Object.values(val.seasons).map((s: any) => ({
+                      name: s.name || "Season 1",
+                      seasonNumber: s.seasonNumber || 1,
+                      episodes: s.episodes ? Object.values(s.episodes) : [],
+                    }));
+                    parsedSeasons.sort((a: any, b: any) => a.seasonNumber - b.seasonNumber);
+                  } else if (val.episodes) {
+                    // Legacy: convert flat episodes to single season
+                    parsedSeasons = [{
+                      name: "Season 1",
+                      seasonNumber: 1,
+                      episodes: Object.values(val.episodes),
+                    }];
+                  }
+                  return { id, ...val, seasons: parsedSeasons };
+                });
                 items.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
                 setContentList(items);
               });
@@ -7343,19 +7388,41 @@ ${tgHashtags}`;
 
             const resetForm = () => {
               setTitle(""); setDescription(""); setBackdrop(""); setPoster("");
-              setEpisodes([]); setAddMode(false); setEditId(null);
+              setSeasons([]); setAddMode(false); setEditId(null); setExpandedSeason(0);
             };
 
-            const addEpisode = () => {
-              setEpisodes(prev => [...prev, { episodeNumber: prev.length + 1, title: "", link: "" }]);
+            const addSeason = () => {
+              setSeasons(prev => [...prev, { name: `Season ${prev.length + 1}`, seasonNumber: prev.length + 1, episodes: [] }]);
+              setExpandedSeason(seasons.length);
             };
 
-            const updateEpisode = (idx: number, field: string, value: string | number) => {
-              setEpisodes(prev => prev.map((ep, i) => i === idx ? { ...ep, [field]: value } : ep));
+            const removeSeason = (idx: number) => {
+              setSeasons(prev => prev.filter((_, i) => i !== idx));
             };
 
-            const removeEpisode = (idx: number) => {
-              setEpisodes(prev => prev.filter((_, i) => i !== idx));
+            const updateSeasonName = (idx: number, name: string) => {
+              setSeasons(prev => prev.map((s, i) => i === idx ? { ...s, name } : s));
+            };
+
+            const addEpisode = (seasonIdx: number) => {
+              setSeasons(prev => prev.map((s, i) => i === seasonIdx ? {
+                ...s,
+                episodes: [...s.episodes, { episodeNumber: s.episodes.length + 1, title: "", link: "", link480: "", link720: "", link1080: "", link4k: "" }]
+              } : s));
+            };
+
+            const updateEpisode = (seasonIdx: number, epIdx: number, field: string, value: string | number) => {
+              setSeasons(prev => prev.map((s, si) => si === seasonIdx ? {
+                ...s,
+                episodes: s.episodes.map((ep, ei) => ei === epIdx ? { ...ep, [field]: value } : ep)
+              } : s));
+            };
+
+            const removeEpisode = (seasonIdx: number, epIdx: number) => {
+              setSeasons(prev => prev.map((s, si) => si === seasonIdx ? {
+                ...s,
+                episodes: s.episodes.filter((_, ei) => ei !== epIdx)
+              } : s));
             };
 
             const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: "backdrop" | "poster") => {
@@ -7377,14 +7444,18 @@ ${tgHashtags}`;
               setSaving(true);
               try {
                 const id = editId || `pc_${Date.now()}`;
-                const epObj: Record<string, any> = {};
-                episodes.forEach((ep, i) => { epObj[`ep_${i}`] = ep; });
+                const seasonsObj: Record<string, any> = {};
+                seasons.forEach((s, si) => {
+                  const epObj: Record<string, any> = {};
+                  s.episodes.forEach((ep, ei) => { epObj[`ep_${ei}`] = ep; });
+                  seasonsObj[`s_${si}`] = { name: s.name, seasonNumber: s.seasonNumber, episodes: epObj };
+                });
                 await set(ref(db, `privateContent/${id}`), {
                   title: title.trim(),
                   description: description.trim(),
                   backdrop: backdrop.trim(),
                   poster: poster.trim(),
-                  episodes: epObj,
+                  seasons: seasonsObj,
                   createdAt: editId ? (contentList.find(c => c.id === editId)?.createdAt || Date.now()) : Date.now(),
                   updatedAt: Date.now(),
                 });
@@ -7400,8 +7471,9 @@ ${tgHashtags}`;
               setDescription(item.description || "");
               setBackdrop(item.backdrop || "");
               setPoster(item.poster || "");
-              setEpisodes(item.episodes || []);
+              setSeasons(item.seasons || []);
               setAddMode(true);
+              setExpandedSeason(0);
             };
 
             const deleteContent = async (id: string) => {
@@ -7460,25 +7532,62 @@ ${tgHashtags}`;
                     </div>
                   </div>
 
-                  {/* Episodes */}
+                  {/* Seasons & Episodes */}
                   <div className={`${glassCard} p-4 mb-4`}>
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold">Episodes ({episodes.length})</h3>
-                      <button onClick={addEpisode} className={`${btnPrimary} py-1.5 px-3 text-[10px] flex items-center gap-1`}>
-                        <Plus size={10} /> এপিসোড যোগ
+                      <h3 className="text-sm font-semibold">Seasons ({seasons.length})</h3>
+                      <button onClick={addSeason} className={`${btnPrimary} py-1.5 px-3 text-[10px] flex items-center gap-1`}>
+                        <Plus size={10} /> সিজন যোগ
                       </button>
                     </div>
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                      {episodes.map((ep, idx) => (
-                        <div key={idx} className="bg-zinc-800/50 rounded-lg p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-zinc-400">EP {ep.episodeNumber}</span>
-                            <button onClick={() => removeEpisode(idx)} className="text-red-400 hover:text-red-300"><Trash2 size={12} /></button>
+
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                      {seasons.map((season, si) => (
+                        <div key={si} className="bg-zinc-800/50 rounded-xl border border-zinc-700/50">
+                          {/* Season Header */}
+                          <div className="flex items-center justify-between p-3 cursor-pointer" onClick={() => setExpandedSeason(expandedSeason === si ? -1 : si)}>
+                            <div className="flex items-center gap-2 flex-1">
+                              <ChevronDown size={12} className={`text-zinc-400 transition-transform ${expandedSeason === si ? "rotate-0" : "-rotate-90"}`} />
+                              <input value={season.name} onChange={e => { e.stopPropagation(); updateSeasonName(si, e.target.value); }}
+                                onClick={e => e.stopPropagation()}
+                                className="bg-transparent text-xs font-semibold text-white border-none focus:outline-none focus:border-b focus:border-indigo-500 flex-1" />
+                              <span className="text-[9px] text-zinc-500">({season.episodes.length} eps)</span>
+                            </div>
+                            <button onClick={(e) => { e.stopPropagation(); removeSeason(si); }} className="text-red-400 hover:text-red-300 ml-2">
+                              <Trash2 size={12} />
+                            </button>
                           </div>
-                          <input value={ep.title} onChange={e => updateEpisode(idx, "title", e.target.value)}
-                            className={`${inputClass} text-[11px]`} placeholder="এপিসোড টাইটেল" />
-                          <input value={ep.link} onChange={e => updateEpisode(idx, "link", e.target.value)}
-                            className={`${inputClass} text-[11px] font-mono`} placeholder="ভিডিও URL (m3u8/mp4)" />
+
+                          {/* Episodes (expanded) */}
+                          {expandedSeason === si && (
+                            <div className="px-3 pb-3 space-y-2">
+                              {season.episodes.map((ep, ei) => (
+                                <div key={ei} className="bg-zinc-900/60 rounded-lg p-2.5 space-y-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold text-zinc-400">EP {ep.episodeNumber}</span>
+                                    <button onClick={() => removeEpisode(si, ei)} className="text-red-400 hover:text-red-300"><Trash2 size={10} /></button>
+                                  </div>
+                                  <input value={ep.title} onChange={e => updateEpisode(si, ei, "title", e.target.value)}
+                                    className={`${inputClass} text-[10px]`} placeholder="এপিসোড টাইটেল" />
+                                  <input value={ep.link} onChange={e => updateEpisode(si, ei, "link", e.target.value)}
+                                    className={`${inputClass} text-[10px] font-mono`} placeholder="Default URL (m3u8/mp4)" />
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    <input value={ep.link480 || ""} onChange={e => updateEpisode(si, ei, "link480", e.target.value)}
+                                      className={`${inputClass} text-[9px] font-mono`} placeholder="480p URL" />
+                                    <input value={ep.link720 || ""} onChange={e => updateEpisode(si, ei, "link720", e.target.value)}
+                                      className={`${inputClass} text-[9px] font-mono`} placeholder="720p URL" />
+                                    <input value={ep.link1080 || ""} onChange={e => updateEpisode(si, ei, "link1080", e.target.value)}
+                                      className={`${inputClass} text-[9px] font-mono`} placeholder="1080p URL" />
+                                    <input value={ep.link4k || ""} onChange={e => updateEpisode(si, ei, "link4k", e.target.value)}
+                                      className={`${inputClass} text-[9px] font-mono`} placeholder="4K URL" />
+                                  </div>
+                                </div>
+                              ))}
+                              <button onClick={() => addEpisode(si)} className={`${btnSecondary} w-full py-1.5 text-[10px] flex items-center justify-center gap-1`}>
+                                <Plus size={10} /> এপিসোড যোগ
+                              </button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -7506,29 +7615,32 @@ ${tgHashtags}`;
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {contentList.map(item => (
-                      <div key={item.id} className={`${glassCard} p-3 flex items-center gap-3`}>
-                        <div className="w-16 h-10 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0">
-                          {item.backdrop || item.poster ? (
-                            <img src={item.backdrop || item.poster} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center"><Film size={14} className="text-zinc-600" /></div>
-                          )}
+                    {contentList.map(item => {
+                      const totalEps = item.seasons?.reduce((sum: number, s: any) => sum + (s.episodes?.length || 0), 0) || 0;
+                      return (
+                        <div key={item.id} className={`${glassCard} p-3 flex items-center gap-3`}>
+                          <div className="w-16 h-10 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0">
+                            {item.backdrop || item.poster ? (
+                              <img src={item.backdrop || item.poster} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center"><Film size={14} className="text-zinc-600" /></div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-white truncate">{item.title}</p>
+                            <p className="text-[10px] text-zinc-500">{item.seasons?.length || 0} Seasons · {totalEps} Episodes</p>
+                          </div>
+                          <div className="flex gap-1.5">
+                            <button onClick={() => editContent(item)} className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center hover:bg-indigo-500/20">
+                              <Edit size={12} className="text-zinc-400" />
+                            </button>
+                            <button onClick={() => deleteContent(item.id)} className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center hover:bg-red-500/20">
+                              <Trash2 size={12} className="text-red-400" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-white truncate">{item.title}</p>
-                          <p className="text-[10px] text-zinc-500">{item.episodes?.length || 0} Episodes</p>
-                        </div>
-                        <div className="flex gap-1.5">
-                          <button onClick={() => editContent(item)} className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center hover:bg-indigo-500/20">
-                            <Edit size={12} className="text-zinc-400" />
-                          </button>
-                          <button onClick={() => deleteContent(item.id)} className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center hover:bg-red-500/20">
-                            <Trash2 size={12} className="text-red-400" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

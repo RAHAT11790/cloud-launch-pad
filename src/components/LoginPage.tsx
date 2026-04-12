@@ -62,11 +62,14 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   const [showGooglePwConfirm, setShowGooglePwConfirm] = useState(false);
   const [googlePendingData, setGooglePendingData] = useState<any>(null);
 
-  // Forgot password states
+  // Forgot password states (OTP-based)
   const [showForgotPw, setShowForgotPw] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
-  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotOtpSent, setForgotOtpSent] = useState(false);
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [forgotNewPw, setForgotNewPw] = useState("");
+  const [forgotNewPwConfirm, setForgotNewPwConfirm] = useState("");
 
   // Intro animation sequence
   useEffect(() => {
@@ -218,15 +221,82 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
     if (!forgotEmail.trim()) { toast.error("ইমেইল দিন"); return; }
     setForgotLoading(true);
     try {
-      await sendPasswordResetEmail(auth, forgotEmail.trim());
-      setForgotSent(true);
-      toast.success("পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হয়েছে!");
-    } catch (err: any) {
-      if (err.code === "auth/user-not-found") {
+      // Find user by email in Firebase
+      const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
+      const snap = await get(ref(db, `appUsers/${emailKey}`));
+      if (!snap.exists()) {
         toast.error("এই ইমেইলে কোনো অ্যাকাউন্ট নেই!");
-      } else {
-        toast.error("Error: " + err.message);
+        setForgotLoading(false);
+        return;
       }
+
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const userId = snap.val()?.id || emailKey;
+      
+      // Store OTP in Firebase
+      await set(ref(db, `users/${userId}/passwordResetOtp`), {
+        code: otp,
+        expiresAt: Date.now() + 5 * 60 * 1000,
+        email: forgotEmail.trim(),
+      });
+
+      // Send OTP via edge function
+      try {
+        const { supabase } = await import("@/integrations/supabase/client");
+        await supabase.functions.invoke("send-otp-email", {
+          body: { email: forgotEmail.trim(), otp, siteName: SITE_NAME },
+        });
+      } catch {
+        console.log("Email edge function call attempted");
+      }
+
+      setForgotOtpSent(true);
+      toast.success(`📧 কোড পাঠানো হয়েছে: ${forgotEmail}`);
+    } catch (err: any) {
+      toast.error("Error: " + err.message);
+    }
+    setForgotLoading(false);
+  };
+
+  const handleResetPasswordWithOtp = async () => {
+    if (!forgotOtp.trim() || !forgotNewPw.trim()) return;
+    if (forgotNewPw.length < 4) { toast.error("পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে"); return; }
+    if (forgotNewPw !== forgotNewPwConfirm) { toast.error("পাসওয়ার্ড মিলছে না!"); return; }
+
+    setForgotLoading(true);
+    try {
+      const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
+      const snap = await get(ref(db, `appUsers/${emailKey}`));
+      if (!snap.exists()) { toast.error("অ্যাকাউন্ট পাওয়া যায়নি"); setForgotLoading(false); return; }
+
+      const userId = snap.val()?.id || emailKey;
+      const otpSnap = await get(ref(db, `users/${userId}/passwordResetOtp`));
+      const otpData = otpSnap.val();
+
+      if (!otpData || otpData.code !== forgotOtp.trim()) {
+        toast.error("❌ কোড ভুল!");
+        setForgotLoading(false);
+        return;
+      }
+      if (otpData.expiresAt < Date.now()) {
+        toast.error("⏰ কোডের মেয়াদ শেষ!");
+        setForgotLoading(false);
+        return;
+      }
+
+      // Update password in appUsers
+      await set(ref(db, `appUsers/${emailKey}/password`), forgotNewPw.trim());
+      await set(ref(db, `users/${userId}/passwordResetOtp`), null);
+
+      toast.success("✅ নতুন পাসওয়ার্ড সেট হয়েছে! এখন লগইন করুন।");
+      setShowForgotPw(false);
+      setForgotOtpSent(false);
+      setForgotOtp("");
+      setForgotNewPw("");
+      setForgotNewPwConfirm("");
+      setForgotEmail("");
+    } catch (err: any) {
+      toast.error("Error: " + err.message);
     }
     setForgotLoading(false);
   };
@@ -490,7 +560,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
               transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
             />
             <div className="relative glass-card-strong p-6 rounded-3xl overflow-hidden">
-              <button onClick={() => { setShowForgotPw(false); setForgotSent(false); setForgotEmail(""); }}
+              <button onClick={() => { setShowForgotPw(false); setForgotOtpSent(false); setForgotEmail(""); setForgotOtp(""); setForgotNewPw(""); setForgotNewPwConfirm(""); }}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors">
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
@@ -505,24 +575,42 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                   পাসওয়ার্ড রিসেট
                 </h2>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  আপনার ইমেইলে একটি রিসেট লিংক পাঠানো হবে
+                  {forgotOtpSent ? "ইমেইলে পাঠানো কোড দিন ও নতুন পাসওয়ার্ড সেট করুন" : "আপনার ইমেইলে একটি কোড পাঠানো হবে"}
                 </p>
               </motion.div>
 
-              {forgotSent ? (
-                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                  className="text-center py-4">
-                  <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-green-500/20 flex items-center justify-center">
-                    <Check className="w-8 h-8 text-green-500" />
+              {forgotOtpSent ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">ইমেইলে পাঠানো ৬ ডিজিটের কোড</label>
+                    <input type="text" value={forgotOtp} onChange={e => setForgotOtp(e.target.value)}
+                      placeholder="৬ ডিজিটের কোড" maxLength={6}
+                      className="w-full py-3 px-4 rounded-xl bg-secondary border border-border text-foreground text-center text-lg font-mono tracking-[8px] focus:border-primary focus:outline-none" />
                   </div>
-                  <h3 className="text-base font-bold mb-1">ইমেইল পাঠানো হয়েছে!</h3>
-                  <p className="text-xs text-muted-foreground mb-4">
-                    {forgotEmail} এ রিসেট লিংক পাঠানো হয়েছে। ইমেইল চেক করুন এবং লিংকে ক্লিক করে নতুন পাসওয়ার্ড সেট করুন।
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    ⚠️ রিসেট করার পর প্রোফাইল পেজ থেকেও পাসওয়ার্ড আপডেট করুন
-                  </p>
-                </motion.div>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input type="password" value={forgotNewPw} onChange={e => setForgotNewPw(e.target.value)}
+                      placeholder="নতুন পাসওয়ার্ড (মিনিমাম ৪)"
+                      className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none" />
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input type="password" value={forgotNewPwConfirm} onChange={e => setForgotNewPwConfirm(e.target.value)}
+                      placeholder="পাসওয়ার্ড আবার দিন"
+                      className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none" />
+                  </div>
+                  <motion.button
+                    onClick={handleResetPasswordWithOtp}
+                    disabled={forgotLoading || !forgotOtp || !forgotNewPw}
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50 transition-all"
+                  >
+                    {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><KeyRound className="w-4 h-4" /> পাসওয়ার্ড রিসেট করুন</>}
+                  </motion.button>
+                  <button onClick={() => setForgotOtpSent(false)} className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground">
+                    ← আবার কোড পাঠান
+                  </button>
+                </div>
               ) : (
                 <div className="space-y-3">
                   <div className="relative">
@@ -543,7 +631,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                     whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50 transition-all"
                   >
-                    {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><Mail className="w-4 h-4" /> রিসেট লিংক পাঠান</>}
+                    {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><Mail className="w-4 h-4" /> কোড পাঠান</>}
                   </motion.button>
 
                   <a href={TELEGRAM_ADMIN_URL} target="_blank" rel="noopener noreferrer"

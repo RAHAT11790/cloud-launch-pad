@@ -34,6 +34,7 @@ export interface AdService {
   enabled: boolean;
   icon?: string;
   color?: string;
+  durationHours?: number; // per-service unlock duration
 }
 
 // --- Get ad services from Firebase ---
@@ -100,7 +101,22 @@ async function shortenWithService(functionUrl: string, callbackUrl: string): Pro
   }
 }
 
-/** Create unlock links for ALL enabled ad services */
+/** Get duration for a specific service */
+export async function getServiceDurationMs(serviceId?: string): Promise<number> {
+  if (serviceId) {
+    try {
+      const snap = await get(ref(db, `settings/adServices/${serviceId}/durationHours`));
+      const hours = snap.val();
+      if (hours && typeof hours === "number" && hours > 0) {
+        return hours * 60 * 60 * 1000;
+      }
+    } catch {}
+  }
+  // fallback to global
+  return getUnlockDurationMs();
+}
+
+/** Create unlock links for ALL enabled ad services (separate token per service) */
 export const createUnlockLinksForAllServices = async (): Promise<{ ok: boolean; links: { service: AdService; shortUrl: string }[]; error?: string }> => {
   const userId = getLocalUserId();
   if (!userId) return { ok: false, links: [], error: "login_required" };
@@ -108,23 +124,22 @@ export const createUnlockLinksForAllServices = async (): Promise<{ ok: boolean; 
   const services = await getAdServices();
   if (services.length === 0) return { ok: false, links: [], error: "no_services" };
 
-  const token = randomToken();
   const now = Date.now();
   const expiresAt = now + UNLOCK_TOKEN_TTL_MS;
 
-  await set(ref(db, `unlockTokens/${token}`), {
-    token,
-    ownerUserId: userId,
-    createdAt: now,
-    expiresAt,
-    status: "pending",
-    consumed: false,
-  });
-
-  const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}`;
-
   const results: { service: AdService; shortUrl: string }[] = [];
   await Promise.all(services.map(async (svc) => {
+    const token = randomToken();
+    await set(ref(db, `unlockTokens/${token}`), {
+      token,
+      ownerUserId: userId,
+      createdAt: now,
+      expiresAt,
+      status: "pending",
+      consumed: false,
+      serviceId: svc.id,
+    });
+    const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}&svc=${encodeURIComponent(svc.id)}`;
     const shortUrl = await shortenWithService(svc.functionUrl, callbackUrl);
     if (shortUrl) results.push({ service: svc, shortUrl });
   }));
@@ -188,7 +203,7 @@ export const createRandomPrizeLink = async (): Promise<{
 
 export const consumeUnlockTokenForCurrentUser = async (
   token: string,
-): Promise<{ ok: boolean; reason?: "login_required" | "invalid_token" | "expired" | "not_owner" | "already_used" | "claimed" }> => {
+): Promise<{ ok: boolean; reason?: "login_required" | "invalid_token" | "expired" | "not_owner" | "already_used" | "claimed"; serviceId?: string; durationMs?: number }> => {
   const userId = getLocalUserId();
   if (!userId) return { ok: false, reason: "login_required" };
   if (!token) return { ok: false, reason: "invalid_token" };
@@ -278,7 +293,10 @@ export const consumeUnlockTokenForCurrentUser = async (
   }
 
   const now = Date.now();
-  const durationMs = await getUnlockDurationMs();
+  // Get service-specific duration from token
+  const tokenSnap = await get(ref(db, `unlockTokens/${token}/serviceId`));
+  const serviceId = tokenSnap.val();
+  const durationMs = await getServiceDurationMs(serviceId);
   const expiresAt = now + durationMs;
 
   await set(ref(db, `users/${userId}/freeAccess`), {
@@ -286,7 +304,8 @@ export const consumeUnlockTokenForCurrentUser = async (
     grantedAt: now,
     expiresAt,
     viaToken: token,
+    serviceId: serviceId || null,
   });
 
-  return { ok: true, reason: "claimed" };
+  return { ok: true, reason: "claimed", serviceId, durationMs };
 };
