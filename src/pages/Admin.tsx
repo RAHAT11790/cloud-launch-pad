@@ -5578,7 +5578,7 @@ ${tgHashtags}`;
                           const expiresAt = Date.now() + days * 24 * 60 * 60 * 1000;
                           await set(ref(db, `users/${req.userId}/premium`), { active: true, expiresAt, redeemedAt: Date.now(), method: "bkash", transactionId: req.transactionId, maxDevices });
                           await update(ref(db, `bkashPayments/${req.id}`), { status: "approved", approvedAt: Date.now() });
-                          // Send notification to user
+                          // Send in-app notification to user
                           const userNotifRef = push(ref(db, `notifications/${req.userId}`));
                           await set(userNotifRef, {
                             title: "Premium Activated! 🎉",
@@ -5587,6 +5587,16 @@ ${tgHashtags}`;
                             timestamp: Date.now(),
                             read: false,
                           });
+                          // Send FCM push to user
+                          try {
+                            const { sendPushToUsers } = await import("@/lib/fcm");
+                            await sendPushToUsers([req.userId], {
+                              title: "Premium Activated! 🎉",
+                              body: `আপনার ${req.planName} প্ল্যান অ্যাক্টিভেট হয়েছে। ${days} দিন Ad-free উপভোগ করুন!`,
+                              url: "/profile",
+                              data: { type: "subscription_activated" },
+                            });
+                          } catch (pushErr) { console.warn("User push failed:", pushErr); }
                           toast.success(`${req.userName} এর প্রিমিয়াম অ্যাক্টিভেট হয়েছে (${days} দিন)`);
                         }} className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors">
                           <Check size={12} /> Approve
@@ -5601,6 +5611,16 @@ ${tgHashtags}`;
                             timestamp: Date.now(),
                             read: false,
                           });
+                          // Send FCM push to user
+                          try {
+                            const { sendPushToUsers } = await import("@/lib/fcm");
+                            await sendPushToUsers([req.userId], {
+                              title: "Payment Rejected ❌",
+                              body: "আপনার পেমেন্ট রিকোয়েস্ট গ্রহণ হয়নি। সঠিক Transaction ID দিয়ে আবার চেষ্টা করুন।",
+                              url: "/profile",
+                              data: { type: "subscription_rejected" },
+                            });
+                          } catch (pushErr) { console.warn("User push failed:", pushErr); }
                           toast.success("রিকোয়েস্ট রিজেক্ট করা হয়েছে");
                         }} className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors">
                           <X size={12} /> Reject
@@ -7428,61 +7448,8 @@ ${tgHashtags}`;
           />
         )}
 
-        {/* ==================== UNLOCK DURATION ==================== */}
-        {activeSection === "unlock-duration" && (() => {
-          const UnlockDurationSection = () => {
-            const [hours, setHours] = useState(24);
-            const [saving, setSaving] = useState(false);
 
-            useEffect(() => {
-              const unsub = onValue(ref(db, "settings/unlockDurationHours"), (snap) => {
-                const val = snap.val();
-                if (val && typeof val === "number") setHours(val);
-              });
-              return () => unsub();
-            }, []);
 
-            const saveHours = async () => {
-              setSaving(true);
-              try {
-                await set(ref(db, "settings/unlockDurationHours"), hours);
-                toast.success(`✅ Unlock Duration: ${hours} ঘন্টা সেট হয়েছে!`);
-              } catch (e: any) { toast.error(e.message); }
-              setSaving(false);
-            };
-
-            return (
-              <div className={`${glassCard} p-4 mb-4`}>
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <Clock size={14} className="text-amber-400" /> Unlock Duration Settings
-                </h3>
-                <p className="text-[11px] text-zinc-400 mb-4">
-                  ইউজার অ্যাড আনলক করলে কত ঘন্টার এক্সেস পাবে সেটা এখান থেকে সেট করুন। ডিফল্ট: ২৪ ঘন্টা।
-                </p>
-                <div className="flex items-center gap-3 mb-4">
-                  <label className="text-[11px] text-zinc-400 flex-shrink-0">ঘন্টা:</label>
-                  <input type="number" min={1} max={720} value={hours} onChange={e => setHours(Number(e.target.value))}
-                    className={`${inputClass} w-24 text-center`} />
-                  <span className="text-xs text-zinc-500">({Math.floor(hours / 24)} দিন {hours % 24} ঘন্টা)</span>
-                </div>
-                <div className="flex gap-2 mb-3">
-                  {[6, 12, 24, 48, 72, 168].map(h => (
-                    <button key={h} onClick={() => setHours(h)}
-                      className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all ${hours === h ? "bg-indigo-500 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}>
-                      {h}h
-                    </button>
-                  ))}
-                </div>
-                <button onClick={saveHours} disabled={saving}
-                  className={`${btnPrimary} w-full py-2.5 text-sm flex items-center justify-center gap-2`}>
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  সেভ করুন
-                </button>
-              </div>
-            );
-          };
-          return <UnlockDurationSection />;
-        })()}
 
         {/* ==================== PRIVATE CONTENT ==================== */}
         {activeSection === "private-content" && (() => {
