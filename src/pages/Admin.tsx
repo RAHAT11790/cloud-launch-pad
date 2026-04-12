@@ -7352,6 +7352,11 @@ ${tgHashtags}`;
             const [description, setDescription] = useState("");
             const [backdrop, setBackdrop] = useState("");
             const [poster, setPoster] = useState("");
+            const [category, setCategory] = useState("");
+            const [rating, setRating] = useState("");
+            const [year, setYear] = useState("");
+            const [contentType, setContentType] = useState("webseries");
+            const [language, setLanguage] = useState("");
             const [seasons, setSeasons] = useState<{ name: string; seasonNumber: number; episodes: { episodeNumber: number; title: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[] }[]>([]);
             const [saving, setSaving] = useState(false);
             const [uploading, setUploading] = useState<string | null>(null);
@@ -7388,6 +7393,7 @@ ${tgHashtags}`;
 
             const resetForm = () => {
               setTitle(""); setDescription(""); setBackdrop(""); setPoster("");
+              setCategory(""); setRating(""); setYear(""); setContentType("webseries"); setLanguage("");
               setSeasons([]); setAddMode(false); setEditId(null); setExpandedSeason(0);
             };
 
@@ -7455,6 +7461,11 @@ ${tgHashtags}`;
                   description: description.trim(),
                   backdrop: backdrop.trim(),
                   poster: poster.trim(),
+                  category: category.trim() || "Uncategorized",
+                  rating: rating.trim(),
+                  year: year.trim(),
+                  type: contentType,
+                  language: language.trim(),
                   seasons: seasonsObj,
                   createdAt: editId ? (contentList.find(c => c.id === editId)?.createdAt || Date.now()) : Date.now(),
                   updatedAt: Date.now(),
@@ -7471,6 +7482,11 @@ ${tgHashtags}`;
               setDescription(item.description || "");
               setBackdrop(item.backdrop || "");
               setPoster(item.poster || "");
+              setCategory(item.category || "");
+              setRating(item.rating || "");
+              setYear(item.year || "");
+              setContentType(item.type || "webseries");
+              setLanguage(item.language || "");
               setSeasons(item.seasons || []);
               setAddMode(true);
               setExpandedSeason(0);
@@ -7528,6 +7544,32 @@ ${tgHashtags}`;
                             </label>
                           )}
                         </div>
+                      </div>
+                      {/* Extra metadata fields */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] text-zinc-400 mb-1 block">Category</label>
+                          <input value={category} onChange={e => setCategory(e.target.value)} className={inputClass} placeholder="e.g. Action, Romance" />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-zinc-400 mb-1 block">Rating</label>
+                          <input value={rating} onChange={e => setRating(e.target.value)} className={inputClass} placeholder="e.g. 8.5" />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-zinc-400 mb-1 block">Year</label>
+                          <input value={year} onChange={e => setYear(e.target.value)} className={inputClass} placeholder="e.g. 2024" />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-zinc-400 mb-1 block">Type</label>
+                          <select value={contentType} onChange={e => setContentType(e.target.value)} className={inputClass}>
+                            <option value="webseries">Series</option>
+                            <option value="movie">Movie</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-zinc-400 mb-1 block">Language</label>
+                        <input value={language} onChange={e => setLanguage(e.target.value)} className={inputClass} placeholder="e.g. Bengali, Hindi" />
                       </div>
                     </div>
                   </div>
