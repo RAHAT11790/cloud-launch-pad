@@ -2783,6 +2783,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     const newRelease = {
       contentId, contentType, title: content.title, poster: content.poster || "",
       year: content.year || "N/A", rating: content.rating || "N/A",
+      visibility: content.visibility || "public",
       episodeInfo, timestamp: Date.now(), active: true
     };
     try {
@@ -4634,6 +4635,7 @@ ${tgHashtags}`;
                       poster: ctxForm.poster || "",
                       year: ctxForm.year || "N/A",
                       rating: ctxForm.rating || "N/A",
+                      visibility: ctxForm.visibility || "public",
                       episodeInfo: {
                         seasonNumber: parseInt(wsNotifySeason) + 1,
                         episodeNumber: episode?.episodeNumber || parseInt(wsNotifyEpisode) + 1,
