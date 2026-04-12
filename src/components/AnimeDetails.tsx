@@ -88,7 +88,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
       .catch((err) => {
         console.error("Comment post failed:", err);
         setCommentText(text); // Restore on failure
-        import("sonner").then(({ toast }) => toast.error("কমেন্ট পোস্ট করা যায়নি। Firebase Rules চেক করুন।"));
+        import("sonner").then(({ toast }) => toast.error("Failed to post comment. Please try again."));
       });
   }, [userId, commentText, anime.id, getUserName]);
 
@@ -135,18 +135,18 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
     } catch (err) {
       console.error("Reply post failed:", err);
       setReplyText(text);
-      import("sonner").then(({ toast }) => toast.error("রিপ্লাই পোস্ট করা যায়নি। Firebase Rules চেক করুন।"));
+      import("sonner").then(({ toast }) => toast.error("Failed to post reply. Please try again."));
     }
   }, [userId, replyText, anime.id, anime.poster, anime.title, anime.type, comments, getUserName]);
 
   const deleteComment = (commentKey: string) => {
     remove(ref(db, `comments/${anime.id}/${commentKey}`))
-      .catch(() => import("sonner").then(({ toast }) => toast.error("ডিলিট করা যায়নি")));
+      .catch(() => import("sonner").then(({ toast }) => toast.error("Failed to delete")));
   };
 
   const deleteReply = (commentKey: string, replyKey: string) => {
     remove(ref(db, `comments/${anime.id}/${commentKey}/replies/${replyKey}`))
-      .catch(() => import("sonner").then(({ toast }) => toast.error("ডিলিট করা যায়নি")));
+      .catch(() => import("sonner").then(({ toast }) => toast.error("Failed to delete")));
   };
 
   const toggleWatchlist = () => {
