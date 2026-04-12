@@ -7393,7 +7393,9 @@ ${tgHashtags}`;
 
             const resetForm = () => {
               setTitle(""); setDescription(""); setBackdrop(""); setPoster("");
+              setCategory(""); setRating(""); setYear(""); setContentType("webseries"); setLanguage("");
               setSeasons([]); setAddMode(false); setEditId(null); setExpandedSeason(0);
+            };
             };
 
             const addSeason = () => {
