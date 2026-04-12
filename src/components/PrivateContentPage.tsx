@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from "react";
-import { ArrowLeft, Lock, Eye, EyeOff, KeyRound, Play, ChevronDown, ChevronRight, Loader2, Film, X } from "lucide-react";
+import { ArrowLeft, Lock, Eye, EyeOff, KeyRound, Play, ChevronDown, ChevronRight, Loader2, Film, X, List } from "lucide-react";
 import { db, ref, onValue, get, set } from "@/lib/firebase";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBranding } from "@/hooks/useBranding";
+import type { Season } from "@/data/animeData";
 
 const VideoPlayer = lazy(() => import("@/components/VideoPlayer"));
 
@@ -11,6 +12,17 @@ interface PrivateEpisode {
   episodeNumber: number;
   title: string;
   link: string;
+  link480?: string;
+  link720?: string;
+  link1080?: string;
+  link4k?: string;
+  audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
+}
+
+interface PrivateSeason {
+  name: string;
+  seasonNumber: number;
+  episodes: PrivateEpisode[];
 }
 
 interface PrivateSeries {
@@ -19,7 +31,9 @@ interface PrivateSeries {
   description?: string;
   backdrop?: string;
   poster?: string;
-  episodes: PrivateEpisode[];
+  seasons?: PrivateSeason[];
+  // Legacy flat episodes support
+  episodes?: PrivateEpisode[];
   createdAt?: number;
 }
 
@@ -36,7 +50,9 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
   const [loading, setLoading] = useState(false);
   const [series, setSeries] = useState<PrivateSeries[]>([]);
   const [selectedSeries, setSelectedSeries] = useState<PrivateSeries | null>(null);
+  const [currentSeasonIdx, setCurrentSeasonIdx] = useState(0);
   const [playingEp, setPlayingEp] = useState<PrivateEpisode | null>(null);
+  const [playingSeasonIdx, setPlayingSeasonIdx] = useState(0);
 
   // Forgot PIN states
   const [forgotMode, setForgotMode] = useState(false);
@@ -73,15 +89,53 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
     const unsub = onValue(ref(db, "privateContent"), (snap) => {
       const data = snap.val();
       if (!data) { setSeries([]); return; }
-      const items: PrivateSeries[] = Object.entries(data).map(([id, val]: [string, any]) => ({
-        id,
-        title: val.title || "",
-        description: val.description || "",
-        backdrop: val.backdrop || "",
-        poster: val.poster || "",
-        episodes: val.episodes ? Object.values(val.episodes) : [],
-        createdAt: val.createdAt || 0,
-      }));
+      const items: PrivateSeries[] = Object.entries(data).map(([id, val]: [string, any]) => {
+        // Parse seasons
+        let seasons: PrivateSeason[] | undefined;
+        if (val.seasons) {
+          seasons = Object.values(val.seasons).map((s: any) => ({
+            name: s.name || `Season ${s.seasonNumber || 1}`,
+            seasonNumber: s.seasonNumber || 1,
+            episodes: s.episodes ? Object.values(s.episodes).map((ep: any) => ({
+              episodeNumber: ep.episodeNumber || 1,
+              title: ep.title || "",
+              link: ep.link || "",
+              link480: ep.link480 || "",
+              link720: ep.link720 || "",
+              link1080: ep.link1080 || "",
+              link4k: ep.link4k || "",
+              audioTracks: ep.audioTracks ? Object.values(ep.audioTracks) : undefined,
+            })) : [],
+          }));
+          seasons.sort((a, b) => a.seasonNumber - b.seasonNumber);
+        }
+
+        // Legacy flat episodes
+        let episodes: PrivateEpisode[] | undefined;
+        if (!seasons && val.episodes) {
+          episodes = Object.values(val.episodes).map((ep: any) => ({
+            episodeNumber: ep.episodeNumber || 1,
+            title: ep.title || "",
+            link: ep.link || "",
+            link480: ep.link480 || "",
+            link720: ep.link720 || "",
+            link1080: ep.link1080 || "",
+            link4k: ep.link4k || "",
+            audioTracks: ep.audioTracks ? Object.values(ep.audioTracks) : undefined,
+          }));
+        }
+
+        return {
+          id,
+          title: val.title || "",
+          description: val.description || "",
+          backdrop: val.backdrop || "",
+          poster: val.poster || "",
+          seasons,
+          episodes,
+          createdAt: val.createdAt || 0,
+        };
+      });
       items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       setSeries(items);
     });
@@ -132,21 +186,18 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
     setOtpLoading(true);
     try {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      // Store OTP in Firebase with 5 min expiry
       await set(ref(db, `users/${userId}/pinResetOtp`), {
         code: otp,
         expiresAt: Date.now() + 5 * 60 * 1000,
         email: userEmail,
       });
 
-      // Try to send email via edge function
       try {
         const { supabase } = await import("@/integrations/supabase/client");
         await supabase.functions.invoke("send-otp-email", {
           body: { email: userEmail, otp, siteName: branding.siteName },
         });
       } catch {
-        // If edge function fails, show OTP in toast as fallback
         console.log("Email sending failed, OTP stored in Firebase");
       }
 
@@ -178,7 +229,6 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
         setOtpLoading(false);
         return;
       }
-      // Set new PIN
       await set(ref(db, `users/${userId}/privatePin`), newPin.trim());
       await set(ref(db, `users/${userId}/pinResetOtp`), null);
       setForgotMode(false);
@@ -193,13 +243,84 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
     setOtpLoading(false);
   };
 
-  // Video Player
+  // Get all episodes for current series (seasons or flat)
+  const getAllSeasons = useCallback((): Season[] => {
+    if (!selectedSeries) return [];
+    if (selectedSeries.seasons && selectedSeries.seasons.length > 0) {
+      return selectedSeries.seasons.map(s => ({
+        name: s.name,
+        seasonNumber: s.seasonNumber,
+        episodes: s.episodes.map(ep => ({
+          episodeNumber: ep.episodeNumber,
+          title: ep.title,
+          link: ep.link,
+          link480: ep.link480,
+          link720: ep.link720,
+          link1080: ep.link1080,
+          link4k: ep.link4k,
+          audioTracks: ep.audioTracks,
+        })),
+      }));
+    }
+    // Legacy flat episodes → single season
+    if (selectedSeries.episodes && selectedSeries.episodes.length > 0) {
+      return [{
+        name: "Season 1",
+        seasonNumber: 1,
+        episodes: selectedSeries.episodes.map(ep => ({
+          episodeNumber: ep.episodeNumber,
+          title: ep.title,
+          link: ep.link,
+          link480: ep.link480,
+          link720: ep.link720,
+          link1080: ep.link1080,
+          link4k: ep.link4k,
+          audioTracks: ep.audioTracks,
+        })),
+      }];
+    }
+    return [];
+  }, [selectedSeries]);
+
+  const currentSeasons = getAllSeasons();
+  const currentEpisodes = currentSeasons[currentSeasonIdx]?.episodes || [];
+
+  // Build quality options for current episode
+  const getQualityOptions = (ep: PrivateEpisode) => {
+    const opts: { label: string; src: string }[] = [];
+    if (ep.link4k) opts.push({ label: "4K", src: ep.link4k });
+    if (ep.link1080) opts.push({ label: "1080p", src: ep.link1080 });
+    if (ep.link720) opts.push({ label: "720p", src: ep.link720 });
+    if (ep.link480) opts.push({ label: "480p", src: ep.link480 });
+    if (ep.link) opts.push({ label: "Default", src: ep.link });
+    return opts.length > 1 ? opts : undefined;
+  };
+
+  // Video Player (full-featured like main app)
   if (playingEp && selectedSeries) {
-    const episodeList = selectedSeries.episodes.map((ep, idx) => ({
+    const seasons = getAllSeasons();
+    const eps = seasons[playingSeasonIdx]?.episodes || [];
+    const epIdx = eps.findIndex(e => e.episodeNumber === playingEp.episodeNumber);
+
+    const episodeList = eps.map((ep, idx) => ({
       number: ep.episodeNumber || idx + 1,
-      active: ep === playingEp,
-      onClick: () => setPlayingEp(ep),
+      title: ep.title,
+      active: ep.episodeNumber === playingEp.episodeNumber,
+      onClick: () => setPlayingEp(ep as PrivateEpisode),
     }));
+
+    const handleNextEpisode = () => {
+      if (epIdx < eps.length - 1) {
+        setPlayingEp(eps[epIdx + 1] as PrivateEpisode);
+      }
+    };
+
+    const handleSeasonChange = (idx: number) => {
+      setPlayingSeasonIdx(idx);
+      setCurrentSeasonIdx(idx);
+      const newEps = seasons[idx]?.episodes || [];
+      if (newEps.length > 0) setPlayingEp(newEps[0] as PrivateEpisode);
+    };
 
     return (
       <div className="fixed inset-0 z-[300]">
@@ -207,17 +328,24 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
           <VideoPlayer
             src={playingEp.link}
             title={selectedSeries.title}
-            subtitle={`Episode ${playingEp.episodeNumber}: ${playingEp.title}`}
+            subtitle={`Episode ${playingEp.episodeNumber}: ${playingEp.title || ""}`}
             poster={selectedSeries.backdrop || selectedSeries.poster}
             onClose={() => setPlayingEp(null)}
+            onNextEpisode={epIdx < eps.length - 1 ? handleNextEpisode : undefined}
             episodeList={episodeList}
+            qualityOptions={getQualityOptions(playingEp)}
+            audioTracks={playingEp.audioTracks}
+            seasons={seasons.length > 1 ? seasons : undefined}
+            currentSeasonIdx={playingSeasonIdx}
+            onSeasonChange={seasons.length > 1 ? handleSeasonChange : undefined}
+            animeId={`private_${selectedSeries.id}`}
           />
         </Suspense>
       </div>
     );
   }
 
-  // Series Detail View
+  // Series Detail View (like AnimeDetails)
   if (selectedSeries && isAuthenticated) {
     return (
       <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto"
@@ -225,23 +353,60 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
         transition={{ type: "tween", duration: 0.25 }}>
         {/* Backdrop */}
         {selectedSeries.backdrop && (
-          <div className="relative h-[200px] w-full">
-            <img src={selectedSeries.backdrop} alt="" className="w-full h-full object-cover" />
+          <div className="relative h-[220px] w-full">
+            <img src={selectedSeries.backdrop} alt="" className="w-full h-full object-cover" loading="lazy" />
             <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, transparent 30%, hsl(var(--background)) 100%)" }} />
           </div>
         )}
-        <div className="px-4 pb-24" style={{ marginTop: selectedSeries.backdrop ? "-40px" : "70px" }}>
-          <button onClick={() => setSelectedSeries(null)} className="flex items-center gap-2 mb-4 text-sm text-secondary-foreground hover:text-foreground">
+        <div className="px-4 pb-24" style={{ marginTop: selectedSeries.backdrop ? "-50px" : "70px" }}>
+          <button onClick={() => { setSelectedSeries(null); setCurrentSeasonIdx(0); }} className="flex items-center gap-2 mb-4 text-sm text-secondary-foreground hover:text-foreground">
             <ArrowLeft className="w-5 h-5" /> Back
           </button>
-          <h2 className="text-xl font-bold mb-1">{selectedSeries.title}</h2>
-          {selectedSeries.description && (
-            <p className="text-sm text-muted-foreground mb-4">{selectedSeries.description}</p>
+
+          <div className="flex gap-3 mb-4">
+            {selectedSeries.poster && (
+              <img src={selectedSeries.poster} alt={selectedSeries.title} className="w-24 h-36 rounded-xl object-cover shadow-lg flex-shrink-0" />
+            )}
+            <div className="flex-1">
+              <h2 className="text-xl font-bold mb-1">{selectedSeries.title}</h2>
+              {selectedSeries.description && (
+                <p className="text-xs text-muted-foreground line-clamp-4">{selectedSeries.description}</p>
+              )}
+              <div className="flex gap-2 mt-3">
+                {currentEpisodes.length > 0 && (
+                  <button onClick={() => { setPlayingEp(currentEpisodes[0]); setPlayingSeasonIdx(currentSeasonIdx); }}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl gradient-primary text-primary-foreground text-xs font-semibold">
+                    <Play className="w-4 h-4" /> Play
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Season Tabs */}
+          {currentSeasons.length > 1 && (
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-1 scrollbar-none">
+              {currentSeasons.map((s, idx) => (
+                <button key={idx} onClick={() => setCurrentSeasonIdx(idx)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                    idx === currentSeasonIdx
+                      ? "gradient-primary text-primary-foreground"
+                      : "bg-foreground/10 text-muted-foreground hover:text-foreground"
+                  }`}>
+                  {s.name}
+                </button>
+              ))}
+            </div>
           )}
-          <h3 className="text-sm font-semibold mb-3">Episodes ({selectedSeries.episodes.length})</h3>
+
+          {/* Episodes */}
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <List className="w-4 h-4 text-primary" />
+            Episodes ({currentEpisodes.length})
+          </h3>
           <div className="space-y-2">
-            {selectedSeries.episodes.map((ep, idx) => (
-              <button key={idx} onClick={() => setPlayingEp(ep)}
+            {currentEpisodes.map((ep, idx) => (
+              <button key={idx} onClick={() => { setPlayingEp(ep); setPlayingSeasonIdx(currentSeasonIdx); }}
                 className="w-full flex items-center gap-3 glass-card p-3 rounded-xl hover:border-primary transition-all">
                 <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center flex-shrink-0">
                   <Play className="w-5 h-5 text-primary-foreground" />
@@ -249,6 +414,10 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
                 <div className="flex-1 text-left">
                   <p className="text-sm font-medium">EP {ep.episodeNumber || idx + 1}</p>
                   {ep.title && <p className="text-[11px] text-muted-foreground">{ep.title}</p>}
+                </div>
+                <div className="flex gap-1">
+                  {ep.link1080 && <span className="text-[8px] bg-primary/20 text-primary px-1 rounded">HD</span>}
+                  {ep.link4k && <span className="text-[8px] bg-amber-500/20 text-amber-400 px-1 rounded">4K</span>}
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
@@ -378,24 +547,32 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          {series.map(s => (
-            <button key={s.id} onClick={() => setSelectedSeries(s)}
-              className="text-left rounded-xl overflow-hidden glass-card hover:border-primary transition-all">
-              <div className="aspect-video bg-card relative">
-                {s.backdrop || s.poster ? (
-                  <img src={s.backdrop || s.poster} alt={s.title} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full gradient-primary flex items-center justify-center">
-                    <Film className="w-8 h-8 text-primary-foreground/50" />
+          {series.map(s => {
+            const totalEps = s.seasons
+              ? s.seasons.reduce((sum, sn) => sum + (sn.episodes?.length || 0), 0)
+              : (s.episodes?.length || 0);
+            return (
+              <button key={s.id} onClick={() => { setSelectedSeries(s); setCurrentSeasonIdx(0); }}
+                className="text-left rounded-xl overflow-hidden glass-card hover:border-primary transition-all">
+                <div className="aspect-video bg-card relative">
+                  {s.backdrop || s.poster ? (
+                    <img src={s.backdrop || s.poster} alt={s.title} className="w-full h-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="w-full h-full gradient-primary flex items-center justify-center">
+                      <Film className="w-8 h-8 text-primary-foreground/50" />
+                    </div>
+                  )}
+                  <div className="absolute bottom-0 left-0 right-0 p-2" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)" }}>
+                    <p className="text-[11px] font-semibold line-clamp-1 text-white">{s.title}</p>
+                    <p className="text-[9px] text-white/60">
+                      {s.seasons && s.seasons.length > 1 ? `${s.seasons.length} Seasons · ` : ""}
+                      {totalEps} Episodes
+                    </p>
                   </div>
-                )}
-                <div className="absolute bottom-0 left-0 right-0 p-2" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)" }}>
-                  <p className="text-[11px] font-semibold line-clamp-1 text-white">{s.title}</p>
-                  <p className="text-[9px] text-white/60">{s.episodes.length} Episodes</p>
                 </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       )}
     </motion.div>
