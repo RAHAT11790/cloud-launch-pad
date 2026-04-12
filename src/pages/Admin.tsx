@@ -434,9 +434,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   // Per-function overrides from Firebase
   const [fnOverrides, setFnOverrides] = useState<Record<string, { enabled: boolean; customUrl: string }>>({});
 
-  const CORE_FUNCTIONS = [
-    { key: "shorten", label: "🔗 URL Shortener", endpoint: "shorten" },
-  ];
+  const CORE_FUNCTIONS: { key: string; label: string; endpoint: string }[] = [];
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/edgeRouter"), (snap) => {
