@@ -605,6 +605,142 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   );
 };
 
+// ==================== AD SERVICES SECTION ====================
+const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
+  const [services, setServices] = useState<Record<string, any>>({});
+  const [newName, setNewName] = useState("");
+  const [newUrl, setNewUrl] = useState("");
+  const [newIcon, setNewIcon] = useState("🔓");
+  const [newColor, setNewColor] = useState("linear-gradient(135deg, #6366f1, #8b5cf6)");
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/adServices"), (snap) => {
+      setServices(snap.val() || {});
+    });
+    return () => unsub();
+  }, []);
+
+  const addService = async () => {
+    const name = newName.trim();
+    const url = newUrl.trim();
+    if (!name || !url) { toast.error("নাম ও URL দাও!"); return; }
+    const id = `ad_${Date.now()}`;
+    await set(ref(db, `settings/adServices/${id}`), {
+      id, name, functionUrl: url, enabled: true, icon: newIcon || "🔓", color: newColor || "",
+    });
+    setNewName(""); setNewUrl(""); setNewIcon("🔓");
+    toast.success(`✅ "${name}" যোগ হয়েছে!`);
+  };
+
+  const toggleService = async (id: string) => {
+    const svc = services[id];
+    if (!svc) return;
+    await set(ref(db, `settings/adServices/${id}/enabled`), !svc.enabled);
+    toast.success(svc.enabled ? "🚫 বন্ধ হয়েছে" : "✅ চালু হয়েছে");
+  };
+
+  const deleteService = async (id: string) => {
+    await remove(ref(db, `settings/adServices/${id}`));
+    toast.success("🗑️ ডিলিট হয়েছে!");
+  };
+
+  const testService = async (id: string, url: string) => {
+    setTesting(id);
+    const start = Date.now();
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: "https://google.com" }),
+        signal: controller.signal,
+      });
+      clearTimeout(t);
+      const data = await res.json().catch(() => ({}));
+      const alive = !!data?.shortenedUrl || !!data?.success;
+      setTestResults(prev => ({ ...prev, [id]: { alive, latency: Date.now() - start } }));
+    } catch {
+      setTestResults(prev => ({ ...prev, [id]: { alive: false, latency: Date.now() - start } }));
+    }
+    setTesting(null);
+  };
+
+  const serviceList = Object.values(services);
+
+  return (
+    <div className={`${glassCard} p-4 mb-4`}>
+      <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+        <Link size={14} className="text-amber-400" /> 📢 Ad Link Services (Unlock বাটন)
+      </h3>
+      <p className="text-[10px] text-zinc-400 mb-4">
+        ভিডিও আনলক করতে ইউজার যে অ্যাড লিংকে যাবে সেগুলো এখানে ম্যানেজ করো। প্রতিটি সার্ভিসের জন্য আলাদা আনলক বাটন দেখাবে।
+      </p>
+
+      {/* Existing services */}
+      <div className="space-y-3 mb-4">
+        {serviceList.length === 0 && (
+          <p className="text-[10px] text-zinc-500 text-center py-3">কোনো সার্ভিস যোগ হয়নি। নিচে থেকে যোগ করো।</p>
+        )}
+        {serviceList.map((svc: any) => {
+          const tr = testResults[svc.id];
+          return (
+            <div key={svc.id} className={`bg-zinc-800/40 rounded-xl p-3 border ${svc.enabled ? "border-green-500/30" : "border-zinc-700/40 opacity-60"}`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">{svc.icon || "🔓"}</span>
+                  <span className="text-xs font-semibold text-white">{svc.name}</span>
+                  {tr && (
+                    <span className={`text-[9px] font-mono ${tr.alive ? "text-green-400" : "text-red-400"}`}>
+                      {tr.alive ? `✓ ${tr.latency}ms` : "✕ Down"}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => testService(svc.id, svc.functionUrl)} disabled={testing === svc.id}
+                    className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
+                    {testing === svc.id ? <RefreshCw size={10} className="animate-spin" /> : <Activity size={10} />}
+                  </button>
+                  <button onClick={() => toggleService(svc.id)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${svc.enabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${svc.enabled ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+                  </button>
+                  <button onClick={() => deleteService(svc.id)} className={`${btnSecondary} !px-2 !py-1 !text-[10px] text-red-400`}>
+                    <Trash2 size={10} />
+                  </button>
+                </div>
+              </div>
+              <p className="text-[9px] text-zinc-400 font-mono truncate">{svc.functionUrl}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Add New Service */}
+      <div className="bg-zinc-800/30 rounded-xl p-3 border border-dashed border-zinc-600/50">
+        <h4 className="text-[11px] font-semibold text-white mb-2 flex items-center gap-1.5">
+          <PlusCircle size={12} className="text-green-400" /> নতুন সার্ভিস যোগ করো
+        </h4>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input value={newIcon} onChange={(e) => setNewIcon(e.target.value)} placeholder="🔓" className={`${inputClass} !w-12 !text-center`} />
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="সার্ভিসের নাম (যেমন: AroLinks)" className={`${inputClass} flex-1`} />
+          </div>
+          <input value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
+            placeholder="Supabase Function URL (যেমন: https://xxx.supabase.co/functions/v1/shorten-arolinks)" className={inputClass} />
+          <input value={newColor} onChange={(e) => setNewColor(e.target.value)}
+            placeholder="বাটন কালার CSS (যেমন: linear-gradient(135deg, #f59e0b, #ef4444))" className={inputClass} />
+          <button onClick={addService} className={`${btnPrimary} w-full`}>
+            <PlusCircle size={12} /> যোগ করো
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ==================== AI CONFIG SECTION ====================
 const AiConfigSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
   const [aiEnabled, setAiEnabled] = useState(false);
