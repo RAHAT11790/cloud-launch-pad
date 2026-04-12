@@ -5,8 +5,6 @@ import type { AnimeItem } from "@/data/animeData";
 export function useFirebaseData() {
   const [webseries, setWebseries] = useState<AnimeItem[]>([]);
   const [movies, setMovies] = useState<AnimeItem[]>([]);
-  const [privateWebseries, setPrivateWebseries] = useState<AnimeItem[]>([]);
-  const [privateMovies, setPrivateMovies] = useState<AnimeItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,8 +32,8 @@ export function useFirebaseData() {
     const unsubWs = onValue(wsRef, (snapshot) => {
       const data = snapshot.val() || {};
       const publicItems: AnimeItem[] = [];
-      const privateItems: AnimeItem[] = [];
       Object.entries(data).forEach(([id, item]: [string, any]) => {
+        if (item.visibility === "private") return; // skip private content
         const mappedItem: AnimeItem = {
           id,
           source: "firebase" as const,
@@ -79,14 +77,10 @@ export function useFirebaseData() {
           createdAt: item.createdAt || 0,
           updatedAt: item.updatedAt || 0,
         };
-
-        if (item.visibility === "private") privateItems.push(mappedItem);
-        else publicItems.push(mappedItem);
+        publicItems.push(mappedItem);
       });
       publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      privateItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
       setWebseries(publicItems);
-      setPrivateWebseries(privateItems);
       checkLoaded();
     });
 
@@ -95,8 +89,8 @@ export function useFirebaseData() {
     const unsubMov = onValue(movRef, (snapshot) => {
       const data = snapshot.val() || {};
       const publicItems: AnimeItem[] = [];
-      const privateItems: AnimeItem[] = [];
       Object.entries(data).forEach(([id, item]: [string, any]) => {
+        if (item.visibility === "private") return; // skip private content
         const mappedItem: AnimeItem = {
           id,
           source: "firebase" as const,
@@ -120,14 +114,10 @@ export function useFirebaseData() {
           createdAt: item.createdAt || 0,
           updatedAt: item.updatedAt || 0,
         };
-
-        if (item.visibility === "private") privateItems.push(mappedItem);
-        else publicItems.push(mappedItem);
+        publicItems.push(mappedItem);
       });
       publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      privateItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
       setMovies(publicItems);
-      setPrivateMovies(privateItems);
       checkLoaded();
     });
 
@@ -144,11 +134,5 @@ export function useFirebaseData() {
     return combined;
   }, [webseries, movies]);
 
-  const privateAllAnime = useMemo(() => {
-    const combined = [...privateWebseries, ...privateMovies];
-    combined.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-    return combined;
-  }, [privateWebseries, privateMovies]);
-
-  return { webseries, movies, privateWebseries, privateMovies, categories, allAnime, privateAllAnime, loading };
+  return { webseries, movies, categories, allAnime, loading };
 }

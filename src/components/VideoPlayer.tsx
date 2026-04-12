@@ -421,16 +421,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => unsub();
   }, []);
 
-  // Private content (animeId starts with "private_") bypasses ad gate entirely
-  const isPrivateContent = animeId?.startsWith("private_") ?? false;
-
-  // Ad gate - only run after premium check completes (skip for private content)
+  // Ad gate - only run after premium check completes
   useEffect(() => {
-    if (isPrivateContent) {
-      setAdGateActive(false);
-      return;
-    }
-
     if (isPremium === null) return; // still loading premium status
 
     const uid = getLocalUserId();
@@ -465,7 +457,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (result.ok && result.links.length > 0) setAdLinks(result.links);
       else setAdGateActive(false);
     }).catch(() => { setShortenLoading(false); setAdGateActive(false); });
-  }, [isPremium, has24hAccess, unlockBlocked, isPrivateContent]);
+  }, [isPremium, has24hAccess, unlockBlocked]);
 
   const handleOpenAdLink = useCallback((url: string) => {
     if (url) window.location.href = url;
@@ -1863,7 +1855,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           </div>
         )}
 
-        {unlockBlocked && !isPrivateContent && (
+        {unlockBlocked && (
           <div className="fixed inset-0 z-[450] bg-black/90 flex items-center justify-center backdrop-blur-sm p-5">
             <div className="bg-card rounded-2xl p-6 max-w-sm w-full text-center space-y-3 border border-border shadow-2xl">
               <h3 className="text-lg font-bold text-foreground">Access Blocked</h3>
