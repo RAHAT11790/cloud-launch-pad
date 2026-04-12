@@ -428,7 +428,7 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
 
 const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: ProfilePageProps) => {
   const brandingCfg = useBranding();
-  const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy">("main");
+  const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy" | "private-content">("main");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(() => {
     try { return localStorage.getItem("rs_profile_photo"); } catch { return null; }
   });
