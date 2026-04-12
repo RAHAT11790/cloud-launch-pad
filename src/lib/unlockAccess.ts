@@ -203,7 +203,7 @@ export const createRandomPrizeLink = async (): Promise<{
 
 export const consumeUnlockTokenForCurrentUser = async (
   token: string,
-): Promise<{ ok: boolean; reason?: "login_required" | "invalid_token" | "expired" | "not_owner" | "already_used" | "claimed" }> => {
+): Promise<{ ok: boolean; reason?: "login_required" | "invalid_token" | "expired" | "not_owner" | "already_used" | "claimed"; serviceId?: string; durationMs?: number }> => {
   const userId = getLocalUserId();
   if (!userId) return { ok: false, reason: "login_required" };
   if (!token) return { ok: false, reason: "invalid_token" };
