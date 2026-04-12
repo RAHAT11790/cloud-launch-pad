@@ -1863,7 +1863,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           </div>
         )}
 
-        {unlockBlocked && (
+        {unlockBlocked && !isPrivateContent && (
           <div className="fixed inset-0 z-[450] bg-black/90 flex items-center justify-center backdrop-blur-sm p-5">
             <div className="bg-card rounded-2xl p-6 max-w-sm w-full text-center space-y-3 border border-border shadow-2xl">
               <h3 className="text-lg font-bold text-foreground">Access Blocked</h3>
