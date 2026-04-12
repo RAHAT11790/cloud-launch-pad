@@ -1660,6 +1660,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   // Settings state
   const [tutorialLink, setTutorialLink] = useState("");
   const [tutorialLinkInput, setTutorialLinkInput] = useState("");
+  const [tutorialVideos, setTutorialVideos] = useState<{ title: string; url: string }[]>([]);
+  const [newTutorialTitle, setNewTutorialTitle] = useState("");
+  const [newTutorialUrl, setNewTutorialUrl] = useState("");
   const [adminUserIdInput, setAdminUserIdInput] = useState("");
   const [savedAdminUserId, setSavedAdminUserId] = useState("");
 
