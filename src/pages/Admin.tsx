@@ -2167,13 +2167,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
   const handleAdminBack = useCallback(() => {
     // If in add/edit sub-tab, go back to list first and restore scroll
-    if (activeSection === "webseries" && seriesTab === "ws-add") {
+    if (activeSection === "webseries" && (seriesTab === "ws-add" || seriesTab === "ws-manual")) {
       setSeriesTab("ws-list");
       setSeriesEditId("");
       setTimeout(() => window.scrollTo({ top: savedScrollPos.current, behavior: "instant" as ScrollBehavior }), 50);
       return true;
     }
-    if (activeSection === "movies" && moviesTab === "mv-add") {
+    if (activeSection === "movies" && (moviesTab === "mv-add" || moviesTab === "mv-manual")) {
       setMoviesTab("mv-list");
       setMovieEditId("");
       setTimeout(() => window.scrollTo({ top: savedScrollPos.current, behavior: "instant" as ScrollBehavior }), 50);
