@@ -4921,19 +4921,6 @@ ${tgHashtags}`;
                         </select>
                       </div>
                       <div className="mb-4">
-                        <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Visibility</label>
-                        <div className="flex gap-2">
-                          <button type="button" onClick={() => setMovieForm({ ...movieForm, visibility: "public" })}
-                            className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${(movieForm.visibility || "public") !== "private" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
-                            Public
-                          </button>
-                          <button type="button" onClick={() => setMovieForm({ ...movieForm, visibility: "private" })}
-                            className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${movieForm.visibility === "private" ? "bg-red-600 border-red-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
-                            Private
-                          </button>
-                        </div>
-                      </div>
-                      <div className="mb-4">
                         <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">ডাব টাইপ</label>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => setMovieForm({ ...movieForm, dubType: "official" })}
