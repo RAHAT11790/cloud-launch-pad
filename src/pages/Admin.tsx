@@ -4644,8 +4644,6 @@ ${tgHashtags}`;
                     try {
                       await set(push(ref(db, "newEpisodeReleases")), newRelease);
                       toast.success("✅ New Release added!");
-                      // Only send notifications for public content
-                      if (ctxForm.visibility !== "private") {
                       // Send FCM + in-app notifications
                       const usersSnap = await get(ref(db, "users"));
                       const users = usersSnap.val() || {};
@@ -4684,9 +4682,6 @@ ${tgHashtags}`;
                         if ((result?.total || 0) > 0) toast.success(`Push: ${result?.success || 0} delivered`);
                         setTimeout(() => { setPushSending(false); setPushProgress(null); }, 4000);
                       } catch { toast.warning("Push delivery failed"); setPushSending(false); setPushProgress(null); }
-                      } else {
-                        toast.info("Private content - notifications skipped");
-                      }
                       // Auto-fill telegram fields
                       setTgTitle(ctxForm.title);
                       const backdropUrl = ctxForm.backdrop || ctxForm.poster || "";
