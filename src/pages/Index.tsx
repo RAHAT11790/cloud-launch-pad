@@ -46,6 +46,7 @@ import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
 import { registerFCMToken } from "@/lib/fcm";
 import { createUnlockLinkForCurrentUser } from "@/lib/unlockAccess";
+import { isUnlockBlockActive } from "@/lib/unlockBlock";
 
 type MainPage = "home" | "series" | "livetv" | "movies";
 
@@ -196,7 +197,7 @@ const Index = () => {
     });
 
     const unsubBlocked = onValue(ref(db, `users/${uid}/security/unlockBlocked`), (snap) => {
-      setUnlockBlocked(!!snap.val()?.blocked);
+      setUnlockBlocked(isUnlockBlockActive(snap.val()));
     });
 
     return () => {

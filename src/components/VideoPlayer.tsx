@@ -10,6 +10,7 @@ import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
 import animeCharImg from "@/assets/anime-loading-char.png";
 import { createUnlockLinksForAllServices, getLocalUserId, type AdService } from "@/lib/unlockAccess";
+import { isUnlockBlockActive } from "@/lib/unlockBlock";
 
 interface QualityOption {
   label: string;
@@ -315,7 +316,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     });
 
     const unsubBlocked = onValue(ref(db, `users/${uid}/security/unlockBlocked`), (snap) => {
-      setUnlockBlocked(!!snap.val()?.blocked);
+      setUnlockBlocked(isUnlockBlockActive(snap.val()));
     });
 
     return () => {
@@ -1858,7 +1859,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           <div className="fixed inset-0 z-[450] bg-black/90 flex items-center justify-center backdrop-blur-sm p-5">
             <div className="bg-card rounded-2xl p-6 max-w-sm w-full text-center space-y-3 border border-border shadow-2xl">
               <h3 className="text-lg font-bold text-foreground">Access Blocked</h3>
-              <p className="text-sm text-muted-foreground">একই unlock token একাধিক আইডিতে ব্যবহার করার কারণে এই অ্যাকাউন্টে ভিডিও অ্যাক্সেস ব্লক করা হয়েছে।</p>
+              <p className="text-sm text-muted-foreground">This account is temporarily blocked because the same unlock token was used on multiple accounts.</p>
               <button onClick={onClose} className="w-full py-2.5 rounded-xl gradient-primary text-primary-foreground font-semibold">Close Player</button>
             </div>
           </div>
