@@ -278,7 +278,8 @@ export const consumeUnlockTokenForCurrentUser = async (
   }
 
   const now = Date.now();
-  const expiresAt = now + FREE_ACCESS_DURATION_MS;
+  const durationMs = await getUnlockDurationMs();
+  const expiresAt = now + durationMs;
 
   await set(ref(db, `users/${userId}/freeAccess`), {
     active: true,
