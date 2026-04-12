@@ -1,34 +1,47 @@
 import { db, ref, set, get, runTransaction } from "@/lib/firebase";
-import { callEdgeFunction } from "@/lib/edgeFunctionRouter";
 import { SITE_URL } from "@/lib/siteConfig";
 
 const UNLOCK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const FREE_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
 
+// --- Ad Service Types ---
+export interface AdService {
+  id: string;
+  name: string;
+  functionUrl: string;
+  enabled: boolean;
+  icon?: string;
+  color?: string;
+}
+
+// --- Get ad services from Firebase ---
+export async function getAdServices(): Promise<AdService[]> {
+  try {
+    const snap = await get(ref(db, "settings/adServices"));
+    const val = snap.val();
+    if (!val) return [];
+    return Object.values(val).filter((s: any) => s.enabled !== false) as AdService[];
+  } catch {
+    return [];
+  }
+}
+
 // --- Random Prize Duration Logic ---
-// Weighted: heavily favors 24-30h range, very rarely gives high hours
-// Returns hours and minutes for more exciting display
 export function getRandomPrizeDuration(): { hours: number; minutes: number; totalMs: number } {
   const roll = Math.random();
   let totalMinutes: number;
 
   if (roll < 0.005) {
-    // 0.5% → 48h exactly (ultra jackpot!)
     totalMinutes = 48 * 60;
   } else if (roll < 0.02) {
-    // 1.5% → 42-47h range
     totalMinutes = Math.floor((42 + Math.random() * 5) * 60 + Math.random() * 60);
   } else if (roll < 0.05) {
-    // 3% → 36-41h range
     totalMinutes = Math.floor((36 + Math.random() * 5) * 60 + Math.random() * 60);
   } else if (roll < 0.12) {
-    // 7% → 31-35h range
     totalMinutes = Math.floor((31 + Math.random() * 4) * 60 + Math.random() * 60);
   } else if (roll < 0.30) {
-    // 18% → 27-30h range
     totalMinutes = Math.floor((27 + Math.random() * 3) * 60 + Math.random() * 60);
   } else {
-    // 70% → 24h 0m to 26h 59m (most common)
     totalMinutes = Math.floor(24 * 60 + Math.random() * 3 * 60);
   }
 
@@ -50,9 +63,28 @@ export const getLocalUserId = (): string | null => {
   }
 };
 
-export const createUnlockLinkForCurrentUser = async (): Promise<{ ok: boolean; shortUrl?: string; error?: string }> => {
+/** Shorten a URL using a specific ad service function URL */
+async function shortenWithService(functionUrl: string, callbackUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(functionUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: callbackUrl }),
+    });
+    const data = await res.json();
+    return data?.shortenedUrl || data?.short || data?.url || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Create unlock links for ALL enabled ad services */
+export const createUnlockLinksForAllServices = async (): Promise<{ ok: boolean; links: { service: AdService; shortUrl: string }[]; error?: string }> => {
   const userId = getLocalUserId();
-  if (!userId) return { ok: false, error: "login_required" };
+  if (!userId) return { ok: false, links: [], error: "login_required" };
+
+  const services = await getAdServices();
+  if (services.length === 0) return { ok: false, links: [], error: "no_services" };
 
   const token = randomToken();
   const now = Date.now();
@@ -68,31 +100,38 @@ export const createUnlockLinkForCurrentUser = async (): Promise<{ ok: boolean; s
   });
 
   const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}`;
-  let data: any;
-  try {
-    data = await callEdgeFunction("shorten", { url: callbackUrl });
-  } catch {
-    return { ok: false, error: "shortener_failed" };
-  }
 
-  const shortUrl = typeof data === "string" ? data : data?.shortenedUrl || data?.short || data?.url;
-  if (!shortUrl) return { ok: false, error: "shortener_empty" };
+  const results: { service: AdService; shortUrl: string }[] = [];
+  await Promise.all(services.map(async (svc) => {
+    const shortUrl = await shortenWithService(svc.functionUrl, callbackUrl);
+    if (shortUrl) results.push({ service: svc, shortUrl });
+  }));
 
-  return { ok: true, shortUrl };
+  if (results.length === 0) return { ok: false, links: [], error: "all_shorteners_failed" };
+  return { ok: true, links: results };
+};
+
+// Keep backward compat
+export const createUnlockLinkForCurrentUser = async (): Promise<{ ok: boolean; shortUrl?: string; error?: string }> => {
+  const result = await createUnlockLinksForAllServices();
+  if (!result.ok || result.links.length === 0) return { ok: false, error: result.error };
+  return { ok: true, shortUrl: result.links[0].shortUrl };
 };
 
 // --- Random Prize Link Creator ---
-// Creates a single reusable prize link. Duration is determined at OPEN time, not here.
 export const createRandomPrizeLink = async (): Promise<{
   ok: boolean; shortUrl?: string; error?: string;
 }> => {
   const userId = getLocalUserId();
   if (!userId) return { ok: false, error: "login_required" };
 
+  const services = await getAdServices();
+  const service = services[0];
+  if (!service) return { ok: false, error: "no_services" };
+
   const token = randomToken();
   const now = Date.now();
 
-  // Deactivate old prize link if exists
   try {
     const oldSnap = await get(ref(db, `activePrizeLink`));
     const old = oldSnap.val();
@@ -101,7 +140,6 @@ export const createRandomPrizeLink = async (): Promise<{
     }
   } catch {}
 
-  // Prize links: unlimited uses, no expiry until new link generated
   await set(ref(db, `unlockTokens/${token}`), {
     token,
     ownerUserId: userId,
@@ -120,15 +158,8 @@ export const createRandomPrizeLink = async (): Promise<{
   });
 
   const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}&mode=prize`;
-  let data: any;
-  try {
-    data = await callEdgeFunction("shorten", { url: callbackUrl });
-  } catch {
-    return { ok: false, error: "shortener_failed" };
-  }
-
-  const shortUrl = typeof data === "string" ? data : data?.shortenedUrl || data?.short || data?.url;
-  if (!shortUrl) return { ok: false, error: "shortener_empty" };
+  const shortUrl = await shortenWithService(service.functionUrl, callbackUrl);
+  if (!shortUrl) return { ok: false, error: "shortener_failed" };
 
   return { ok: true, shortUrl };
 };
@@ -152,14 +183,11 @@ export const consumeUnlockTokenForCurrentUser = async (
     const now = Date.now();
     const isPrizeToken = current.mode === "prize" && current.unlimited;
 
-    // Prize tokens: skip expiry, owner, and consumed checks
     if (isPrizeToken) {
-      // Check if deactivated
       if (current.status === "deactivated" || current.status === "expired") {
         decision = "expired";
         return current;
       }
-      // Track usage count but don't block
       decision = "claimed";
       return {
         ...current,
@@ -169,7 +197,6 @@ export const consumeUnlockTokenForCurrentUser = async (
       };
     }
 
-    // Normal token logic below
     if (Number(current.expiresAt || 0) < now && current.expiresAt !== 0) {
       decision = "expired";
       return {
