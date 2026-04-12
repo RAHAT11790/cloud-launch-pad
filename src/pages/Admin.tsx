@@ -517,6 +517,9 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
 
   return (
     <div>
+      {/* Ad Services (Unlock Buttons) */}
+      <AdServicesSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+
       {/* FCM Provider Toggle */}
       <FcmProviderSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
