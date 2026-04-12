@@ -4708,6 +4708,17 @@ ${tgHashtags}`;
                         setTgTotalEpisodes(String(season?.episodes?.length || 0));
                       }
                       setTgDubType(ctxForm.dubType === "fandub" ? "fandub" : "official");
+                      if (ctxForm.language) setTgLanguages(ctxForm.language);
+                      if (ctxForm.category) setTgGenres(ctxForm.category);
+                      if (ctxForm.rating) setTgRating(String(ctxForm.rating));
+                      if (ctxForm.tmdbId) {
+                        try {
+                          setTgImdbId(String(ctxForm.tmdbId));
+                          const { genres, rating } = await resolveTelegramGenresAndRating(String(ctxForm.tmdbId), ctxForm.title || "");
+                          if (genres.length > 0) setTgGenres(genres.join(", "));
+                          if (rating) setTgRating(rating);
+                        } catch {}
+                      }
                       // Get quality info
                       const quals: string[] = [];
                       ctxSeasons.forEach((s: any) => s.episodes?.forEach((ep: any) => {
