@@ -613,6 +613,7 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const [newUrl, setNewUrl] = useState("");
   const [newIcon, setNewIcon] = useState("🔓");
   const [newColor, setNewColor] = useState("linear-gradient(135deg, #6366f1, #8b5cf6)");
+  const [newDuration, setNewDuration] = useState(24);
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
 
@@ -630,8 +631,9 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     const id = `ad_${Date.now()}`;
     await set(ref(db, `settings/adServices/${id}`), {
       id, name, functionUrl: url, enabled: true, icon: newIcon || "🔓", color: newColor || "",
+      durationHours: newDuration || 24,
     });
-    setNewName(""); setNewUrl(""); setNewIcon("🔓");
+    setNewName(""); setNewUrl(""); setNewIcon("🔓"); setNewDuration(24);
     toast.success(`✅ "${name}" যোগ হয়েছে!`);
   };
 
@@ -645,6 +647,11 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const deleteService = async (id: string) => {
     await remove(ref(db, `settings/adServices/${id}`));
     toast.success("🗑️ ডিলিট হয়েছে!");
+  };
+
+  const updateDuration = async (id: string, hours: number) => {
+    await set(ref(db, `settings/adServices/${id}/durationHours`), hours);
+    toast.success(`⏱️ ${hours} ঘন্টা সেট হয়েছে!`);
   };
 
   const testService = async (id: string, url: string) => {
@@ -677,7 +684,7 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         <Link size={14} className="text-amber-400" /> 📢 Ad Link Services (Unlock বাটন)
       </h3>
       <p className="text-[10px] text-zinc-400 mb-4">
-        ভিডিও আনলক করতে ইউজার যে অ্যাড লিংকে যাবে সেগুলো এখানে ম্যানেজ করো। প্রতিটি সার্ভিসের জন্য আলাদা আনলক বাটন দেখাবে।
+        ভিডিও আনলক করতে ইউজার যে অ্যাড লিংকে যাবে সেগুলো এখানে ম্যানেজ করো। প্রতিটি সার্ভিসের জন্য আলাদা আনলক বাটন ও আলাদা সময় সেট করা যায়।
       </p>
 
       {/* Existing services */}
@@ -713,7 +720,23 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                   </button>
                 </div>
               </div>
-              <p className="text-[9px] text-zinc-400 font-mono truncate">{svc.functionUrl}</p>
+              <p className="text-[9px] text-zinc-400 font-mono truncate mb-2">{svc.functionUrl}</p>
+              {/* Per-service duration */}
+              <div className="flex items-center gap-2 bg-zinc-900/50 rounded-lg p-2">
+                <Clock size={10} className="text-amber-400 flex-shrink-0" />
+                <span className="text-[10px] text-zinc-400">Duration:</span>
+                <input type="number" min={1} max={720} value={svc.durationHours || 24}
+                  onChange={e => {
+                    const val = Number(e.target.value);
+                    setServices(prev => ({ ...prev, [svc.id]: { ...prev[svc.id], durationHours: val } }));
+                  }}
+                  className="w-14 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] text-white text-center" />
+                <span className="text-[10px] text-zinc-500">ঘন্টা</span>
+                <button onClick={() => updateDuration(svc.id, svc.durationHours || 24)}
+                  className={`${btnSecondary} !px-2 !py-0.5 !text-[9px]`}>
+                  <Save size={8} />
+                </button>
+              </div>
             </div>
           );
         })}
@@ -733,6 +756,12 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
             placeholder="Supabase Function URL (যেমন: https://xxx.supabase.co/functions/v1/shorten-arolinks)" className={inputClass} />
           <input value={newColor} onChange={(e) => setNewColor(e.target.value)}
             placeholder="বাটন কালার CSS (যেমন: linear-gradient(135deg, #f59e0b, #ef4444))" className={inputClass} />
+          <div className="flex gap-2 items-center">
+            <Clock size={12} className="text-amber-400" />
+            <input type="number" min={1} max={720} value={newDuration} onChange={e => setNewDuration(Number(e.target.value))}
+              className={`${inputClass} !w-20 text-center`} placeholder="24" />
+            <span className="text-[10px] text-zinc-400">ঘন্টা এক্সেস</span>
+          </div>
           <button onClick={addService} className={`${btnPrimary} w-full`}>
             <PlusCircle size={12} /> যোগ করো
           </button>
