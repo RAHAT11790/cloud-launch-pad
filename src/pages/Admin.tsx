@@ -1948,6 +1948,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       setTutorialLinkInput(val);
     }));
 
+    unsubs.push(onValue(ref(db, "settings/tutorialVideos"), (snap) => {
+      const val = snap.val();
+      if (val && typeof val === "object") {
+        const list = Object.entries(val).map(([k, v]: any) => ({ id: k, title: v.title || "", url: v.url || "" }));
+        setTutorialVideos(list);
+      } else {
+        setTutorialVideos([]);
+      }
+    }));
+
     unsubs.push(onValue(ref(db, "admin/userId"), (snap) => {
       const val = snap.val() || "";
       setSavedAdminUserId(val);
