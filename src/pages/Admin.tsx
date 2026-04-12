@@ -1589,8 +1589,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
   // Form states
   const [categoryInput, setCategoryInput] = useState("");
-  const [seriesTab, setSeriesTab] = useState<"ws-list" | "ws-add">("ws-list");
-  const [moviesTab, setMoviesTab] = useState<"mv-list" | "mv-add">("mv-list");
+  const [seriesTab, setSeriesTab] = useState<"ws-list" | "ws-add" | "ws-manual">("ws-list");
+  const [moviesTab, setMoviesTab] = useState<"mv-list" | "mv-add" | "mv-manual">("mv-list");
   const [fetchType, setFetchType] = useState<"movie" | "tv">("movie");
   const [quickTmdbId, setQuickTmdbId] = useState("");
 
@@ -2167,13 +2167,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
   const handleAdminBack = useCallback(() => {
     // If in add/edit sub-tab, go back to list first and restore scroll
-    if (activeSection === "webseries" && seriesTab === "ws-add") {
+    if (activeSection === "webseries" && (seriesTab === "ws-add" || seriesTab === "ws-manual")) {
       setSeriesTab("ws-list");
       setSeriesEditId("");
       setTimeout(() => window.scrollTo({ top: savedScrollPos.current, behavior: "instant" as ScrollBehavior }), 50);
       return true;
     }
-    if (activeSection === "movies" && moviesTab === "mv-add") {
+    if (activeSection === "movies" && (moviesTab === "mv-add" || moviesTab === "mv-manual")) {
       setMoviesTab("mv-list");
       setMovieEditId("");
       setTimeout(() => window.scrollTo({ top: savedScrollPos.current, behavior: "instant" as ScrollBehavior }), 50);
@@ -3990,6 +3990,9 @@ ${tgHashtags}`;
               <button onClick={() => setSeriesTab("ws-add")} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-add" ? "bg-indigo-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
                 Add New
               </button>
+              <button onClick={() => { setSeriesTab("ws-manual"); setSeriesEditId(""); setSeriesForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official" }); setSeasonsData([{ name: "Season 1", seasonNumber: 1, episodes: [] }]); setSeriesCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
+                Manual
+              </button>
             </div>
 
             {seriesTab === "ws-list" && (
@@ -4023,12 +4026,6 @@ ${tgHashtags}`;
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-2 mt-2.5">
-                          <button onClick={() => updateSeriesVisibility(item.id, "public")} className={`px-3.5 py-2 rounded-xl text-[11px] font-semibold border ${item.visibility !== "private" ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-300" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
-                            Public
-                          </button>
-                          <button onClick={() => updateSeriesVisibility(item.id, "private")} className={`px-3.5 py-2 rounded-xl text-[11px] font-semibold border ${item.visibility === "private" ? "bg-red-500/20 border-red-500/30 text-red-300" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
-                            Private
-                          </button>
                           <button onClick={() => editSeries(item.id)} className={`${btnSecondary} px-3.5 py-2 text-[11px] font-semibold flex items-center gap-1.5`}>
                             <Edit size={12} /> Edit
                           </button>
@@ -4044,8 +4041,9 @@ ${tgHashtags}`;
               </div>
             )}
 
-            {seriesTab === "ws-add" && (
+            {(seriesTab === "ws-add" || seriesTab === "ws-manual") && (
               <div>
+                {seriesTab === "ws-add" && (
                 <div className={`${glassCard} p-4 mb-4`}>
                   <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2"><Search size={14} className="text-purple-500" /> Search Web Series</h3>
                   <div className="flex gap-2.5 mb-3.5">
@@ -4072,6 +4070,7 @@ ${tgHashtags}`;
                     </div>
                   )}
                 </div>
+                )}
 
                 {seriesForm && (
                   <>
@@ -4766,6 +4765,9 @@ ${tgHashtags}`;
               <button onClick={() => setMoviesTab("mv-add")} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${moviesTab === "mv-add" ? "bg-indigo-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
                 Add New
               </button>
+              <button onClick={() => { setMoviesTab("mv-manual"); setMovieEditId(""); setMovieForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official", movieLink: "" }); setMovieCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${moviesTab === "mv-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
+                Manual
+              </button>
             </div>
 
             {moviesTab === "mv-list" && (
@@ -4799,12 +4801,6 @@ ${tgHashtags}`;
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-2 mt-2.5">
-                          <button onClick={() => updateMovieVisibility(item.id, "public")} className={`px-3.5 py-2 rounded-xl text-[11px] font-semibold border ${item.visibility !== "private" ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-300" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
-                            Public
-                          </button>
-                          <button onClick={() => updateMovieVisibility(item.id, "private")} className={`px-3.5 py-2 rounded-xl text-[11px] font-semibold border ${item.visibility === "private" ? "bg-red-500/20 border-red-500/30 text-red-300" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
-                            Private
-                          </button>
                           <button onClick={() => editMovie(item.id)} className={`${btnSecondary} px-3.5 py-2 text-[11px] font-semibold flex items-center gap-1.5`}>
                             <Edit size={12} /> Edit
                           </button>
@@ -4820,8 +4816,9 @@ ${tgHashtags}`;
               </div>
             )}
 
-            {moviesTab === "mv-add" && (
+            {(moviesTab === "mv-add" || moviesTab === "mv-manual") && (
               <div>
+                {moviesTab === "mv-add" && (
                 <div className={`${glassCard} p-4 mb-4`}>
                   <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2"><Search size={14} className="text-purple-500" /> Search Movie</h3>
                   <div className="flex gap-2.5 mb-3.5">
@@ -4848,6 +4845,7 @@ ${tgHashtags}`;
                     </div>
                   )}
                 </div>
+                )}
 
                 {movieForm && (
                   <>
