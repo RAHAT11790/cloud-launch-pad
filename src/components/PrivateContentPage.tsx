@@ -265,7 +265,6 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
     if (selectedSeries.episodes && selectedSeries.episodes.length > 0) {
       return [{
         name: "Season 1",
-        seasonNumber: 1,
         episodes: selectedSeries.episodes.map(ep => ({
           episodeNumber: ep.episodeNumber,
           title: ep.title,
