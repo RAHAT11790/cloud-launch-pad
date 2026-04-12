@@ -7257,6 +7257,286 @@ ${tgHashtags}`;
           />
         )}
 
+        {/* ==================== UNLOCK DURATION ==================== */}
+        {activeSection === "unlock-duration" && (() => {
+          const UnlockDurationSection = () => {
+            const [hours, setHours] = useState(24);
+            const [saving, setSaving] = useState(false);
+
+            useEffect(() => {
+              const unsub = onValue(ref(db, "settings/unlockDurationHours"), (snap) => {
+                const val = snap.val();
+                if (val && typeof val === "number") setHours(val);
+              });
+              return () => unsub();
+            }, []);
+
+            const saveHours = async () => {
+              setSaving(true);
+              try {
+                await set(ref(db, "settings/unlockDurationHours"), hours);
+                toast.success(`✅ Unlock Duration: ${hours} ঘন্টা সেট হয়েছে!`);
+              } catch (e: any) { toast.error(e.message); }
+              setSaving(false);
+            };
+
+            return (
+              <div className={`${glassCard} p-4 mb-4`}>
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Clock size={14} className="text-amber-400" /> Unlock Duration Settings
+                </h3>
+                <p className="text-[11px] text-zinc-400 mb-4">
+                  ইউজার অ্যাড আনলক করলে কত ঘন্টার এক্সেস পাবে সেটা এখান থেকে সেট করুন। ডিফল্ট: ২৪ ঘন্টা।
+                </p>
+                <div className="flex items-center gap-3 mb-4">
+                  <label className="text-[11px] text-zinc-400 flex-shrink-0">ঘন্টা:</label>
+                  <input type="number" min={1} max={720} value={hours} onChange={e => setHours(Number(e.target.value))}
+                    className={`${inputClass} w-24 text-center`} />
+                  <span className="text-xs text-zinc-500">({Math.floor(hours / 24)} দিন {hours % 24} ঘন্টা)</span>
+                </div>
+                <div className="flex gap-2 mb-3">
+                  {[6, 12, 24, 48, 72, 168].map(h => (
+                    <button key={h} onClick={() => setHours(h)}
+                      className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all ${hours === h ? "bg-indigo-500 text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"}`}>
+                      {h}h
+                    </button>
+                  ))}
+                </div>
+                <button onClick={saveHours} disabled={saving}
+                  className={`${btnPrimary} w-full py-2.5 text-sm flex items-center justify-center gap-2`}>
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  সেভ করুন
+                </button>
+              </div>
+            );
+          };
+          return <UnlockDurationSection />;
+        })()}
+
+        {/* ==================== PRIVATE CONTENT ==================== */}
+        {activeSection === "private-content" && (() => {
+          const PrivateContentAdmin = () => {
+            const [contentList, setContentList] = useState<any[]>([]);
+            const [addMode, setAddMode] = useState(false);
+            const [editId, setEditId] = useState<string | null>(null);
+            const [title, setTitle] = useState("");
+            const [description, setDescription] = useState("");
+            const [backdrop, setBackdrop] = useState("");
+            const [poster, setPoster] = useState("");
+            const [episodes, setEpisodes] = useState<{ episodeNumber: number; title: string; link: string }[]>([]);
+            const [saving, setSaving] = useState(false);
+            const [uploading, setUploading] = useState<string | null>(null);
+
+            useEffect(() => {
+              const unsub = onValue(ref(db, "privateContent"), (snap) => {
+                const data = snap.val();
+                if (!data) { setContentList([]); return; }
+                const items = Object.entries(data).map(([id, val]: [string, any]) => ({
+                  id, ...val,
+                  episodes: val.episodes ? Object.values(val.episodes) : [],
+                }));
+                items.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+                setContentList(items);
+              });
+              return () => unsub();
+            }, []);
+
+            const resetForm = () => {
+              setTitle(""); setDescription(""); setBackdrop(""); setPoster("");
+              setEpisodes([]); setAddMode(false); setEditId(null);
+            };
+
+            const addEpisode = () => {
+              setEpisodes(prev => [...prev, { episodeNumber: prev.length + 1, title: "", link: "" }]);
+            };
+
+            const updateEpisode = (idx: number, field: string, value: string | number) => {
+              setEpisodes(prev => prev.map((ep, i) => i === idx ? { ...ep, [field]: value } : ep));
+            };
+
+            const removeEpisode = (idx: number) => {
+              setEpisodes(prev => prev.filter((_, i) => i !== idx));
+            };
+
+            const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: "backdrop" | "poster") => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setUploading(field);
+              try {
+                const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+                const url = await uploadToImgbb(file);
+                if (field === "backdrop") setBackdrop(url);
+                else setPoster(url);
+                toast.success(`${field} আপলোড হয়েছে!`);
+              } catch { toast.error("আপলোড ব্যর্থ"); }
+              setUploading(null);
+            };
+
+            const saveContent = async () => {
+              if (!title.trim()) { toast.error("টাইটেল দিন"); return; }
+              setSaving(true);
+              try {
+                const id = editId || `pc_${Date.now()}`;
+                const epObj: Record<string, any> = {};
+                episodes.forEach((ep, i) => { epObj[`ep_${i}`] = ep; });
+                await set(ref(db, `privateContent/${id}`), {
+                  title: title.trim(),
+                  description: description.trim(),
+                  backdrop: backdrop.trim(),
+                  poster: poster.trim(),
+                  episodes: epObj,
+                  createdAt: editId ? (contentList.find(c => c.id === editId)?.createdAt || Date.now()) : Date.now(),
+                  updatedAt: Date.now(),
+                });
+                toast.success(editId ? "✅ আপডেট হয়েছে!" : "✅ প্রাইভেট কন্টেন্ট যোগ হয়েছে!");
+                resetForm();
+              } catch (e: any) { toast.error(e.message); }
+              setSaving(false);
+            };
+
+            const editContent = (item: any) => {
+              setEditId(item.id);
+              setTitle(item.title || "");
+              setDescription(item.description || "");
+              setBackdrop(item.backdrop || "");
+              setPoster(item.poster || "");
+              setEpisodes(item.episodes || []);
+              setAddMode(true);
+            };
+
+            const deleteContent = async (id: string) => {
+              if (!confirm("মুছে ফেলতে চান?")) return;
+              await set(ref(db, `privateContent/${id}`), null);
+              toast.success("মুছে ফেলা হয়েছে");
+            };
+
+            if (addMode) {
+              return (
+                <div>
+                  <button onClick={resetForm} className={`${btnSecondary} mb-4 py-2 px-3 text-xs flex items-center gap-1`}>
+                    <ChevronLeft size={12} /> Back
+                  </button>
+                  <div className={`${glassCard} p-4 mb-4`}>
+                    <h3 className="text-sm font-semibold mb-3">{editId ? "✏️ Edit Content" : "➕ নতুন প্রাইভেট কন্টেন্ট"}</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[11px] text-zinc-400 mb-1 block">Title *</label>
+                        <input value={title} onChange={e => setTitle(e.target.value)} className={inputClass} placeholder="কন্টেন্ট নাম" />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-zinc-400 mb-1 block">Description</label>
+                        <textarea value={description} onChange={e => setDescription(e.target.value)} className={`${inputClass} h-20 resize-none`} placeholder="বর্ণনা" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] text-zinc-400 mb-1 block">Backdrop Image</label>
+                          {backdrop ? (
+                            <div className="relative">
+                              <img src={backdrop} alt="" className="w-full h-20 rounded-lg object-cover" />
+                              <button onClick={() => setBackdrop("")} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center"><X size={10} /></button>
+                            </div>
+                          ) : (
+                            <label className="block w-full h-20 rounded-lg border-2 border-dashed border-zinc-700 flex items-center justify-center cursor-pointer hover:border-indigo-500 transition-colors">
+                              {uploading === "backdrop" ? <Loader2 size={16} className="animate-spin text-zinc-400" /> : <Upload size={16} className="text-zinc-500" />}
+                              <input type="file" accept="image/*" className="hidden" onChange={e => handleImageUpload(e, "backdrop")} />
+                            </label>
+                          )}
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-zinc-400 mb-1 block">Poster Image</label>
+                          {poster ? (
+                            <div className="relative">
+                              <img src={poster} alt="" className="w-full h-20 rounded-lg object-cover" />
+                              <button onClick={() => setPoster("")} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center"><X size={10} /></button>
+                            </div>
+                          ) : (
+                            <label className="block w-full h-20 rounded-lg border-2 border-dashed border-zinc-700 flex items-center justify-center cursor-pointer hover:border-indigo-500 transition-colors">
+                              {uploading === "poster" ? <Loader2 size={16} className="animate-spin text-zinc-400" /> : <Upload size={16} className="text-zinc-500" />}
+                              <input type="file" accept="image/*" className="hidden" onChange={e => handleImageUpload(e, "poster")} />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Episodes */}
+                  <div className={`${glassCard} p-4 mb-4`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold">Episodes ({episodes.length})</h3>
+                      <button onClick={addEpisode} className={`${btnPrimary} py-1.5 px-3 text-[10px] flex items-center gap-1`}>
+                        <Plus size={10} /> এপিসোড যোগ
+                      </button>
+                    </div>
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                      {episodes.map((ep, idx) => (
+                        <div key={idx} className="bg-zinc-800/50 rounded-lg p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-zinc-400">EP {ep.episodeNumber}</span>
+                            <button onClick={() => removeEpisode(idx)} className="text-red-400 hover:text-red-300"><Trash2 size={12} /></button>
+                          </div>
+                          <input value={ep.title} onChange={e => updateEpisode(idx, "title", e.target.value)}
+                            className={`${inputClass} text-[11px]`} placeholder="এপিসোড টাইটেল" />
+                          <input value={ep.link} onChange={e => updateEpisode(idx, "link", e.target.value)}
+                            className={`${inputClass} text-[11px] font-mono`} placeholder="ভিডিও URL (m3u8/mp4)" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button onClick={saveContent} disabled={saving}
+                    className={`${btnPrimary} w-full py-2.5 text-sm flex items-center justify-center gap-2`}>
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    {editId ? "আপডেট করুন" : "সেভ করুন"}
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <div>
+                <button onClick={() => setAddMode(true)}
+                  className={`${btnPrimary} w-full py-2.5 text-sm flex items-center justify-center gap-2 mb-4`}>
+                  <Plus size={14} /> নতুন প্রাইভেট কন্টেন্ট যোগ করুন
+                </button>
+                {contentList.length === 0 ? (
+                  <div className={`${glassCard} p-6 text-center`}>
+                    <Lock size={24} className="mx-auto mb-2 text-zinc-600" />
+                    <p className="text-xs text-zinc-500">কোনো প্রাইভেট কন্টেন্ট নেই</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {contentList.map(item => (
+                      <div key={item.id} className={`${glassCard} p-3 flex items-center gap-3`}>
+                        <div className="w-16 h-10 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0">
+                          {item.backdrop || item.poster ? (
+                            <img src={item.backdrop || item.poster} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center"><Film size={14} className="text-zinc-600" /></div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-white truncate">{item.title}</p>
+                          <p className="text-[10px] text-zinc-500">{item.episodes?.length || 0} Episodes</p>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <button onClick={() => editContent(item)} className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center hover:bg-indigo-500/20">
+                            <Edit size={12} className="text-zinc-400" />
+                          </button>
+                          <button onClick={() => deleteContent(item.id)} className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center hover:bg-red-500/20">
+                            <Trash2 size={12} className="text-red-400" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          };
+          return <PrivateContentAdmin />;
+        })()}
+
         {/* ==================== ANALYTICS ==================== */}
         {activeSection === "analytics" && (() => {
           const today = new Date().toISOString().split("T")[0];
