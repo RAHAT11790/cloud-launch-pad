@@ -9,7 +9,7 @@ import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
 import animeCharImg from "@/assets/anime-loading-char.png";
-import { createUnlockLinkForCurrentUser, getLocalUserId } from "@/lib/unlockAccess";
+import { createUnlockLinksForAllServices, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 
 interface QualityOption {
   label: string;
@@ -236,7 +236,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [noProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
-  const [shortenedLink, setShortenedLink] = useState<string | null>(null);
+  const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
   const [shortenLoading, setShortenLoading] = useState(false);
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
