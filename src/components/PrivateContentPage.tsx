@@ -1,83 +1,74 @@
 import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from "react";
-import { ArrowLeft, Lock, Eye, EyeOff, KeyRound, Play, ChevronDown, ChevronRight, Loader2, Film, X, List, Star, BookOpen, Heart, Share2, Check, MessageCircle, Send, Reply, ChevronUp, Trash2 } from "lucide-react";
-import { db, ref, onValue, get, set, push, remove } from "@/lib/firebase";
+import { ArrowLeft, Lock, Eye, EyeOff, KeyRound, Loader2, Film } from "lucide-react";
+import { db, ref, onValue, get, set } from "@/lib/firebase";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useBranding } from "@/hooks/useBranding";
 import HeroSlider, { type HeroSlide } from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
-import type { AnimeItem, Season } from "@/data/animeData";
+import AnimeDetails from "@/components/AnimeDetails";
+import type { AnimeItem, Episode, Season } from "@/data/animeData";
+import { useFirebaseData } from "@/hooks/useFirebaseData";
 
 const VideoPlayer = lazy(() => import("@/components/VideoPlayer"));
-
-interface PrivateEpisode {
-  episodeNumber: number;
-  title: string;
-  link: string;
-  link480?: string;
-  link720?: string;
-  link1080?: string;
-  link4k?: string;
-  audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
-}
-
-interface PrivateSeason {
-  name: string;
-  seasonNumber: number;
-  episodes: PrivateEpisode[];
-}
-
-interface PrivateSeries {
-  id: string;
-  title: string;
-  description?: string;
-  backdrop?: string;
-  poster?: string;
-  category?: string;
-  rating?: string;
-  year?: string;
-  type?: string;
-  language?: string;
-  seasons?: PrivateSeason[];
-  episodes?: PrivateEpisode[];
-  createdAt?: number;
-  updatedAt?: number;
-}
 
 interface PrivateContentPageProps {
   onClose: () => void;
 }
 
-// Helper to get best src from episode
-const getEpisodeSrc = (ep: PrivateEpisode): string => {
-  return ep.link || ep.link480 || ep.link720 || ep.link1080 || ep.link4k || "";
+const getEpisodeSrc = (episode?: Partial<Episode>) => {
+  return episode?.link || episode?.link480 || episode?.link720 || episode?.link1080 || episode?.link4k || "";
+};
+
+const getMovieSrc = (anime: AnimeItem) => {
+  return anime.movieLink || anime.movieLink480 || anime.movieLink720 || anime.movieLink1080 || anime.movieLink4k || "";
+};
+
+const buildEpisodeQualityOptions = (episode?: Partial<Episode>) => {
+  if (!episode) return undefined;
+  const options: { label: string; src: string }[] = [];
+  if (episode.link480) options.push({ label: "480p", src: episode.link480 });
+  if (episode.link720) options.push({ label: "720p", src: episode.link720 });
+  if (episode.link1080) options.push({ label: "1080p", src: episode.link1080 });
+  if (episode.link4k) options.push({ label: "4K", src: episode.link4k });
+  return options.length > 0 ? options : undefined;
+};
+
+const buildMovieQualityOptions = (anime: AnimeItem) => {
+  const options: { label: string; src: string }[] = [];
+  if (anime.movieLink480) options.push({ label: "480p", src: anime.movieLink480 });
+  if (anime.movieLink720) options.push({ label: "720p", src: anime.movieLink720 });
+  if (anime.movieLink1080) options.push({ label: "1080p", src: anime.movieLink1080 });
+  if (anime.movieLink4k) options.push({ label: "4K", src: anime.movieLink4k });
+  return options.length > 0 ? options : undefined;
 };
 
 const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
   const branding = useBranding();
+  const { privateWebseries, privateMovies, loading: contentLoading } = useFirebaseData();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hasPin, setHasPin] = useState<boolean | null>(null);
   const [pin, setPin] = useState("");
   const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [series, setSeries] = useState<PrivateSeries[]>([]);
-  const [selectedSeries, setSelectedSeries] = useState<PrivateSeries | null>(null);
+  const [selectedAnimeId, setSelectedAnimeId] = useState(() => {
+    try {
+      return sessionStorage.getItem("rs_private_selected_id") || "";
+    } catch {
+      return "";
+    }
+  });
   const [activeCategory, setActiveCategory] = useState("All");
-
-  // Player state
   const [playerState, setPlayerState] = useState<{
     src: string;
-    title: string;
     subtitle: string;
-    series: PrivateSeries;
+    anime: AnimeItem;
     seasonIdx: number;
     epIdx: number;
     qualityOptions?: { label: string; src: string }[];
-    audioTracks?: any[];
+    audioTracks?: Episode["audioTracks"];
   } | null>(null);
-
-  // Forgot PIN states
   const [forgotMode, setForgotMode] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otpInput, setOtpInput] = useState("");
@@ -88,17 +79,31 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
     try {
       const raw = localStorage.getItem("rsanime_user");
       return raw ? JSON.parse(raw)?.id : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }, []);
 
   const userEmail = useMemo(() => {
     try {
       const raw = localStorage.getItem("rsanime_user");
       return raw ? JSON.parse(raw)?.email : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }, []);
 
-  // Check if user has PIN set
+  const privateItems = useMemo(() => {
+    const merged = [...privateWebseries, ...privateMovies];
+    merged.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+    return merged;
+  }, [privateMovies, privateWebseries]);
+
+  const selectedAnime = useMemo(
+    () => privateItems.find((item) => item.id === selectedAnimeId) || null,
+    [privateItems, selectedAnimeId],
+  );
+
   useEffect(() => {
     if (!userId) return;
     const unsub = onValue(ref(db, `users/${userId}/privatePin`), (snap) => {
@@ -107,60 +112,18 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
     return () => unsub();
   }, [userId]);
 
-  // Load private content
   useEffect(() => {
-    const unsub = onValue(ref(db, "privateContent"), (snap) => {
-      const data = snap.val();
-      if (!data) { setSeries([]); return; }
-      const items: PrivateSeries[] = Object.entries(data).map(([id, val]: [string, any]) => {
-        let seasons: PrivateSeason[] | undefined;
-        if (val.seasons) {
-          seasons = Object.values(val.seasons).map((s: any) => ({
-            name: s.name || `Season ${s.seasonNumber || 1}`,
-            seasonNumber: s.seasonNumber || 1,
-            episodes: s.episodes ? Object.values(s.episodes).map((ep: any) => ({
-              episodeNumber: ep.episodeNumber || 1,
-              title: ep.title || "",
-              link: ep.link || "",
-              link480: ep.link480 || "",
-              link720: ep.link720 || "",
-              link1080: ep.link1080 || "",
-              link4k: ep.link4k || "",
-              audioTracks: ep.audioTracks ? Object.values(ep.audioTracks) : undefined,
-            })) : [],
-          }));
-          seasons.sort((a, b) => a.seasonNumber - b.seasonNumber);
-        }
+    try {
+      if (selectedAnimeId) sessionStorage.setItem("rs_private_selected_id", selectedAnimeId);
+      else sessionStorage.removeItem("rs_private_selected_id");
+    } catch {}
+  }, [selectedAnimeId]);
 
-        let episodes: PrivateEpisode[] | undefined;
-        if (!seasons && val.episodes) {
-          episodes = Object.values(val.episodes).map((ep: any) => ({
-            episodeNumber: ep.episodeNumber || 1,
-            title: ep.title || "",
-            link: ep.link || "",
-            link480: ep.link480 || "",
-            link720: ep.link720 || "",
-            link1080: ep.link1080 || "",
-            link4k: ep.link4k || "",
-            audioTracks: ep.audioTracks ? Object.values(ep.audioTracks) : undefined,
-          }));
-        }
-
-        return {
-          id, title: val.title || "", description: val.description || "",
-          backdrop: val.backdrop || "", poster: val.poster || "",
-          category: val.category || "Uncategorized",
-          rating: val.rating || "", year: val.year || "",
-          type: val.type || "webseries", language: val.language || "",
-          seasons, episodes,
-          createdAt: val.createdAt || 0, updatedAt: val.updatedAt || 0,
-        };
-      });
-      items.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      setSeries(items);
-    });
-    return () => unsub();
-  }, []);
+  useEffect(() => {
+    if (selectedAnimeId && !privateItems.some((item) => item.id === selectedAnimeId)) {
+      setSelectedAnimeId("");
+    }
+  }, [privateItems, selectedAnimeId]);
 
   const verifyPin = useCallback(async () => {
     if (!userId || !pin.trim()) return;
@@ -229,192 +192,163 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
     setOtpLoading(false);
   }, [userId, otpInput, newPin]);
 
-  // Categories from content
   const categories = useMemo(() => {
-    const cats = new Set<string>();
-    series.forEach(s => { if (s.category) cats.add(s.category); });
-    return Array.from(cats);
-  }, [series]);
+    return Array.from(new Set(privateItems.map((item) => item.category).filter(Boolean)));
+  }, [privateItems]);
 
-  // Filtered content
-  const filteredSeries = useMemo(() => {
-    if (activeCategory === "All") return series;
-    return series.filter(s => s.category === activeCategory);
-  }, [series, activeCategory]);
+  const filteredItems = useMemo(() => {
+    if (activeCategory === "All") return privateItems;
+    return privateItems.filter((item) => item.category === activeCategory);
+  }, [activeCategory, privateItems]);
 
-  // Category groups for home sections
   const categoryGroups = useMemo(() => {
-    const groups: Record<string, PrivateSeries[]> = {};
-    series.forEach(s => {
-      const cat = s.category || "Uncategorized";
+    const groups: Record<string, AnimeItem[]> = {};
+    privateItems.forEach((item) => {
+      const cat = item.category || "Uncategorized";
       if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(s);
+      groups[cat].push(item);
     });
     return groups;
-  }, [series]);
+  }, [privateItems]);
 
-  // Hero slides from content with backdrop
   const heroSlides = useMemo((): HeroSlide[] => {
-    const withBackdrop = series.filter(s => s.backdrop);
+    const withBackdrop = privateItems.filter((item) => item.backdrop);
     if (withBackdrop.length === 0) return [];
-    return withBackdrop.slice(0, 6).map(s => ({
-      id: s.id,
-      title: s.title,
-      backdrop: s.backdrop!,
-      subtitle: s.category || "",
-      rating: s.rating || "",
-      year: s.year || "",
-      type: s.type || "webseries",
+    return withBackdrop.slice(0, 6).map((item) => ({
+      id: item.id,
+      title: item.title,
+      backdrop: item.backdrop,
+      subtitle: item.category || "",
+      rating: item.rating || "",
+      year: item.year || "",
+      type: item.type,
       isCustom: false,
-      description: s.description || "",
+      description: item.storyline || "",
     }));
-  }, [series]);
+  }, [privateItems]);
 
-  // New releases (latest updated content)
   const newReleases = useMemo(() => {
-    return [...series]
+    return [...privateItems]
       .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
       .slice(0, 10);
-  }, [series]);
+  }, [privateItems]);
 
-  // Convert PrivateSeries to AnimeItem for reuse of AnimeSection/AnimeCard
-  const toAnimeItem = useCallback((s: PrivateSeries): AnimeItem => ({
-    id: s.id,
-    title: s.title,
-    poster: s.poster || s.backdrop || "",
-    backdrop: s.backdrop || "",
-    year: s.year || "",
-    rating: s.rating || "",
-    type: (s.type || "webseries") as "webseries" | "movie",
-    category: s.category || "Uncategorized",
-    storyline: s.description || "",
-    language: s.language || "",
-    createdAt: s.createdAt || 0,
-    updatedAt: s.updatedAt || 0,
-    seasons: s.seasons?.map(sn => ({
-      name: sn.name,
-      episodes: sn.episodes.map(ep => ({
-        episodeNumber: ep.episodeNumber,
-        title: ep.title,
-        link: ep.link,
-        link480: ep.link480,
-        link720: ep.link720,
-        link1080: ep.link1080,
-        link4k: ep.link4k,
-        audioTracks: ep.audioTracks,
-      })),
-    })),
-  }), []);
+  const handlePlay = useCallback((anime: AnimeItem, seasonIdx = 0, epIdx = 0) => {
+    if (anime.type === "movie") {
+      const src = getMovieSrc(anime);
+      if (!src) {
+        toast.error("ভিডিও লিংক নেই");
+        return;
+      }
 
-  // Get seasons for selected series
-  const getSeasons = useCallback((s: PrivateSeries): Season[] => {
-    if (s.seasons && s.seasons.length > 0) {
-      return s.seasons.map(sn => ({
-        name: sn.name,
-        episodes: sn.episodes.map(ep => ({
-          episodeNumber: ep.episodeNumber, title: ep.title, link: ep.link,
-          link480: ep.link480, link720: ep.link720, link1080: ep.link1080, link4k: ep.link4k,
-          audioTracks: ep.audioTracks,
-        })),
-      }));
+      setPlayerState({
+        src,
+        subtitle: anime.year || "Movie",
+        anime,
+        seasonIdx: 0,
+        epIdx: 0,
+        qualityOptions: buildMovieQualityOptions(anime),
+      });
+      return;
     }
-    if (s.episodes && s.episodes.length > 0) {
-      return [{ name: "Season 1", episodes: s.episodes.map(ep => ({
-        episodeNumber: ep.episodeNumber, title: ep.title, link: ep.link,
-        link480: ep.link480, link720: ep.link720, link1080: ep.link1080, link4k: ep.link4k,
-        audioTracks: ep.audioTracks,
-      })) }];
+
+    const season = anime.seasons?.[seasonIdx];
+    const episode = season?.episodes?.[epIdx];
+    const src = getEpisodeSrc(episode);
+
+    if (!season || !episode || !src) {
+      toast.error("ভিডিও লিংক নেই");
+      return;
     }
-    return [];
+
+    setPlayerState({
+      src,
+      subtitle: `${season.name} - Episode ${episode.episodeNumber}`,
+      anime,
+      seasonIdx,
+      epIdx,
+      qualityOptions: buildEpisodeQualityOptions(episode),
+      audioTracks: episode.audioTracks,
+    });
   }, []);
 
-  // Handle play
-  const handlePlay = useCallback((s: PrivateSeries, seasonIdx = 0, epIdx = 0) => {
-    const seasons = getSeasons(s);
-    const season = seasons[seasonIdx];
-    if (!season?.episodes?.[epIdx]) return;
-    const ep = season.episodes[epIdx];
-    const src = getEpisodeSrc(ep as PrivateEpisode);
-    if (!src) { toast.error("ভিডিও লিংক নেই"); return; }
-    const qOpts: { label: string; src: string }[] = [];
-    if (ep.link480) qOpts.push({ label: "480p", src: ep.link480 });
-    if (ep.link720) qOpts.push({ label: "720p", src: ep.link720 });
-    if (ep.link1080) qOpts.push({ label: "1080p", src: ep.link1080 });
-    if (ep.link4k) qOpts.push({ label: "4K", src: ep.link4k });
-    setPlayerState({
-      src, title: s.title,
-      subtitle: `${season.name} - Episode ${ep.episodeNumber}`,
-      series: s, seasonIdx, epIdx,
-      qualityOptions: qOpts.length > 0 ? qOpts : undefined,
-      audioTracks: (ep as PrivateEpisode).audioTracks,
-    });
-  }, [getSeasons]);
-
   const handleCardClick = useCallback((anime: AnimeItem) => {
-    const found = series.find(s => s.id === anime.id);
-    if (found) setSelectedSeries(found);
-  }, [series]);
+    setSelectedAnimeId(anime.id);
+  }, []);
 
-  // ========== VIDEO PLAYER ==========
   if (playerState) {
-    const seasons = getSeasons(playerState.series);
-    const eps = seasons[playerState.seasonIdx]?.episodes || [];
-    const episodeList = eps.map((ep, i) => ({
-      number: ep.episodeNumber || i + 1,
-      title: ep.title,
-      active: i === playerState.epIdx,
+    if (playerState.anime.type === "movie") {
+      return (
+        <div className="fixed inset-0 z-[300]">
+          <Suspense fallback={<div className="fixed inset-0 bg-black flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
+            <VideoPlayer
+              src={playerState.src}
+              title={playerState.anime.title}
+              subtitle={playerState.subtitle}
+              poster={playerState.anime.backdrop || playerState.anime.poster}
+              onClose={() => setPlayerState(null)}
+              qualityOptions={playerState.qualityOptions}
+              animeId={`private_${playerState.anime.id}`}
+            />
+          </Suspense>
+        </div>
+      );
+    }
+
+    const seasons = playerState.anime.seasons || [];
+    const episodes = seasons[playerState.seasonIdx]?.episodes || [];
+
+    const episodeList = episodes.map((episode, index) => ({
+      number: episode.episodeNumber || index + 1,
+      title: episode.title,
+      active: index === playerState.epIdx,
       onClick: () => {
-        const clickedSrc = getEpisodeSrc(ep as PrivateEpisode);
+        const clickedSrc = getEpisodeSrc(episode);
         if (!clickedSrc) return;
-        const qO: { label: string; src: string }[] = [];
-        if (ep.link480) qO.push({ label: "480p", src: ep.link480 });
-        if (ep.link720) qO.push({ label: "720p", src: ep.link720 });
-        if (ep.link1080) qO.push({ label: "1080p", src: ep.link1080 });
-        if (ep.link4k) qO.push({ label: "4K", src: ep.link4k });
-        setPlayerState({
-          ...playerState, src: clickedSrc,
-          subtitle: `${seasons[playerState.seasonIdx].name} - Episode ${ep.episodeNumber}`,
-          epIdx: i, qualityOptions: qO.length > 0 ? qO : undefined,
-          audioTracks: (ep as PrivateEpisode).audioTracks,
-        });
+
+        setPlayerState((current) => current ? {
+          ...current,
+          src: clickedSrc,
+          subtitle: `${seasons[current.seasonIdx].name} - Episode ${episode.episodeNumber}`,
+          epIdx: index,
+          qualityOptions: buildEpisodeQualityOptions(episode),
+          audioTracks: episode.audioTracks,
+        } : null);
       },
     }));
 
-    const handleNextEpisode = playerState.epIdx < eps.length - 1 ? () => {
-      const nextEp = eps[playerState.epIdx + 1];
-      const nextSrc = getEpisodeSrc(nextEp as PrivateEpisode);
-      if (!nextSrc) return;
-      const qO: { label: string; src: string }[] = [];
-      if (nextEp.link480) qO.push({ label: "480p", src: nextEp.link480 });
-      if (nextEp.link720) qO.push({ label: "720p", src: nextEp.link720 });
-      if (nextEp.link1080) qO.push({ label: "1080p", src: nextEp.link1080 });
-      if (nextEp.link4k) qO.push({ label: "4K", src: nextEp.link4k });
-      setPlayerState({
-        ...playerState, src: nextSrc,
-        subtitle: `${seasons[playerState.seasonIdx].name} - Episode ${nextEp.episodeNumber}`,
-        epIdx: playerState.epIdx + 1, qualityOptions: qO.length > 0 ? qO : undefined,
-        audioTracks: (nextEp as PrivateEpisode).audioTracks,
-      });
-    } : undefined;
+    const handleNextEpisode = playerState.epIdx < episodes.length - 1
+      ? () => {
+          const nextEpisode = episodes[playerState.epIdx + 1];
+          const nextSrc = getEpisodeSrc(nextEpisode);
+          if (!nextSrc) return;
 
-    const handleSeasonChange = (newIdx: number) => {
-      const newSeason = seasons[newIdx];
-      if (!newSeason?.episodes?.length) return;
-      const ep = newSeason.episodes[0];
-      const src = getEpisodeSrc(ep as PrivateEpisode);
-      if (!src) return;
-      const qO: { label: string; src: string }[] = [];
-      if (ep.link480) qO.push({ label: "480p", src: ep.link480 });
-      if (ep.link720) qO.push({ label: "720p", src: ep.link720 });
-      if (ep.link1080) qO.push({ label: "1080p", src: ep.link1080 });
-      if (ep.link4k) qO.push({ label: "4K", src: ep.link4k });
-      setPlayerState({
-        ...playerState, src,
-        subtitle: `${newSeason.name} - Episode ${ep.episodeNumber}`,
-        seasonIdx: newIdx, epIdx: 0,
-        qualityOptions: qO.length > 0 ? qO : undefined,
-        audioTracks: (ep as PrivateEpisode).audioTracks,
-      });
+          setPlayerState((current) => current ? {
+            ...current,
+            src: nextSrc,
+            subtitle: `${seasons[current.seasonIdx].name} - Episode ${nextEpisode.episodeNumber}`,
+            epIdx: current.epIdx + 1,
+            qualityOptions: buildEpisodeQualityOptions(nextEpisode),
+            audioTracks: nextEpisode.audioTracks,
+          } : null);
+        }
+      : undefined;
+
+    const handleSeasonChange = (nextSeasonIdx: number) => {
+      const nextSeason = seasons[nextSeasonIdx];
+      const firstEpisode = nextSeason?.episodes?.[0];
+      const nextSrc = getEpisodeSrc(firstEpisode);
+      if (!nextSeason || !firstEpisode || !nextSrc) return;
+
+      setPlayerState((current) => current ? {
+        ...current,
+        src: nextSrc,
+        subtitle: `${nextSeason.name} - Episode ${firstEpisode.episodeNumber}`,
+        seasonIdx: nextSeasonIdx,
+        epIdx: 0,
+        qualityOptions: buildEpisodeQualityOptions(firstEpisode),
+        audioTracks: firstEpisode.audioTracks,
+      } : null);
     };
 
     return (
@@ -422,9 +356,9 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
         <Suspense fallback={<div className="fixed inset-0 bg-black flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
           <VideoPlayer
             src={playerState.src}
-            title={playerState.title}
+            title={playerState.anime.title}
             subtitle={playerState.subtitle}
-            poster={playerState.series.backdrop || playerState.series.poster}
+            poster={playerState.anime.backdrop || playerState.anime.poster}
             onClose={() => setPlayerState(null)}
             onNextEpisode={handleNextEpisode}
             episodeList={episodeList}
@@ -433,113 +367,17 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
             seasons={seasons.length > 1 ? seasons : undefined}
             currentSeasonIdx={playerState.seasonIdx}
             onSeasonChange={seasons.length > 1 ? handleSeasonChange : undefined}
-            animeId={`private_${playerState.series.id}`}
+            animeId={`private_${playerState.anime.id}`}
           />
         </Suspense>
       </div>
     );
   }
 
-  // ========== DETAILS VIEW (clone of AnimeDetails) ==========
-  if (selectedSeries && isAuthenticated) {
-    const s = selectedSeries;
-    const seasons = getSeasons(s);
-    return (
-      <motion.div
-        className="fixed inset-0 z-[250] bg-background overflow-y-auto"
-        initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
-        transition={{ type: "tween", duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-      >
-        {/* Header Image */}
-        <div className="relative w-full h-[45vh] min-h-[300px] overflow-hidden">
-          <img src={s.backdrop || s.poster} alt={s.title} className="w-full h-full object-cover" />
-          <div className="absolute inset-0" style={{
-            background: "linear-gradient(to top, hsl(var(--background)) 0%, hsl(var(--background) / 0.4) 40%, transparent 60%), linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, transparent 25%)"
-          }} />
-          <div className="absolute bottom-6 left-0 right-0 px-5 text-center">
-            <h1 className="text-2xl font-extrabold mb-2 drop-shadow-[0_4px_20px_rgba(0,0,0,0.9)]" style={{ color: "white" }}>
-              {s.title}
-            </h1>
-            <div className="flex items-center justify-center gap-2 text-[11px] text-secondary-foreground flex-wrap">
-              {s.rating && (
-                <span className="bg-accent px-2.5 py-1 rounded text-accent-foreground font-semibold shadow-[0_2px_10px_hsla(38,90%,55%,0.4)] flex items-center gap-1">
-                  <Star className="w-3 h-3" /> {s.rating}
-                </span>
-              )}
-              {s.year && <span>{s.year}</span>}
-              {s.language && <span>{s.language}</span>}
-              <span className="bg-foreground/15 px-2.5 py-1 rounded text-[10px] backdrop-blur-[10px]">
-                {s.type === "movie" ? "Movie" : "Series"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Back button */}
-        <button onClick={() => setSelectedSeries(null)}
-          className="fixed left-4 top-5 w-10 h-10 rounded-full bg-background/70 backdrop-blur-[20px] border-2 border-foreground/20 flex items-center justify-center z-[260] transition-all hover:bg-primary hover:border-primary hover:scale-110">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-
-        {/* Content */}
-        <div className="relative px-4 pb-24 z-10">
-          <div className="flex gap-2.5 mb-5">
-            <button onClick={() => handlePlay(s, 0, 0)}
-              className="flex-1 py-3 rounded-xl gradient-primary font-bold text-sm flex items-center justify-center gap-2 btn-glow">
-              {s.type === "movie" ? <><Play className="w-4 h-4" /> Play</> : <><List className="w-4 h-4" /> Watch</>}
-            </button>
-          </div>
-
-          {s.description && (
-            <div className="glass-card p-4 mb-5">
-              <h3 className="text-[15px] font-bold mb-2.5 flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-primary" /> Storyline
-              </h3>
-              <p className="text-[13px] leading-relaxed text-secondary-foreground">{s.description}</p>
-            </div>
-          )}
-
-          {/* Episode List like AnimeDetails */}
-          {seasons.length > 0 && (
-            <div className="mb-5 space-y-4">
-              {seasons.map((season, sIdx) => (
-                <div key={sIdx} className="glass-card p-3.5 rounded-xl">
-                  <h3 className="text-[15px] font-bold mb-3 flex items-center category-bar">{season.name}</h3>
-                  <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
-                    {season.episodes.map((ep, eIdx) => (
-                      <button key={eIdx} onClick={() => handlePlay(s, sIdx, eIdx)}
-                        className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-secondary/60 border border-border/30 hover:border-primary hover:bg-primary/10 transition-all group">
-                        <div className="w-[72px] h-[42px] min-w-[72px] flex-shrink-0 rounded-lg overflow-hidden bg-card relative">
-                          <img src={s.poster || s.backdrop} alt={`Ep ${ep.episodeNumber}`} className="w-full h-full object-cover" loading="lazy" />
-                          <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Play className="w-4 h-4 text-white" fill="white" />
-                          </div>
-                          <span className="absolute bottom-0.5 right-0.5 text-[8px] font-bold bg-black/70 text-white px-1 rounded">EP {ep.episodeNumber}</span>
-                        </div>
-                        <div className="flex-1 min-w-0 text-left">
-                          <p className="text-[13px] font-semibold truncate">Episode {ep.episodeNumber}</p>
-                          {ep.title && ep.title !== `Episode ${ep.episodeNumber}` && (
-                            <p className="text-[11px] text-muted-foreground truncate">{ep.title}</p>
-                          )}
-                        </div>
-                        <div className="flex gap-1 flex-shrink-0">
-                          {ep.link1080 && <span className="text-[8px] bg-primary/20 text-primary px-1 rounded">HD</span>}
-                          {ep.link4k && <span className="text-[8px] bg-amber-500/20 text-amber-400 px-1 rounded">4K</span>}
-                        </div>
-                        <Play className="w-4 h-4 flex-shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </motion.div>
-    );
+  if (selectedAnime && isAuthenticated) {
+    return <AnimeDetails anime={selectedAnime} onClose={() => setSelectedAnimeId("")} onPlay={handlePlay} />;
   }
 
-  // ========== LOGIN / SET PIN ==========
   if (!isAuthenticated) {
     return (
       <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
@@ -635,9 +473,6 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
     );
   }
 
-  // ========== MAIN HOME PAGE CLONE ==========
-  const animeItems = filteredSeries.map(toAnimeItem);
-
   return (
     <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto"
       initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
@@ -664,13 +499,12 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
             slides={heroSlides}
             onPlay={(idx) => {
               const slide = heroSlides[idx];
-              const found = series.find(s => s.id === slide.id);
+              const found = privateItems.find((item) => item.id === slide.id);
               if (found) handlePlay(found, 0, 0);
             }}
             onInfo={(idx) => {
               const slide = heroSlides[idx];
-              const found = series.find(s => s.id === slide.id);
-              if (found) setSelectedSeries(found);
+              setSelectedAnimeId(slide.id);
             }}
           />
         )}
@@ -681,12 +515,11 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
         )}
 
         {activeCategory !== "All" ? (
-          // Filtered view - grid
           <div className="px-4 pb-6">
             <h2 className="text-base font-bold mb-3 flex items-center category-bar">{activeCategory}</h2>
-            {animeItems.length > 0 ? (
+            {filteredItems.length > 0 ? (
               <div className="grid grid-cols-3 gap-2.5">
-                {animeItems.map(anime => (
+                {filteredItems.map((anime) => (
                   <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
                     <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
                     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
@@ -703,25 +536,21 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
           </div>
         ) : (
           <>
-            {/* New Releases Section */}
             {newReleases.length > 0 && (
-              <AnimeSection title="🔥 New Releases" items={newReleases.map(toAnimeItem)} onCardClick={handleCardClick} />
+              <AnimeSection title="🔥 New Releases" items={newReleases} onCardClick={handleCardClick} />
             )}
 
-            {/* Category Sections */}
             {Object.entries(categoryGroups).map(([cat, items]) => (
-              <AnimeSection key={cat} title={cat} items={items.slice(0, 10).map(toAnimeItem)} onCardClick={handleCardClick} />
+              <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
             ))}
 
-            {/* All content grid */}
-            {series.length > 0 && (
+            {privateItems.length > 0 && (
               <div className="px-4 mb-6">
                 <h3 className="text-base font-bold mb-3 flex items-center category-bar">📺 All Content</h3>
                 <div className="grid grid-cols-3 gap-2.5">
-                  {series.map(s => {
-                    const anime = toAnimeItem(s);
+                  {privateItems.map((anime) => {
                     return (
-                      <div key={s.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+                      <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
                         <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
                         <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
                         {anime.year && <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>}
@@ -735,10 +564,10 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
               </div>
             )}
 
-            {series.length === 0 && (
+            {(contentLoading || privateItems.length === 0) && (
               <div className="text-center py-16">
-                <Film className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
-                <p className="text-sm text-muted-foreground">এখনো কোনো প্রাইভেট কন্টেন্ট নেই</p>
+                {contentLoading ? <Loader2 className="w-12 h-12 text-primary mx-auto mb-3 animate-spin" /> : <Film className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />}
+                <p className="text-sm text-muted-foreground">{contentLoading ? "প্রাইভেট কন্টেন্ট লোড হচ্ছে..." : "এখনো কোনো প্রাইভেট কন্টেন্ট নেই"}</p>
               </div>
             )}
           </>
