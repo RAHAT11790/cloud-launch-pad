@@ -11,7 +11,7 @@ import AboutPage from "./AboutPage";
 import PrivacyPolicyPage from "./PrivacyPolicyPage";
 
 const VideoPlayer = lazy(() => import("@/components/VideoPlayer"));
-const PrivateContentPortal = lazy(() => import("@/components/PrivateContentPage"));
+
 
 const DownloadVideoPlayer = ({ src, title, subtitle, poster, onClose, downloadedEpisodes, onPlayEpisode, currentId, qualityOptions, onQualityChange }: {
   src: string; title: string; subtitle?: string; poster?: string; onClose: () => void;
@@ -429,7 +429,7 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
 
 const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: ProfilePageProps) => {
   const brandingCfg = useBranding();
-  const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy" | "private-content">("main");
+  const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy">("main");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(() => {
     try { return localStorage.getItem("rs_profile_photo"); } catch { return null; }
   });
@@ -1146,15 +1146,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
     );
   }
 
-  // Private Content Panel
-  if (activePanel === "private-content") {
-    return (
-      <Suspense fallback={<div className="fixed inset-0 z-[200] bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
-        <PrivateContentPortal onClose={() => setActivePanel("main")} />
-      </Suspense>
-    );
-  }
-
   // Downloads Panel
   if (activePanel === "downloads") {
     return <DownloadsPanel onBack={() => setActivePanel("main")} />;
@@ -1376,15 +1367,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
           className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:border-primary hover:translate-x-1 rounded-xl">
           <Download className="w-5 h-5 text-primary" />
           <span className="flex-1 text-[13px] font-medium">Downloads</span>
-          <ChevronRight className="w-3 h-3 text-muted-foreground" />
-        </div>
-        <div onClick={() => setActivePanel("private-content")}
-          className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:border-primary hover:translate-x-1 rounded-xl">
-          <Lock className="w-5 h-5 text-primary" />
-          <div className="flex-1">
-            <span className="text-[13px] font-medium">Private Content</span>
-            <p className="text-[10px] text-muted-foreground">🔒 বিশেষ কন্টেন্ট এক্সেস</p>
-          </div>
           <ChevronRight className="w-3 h-3 text-muted-foreground" />
         </div>
         <div onClick={() => { setTempName(displayName); setActivePanel("edit"); }}
