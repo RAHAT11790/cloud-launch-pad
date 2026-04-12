@@ -10,7 +10,7 @@ import {
   Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
   Shield, LogOut, Search, Save, ChevronDown, Send, Link, ChevronLeft, ChevronRight,
   Lock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin,
-  Upload, Loader2, CheckCircle, XCircle
+  Upload, Loader2, CheckCircle, XCircle, Clock, Image
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
