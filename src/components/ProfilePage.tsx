@@ -554,7 +554,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
       const url = await uploadToImgbb(file);
       setProfilePhoto(url);
       localStorage.setItem("rs_profile_photo", url);
-      toast.success("✅ প্রোফাইল ছবি আপলোড হয়েছে!");
+      toast.success("✅ Profile photo uploaded!");
     } catch {
       // Fallback to base64 if imgbb fails
       const reader = new FileReader();
@@ -564,7 +564,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
         localStorage.setItem("rs_profile_photo", result);
       };
       reader.readAsDataURL(file);
-      toast.error("ImgBB ব্যর্থ, লোকালে সেভ হয়েছে");
+      toast.error("ImgBB failed, saved locally");
     }
     setPhotoUploading(false);
   };
@@ -940,10 +940,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
               </div>
               <h3 className="text-lg font-bold text-destructive mb-2">Device Limit Exceeded</h3>
               <p className="text-sm text-secondary-foreground mb-1">
-                আপনার প্রিমিয়াম সাবস্ক্রিপশন সর্বোচ্চ <strong>{premiumMaxDevices}টি</strong> ডিভাইসে চলবে।
+                Your premium subscription supports up to <strong>{premiumMaxDevices}</strong> devices.
               </p>
               <p className="text-xs text-muted-foreground">
-                বর্তমানে {premiumDeviceCount}টি ডিভাইস অ্যাক্টিভ আছে। এই ডিভাইসটি নতুন।
+                Currently {premiumDeviceCount} devices are active. This device is new.
               </p>
             </div>
 
@@ -972,7 +972,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
                   </div>
                   <div>
                     <p className="text-sm font-semibold premium-text">Activate Premium Here</p>
-                    <p className="text-[11px] text-muted-foreground">অন্য একটি ডিভাইস রিমুভ হয়ে এখানে অ্যাক্টিভ হবে</p>
+                    <p className="text-[11px] text-muted-foreground">Another device will be removed and premium activated here</p>
                   </div>
                 </div>
               </button>
@@ -987,8 +987,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
                     <LogOut className="w-5 h-5 text-destructive" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-foreground">এই ফোন থেকে আইডি ডিলিট করে Logout করুন</p>
-                    <p className="text-[11px] text-muted-foreground">ডিলিট করলে এই ফোনে অটো লগআউট হয়ে লগইন পেইজে চলে যাবে</p>
+                    <p className="text-sm font-semibold text-foreground">Delete ID & Logout from this phone</p>
+                    <p className="text-[11px] text-muted-foreground">This will log you out and redirect to the login page</p>
                   </div>
                 </div>
               </button>
@@ -999,12 +999,12 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
             <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: "hsla(142,70%,45%,0.15)", border: "1px solid hsla(142,70%,45%,0.3)" }}>
               <Clock className="w-8 h-8" style={{ color: "hsl(142,70%,45%)" }} />
             </div>
-            <h3 className="text-lg font-bold mb-2" style={{ color: "hsl(142,70%,45%)" }}>রিকোয়েস্ট সাবমিট হয়েছে! ✅</h3>
-            <p className="text-sm text-secondary-foreground mb-2">24 ঘন্টার মধ্যে আপনার সাবস্ক্রিপশন অ্যাক্টিভেট হয়ে যাবে।</p>
-            <p className="text-xs text-muted-foreground">আমরা আপনার Transaction ID ভেরিফাই করছি। ভেরিফাই হলে নোটিফিকেশন পাবেন।</p>
+            <h3 className="text-lg font-bold mb-2" style={{ color: "hsl(142,70%,45%)" }}>Request Submitted! ✅</h3>
+            <p className="text-sm text-secondary-foreground mb-2">Your subscription will be activated within 24 hours.</p>
+            <p className="text-xs text-muted-foreground">We are verifying your Transaction ID. You'll receive a notification once verified.</p>
             <button onClick={() => { setTrxSubmitted(false); setSelectedPlan(null); }}
               className="mt-4 py-2 px-6 rounded-xl bg-foreground/10 text-foreground text-sm font-medium transition-colors hover:bg-foreground/20">
-              আবার কিনুন
+              Buy Again
             </button>
           </div>
         ) : (
@@ -1016,10 +1016,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
               <h3 className="text-xl font-bold premium-text mb-3">{brandingCfg.premiumTitle}</h3>
               <div className="space-y-2.5 text-left">
                 {[
-                  { icon: "🚫", text: "বিজ্ঞাপন ছাড়া দেখুন" },
-                  { icon: "📺", text: "4K Ultra HD কোয়ালিটি" },
-                  { icon: "⚡", text: "নিরবিচ্ছিন্ন স্ট্রিমিং" },
-                  { icon: "💎", text: "ক্রিয়েটরদের সাপোর্ট করুন" },
+                  { icon: "🚫", text: "Ad-free streaming" },
+                  { icon: "📺", text: "4K Ultra HD quality" },
+                  { icon: "⚡", text: "Uninterrupted streaming" },
+                  { icon: "💎", text: "Support the creators" },
                 ].map((f, i) => (
                   <div key={i} className="flex items-center gap-3 text-sm">
                     <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs" style={{ background: "hsla(45,90%,55%,0.15)" }}>{f.icon}</span>
@@ -1048,7 +1048,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
               <div>
                 {/* Select Plan with Device Limits */}
                 <div className="premium-card p-4 rounded-2xl mb-4">
-                  <h4 className="text-sm font-semibold mb-3 premium-text">📦 প্ল্যান সিলেক্ট করুন</h4>
+                  <h4 className="text-sm font-semibold mb-3 premium-text">📦 Select a Plan</h4>
                   <div className="space-y-2">
                     {activePlans.map((plan: any) => (
                       <div key={plan.id} onClick={() => setSelectedPlan(plan)}
@@ -1056,10 +1056,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
                         <div className="flex justify-between items-center">
                           <div>
                             <p className="text-sm font-bold">{plan.name}</p>
-                            <p className="text-[11px] text-muted-foreground">{plan.days} দিন Ad-Free</p>
+                            <p className="text-[11px] text-muted-foreground">{plan.days} days Ad-Free</p>
                             {plan.maxDevices && (
                               <p className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: "hsl(45,90%,55%)" }}>
-                                <Smartphone className="w-3 h-3" /> {plan.maxDevices} ডিভাইস পর্যন্ত
+                                <Smartphone className="w-3 h-3" /> Up to {plan.maxDevices} devices
                               </p>
                             )}
                           </div>

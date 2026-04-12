@@ -213,7 +213,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
     const now = Date.now();
     if (cooldownUntilRef.current > now) {
       const waitSeconds = Math.ceil((cooldownUntilRef.current - now) / 1000);
-      toast.error(`⏳ ${waitSeconds} সেকেন্ড পরে আবার চেষ্টা করুন`);
+      toast.error(`⏳ Please try again after ${waitSeconds} seconds`);
       return;
     }
 
@@ -281,7 +281,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
         const adminReply: ChatMessage = { id: `a_${Date.now()}`, role: "assistant", content: "✅ আপনার মেসেজ Admin-এর কাছে পাঠানো হয়েছে! Admin রিপ্লাই দিলে এখানেই দেখতে পাবেন। 😊", timestamp: Date.now() };
         setMessages(prev => [...prev, adminReply]);
       } catch {
-        toast.error("মেসেজ পাঠাতে ব্যর্থ");
+        toast.error("Failed to send message");
       }
       return;
     }
@@ -365,7 +365,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
         id: `err_${Date.now()}`,
         role: "assistant",
         content: isRateLimit
-          ? "⏳ এই মুহূর্তে অনেক বেশি রিকোয়েস্ট হচ্ছে। ১৫ সেকেন্ড পরে আবার চেষ্টা করুন।"
+          ? "⏳ Too many requests right now. Please try again in 15 seconds."
           : "⚠️ সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করুন। সরাসরি Admin-এর কাছে পৌঁছাতে @RS লিখে মেসেজ করুন।",
         timestamp: Date.now(),
       };
@@ -566,9 +566,9 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
             <div className="w-12 h-12 rounded-lg overflow-hidden mx-auto mb-3 bg-card p-1" style={{ boxShadow: "var(--neu-shadow-sm)" }}>
               <img src={logoSrc} alt={branding.siteName} className="w-full h-full object-contain" onError={() => setLogoFailed(true)} />
             </div>
-            <p className="text-sm text-foreground font-medium">হ্যালো! 👋</p>
-            <p className="text-xs text-muted-foreground mt-1">আমি {branding.siteName} Bot, আপনাকে সাহায্য করতে এখানে আছি!</p>
-            <p className="text-[10px] text-primary/60 mt-2">Admin-এর সাথে কথা বলতে @RS লিখুন</p>
+            <p className="text-sm text-foreground font-medium">Hello! 👋</p>
+            <p className="text-xs text-muted-foreground mt-1">I'm {branding.siteName} Bot, here to help you!</p>
+            <p className="text-[10px] text-primary/60 mt-2">Type @RS to talk to Admin</p>
           </div>
         )}
         {messages.map((msg) => (
@@ -610,7 +610,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
         <div className="flex items-center gap-2">
           <input
             value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
-            placeholder="মেসেজ লিখুন..."
+            placeholder="Type a message..."
             className="flex-1 min-w-0 bg-secondary rounded-full px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
             style={{ boxShadow: "var(--neu-shadow-inset)" }}
             disabled={loading}

@@ -1807,8 +1807,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         {adGateActive && !deviceBlocked && !unlockBlocked && (
           <div className="fixed inset-0 z-[400] bg-black/90 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-card rounded-2xl p-6 max-w-sm w-[90%] text-center space-y-4 shadow-2xl border border-border">
-              <h3 className="text-lg font-bold text-foreground">Unlock 24 Hours Access</h3>
-              <p className="text-sm text-muted-foreground">যেকোনো একটা লিংকে ক্লিক করে ২৪ ঘন্টা ফ্রি এক্সেস নাও</p>
+              <h3 className="text-lg font-bold text-foreground">Unlock Free Access</h3>
+              <p className="text-sm text-muted-foreground">Click any link below to get free streaming access</p>
               {shortenLoading ? (
                 <div className="flex items-center justify-center gap-2 py-3">
                   <Loader2 className="w-5 h-5 animate-spin text-primary" />
@@ -1825,6 +1825,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     >
                       <ExternalLink className="w-4 h-4" />
                       {link.service.icon || "🔓"} {link.service.name || `Unlock ${i + 1}`}
+                      {link.service.durationHours && (
+                        <span className="text-[10px] opacity-80 ml-1">({link.service.durationHours}h access)</span>
+                      )}
                     </button>
                   ))}
                 </div>

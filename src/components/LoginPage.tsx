@@ -176,9 +176,9 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   };
 
   const handleGooglePasswordSet = async () => {
-    if (!googlePw.trim()) { toast.error("পাসওয়ার্ড দিন"); return; }
-    if (googlePw.length < 4) { toast.error("পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে"); return; }
-    if (googlePw !== googlePwConfirm) { toast.error("পাসওয়ার্ড মিলছে না!"); return; }
+    if (!googlePw.trim()) { toast.error("Please enter a password"); return; }
+    if (googlePw.length < 4) { toast.error("Password must be at least 4 characters"); return; }
+    if (googlePw !== googlePwConfirm) { toast.error("Passwords don't match!"); return; }
 
     setLoading(true);
     try {
@@ -207,7 +207,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
       localStorage.setItem("rs_display_name", gName);
       if (gPhoto) localStorage.setItem("rs_profile_photo", gPhoto);
-      toast.success(`Welcome, ${gName}! পাসওয়ার্ড সেট হয়েছে ✅`);
+      toast.success(`Welcome, ${gName}! Password set successfully ✅`);
       setGoogleSetPwMode(false);
       setGooglePendingData(null);
       onLogin(uid);
@@ -218,14 +218,14 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   };
 
   const handleForgotPassword = async () => {
-    if (!forgotEmail.trim()) { toast.error("ইমেইল দিন"); return; }
+    if (!forgotEmail.trim()) { toast.error("Please enter your email"); return; }
     setForgotLoading(true);
     try {
       // Find user by email in Firebase
       const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
       const snap = await get(ref(db, `appUsers/${emailKey}`));
       if (!snap.exists()) {
-        toast.error("এই ইমেইলে কোনো অ্যাকাউন্ট নেই!");
+        toast.error("No account found with this email!");
         setForgotLoading(false);
         return;
       }
@@ -251,7 +251,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       }
 
       setForgotOtpSent(true);
-      toast.success(`📧 কোড পাঠানো হয়েছে: ${forgotEmail}`);
+      toast.success(`📧 Code sent to: ${forgotEmail}`);
     } catch (err: any) {
       toast.error("Error: " + err.message);
     }
@@ -260,26 +260,26 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
 
   const handleResetPasswordWithOtp = async () => {
     if (!forgotOtp.trim() || !forgotNewPw.trim()) return;
-    if (forgotNewPw.length < 4) { toast.error("পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে"); return; }
-    if (forgotNewPw !== forgotNewPwConfirm) { toast.error("পাসওয়ার্ড মিলছে না!"); return; }
+    if (forgotNewPw.length < 4) { toast.error("Password must be at least 4 characters"); return; }
+    if (forgotNewPw !== forgotNewPwConfirm) { toast.error("Passwords don't match!"); return; }
 
     setForgotLoading(true);
     try {
       const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
       const snap = await get(ref(db, `appUsers/${emailKey}`));
-      if (!snap.exists()) { toast.error("অ্যাকাউন্ট পাওয়া যায়নি"); setForgotLoading(false); return; }
+      if (!snap.exists()) { toast.error("Account not found"); setForgotLoading(false); return; }
 
       const userId = snap.val()?.id || emailKey;
       const otpSnap = await get(ref(db, `users/${userId}/passwordResetOtp`));
       const otpData = otpSnap.val();
 
       if (!otpData || otpData.code !== forgotOtp.trim()) {
-        toast.error("❌ কোড ভুল!");
+        toast.error("❌ Incorrect code!");
         setForgotLoading(false);
         return;
       }
       if (otpData.expiresAt < Date.now()) {
-        toast.error("⏰ কোডের মেয়াদ শেষ!");
+        toast.error("⏰ Code expired!");
         setForgotLoading(false);
         return;
       }
@@ -288,7 +288,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       await set(ref(db, `appUsers/${emailKey}/password`), forgotNewPw.trim());
       await set(ref(db, `users/${userId}/passwordResetOtp`), null);
 
-      toast.success("✅ নতুন পাসওয়ার্ড সেট হয়েছে! এখন লগইন করুন।");
+      toast.success("✅ New password set! You can now login.");
       setShowForgotPw(false);
       setForgotOtpSent(false);
       setForgotOtp("");
@@ -460,21 +460,21 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                   <KeyRound className="w-7 h-7 text-primary" />
                 </div>
                 <h2 className="text-xl font-black text-primary" style={{ fontFamily: "'Russo One', sans-serif" }}>
-                  পাসওয়ার্ড সেট করুন
+                  Set Your Password
                 </h2>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  হ্যালো {googlePendingData.gName}! প্রথমে একটা পাসওয়ার্ড সেট করুন
+                  Hello {googlePendingData.gName}! Please set a password first
                 </p>
               </motion.div>
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">পাসওয়ার্ড</label>
+                  <label className="text-xs text-muted-foreground mb-1.5 block">Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
                       type={showGooglePw ? "text" : "password"}
-                      placeholder="পাসওয়ার্ড দিন"
+                      placeholder="Enter password"
                       value={googlePw}
                       onChange={e => setGooglePw(e.target.value)}
                       className="w-full py-3 pl-10 pr-10 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground"
@@ -487,12 +487,12 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                 </div>
 
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1.5 block">কনফার্ম পাসওয়ার্ড</label>
+                  <label className="text-xs text-muted-foreground mb-1.5 block">Confirm Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
                       type={showGooglePwConfirm ? "text" : "password"}
-                      placeholder="আবার পাসওয়ার্ড দিন"
+                      placeholder="Re-enter password"
                       value={googlePwConfirm}
                       onChange={e => setGooglePwConfirm(e.target.value)}
                       className="w-full py-3 pl-10 pr-10 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground"
@@ -507,11 +507,11 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                 {googlePw && googlePwConfirm && googlePw === googlePwConfirm && (
                   <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
                     className="flex items-center gap-2 text-xs text-green-500">
-                    <Check className="w-3.5 h-3.5" /> পাসওয়ার্ড মিলছে
+                    <Check className="w-3.5 h-3.5" /> Passwords match
                   </motion.div>
                 )}
                 {googlePw && googlePwConfirm && googlePw !== googlePwConfirm && (
-                  <p className="text-xs text-destructive">পাসওয়ার্ড মিলছে না!</p>
+                  <p className="text-xs text-destructive">Passwords don't match!</p>
                 )}
 
                 <motion.button
@@ -572,31 +572,31 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                   <Mail className="w-7 h-7 text-primary" />
                 </div>
                 <h2 className="text-xl font-black text-primary" style={{ fontFamily: "'Russo One', sans-serif" }}>
-                  পাসওয়ার্ড রিসেট
+                  Reset Password
                 </h2>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  {forgotOtpSent ? "ইমেইলে পাঠানো কোড দিন ও নতুন পাসওয়ার্ড সেট করুন" : "আপনার ইমেইলে একটি কোড পাঠানো হবে"}
+                  {forgotOtpSent ? "Enter the code sent to your email and set a new password" : "A verification code will be sent to your email"}
                 </p>
               </motion.div>
 
               {forgotOtpSent ? (
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">ইমেইলে পাঠানো ৬ ডিজিটের কোড</label>
+                    <label className="text-xs text-muted-foreground mb-1 block">6-digit code from email</label>
                     <input type="text" value={forgotOtp} onChange={e => setForgotOtp(e.target.value)}
-                      placeholder="৬ ডিজিটের কোড" maxLength={6}
+                      placeholder="6-digit code" maxLength={6}
                       className="w-full py-3 px-4 rounded-xl bg-secondary border border-border text-foreground text-center text-lg font-mono tracking-[8px] focus:border-primary focus:outline-none" />
                   </div>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input type="password" value={forgotNewPw} onChange={e => setForgotNewPw(e.target.value)}
-                      placeholder="নতুন পাসওয়ার্ড (মিনিমাম ৪)"
+                      placeholder="New password (min 4 chars)"
                       className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none" />
                   </div>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input type="password" value={forgotNewPwConfirm} onChange={e => setForgotNewPwConfirm(e.target.value)}
-                      placeholder="পাসওয়ার্ড আবার দিন"
+                      placeholder="Re-enter password"
                       className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none" />
                   </div>
                   <motion.button
@@ -605,10 +605,10 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                     whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50 transition-all"
                   >
-                    {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><KeyRound className="w-4 h-4" /> পাসওয়ার্ড রিসেট করুন</>}
+                    {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><KeyRound className="w-4 h-4" /> Reset Password</>}
                   </motion.button>
                   <button onClick={() => setForgotOtpSent(false)} className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground">
-                    ← আবার কোড পাঠান
+                    ← Resend Code
                   </button>
                 </div>
               ) : (
@@ -617,7 +617,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                     <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
                       type="email"
-                      placeholder="আপনার ইমেইল দিন"
+                      placeholder="Enter your email"
                       value={forgotEmail}
                       onChange={e => setForgotEmail(e.target.value)}
                       className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground"
@@ -631,12 +631,12 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                     whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     className="w-full py-3.5 rounded-xl gradient-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 btn-glow disabled:opacity-50 transition-all"
                   >
-                    {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><Mail className="w-4 h-4" /> কোড পাঠান</>}
+                    {forgotLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><Mail className="w-4 h-4" /> Send Code</>}
                   </motion.button>
 
                   <a href={TELEGRAM_ADMIN_URL} target="_blank" rel="noopener noreferrer"
                     className="block text-center text-[11px] text-primary/60 hover:text-primary hover:underline mt-3">
-                    📩 সমস্যা হলে Contact Owner
+                    📩 Having trouble? Contact Owner
                   </a>
                 </div>
               )}

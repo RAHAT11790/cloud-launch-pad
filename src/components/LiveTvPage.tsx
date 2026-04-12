@@ -233,7 +233,7 @@ const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
         <div className="text-center py-20">
           <Radio className="w-12 h-12 text-muted-foreground mx-auto mb-3 opacity-50" />
           <p className="text-sm text-muted-foreground">
-            {searchQuery ? "কোনো চ্যানেল পাওয়া যায়নি" : "কোনো লাইভ টিভি চ্যানেল নেই"}
+            {searchQuery ? "No channels found" : "No live TV channels available"}
           </p>
         </div>
       )}
