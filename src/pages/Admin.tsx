@@ -9872,12 +9872,30 @@ const AnimeSaltManagerSection = ({
               ].map(field => (
                 <div key={field.key}>
                   <label className="text-[11px] text-purple-400 mb-1 block">{field.label}</label>
-                  <input
-                    value={(editForm as any)[field.key]}
-                    onChange={e => setEditForm(f => ({ ...f, [field.key]: e.target.value }))}
-                    className={inputClass}
-                    placeholder={field.label}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      value={(editForm as any)[field.key]}
+                      onChange={e => setEditForm(f => ({ ...f, [field.key]: e.target.value }))}
+                      className={`${inputClass} flex-1`}
+                      placeholder={field.label}
+                    />
+                    {(field.key === "poster" || field.key === "backdrop") && (
+                      <label className="px-3 py-2 rounded-lg bg-[#151521] border border-white/10 text-[#D1C4E9] cursor-pointer flex items-center gap-1 text-[11px]">
+                        <Image size={12} />
+                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            toast.info("Uploading...");
+                            const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+                            const url = await uploadToImgbb(file);
+                            setEditForm(f => ({ ...f, [field.key]: url }));
+                            toast.success(`${field.label} uploaded!`);
+                          } catch { toast.error("Upload failed"); }
+                        }} />
+                      </label>
+                    )}
+                  </div>
                 </div>
               ))}
               <div>
