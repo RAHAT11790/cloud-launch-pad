@@ -237,8 +237,8 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
     if (anime.type === "movie") {
       const src = getMovieSrc(anime);
       if (!src) {
-        toast.error("ভিডিও লিংক নেই");
-        return;
+      toast.error("No video link");
+      return;
       }
 
       setPlayerState({
@@ -257,7 +257,7 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
     const src = getEpisodeSrc(episode);
 
     if (!season || !episode || !src) {
-      toast.error("ভিডিও লিংক নেই");
+      toast.error("No video link");
       return;
     }
 
@@ -462,7 +462,7 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
                 </button>
                 {hasPin && (
                   <button onClick={() => setForgotMode(true)} className="w-full py-2 text-sm text-primary hover:underline">
-                    পাসওয়ার্ড ভুলে গেছেন?
+                    Forgot Password?
                   </button>
                 )}
               </>
@@ -567,7 +567,7 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
             {(contentLoading || privateItems.length === 0) && (
               <div className="text-center py-16">
                 {contentLoading ? <Loader2 className="w-12 h-12 text-primary mx-auto mb-3 animate-spin" /> : <Film className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />}
-                <p className="text-sm text-muted-foreground">{contentLoading ? "প্রাইভেট কন্টেন্ট লোড হচ্ছে..." : "এখনো কোনো প্রাইভেট কন্টেন্ট নেই"}</p>
+                <p className="text-sm text-muted-foreground">{contentLoading ? "Loading private content..." : "No private content yet"}</p>
               </div>
             )}
           </>
