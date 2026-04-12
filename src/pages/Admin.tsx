@@ -3523,7 +3523,7 @@ ${tgHashtags}`;
     { section: "telegram-post", icon: <Send size={16} />, label: "Telegram Post", group: "Sharing" },
     { section: "tg-url-changer", icon: <RefreshCw size={16} />, label: "TG URL Changer" },
     { section: "free-access", icon: <Eye size={16} />, label: "Free Access", group: "Tracking" },
-    { section: "unlock-duration", icon: <Clock size={16} />, label: "Unlock Duration" },
+    
     { section: "analytics", icon: <BarChart3 size={16} />, label: "Analytics & Views" },
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
@@ -4078,8 +4078,26 @@ ${tgHashtags}`;
                       {["title", "logo", "poster", "backdrop", "trailer"].map(field => (
                         <div key={field} className="mb-4">
                           <label className="block text-xs text-[#D1C4E9] mb-2 font-medium capitalize">{field === "logo" ? "Title Logo URL" : field === "trailer" ? "Trailer (YouTube Link)" : field.charAt(0).toUpperCase() + field.slice(1) + " URL"}</label>
-                          <input value={seriesForm[field] || ""} onChange={e => setSeriesForm({ ...seriesForm, [field]: e.target.value })}
-                            className={inputClass} placeholder={`${field}...`} />
+                          <div className="flex gap-2">
+                            <input value={seriesForm[field] || ""} onChange={e => setSeriesForm({ ...seriesForm, [field]: e.target.value })}
+                              className={`${inputClass} flex-1`} placeholder={`${field}...`} />
+                            {(field === "poster" || field === "backdrop") && (
+                              <label className={`${btnSecondary} !px-3 cursor-pointer flex items-center gap-1`}>
+                                <Image size={14} />
+                                <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  try {
+                                    toast.info("Uploading...");
+                                    const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+                                    const url = await uploadToImgbb(file);
+                                    setSeriesForm(f => ({ ...f, [field]: url }));
+                                    toast.success(`${field} uploaded!`);
+                                  } catch { toast.error("Upload failed"); }
+                                }} />
+                              </label>
+                            )}
+                          </div>
                         </div>
                       ))}
                       <div className="grid grid-cols-2 gap-3">
