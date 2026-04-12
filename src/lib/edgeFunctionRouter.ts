@@ -9,7 +9,6 @@ import { db, ref, get } from "@/lib/firebase";
 
 // ---- Default built-in Cloudflare Worker endpoints ----
 export const DEFAULT_CF_FUNCTIONS = [
-  "shorten",
   "animesalt",
 ] as const;
 
@@ -168,7 +167,6 @@ export async function checkFunctionStatus(
 /** Get built-in description */
 function getBuiltInDescription(fn: string): string {
   const d: Record<string, string> = {
-    "shorten": "URL shortener",
     "animesalt": "AnimeSalt scraper",
   };
   return d[fn] || fn;
