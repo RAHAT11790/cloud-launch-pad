@@ -132,9 +132,9 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
       const snap = await get(ref(db, `users/${userId}/privatePin`));
       if (snap.val() === pin.trim()) {
         setIsAuthenticated(true);
-        toast.success("✅ অ্যাক্সেস দেওয়া হয়েছে!");
+        toast.success("✅ Access granted!");
       } else {
-        toast.error("❌ পাসওয়ার্ড ভুল!");
+        toast.error("❌ Wrong password!");
       }
     } catch { toast.error("Error verifying"); }
     setLoading(false);
@@ -142,7 +142,7 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
 
   const setNewPinForUser = useCallback(async () => {
     if (!userId || !pin.trim() || pin.trim().length < 4) {
-      toast.error("পাসওয়ার্ড কমপক্ষে ৪ ক্যারেক্টার হতে হবে");
+      toast.error("Password must be at least 4 characters");
       return;
     }
     setLoading(true);
@@ -150,13 +150,13 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
       await set(ref(db, `users/${userId}/privatePin`), pin.trim());
       setHasPin(true);
       setIsAuthenticated(true);
-      toast.success("✅ পাসওয়ার্ড সেট হয়েছে!");
+      toast.success("✅ Password set!");
     } catch { toast.error("Error setting password"); }
     setLoading(false);
   }, [userId, pin]);
 
   const sendOtp = useCallback(async () => {
-    if (!userId || !userEmail) { toast.error("ইমেইল পাওয়া যায়নি"); return; }
+    if (!userId || !userEmail) { toast.error("Email not found"); return; }
     setOtpLoading(true);
     try {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -170,24 +170,24 @@ const PrivateContentPage = ({ onClose }: PrivateContentPageProps) => {
         });
       } catch { console.log("Email sending failed, OTP stored in Firebase"); }
       setOtpSent(true);
-      toast.success(`📧 কোড পাঠানো হয়েছে: ${userEmail}`);
+      toast.success(`📧 Code sent to: ${userEmail}`);
     } catch { toast.error("Error sending code"); }
     setOtpLoading(false);
   }, [userId, userEmail, branding.siteName]);
 
   const verifyOtpAndResetPin = useCallback(async () => {
     if (!userId || !otpInput.trim() || !newPin.trim()) return;
-    if (newPin.trim().length < 4) { toast.error("পাসওয়ার্ড কমপক্ষে ৪ ক্যারেক্টার"); return; }
+    if (newPin.trim().length < 4) { toast.error("Password must be at least 4 characters"); return; }
     setOtpLoading(true);
     try {
       const snap = await get(ref(db, `users/${userId}/pinResetOtp`));
       const otpData = snap.val();
-      if (!otpData || otpData.code !== otpInput.trim()) { toast.error("❌ কোড ভুল!"); setOtpLoading(false); return; }
-      if (otpData.expiresAt < Date.now()) { toast.error("⏰ কোডের মেয়াদ শেষ!"); setOtpLoading(false); return; }
+      if (!otpData || otpData.code !== otpInput.trim()) { toast.error("❌ Wrong code!"); setOtpLoading(false); return; }
+      if (otpData.expiresAt < Date.now()) { toast.error("⏰ Code expired!"); setOtpLoading(false); return; }
       await set(ref(db, `users/${userId}/privatePin`), newPin.trim());
       await set(ref(db, `users/${userId}/pinResetOtp`), null);
       setForgotMode(false); setOtpSent(false); setOtpInput(""); setNewPin(""); setPin("");
-      toast.success("✅ নতুন পাসওয়ার্ড সেট হয়েছে!");
+      toast.success("✅ Password reset successfully!");
     } catch { toast.error("Error resetting"); }
     setOtpLoading(false);
   }, [userId, otpInput, newPin]);
