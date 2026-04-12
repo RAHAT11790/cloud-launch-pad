@@ -251,7 +251,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const loaderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [tutorialLink, setTutorialLink] = useState<string | null>(null);
+  const [tutorialVideos, setTutorialVideos] = useState<{ title: string; url: string }[]>([]);
   const [showTutorialVideo, setShowTutorialVideo] = useState(false);
+  const [activeTutorialIdx, setActiveTutorialIdx] = useState(0);
   const [showNextEpOverlay, setShowNextEpOverlay] = useState(false);
   const [nextEpCountdown, setNextEpCountdown] = useState(0);
   const nextEpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -359,12 +361,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return userFreeAccessExpiresAt > Date.now();
   }, [globalFreeAccess, userFreeAccessExpiresAt]);
 
-  // Load tutorial link from Firebase
+  // Load tutorial videos from Firebase
   useEffect(() => {
-    const unsub = onValue(ref(db, "settings/tutorialLink"), (snap) => {
+    const unsubs: (() => void)[] = [];
+    unsubs.push(onValue(ref(db, "settings/tutorialLink"), (snap) => {
       setTutorialLink(snap.val() || null);
-    });
-    return () => unsub();
+    }));
+    unsubs.push(onValue(ref(db, "settings/tutorialVideos"), (snap) => {
+      const val = snap.val();
+      if (val && typeof val === "object") {
+        const list = Object.values(val).map((v: any) => ({ title: v.title || "", url: v.url || "" }));
+        setTutorialVideos(list);
+      } else {
+        setTutorialVideos([]);
+      }
+    }));
+    return () => unsubs.forEach(u => u());
   }, []);
 
   // Maintenance pause listener
