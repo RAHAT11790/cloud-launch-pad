@@ -176,9 +176,9 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   };
 
   const handleGooglePasswordSet = async () => {
-    if (!googlePw.trim()) { toast.error("পাসওয়ার্ড দিন"); return; }
-    if (googlePw.length < 4) { toast.error("পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে"); return; }
-    if (googlePw !== googlePwConfirm) { toast.error("পাসওয়ার্ড মিলছে না!"); return; }
+    if (!googlePw.trim()) { toast.error("Please enter a password"); return; }
+    if (googlePw.length < 4) { toast.error("Password must be at least 4 characters"); return; }
+    if (googlePw !== googlePwConfirm) { toast.error("Passwords don't match!"); return; }
 
     setLoading(true);
     try {
@@ -207,7 +207,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
       localStorage.setItem("rs_display_name", gName);
       if (gPhoto) localStorage.setItem("rs_profile_photo", gPhoto);
-      toast.success(`Welcome, ${gName}! পাসওয়ার্ড সেট হয়েছে ✅`);
+      toast.success(`Welcome, ${gName}! Password set successfully ✅`);
       setGoogleSetPwMode(false);
       setGooglePendingData(null);
       onLogin(uid);
@@ -218,14 +218,14 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   };
 
   const handleForgotPassword = async () => {
-    if (!forgotEmail.trim()) { toast.error("ইমেইল দিন"); return; }
+    if (!forgotEmail.trim()) { toast.error("Please enter your email"); return; }
     setForgotLoading(true);
     try {
       // Find user by email in Firebase
       const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
       const snap = await get(ref(db, `appUsers/${emailKey}`));
       if (!snap.exists()) {
-        toast.error("এই ইমেইলে কোনো অ্যাকাউন্ট নেই!");
+        toast.error("No account found with this email!");
         setForgotLoading(false);
         return;
       }
@@ -251,7 +251,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       }
 
       setForgotOtpSent(true);
-      toast.success(`📧 কোড পাঠানো হয়েছে: ${forgotEmail}`);
+      toast.success(`📧 Code sent to: ${forgotEmail}`);
     } catch (err: any) {
       toast.error("Error: " + err.message);
     }
@@ -260,26 +260,26 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
 
   const handleResetPasswordWithOtp = async () => {
     if (!forgotOtp.trim() || !forgotNewPw.trim()) return;
-    if (forgotNewPw.length < 4) { toast.error("পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে"); return; }
-    if (forgotNewPw !== forgotNewPwConfirm) { toast.error("পাসওয়ার্ড মিলছে না!"); return; }
+    if (forgotNewPw.length < 4) { toast.error("Password must be at least 4 characters"); return; }
+    if (forgotNewPw !== forgotNewPwConfirm) { toast.error("Passwords don't match!"); return; }
 
     setForgotLoading(true);
     try {
       const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
       const snap = await get(ref(db, `appUsers/${emailKey}`));
-      if (!snap.exists()) { toast.error("অ্যাকাউন্ট পাওয়া যায়নি"); setForgotLoading(false); return; }
+      if (!snap.exists()) { toast.error("Account not found"); setForgotLoading(false); return; }
 
       const userId = snap.val()?.id || emailKey;
       const otpSnap = await get(ref(db, `users/${userId}/passwordResetOtp`));
       const otpData = otpSnap.val();
 
       if (!otpData || otpData.code !== forgotOtp.trim()) {
-        toast.error("❌ কোড ভুল!");
+        toast.error("❌ Incorrect code!");
         setForgotLoading(false);
         return;
       }
       if (otpData.expiresAt < Date.now()) {
-        toast.error("⏰ কোডের মেয়াদ শেষ!");
+        toast.error("⏰ Code expired!");
         setForgotLoading(false);
         return;
       }
@@ -288,7 +288,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       await set(ref(db, `appUsers/${emailKey}/password`), forgotNewPw.trim());
       await set(ref(db, `users/${userId}/passwordResetOtp`), null);
 
-      toast.success("✅ নতুন পাসওয়ার্ড সেট হয়েছে! এখন লগইন করুন।");
+      toast.success("✅ New password set! You can now login.");
       setShowForgotPw(false);
       setForgotOtpSent(false);
       setForgotOtp("");
