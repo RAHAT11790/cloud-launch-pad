@@ -7545,6 +7545,32 @@ ${tgHashtags}`;
                           )}
                         </div>
                       </div>
+                      {/* Extra metadata fields */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] text-zinc-400 mb-1 block">Category</label>
+                          <input value={category} onChange={e => setCategory(e.target.value)} className={inputClass} placeholder="e.g. Action, Romance" />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-zinc-400 mb-1 block">Rating</label>
+                          <input value={rating} onChange={e => setRating(e.target.value)} className={inputClass} placeholder="e.g. 8.5" />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-zinc-400 mb-1 block">Year</label>
+                          <input value={year} onChange={e => setYear(e.target.value)} className={inputClass} placeholder="e.g. 2024" />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-zinc-400 mb-1 block">Type</label>
+                          <select value={contentType} onChange={e => setContentType(e.target.value)} className={inputClass}>
+                            <option value="webseries">Series</option>
+                            <option value="movie">Movie</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-zinc-400 mb-1 block">Language</label>
+                        <input value={language} onChange={e => setLanguage(e.target.value)} className={inputClass} placeholder="e.g. Bengali, Hindi" />
+                      </div>
                     </div>
                   </div>
 
