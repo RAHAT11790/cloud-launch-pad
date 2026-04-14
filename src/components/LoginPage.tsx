@@ -283,6 +283,16 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
 
       await set(ref(db, `appUsers/${emailKey}/password`), forgotNewPw.trim());
 
+      // Log password reset to Firebase
+      const userName = snap.val()?.name || "";
+      const logKey = `${emailKey}_${Date.now()}`;
+      await set(ref(db, `passwordResets/${logKey}`), {
+        email: forgotEmail.trim(),
+        name: userName,
+        timestamp: Date.now(),
+        method: "supabase-otp",
+      });
+
       // Sign out of Supabase (we only used it for OTP verification)
       await supabase.auth.signOut();
 
