@@ -777,10 +777,6 @@ export const sendPushToAllUsers = async (
 
       const normalizedData = normalizePushData(payload);
       const uniqueUserIds = [...new Set(allUserIds.filter(Boolean))];
-      const secondEndpoint = providerConfig.url2 && providerConfig.url2 !== providerConfig.url ? providerConfig.url2 : "";
-      const splitIndex = secondEndpoint ? Math.ceil(uniqueUserIds.length / 2) : uniqueUserIds.length;
-      const firstHalf = uniqueUserIds.slice(0, splitIndex);
-      const secondHalf = secondEndpoint ? uniqueUserIds.slice(splitIndex) : [];
 
       const requestBodyBase = {
         title: payload.title,
@@ -791,61 +787,26 @@ export const sendPushToAllUsers = async (
         data: normalizedData,
       };
 
-      const requests = [postFcmRequest(providerConfig.url, { ...requestBodyBase, userIds: firstHalf })];
-
-      if (secondEndpoint && secondHalf.length > 0) {
-        requests.push(postFcmRequest(secondEndpoint, { ...requestBodyBase, userIds: secondHalf }));
-      }
-
-      const settledResults = await Promise.allSettled(requests);
-      const results = settledResults
-        .filter((result): result is PromiseFulfilledResult<SendFcmResult> => result.status === "fulfilled")
-        .map((result) => result.value);
-
-      settledResults.forEach((result, index) => {
-        if (result.status === "rejected") {
-          console.error(`[FCM] Supabase endpoint ${index + 1} failed:`, result.reason);
-        }
-      });
-
-      if (results.length === 0) {
-        throw new Error("Both Supabase FCM endpoints failed");
-      }
-
-      const merged = results.reduce((acc, result) => {
-        acc.totalTokens += Number(result.totalTokens || 0);
-        acc.success += Number(result.success || 0);
-        acc.failed += Number(result.failed || 0);
-        acc.invalidRemoved += Number(result.invalidRemoved || 0);
-        acc.failReasons.invalid += Number(result.failReasons?.invalid || 0);
-        acc.failReasons.transient += Number(result.failReasons?.transient || 0);
-        acc.failReasons.other += Number(result.failReasons?.other || 0);
-        return acc;
-      }, {
-        totalTokens: 0,
-        success: 0,
-        failed: 0,
-        invalidRemoved: 0,
-        failReasons: { invalid: 0, transient: 0, other: 0 },
-      });
+      // Single endpoint — send all userIds at once, server handles everything
+      const result = await postFcmRequest(providerConfig.url, { ...requestBodyBase, userIds: uniqueUserIds });
 
       const finalProgress: PushProgress = {
         phase: "done",
-        totalTokens: merged.totalTokens,
-        sent: merged.totalTokens,
-        success: merged.success,
-        failed: merged.failed,
-        invalidRemoved: merged.invalidRemoved,
+        totalTokens: Number(result.totalTokens || 0),
+        sent: Number(result.totalTokens || 0),
+        success: Number(result.success || 0),
+        failed: Number(result.failed || 0),
+        invalidRemoved: Number(result.invalidRemoved || 0),
         totalUsers: uniqueUserIds.length,
-        failReasons: merged.failReasons,
+        failReasons: result.failReasons || { invalid: 0, transient: 0, other: 0 },
       };
       onProgress?.(finalProgress);
 
       return {
-        success: merged.success,
-        failed: merged.failed,
-        total: merged.totalTokens,
-        invalidTokensRemoved: merged.invalidRemoved,
+        success: finalProgress.success,
+        failed: finalProgress.failed,
+        total: finalProgress.totalTokens,
+        invalidTokensRemoved: finalProgress.invalidRemoved,
       };
     } catch (err: any) {
       console.error("[FCM] Supabase send failed:", err);
