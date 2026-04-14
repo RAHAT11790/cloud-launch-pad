@@ -23,19 +23,18 @@ const PRIMARY_SITE_ORIGIN = (() => {
     return SITE_URL;
   }
 })();
-const CHUNK_SIZE = 180;
-const CHUNK_CONCURRENCY = 3;
+const CHUNK_SIZE = 200;
+const CHUNK_CONCURRENCY = 2;
 const REQUEST_TIMEOUT_MS = 30000;
 const MAX_TOKENS_PER_USER = 3;
 
 let messaging: any = null;
 let cachedSendFcmEndpoint: string | null = null;
-let cachedFcmProvider: { provider: "cloudflare" | "supabase"; url: string; url2?: string } | null = null;
+let cachedFcmProvider: { provider: "cloudflare" | "supabase"; url: string } | null = null;
 
 type FcmProviderConfig = {
   provider: "cloudflare" | "supabase";
   url: string;
-  url2?: string;
 };
 
 const getCurrentSupabaseFunctionUrl = (functionName: string) => {
@@ -52,25 +51,6 @@ const isCurrentSupabaseFunctionUrl = (url?: string) => {
   }
 };
 
-const normalizeSupabaseProviderUrls = (url?: string, url2?: string) => {
-  const primaryFallback = getCurrentSupabaseFunctionUrl("send-fcm");
-  const secondaryFallback = getCurrentSupabaseFunctionUrl("send-fmc-b");
-
-  const primaryUrl = !url
-    ? primaryFallback
-    : isSupabaseFunctionUrl(url) && !isCurrentSupabaseFunctionUrl(url)
-      ? primaryFallback
-      : url;
-
-  const secondaryUrl = !url2
-    ? secondaryFallback
-    : isSupabaseFunctionUrl(url2) && !isCurrentSupabaseFunctionUrl(url2)
-      ? secondaryFallback
-      : url2;
-
-  return { primaryUrl, secondaryUrl };
-};
-
 /** Get the active FCM provider config from Firebase */
 const getFcmProviderConfig = async (): Promise<FcmProviderConfig> => {
   if (cachedFcmProvider) return cachedFcmProvider;
@@ -78,23 +58,17 @@ const getFcmProviderConfig = async (): Promise<FcmProviderConfig> => {
     const snap = await get(ref(db, "settings/fcmProvider"));
     const val = snap.val();
     if (val?.active) {
-      // Read the correct URL based on active provider
       const activeProvider = val.active as "cloudflare" | "supabase";
       const url = activeProvider === "supabase" 
         ? (val.supabaseUrl || val.url || "")
         : (val.cloudflareUrl || val.url || "");
-      const url2 = activeProvider === "supabase" ? (val.supabaseUrl2 || "") : "";
-      const normalized = activeProvider === "supabase"
-        ? normalizeSupabaseProviderUrls(url, url2)
-        : { primaryUrl: url, secondaryUrl: url2 };
-      if (normalized.primaryUrl) {
-        cachedFcmProvider = { provider: activeProvider, url: normalized.primaryUrl, url2: normalized.secondaryUrl };
+      if (url) {
+        cachedFcmProvider = { provider: activeProvider, url };
         setTimeout(() => { cachedFcmProvider = null; }, 30000);
         return cachedFcmProvider;
       }
     }
   } catch {}
-  // Fallback to edge router (Cloudflare)
   const url = await getEdgeFunctionUrl("send-fcm");
   cachedFcmProvider = { provider: "cloudflare", url };
   setTimeout(() => { cachedFcmProvider = null; }, 30000);
