@@ -22,9 +22,23 @@ const hashText = (input: string): string => {
 export const getDeviceFingerprint = (): string => {
   try {
     const screenSize = typeof window !== "undefined" && window.screen
-      ? `${window.screen.width}x${window.screen.height}`
+      ? `${window.screen.width}x${window.screen.height}x${window.screen.colorDepth}`
       : "unknown";
-    const raw = `${navigator.userAgent}|${navigator.platform}|${navigator.language}|${screenSize}`;
+    const timezoneOffset = new Date().getTimezoneOffset();
+    const canvas = (() => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = 200; c.height = 50;
+        const ctx = c.getContext("2d");
+        if (!ctx) return "no_canvas";
+        ctx.textBaseline = "top";
+        ctx.font = "14px Arial";
+        ctx.fillText("fp_test_123", 2, 2);
+        return hashText(c.toDataURL());
+      } catch { return "no_canvas"; }
+    })();
+    const deviceId = getDeviceId(); // tie fingerprint to localStorage device ID
+    const raw = `${navigator.userAgent}|${navigator.platform}|${navigator.language}|${screenSize}|${timezoneOffset}|${navigator.hardwareConcurrency || 0}|${(navigator as any).deviceMemory || 0}|${canvas}|${deviceId}`;
     return `fp_${hashText(raw)}`;
   } catch {
     return "fp_unknown";
