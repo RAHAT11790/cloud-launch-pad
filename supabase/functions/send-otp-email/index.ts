@@ -8,7 +8,6 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // GET request = health check / ping
   if (req.method === "GET") {
     return new Response(JSON.stringify({ status: "ok", service: "send-otp-email" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -16,33 +15,81 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { email, otp, siteName } = await req.json();
+    const { email, otp, siteName, logoUrl, siteUrl, telegramUrl } = await req.json();
     if (!email || !otp) {
       return new Response(JSON.stringify({ error: "email and otp are required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const name = siteName || "RS Anime";
+    const name = siteName || "RS ANIME";
+    const logo = logoUrl || "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png";
+    const site = siteUrl || "https://rsanime03.lovable.app";
+    const telegram = telegramUrl || "https://t.me/rs_woner";
+
+    const otpDigits = otp.toString().split("").map((d: string) => 
+      `<td style="width:48px;height:56px;background:#1a1a2e;border-radius:10px;text-align:center;vertical-align:middle;font-size:28px;font-weight:700;color:#818cf8;font-family:'Courier New',monospace;border:1px solid #2d2d4e;">${d}</td>`
+    ).join('<td style="width:8px;"></td>');
 
     const emailHtml = `
-      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 20px; background: #ffffff;">
-        <div style="text-align: center; margin-bottom: 30px;">
-          <h2 style="color: #6366f1; margin: 0; font-size: 24px;">${name}</h2>
-        </div>
-        <div style="background: #f8f9fa; border-radius: 16px; padding: 32px; text-align: center;">
-          <h3 style="color: #1a1a2e; margin: 0 0 8px; font-size: 18px;">🔐 Password Reset Code</h3>
-          <p style="color: #666; font-size: 14px; margin: 0 0 24px;">আপনার পাসওয়ার্ড রিসেট করতে নিচের কোডটি ব্যবহার করুন:</p>
-          <div style="background: #ffffff; border: 2px dashed #6366f1; border-radius: 12px; padding: 20px; margin: 0 0 24px;">
-            <span style="font-size: 36px; font-weight: bold; letter-spacing: 10px; color: #6366f1; font-family: 'Courier New', monospace;">${otp}</span>
-          </div>
-          <p style="color: #999; font-size: 12px; margin: 0;">⏱️ এই কোডটি ৫ মিনিটের মধ্যে মেয়াদ শেষ হয়ে যাবে।</p>
-        </div>
-        <p style="color: #bbb; font-size: 11px; text-align: center; margin-top: 24px;">
-          আপনি এই রিকোয়েস্ট না করে থাকলে এই ইমেইলটি উপেক্ষা করুন।
-        </p>
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#0f0f1a;font-family:'Segoe UI',Roboto,Arial,sans-serif;">
+  <div style="max-width:500px;margin:0 auto;padding:24px 16px;">
+    
+    <!-- Header with Logo -->
+    <div style="text-align:center;padding:28px 20px 20px;">
+      <img src="${logo}" alt="${name}" width="64" height="64" style="border-radius:14px;margin-bottom:12px;" />
+      <h1 style="color:#818cf8;font-size:22px;font-weight:700;margin:0;letter-spacing:1px;">${name}</h1>
+    </div>
+
+    <!-- Main Card -->
+    <div style="background:linear-gradient(145deg,#1a1a2e,#16162a);border-radius:20px;padding:36px 28px;border:1px solid #2d2d4e;box-shadow:0 8px 32px rgba(99,102,241,0.1);">
+      
+      <!-- Icon & Title -->
+      <div style="text-align:center;margin-bottom:8px;">
+        <div style="display:inline-block;background:#818cf8;border-radius:50%;width:48px;height:48px;line-height:48px;font-size:24px;margin-bottom:12px;">🔐</div>
+        <h2 style="color:#e2e8f0;font-size:20px;font-weight:600;margin:0 0 6px;">Password Reset Code</h2>
+        <p style="color:#94a3b8;font-size:14px;margin:0;">Use the code below to reset your password:</p>
       </div>
-    `;
+
+      <!-- OTP Code -->
+      <div style="margin:28px 0;text-align:center;">
+        <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
+          <tr>${otpDigits}</tr>
+        </table>
+      </div>
+
+      <!-- Timer Notice -->
+      <div style="text-align:center;background:#0f0f1a;border-radius:10px;padding:12px;margin-top:8px;">
+        <p style="color:#64748b;font-size:12px;margin:0;">⏱ This code expires in <strong style="color:#818cf8;">5 minutes</strong></p>
+      </div>
+    </div>
+
+    <!-- Security Notice -->
+    <p style="color:#475569;font-size:12px;text-align:center;margin:20px 0 28px;line-height:1.5;">
+      If you didn't request this, you can safely ignore this email.<br/>
+      Never share this code with anyone.
+    </p>
+
+    <!-- Divider -->
+    <div style="border-top:1px solid #1e1e35;margin:0 20px;"></div>
+
+    <!-- Footer -->
+    <div style="text-align:center;padding:20px 0 8px;">
+      <p style="color:#4a4a6a;font-size:11px;margin:0 0 8px;">Powered by <strong style="color:#818cf8;">${name}</strong></p>
+      <div style="margin:8px 0;">
+        <a href="${telegram}" style="color:#818cf8;font-size:12px;text-decoration:none;margin:0 10px;">📱 Telegram</a>
+        <span style="color:#2d2d4e;">|</span>
+        <a href="${site}" style="color:#818cf8;font-size:12px;text-decoration:none;margin:0 10px;">🌐 Website</a>
+      </div>
+      <p style="color:#3a3a5a;font-size:10px;margin:8px 0 0;">© ${new Date().getFullYear()} ${name}. All rights reserved.</p>
+    </div>
+
+  </div>
+</body>
+</html>`;
 
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (!RESEND_API_KEY) {
@@ -51,7 +98,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Send email via Resend API directly
     const resendRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -71,8 +117,7 @@ Deno.serve(async (req) => {
     if (!resendRes.ok) {
       console.error("Resend API error:", resendData);
       return new Response(JSON.stringify({ 
-        success: false, 
-        emailSent: false, 
+        success: false, emailSent: false, 
         error: resendData?.message || "Email sending failed" 
       }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -80,8 +125,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ 
-      success: true,
-      emailSent: true,
+      success: true, emailSent: true,
       message: "OTP email sent via Resend",
       messageId: resendData.id,
     }), {
