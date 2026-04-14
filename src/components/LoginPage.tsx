@@ -278,25 +278,48 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
 
     setForgotLoading(true);
     try {
-      // Verify OTP via Supabase Auth
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email: forgotEmail.trim(),
-        token: forgotOtp.trim(),
-        type: 'email',
-      });
+      const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
 
-      if (verifyError) {
-        if (verifyError.message.includes("expired")) {
-          toast.error("⏰ Code expired! Please request a new one.");
-        } else {
+      // Check if custom email service was used
+      const emailServiceSnap = await get(ref(db, "settings/emailService/otpFunctionUrl"));
+      const customUrl = emailServiceSnap.val();
+
+      if (customUrl) {
+        // Verify OTP from Firebase
+        const otpSnap = await get(ref(db, `otpCodes/${emailKey}`));
+        const otpData = otpSnap.val();
+        if (!otpData || otpData.code !== forgotOtp.trim()) {
           toast.error("❌ Incorrect code!");
+          setForgotLoading(false);
+          return;
         }
-        setForgotLoading(false);
-        return;
+        if (Date.now() > otpData.expires) {
+          toast.error("⏰ Code expired! Please request a new one.");
+          await remove(ref(db, `otpCodes/${emailKey}`));
+          setForgotLoading(false);
+          return;
+        }
+        // Clean up OTP
+        await remove(ref(db, `otpCodes/${emailKey}`));
+      } else {
+        // Verify OTP via Supabase Auth
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          email: forgotEmail.trim(),
+          token: forgotOtp.trim(),
+          type: 'email',
+        });
+        if (verifyError) {
+          if (verifyError.message.includes("expired")) {
+            toast.error("⏰ Code expired! Please request a new one.");
+          } else {
+            toast.error("❌ Incorrect code!");
+          }
+          setForgotLoading(false);
+          return;
+        }
       }
 
       // OTP verified — update password in Firebase RTDB
-      const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
       const snap = await get(ref(db, `appUsers/${emailKey}`));
       if (!snap.exists()) { toast.error("Account not found"); setForgotLoading(false); return; }
 
@@ -309,11 +332,11 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         email: forgotEmail.trim(),
         name: userName,
         timestamp: Date.now(),
-        method: "supabase-otp",
+        method: customUrl ? "custom-otp" : "supabase-otp",
       });
 
-      // Sign out of Supabase (we only used it for OTP verification)
-      await supabase.auth.signOut();
+      // Sign out of Supabase if it was used
+      if (!customUrl) await supabase.auth.signOut();
 
       toast.success("✅ New password set! You can now login.");
       setShowForgotPw(false);
