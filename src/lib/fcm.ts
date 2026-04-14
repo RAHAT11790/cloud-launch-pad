@@ -264,15 +264,10 @@ const toEmailKey = (email?: string | null): string | null => {
   return email.replace(/\./g, ",");
 };
 
-const isPrimaryOriginToken = (entry: any) => {
-  const origin = typeof entry?.origin === "string" ? entry.origin : "";
-  return !origin || origin === PRIMARY_SITE_ORIGIN;
-};
-
 const extractTokensFromMap = (data: Record<string, any> | null | undefined): string[] => {
   if (!data || typeof data !== "object") return [];
   return Object.values(data)
-    .filter((entry: any) => entry?.token && isPrimaryOriginToken(entry))
+    .filter((entry: any) => !!entry?.token)
     .map((entry: any) => entry.token);
 };
 

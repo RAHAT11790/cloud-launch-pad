@@ -12,7 +12,8 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
-const brandIcon = 'https://rsanime03.lovable.app/android-chrome-192x192.png';
+const brandIcon = 'https://rsanime03.lovable.app/favicon-32x32.png';
+const brandLargeIcon = 'https://rsanime03.lovable.app/android-chrome-192x192.png';
 // Main published domain — always use this for notification clicks
 const MAIN_DOMAIN = 'https://rsanime03.lovable.app';
 
