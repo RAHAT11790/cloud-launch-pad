@@ -8,7 +8,7 @@
 export const SITE_NAME = import.meta.env.VITE_SITE_NAME || "RS ANIME";
 export const SITE_DESCRIPTION = import.meta.env.VITE_SITE_DESCRIPTION || "Your ultimate destination for watching anime series and movies.";
 export const SITE_URL = import.meta.env.VITE_SITE_URL || "https://rsanime03.lovable.app";
-export const SITE_ICON_URL = import.meta.env.VITE_SITE_ICON_URL || "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png";
+export const SITE_ICON_URL = import.meta.env.VITE_SITE_ICON_URL || "https://rsanime03.lovable.app/android-chrome-192x192.png";
 
 // --- Telegram ---
 export const TELEGRAM_CHANNEL = import.meta.env.VITE_TELEGRAM_CHANNEL || "@CARTOONFUNNY03";
