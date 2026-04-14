@@ -6695,6 +6695,11 @@ ${tgHashtags}`;
           <EdgeRouterSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
+        {/* ==================== EMAIL SERVICE ==================== */}
+        {activeSection === "email-service" && (
+          <EmailServiceSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+        )}
+
         {/* ==================== AI CONFIG ==================== */}
         {activeSection === "ai-config" && (
           <AiConfigSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
