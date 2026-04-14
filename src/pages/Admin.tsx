@@ -2256,6 +2256,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "tg-url-changer": "TG URL Changer",
     "video-servers": "Video Servers",
     "unlock-duration": "Unlock Duration",
+    "email-service": "Email Service",
     
   };
 
@@ -3557,6 +3558,7 @@ ${tgHashtags}`;
     { section: "analytics", icon: <BarChart3 size={16} />, label: "Analytics & Views" },
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
+    { section: "email-service", icon: <Mail size={16} />, label: "Email Service" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
