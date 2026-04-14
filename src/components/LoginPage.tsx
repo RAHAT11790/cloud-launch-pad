@@ -244,7 +244,14 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         const res = await fetch(customUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: forgotEmail.trim(), otp, siteName: SITE_NAME }),
+          body: JSON.stringify({ 
+            email: forgotEmail.trim(), 
+            otp, 
+            siteName: branding.siteName || SITE_NAME,
+            logoUrl: branding.logoUrl || "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png",
+            siteUrl: "https://rsanime03.lovable.app",
+            telegramUrl: "https://t.me/rs_woner",
+          }),
         });
         if (!res.ok) throw new Error("Email sending failed");
 
