@@ -23,19 +23,18 @@ const PRIMARY_SITE_ORIGIN = (() => {
     return SITE_URL;
   }
 })();
-const CHUNK_SIZE = 180;
-const CHUNK_CONCURRENCY = 3;
+const CHUNK_SIZE = 200;
+const CHUNK_CONCURRENCY = 2;
 const REQUEST_TIMEOUT_MS = 30000;
 const MAX_TOKENS_PER_USER = 3;
 
 let messaging: any = null;
 let cachedSendFcmEndpoint: string | null = null;
-let cachedFcmProvider: { provider: "cloudflare" | "supabase"; url: string; url2?: string } | null = null;
+let cachedFcmProvider: { provider: "cloudflare" | "supabase"; url: string } | null = null;
 
 type FcmProviderConfig = {
   provider: "cloudflare" | "supabase";
   url: string;
-  url2?: string;
 };
 
 const getCurrentSupabaseFunctionUrl = (functionName: string) => {
@@ -52,25 +51,6 @@ const isCurrentSupabaseFunctionUrl = (url?: string) => {
   }
 };
 
-const normalizeSupabaseProviderUrls = (url?: string, url2?: string) => {
-  const primaryFallback = getCurrentSupabaseFunctionUrl("send-fcm");
-  const secondaryFallback = getCurrentSupabaseFunctionUrl("send-fmc-b");
-
-  const primaryUrl = !url
-    ? primaryFallback
-    : isSupabaseFunctionUrl(url) && !isCurrentSupabaseFunctionUrl(url)
-      ? primaryFallback
-      : url;
-
-  const secondaryUrl = !url2
-    ? secondaryFallback
-    : isSupabaseFunctionUrl(url2) && !isCurrentSupabaseFunctionUrl(url2)
-      ? secondaryFallback
-      : url2;
-
-  return { primaryUrl, secondaryUrl };
-};
-
 /** Get the active FCM provider config from Firebase */
 const getFcmProviderConfig = async (): Promise<FcmProviderConfig> => {
   if (cachedFcmProvider) return cachedFcmProvider;
@@ -78,23 +58,17 @@ const getFcmProviderConfig = async (): Promise<FcmProviderConfig> => {
     const snap = await get(ref(db, "settings/fcmProvider"));
     const val = snap.val();
     if (val?.active) {
-      // Read the correct URL based on active provider
       const activeProvider = val.active as "cloudflare" | "supabase";
       const url = activeProvider === "supabase" 
         ? (val.supabaseUrl || val.url || "")
         : (val.cloudflareUrl || val.url || "");
-      const url2 = activeProvider === "supabase" ? (val.supabaseUrl2 || "") : "";
-      const normalized = activeProvider === "supabase"
-        ? normalizeSupabaseProviderUrls(url, url2)
-        : { primaryUrl: url, secondaryUrl: url2 };
-      if (normalized.primaryUrl) {
-        cachedFcmProvider = { provider: activeProvider, url: normalized.primaryUrl, url2: normalized.secondaryUrl };
+      if (url) {
+        cachedFcmProvider = { provider: activeProvider, url };
         setTimeout(() => { cachedFcmProvider = null; }, 30000);
         return cachedFcmProvider;
       }
     }
   } catch {}
-  // Fallback to edge router (Cloudflare)
   const url = await getEdgeFunctionUrl("send-fcm");
   cachedFcmProvider = { provider: "cloudflare", url };
   setTimeout(() => { cachedFcmProvider = null; }, 30000);
@@ -803,10 +777,6 @@ export const sendPushToAllUsers = async (
 
       const normalizedData = normalizePushData(payload);
       const uniqueUserIds = [...new Set(allUserIds.filter(Boolean))];
-      const secondEndpoint = providerConfig.url2 && providerConfig.url2 !== providerConfig.url ? providerConfig.url2 : "";
-      const splitIndex = secondEndpoint ? Math.ceil(uniqueUserIds.length / 2) : uniqueUserIds.length;
-      const firstHalf = uniqueUserIds.slice(0, splitIndex);
-      const secondHalf = secondEndpoint ? uniqueUserIds.slice(splitIndex) : [];
 
       const requestBodyBase = {
         title: payload.title,
@@ -817,61 +787,26 @@ export const sendPushToAllUsers = async (
         data: normalizedData,
       };
 
-      const requests = [postFcmRequest(providerConfig.url, { ...requestBodyBase, userIds: firstHalf })];
-
-      if (secondEndpoint && secondHalf.length > 0) {
-        requests.push(postFcmRequest(secondEndpoint, { ...requestBodyBase, userIds: secondHalf }));
-      }
-
-      const settledResults = await Promise.allSettled(requests);
-      const results = settledResults
-        .filter((result): result is PromiseFulfilledResult<SendFcmResult> => result.status === "fulfilled")
-        .map((result) => result.value);
-
-      settledResults.forEach((result, index) => {
-        if (result.status === "rejected") {
-          console.error(`[FCM] Supabase endpoint ${index + 1} failed:`, result.reason);
-        }
-      });
-
-      if (results.length === 0) {
-        throw new Error("Both Supabase FCM endpoints failed");
-      }
-
-      const merged = results.reduce((acc, result) => {
-        acc.totalTokens += Number(result.totalTokens || 0);
-        acc.success += Number(result.success || 0);
-        acc.failed += Number(result.failed || 0);
-        acc.invalidRemoved += Number(result.invalidRemoved || 0);
-        acc.failReasons.invalid += Number(result.failReasons?.invalid || 0);
-        acc.failReasons.transient += Number(result.failReasons?.transient || 0);
-        acc.failReasons.other += Number(result.failReasons?.other || 0);
-        return acc;
-      }, {
-        totalTokens: 0,
-        success: 0,
-        failed: 0,
-        invalidRemoved: 0,
-        failReasons: { invalid: 0, transient: 0, other: 0 },
-      });
+      // Single endpoint — send all userIds at once, server handles everything
+      const result = await postFcmRequest(providerConfig.url, { ...requestBodyBase, userIds: uniqueUserIds });
 
       const finalProgress: PushProgress = {
         phase: "done",
-        totalTokens: merged.totalTokens,
-        sent: merged.totalTokens,
-        success: merged.success,
-        failed: merged.failed,
-        invalidRemoved: merged.invalidRemoved,
+        totalTokens: Number(result.totalTokens || 0),
+        sent: Number(result.totalTokens || 0),
+        success: Number(result.success || 0),
+        failed: Number(result.failed || 0),
+        invalidRemoved: Number(result.invalidRemoved || 0),
         totalUsers: uniqueUserIds.length,
-        failReasons: merged.failReasons,
+        failReasons: result.failReasons || { invalid: 0, transient: 0, other: 0 },
       };
       onProgress?.(finalProgress);
 
       return {
-        success: merged.success,
-        failed: merged.failed,
-        total: merged.totalTokens,
-        invalidTokensRemoved: merged.invalidRemoved,
+        success: finalProgress.success,
+        failed: finalProgress.failed,
+        total: finalProgress.totalTokens,
+        invalidTokensRemoved: finalProgress.invalidRemoved,
       };
     } catch (err: any) {
       console.error("[FCM] Supabase send failed:", err);

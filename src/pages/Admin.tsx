@@ -50,8 +50,6 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
   const [cfUrlInput, setCfUrlInput] = useState("");
   const [sbUrl, setSbUrl] = useState("");
   const [sbUrlInput, setSbUrlInput] = useState("");
-  const [sbUrl2, setSbUrl2] = useState("");
-  const [sbUrl2Input, setSbUrl2Input] = useState("");
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
 
@@ -64,8 +62,6 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
         setCfUrlInput(val.cloudflareUrl || "");
         setSbUrl(val.supabaseUrl || "");
         setSbUrlInput(val.supabaseUrl || "");
-        setSbUrl2(val.supabaseUrl2 || "");
-        setSbUrl2Input(val.supabaseUrl2 || "");
       }
     });
     return () => unsub();
@@ -98,13 +94,6 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
     if (activeProvider === "supabase") updates.url = url;
     await update(ref(db, "settings/fcmProvider"), updates);
     toast.success("✅ Supabase FCM URL সেভ হয়েছে!");
-  };
-
-  const saveSbUrl2 = async () => {
-    const url = sbUrl2Input.trim();
-    setSbUrl2(url);
-    await update(ref(db, "settings/fcmProvider"), { supabaseUrl2: url });
-    toast.success("✅ Supabase FCM URL 2 সেভ হয়েছে!");
   };
 
   const testProvider = async (provider: "cloudflare" | "supabase") => {
@@ -141,7 +130,7 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
         <Bell size={14} className="text-yellow-400" /> 🔔 FCM Push Provider
       </h3>
       <p className="text-[10px] text-zinc-400 mb-4">
-        নোটিফিকেশন পাঠানোর জন্য Cloudflare অথবা Supabase — যেকোনো একটা চালু রাখো। একটা চালু করলে অন্যটা বন্ধ হবে।
+        Choose Cloudflare or Supabase as your push notification provider. Only one active at a time.
       </p>
 
       {/* Provider Toggle */}
@@ -159,7 +148,7 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
           {activeProvider === "cloudflare" && (
             <div className="flex items-center justify-center gap-1 mt-1">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-[9px] text-green-400">চালু</span>
+              <span className="text-[9px] text-green-400">Active</span>
             </div>
           )}
         </button>
@@ -176,7 +165,7 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
           {activeProvider === "supabase" && (
             <div className="flex items-center justify-center gap-1 mt-1">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-[9px] text-green-400">চালু</span>
+              <span className="text-[9px] text-green-400">Active</span>
             </div>
           )}
         </button>
@@ -220,19 +209,12 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
             {testing === "supabase" ? <RefreshCw size={10} className="animate-spin" /> : <Activity size={10} />}
           </button>
         </div>
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[11px] font-semibold">🟢 Supabase FCM URL 2</span>
-        </div>
-        <div className="flex gap-1.5">
-          <input value={sbUrl2Input} onChange={(e) => setSbUrl2Input(e.target.value)}
-            placeholder="https://xxx.supabase.co/functions/v1/send-fcm-b" className={`${inputClass} !text-[10px] !py-1.5 flex-1`} />
-          <button onClick={saveSbUrl2} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}><Save size={10} /></button>
-        </div>
-        <p className="text-[9px] text-zinc-500 mt-1.5">⚡ দুইটা Supabase URL দিলে FCM send দুই ভাগে ভাগ হয়ে যাবে, duplicate ছাড়া</p>
       </div>
     </div>
   );
 };
+
+
 
 // ==================== TELEGRAM PROVIDER SECTION ====================
 const TelegramProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {

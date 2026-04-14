@@ -1,6 +1,7 @@
 /**
  * send-fcm — Supabase Edge Function
  * Firebase Cloud Messaging sender with server-side token resolution.
+ * Optimized for 200+ tokens — sends ALL tokens reliably.
  *
  * Accepts either:
  *   { tokens: string[], ... }   — direct token list
@@ -8,8 +9,6 @@
  *
  * Required Supabase secrets:
  *   FIREBASE_SERVICE_ACCOUNT_KEY  — Firebase service account JSON
- *
- * Deploy TWO copies (send-fcm & send-fcm-b) for dual-batching large user lists.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -85,40 +84,31 @@ async function fetchRTDB(url: string, token: string) {
 async function patchRTDB(url: string, token: string, body: Record<string, null>) {
   const res = await fetch(`${url}.json?access_token=${encodeURIComponent(token)}`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-
   if (!res.ok) {
     const errBody = await res.text().catch(() => "");
     console.error(`RTDB patch error ${res.status}: ${errBody.substring(0, 200)}`);
-    throw new Error(`RTDB patch ${res.status}: ${errBody.substring(0, 100)}`);
   }
-
   return res.json().catch(() => null);
 }
 
-const SITE_ORIGIN = "https://rsanime03.lovable.app";
-
+// Extract ALL valid tokens from a user's token map (no origin filter — accept all)
 function extractTokens(userTokens: any): string[] {
   if (!userTokens || typeof userTokens !== "object") return [];
   return Object.values(userTokens)
-    .filter((e: any) => {
-      if (!e?.token) return false;
-      const origin = typeof e.origin === "string" ? e.origin : "";
-      return !origin || origin === SITE_ORIGIN;
-    })
+    .filter((e: any) => !!e?.token)
     .map((e: any) => e.token);
 }
 
-// ---- FCM v1 send single ----
+// ---- FCM v1 send single with retry ----
 async function sendOne(
   accessToken: string, projectId: string, token: string,
   notification: { title: string; body: string; image?: string },
   data: Record<string, string>,
-  webpush?: { icon?: string; badge?: string }
+  webpush?: { icon?: string; badge?: string },
+  retries = 1
 ): Promise<{ ok: boolean; invalid?: boolean; error?: string }> {
   const msg: any = {
     token, notification, data,
@@ -132,47 +122,54 @@ async function sendOne(
     },
   };
 
-  try {
-    const res = await fetch(
-      `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg }),
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(
+        `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ message: msg }),
+        }
+      );
+      if (res.ok) return { ok: true };
+      const err = await res.json().catch(() => ({}));
+      const code = err?.error?.details?.[0]?.errorCode || err?.error?.status || "";
+      const invalid = code === "UNREGISTERED" || code === "INVALID_ARGUMENT" || res.status === 404;
+      
+      // Don't retry invalid tokens
+      if (invalid) return { ok: false, invalid, error: code || `${res.status}` };
+      
+      // Retry on 429/5xx
+      const retryable = res.status >= 500 || res.status === 429;
+      if (!retryable || attempt === retries) {
+        return { ok: false, error: code || `${res.status}` };
       }
-    );
-    if (res.ok) return { ok: true };
-    const err = await res.json().catch(() => ({}));
-    const code = err?.error?.details?.[0]?.errorCode || err?.error?.status || "";
-    const invalid = code === "UNREGISTERED" || code === "INVALID_ARGUMENT" || res.status === 404;
-    return { ok: false, invalid, error: code || `${res.status}` };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || "network" };
+      
+      // Wait before retry with backoff
+      await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+    } catch (e: any) {
+      if (attempt === retries) return { ok: false, error: e?.message || "network" };
+      await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+    }
   }
+  return { ok: false, error: "max_retries" };
 }
 
 // ---- Main ----
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (req.method === "GET") return json({ ok: true, service: "send-fcm" });
+  if (req.method === "GET") return json({ ok: true, service: "send-fcm", version: "2.0" });
 
   try {
     const saRaw = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_KEY");
-    if (!saRaw) {
-      console.error("FIREBASE_SERVICE_ACCOUNT_KEY is not set in environment");
-      return json({ error: "FIREBASE_SERVICE_ACCOUNT_KEY not set" }, 500);
-    }
+    if (!saRaw) return json({ error: "FIREBASE_SERVICE_ACCOUNT_KEY not set" }, 500);
 
     let sa: any;
-    try {
-      sa = JSON.parse(saRaw);
-    } catch (parseErr) {
-      console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:", parseErr);
-      return json({ error: "Invalid FIREBASE_SERVICE_ACCOUNT_KEY format" }, 500);
-    }
+    try { sa = JSON.parse(saRaw); }
+    catch { return json({ error: "Invalid FIREBASE_SERVICE_ACCOUNT_KEY format" }, 500); }
 
     if (!sa.client_email || !sa.private_key || !sa.project_id) {
-      console.error("FIREBASE_SERVICE_ACCOUNT_KEY missing required fields (client_email, private_key, project_id)");
       return json({ error: "FIREBASE_SERVICE_ACCOUNT_KEY incomplete" }, 500);
     }
 
@@ -190,6 +187,7 @@ serve(async (req) => {
     if (Array.isArray(directTokens) && directTokens.length > 0) {
       allTokens = directTokens.filter(Boolean);
     } else if (Array.isArray(userIds) && userIds.length > 0) {
+      // Fetch all FCM tokens at once
       const allFcm = await fetchRTDB(`${dbUrl}/fcmTokens`, accessToken);
       if (allFcm) {
         const keys = new Set<string>();
@@ -212,9 +210,20 @@ serve(async (req) => {
           if (allFcm[k]) allTokens.push(...extractTokens(allFcm[k]));
         });
       }
+    } else {
+      // No tokens or userIds — fetch ALL tokens from RTDB
+      console.log("[send-fcm] No tokens/userIds provided, fetching ALL tokens...");
+      const allFcm = await fetchRTDB(`${dbUrl}/fcmTokens`, accessToken);
+      if (allFcm) {
+        Object.values(allFcm).forEach((userTokens: any) => {
+          allTokens.push(...extractTokens(userTokens));
+        });
+      }
     }
 
     allTokens = [...new Set(allTokens)];
+    console.log(`[send-fcm] Total unique tokens to send: ${allTokens.length}`);
+    
     if (allTokens.length === 0) {
       return json({ ok: true, totalTokens: 0, success: 0, failed: 0, invalidRemoved: 0 });
     }
@@ -226,27 +235,46 @@ serve(async (req) => {
       Object.entries(extra).forEach(([k, v]) => { dataPayload[k] = v == null ? "" : String(v); });
     }
 
-    // ---- Send in batches of 25 concurrently ----
-    const BATCH = 25;
+    // ---- Send in concurrent batches of 50 (increased from 25) ----
+    // Process 3 batches concurrently for speed
+    const BATCH = 50;
+    const CONCURRENCY = 3;
     let success = 0, failed = 0;
     const invalidTokens: string[] = [];
     const failReasons = { invalid: 0, transient: 0, other: 0 };
 
+    const batches: string[][] = [];
     for (let i = 0; i < allTokens.length; i += BATCH) {
-      const batch = allTokens.slice(i, i + BATCH);
-      const results = await Promise.all(
-        batch.map((t) => sendOne(accessToken, projectId, t, notification, dataPayload, { icon, badge }))
-      );
-      results.forEach((r, idx) => {
-        if (r.ok) { success++; }
-        else {
-          failed++;
-          if (r.invalid) { failReasons.invalid++; invalidTokens.push(batch[idx]); }
-          else if (r.error?.includes("UNAVAILABLE") || r.error?.includes("INTERNAL")) { failReasons.transient++; }
-          else { failReasons.other++; }
-        }
-      });
+      batches.push(allTokens.slice(i, i + BATCH));
     }
+
+    let batchIndex = 0;
+    const processBatch = async () => {
+      while (batchIndex < batches.length) {
+        const currentIdx = batchIndex++;
+        const batch = batches[currentIdx];
+        console.log(`[send-fcm] Processing batch ${currentIdx + 1}/${batches.length} (${batch.length} tokens)`);
+        
+        const results = await Promise.all(
+          batch.map((t) => sendOne(accessToken, projectId, t, notification, dataPayload, { icon, badge }))
+        );
+        
+        results.forEach((r, idx) => {
+          if (r.ok) { success++; }
+          else {
+            failed++;
+            if (r.invalid) { failReasons.invalid++; invalidTokens.push(batch[idx]); }
+            else if (r.error?.includes("UNAVAILABLE") || r.error?.includes("INTERNAL")) { failReasons.transient++; }
+            else { failReasons.other++; console.warn(`[send-fcm] Token failed: ${r.error}`); }
+          }
+        });
+      }
+    };
+
+    // Run CONCURRENCY workers in parallel
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batches.length) }, () => processBatch()));
+
+    console.log(`[send-fcm] Done: ${success} success, ${failed} failed out of ${allTokens.length}`);
 
     // ---- Cleanup invalid tokens ----
     let invalidRemoved = 0;
@@ -267,6 +295,7 @@ serve(async (req) => {
         if (Object.keys(patches).length > 0) {
           await patchRTDB(`${dbUrl}/fcmTokens`, accessToken, patches);
           invalidRemoved = Object.keys(patches).length;
+          console.log(`[send-fcm] Cleaned up ${invalidRemoved} invalid tokens`);
         }
       } catch (e) { console.error("Cleanup error:", e); }
     }

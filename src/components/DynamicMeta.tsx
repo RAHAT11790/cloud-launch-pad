@@ -7,7 +7,7 @@ const DynamicMeta = () => {
   const branding = useBranding();
 
   useEffect(() => {
-    const logoUrl = branding.logoUrl || "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png";
+    const logoUrl = branding.logoUrl || "https://rsanime03.lovable.app/android-chrome-192x192.png";
 
     // Title
     document.title = branding.siteName;
