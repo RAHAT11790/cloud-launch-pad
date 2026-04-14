@@ -115,8 +115,8 @@ async function sendOne(
     webpush: {
       notification: {
         ...notification,
-        icon: webpush?.icon || data?.icon,
-        badge: webpush?.badge || data?.badge,
+        icon: webpush?.icon || data?.icon || "https://rsanime03.lovable.app/android-chrome-192x192.png",
+        badge: webpush?.badge || data?.badge || "https://rsanime03.lovable.app/favicon-32x32.png",
       },
       fcm_options: data?.url ? { link: data.url } : undefined,
     },
