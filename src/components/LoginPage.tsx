@@ -231,24 +231,17 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         return;
       }
 
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      const userId = snap.val()?.id || emailKey;
-      
-      // Store OTP in Firebase
-      await set(ref(db, `users/${userId}/passwordResetOtp`), {
-        code: otp,
-        expiresAt: Date.now() + 5 * 60 * 1000,
+      // Send OTP via Supabase Auth (works without custom domain)
+      const { error } = await supabase.auth.signInWithOtp({
         email: forgotEmail.trim(),
+        options: { shouldCreateUser: true },
       });
 
-      // Send OTP via edge function
-      try {
-        const { supabase } = await import("@/integrations/supabase/client");
-        await supabase.functions.invoke("send-otp-email", {
-          body: { email: forgotEmail.trim(), otp, siteName: SITE_NAME },
-        });
-      } catch {
-        console.log("Email edge function call attempted");
+      if (error) {
+        console.error("OTP send error:", error);
+        toast.error("ইমেল পাঠাতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+        setForgotLoading(false);
+        return;
       }
 
       setForgotOtpSent(true);
