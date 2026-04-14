@@ -209,15 +209,10 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
             {testing === "supabase" ? <RefreshCw size={10} className="animate-spin" /> : <Activity size={10} />}
           </button>
         </div>
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[11px] font-semibold">🟢 Supabase FCM URL 2</span>
-        </div>
-        <div className="flex gap-1.5">
-          <input value={sbUrl2Input} onChange={(e) => setSbUrl2Input(e.target.value)}
-            placeholder="https://xxx.supabase.co/functions/v1/send-fcm-b" className={`${inputClass} !text-[10px] !py-1.5 flex-1`} />
-          <button onClick={saveSbUrl2} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}><Save size={10} /></button>
-        </div>
-        <p className="text-[9px] text-zinc-500 mt-1.5">⚡ দুইটা Supabase URL দিলে FCM send দুই ভাগে ভাগ হয়ে যাবে, duplicate ছাড়া</p>
+      </div>
+    </div>
+  );
+};
       </div>
     </div>
   );
