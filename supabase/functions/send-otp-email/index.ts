@@ -8,6 +8,13 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // GET request = health check / ping
+  if (req.method === "GET") {
+    return new Response(JSON.stringify({ status: "ok", service: "send-otp-email" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
     const { email, otp, siteName } = await req.json();
     if (!email || !otp) {
@@ -37,52 +44,52 @@ Deno.serve(async (req) => {
       </div>
     `;
 
-    // Try sending via SMTP/Resend gateway if available
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    
-    // Method 1: Try Supabase Auth admin to send a magic link (piggyback email sending)
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+    if (!RESEND_API_KEY) {
+      return new Response(JSON.stringify({ error: "RESEND_API_KEY not configured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    let emailSent = false;
+    // Send email via Resend API directly
+    const resendRes = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: `${name} <onboarding@resend.dev>`,
+        to: [email],
+        subject: `🔐 ${name} - Password Reset Code: ${otp}`,
+        html: emailHtml,
+      }),
+    });
 
-    // Method: Use Supabase Auth to trigger an email
-    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-      try {
-        // Generate a magic link which will trigger Supabase to send an email
-        const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-            "apikey": SUPABASE_SERVICE_ROLE_KEY,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            type: "magiclink",
-            email: email,
-            options: {
-              data: { otp_code: otp },
-            },
-          }),
-        });
-        
-        if (res.ok) {
-          emailSent = true;
-        }
-      } catch (e) {
-        console.error("Supabase auth email failed:", e);
-      }
+    const resendData = await resendRes.json();
+
+    if (!resendRes.ok) {
+      console.error("Resend API error:", resendData);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        emailSent: false, 
+        error: resendData?.message || "Email sending failed" 
+      }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify({ 
       success: true,
-      emailSent,
-      message: emailSent ? "OTP email sent" : "OTP generated (check Firebase for code)",
+      emailSent: true,
+      message: "OTP email sent via Resend",
+      messageId: resendData.id,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (e: any) {
+    console.error("send-otp-email error:", e);
     return new Response(JSON.stringify({ error: e.message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
