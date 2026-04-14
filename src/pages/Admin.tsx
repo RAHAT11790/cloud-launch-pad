@@ -213,10 +213,8 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
     </div>
   );
 };
-      </div>
-    </div>
-  );
-};
+
+
 
 // ==================== TELEGRAM PROVIDER SECTION ====================
 const TelegramProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
