@@ -149,6 +149,10 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
             <div className="flex items-center justify-center gap-1 mt-1">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span className="text-[9px] text-green-400">Active</span>
+            </div>
+          )}
+        </button>
+        <button
           onClick={() => switchProvider("supabase")}
           className={`p-3 rounded-xl border-2 transition-all text-center ${
             activeProvider === "supabase"
@@ -161,7 +165,7 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
           {activeProvider === "supabase" && (
             <div className="flex items-center justify-center gap-1 mt-1">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-[9px] text-green-400">চালু</span>
+              <span className="text-[9px] text-green-400">Active</span>
             </div>
           )}
         </button>
