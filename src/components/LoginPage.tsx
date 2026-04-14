@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { User, Lock, Eye, EyeOff, LogIn, Mail, AlertTriangle, Smartphone, ArrowLeft, KeyRound, Check } from "lucide-react";
 import logoImg from "@/assets/logo.png";
-import { db, auth, googleProvider, ref, set, get, update, signInWithPopup, sendPasswordResetEmail } from "@/lib/firebase";
+import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup, sendPasswordResetEmail } from "@/lib/firebase";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
@@ -231,21 +231,40 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         return;
       }
 
-      // Send OTP via Supabase Auth (works without custom domain)
-      const { error } = await supabase.auth.signInWithOtp({
-        email: forgotEmail.trim(),
-        options: { shouldCreateUser: true },
-      });
+      // Check if custom email service URL is configured
+      const emailServiceSnap = await get(ref(db, "settings/emailService/otpFunctionUrl"));
+      const customUrl = emailServiceSnap.val();
 
-      if (error) {
-        console.error("OTP send error:", error);
-        toast.error("ইমেল পাঠাতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
-        setForgotLoading(false);
-        return;
+      if (customUrl) {
+        // Use custom edge function for OTP
+        const otp = String(Math.floor(100000 + Math.random() * 900000));
+        // Store OTP temporarily in Firebase
+        await set(ref(db, `otpCodes/${emailKey}`), { code: otp, expires: Date.now() + 5 * 60 * 1000 });
+
+        const res = await fetch(customUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: forgotEmail.trim(), otp, siteName: SITE_NAME }),
+        });
+        if (!res.ok) throw new Error("Email sending failed");
+
+        setForgotOtpSent(true);
+        toast.success(`📧 Code sent to: ${forgotEmail}`);
+      } else {
+        // Fallback: Use Supabase Auth OTP
+        const { error } = await supabase.auth.signInWithOtp({
+          email: forgotEmail.trim(),
+          options: { shouldCreateUser: true },
+        });
+        if (error) {
+          console.error("OTP send error:", error);
+          toast.error("ইমেল পাঠাতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+          setForgotLoading(false);
+          return;
+        }
+        setForgotOtpSent(true);
+        toast.success(`📧 Code sent to: ${forgotEmail}`);
       }
-
-      setForgotOtpSent(true);
-      toast.success(`📧 Code sent to: ${forgotEmail}`);
     } catch (err: any) {
       toast.error("Error: " + err.message);
     }
@@ -259,32 +278,65 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
 
     setForgotLoading(true);
     try {
-      // Verify OTP via Supabase Auth
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email: forgotEmail.trim(),
-        token: forgotOtp.trim(),
-        type: 'email',
-      });
+      const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
 
-      if (verifyError) {
-        if (verifyError.message.includes("expired")) {
-          toast.error("⏰ Code expired! Please request a new one.");
-        } else {
+      // Check if custom email service was used
+      const emailServiceSnap = await get(ref(db, "settings/emailService/otpFunctionUrl"));
+      const customUrl = emailServiceSnap.val();
+
+      if (customUrl) {
+        // Verify OTP from Firebase
+        const otpSnap = await get(ref(db, `otpCodes/${emailKey}`));
+        const otpData = otpSnap.val();
+        if (!otpData || otpData.code !== forgotOtp.trim()) {
           toast.error("❌ Incorrect code!");
+          setForgotLoading(false);
+          return;
         }
-        setForgotLoading(false);
-        return;
+        if (Date.now() > otpData.expires) {
+          toast.error("⏰ Code expired! Please request a new one.");
+          await remove(ref(db, `otpCodes/${emailKey}`));
+          setForgotLoading(false);
+          return;
+        }
+        // Clean up OTP
+        await remove(ref(db, `otpCodes/${emailKey}`));
+      } else {
+        // Verify OTP via Supabase Auth
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          email: forgotEmail.trim(),
+          token: forgotOtp.trim(),
+          type: 'email',
+        });
+        if (verifyError) {
+          if (verifyError.message.includes("expired")) {
+            toast.error("⏰ Code expired! Please request a new one.");
+          } else {
+            toast.error("❌ Incorrect code!");
+          }
+          setForgotLoading(false);
+          return;
+        }
       }
 
       // OTP verified — update password in Firebase RTDB
-      const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
       const snap = await get(ref(db, `appUsers/${emailKey}`));
       if (!snap.exists()) { toast.error("Account not found"); setForgotLoading(false); return; }
 
       await set(ref(db, `appUsers/${emailKey}/password`), forgotNewPw.trim());
 
-      // Sign out of Supabase (we only used it for OTP verification)
-      await supabase.auth.signOut();
+      // Log password reset to Firebase
+      const userName = snap.val()?.name || "";
+      const logKey = `${emailKey}_${Date.now()}`;
+      await set(ref(db, `passwordResets/${logKey}`), {
+        email: forgotEmail.trim(),
+        name: userName,
+        timestamp: Date.now(),
+        method: customUrl ? "custom-otp" : "supabase-otp",
+      });
+
+      // Sign out of Supabase if it was used
+      if (!customUrl) await supabase.auth.signOut();
 
       toast.success("✅ New password set! You can now login.");
       setShowForgotPw(false);

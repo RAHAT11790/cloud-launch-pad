@@ -10,13 +10,13 @@ import {
   Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
   Shield, LogOut, Search, Save, ChevronDown, Send, Link, ChevronLeft, ChevronRight,
   Lock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin,
-  Upload, Loader2, CheckCircle, XCircle, Clock, Image
+  Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service";
 
 interface CastMember {
   name: string;
@@ -420,6 +420,143 @@ const TelegramWebhookSection = ({ glassCard, inputClass, btnPrimary, btnSecondar
           ⚠️ আগে উপরে "Telegram Supabase URL" সেট করো!
         </p>
       )}
+    </div>
+  );
+};
+
+// ==================== EMAIL SERVICE SECTION ====================
+const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
+  const [otpUrl, setOtpUrl] = useState("");
+  const [otpUrlInput, setOtpUrlInput] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ alive: boolean; latency: number } | null>(null);
+  const [resetLogs, setResetLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(true);
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/emailService"), (snap) => {
+      const val = snap.val();
+      if (val) {
+        setOtpUrl(val.otpFunctionUrl || "");
+        setOtpUrlInput(val.otpFunctionUrl || "");
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "passwordResets"), (snap) => {
+      const val = snap.val();
+      if (val) {
+        const arr = Object.entries(val).map(([k, v]: any) => ({ id: k, ...v }));
+        arr.sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0));
+        setResetLogs(arr);
+      } else {
+        setResetLogs([]);
+      }
+      setLoadingLogs(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const saveUrl = async () => {
+    await set(ref(db, "settings/emailService/otpFunctionUrl"), otpUrlInput.trim());
+    toast.success("✅ Email Service URL saved!");
+  };
+
+  const testUrl = async () => {
+    if (!otpUrl) { toast.error("URL সেট করো আগে!"); return; }
+    setTesting(true);
+    setTestResult(null);
+    const start = Date.now();
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(otpUrl, { method: "GET", signal: controller.signal });
+      clearTimeout(t);
+      setTestResult({ alive: res.status < 500, latency: Date.now() - start });
+    } catch {
+      setTestResult({ alive: false, latency: Date.now() - start });
+    }
+    setTesting(false);
+  };
+
+  const clearLogs = async () => {
+    if (!confirm("সব পাসওয়ার্ড রিসেট লগ মুছে ফেলবে?")) return;
+    await remove(ref(db, "passwordResets"));
+    toast.success("লগ মুছে ফেলা হয়েছে");
+  };
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-bold text-white flex items-center gap-2"><Mail size={18} className="text-indigo-400" /> Email Service</h2>
+
+      {/* OTP Function URL */}
+      <div className={`${glassCard} p-4 space-y-3`}>
+        <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+          <Link size={14} className="text-cyan-400" /> OTP Email Function URL
+        </h3>
+        <p className="text-[10px] text-zinc-500">
+          Supabase Edge Function (send-otp-email) এর URL দিন। ভবিষ্যতে অন্য প্ল্যাটফর্মে ডিপ্লয় করলে নতুন URL দিলেই কাজ করবে।
+        </p>
+        <div className="flex gap-2">
+          <input value={otpUrlInput} onChange={e => setOtpUrlInput(e.target.value)}
+            placeholder="https://your-project.supabase.co/functions/v1/send-otp-email"
+            className={inputClass + " flex-1 text-[11px] font-mono"} />
+          <button onClick={saveUrl} className={`${btnPrimary} px-3 py-2 text-xs`}><Save size={12} /></button>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={testUrl} disabled={testing || !otpUrl} className={`${btnSecondary} px-3 py-1.5 text-[10px] flex items-center gap-1.5 disabled:opacity-40`}>
+            {testing ? <Loader2 size={10} className="animate-spin" /> : <Activity size={10} />} পিং
+          </button>
+          {testResult && (
+            <span className={`text-[10px] font-mono ${testResult.alive ? "text-emerald-400" : "text-red-400"}`}>
+              {testResult.alive ? "✅" : "❌"} {testResult.latency}ms
+            </span>
+          )}
+          {otpUrl && (
+            <span className="text-[10px] text-emerald-400/60 font-mono truncate max-w-[200px]">{otpUrl}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Password Reset Logs */}
+      <div className={`${glassCard} p-4 space-y-3`}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+            <KeyRound size={14} className="text-amber-400" /> Password Reset Logs
+          </h3>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-zinc-500">{resetLogs.length} জন</span>
+            {resetLogs.length > 0 && (
+              <button onClick={clearLogs} className={`${btnSecondary} px-2 py-1 text-[9px] flex items-center gap-1`}>
+                <Trash2 size={9} /> সব মুছুন
+              </button>
+            )}
+          </div>
+        </div>
+
+        {loadingLogs ? (
+          <div className="text-center py-4"><Loader2 size={16} className="animate-spin text-zinc-500 mx-auto" /></div>
+        ) : resetLogs.length === 0 ? (
+          <p className="text-[11px] text-zinc-600 text-center py-4">কেউ এখনো পাসওয়ার্ড পরিবর্তন করেনি</p>
+        ) : (
+          <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
+            {resetLogs.map((log: any) => (
+              <div key={log.id} className="bg-white/3 border border-white/5 rounded-lg px-3 py-2 flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] text-white font-medium truncate">{log.email}</p>
+                  <p className="text-[9px] text-zinc-500">{log.name || "—"}</p>
+                </div>
+                <div className="text-right flex-shrink-0 ml-2">
+                  <p className="text-[9px] text-zinc-400">{log.timestamp ? new Date(log.timestamp).toLocaleString("bn-BD") : "—"}</p>
+                  <p className="text-[9px] text-emerald-400/60">{log.method || "supabase-otp"}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -2256,6 +2393,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "tg-url-changer": "TG URL Changer",
     "video-servers": "Video Servers",
     "unlock-duration": "Unlock Duration",
+    "email-service": "Email Service",
     
   };
 
@@ -3557,6 +3695,7 @@ ${tgHashtags}`;
     { section: "analytics", icon: <BarChart3 size={16} />, label: "Analytics & Views" },
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
+    { section: "email-service", icon: <Mail size={16} />, label: "Email Service" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
@@ -6554,6 +6693,11 @@ ${tgHashtags}`;
         {/* ==================== EDGE FUNCTION ROUTER ==================== */}
         {activeSection === "edge-router" && (
           <EdgeRouterSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+        )}
+
+        {/* ==================== EMAIL SERVICE ==================== */}
+        {activeSection === "email-service" && (
+          <EmailServiceSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
         {/* ==================== AI CONFIG ==================== */}
