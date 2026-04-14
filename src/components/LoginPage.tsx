@@ -231,21 +231,40 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         return;
       }
 
-      // Send OTP via Supabase Auth (works without custom domain)
-      const { error } = await supabase.auth.signInWithOtp({
-        email: forgotEmail.trim(),
-        options: { shouldCreateUser: true },
-      });
+      // Check if custom email service URL is configured
+      const emailServiceSnap = await get(ref(db, "settings/emailService/otpFunctionUrl"));
+      const customUrl = emailServiceSnap.val();
 
-      if (error) {
-        console.error("OTP send error:", error);
-        toast.error("ইমেল পাঠাতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
-        setForgotLoading(false);
-        return;
+      if (customUrl) {
+        // Use custom edge function for OTP
+        const otp = String(Math.floor(100000 + Math.random() * 900000));
+        // Store OTP temporarily in Firebase
+        await set(ref(db, `otpCodes/${emailKey}`), { code: otp, expires: Date.now() + 5 * 60 * 1000 });
+
+        const res = await fetch(customUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: forgotEmail.trim(), otp, siteName: SITE_NAME }),
+        });
+        if (!res.ok) throw new Error("Email sending failed");
+
+        setForgotOtpSent(true);
+        toast.success(`📧 Code sent to: ${forgotEmail}`);
+      } else {
+        // Fallback: Use Supabase Auth OTP
+        const { error } = await supabase.auth.signInWithOtp({
+          email: forgotEmail.trim(),
+          options: { shouldCreateUser: true },
+        });
+        if (error) {
+          console.error("OTP send error:", error);
+          toast.error("ইমেল পাঠাতে সমস্যা হয়েছে। আবার চেষ্টা করুন।");
+          setForgotLoading(false);
+          return;
+        }
+        setForgotOtpSent(true);
+        toast.success(`📧 Code sent to: ${forgotEmail}`);
       }
-
-      setForgotOtpSent(true);
-      toast.success(`📧 Code sent to: ${forgotEmail}`);
     } catch (err: any) {
       toast.error("Error: " + err.message);
     }
