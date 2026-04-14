@@ -768,7 +768,7 @@ export const sendPushToAllUsers = async (
         success: Number(result.success || 0),
         failed: Number(result.failed || 0),
         invalidRemoved: Number(result.invalidRemoved || 0),
-        totalUsers: uniqueUserIds.length,
+        totalUsers: Number(result.totalTokens || 0),
         failReasons: result.failReasons || { invalid: 0, transient: 0, other: 0 },
       };
       onProgress?.(finalProgress);
