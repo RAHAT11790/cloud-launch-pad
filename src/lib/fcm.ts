@@ -264,15 +264,10 @@ const toEmailKey = (email?: string | null): string | null => {
   return email.replace(/\./g, ",");
 };
 
-const isPrimaryOriginToken = (entry: any) => {
-  const origin = typeof entry?.origin === "string" ? entry.origin : "";
-  return !origin || origin === PRIMARY_SITE_ORIGIN;
-};
-
 const extractTokensFromMap = (data: Record<string, any> | null | undefined): string[] => {
   if (!data || typeof data !== "object") return [];
   return Object.values(data)
-    .filter((entry: any) => entry?.token && isPrimaryOriginToken(entry))
+    .filter((entry: any) => !!entry?.token)
     .map((entry: any) => entry.token);
 };
 
@@ -737,34 +732,12 @@ export const sendPushToAllUsers = async (
     invalidRemoved: 0,
   });
 
-  // Check if Supabase provider is active — if so, send userIds and let server fetch tokens
+  // Use Supabase provider — server-side token resolution (send with NO tokens/userIds = fetch ALL)
   const providerConfig = await getFcmProviderConfig();
   
   if (providerConfig.provider === "supabase" && providerConfig.url) {
-    console.log("[FCM] Using Supabase provider — server-side token resolution");
+    console.log("[FCM] Using Supabase provider — server fetches ALL tokens");
     try {
-      const usersSnap = await get(ref(db, "users"));
-      const usersData = usersSnap.val() || {};
-      const allUserIds: string[] = [];
-      const seenIds = new Set<string>();
-      
-      Object.entries(usersData).forEach(([key, userData]: any) => {
-        const effectiveId = String(userData?.id || key || "").trim();
-        if (effectiveId && !seenIds.has(effectiveId)) {
-          seenIds.add(effectiveId);
-          allUserIds.push(effectiveId);
-        }
-      });
-
-      const tokenSnap = await get(ref(db, "fcmTokens"));
-      const tokenData = tokenSnap.val() || {};
-      Object.keys(tokenData).forEach(key => {
-        if (!seenIds.has(key)) {
-          seenIds.add(key);
-          allUserIds.push(key);
-        }
-      });
-
       onProgress?.({
         phase: "sending",
         totalTokens: 0,
@@ -772,23 +745,21 @@ export const sendPushToAllUsers = async (
         success: 0,
         failed: 0,
         invalidRemoved: 0,
-        totalUsers: allUserIds.length,
       });
 
       const normalizedData = normalizePushData(payload);
-      const uniqueUserIds = [...new Set(allUserIds.filter(Boolean))];
 
-      const requestBodyBase = {
+      const requestBody = {
         title: payload.title,
         body: payload.body,
         image: payload.image,
         icon: payload.icon || APP_ICON_URL,
-        badge: payload.badge || APP_ICON_URL,
+        badge: payload.badge || "https://rsanime03.lovable.app/favicon-32x32.png",
         data: normalizedData,
+        // No tokens or userIds → server fetches ALL tokens from Firebase RTDB
       };
 
-      // Single endpoint — send all userIds at once, server handles everything
-      const result = await postFcmRequest(providerConfig.url, { ...requestBodyBase, userIds: uniqueUserIds });
+      const result = await postFcmRequest(providerConfig.url, requestBody);
 
       const finalProgress: PushProgress = {
         phase: "done",
@@ -797,7 +768,7 @@ export const sendPushToAllUsers = async (
         success: Number(result.success || 0),
         failed: Number(result.failed || 0),
         invalidRemoved: Number(result.invalidRemoved || 0),
-        totalUsers: uniqueUserIds.length,
+        totalUsers: Number(result.totalTokens || 0),
         failReasons: result.failReasons || { invalid: 0, transient: 0, other: 0 },
       };
       onProgress?.(finalProgress);
