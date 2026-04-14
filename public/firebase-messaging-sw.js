@@ -34,7 +34,7 @@ messaging.onBackgroundMessage((payload) => {
     body: notifBody,
     icon: notifIcon,
     image: notifImage,
-    badge: brandIcon,
+    badge: data.badge || brandIcon,
     vibrate: [200, 100, 200],
     data: data,
     tag: 'rsanime-' + contentTag,
@@ -56,9 +56,9 @@ self.addEventListener('push', (event) => {
         const contentTag = data.contentId || data.type || 'general';
         const options = {
           body: data.body || '',
-          icon: data.icon || brandIcon,
+          icon: data.icon || brandLargeIcon,
           image: data.image || undefined,
-          badge: brandIcon,
+          badge: data.badge || brandIcon,
           vibrate: [200, 100, 200],
           data: data,
           tag: 'rsanime-' + contentTag,
