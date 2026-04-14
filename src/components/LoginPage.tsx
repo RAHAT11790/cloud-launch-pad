@@ -259,28 +259,32 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
 
     setForgotLoading(true);
     try {
+      // Verify OTP via Supabase Auth
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email: forgotEmail.trim(),
+        token: forgotOtp.trim(),
+        type: 'email',
+      });
+
+      if (verifyError) {
+        if (verifyError.message.includes("expired")) {
+          toast.error("⏰ Code expired! Please request a new one.");
+        } else {
+          toast.error("❌ Incorrect code!");
+        }
+        setForgotLoading(false);
+        return;
+      }
+
+      // OTP verified — update password in Firebase RTDB
       const emailKey = forgotEmail.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
       const snap = await get(ref(db, `appUsers/${emailKey}`));
       if (!snap.exists()) { toast.error("Account not found"); setForgotLoading(false); return; }
 
-      const userId = snap.val()?.id || emailKey;
-      const otpSnap = await get(ref(db, `users/${userId}/passwordResetOtp`));
-      const otpData = otpSnap.val();
-
-      if (!otpData || otpData.code !== forgotOtp.trim()) {
-        toast.error("❌ Incorrect code!");
-        setForgotLoading(false);
-        return;
-      }
-      if (otpData.expiresAt < Date.now()) {
-        toast.error("⏰ Code expired!");
-        setForgotLoading(false);
-        return;
-      }
-
-      // Update password in appUsers
       await set(ref(db, `appUsers/${emailKey}/password`), forgotNewPw.trim());
-      await set(ref(db, `users/${userId}/passwordResetOtp`), null);
+
+      // Sign out of Supabase (we only used it for OTP verification)
+      await supabase.auth.signOut();
 
       toast.success("✅ New password set! You can now login.");
       setShowForgotPw(false);
