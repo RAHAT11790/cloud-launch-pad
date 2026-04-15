@@ -7426,7 +7426,7 @@ ${tgHashtags}`;
         {/* ==================== VIDEO SERVERS ==================== */}
         {activeSection === "video-servers" && (() => {
           const VideoServersSection = () => {
-            const [servers, setServers] = useState<{ name: string; domain: string }[]>([]);
+            const [servers, setServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
             const [vsLoading, setVsLoading] = useState(true);
             const [newName, setNewName] = useState("");
             const [newDomain, setNewDomain] = useState("");
@@ -7437,7 +7437,7 @@ ${tgHashtags}`;
                 if (val && Array.isArray(val)) {
                   setServers(val.filter((s: any) => s && s.domain));
                 } else if (val && typeof val === "object") {
-                  const arr = Object.values(val).filter((s: any) => s && s.domain) as { name: string; domain: string }[];
+                  const arr = Object.values(val).filter((s: any) => s && s.domain) as any[];
                   setServers(arr);
                 } else {
                   setServers([]);
@@ -7447,17 +7447,23 @@ ${tgHashtags}`;
               return () => unsub();
             }, []);
 
-            const saveServers = async (updated: { name: string; domain: string }[]) => {
+            const saveServers = async (updated: { name: string; domain: string; locked?: boolean }[]) => {
               await set(ref(db, "settings/videoServers"), updated);
-              toast.success("✅ সার্ভার লিস্ট সেভ হয়েছে!");
+              toast.success("✅ Server list saved!");
             };
 
             const addServer = () => {
-              if (!newDomain.trim()) { toast.error("ডোমেইন দিন!"); return; }
-              const updated = [...servers, { name: newName.trim() || `Server ${servers.length + 1}`, domain: newDomain.trim() }];
+              if (!newDomain.trim()) { toast.error("Enter domain!"); return; }
+              const updated = [...servers, { name: newName.trim() || `Server ${servers.length + 1}`, domain: newDomain.trim(), locked: false }];
               saveServers(updated);
               setNewName("");
               setNewDomain("");
+            };
+
+            const toggleLocked = (idx: number) => {
+              const updated = [...servers];
+              updated[idx] = { ...updated[idx], locked: !updated[idx].locked };
+              saveServers(updated);
             };
 
             const removeServer = (idx: number) => {
