@@ -1558,15 +1558,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     {showServerPanel && (
                       <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
                         <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
-                        {videoServers.map((srv, idx) => (
-                          <button key={idx} onClick={() => switchServer(idx)}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
-                              activeServerIndex === idx ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                            }`}>
-                            <span>{srv.name || `Server ${idx + 1}`}</span>
-                            {activeServerIndex === idx && <Check className="w-3 h-3" />}
-                          </button>
-                        ))}
+                        {videoServers.map((srv, idx) => {
+                          const isLocked = srv.locked && !isPremium;
+                          return (
+                            <button key={idx} onClick={() => { if (!isLocked) switchServer(idx); }}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
+                                activeServerIndex === idx ? "gradient-primary font-bold text-white" : isLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-foreground/10"
+                              }`}>
+                              <span className="flex items-center gap-1.5">
+                                {srv.locked && <Lock className="w-3 h-3 text-accent" />}
+                                {srv.name || `Server ${idx + 1}`}
+                              </span>
+                              {isLocked && <span className="text-[8px] text-accent font-medium">Premium</span>}
+                              {!isLocked && activeServerIndex === idx && <Check className="w-3 h-3" />}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
