@@ -7505,6 +7505,10 @@ ${tgHashtags}`;
                             <span className="text-[10px] text-zinc-500 block truncate">{srv.domain}</span>
                           </div>
                           <div className="flex items-center gap-1">
+                            <button onClick={() => toggleLocked(idx)} title={srv.locked ? "Unlock (make free)" : "Lock (premium only)"}
+                              className={`p-1 rounded ${srv.locked ? "text-amber-400 hover:text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}>
+                              {srv.locked ? <Lock size={13} /> : <Unlock size={13} />}
+                            </button>
                             <button onClick={() => moveServer(idx, -1)} disabled={idx === 0} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
                               <ChevronLeft size={12} />
                             </button>
