@@ -171,6 +171,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [showServerPanel, setShowServerPanel] = useState(false);
+  const premiumServerApplied = useRef(false);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
@@ -182,18 +183,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         servers = Object.values(val).filter((s: any) => s && s.domain) as any[];
       }
       setVideoServers(servers);
-
-      // Premium users default to first locked (premium) server
-      if (isPremium && servers.length > 0) {
-        const premIdx = servers.findIndex(s => s.locked);
-        if (premIdx >= 0 && activeServerIndex === 0) {
-          // Auto-switch to premium server on mount
-          setTimeout(() => switchServer(premIdx), 100);
-        }
-      }
     });
     return () => unsub();
-  }, [isPremium]);
+  }, []);
 
   
 
