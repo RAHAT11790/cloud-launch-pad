@@ -940,7 +940,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
           <div>
             <div className="premium-card p-4 rounded-2xl mb-4">
               <div className="flex items-center justify-between gap-3 mb-3">
-                <h4 className="text-sm font-semibold premium-text">📦 {isPremium ? "Extend or Renew Your Plan" : editingPendingPendingRequest ? "Edit Payment Request" : "Select a Plan"}</h4>
+                <h4 className="text-sm font-semibold premium-text">📦 {isPremium ? "Extend or Renew Your Plan" : editingPendingRequest ? "Edit Payment Request" : "Select a Plan"}</h4>
                 {editingPendingRequest && (
                   <button
                     onClick={() => setEditingPendingRequest(false)}
