@@ -493,6 +493,11 @@ type PushPayload = {
   data?: Record<string, string | number | boolean | null | undefined>;
 };
 
+type PushTargets = {
+  userIds?: string[];
+  tokens?: string[];
+};
+
 export type PushProgress = {
   phase: "tokens" | "sending" | "cleanup" | "done";
   totalTokens: number;
@@ -674,7 +679,16 @@ export const sendPushToUsers = async (
   payload: PushPayload,
   onProgress?: (progress: PushProgress) => void
 ) => {
-  const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+  return sendPushToTargets({ userIds }, payload, onProgress);
+};
+
+export const sendPushToTargets = async (
+  targets: PushTargets,
+  payload: PushPayload,
+  onProgress?: (progress: PushProgress) => void
+) => {
+  const uniqueUserIds = [...new Set((targets.userIds || []).filter(Boolean))];
+  const directTokens = [...new Set((targets.tokens || []).filter(Boolean))];
   const eligibleUserIds = await getPushEligibleUserIds(uniqueUserIds);
 
   onProgress?.({
@@ -687,13 +701,50 @@ export const sendPushToUsers = async (
     totalUsers: eligibleUserIds.length,
   });
 
-  if (eligibleUserIds.length === 0) {
+  if (eligibleUserIds.length === 0 && directTokens.length === 0) {
     onProgress?.({ phase: "done", totalTokens: 0, sent: 0, success: 0, failed: 0, invalidRemoved: 0, totalUsers: 0 });
     return { skipped: true, success: 0, failed: 0, total: 0, invalidTokensRemoved: 0, reason: "NO_TARGET_USERS" };
   }
 
+  const providerConfig = await getFcmProviderConfig();
+  if (providerConfig.provider === "supabase" && providerConfig.url) {
+    onProgress?.({ phase: "sending", totalTokens: 0, sent: 0, success: 0, failed: 0, invalidRemoved: 0, totalUsers: eligibleUserIds.length });
+
+    const result = await postFcmRequest(providerConfig.url, {
+      title: payload.title,
+      body: payload.body,
+      image: payload.image,
+      icon: payload.icon || APP_ICON_URL,
+      badge: payload.badge || APP_ICON_URL,
+      data: normalizePushData(payload),
+      ...(eligibleUserIds.length > 0 ? { userIds: eligibleUserIds } : {}),
+      ...(directTokens.length > 0 ? { tokens: directTokens } : {}),
+    });
+
+    const finalProgress: PushProgress = {
+      phase: "done",
+      totalTokens: Number(result.totalTokens || 0),
+      sent: Number(result.totalTokens || 0),
+      success: Number(result.success || 0),
+      failed: Number(result.failed || 0),
+      invalidRemoved: Number(result.invalidRemoved || 0),
+      totalUsers: eligibleUserIds.length,
+      failReasons: result.failReasons || { invalid: 0, transient: 0, other: 0 },
+    };
+    onProgress?.(finalProgress);
+
+    return {
+      success: finalProgress.success,
+      failed: finalProgress.failed,
+      total: finalProgress.totalTokens,
+      invalidTokensRemoved: finalProgress.invalidRemoved,
+      reason: finalProgress.totalTokens === 0 ? "NO_TOKENS" : undefined,
+    };
+  }
+
   console.log(`[FCM] Resolving tokens for ${eligibleUserIds.length} target users on ${PRIMARY_SITE_ORIGIN}...`);
-  const tokens = await getFCMTokens(eligibleUserIds);
+  const userTokens = eligibleUserIds.length > 0 ? await getFCMTokens(eligibleUserIds) : [];
+  const tokens = [...new Set([...directTokens, ...userTokens])];
   console.log(`[FCM] Found ${tokens.length} matching tokens for target users`);
 
   if (tokens.length === 0) {
