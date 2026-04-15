@@ -2089,12 +2089,12 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     unsubs.push(onValue(ref(db, "admin"), (snap) => {
       const val = snap.val() || {};
       const targetConfig = typeof val === "object" ? val?.notificationTargets || {} : {};
-      const userIds = [...new Set([
+      const userIds: string[] = [...new Set([
         typeof val === "string" ? val : "",
         typeof val === "object" ? val?.userId || "" : "",
         ...(Array.isArray(targetConfig?.userIds) ? targetConfig.userIds : []),
       ].map((item) => String(item || "").trim()).filter(Boolean))];
-      const tokens = [...new Set((Array.isArray(targetConfig?.tokens) ? targetConfig.tokens : [])
+      const tokens: string[] = [...new Set((Array.isArray(targetConfig?.tokens) ? targetConfig.tokens : [])
         .map((item: any) => String(item || "").trim())
         .filter(Boolean))];
       setSavedAdminUserId(userIds.join("\n"));

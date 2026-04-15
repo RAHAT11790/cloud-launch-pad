@@ -725,13 +725,13 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
         const adminSnap = await get(ref(db, "admin"));
         const adminData = adminSnap.val() || {};
         const notificationTargets = typeof adminData === "object" ? adminData?.notificationTargets || {} : {};
-        const adminIds = [...new Set([
+        const adminIds: string[] = [...new Set([
           typeof adminData === "string" ? adminData : "",
           typeof adminData === "object" ? adminData?.userId || "" : "",
           typeof adminData === "object" ? adminData?.email || "" : "",
           ...(Array.isArray(notificationTargets?.userIds) ? notificationTargets.userIds : []),
         ].map((value) => String(value || "").trim()).filter(Boolean))];
-        const adminTokens = [...new Set((Array.isArray(notificationTargets?.tokens) ? notificationTargets.tokens : [])
+        const adminTokens: string[] = [...new Set((Array.isArray(notificationTargets?.tokens) ? notificationTargets.tokens : [])
           .map((value: any) => String(value || "").trim())
           .filter(Boolean))];
         const inboxTargets = adminIds.filter((value) => !value.includes("@") && !value.includes(",") && !value.includes("."));
