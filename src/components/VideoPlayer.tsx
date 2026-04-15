@@ -574,12 +574,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       serverSwitchingRef.current = false;
     });
   }, [activeServerIndex, videoServers, resolvePlaybackSrc]);
-      }
-    }, 4000);
-
-    // Error fallback: if preload fails, still swap (let main player handle error)
-    preload.addEventListener("error", () => { settle(); }, { once: true });
-  }, [activeServerIndex, videoServers, resolvePlaybackSrc]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
