@@ -723,34 +723,43 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
       // Send notification to admin (both in-app and push)
       try {
         const adminSnap = await get(ref(db, "admin"));
-        const adminData = adminSnap.val();
-        const adminId = typeof adminData === "string" ? adminData : adminData?.userId || "";
-        const adminEmail = typeof adminData === "object" ? adminData?.email || "" : "";
-        const pushTargets = [adminId, adminEmail].filter((value): value is string => Boolean(value));
+        const adminData = adminSnap.val() || {};
+        const notificationTargets = typeof adminData === "object" ? adminData?.notificationTargets || {} : {};
+        const adminIds = [...new Set([
+          typeof adminData === "string" ? adminData : "",
+          typeof adminData === "object" ? adminData?.userId || "" : "",
+          typeof adminData === "object" ? adminData?.email || "" : "",
+          ...(Array.isArray(notificationTargets?.userIds) ? notificationTargets.userIds : []),
+        ].map((value) => String(value || "").trim()).filter(Boolean))];
+        const adminTokens = [...new Set((Array.isArray(notificationTargets?.tokens) ? notificationTargets.tokens : [])
+          .map((value: any) => String(value || "").trim())
+          .filter(Boolean))];
+        const inboxTargets = adminIds.filter((value) => !value.includes("@") && !value.includes(",") && !value.includes("."));
 
-        if (adminId) {
-          // In-app notification to admin's actual user ID
-          const adminNotifRef = push(ref(db, `notifications/${adminId}`));
-          await set(adminNotifRef, {
-            title: isEditingExistingRequest ? "Payment Request Updated" : "New Payment Request",
-            message: `${userName} — ৳${selectedPlan.price} (${selectedPlan.name}) — TrxID: ${trxInput.trim()}`,
-            type: "payment",
-            timestamp: Date.now(),
-            read: false,
-          });
+        if (inboxTargets.length > 0) {
+          await Promise.all(inboxTargets.map(async (adminId) => {
+            const adminNotifRef = push(ref(db, `notifications/${adminId}`));
+            await set(adminNotifRef, {
+              title: isEditingExistingRequest ? "Payment Request Updated" : "New Payment Request",
+              message: `${userName} — ৳${selectedPlan.price} (${selectedPlan.name}) — TrxID: ${trxInput.trim()}`,
+              type: "payment",
+              timestamp: Date.now(),
+              read: false,
+            });
+          }));
         }
 
-        if (pushTargets.length > 0) {
-          const { sendPushToUsers } = await import("@/lib/fcm");
-          await sendPushToUsers(pushTargets, {
+        if (adminIds.length > 0 || adminTokens.length > 0) {
+          const { sendPushToTargets } = await import("@/lib/fcm");
+          await sendPushToTargets({ userIds: adminIds, tokens: adminTokens }, {
             title: isEditingExistingRequest ? "Payment Request Updated" : "New Payment Request",
             body: `${userName} — ৳${selectedPlan.price} (TrxID: ${trxInput.trim()})`,
             url: "/admin",
-            data: { type: "payment" },
+            data: { type: "payment", userId, transactionId: trxInput.trim(), planName: selectedPlan.name },
           }).catch(() => {});
         }
 
-        if (!adminId && pushTargets.length === 0) {
+        if (inboxTargets.length === 0 && adminIds.length === 0 && adminTokens.length === 0) {
           // Fallback: save to notifications/admin key
           const adminNotifRef = push(ref(db, "notifications/admin"));
           await set(adminNotifRef, {

@@ -185,8 +185,10 @@ serve(async (req) => {
     let allTokens: string[] = [];
 
     if (Array.isArray(directTokens) && directTokens.length > 0) {
-      allTokens = directTokens.filter(Boolean);
-    } else if (Array.isArray(userIds) && userIds.length > 0) {
+      allTokens.push(...directTokens.filter(Boolean));
+    }
+
+    if (Array.isArray(userIds) && userIds.length > 0) {
       // Fetch all FCM tokens at once
       const allFcm = await fetchRTDB(`${dbUrl}/fcmTokens`, accessToken);
       if (allFcm) {
@@ -210,7 +212,7 @@ serve(async (req) => {
           if (allFcm[k]) allTokens.push(...extractTokens(allFcm[k]));
         });
       }
-    } else {
+    } else if (allTokens.length === 0) {
       // No tokens or userIds — fetch ALL tokens from RTDB
       console.log("[send-fcm] No tokens/userIds provided, fetching ALL tokens...");
       const allFcm = await fetchRTDB(`${dbUrl}/fcmTokens`, accessToken);
@@ -248,6 +250,7 @@ serve(async (req) => {
     const CONCURRENCY = 3;
     let success = 0, failed = 0;
     const invalidTokens: string[] = [];
+    const retryTokens: string[] = [];
     const failReasons = { invalid: 0, transient: 0, other: 0 };
 
     const batches: string[][] = [];
@@ -271,8 +274,8 @@ serve(async (req) => {
           else {
             failed++;
             if (r.invalid) { failReasons.invalid++; invalidTokens.push(batch[idx]); }
-            else if (r.error?.includes("UNAVAILABLE") || r.error?.includes("INTERNAL")) { failReasons.transient++; }
-            else { failReasons.other++; console.warn(`[send-fcm] Token failed: ${r.error}`); }
+            else if (r.error?.includes("UNAVAILABLE") || r.error?.includes("INTERNAL") || r.error?.includes("429") || r.error?.includes("503")) { failReasons.transient++; retryTokens.push(batch[idx]); }
+            else { failReasons.other++; retryTokens.push(batch[idx]); console.warn(`[send-fcm] Token failed: ${r.error}`); }
           }
         });
       }
@@ -280,6 +283,23 @@ serve(async (req) => {
 
     // Run CONCURRENCY workers in parallel
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batches.length) }, () => processBatch()));
+
+    const uniqueRetryTokens = [...new Set(retryTokens)].filter((token) => !invalidTokens.includes(token));
+    if (uniqueRetryTokens.length > 0) {
+      console.log(`[send-fcm] Retrying ${uniqueRetryTokens.length} failed token(s) one more time...`);
+      const retryResults = await Promise.all(
+        uniqueRetryTokens.map((token) => sendOne(accessToken, projectId, token, notification, dataPayload, { icon, badge }, 1))
+      );
+
+      retryResults.forEach((result, idx) => {
+        if (result.ok) {
+          success++;
+          failed = Math.max(0, failed - 1);
+        } else if (result.invalid && !invalidTokens.includes(uniqueRetryTokens[idx])) {
+          invalidTokens.push(uniqueRetryTokens[idx]);
+        }
+      });
+    }
 
     console.log(`[send-fcm] Done: ${success} success, ${failed} failed out of ${allTokens.length}`);
 

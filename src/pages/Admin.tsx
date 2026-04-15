@@ -1781,6 +1781,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [newTutorialUrl, setNewTutorialUrl] = useState("");
   const [adminUserIdInput, setAdminUserIdInput] = useState("");
   const [savedAdminUserId, setSavedAdminUserId] = useState("");
+  const [adminFcmTokensInput, setAdminFcmTokensInput] = useState("");
+  const [savedAdminFcmTokens, setSavedAdminFcmTokens] = useState<string[]>([]);
 
   // Maintenance state
   const [maintenanceActive, setMaintenanceActive] = useState(false);
@@ -2084,10 +2086,21 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       }
     }));
 
-    unsubs.push(onValue(ref(db, "admin/userId"), (snap) => {
-      const val = snap.val() || "";
-      setSavedAdminUserId(val);
-      setAdminUserIdInput(val);
+    unsubs.push(onValue(ref(db, "admin"), (snap) => {
+      const val = snap.val() || {};
+      const targetConfig = typeof val === "object" ? val?.notificationTargets || {} : {};
+      const userIds = [...new Set([
+        typeof val === "string" ? val : "",
+        typeof val === "object" ? val?.userId || "" : "",
+        ...(Array.isArray(targetConfig?.userIds) ? targetConfig.userIds : []),
+      ].map((item) => String(item || "").trim()).filter(Boolean))];
+      const tokens = [...new Set((Array.isArray(targetConfig?.tokens) ? targetConfig.tokens : [])
+        .map((item: any) => String(item || "").trim())
+        .filter(Boolean))];
+      setSavedAdminUserId(userIds.join("\n"));
+      setAdminUserIdInput(userIds.join("\n"));
+      setSavedAdminFcmTokens(tokens);
+      setAdminFcmTokensInput(tokens.join("\n"));
     }));
 
     return () => unsubs.forEach(u => u());
