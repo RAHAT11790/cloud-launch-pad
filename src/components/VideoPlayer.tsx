@@ -421,6 +421,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => unsub();
   }, []);
 
+  // Auto-switch to premium server for premium users
+  useEffect(() => {
+    if (isPremium && videoServers.length > 0 && !premiumServerApplied.current) {
+      const premIdx = videoServers.findIndex(s => s.locked);
+      if (premIdx >= 0 && premIdx !== activeServerIndex) {
+        premiumServerApplied.current = true;
+        setTimeout(() => switchServer(premIdx), 300);
+      }
+    }
+  }, [isPremium, videoServers]);
+
   // Ad gate - only run after premium check completes
   useEffect(() => {
     if (isPremium === null) return; // still loading premium status
