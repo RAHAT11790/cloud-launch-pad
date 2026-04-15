@@ -164,12 +164,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
+  const sourceBaseRef = useRef(src);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
   // ===== SERVER CHANGER =====
   const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
+  const [manualServerSelected, setManualServerSelected] = useState(false);
   const [showServerPanel, setShowServerPanel] = useState(false);
   const premiumServerApplied = useRef(false);
 
@@ -191,8 +193,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
-    const canStartDirectly = isDirectPlaybackUrl(src);
-
     if (noProxy) {
       setCdnEnabled(false);
       setProxyUrl('');
@@ -201,20 +201,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
 
-    let cdnLoaded = false;
-    let proxyLoaded = false;
-    setPlaybackRouteReady(canStartDirectly);
-
-    const markReady = () => {
-      if (canStartDirectly || (cdnLoaded && proxyLoaded)) setPlaybackRouteReady(true);
-    };
+    setPlaybackRouteReady(true);
 
     const unsub1 = onValue(ref(db, "settings/cdnEnabled"), (snap) => {
       const val = snap.val();
       const enabled = val !== false;
       setCdnEnabled(enabled);
-      cdnLoaded = true;
-      markReady();
     });
 
     const unsub2 = onValue(ref(db, "settings/proxyServer"), (snap) => {
@@ -226,8 +218,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         setProxyUrl('');
         setProxyApiKey('');
       }
-      proxyLoaded = true;
-      markReady();
     });
 
     return () => {
@@ -535,35 +525,37 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return getPrimaryPlaybackSrc(rawUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
+  const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
+    const server = videoServers[serverIndex];
+    if (!server?.domain) return rawUrl;
+    try {
+      const url = new URL(rawUrl);
+      return `${server.domain.replace(/\/$/, "")}${url.pathname}${url.search}${url.hash}`;
+    } catch {
+      const match = rawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
+      return `${server.domain.replace(/\/$/, "")}${match ? match[1] : rawUrl}`;
+    }
+  }, [videoServers]);
+
   const preloadVideoRef = useRef<HTMLVideoElement | null>(null);
   const serverSwitchingRef = useRef(false);
 
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
+    if (videoServers[serverIndex].locked && !isPremium) return;
     if (serverSwitchingRef.current) return;
     const v = videoRef.current;
     if (!v) return;
 
     const savedTime = v.currentTime || 0;
-    const currentRawSrc = activeSourceBaseRef.current;
-
-    let path = "";
-    try {
-      const u = new URL(currentRawSrc);
-      path = u.pathname + u.search + u.hash;
-    } catch {
-      const match = currentRawSrc.match(/^https?:\/\/[^\/]+(\/.*)/);
-      path = match ? match[1] : currentRawSrc;
-    }
-
-    const newDomain = videoServers[serverIndex].domain.replace(/\/$/, "");
-    const newRawSrc = newDomain + path;
+    const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
     const resolved = resolvePlaybackSrc(newRawSrc);
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
 
     // Keep last frame visible by NOT clearing src — just swap directly
+    setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
@@ -573,7 +565,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setCurrentSrc(resolved);
       serverSwitchingRef.current = false;
     });
-  }, [activeServerIndex, videoServers, resolvePlaybackSrc]);
+  }, [activeServerIndex, videoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
@@ -642,8 +634,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       else if (q.includes('720')) audioUrl = track.src720 || track.src;
       else if (q.includes('480')) audioUrl = track.src480 || track.src;
       // Switch to a different URL for this language
-      const proxiedSrc = resolvePlaybackSrc(audioUrl);
-      activeSourceBaseRef.current = audioUrl;
+      sourceBaseRef.current = audioUrl;
+      const finalAudioUrl = manualServerSelected ? applyServerDomain(audioUrl, activeServerIndex) : audioUrl;
+      const proxiedSrc = resolvePlaybackSrc(finalAudioUrl);
+      activeSourceBaseRef.current = finalAudioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
     // Restore playback position after source change
@@ -657,7 +651,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.addEventListener("loadedmetadata", restoreTime);
     }
     setShowAudioPanel(false);
-  }, [currentQuality, resolvePlaybackSrc]);
+  }, [currentQuality, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
 
   const resetToDefaultAudio = useCallback(() => {
     const v = videoRef.current;
@@ -673,11 +667,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       }
     }
 
+    sourceBaseRef.current = defaultRawSrc;
     activeSourceBaseRef.current = defaultRawSrc;
     setCurrentAudioTrack("Default");
     setShowAudioPanel(false);
 
-    if (v && currentSrc !== defaultResolvedSrc) {
+    const finalDefaultSrc = manualServerSelected ? applyServerDomain(defaultRawSrc, activeServerIndex) : defaultRawSrc;
+    const finalResolvedSrc = resolvePlaybackSrc(finalDefaultSrc);
+
+    if (v && currentSrc !== finalResolvedSrc) {
       const restoreTime = () => {
         if (v.duration > 0) {
           v.currentTime = savedTime;
@@ -687,17 +685,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       };
 
       v.addEventListener("loadedmetadata", restoreTime);
-      setCurrentSrc(defaultResolvedSrc);
+      activeSourceBaseRef.current = finalDefaultSrc;
+      setCurrentSrc(finalResolvedSrc);
     }
 
-  }, [currentSrc, resolvePlaybackSrc, src]);
+  }, [currentSrc, resolvePlaybackSrc, src, manualServerSelected, activeServerIndex, applyServerDomain]);
 
   useEffect(() => {
     if (!playbackRouteReady) return;
+    sourceBaseRef.current = src;
     activeSourceBaseRef.current = src;
     const resolvedSrc = resolvePlaybackSrc(src);
     setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
+    setManualServerSelected(false);
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
@@ -721,7 +722,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     loaderTimeoutRef.current = setTimeout(() => {
       setShowFixedLoader(false);
       loaderTimeoutRef.current = null;
-    }, 5000);
+    }, 1800);
 
     // Also hide immediately when video fires canplay/playing
     const v = videoRef.current;
@@ -1200,8 +1201,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (is4KLabel(option.label) && !isPremium) return;
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
-    activeSourceBaseRef.current = option.src;
-    const newSrc = resolvePlaybackSrc(option.src);
+    sourceBaseRef.current = option.src;
+    const finalOptionSrc = manualServerSelected ? applyServerDomain(option.src, activeServerIndex) : option.src;
+    activeSourceBaseRef.current = finalOptionSrc;
+    const newSrc = resolvePlaybackSrc(finalOptionSrc);
 
     if (newSrc === currentSrc) {
       setCurrentQuality(option.label);
@@ -1215,7 +1218,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentQuality(option.label);
     setShowSettings(false);
 
-  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc]);
+  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
@@ -1510,13 +1513,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 </button>
                 {videoServers.length > 1 && (
                   <div className="relative">
-                    <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1 ${activeServerIndex > 0 ? 'ring-1 ring-primary' : ''}`}>
+                    <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
-                      <span className="text-[10px] font-medium">S{activeServerIndex + 1}</span>
+                      <span className="text-[10px] font-medium">{manualServerSelected ? (videoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
                     </button>
                     {showServerPanel && (
                       <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
                         <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
+                        {!isPremium && (
+                          <button onClick={() => {
+                            setShowServerPanel(false);
+                            setManualServerSelected(false);
+                            activeSourceBaseRef.current = sourceBaseRef.current;
+                            setCurrentSrc(resolvePlaybackSrc(sourceBaseRef.current));
+                          }}
+                            className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
+                              !manualServerSelected ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                            }`}>
+                            <span>Default</span>
+                            {!manualServerSelected && <Check className="w-3 h-3" />}
+                          </button>
+                        )}
                         {videoServers.map((srv, idx) => {
                           const isLocked = srv.locked && !isPremium;
                           return (
