@@ -540,12 +540,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
-    if (serverSwitchingRef.current) return; // prevent double-click
+    if (serverSwitchingRef.current) return;
     const v = videoRef.current;
     if (!v) return;
 
     const savedTime = v.currentTime || 0;
-    const wasPlaying = !v.paused;
     const currentRawSrc = activeSourceBaseRef.current;
 
     let path = "";
@@ -564,51 +563,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
 
-    // Create hidden preload video to load new server in background
-    const preload = document.createElement("video");
-    preload.preload = "auto";
-    preload.muted = true;
-    preload.playsInline = true;
-    preload.style.display = "none";
-    preload.src = resolved;
-    document.body.appendChild(preload);
-    preloadVideoRef.current = preload;
-
-    let settled = false;
-    const settle = () => {
-      if (settled) return;
-      settled = true;
-      // Clean up preload element
-      try { preload.pause(); preload.src = ""; document.body.removeChild(preload); } catch {}
-      preloadVideoRef.current = null;
-
-      // Now swap source on the real player — it should load from cache/connection
-      setActiveServerIndex(serverIndex);
-      activeSourceBaseRef.current = newRawSrc;
-      pendingSeek.current = savedTime;
+    // Keep last frame visible by NOT clearing src — just swap directly
+    setActiveServerIndex(serverIndex);
+    activeSourceBaseRef.current = newRawSrc;
+    pendingSeek.current = savedTime;
+    
+    // Brief delay to let React update, then swap source
+    requestAnimationFrame(() => {
       setCurrentSrc(resolved);
       serverSwitchingRef.current = false;
-    };
-
-    // When preload has enough data, seek to position to verify, then swap
-    const onCanPlay = () => {
-      preload.currentTime = savedTime;
-      // Wait for seek to complete
-      const onSeeked = () => {
-        settle();
-      };
-      preload.addEventListener("seeked", onSeeked, { once: true });
-      // Safety: if seeked doesn't fire within 2s, swap anyway
-      setTimeout(() => { settle(); }, 2000);
-    };
-
-    preload.addEventListener("canplay", onCanPlay, { once: true });
-
-    // Timeout fallback: if preload takes >4s, just do a direct swap
-    setTimeout(() => {
-      if (!settled) {
-        console.log("Server preload timeout, doing direct swap");
-        settle();
+    });
+  }, [activeServerIndex, videoServers, resolvePlaybackSrc]);
       }
     }, 4000);
 
