@@ -7501,7 +7501,10 @@ ${tgHashtags}`;
                             <span className="text-[11px] font-bold text-cyan-300">S{idx + 1}</span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <span className="text-[12px] font-medium block truncate">{srv.name}</span>
+                            <span className="text-[12px] font-medium block truncate flex items-center gap-1">
+                              {srv.name}
+                              {srv.locked && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md font-bold">PREMIUM</span>}
+                            </span>
                             <span className="text-[10px] text-zinc-500 block truncate">{srv.domain}</span>
                           </div>
                           <div className="flex items-center gap-1">
