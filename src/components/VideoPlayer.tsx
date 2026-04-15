@@ -168,21 +168,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
   // ===== SERVER CHANGER =====
-  const [videoServers, setVideoServers] = useState<{ name: string; domain: string }[]>([]);
+  const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [showServerPanel, setShowServerPanel] = useState(false);
+  const premiumServerApplied = useRef(false);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
       const val = snap.val();
+      let servers: { name: string; domain: string; locked?: boolean }[] = [];
       if (val && Array.isArray(val)) {
-        setVideoServers(val.filter((s: any) => s && s.domain));
+        servers = val.filter((s: any) => s && s.domain);
       } else if (val && typeof val === "object") {
-        const arr = Object.values(val).filter((s: any) => s && s.domain) as { name: string; domain: string }[];
-        setVideoServers(arr);
-      } else {
-        setVideoServers([]);
+        servers = Object.values(val).filter((s: any) => s && s.domain) as any[];
       }
+      setVideoServers(servers);
     });
     return () => unsub();
   }, []);
@@ -421,6 +421,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => unsub();
   }, []);
 
+  // Auto-switch to premium server for premium users
+  useEffect(() => {
+    if (isPremium && videoServers.length > 0 && !premiumServerApplied.current) {
+      const premIdx = videoServers.findIndex(s => s.locked);
+      if (premIdx >= 0 && premIdx !== activeServerIndex) {
+        premiumServerApplied.current = true;
+        setTimeout(() => switchServer(premIdx), 300);
+      }
+    }
+  }, [isPremium, videoServers]);
+
   // Ad gate - only run after premium check completes
   useEffect(() => {
     if (isPremium === null) return; // still loading premium status
@@ -529,12 +540,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
-    if (serverSwitchingRef.current) return; // prevent double-click
+    if (serverSwitchingRef.current) return;
     const v = videoRef.current;
     if (!v) return;
 
     const savedTime = v.currentTime || 0;
-    const wasPlaying = !v.paused;
     const currentRawSrc = activeSourceBaseRef.current;
 
     let path = "";
@@ -553,56 +563,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
 
-    // Create hidden preload video to load new server in background
-    const preload = document.createElement("video");
-    preload.preload = "auto";
-    preload.muted = true;
-    preload.playsInline = true;
-    preload.style.display = "none";
-    preload.src = resolved;
-    document.body.appendChild(preload);
-    preloadVideoRef.current = preload;
-
-    let settled = false;
-    const settle = () => {
-      if (settled) return;
-      settled = true;
-      // Clean up preload element
-      try { preload.pause(); preload.src = ""; document.body.removeChild(preload); } catch {}
-      preloadVideoRef.current = null;
-
-      // Now swap source on the real player — it should load from cache/connection
-      setActiveServerIndex(serverIndex);
-      activeSourceBaseRef.current = newRawSrc;
-      pendingSeek.current = savedTime;
+    // Keep last frame visible by NOT clearing src — just swap directly
+    setActiveServerIndex(serverIndex);
+    activeSourceBaseRef.current = newRawSrc;
+    pendingSeek.current = savedTime;
+    
+    // Brief delay to let React update, then swap source
+    requestAnimationFrame(() => {
       setCurrentSrc(resolved);
       serverSwitchingRef.current = false;
-    };
-
-    // When preload has enough data, seek to position to verify, then swap
-    const onCanPlay = () => {
-      preload.currentTime = savedTime;
-      // Wait for seek to complete
-      const onSeeked = () => {
-        settle();
-      };
-      preload.addEventListener("seeked", onSeeked, { once: true });
-      // Safety: if seeked doesn't fire within 2s, swap anyway
-      setTimeout(() => { settle(); }, 2000);
-    };
-
-    preload.addEventListener("canplay", onCanPlay, { once: true });
-
-    // Timeout fallback: if preload takes >4s, just do a direct swap
-    setTimeout(() => {
-      if (!settled) {
-        console.log("Server preload timeout, doing direct swap");
-        settle();
-      }
-    }, 4000);
-
-    // Error fallback: if preload fails, still swap (let main player handle error)
-    preload.addEventListener("error", () => { settle(); }, { once: true });
+    });
   }, [activeServerIndex, videoServers, resolvePlaybackSrc]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
@@ -1547,15 +1517,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     {showServerPanel && (
                       <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
                         <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
-                        {videoServers.map((srv, idx) => (
-                          <button key={idx} onClick={() => switchServer(idx)}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
-                              activeServerIndex === idx ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                            }`}>
-                            <span>{srv.name || `Server ${idx + 1}`}</span>
-                            {activeServerIndex === idx && <Check className="w-3 h-3" />}
-                          </button>
-                        ))}
+                        {videoServers.map((srv, idx) => {
+                          const isLocked = srv.locked && !isPremium;
+                          return (
+                            <button key={idx} onClick={() => { if (!isLocked) switchServer(idx); }}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
+                                activeServerIndex === idx ? "gradient-primary font-bold text-white" : isLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-foreground/10"
+                              }`}>
+                              <span className="flex items-center gap-1.5">
+                                {srv.locked && <Lock className="w-3 h-3 text-accent" />}
+                                {srv.name || `Server ${idx + 1}`}
+                              </span>
+                              {isLocked && <span className="text-[8px] text-accent font-medium">Premium</span>}
+                              {!isLocked && activeServerIndex === idx && <Check className="w-3 h-3" />}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

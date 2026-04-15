@@ -229,8 +229,15 @@ serve(async (req) => {
     }
 
     // ---- Build payload ----
-    const notification = { title, body: msgBody || "", image: image || undefined };
-    const dataPayload: Record<string, string> = {};
+    const brandIcon = "https://rsanime03.lovable.app/android-chrome-192x192.png";
+    const brandBadge = "https://rsanime03.lovable.app/favicon-32x32.png";
+    const notifIcon = icon || brandIcon;
+    const notifBadge = badge || brandBadge;
+    const notification = { title, body: msgBody || "", image: image || undefined, icon: notifIcon };
+    const dataPayload: Record<string, string> = {
+      icon: notifIcon,
+      badge: notifBadge,
+    };
     if (extra && typeof extra === "object") {
       Object.entries(extra).forEach(([k, v]) => { dataPayload[k] = v == null ? "" : String(v); });
     }

@@ -9,7 +9,7 @@ import {
   LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
   Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
   Shield, LogOut, Search, Save, ChevronDown, Send, Link, ChevronLeft, ChevronRight,
-  Lock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin,
+  Lock, Unlock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin,
   Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail
 } from "lucide-react";
 
@@ -7426,7 +7426,7 @@ ${tgHashtags}`;
         {/* ==================== VIDEO SERVERS ==================== */}
         {activeSection === "video-servers" && (() => {
           const VideoServersSection = () => {
-            const [servers, setServers] = useState<{ name: string; domain: string }[]>([]);
+            const [servers, setServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
             const [vsLoading, setVsLoading] = useState(true);
             const [newName, setNewName] = useState("");
             const [newDomain, setNewDomain] = useState("");
@@ -7437,7 +7437,7 @@ ${tgHashtags}`;
                 if (val && Array.isArray(val)) {
                   setServers(val.filter((s: any) => s && s.domain));
                 } else if (val && typeof val === "object") {
-                  const arr = Object.values(val).filter((s: any) => s && s.domain) as { name: string; domain: string }[];
+                  const arr = Object.values(val).filter((s: any) => s && s.domain) as any[];
                   setServers(arr);
                 } else {
                   setServers([]);
@@ -7447,17 +7447,23 @@ ${tgHashtags}`;
               return () => unsub();
             }, []);
 
-            const saveServers = async (updated: { name: string; domain: string }[]) => {
+            const saveServers = async (updated: { name: string; domain: string; locked?: boolean }[]) => {
               await set(ref(db, "settings/videoServers"), updated);
-              toast.success("✅ সার্ভার লিস্ট সেভ হয়েছে!");
+              toast.success("✅ Server list saved!");
             };
 
             const addServer = () => {
-              if (!newDomain.trim()) { toast.error("ডোমেইন দিন!"); return; }
-              const updated = [...servers, { name: newName.trim() || `Server ${servers.length + 1}`, domain: newDomain.trim() }];
+              if (!newDomain.trim()) { toast.error("Enter domain!"); return; }
+              const updated = [...servers, { name: newName.trim() || `Server ${servers.length + 1}`, domain: newDomain.trim(), locked: false }];
               saveServers(updated);
               setNewName("");
               setNewDomain("");
+            };
+
+            const toggleLocked = (idx: number) => {
+              const updated = [...servers];
+              updated[idx] = { ...updated[idx], locked: !updated[idx].locked };
+              saveServers(updated);
             };
 
             const removeServer = (idx: number) => {
@@ -7495,10 +7501,17 @@ ${tgHashtags}`;
                             <span className="text-[11px] font-bold text-cyan-300">S{idx + 1}</span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <span className="text-[12px] font-medium block truncate">{srv.name}</span>
+                            <span className="text-[12px] font-medium block truncate flex items-center gap-1">
+                              {srv.name}
+                              {srv.locked && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md font-bold">PREMIUM</span>}
+                            </span>
                             <span className="text-[10px] text-zinc-500 block truncate">{srv.domain}</span>
                           </div>
                           <div className="flex items-center gap-1">
+                            <button onClick={() => toggleLocked(idx)} title={srv.locked ? "Unlock (make free)" : "Lock (premium only)"}
+                              className={`p-1 rounded ${srv.locked ? "text-amber-400 hover:text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}>
+                              {srv.locked ? <Lock size={13} /> : <Unlock size={13} />}
+                            </button>
                             <button onClick={() => moveServer(idx, -1)} disabled={idx === 0} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
                               <ChevronLeft size={12} />
                             </button>
