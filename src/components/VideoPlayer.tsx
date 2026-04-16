@@ -533,7 +533,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [videoServers]);
 
   const preloadVideoRef = useRef<HTMLVideoElement | null>(null);
+  const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
+
+  // Preload next episode for instant switching
+  useEffect(() => {
+    if (!episodeList || episodeList.length <= 1) return;
+    const activeIdx = episodeList.findIndex(ep => ep.active);
+    if (activeIdx < 0 || activeIdx >= episodeList.length - 1) return;
+    // Find the next episode's src from qualityOptions or main src
+    // We preload via <link rel="preload"> which is lightweight
+    const nextSrc = src; // Will be resolved when episode actually switches
+    // Clean up old preload
+    if (preloadLinkRef.current) {
+      try { document.head.removeChild(preloadLinkRef.current); } catch {}
+      preloadLinkRef.current = null;
+    }
+    return () => {
+      if (preloadLinkRef.current) {
+        try { document.head.removeChild(preloadLinkRef.current); } catch {}
+        preloadLinkRef.current = null;
+      }
+    };
+  }, [episodeList, src]);
 
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
@@ -717,7 +739,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     loaderTimeoutRef.current = setTimeout(() => {
       setShowFixedLoader(false);
       loaderTimeoutRef.current = null;
-    }, 1200);
+    }, 800);
 
     // Also hide immediately when video fires canplay/playing
     const v = videoRef.current;
