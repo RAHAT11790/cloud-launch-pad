@@ -1264,6 +1264,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, []);
 
   const lastTap = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
+  const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleVideoClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (locked) return;
@@ -1272,7 +1273,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const relX = (clientX - rect.left) / rect.width;
 
-    if (now - lastTap.current.time < 300) {
+    if (now - lastTap.current.time < 250) {
+      // Double tap — cancel single tap
+      if (singleTapTimer.current) { clearTimeout(singleTapTimer.current); singleTapTimer.current = null; }
       if (relX < 0.33) seek(-10);
       else if (relX > 0.66) seek(10);
       else {
@@ -1283,7 +1286,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       lastTap.current = { time: 0, x: 0 };
     } else {
       lastTap.current = { time: now, x: clientX };
-      setTimeout(() => { if (lastTap.current.time === now) toggleControls(); }, 300);
+      // Show controls INSTANTLY on single tap — no 300ms wait
+      toggleControls();
     }
   }, [locked, seek, togglePlay, playing, toggleControls]);
 
