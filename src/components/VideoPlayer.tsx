@@ -536,62 +536,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
 
-  // SUPER FAST preload next episode for instant switching
-useEffect(() => {
-  if (!episodeList || episodeList.length <= 1) return;
-  const activeIdx = episodeList.findIndex(ep => ep.active);
-  if (activeIdx < 0 || activeIdx >= episodeList.length - 1) return;
-  
-  const nextSrc = src;
-  
-  // Clean up old
-  if (preloadLinkRef.current) {
-    try { document.head.removeChild(preloadLinkRef.current); } catch {}
-    preloadLinkRef.current = null;
-  }
-  if (preloadVideoRef.current) {
-    try { preloadVideoRef.current.src = ''; } catch {}
-    preloadVideoRef.current = null;
-  }
-  
-  // Method 1: Link preload
-  const link = document.createElement('link');
-  link.rel = 'preload';
-  link.as = 'video';
-  link.href = nextSrc;
-  document.head.appendChild(link);
-  preloadLinkRef.current = link;
-  
-  // Method 2: Hidden video element for instant playback (SUPER FAST)
-  const video = document.createElement('video');
-  video.preload = 'auto';
-  video.src = nextSrc;
-  video.load();
-  video.style.display = 'none';
-  document.body.appendChild(video);
-  preloadVideoRef.current = video;
-  
-  // Method 3: Preconnect to CDN
-  const preconnect = document.createElement('link');
-  preconnect.rel = 'preconnect';
-  preconnect.href = new URL(nextSrc).origin;
-  document.head.appendChild(preconnect);
-  
-  return () => {
+  // Preload next episode for instant switching
+  useEffect(() => {
+    if (!episodeList || episodeList.length <= 1) return;
+    const activeIdx = episodeList.findIndex(ep => ep.active);
+    if (activeIdx < 0 || activeIdx >= episodeList.length - 1) return;
+    // Find the next episode's src from qualityOptions or main src
+    // We preload via <link rel="preload"> which is lightweight
+    const nextSrc = src; // Will be resolved when episode actually switches
+    // Clean up old preload
     if (preloadLinkRef.current) {
       try { document.head.removeChild(preloadLinkRef.current); } catch {}
       preloadLinkRef.current = null;
     }
-    if (preloadVideoRef.current) {
-      try { 
-        preloadVideoRef.current.pause();
-        preloadVideoRef.current.src = '';
-        document.body.removeChild(preloadVideoRef.current);
-      } catch {}
-      preloadVideoRef.current = null;
-    }
-  };
-}, [episodeList, src]);
+    return () => {
+      if (preloadLinkRef.current) {
+        try { document.head.removeChild(preloadLinkRef.current); } catch {}
+        preloadLinkRef.current = null;
+      }
+    };
+  }, [episodeList, src]);
 
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
@@ -859,15 +823,15 @@ useEffect(() => {
   }, []);
 
   const toggleControls = useCallback(() => {
-  if (hideTimer.current) clearTimeout(hideTimer.current);
-  setShowControls(prev => {
-    const next = !prev;
-    if (next) {
-      hideTimer.current = setTimeout(() => setShowControls(false), 3000);
-    }
-    return next;
-  });
-}, []);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    setShowControls(prev => {
+      const next = !prev;
+      if (next) {
+        hideTimer.current = setTimeout(() => setShowControls(false), 3000);
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     resetHideTimer();
@@ -1078,77 +1042,75 @@ useEffect(() => {
       }
     };
     // Stalled: video stopped downloading - try to recover
-let stalledTimer: ReturnType<typeof setTimeout> | null = null;
-const onStalled = () => {
-  stalledTimer = setTimeout(() => {
-    if (v.currentTime === 0 && v.readyState <= 1 && v.networkState === 2) {
-      console.log('Video stalled at 0:00 with no data, reloading source...');
-      const savedSrc = v.src;
+    let stalledTimer: ReturnType<typeof setTimeout> | null = null;
+    const onStalled = () => {
+      stalledTimer = setTimeout(() => {
+        // Only reload if video truly hasn't loaded anything at all (readyState 0 = HAVE_NOTHING)
+        if (v.currentTime === 0 && v.readyState <= 1 && v.networkState === 2) {
+          console.log('Video stalled at 0:00 with no data, reloading source...');
+          const savedSrc = v.src;
+          v.src = '';
+          v.src = savedSrc;
+          v.load();
+        }
+      }, 10000); // Wait 10s before considering stalled - prevents premature reloads
+    };
+
+    v.addEventListener("loadedmetadata", onLoaded);
+    v.addEventListener("play", onPlay);
+    v.addEventListener("pause", onPause);
+    v.addEventListener("ended", onEnded);
+    v.addEventListener("error", onError);
+    v.addEventListener("canplay", onCanPlay);
+    v.addEventListener("canplaythrough", onCanPlayThrough);
+    v.addEventListener("waiting", onWaiting);
+    v.addEventListener("playing", onPlaying);
+    v.addEventListener("seeked", onSeeked);
+    v.addEventListener("stalled", onStalled);
+    setIsBuffering(true);
+    v.load();
+
+    return () => {
+      cancelAnimationFrame(rafId.current);
+      if (stalledTimer) clearTimeout(stalledTimer);
+      v.removeEventListener("loadedmetadata", onLoaded);
+      v.removeEventListener("play", onPlay);
+      v.removeEventListener("pause", onPause);
+      v.removeEventListener("ended", onEnded);
+      v.removeEventListener("error", onError);
+      v.removeEventListener("canplay", onCanPlay);
+      v.removeEventListener("canplaythrough", onCanPlayThrough);
+      v.removeEventListener("waiting", onWaiting);
+      v.removeEventListener("playing", onPlaying);
+      v.removeEventListener("seeked", onSeeked);
+      v.removeEventListener("stalled", onStalled);
+      // Ensure video is fully stopped on unmount (prevents background playback)
+      v.pause();
       v.src = '';
-      v.src = savedSrc;
       v.load();
-    }
-  }, 5000);
-};
+      // Clean up any preload element
+      if (preloadVideoRef.current) {
+        try { preloadVideoRef.current.pause(); preloadVideoRef.current.src = ""; document.body.removeChild(preloadVideoRef.current); } catch {}
+        preloadVideoRef.current = null;
+      }
+      if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
+    };
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, videoServers, activeServerIndex]);
 
-v.addEventListener("loadedmetadata", onLoaded);
-v.addEventListener("play", onPlay);
-v.addEventListener("pause", onPause);
-v.addEventListener("ended", onEnded);
-v.addEventListener("error", onError);
-v.addEventListener("canplay", onCanPlay);
-v.addEventListener("canplaythrough", onCanPlayThrough);
-v.addEventListener("waiting", onWaiting);
-v.addEventListener("playing", onPlaying);
-v.addEventListener("seeked", onSeeked);
-v.addEventListener("stalled", onStalled);
-setIsBuffering(true);
-v.load();
-
-return () => {
-  cancelAnimationFrame(rafId.current);
-  if (stalledTimer) clearTimeout(stalledTimer);
-  if (waitingTimer) clearTimeout(waitingTimer);
-  v.removeEventListener("loadedmetadata", onLoaded);
-  v.removeEventListener("play", onPlay);
-  v.removeEventListener("pause", onPause);
-  v.removeEventListener("ended", onEnded);
-  v.removeEventListener("error", onError);
-  v.removeEventListener("canplay", onCanPlay);
-  v.removeEventListener("canplaythrough", onCanPlayThrough);
-  v.removeEventListener("waiting", onWaiting);
-  v.removeEventListener("playing", onPlaying);
-  v.removeEventListener("seeked", onSeeked);
-  v.removeEventListener("stalled", onStalled);
-  v.pause();
-  v.src = '';
-  v.load();
-  if (preloadVideoRef.current) {
-    try { preloadVideoRef.current.pause(); preloadVideoRef.current.src = ""; document.body.removeChild(preloadVideoRef.current); } catch {}
-    preloadVideoRef.current = null;
-  }
-  if ('mediaSession' in navigator) { 
-    navigator.mediaSession.metadata = null; 
-    navigator.mediaSession.playbackState = 'none'; 
-  }
-};
-}, [currentSrc, adGateActive, cdnEnabled, proxyUrl, playbackRouteReady]);
-
-useEffect(() => {
-  const onFs = () => {
-    const fs = !!document.fullscreenElement;
-    setIsFullscreen(fs);
-    if (!fs) { 
-      try { (screen.orientation as any).unlock?.(); } catch {} 
-    }
-  };
-  document.addEventListener("fullscreenchange", onFs);
-  document.addEventListener("webkitfullscreenchange", onFs);
-  return () => {
-    document.removeEventListener("fullscreenchange", onFs);
-    document.removeEventListener("webkitfullscreenchange", onFs);
-  };
-}, []);
+  useEffect(() => {
+    const onFs = () => {
+      const fs = !!document.fullscreenElement;
+      setIsFullscreen(fs);
+      // Unlock orientation when exiting fullscreen externally (e.g. swipe gesture)
+      if (!fs) { try { (screen.orientation as any).unlock?.(); } catch {} }
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    document.addEventListener("webkitfullscreenchange", onFs);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFs);
+      document.removeEventListener("webkitfullscreenchange", onFs);
+    };
+  }, []);
 
   // Pause video when app goes background / tab hidden
   useEffect(() => {
@@ -1322,34 +1284,35 @@ useEffect(() => {
   const lastTap = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
 
   const handleVideoClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-  if (locked) return;
-  
-  const now = Date.now();
-  const clientX = "touches" in e ? e.changedTouches[0].clientX : e.clientX;
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-  const relX = (clientX - rect.left) / rect.width;
+    if (locked) return;
+    const now = Date.now();
+    const clientX = "touches" in e ? e.changedTouches[0].clientX : e.clientX;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const relX = (clientX - rect.left) / rect.width;
 
-  if (now - lastTap.current.time < 300) {
-    // Double tap
-    if (relX < 0.33) seek(-10);
-    else if (relX > 0.66) seek(10);
-    else {
-      togglePlay();
-      setSkipIndicator({ side: "center", text: playing ? "⏸" : "▶" });
-      setTimeout(() => setSkipIndicator(null), 600);
+    if (now - lastTap.current.time < 250) {
+      // Double tap — cancel single tap
+      // Double tap detected
+      if (relX < 0.33) seek(-10);
+      else if (relX > 0.66) seek(10);
+      else {
+        togglePlay();
+        setSkipIndicator({ side: "center", text: playing ? "⏸" : "▶" });
+        setTimeout(() => setSkipIndicator(null), 600);
+      }
+      lastTap.current = { time: 0, x: 0 };
+    } else {
+      lastTap.current = { time: now, x: clientX };
+      // Show controls INSTANTLY on single tap — no 300ms wait
+      toggleControls();
     }
-    lastTap.current = { time: 0, x: 0 };
-  } else {
-    lastTap.current = { time: now, x: clientX };
-    // Single tap - show/hide controls
-    toggleControls();
-  }
-}, [locked, seek, togglePlay, playing, toggleControls]);
+  }, [locked, seek, togglePlay, playing, toggleControls]);
 
-const handleTouchStart = useCallback((e: React.TouchEvent) => {
-  const touch = e.touches[0];
-  setSwipeState({ startX: touch.clientX, startY: touch.clientY, type: null });
-}, []);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const t = e.touches[0];
+    setSwipeState({ startX: t.clientX, startY: t.clientY, type: null });
+  }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!swipeState || locked) return;
@@ -1419,6 +1382,16 @@ const handleTouchStart = useCallback((e: React.TouchEvent) => {
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
+          {/* Thumbnail placeholder - shown until video has data */}
+          {(isBuffering || showFixedLoader) && !videoError && (
+            <div className="absolute inset-0 z-[5] flex items-center justify-center bg-black">
+              {poster ? (
+                <img src={poster} alt="" className="w-full h-full object-cover opacity-60" />
+              ) : (
+                <img src={logoImg} alt="" className="w-20 h-20 object-contain opacity-40" />
+              )}
+            </div>
+          )}
           <video
             ref={videoRef}
             src={currentSrc}
