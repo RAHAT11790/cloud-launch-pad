@@ -1292,7 +1292,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     if (now - lastTap.current.time < 250) {
       // Double tap — cancel single tap
-      if (singleTapTimer.current) { clearTimeout(singleTapTimer.current); singleTapTimer.current = null; }
+      // Double tap detected
       if (relX < 0.33) seek(-10);
       else if (relX > 0.66) seek(10);
       else {
