@@ -41,31 +41,40 @@ const isDirectPlaybackUrl = (url: string): boolean => {
 
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
   if (!url) return [];
+
   const candidates: string[] = [];
   const addCandidate = (candidate?: string | null) => {
     if (!candidate || candidates.includes(candidate)) return;
     candidates.push(candidate);
   };
+
   const encoded = encodeURIComponent(url);
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  const prefersDirectPlayback = isDirectPlaybackUrl(url);
-
-  if (prefersDirectPlayback) {
-    addCandidate(url);
-    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
-    if (customProxyCandidate) addCandidate(customProxyCandidate);
-    return candidates;
+  
+  // Try proxy first if enabled
+  if (cdnEnabled && cloudflareCandidate) {
+    addCandidate(cloudflareCandidate);
+  }
+  if (customProxyCandidate) {
+    addCandidate(customProxyCandidate);
+  }
+  
+  // Then try direct URL (both http and https)
+  addCandidate(url);
+  
+  // Also try http if original was https (for mixed content)
+  if (url.startsWith('https://')) {
+    const httpUrl = url.replace('https://', 'http://');
+    addCandidate(httpUrl);
   }
 
-  if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
-  if (customProxyCandidate) addCandidate(customProxyCandidate);
-  if (candidates.length === 0) addCandidate(url);
   return candidates;
 };
 
 const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
-  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
+  const candidates = buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey);
+  return candidates[0] || url;
 };
 
 interface AudioTrackOption {
@@ -827,66 +836,86 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
 
     const onError = () => {
-      if (retryCount >= MAX_RETRIES) {
-        const sameQualityRouteFallback = buildPlaybackCandidates(
-          activeSourceBaseRef.current,
-          cdnEnabled,
-          proxyUrl || undefined,
-          proxyApiKey || undefined
-        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
+  if (retryCount >= MAX_RETRIES) {
+    // Try fallback candidates in order
+    const allCandidates = buildPlaybackCandidates(
+      activeSourceBaseRef.current,
+      cdnEnabled,
+      proxyUrl || undefined,
+      proxyApiKey || undefined
+    );
+    
+    const currentIndex = allCandidates.indexOf(currentSrc);
+    const nextCandidate = allCandidates[currentIndex + 1];
+    
+    if (nextCandidate) {
+      setQualityFailMsg(`Trying alternate route...`);
+      setTimeout(() => setQualityFailMsg(null), 2000);
+      pendingSeek.current = lastKnownTime || v?.currentTime || 0;
+      setCurrentSrc(nextCandidate);
+      retryCount = 0;
+      return;
+    }
 
-        if (sameQualityRouteFallback) {
-          failedSrcsRef.current.add(currentSrc);
-          setQualityFailMsg(`Trying alternate route...`);
-          setTimeout(() => setQualityFailMsg(null), 2000);
-          pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          setCurrentSrc(sameQualityRouteFallback);
-          retryCount = 0;
-          return;
-        }
+    const sameQualityRouteFallback = buildPlaybackCandidates(
+      activeSourceBaseRef.current,
+      cdnEnabled,
+      proxyUrl || undefined,
+      proxyApiKey || undefined
+    ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
 
-        const nextOption = availableQualities.find((q) => {
-          const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-          return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
-        });
+    if (sameQualityRouteFallback) {
+      failedSrcsRef.current.add(currentSrc);
+      setQualityFailMsg(`Trying alternate route...`);
+      setTimeout(() => setQualityFailMsg(null), 2000);
+      pendingSeek.current = lastKnownTime || v?.currentTime || 0;
+      setCurrentSrc(sameQualityRouteFallback);
+      retryCount = 0;
+      return;
+    }
 
-        if (nextOption) {
-          setQualityFailMsg(`Switching to ${nextOption.label}...`);
-          setTimeout(() => setQualityFailMsg(null), 2000);
-          pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-          activeSourceBaseRef.current = nextOption.src;
-          setCurrentSrc(newFallbackSrc);
-          setCurrentQuality(nextOption.label);
-          retryCount = 0;
-        } else if (videoServers.length > 1) {
-          const nextServerIdx = (activeServerIndex + 1) % videoServers.length;
-          if (nextServerIdx !== activeServerIndex) {
-            setQualityFailMsg(`Switching server...`);
-            setTimeout(() => setQualityFailMsg(null), 2000);
-            switchServer(nextServerIdx);
-            retryCount = 0;
-          } else {
-            setVideoError(true);
-          }
-        } else {
-          setVideoError(true);
-        }
-        return;
+    const nextOption = availableQualities.find((q) => {
+      const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+      return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
+    });
+
+    if (nextOption) {
+      setQualityFailMsg(`Switching to ${nextOption.label}...`);
+      setTimeout(() => setQualityFailMsg(null), 2000);
+      pendingSeek.current = lastKnownTime || v?.currentTime || 0;
+      const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+      activeSourceBaseRef.current = nextOption.src;
+      setCurrentSrc(newFallbackSrc);
+      setCurrentQuality(nextOption.label);
+      retryCount = 0;
+    } else if (videoServers.length > 1) {
+      const nextServerIdx = (activeServerIndex + 1) % videoServers.length;
+      if (nextServerIdx !== activeServerIndex) {
+        setQualityFailMsg(`Switching server...`);
+        setTimeout(() => setQualityFailMsg(null), 2000);
+        switchServer(nextServerIdx);
+        retryCount = 0;
+      } else {
+        setVideoError(true);
       }
-      retryCount++;
-      const delay = 500;
-      setTimeout(() => {
-        if (v) {
-          const savedTime = v.currentTime || lastKnownTime;
-          v.load();
-          v.addEventListener('loadedmetadata', () => {
-            if (savedTime > 0) v.currentTime = savedTime;
-            if (!adGateActive) v.play().catch(() => {});
-          }, { once: true });
-        }
-      }, delay);
-    };
+    } else {
+      setVideoError(true);
+    }
+    return;
+  }
+  retryCount++;
+  const delay = 500;
+  setTimeout(() => {
+    if (v) {
+      const savedTime = v.currentTime || lastKnownTime;
+      v.load();
+      v.addEventListener('loadedmetadata', () => {
+        if (savedTime > 0) v.currentTime = savedTime;
+        if (!adGateActive) v.play().catch(() => {});
+      }, { once: true });
+    }
+  }, delay);
+};
 
     const onCanPlay = () => {
       setVideoError(false);
