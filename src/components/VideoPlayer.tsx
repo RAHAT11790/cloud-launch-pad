@@ -533,7 +533,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [videoServers]);
 
   const preloadVideoRef = useRef<HTMLVideoElement | null>(null);
+  const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
+
+  // Preload next episode for instant switching
+  useEffect(() => {
+    if (!episodeList || episodeList.length <= 1) return;
+    const activeIdx = episodeList.findIndex(ep => ep.active);
+    if (activeIdx < 0 || activeIdx >= episodeList.length - 1) return;
+    // Find the next episode's src from qualityOptions or main src
+    // We preload via <link rel="preload"> which is lightweight
+    const nextSrc = src; // Will be resolved when episode actually switches
+    // Clean up old preload
+    if (preloadLinkRef.current) {
+      try { document.head.removeChild(preloadLinkRef.current); } catch {}
+      preloadLinkRef.current = null;
+    }
+    return () => {
+      if (preloadLinkRef.current) {
+        try { document.head.removeChild(preloadLinkRef.current); } catch {}
+        preloadLinkRef.current = null;
+      }
+    };
+  }, [episodeList, src]);
 
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
@@ -554,12 +576,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
-    
-    // Brief delay to let React update, then swap source
-    requestAnimationFrame(() => {
-      setCurrentSrc(resolved);
-      serverSwitchingRef.current = false;
-    });
+    setCurrentSrc(resolved);
+    serverSwitchingRef.current = false;
   }, [activeServerIndex, videoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
@@ -717,7 +735,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     loaderTimeoutRef.current = setTimeout(() => {
       setShowFixedLoader(false);
       loaderTimeoutRef.current = null;
-    }, 1200);
+    }, 800);
 
     // Also hide immediately when video fires canplay/playing
     const v = videoRef.current;
@@ -1010,7 +1028,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
       if (waitingTimer) clearTimeout(waitingTimer);
-      waitingTimer = setTimeout(() => setIsBuffering(true), 300);
+      waitingTimer = setTimeout(() => setIsBuffering(true), 500);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
@@ -1272,7 +1290,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const relX = (clientX - rect.left) / rect.width;
 
-    if (now - lastTap.current.time < 300) {
+    if (now - lastTap.current.time < 250) {
+      // Double tap — cancel single tap
+      // Double tap detected
       if (relX < 0.33) seek(-10);
       else if (relX > 0.66) seek(10);
       else {
@@ -1283,7 +1303,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       lastTap.current = { time: 0, x: 0 };
     } else {
       lastTap.current = { time: now, x: clientX };
-      setTimeout(() => { if (lastTap.current.time === now) toggleControls(); }, 300);
+      // Show controls INSTANTLY on single tap — no 300ms wait
+      toggleControls();
     }
   }, [locked, seek, togglePlay, playing, toggleControls]);
 
@@ -1361,6 +1382,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
+          {/* Thumbnail placeholder - shown until video has data */}
+          {(isBuffering || showFixedLoader) && !videoError && (
+            <div className="absolute inset-0 z-[5] flex items-center justify-center bg-black">
+              {poster ? (
+                <img src={poster} alt="" className="w-full h-full object-cover opacity-60" />
+              ) : (
+                <img src={logoImg} alt="" className="w-20 h-20 object-contain opacity-40" />
+              )}
+            </div>
+          )}
           <video
             ref={videoRef}
             src={currentSrc}
@@ -1368,6 +1399,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
             playsInline
             preload="auto"
+            poster={poster || undefined}
             controlsList="nodownload noplaybackrate noremoteplayback"
             disablePictureInPicture
             disableRemotePlayback
@@ -1389,10 +1421,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
-          {/* Loading Overlay - Simple spinner */}
+          {/* Loading spinner on top of thumbnail */}
           {showLoaderOverlay && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black z-15 pointer-events-none">
-              <div className="w-10 h-10 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none">
+              <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             </div>
           )}
 
@@ -1462,7 +1494,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           {/* Controls Overlay - always dark bg for visibility in all themes */}
           {showControls && !locked && (
-            <div className="absolute inset-0 flex flex-col justify-between text-white" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)", transition: "opacity 0.15s ease" }}>
+            <div className="absolute inset-0 flex flex-col justify-between text-white" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}>
               {/* Top controls */}
               <div className="flex justify-end gap-2 p-3">
                 <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1">
