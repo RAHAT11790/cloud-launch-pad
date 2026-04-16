@@ -1028,7 +1028,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
       if (waitingTimer) clearTimeout(waitingTimer);
-      waitingTimer = setTimeout(() => setIsBuffering(true), 300);
+      waitingTimer = setTimeout(() => setIsBuffering(true), 500);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
