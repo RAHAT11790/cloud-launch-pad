@@ -572,6 +572,7 @@ const getPushEligibleUserIds = async (userIds: string[]): Promise<string[]> => {
   try {
     const snaps = await Promise.all(userIds.map((uid) => get(ref(db, `users/${uid}`))));
     return userIds.filter((uid, index) => {
+      if (uid.includes("@") || uid.includes(",") || uid.includes(".")) return true;
       const user = snaps[index]?.val?.();
       if (!user) return true;
       if (user.pushEnabled === false) return false;
@@ -805,7 +806,7 @@ export const sendPushToAllUsers = async (
         body: payload.body,
         image: payload.image,
         icon: payload.icon || APP_ICON_URL,
-        badge: payload.badge || "https://rsanime03.lovable.app/favicon-32x32.png",
+        badge: payload.badge || `${SITE_URL.replace(/\/$/, "")}/notification-badge.svg`,
         data: normalizedData,
         // No tokens or userIds → server fetches ALL tokens from Firebase RTDB
       };

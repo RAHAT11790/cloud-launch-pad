@@ -2089,14 +2089,14 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     unsubs.push(onValue(ref(db, "admin"), (snap) => {
       const val = snap.val() || {};
       const targetConfig = typeof val === "object" ? val?.notificationTargets || {} : {};
-      const userIds: string[] = [...new Set([
+      const userIds = [...new Set([
         typeof val === "string" ? val : "",
         typeof val === "object" ? val?.userId || "" : "",
         ...(Array.isArray(targetConfig?.userIds) ? targetConfig.userIds : []),
-      ].map((item) => String(item || "").trim()).filter(Boolean))];
-      const tokens: string[] = [...new Set((Array.isArray(targetConfig?.tokens) ? targetConfig.tokens : [])
+      ].map((item) => String(item || "").trim()).filter((item): item is string => Boolean(item)))] as string[];
+      const tokens = [...new Set((Array.isArray(targetConfig?.tokens) ? targetConfig.tokens : [])
         .map((item: any) => String(item || "").trim())
-        .filter(Boolean))];
+        .filter((item): item is string => Boolean(item)))] as string[];
       setSavedAdminUserId(userIds.join("\n"));
       setAdminUserIdInput(userIds.join("\n"));
       setSavedAdminFcmTokens(tokens);
@@ -5704,8 +5704,20 @@ ${tgHashtags}`;
                             const plan = (bkashSettings.plans || []).find((p: any) => p.id === req.planId);
                             return plan?.maxDevices || (days <= 30 ? 1 : days <= 90 ? 3 : 4);
                           })();
-                          const expiresAt = Date.now() + days * 24 * 60 * 60 * 1000;
-                          await set(ref(db, `users/${req.userId}/premium`), { active: true, expiresAt, redeemedAt: Date.now(), method: "bkash", transactionId: req.transactionId, maxDevices });
+                          const premiumSnap = await get(ref(db, `users/${req.userId}/premium`));
+                          const currentPremium = premiumSnap.val() || {};
+                          const baseExpiry = currentPremium?.active && currentPremium?.expiresAt > Date.now() ? currentPremium.expiresAt : Date.now();
+                          const expiresAt = baseExpiry + days * 24 * 60 * 60 * 1000;
+                          await set(ref(db, `users/${req.userId}/premium`), {
+                            ...currentPremium,
+                            active: true,
+                            expiresAt,
+                            redeemedAt: Date.now(),
+                            method: "bkash",
+                            transactionId: req.transactionId,
+                            maxDevices,
+                            devices: currentPremium?.devices || {},
+                          });
                           await update(ref(db, `bkashPayments/${req.id}`), { status: "approved", approvedAt: Date.now() });
                           // Send in-app notification to user
                           const userNotifRef = push(ref(db, `notifications/${req.userId}`));
@@ -5719,11 +5731,11 @@ ${tgHashtags}`;
                           // Send FCM push to user
                           try {
                             const { sendPushToUsers } = await import("@/lib/fcm");
-                            await sendPushToUsers([req.userId], {
+                            await sendPushToUsers([req.userId, req.userEmail].filter(Boolean), {
                               title: "Premium Activated! 🎉",
                               body: `আপনার ${req.planName} প্ল্যান অ্যাক্টিভেট হয়েছে। ${days} দিন Ad-free উপভোগ করুন!`,
                               url: "/profile",
-                              data: { type: "subscription_activated" },
+                              data: { type: "subscription_activated", planName: req.planName, expiresAt },
                             });
                           } catch (pushErr) { console.warn("User push failed:", pushErr); }
                           toast.success(`${req.userName} এর প্রিমিয়াম অ্যাক্টিভেট হয়েছে (${days} দিন)`);
@@ -5743,7 +5755,7 @@ ${tgHashtags}`;
                           // Send FCM push to user
                           try {
                             const { sendPushToUsers } = await import("@/lib/fcm");
-                            await sendPushToUsers([req.userId], {
+                            await sendPushToUsers([req.userId, req.userEmail].filter(Boolean), {
                               title: "Payment Rejected ❌",
                               body: "আপনার পেমেন্ট রিকোয়েস্ট গ্রহণ হয়নি। সঠিক Transaction ID দিয়ে আবার চেষ্টা করুন।",
                               url: "/profile",
@@ -6500,32 +6512,44 @@ ${tgHashtags}`;
                 <Bell size={14} className="text-yellow-500" /> অ্যাডমিন নোটিফিকেশন সেটিং
               </h3>
               <p className="text-[11px] text-[#D1C4E9] mb-4">
-                ইউজার bKash পেমেন্ট সাবমিট করলে আপনার কাছে পুশ নোটিফিকেশন আসবে। আপনার User ID দিন (Firebase Auth UID)।
-                এটি পেতে Users সেকশনে গিয়ে আপনার একাউন্ট খুঁজুন।
+                ইউজার bKash payment, subscription approve/reject, আর comment reply-এর জন্য এখানে Admin User ID / Email এবং FCM token দিন। একাধিক value হলে প্রতি লাইনে একটি করে দিন।
               </p>
-              <div className="flex gap-2">
-                <input
+              <div className="space-y-3">
+                <textarea
                   value={adminUserIdInput}
                   onChange={(e) => setAdminUserIdInput(e.target.value)}
-                  placeholder="আপনার User ID (Firebase UID)"
-                  className={`${inputClass} flex-1`}
+                  placeholder="Admin User ID / Email\nএক লাইনে একটি"
+                  rows={4}
+                  className={`${inputClass} min-h-[110px] resize-y`}
+                />
+                <textarea
+                  value={adminFcmTokensInput}
+                  onChange={(e) => setAdminFcmTokensInput(e.target.value)}
+                  placeholder="Admin FCM Token\nএক লাইনে একটি"
+                  rows={4}
+                  className={`${inputClass} min-h-[110px] resize-y`}
                 />
                 <button
                   onClick={async () => {
-                    if (!adminUserIdInput.trim()) {
-                      toast.error("User ID দিন");
+                    const userIds = adminUserIdInput.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+                    const tokens = adminFcmTokensInput.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+                    if (userIds.length === 0 && tokens.length === 0) {
+                      toast.error("কমপক্ষে একটি User ID অথবা FCM token দিন");
                       return;
                     }
                     try {
-                      await set(ref(db, "admin/userId"), adminUserIdInput.trim());
-                      toast.success("Admin User ID সেভ হয়েছে! এখন পেমেন্ট নোটিফিকেশন পাবেন।");
-                    } catch (err) {
+                      await update(ref(db, "admin"), {
+                        userId: userIds[0] || "",
+                        notificationTargets: { userIds, tokens, updatedAt: Date.now() },
+                      });
+                      toast.success("Admin notification targets সেভ হয়েছে");
+                    } catch {
                       toast.error("Failed to save");
                     }
                   }}
-                  className={`${btnPrimary} !px-4`}
+                  className={`${btnPrimary} w-full !px-4`}
                 >
-                  <Save size={14} /> Save
+                  <Save size={14} /> Save Notification Targets
                 </button>
               </div>
               {savedAdminUserId && (
@@ -6534,10 +6558,16 @@ ${tgHashtags}`;
                   <span className="text-[11px] text-zinc-400 font-mono truncate max-w-[250px]">{savedAdminUserId}</span>
                 </div>
               )}
-              {!savedAdminUserId && (
+              {savedAdminFcmTokens.length > 0 && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[11px] text-green-400">✓ Tokens:</span>
+                  <span className="text-[11px] text-zinc-400 font-mono">{savedAdminFcmTokens.length} saved</span>
+                </div>
+              )}
+              {!savedAdminUserId && savedAdminFcmTokens.length === 0 && (
                 <div className="mt-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
                   <p className="text-[11px] text-yellow-400 flex items-center gap-1.5">
-                    <AlertTriangle size={12} /> Admin User ID সেট না করলে পেমেন্ট নোটিফিকেশন আসবে না!
+                    <AlertTriangle size={12} /> Admin User ID বা FCM token সেট না করলে পেমেন্ট নোটিফিকেশন আসবে না!
                   </p>
                 </div>
               )}
@@ -8405,7 +8435,7 @@ const AdminCommentsSection = ({
           body: message,
           image: targetComment.poster || undefined,
           url: `/?anime=${animeId}`,
-          data: { type: "admin_reply", animeId, commentId },
+          data: { type: "admin_reply", animeId, commentId, replyText: text },
         }).catch((err) => console.warn("Admin reply push failed:", err));
       }
 

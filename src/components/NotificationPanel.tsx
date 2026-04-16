@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, set, update } from "@/lib/firebase";
 import { SITE_ICON_URL, SITE_URL } from "@/lib/siteConfig";
 
+const NOTIFICATION_BADGE_URL = "/notification-badge.svg";
+
 const PRIMARY_SITE_ORIGIN = (() => {
   try {
     return new URL(SITE_URL).origin;
@@ -38,8 +40,8 @@ const showBrowserNotification = (title: string, body: string, contentId?: string
   try {
     const options = {
       body,
-      icon: SITE_ICON_URL,
-      badge: SITE_ICON_URL,
+        icon: SITE_ICON_URL,
+        badge: NOTIFICATION_BADGE_URL,
       image: image || undefined,
       tag: contentId ? `rsanime-${contentId}` : `rsanime-${Date.now()}`,
       data: { url: contentId ? `/?anime=${contentId}` : "/" },

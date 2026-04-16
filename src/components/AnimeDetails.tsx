@@ -129,7 +129,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
           body: notifMsg,
           image: anime.poster || undefined,
           url: `/?anime=${anime.id}`,
-          data: { type: "comment_reply", animeId: anime.id, commentId: commentKey },
+          data: { type: "comment_reply", animeId: anime.id, commentId: commentKey, replyText: text },
         }).catch((err) => console.warn("Reply push failed:", err));
       }
     } catch (err) {
