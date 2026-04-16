@@ -725,15 +725,15 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
         const adminSnap = await get(ref(db, "admin"));
         const adminData = adminSnap.val() || {};
         const notificationTargets = typeof adminData === "object" ? adminData?.notificationTargets || {} : {};
-        const adminIds: string[] = [...new Set([
+        const adminIds = [...new Set([
           typeof adminData === "string" ? adminData : "",
           typeof adminData === "object" ? adminData?.userId || "" : "",
           typeof adminData === "object" ? adminData?.email || "" : "",
           ...(Array.isArray(notificationTargets?.userIds) ? notificationTargets.userIds : []),
-        ].map((value) => String(value || "").trim()).filter(Boolean))];
-        const adminTokens: string[] = [...new Set((Array.isArray(notificationTargets?.tokens) ? notificationTargets.tokens : [])
+        ].map((value) => String(value || "").trim()).filter((value): value is string => Boolean(value)))] as string[];
+        const adminTokens = [...new Set((Array.isArray(notificationTargets?.tokens) ? notificationTargets.tokens : [])
           .map((value: any) => String(value || "").trim())
-          .filter(Boolean))];
+          .filter((value): value is string => Boolean(value)))] as string[];
         const inboxTargets = adminIds.filter((value) => !value.includes("@") && !value.includes(",") && !value.includes("."));
 
         if (inboxTargets.length > 0) {

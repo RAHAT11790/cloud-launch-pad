@@ -232,7 +232,7 @@ serve(async (req) => {
 
     // ---- Build payload ----
     const brandIcon = "https://rsanime03.lovable.app/android-chrome-192x192.png";
-    const brandBadge = "https://rsanime03.lovable.app/favicon-32x32.png";
+    const brandBadge = "https://rsanime03.lovable.app/notification-badge.svg";
     const notifIcon = icon || brandIcon;
     const notifBadge = badge || brandBadge;
     const notification = { title, body: msgBody || "", image: image || undefined, icon: notifIcon };
