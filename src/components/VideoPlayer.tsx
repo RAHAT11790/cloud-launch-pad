@@ -1282,7 +1282,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, []);
 
   const lastTap = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
-  const singleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleVideoClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (locked) return;
