@@ -1361,6 +1361,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
+          {/* Thumbnail placeholder - shown until video has data */}
+          {(isBuffering || showFixedLoader) && !videoError && (
+            <div className="absolute inset-0 z-[5] flex items-center justify-center bg-black">
+              {poster ? (
+                <img src={poster} alt="" className="w-full h-full object-cover opacity-60" />
+              ) : (
+                <img src={logoImg} alt="" className="w-20 h-20 object-contain opacity-40" />
+              )}
+            </div>
+          )}
           <video
             ref={videoRef}
             src={currentSrc}
@@ -1368,6 +1378,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
             playsInline
             preload="auto"
+            poster={poster || undefined}
             controlsList="nodownload noplaybackrate noremoteplayback"
             disablePictureInPicture
             disableRemotePlayback
@@ -1389,10 +1400,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
-          {/* Loading Overlay - Simple spinner */}
+          {/* Loading spinner on top of thumbnail */}
           {showLoaderOverlay && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black z-15 pointer-events-none">
-              <div className="w-10 h-10 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none">
+              <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             </div>
           )}
 
