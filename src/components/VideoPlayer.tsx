@@ -576,12 +576,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
-    
-    // Brief delay to let React update, then swap source
-    requestAnimationFrame(() => {
-      setCurrentSrc(resolved);
-      serverSwitchingRef.current = false;
-    });
+    setCurrentSrc(resolved);
+    serverSwitchingRef.current = false;
   }, [activeServerIndex, videoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
