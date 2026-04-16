@@ -6564,7 +6564,7 @@ ${tgHashtags}`;
                   <span className="text-[11px] text-zinc-400 font-mono">{savedAdminFcmTokens.length} saved</span>
                 </div>
               )}
-              {!savedAdminUserId && (
+              {!savedAdminUserId && savedAdminFcmTokens.length === 0 && (
                 <div className="mt-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
                   <p className="text-[11px] text-yellow-400 flex items-center gap-1.5">
                     <AlertTriangle size={12} /> Admin User ID বা FCM token সেট না করলে পেমেন্ট নোটিফিকেশন আসবে না!
