@@ -3,10 +3,10 @@ import { useBranding } from "@/hooks/useBranding";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock,
-  ChevronRight, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Server
+  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
-import { db, ref, onValue, set, remove } from "@/lib/firebase";
+import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
 import { createUnlockLinksForAllServices, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
@@ -16,6 +16,7 @@ interface QualityOption {
   src: string;
 }
 
+// Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
@@ -24,10 +25,14 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   const encoded = encodeURIComponent(targetUrl);
   if (!base) return targetUrl;
   let url: string;
+  // Support {url} placeholder: https://proxy.example.com/?url={url}
   if (base.includes('{url}')) url = base.split('{url}').join(encoded);
+  // Support ending with = or ?url= or &url=
   else if (/[?&]url=$/.test(base) || base.endsWith('=')) url = `${base}${encoded}`;
   else if (base.includes('?url=') || base.includes('&url=')) url = `${base}${encoded}`;
+  // Default: append ?url=
   else url = `${base.replace(/\/$/, '')}?url=${encoded}`;
+  // Append API key if provided
   if (apiKey) {
     url += (url.includes('?') ? '&' : '?') + `apikey=${encodeURIComponent(apiKey)}`;
   }
@@ -51,41 +56,42 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const encoded = encodeURIComponent(url);
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  
-  // Try proxy first if enabled
-  if (cdnEnabled && cloudflareCandidate) {
-    addCandidate(cloudflareCandidate);
+  const prefersDirectPlayback = isDirectPlaybackUrl(url);
+
+  if (prefersDirectPlayback) {
+    addCandidate(url);
+    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    return candidates;
   }
-  if (customProxyCandidate) {
-    addCandidate(customProxyCandidate);
-  }
-  
-  // Then try direct URL (both http and https)
-  addCandidate(url);
-  
-  // Also try http if original was https (for mixed content)
-  if (url.startsWith('https://')) {
-    const httpUrl = url.replace('https://', 'http://');
-    addCandidate(httpUrl);
+
+  if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+  if (customProxyCandidate) addCandidate(customProxyCandidate);
+
+  // http:// cannot be loaded directly on https pages (mixed content)
+  // so only proxy candidates are valid
+
+  // If no proxy and direct URL, use direct
+  if (candidates.length === 0) {
+    addCandidate(url);
   }
 
   return candidates;
 };
 
 const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
-  const candidates = buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey);
-  return candidates[0] || url;
+  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
 };
 
 interface AudioTrackOption {
   language: string;
   label: string;
-  src?: string;
+  src?: string; // If set, switch to this URL for this language
   src480?: string;
   src720?: string;
   src1080?: string;
   src4k?: string;
-  nativeIndex?: number;
+  nativeIndex?: number; // If set, switch native audio track
 }
 
 interface VideoPlayerProps {
@@ -117,6 +123,7 @@ const formatTime = (t: number) => {
 
 const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
   const branding = useBranding();
+  // Removed preload anime character image - no longer needed
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -131,7 +138,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [boostedVolume, setBoostedVolume] = useState(100);
+  const [boostedVolume, setBoostedVolume] = useState(100); // 0-100%
   const [muted, setMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -150,20 +157,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [proxyUrl, setProxyUrl] = useState<string>('');
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
-  const [currentSrc, setCurrentSrc] = useState('');
-  const activeSourceBaseRef = useRef(src);
+  const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
+  const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
   const sourceBaseRef = useRef(src);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
+  // ===== SERVER CHANGER =====
   const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
   const [showServerPanel, setShowServerPanel] = useState(false);
   const premiumServerApplied = useRef(false);
-
-  // Preload next episode for instant switching
-  const preloadNextEpisodeRef = useRef<{ url: string; link: HTMLLinkElement | null }>({ url: '', link: null });
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
@@ -179,6 +184,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => unsub();
   }, []);
 
+  
+
+  // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
     if (noProxy) {
       setCdnEnabled(false);
@@ -212,8 +220,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       unsub2();
     };
   }, [noProxy, src]);
-  
-  const [isPremium, setIsPremium] = useState<boolean | null>(null);
+  const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
   const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
   const [shortenLoading, setShortenLoading] = useState(false);
@@ -226,20 +233,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [qualityFailMsg, setQualityFailMsg] = useState<string | null>(null);
   const failedSrcsRef = useRef<Set<string>>(new Set());
   const [isBuffering, setIsBuffering] = useState(true);
+  const [showFixedLoader, setShowFixedLoader] = useState(true);
+  const loaderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [tutorialLink, setTutorialLink] = useState<string | null>(null);
+  const [tutorialVideos, setTutorialVideos] = useState<{ title: string; url: string }[]>([]);
+  const [showTutorialVideo, setShowTutorialVideo] = useState(false);
+  const [activeTutorialIdx, setActiveTutorialIdx] = useState(0);
   const [showNextEpOverlay, setShowNextEpOverlay] = useState(false);
   const [nextEpCountdown, setNextEpCountdown] = useState(0);
   const nextEpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const nextEpCancelledRef = useRef(false);
+  // Global download manager state
   const [activeDownloads, setActiveDownloads] = useState<Map<string, any>>(new Map());
   const [globalFreeAccess, setGlobalFreeAccess] = useState<boolean>(false);
   const [deviceBlocked, setDeviceBlocked] = useState(false);
   const [deviceBlockInfo, setDeviceBlockInfo] = useState<{ maxDevices: number; currentCount: number } | null>(null);
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [unlockBlocked, setUnlockBlocked] = useState(false);
-  const [tutorialLink, setTutorialLink] = useState<string | null>(null);
-  const [tutorialVideos, setTutorialVideos] = useState<{ title: string; url: string }[]>([]);
-  const [showTutorialVideo, setShowTutorialVideo] = useState(false);
-  const [activeTutorialIdx, setActiveTutorialIdx] = useState(0);
 
   useEffect(() => {
     let unsub: (() => void) | undefined;
@@ -249,6 +260,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => { unsub?.(); };
   }, []);
 
+  // Check IndexedDB for already downloaded episodes matching this title
   useEffect(() => {
     import("@/lib/downloadStore").then(({ getAllDownloads }) => {
       getAllDownloads().then((all) => {
@@ -258,6 +270,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     });
   }, [title, activeDownloads]);
 
+  // Listen for global free access from Firebase
   useEffect(() => {
     const unsub = onValue(ref(db, "globalFreeAccess"), (snap) => {
       const data = snap.val();
@@ -297,6 +310,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
   }, []);
 
+  // ===== VIDEO VIEW TRACKING =====
   useEffect(() => {
     if (!animeId) return;
     const getUserId = (): string | null => {
@@ -305,29 +319,35 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const uid = getUserId();
     if (!uid) return;
 
-    const today = new Date().toISOString().split("T")[0];
+    // 1. Log a view count
+    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
     const viewRef = ref(db, `analytics/views/${animeId}/${today}/${uid}`);
     set(viewRef, { timestamp: Date.now(), title: title || "" }).catch(() => {});
 
+    // 2. Track as active viewer (presence)
     const activeRef = ref(db, `analytics/activeViewers/${animeId}/${uid}`);
     const userName = (() => {
       try { return localStorage.getItem("rs_display_name") || JSON.parse(localStorage.getItem("rsanime_user") || "{}").name || "User"; } catch { return "User"; }
     })();
     set(activeRef, { title: title || "", userName, startedAt: Date.now() }).catch(() => {});
 
+    // 3. Log to daily aggregate
     const dailyRef = ref(db, `analytics/dailyActive/${today}/${uid}`);
     set(dailyRef, { lastSeen: Date.now(), userName }).catch(() => {});
 
     return () => {
+      // Remove active viewer on unmount
       remove(activeRef).catch(() => {});
     };
   }, [animeId, title]);
 
+  // Check 24h access
   const has24hAccess = useCallback((): boolean => {
     if (globalFreeAccess) return true;
     return userFreeAccessExpiresAt > Date.now();
   }, [globalFreeAccess, userFreeAccessExpiresAt]);
 
+  // Load tutorial videos from Firebase
   useEffect(() => {
     const unsubs: (() => void)[] = [];
     unsubs.push(onValue(ref(db, "settings/tutorialLink"), (snap) => {
@@ -345,6 +365,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => unsubs.forEach(u => u());
   }, []);
 
+  // Maintenance pause listener
   useEffect(() => {
     const unsub = onValue(ref(db, "maintenance"), (snap) => {
       const maint = snap.val();
@@ -368,6 +389,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     localStorage.setItem("rsanime_ad_access", expiry.toString());
   }, []);
 
+  // Premium check (device limit is now enforced at login time)
   useEffect(() => {
     const getUserId = (): string | null => {
       try { const u = localStorage.getItem("rsanime_user"); if (u) return JSON.parse(u).id; } catch {} return null;
@@ -384,6 +406,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => unsub();
   }, []);
 
+  // Auto-switch to premium server for premium users
   useEffect(() => {
     if (isPremium && videoServers.length > 0 && !premiumServerApplied.current) {
       const premIdx = videoServers.findIndex(s => s.locked);
@@ -394,8 +417,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, [isPremium, videoServers]);
 
+  // Ad gate - only run after premium check completes
   useEffect(() => {
-    if (isPremium === null) return;
+    if (isPremium === null) return; // still loading premium status
 
     const uid = getLocalUserId();
     if (!uid) {
@@ -416,7 +440,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setAdGateActive(false);
       return;
     }
+    // No access - block video and show ad gate
     setAdGateActive(true);
+    // Pause video immediately to prevent playing without access
     if (videoRef.current) {
       videoRef.current.pause();
       videoRef.current.src = '';
@@ -433,6 +459,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (url) window.location.href = url;
   }, []);
 
+  // Save progress every 10s
   useEffect(() => {
     if (!onSaveProgress) return;
     const v = videoRef.current;
@@ -449,6 +476,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
   }, [onSaveProgress]);
 
+  // Restore watch position (per-device)
   useEffect(() => {
     if (!animeId) return;
     try {
@@ -464,6 +492,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             if (snap.exists()) {
               const data = snap.val();
               if (data.currentTime && data.duration && (data.currentTime / data.duration) < 0.95) {
+                // Set pendingSeek so the main effect restores position as soon as metadata loads
                 pendingSeek.current = data.currentTime;
                 const v = videoRef.current;
                 if (v && v.duration > 0) {
@@ -477,9 +506,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     } catch {}
   }, [animeId]);
 
+  // Build quality list - 4K is premium-only
   const is4KLabel = (label: string) => /4k|2160|uhd/i.test(label);
 
   const availableQualities: QualityOption[] = useMemo(() => {
+    // Keep raw URLs here; proxy is applied only when actually loading/switching source
     const list: QualityOption[] = [{ label: "Auto", src }];
     if (qualityOptions?.length) qualityOptions.forEach(q => { if (q.src) list.push({ ...q }); });
     return list;
@@ -501,37 +532,66 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, [videoServers]);
 
+  const preloadVideoRef = useRef<HTMLVideoElement | null>(null);
+  const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
 
-  // Preload next episode for instant switching
-  const preloadVideoUrl = useCallback((url: string) => {
-    if (!url || url === preloadNextEpisodeRef.current.url) return;
-    
-    // Remove existing preload link
-    if (preloadNextEpisodeRef.current.link) {
-      try { document.head.removeChild(preloadNextEpisodeRef.current.link); } catch {}
-      preloadNextEpisodeRef.current.link = null;
+  // SUPER FAST preload next episode for instant switching
+useEffect(() => {
+  if (!episodeList || episodeList.length <= 1) return;
+  const activeIdx = episodeList.findIndex(ep => ep.active);
+  if (activeIdx < 0 || activeIdx >= episodeList.length - 1) return;
+  
+  const nextSrc = src;
+  
+  // Clean up old
+  if (preloadLinkRef.current) {
+    try { document.head.removeChild(preloadLinkRef.current); } catch {}
+    preloadLinkRef.current = null;
+  }
+  if (preloadVideoRef.current) {
+    try { preloadVideoRef.current.src = ''; } catch {}
+    preloadVideoRef.current = null;
+  }
+  
+  // Method 1: Link preload
+  const link = document.createElement('link');
+  link.rel = 'preload';
+  link.as = 'video';
+  link.href = nextSrc;
+  document.head.appendChild(link);
+  preloadLinkRef.current = link;
+  
+  // Method 2: Hidden video element for instant playback (SUPER FAST)
+  const video = document.createElement('video');
+  video.preload = 'auto';
+  video.src = nextSrc;
+  video.load();
+  video.style.display = 'none';
+  document.body.appendChild(video);
+  preloadVideoRef.current = video;
+  
+  // Method 3: Preconnect to CDN
+  const preconnect = document.createElement('link');
+  preconnect.rel = 'preconnect';
+  preconnect.href = new URL(nextSrc).origin;
+  document.head.appendChild(preconnect);
+  
+  return () => {
+    if (preloadLinkRef.current) {
+      try { document.head.removeChild(preloadLinkRef.current); } catch {}
+      preloadLinkRef.current = null;
     }
-    
-    // Create new preload link
-    const link = document.createElement('link');
-    link.rel = 'preload';
-    link.as = 'video';
-    link.href = url;
-    document.head.appendChild(link);
-    
-    preloadNextEpisodeRef.current = { url, link };
-  }, []);
-
-  // Preload next episode when episodeList changes
-  useEffect(() => {
-    if (!episodeList || episodeList.length <= 1) return;
-    const activeIdx = episodeList.findIndex(ep => ep.active);
-    if (activeIdx < 0 || activeIdx >= episodeList.length - 1) return;
-    
-    // Next episode's src would be determined when switching
-    // We'll preload after quality selection
-  }, [episodeList]);
+    if (preloadVideoRef.current) {
+      try { 
+        preloadVideoRef.current.pause();
+        preloadVideoRef.current.src = '';
+        document.body.removeChild(preloadVideoRef.current);
+      } catch {}
+      preloadVideoRef.current = null;
+    }
+  };
+}, [episodeList, src]);
 
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
@@ -547,6 +607,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
 
+    // Keep last frame visible by NOT clearing src — just swap directly
     setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
@@ -557,8 +618,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
+
+  // Build audio track options from props + detect native audio tracks on video load
   useEffect(() => {
     const tracks: AudioTrackOption[] = [];
+    // Add manual audio tracks from props
     if (propAudioTracks?.length) {
       propAudioTracks.forEach(t => {
         tracks.push({ language: t.language, label: t.label, src: t.link, src480: t.link480, src720: t.link720, src1080: t.link1080, src4k: t.link4k });
@@ -568,6 +632,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentAudioTrack("Default");
   }, [propAudioTracks, src]);
 
+  // Detect native audio tracks when video loads
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -584,6 +649,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           });
         }
         setAudioTrackOptions(prev => {
+          // Merge: native tracks first, then manual tracks
           const manualTracks = prev.filter(t => t.src);
           return [...nativeTracks, ...manualTracks];
         });
@@ -600,6 +666,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const wasPlaying = !v.paused;
 
     if (track.nativeIndex !== undefined) {
+      // Switch native audio track
       const audioTracks = (v as any).audioTracks;
       if (audioTracks) {
         for (let i = 0; i < audioTracks.length; i++) {
@@ -608,20 +675,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       }
       setCurrentAudioTrack(track.label);
     } else if (track.src) {
+      // Pick quality-matched audio URL based on current quality selection
       let audioUrl = track.src;
       const q = currentQuality.toLowerCase();
       if (q.includes('4k') || q.includes('2160') || q.includes('uhd')) audioUrl = track.src4k || track.src1080 || track.src;
       else if (q.includes('1080')) audioUrl = track.src1080 || track.src;
       else if (q.includes('720')) audioUrl = track.src720 || track.src;
       else if (q.includes('480')) audioUrl = track.src480 || track.src;
-      
+      // Switch to a different URL for this language
       sourceBaseRef.current = audioUrl;
       const finalAudioUrl = manualServerSelected ? applyServerDomain(audioUrl, activeServerIndex) : audioUrl;
       const proxiedSrc = resolvePlaybackSrc(finalAudioUrl);
       activeSourceBaseRef.current = finalAudioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
-      
+    // Restore playback position after source change
       const restoreTime = () => {
         if (v.duration > 0) {
           v.currentTime = savedTime;
@@ -664,10 +732,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           v.removeEventListener("loadedmetadata", restoreTime);
         }
       };
+
       v.addEventListener("loadedmetadata", restoreTime);
       activeSourceBaseRef.current = finalDefaultSrc;
       setCurrentSrc(finalResolvedSrc);
     }
+
   }, [currentSrc, resolvePlaybackSrc, src, manualServerSelected, activeServerIndex, applyServerDomain]);
 
   useEffect(() => {
@@ -683,6 +753,49 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     failedSrcsRef.current.clear();
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
+  // 5-second max loader: disappears when video loads OR after 5s, whichever comes first
+  useEffect(() => {
+    if (loaderTimeoutRef.current) {
+      clearTimeout(loaderTimeoutRef.current);
+      loaderTimeoutRef.current = null;
+    }
+
+    if (!currentSrc) {
+      setShowFixedLoader(false);
+      return;
+    }
+
+    setShowFixedLoader(true);
+
+    // Auto-hide after 5 seconds regardless
+    loaderTimeoutRef.current = setTimeout(() => {
+      setShowFixedLoader(false);
+      loaderTimeoutRef.current = null;
+    }, 800);
+
+    // Also hide immediately when video fires canplay/playing
+    const v = videoRef.current;
+    if (v) {
+      const hideLoader = () => {
+        setShowFixedLoader(false);
+        if (loaderTimeoutRef.current) {
+          clearTimeout(loaderTimeoutRef.current);
+          loaderTimeoutRef.current = null;
+        }
+      };
+      v.addEventListener("canplay", hideLoader, { once: true });
+      v.addEventListener("playing", hideLoader, { once: true });
+    }
+
+    return () => {
+      if (loaderTimeoutRef.current) {
+        clearTimeout(loaderTimeoutRef.current);
+        loaderTimeoutRef.current = null;
+      }
+    };
+  }, [currentSrc]);
+
+  // Simple volume sync - no AudioContext needed
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -690,6 +803,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     v.volume = muted ? 0 : Math.min(1, boostedVolume / 100);
   }, [boostedVolume, muted, currentSrc]);
 
+  // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
     if ('mediaSession' in navigator) {
       const artworkSrc = (() => {
@@ -716,6 +830,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       navigator.mediaSession.setActionHandler('pause', () => { videoRef.current?.pause(); });
       navigator.mediaSession.setActionHandler('seekbackward', () => seek(-10));
       navigator.mediaSession.setActionHandler('seekforward', () => seek(10));
+      // Stop button - closes video and removes notification
       navigator.mediaSession.setActionHandler('stop', () => {
         if (videoRef.current) {
           videoRef.current.pause();
@@ -744,25 +859,30 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, []);
 
   const toggleControls = useCallback(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    setShowControls(prev => {
-      const next = !prev;
-      if (next) {
-        hideTimer.current = setTimeout(() => setShowControls(false), 3000);
-      }
-      return next;
-    });
-  }, []);
+  if (hideTimer.current) clearTimeout(hideTimer.current);
+  setShowControls(prev => {
+    const next = !prev;
+    if (next) {
+      hideTimer.current = setTimeout(() => setShowControls(false), 3000);
+    }
+    return next;
+  });
+}, []);
 
   useEffect(() => {
     resetHideTimer();
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
   }, [resetHideTimer]);
 
+  // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
+  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !serverSwitchingRef.current;
+
+  // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
     if (!onNextEpisode || duration <= 0 || currentTime <= 0) return;
     if (nextEpCancelledRef.current) return;
     const remaining = duration - currentTime;
+    // ONLY show in the last 60 seconds - strict check
     const inLast60 = remaining <= 60 && remaining > 0;
     if (inLast60 && !showNextEpOverlay) {
       setShowNextEpOverlay(true);
@@ -770,11 +890,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     } else if (inLast60 && showNextEpOverlay) {
       setNextEpCountdown(Math.ceil(remaining));
     } else if (!inLast60 && showNextEpOverlay) {
+      // User seeked back out of the last 60s zone - hide timer
       setShowNextEpOverlay(false);
       setNextEpCountdown(0);
     }
   }, [currentTime, duration, onNextEpisode, showNextEpOverlay]);
 
+  // Reset next ep overlay when src OR currentSrc changes (covers both prop change and quality switch)
   useEffect(() => {
     setShowNextEpOverlay(false);
     setNextEpCountdown(0);
@@ -785,215 +907,250 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const v = videoRef.current;
     if (!v || !playbackRouteReady || !currentSrc) return;
 
+    // Track last known good position for fallback recovery
     let lastKnownTime = 0;
-    let retryCount = 0;
-    const MAX_RETRIES = 2;
-    let waitingTimer: ReturnType<typeof setTimeout> | null = null;
-    let stalledTimer: ReturnType<typeof setTimeout> | null = null;
-
     const onLoaded = () => {
       setDuration(v.duration);
       if (pendingSeek.current !== null) {
         v.currentTime = pendingSeek.current;
         pendingSeek.current = null;
       }
+      // Only autoplay if ad gate is not active
       if (!adGateActive) {
+        // Keep native audio path; do not force muted autoplay fallback
         v.play().catch(() => {});
       }
     };
-
     const onPlay = () => {
       setPlaying(true);
+      // Start RAF loop for smooth progress
       const tick = () => {
         if (!v.paused && !v.ended) {
           const ct = v.currentTime;
           if (ct > 0) lastKnownTime = ct;
           const dur = v.duration;
+          // Direct DOM updates for progress bar - avoids React re-renders
           if (progressRef.current && dur > 0) {
             progressRef.current.style.width = `${(ct / dur) * 100}%`;
           }
           if (timeDisplayRef.current && dur > 0) {
             timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
           }
+          // Update React state less frequently (every ~500ms) for other consumers
           setCurrentTime(ct);
           rafId.current = requestAnimationFrame(tick);
         }
       };
       rafId.current = requestAnimationFrame(tick);
     };
-
     const onPause = () => {
       setPlaying(false);
       cancelAnimationFrame(rafId.current);
     };
-
     const onEnded = () => {
       setPlaying(false);
       cancelAnimationFrame(rafId.current);
+      // Auto next episode
       if (onNextEpisode) {
         onNextEpisode();
       }
     };
-
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
     const onError = () => {
-  if (retryCount >= MAX_RETRIES) {
-    // Try fallback candidates in order
-    const allCandidates = buildPlaybackCandidates(
-      activeSourceBaseRef.current,
-      cdnEnabled,
-      proxyUrl || undefined,
-      proxyApiKey || undefined
-    );
-    
-    const currentIndex = allCandidates.indexOf(currentSrc);
-    const nextCandidate = allCandidates[currentIndex + 1];
-    
-    if (nextCandidate) {
-      setQualityFailMsg(`Trying alternate route...`);
-      setTimeout(() => setQualityFailMsg(null), 2000);
-      pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-      setCurrentSrc(nextCandidate);
-      retryCount = 0;
-      return;
-    }
+      if (retryCount >= MAX_RETRIES) {
+        console.log('Video failed after retries. URL:', currentSrc);
+        failedSrcsRef.current.add(currentSrc);
+        const failedQualityLabel = currentQuality;
+        
+        const sameQualityRouteFallback = buildPlaybackCandidates(
+          activeSourceBaseRef.current,
+          cdnEnabled,
+          proxyUrl || undefined,
+          proxyApiKey || undefined
+        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
 
-    const sameQualityRouteFallback = buildPlaybackCandidates(
-      activeSourceBaseRef.current,
-      cdnEnabled,
-      proxyUrl || undefined,
-      proxyApiKey || undefined
-    ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
+        if (sameQualityRouteFallback) {
+          setQualityFailMsg(`"${failedQualityLabel}" source blocked. Trying fallback route...`);
+          setTimeout(() => setQualityFailMsg(null), 3500);
+          pendingSeek.current = lastKnownTime || v?.currentTime || 0;
+          setCurrentSrc(sameQualityRouteFallback);
+          return;
+        }
 
-    if (sameQualityRouteFallback) {
-      failedSrcsRef.current.add(currentSrc);
-      setQualityFailMsg(`Trying alternate route...`);
-      setTimeout(() => setQualityFailMsg(null), 2000);
-      pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-      setCurrentSrc(sameQualityRouteFallback);
-      retryCount = 0;
-      return;
-    }
+        const nextOption = availableQualities.find((q) => {
+          const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+          return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
+        });
 
-    const nextOption = availableQualities.find((q) => {
-      const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-      return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
-    });
-
-    if (nextOption) {
-      setQualityFailMsg(`Switching to ${nextOption.label}...`);
-      setTimeout(() => setQualityFailMsg(null), 2000);
-      pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-      const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-      activeSourceBaseRef.current = nextOption.src;
-      setCurrentSrc(newFallbackSrc);
-      setCurrentQuality(nextOption.label);
-      retryCount = 0;
-    } else if (videoServers.length > 1) {
-      const nextServerIdx = (activeServerIndex + 1) % videoServers.length;
-      if (nextServerIdx !== activeServerIndex) {
-        setQualityFailMsg(`Switching server...`);
-        setTimeout(() => setQualityFailMsg(null), 2000);
-        switchServer(nextServerIdx);
-        retryCount = 0;
-      } else {
-        setVideoError(true);
+        if (nextOption) {
+          setQualityFailMsg(`"${failedQualityLabel}" quality not available. Switching to "${nextOption.label}"...`);
+          setTimeout(() => setQualityFailMsg(null), 4000);
+          pendingSeek.current = lastKnownTime || v?.currentTime || 0;
+          const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+          activeSourceBaseRef.current = nextOption.src;
+          if (newFallbackSrc === currentSrc) {
+            v.currentTime = pendingSeek.current;
+            pendingSeek.current = null;
+            v.load();
+          } else {
+            setCurrentSrc(newFallbackSrc);
+          }
+          setCurrentQuality(nextOption.label);
+        } else {
+          // ===== AUTO SERVER FAILOVER =====
+          // All quality/route fallbacks exhausted — try next server automatically
+          if (videoServers.length > 1) {
+            const nextServerIdx = (activeServerIndex + 1) % videoServers.length;
+            // Only auto-failover if we haven't cycled through all servers
+            const failoverKey = `__server_failover_${nextServerIdx}`;
+            if (!failedSrcsRef.current.has(failoverKey)) {
+              failedSrcsRef.current.add(failoverKey);
+              const serverName = videoServers[nextServerIdx]?.name || `Server ${nextServerIdx + 1}`;
+              setQualityFailMsg(`Server down. Switching to ${serverName}...`);
+              setTimeout(() => setQualityFailMsg(null), 3500);
+              // Reset failed srcs for the new server (keep failover keys)
+              const failoverKeys = new Set([...failedSrcsRef.current].filter(k => k.startsWith("__server_failover_")));
+              failedSrcsRef.current = failoverKeys;
+              switchServer(nextServerIdx);
+              return;
+            }
+          }
+          setVideoError(true);
+        }
+        return;
       }
-    } else {
-      setVideoError(true);
-    }
-    return;
-  }
-  retryCount++;
-  const delay = 500;
-  setTimeout(() => {
-    if (v) {
-      const savedTime = v.currentTime || lastKnownTime;
-      v.load();
-      v.addEventListener('loadedmetadata', () => {
-        if (savedTime > 0) v.currentTime = savedTime;
-        if (!adGateActive) v.play().catch(() => {});
-      }, { once: true });
-    }
-  }, delay);
-};
-
+      retryCount++;
+      console.log(`Video error, retry ${retryCount}/${MAX_RETRIES}...`);
+      // Exponential backoff: 500ms, 1000ms, 1500ms
+      const delay = retryCount * 500;
+      setTimeout(() => {
+        if (v) {
+          const savedTime = v.currentTime || lastKnownTime;
+          // For MKV files, try removing the src attribute and re-setting it
+          v.src = currentSrc;
+          v.load();
+          v.addEventListener('loadedmetadata', () => {
+            if (savedTime > 0) v.currentTime = savedTime;
+            v.play().catch(() => {});
+          }, { once: true });
+          // Also listen for canplay as fallback for MKV
+          v.addEventListener('canplay', () => {
+            if (savedTime > 0 && Math.abs(v.currentTime - savedTime) > 2) {
+              v.currentTime = savedTime;
+            }
+            v.play().catch(() => {});
+          }, { once: true });
+        }
+      }, delay);
+    };
     const onCanPlay = () => {
       setVideoError(false);
       setIsBuffering(false);
+      // Also apply pending seek here in case loadedmetadata didn't fire
       if (pendingSeek.current !== null && v.duration > 0) {
         v.currentTime = pendingSeek.current;
         pendingSeek.current = null;
       }
       if (v.paused && !adGateActive) {
+        // Keep native audio path; manual user interaction will start playback if autoplay is blocked
         v.play().catch(() => {});
       }
     };
-
+    const onCanPlayThrough = () => {
+      setIsBuffering(false);
+    };
+    // Debounce waiting to avoid flashing loader on brief buffers
+    let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
       if (waitingTimer) clearTimeout(waitingTimer);
-      waitingTimer = setTimeout(() => setIsBuffering(true), 300);
+      waitingTimer = setTimeout(() => setIsBuffering(true), 500);
     };
-
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
       setIsBuffering(false);
     };
-
-    const onStalled = () => {
-      stalledTimer = setTimeout(() => {
-        if (v.currentTime === 0 && v.readyState <= 1 && v.networkState === 2) {
-          v.load();
-        }
-      }, 5000);
+    const onSeeked = () => {
+      // Only clear buffering if video has enough data to play
+      if (v.readyState >= 3) {
+        if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
+        setIsBuffering(false);
+      }
     };
-
-    v.addEventListener("loadedmetadata", onLoaded);
-    v.addEventListener("play", onPlay);
-    v.addEventListener("pause", onPause);
-    v.addEventListener("ended", onEnded);
-    v.addEventListener("error", onError);
-    v.addEventListener("canplay", onCanPlay);
-    v.addEventListener("waiting", onWaiting);
-    v.addEventListener("playing", onPlaying);
-    v.addEventListener("stalled", onStalled);
-    
-    setIsBuffering(true);
-    v.load();
-
-    return () => {
-      cancelAnimationFrame(rafId.current);
-      if (stalledTimer) clearTimeout(stalledTimer);
-      if (waitingTimer) clearTimeout(waitingTimer);
-      v.removeEventListener("loadedmetadata", onLoaded);
-      v.removeEventListener("play", onPlay);
-      v.removeEventListener("pause", onPause);
-      v.removeEventListener("ended", onEnded);
-      v.removeEventListener("error", onError);
-      v.removeEventListener("canplay", onCanPlay);
-      v.removeEventListener("waiting", onWaiting);
-      v.removeEventListener("playing", onPlaying);
-      v.removeEventListener("stalled", onStalled);
-      v.pause();
+    // Stalled: video stopped downloading - try to recover
+let stalledTimer: ReturnType<typeof setTimeout> | null = null;
+const onStalled = () => {
+  stalledTimer = setTimeout(() => {
+    if (v.currentTime === 0 && v.readyState <= 1 && v.networkState === 2) {
+      console.log('Video stalled at 0:00 with no data, reloading source...');
+      const savedSrc = v.src;
       v.src = '';
+      v.src = savedSrc;
       v.load();
-      if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
-    };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, videoServers, activeServerIndex]);
+    }
+  }, 5000);
+};
 
-  useEffect(() => {
-    const onFs = () => {
-      const fs = !!document.fullscreenElement;
-      setIsFullscreen(fs);
-      if (!fs) { try { (screen.orientation as any).unlock?.(); } catch {} }
-    };
-    document.addEventListener("fullscreenchange", onFs);
-    document.addEventListener("webkitfullscreenchange", onFs);
-    return () => {
-      document.removeEventListener("fullscreenchange", onFs);
-      document.removeEventListener("webkitfullscreenchange", onFs);
-    };
-  }, []);
+v.addEventListener("loadedmetadata", onLoaded);
+v.addEventListener("play", onPlay);
+v.addEventListener("pause", onPause);
+v.addEventListener("ended", onEnded);
+v.addEventListener("error", onError);
+v.addEventListener("canplay", onCanPlay);
+v.addEventListener("canplaythrough", onCanPlayThrough);
+v.addEventListener("waiting", onWaiting);
+v.addEventListener("playing", onPlaying);
+v.addEventListener("seeked", onSeeked);
+v.addEventListener("stalled", onStalled);
+setIsBuffering(true);
+v.load();
 
+return () => {
+  cancelAnimationFrame(rafId.current);
+  if (stalledTimer) clearTimeout(stalledTimer);
+  if (waitingTimer) clearTimeout(waitingTimer);
+  v.removeEventListener("loadedmetadata", onLoaded);
+  v.removeEventListener("play", onPlay);
+  v.removeEventListener("pause", onPause);
+  v.removeEventListener("ended", onEnded);
+  v.removeEventListener("error", onError);
+  v.removeEventListener("canplay", onCanPlay);
+  v.removeEventListener("canplaythrough", onCanPlayThrough);
+  v.removeEventListener("waiting", onWaiting);
+  v.removeEventListener("playing", onPlaying);
+  v.removeEventListener("seeked", onSeeked);
+  v.removeEventListener("stalled", onStalled);
+  v.pause();
+  v.src = '';
+  v.load();
+  if (preloadVideoRef.current) {
+    try { preloadVideoRef.current.pause(); preloadVideoRef.current.src = ""; document.body.removeChild(preloadVideoRef.current); } catch {}
+    preloadVideoRef.current = null;
+  }
+  if ('mediaSession' in navigator) { 
+    navigator.mediaSession.metadata = null; 
+    navigator.mediaSession.playbackState = 'none'; 
+  }
+};
+}, [currentSrc, adGateActive, cdnEnabled, proxyUrl, playbackRouteReady]);
+
+useEffect(() => {
+  const onFs = () => {
+    const fs = !!document.fullscreenElement;
+    setIsFullscreen(fs);
+    if (!fs) { 
+      try { (screen.orientation as any).unlock?.(); } catch {} 
+    }
+  };
+  document.addEventListener("fullscreenchange", onFs);
+  document.addEventListener("webkitfullscreenchange", onFs);
+  return () => {
+    document.removeEventListener("fullscreenchange", onFs);
+    document.removeEventListener("webkitfullscreenchange", onFs);
+  };
+}, []);
+
+  // Pause video when app goes background / tab hidden
   useEffect(() => {
     const pausePlayback = () => {
       const v = videoRef.current;
@@ -1042,20 +1199,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const getSafeSeekTime = useCallback((v: HTMLVideoElement, target: number) => {
     if (!Number.isFinite(v.duration) || v.duration <= 0) return 0;
+
     let clamped = Math.min(Math.max(target, 0), v.duration);
+
+    // For proxied streams, seek only within seekable range to prevent reset-to-zero
     if (v.seekable && v.seekable.length > 0) {
       const start = v.seekable.start(0);
       const end = v.seekable.end(v.seekable.length - 1);
       clamped = Math.min(Math.max(clamped, start), end);
     }
+
     return clamped;
   }, []);
 
   const seek = useCallback((seconds: number) => {
     const v = videoRef.current;
     if (!v) return;
+
     const nextTime = getSafeSeekTime(v, v.currentTime + seconds);
     v.currentTime = nextTime;
+
     setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
     setTimeout(() => setSkipIndicator(null), 600);
     resetHideTimer();
@@ -1066,11 +1229,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!el) return;
     try {
       if (document.fullscreenElement) {
+        // Unlock orientation before exiting fullscreen
         try { (screen.orientation as any).unlock?.(); } catch {}
         await document.exitFullscreen();
       } else {
         if (el.requestFullscreen) await el.requestFullscreen();
         else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
+        // Lock to landscape after entering fullscreen
         try { await (screen.orientation as any).lock?.('landscape'); } catch {}
       }
     } catch (e) { console.log('Fullscreen not supported'); }
@@ -1083,6 +1248,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, []);
 
   const switchQuality = useCallback((option: QualityOption) => {
+    // Block 4K for non-premium users
     if (is4KLabel(option.label) && !isPremium) return;
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
@@ -1102,6 +1268,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);
     setShowSettings(false);
+
   }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -1113,6 +1280,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     resetHideTimer();
   }, [getSafeSeekTime, resetHideTimer]);
 
+  // Touch drag seeking on progress bar
   const progressBarRef = useRef<HTMLDivElement>(null);
   const isSeeking = useRef(false);
 
@@ -1136,6 +1304,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     const target = getSafeSeekTime(v, pct * v.duration);
     v.currentTime = target;
+
+    // Update progress bar immediately
     if (progressRef.current && v.duration > 0) {
       progressRef.current.style.width = `${(target / v.duration) * 100}%`;
     }
@@ -1152,31 +1322,34 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const lastTap = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
 
   const handleVideoClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    if (locked) return;
-    const now = Date.now();
-    const clientX = "touches" in e ? e.changedTouches[0].clientX : e.clientX;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const relX = (clientX - rect.left) / rect.width;
+  if (locked) return;
+  
+  const now = Date.now();
+  const clientX = "touches" in e ? e.changedTouches[0].clientX : e.clientX;
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const relX = (clientX - rect.left) / rect.width;
 
-    if (now - lastTap.current.time < 250) {
-      if (relX < 0.33) seek(-10);
-      else if (relX > 0.66) seek(10);
-      else {
-        togglePlay();
-        setSkipIndicator({ side: "center", text: playing ? "⏸" : "▶" });
-        setTimeout(() => setSkipIndicator(null), 600);
-      }
-      lastTap.current = { time: 0, x: 0 };
-    } else {
-      lastTap.current = { time: now, x: clientX };
-      toggleControls();
+  if (now - lastTap.current.time < 300) {
+    // Double tap
+    if (relX < 0.33) seek(-10);
+    else if (relX > 0.66) seek(10);
+    else {
+      togglePlay();
+      setSkipIndicator({ side: "center", text: playing ? "⏸" : "▶" });
+      setTimeout(() => setSkipIndicator(null), 600);
     }
-  }, [locked, seek, togglePlay, playing, toggleControls]);
+    lastTap.current = { time: 0, x: 0 };
+  } else {
+    lastTap.current = { time: now, x: clientX };
+    // Single tap - show/hide controls
+    toggleControls();
+  }
+}, [locked, seek, togglePlay, playing, toggleControls]);
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const t = e.touches[0];
-    setSwipeState({ startX: t.clientX, startY: t.clientY, type: null });
-  }, []);
+const handleTouchStart = useCallback((e: React.TouchEvent) => {
+  const touch = e.touches[0];
+  setSwipeState({ startX: touch.clientX, startY: touch.clientY, type: null });
+}, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!swipeState || locked) return;
@@ -1196,7 +1369,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setBrightness(newBr);
       setSwipeState({ ...swipeState, startY: t.clientY });
     }
-  }, [swipeState, locked, brightness, boostedVolume, applyPlayerVolume]);
+  }, [swipeState, locked, brightness, boostedVolume, muted, applyPlayerVolume]);
 
   const handleTouchEnd = useCallback(() => setSwipeState(null), []);
 
@@ -1204,8 +1377,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   return (
     <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
+      {/* Close button */}
       {!isFullscreen && (
         <button onClick={() => {
+          // Stop video completely before closing
           const v = videoRef.current;
           if (v) { v.pause(); v.src = ''; v.load(); }
           if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
@@ -1229,6 +1404,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           </div>
         )}
 
+        {/* Video Container - will-change for GPU compositing */}
         <div
           ref={videoContainerRef}
           className={`relative bg-black overflow-hidden ${
@@ -1243,8 +1419,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          {/* No thumbnail - removed as requested */}
-          
           <video
             ref={videoRef}
             src={currentSrc}
@@ -1252,6 +1426,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
             playsInline
             preload="auto"
+            poster={poster || undefined}
             controlsList="nodownload noplaybackrate noremoteplayback"
             disablePictureInPicture
             disableRemotePlayback
@@ -1259,6 +1434,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             onDragStart={(e) => e.preventDefault()}
           />
 
+          {/* Video Error Overlay */}
           {videoError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20">
               <div className="w-16 h-16 rounded-full bg-destructive/20 flex items-center justify-center mb-4">
@@ -1272,7 +1448,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
-          {isBuffering && !videoError && (
+          {/* Loading spinner on top of thumbnail */}
+          {showLoaderOverlay && (
             <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none">
               <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             </div>
@@ -1290,10 +1467,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
+          {/* Auto Next Episode Overlay */}
           {showNextEpOverlay && onNextEpisode && !videoError && (
             <div className="absolute bottom-20 right-3 z-30 animate-in slide-in-from-right-5 duration-500" onClick={(e) => e.stopPropagation()}>
               <div className="player-glass rounded-xl p-3 pr-4 flex items-center gap-3 shadow-lg border border-primary/30" style={{ boxShadow: "0 0 20px hsla(176, 65%, 48%, 0.2)" }}>
                 <div className="relative w-10 h-10 flex items-center justify-center">
+                  {/* Circular countdown */}
                   <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
                     <circle cx="18" cy="18" r="16" fill="none" stroke="hsla(176,65%,48%,0.15)" strokeWidth="2" />
                     <circle cx="18" cy="18" r="16" fill="none" stroke="hsl(176,65%,48%)" strokeWidth="2.5"
@@ -1340,8 +1519,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
+          {/* Controls Overlay - always dark bg for visibility in all themes */}
           {showControls && !locked && (
             <div className="absolute inset-0 flex flex-col justify-between text-white" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}>
+              {/* Top controls */}
               <div className="flex justify-end gap-2 p-3">
                 <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1">
                   <Crop className="w-3.5 h-3.5" />
@@ -1395,6 +1576,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 </button>
               </div>
 
+              {/* Center play */}
               <div className="flex items-center justify-center gap-8">
                 <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="w-10 h-10 rounded-full bg-foreground/20 flex items-center justify-center backdrop-blur">
                   <SkipBack className="w-5 h-5" />
@@ -1407,7 +1589,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 </button>
               </div>
 
+              {/* Bottom controls */}
               <div className="px-3 pb-3">
+                {/* Progress bar - GPU accelerated with will-change */}
                 <div
                   ref={progressBarRef}
                   className="w-full h-6 flex items-center cursor-pointer mb-2 relative touch-none"
@@ -1473,6 +1657,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         )}
                       </div>
                     )}
+                    {/* Audio track button */}
                     {audioTrackOptions.length > 0 && (
                       <div className="relative">
                         <button
@@ -1525,6 +1710,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
+          {/* Locked indicator */}
           {locked && showControls && (
             <div className="absolute top-3 right-3 z-20" onClick={(e) => e.stopPropagation()}>
               <button onClick={() => { setLocked(false); resetHideTimer(); }} className="player-glass w-10 h-10 rounded-full flex items-center justify-center">
@@ -1536,6 +1722,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             <div className="absolute inset-0" onClick={(e) => { e.stopPropagation(); resetHideTimer(); }} />
           )}
 
+          {/* Settings panel */}
           {showSettings && (
             <div className="absolute bottom-16 right-3 player-glass rounded-xl p-3 z-20 min-w-[180px] max-h-[250px] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <button onClick={() => setShowSettings(false)} className="absolute top-2 right-2 w-6 h-6 rounded-full bg-foreground/20 flex items-center justify-center hover:bg-foreground/30 transition-all">
@@ -1625,6 +1812,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           )}
         </div>
 
+        {/* Device limit is now enforced at login time - no overlay needed */}
+
+        {/* Ad Gate Overlay */}
         {adGateActive && !deviceBlocked && !unlockBlocked && (
           <div className="fixed inset-0 z-[400] bg-black/90 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-card rounded-2xl p-6 max-w-sm w-[90%] text-center space-y-4 shadow-2xl border border-border">
@@ -1653,6 +1843,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   ))}
                 </div>
               )}
+              {/* Tutorial Video Buttons */}
               {tutorialVideos.length > 0 ? (
                 <div className="space-y-2">
                   {tutorialVideos.map((vid, idx) => (
@@ -1688,6 +1879,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           </div>
         )}
 
+        {/* Tutorial Video Modal */}
         {showTutorialVideo && (() => {
           const activeVid = activeTutorialIdx >= 0 && tutorialVideos[activeTutorialIdx]
             ? tutorialVideos[activeTutorialIdx]
@@ -1722,6 +1914,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           );
         })()}
 
+        {/* Download Button with Quality Picker + Offline Playback */}
         {!isFullscreen && !adGateActive && !hideDownload && (() => {
           const normalizeKeyPart = (value: string) =>
             value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -1752,6 +1945,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           const isPaused = dl?.status === "paused";
           const isComplete = dl?.status === "complete";
 
+          // Check if this episode is already saved in IndexedDB
           const savedEpisode = downloadedEpisodes.find(d => d.subtitle === subtitle);
           const isAlreadySaved = !!savedEpisode;
 
@@ -1789,8 +1983,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           return (
             <div className="mt-5 w-full max-w-md mx-auto space-y-3">
+              {/* Main Download / Play Offline Button */}
               <div className="relative">
                 {isAlreadySaved && !isDownloading && !isPaused ? (
+                  /* Already downloaded - show play offline button */
                   <button
                     onClick={() => playOffline()}
                     className="relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all bg-primary text-primary-foreground hover:scale-[1.02]"
@@ -1811,9 +2007,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         toast.info("Download resumed");
                         return;
                       }
+                      // Show quality picker if multiple qualities available
                       if (availableQualities.length > 1) {
                         setShowDownloadQualityPicker(true);
                       } else {
+                        // Only one quality - download directly
                         startDownloadWithQuality(currentQuality, src);
                       }
                     }}
@@ -1858,6 +2056,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     </span>
                   </button>
                 )}
+                {/* Pause & Cancel buttons */}
                 {isDownloading && dl && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex items-center gap-1">
                     <button
@@ -1888,6 +2087,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 )}
               </div>
 
+              {/* Quality Picker Dropdown */}
               {showDownloadQualityPicker && (
                 <div className="bg-card border border-border rounded-xl p-3 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="flex items-center justify-between mb-2">
@@ -1923,6 +2123,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 </div>
               )}
 
+              {/* Downloaded Episodes List (inline, right here) */}
               {downloadedEpisodes.length > 0 && (
                 <div className="bg-card border border-border rounded-xl p-3">
                   <p className="text-xs font-bold text-foreground mb-2 flex items-center gap-1.5">
@@ -1956,8 +2157,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           );
         })()}
 
+        {/* Season Selector + Episode List */}
         {episodeList && episodeList.length > 0 && (
           <div className="mt-4 bg-background rounded-xl p-4">
+            {/* Season selector */}
             {seasons && seasons.length > 1 && onSeasonChange && (
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-xs font-semibold text-muted-foreground">{seasons.length} Seasons</span>
@@ -1979,6 +2182,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               </div>
             )}
 
+            {/* Horizontal episode scroll */}
             <div className="grid grid-cols-5 gap-2 pb-2">
               {episodeList.map((ep) => (
                 <button
@@ -1997,6 +2201,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           </div>
         )}
 
+        {/* Suggested Videos */}
         {suggestedAnime && suggestedAnime.length > 0 && onSuggestedClick && (
           <div className="mt-4 bg-background rounded-xl p-4">
             <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5 text-foreground">
@@ -2032,6 +2237,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         )}
       </div>
 
+      {/* Offline Video Player Overlay */}
       {offlinePlaySrc && offlinePlayInfo && (
         <div className="fixed inset-0 z-[500] bg-black flex flex-col">
           <div className="flex items-center justify-between px-3 py-2 bg-card border-b border-border/30">
@@ -2057,6 +2263,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               style={{ objectFit: "contain" }}
             />
           </div>
+          {/* Other downloaded episodes navigation */}
           {downloadedEpisodes.length > 1 && (
             <div className="bg-card border-t border-border/30 p-3 max-h-[180px] overflow-y-auto">
               <p className="text-xs font-bold text-foreground mb-2">অন্যান্য ডাউনলোড</p>
