@@ -8,7 +8,6 @@ import {
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
-import animeCharImg from "@/assets/anime-loading-char.png";
 import { createUnlockLinksForAllServices, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 
@@ -124,11 +123,7 @@ const formatTime = (t: number) => {
 
 const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
   const branding = useBranding();
-  // Preload anime character image to prevent loading glitch
-  useEffect(() => {
-    const img = new Image();
-    img.src = animeCharImg;
-  }, []);
+  // Removed preload anime character image - no longer needed
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -722,7 +717,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     loaderTimeoutRef.current = setTimeout(() => {
       setShowFixedLoader(false);
       loaderTimeoutRef.current = null;
-    }, 1800);
+    }, 1200);
 
     // Also hide immediately when video fires canplay/playing
     const v = videoRef.current;
@@ -1332,7 +1327,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           if (v) { v.pause(); v.src = ''; v.load(); }
           if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
           onClose();
-        }} className="absolute top-5 right-5 z-[310] w-10 h-10 rounded-full gradient-primary flex items-center justify-center btn-glow transition-all hover:rotate-90">
+        }} className="absolute top-5 right-5 z-[310] w-10 h-10 rounded-full gradient-primary flex items-center justify-center transition-all">
           <X className="w-5 h-5" />
         </button>
       )}
@@ -1340,7 +1335,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full p-5'}`}>
         {!isFullscreen && (
           <div className="text-center mb-2.5">
-            <h1 className="text-2xl font-extrabold text-primary text-glow tracking-wider">{branding.playerName}</h1>
+            <h1 className="text-2xl font-extrabold text-primary tracking-wider">{branding.playerName}</h1>
           </div>
         )}
 
@@ -1359,7 +1354,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               ? "w-screen h-screen rounded-none" 
               : "w-full rounded-xl aspect-video"
           }`}
-          style={{ filter: `brightness(${brightness})`, willChange: "transform", margin: isFullscreen ? 0 : undefined }}
+          style={{ filter: `brightness(${brightness})`, margin: isFullscreen ? 0 : undefined }}
           onContextMenu={(e) => e.preventDefault()}
           onClick={handleVideoClick}
           onTouchStart={handleTouchStart}
@@ -1370,7 +1365,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             ref={videoRef}
             src={currentSrc}
             className="w-full h-full"
-            style={{ objectFit: cropModes[cropIndex], willChange: "transform", WebkitTouchCallout: "none", userSelect: "none" }}
+            style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
             playsInline
             preload="auto"
             controlsList="nodownload noplaybackrate noremoteplayback"
@@ -1394,47 +1389,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
-          {/* Loading/Buffering Overlay - Anime themed */}
+          {/* Loading Overlay - Simple spinner */}
           {showLoaderOverlay && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black z-15 pointer-events-none" style={{ opacity: 1, transition: "opacity 0.3s ease" }}>
-              <div className="flex flex-col items-center">
-                {/* RGB Spinner around anime character */}
-                <div className="relative w-20 h-20 flex items-center justify-center">
-                  <div className="absolute inset-0 rounded-full" style={{
-                    background: "conic-gradient(from 0deg, #ff0000, #ff8800, #ffff00, #00ff00, #00ffff, #0088ff, #8800ff, #ff00ff, #ff0000)",
-                    animation: "rgbSpin 1.5s linear infinite",
-                    padding: "3px",
-                    WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px))",
-                    mask: "radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px))",
-                    filter: "blur(0.5px) drop-shadow(0 0 8px rgba(255,0,255,0.4)) drop-shadow(0 0 15px rgba(0,255,255,0.3))"
-                  }} />
-                  <div className="absolute inset-[-4px] rounded-full opacity-40" style={{
-                    background: "conic-gradient(from 180deg, #ff0000, #00ff00, #0000ff, #ff0000)",
-                    animation: "rgbSpin 2.5s linear infinite reverse",
-                    WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))",
-                    mask: "radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))",
-                    filter: "blur(3px)"
-                  }} />
-                  <img src={animeCharImg} alt="" className="w-14 h-14 rounded-full object-cover"
-                    loading="eager" decoding="sync"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    style={{ animation: "charBounce 2s ease-in-out infinite", filter: "drop-shadow(0 0 6px rgba(150,100,255,0.5))" }} />
-                </div>
-                <div className="flex items-center gap-1.5 mt-3">
-                  <span className="text-[10px] font-semibold tracking-widest uppercase" style={{
-                    background: "linear-gradient(90deg, #ff0066, #00ffff, #ff00ff, #00ff88)",
-                    backgroundSize: "300% 100%",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    animation: "rgbTextShift 2s linear infinite"
-                  }}>Loading</span>
-                  <span className="flex gap-[3px]">
-                    <span className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <span className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <span className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                  </span>
-                </div>
-              </div>
+            <div className="absolute inset-0 flex items-center justify-center bg-black z-15 pointer-events-none">
+              <div className="w-10 h-10 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
             </div>
           )}
 
@@ -1504,7 +1462,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           {/* Controls Overlay - always dark bg for visibility in all themes */}
           {showControls && !locked && (
-            <div className="absolute inset-0 flex flex-col justify-between text-white" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)", willChange: "opacity", transition: "opacity 0.15s ease" }}>
+            <div className="absolute inset-0 flex flex-col justify-between text-white" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)", transition: "opacity 0.15s ease" }}>
               {/* Top controls */}
               <div className="flex justify-end gap-2 p-3">
                 <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1">
@@ -1564,7 +1522,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="w-10 h-10 rounded-full bg-foreground/20 flex items-center justify-center backdrop-blur">
                   <SkipBack className="w-5 h-5" />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="w-14 h-14 rounded-full gradient-primary flex items-center justify-center btn-glow">
+                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="w-14 h-14 rounded-full gradient-primary flex items-center justify-center">
                   {playing ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
                 </button>
                 <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="w-10 h-10 rounded-full bg-foreground/20 flex items-center justify-center backdrop-blur">
@@ -1587,7 +1545,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     <div
                       ref={progressRef}
                       className="h-full gradient-primary rounded-full relative"
-                      style={{ width: `${progress}%`, willChange: "width" }}
+                      style={{ width: `${progress}%` }}
                     >
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary shadow-[0_0_10px_hsla(355,85%,55%,0.6)]" />
                     </div>
