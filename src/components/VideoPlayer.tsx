@@ -1327,7 +1327,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           if (v) { v.pause(); v.src = ''; v.load(); }
           if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
           onClose();
-        }} className="absolute top-5 right-5 z-[310] w-10 h-10 rounded-full gradient-primary flex items-center justify-center btn-glow transition-all hover:rotate-90">
+        }} className="absolute top-5 right-5 z-[310] w-10 h-10 rounded-full gradient-primary flex items-center justify-center transition-all">
           <X className="w-5 h-5" />
         </button>
       )}
@@ -1335,7 +1335,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full p-5'}`}>
         {!isFullscreen && (
           <div className="text-center mb-2.5">
-            <h1 className="text-2xl font-extrabold text-primary text-glow tracking-wider">{branding.playerName}</h1>
+            <h1 className="text-2xl font-extrabold text-primary tracking-wider">{branding.playerName}</h1>
           </div>
         )}
 
@@ -1354,7 +1354,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               ? "w-screen h-screen rounded-none" 
               : "w-full rounded-xl aspect-video"
           }`}
-          style={{ filter: `brightness(${brightness})`, willChange: "transform", margin: isFullscreen ? 0 : undefined }}
+          style={{ filter: `brightness(${brightness})`, margin: isFullscreen ? 0 : undefined }}
           onContextMenu={(e) => e.preventDefault()}
           onClick={handleVideoClick}
           onTouchStart={handleTouchStart}
@@ -1365,7 +1365,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             ref={videoRef}
             src={currentSrc}
             className="w-full h-full"
-            style={{ objectFit: cropModes[cropIndex], willChange: "transform", WebkitTouchCallout: "none", userSelect: "none" }}
+            style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
             playsInline
             preload="auto"
             controlsList="nodownload noplaybackrate noremoteplayback"
@@ -1522,7 +1522,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="w-10 h-10 rounded-full bg-foreground/20 flex items-center justify-center backdrop-blur">
                   <SkipBack className="w-5 h-5" />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="w-14 h-14 rounded-full gradient-primary flex items-center justify-center btn-glow">
+                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="w-14 h-14 rounded-full gradient-primary flex items-center justify-center">
                   {playing ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
                 </button>
                 <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="w-10 h-10 rounded-full bg-foreground/20 flex items-center justify-center backdrop-blur">
