@@ -28,12 +28,14 @@ export interface MonetagFormatConfig {
 export interface MonetagSettings {
   masterEnabled: boolean;
   shortenerEnabled: boolean; // master switch for ad-link shortener system
+  verificationCode?: string; // Main SDK / site-ownership verification tag (injected into <head>)
   formats: Partial<Record<MonetagFormat, MonetagFormatConfig>>;
 }
 
 const DEFAULT_SETTINGS: MonetagSettings = {
   masterEnabled: false,
   shortenerEnabled: true,
+  verificationCode: "",
   formats: {},
 };
 
@@ -61,6 +63,7 @@ export function subscribeMonetagSettings(cb: (s: MonetagSettings) => void): () =
     const merged: MonetagSettings = {
       masterEnabled: !!val.masterEnabled,
       shortenerEnabled: val.shortenerEnabled !== false,
+      verificationCode: val.verificationCode || "",
       formats: val.formats || {},
     };
     cachedSettings = merged;
@@ -78,6 +81,7 @@ export async function getMonetagSettings(): Promise<MonetagSettings> {
     cachedSettings = {
       masterEnabled: !!val.masterEnabled,
       shortenerEnabled: val.shortenerEnabled !== false,
+      verificationCode: val.verificationCode || "",
       formats: val.formats || {},
     };
     return cachedSettings;
@@ -111,15 +115,63 @@ function injectRawScript(code: string, idTag: string): boolean {
   }
 }
 
+// Inject Monetag verification / Main SDK tag into <head>.
+// REQUIRED for Monetag site ownership verification. Runs for ALL users (premium too)
+// because the verification tag itself serves no ads — it's just ownership proof.
+function injectVerificationTag(code: string): boolean {
+  if (typeof document === "undefined") return false;
+  if (document.getElementById("monetag-verification")) return false;
+  const trimmed = (code || "").trim();
+  if (!trimmed) return false;
+  try {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = trimmed.includes("<script") || trimmed.includes("<meta")
+      ? trimmed
+      : `<script>${trimmed}</script>`;
+    const head = document.head || document.documentElement;
+
+    // Inject scripts
+    const scripts = wrapper.querySelectorAll("script");
+    scripts.forEach((old, i) => {
+      const s = document.createElement("script");
+      Array.from(old.attributes).forEach((a) => s.setAttribute(a.name, a.value));
+      if (old.textContent) s.textContent = old.textContent;
+      if (i === 0) s.id = "monetag-verification";
+      head.appendChild(s);
+    });
+
+    // Inject any meta tags (Monetag sometimes uses <meta name="monetag" content="...">)
+    const metas = wrapper.querySelectorAll("meta");
+    metas.forEach((m) => {
+      const name = m.getAttribute("name");
+      if (name && head.querySelector(`meta[name="${name}"]`)) return;
+      head.appendChild(m.cloneNode(true));
+    });
+    return true;
+  } catch (e) {
+    console.warn("[Monetag] verification inject failed:", e);
+    return false;
+  }
+}
+
 // ---- Public API ----
 
 /**
  * Initialize global Monetag SDK & site-wide formats (multitag, push, onclick).
- * Premium users get ZERO ads — bails out immediately.
+ * Verification tag runs for ALL users (no ads served — ownership proof only).
+ * Premium users get ZERO actual ads.
  * Call once on app boot.
  */
 export async function initMonetag(): Promise<void> {
-  // PREMIUM = NO ADS, EVER
+  // Step 1: Inject verification tag for EVERYONE (premium too) — required for Monetag verification
+  try {
+    const verifySettings = await getMonetagSettings();
+    if (verifySettings.verificationCode) {
+      injectVerificationTag(verifySettings.verificationCode);
+    }
+  } catch {}
+
+  // Step 2: PREMIUM = NO ADS, EVER (skip all real ad formats)
   if (await isCurrentUserPremium()) {
     if (typeof window !== "undefined") (window as any).__MONETAG_BLOCKED__ = true;
     return;
