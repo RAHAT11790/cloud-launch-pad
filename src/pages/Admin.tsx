@@ -634,6 +634,9 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
 
   return (
     <div>
+      {/* Monetag Ads Manager */}
+      <MonetagAdsSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+
       {/* Ad Services (Unlock Buttons) */}
       <AdServicesSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
