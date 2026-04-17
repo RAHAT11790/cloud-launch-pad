@@ -10,8 +10,8 @@ import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
 import { createUnlockLinksForAllServices, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
-import { isShortenerEnabled } from "@/lib/monetagAds";
-import MonetagAd from "@/components/MonetagAd";
+// Shortener gate is always-on now (Monetag system removed)
+const isShortenerEnabled = async () => true;
 
 interface QualityOption {
   label: string;
@@ -821,27 +821,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
   }, [title, subtitle, poster, onNextEpisode, onClose]);
 
+  // Pure manual toggle — no auto-hide. One tap shows, another tap hides.
   const resetHideTimer = useCallback(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
     setShowControls(true);
-    hideTimer.current = setTimeout(() => setShowControls(false), 3000);
   }, []);
 
   const toggleControls = useCallback(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    setShowControls(prev => {
-      const next = !prev;
-      if (next) {
-        hideTimer.current = setTimeout(() => setShowControls(false), 3000);
-      }
-      return next;
-    });
+    setShowControls(prev => !prev);
   }, []);
-
-  useEffect(() => {
-    resetHideTimer();
-    return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
-  }, [resetHideTimer]);
 
   // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
   const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !serverSwitchingRef.current;
@@ -1387,24 +1374,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          {/* Thumbnail placeholder - shown until video has data */}
-          {(isBuffering || showFixedLoader) && !videoError && (
-            <div className="absolute inset-0 z-[5] flex items-center justify-center bg-black">
-              {poster ? (
-                <img src={poster} alt="" className="w-full h-full object-cover opacity-60" />
-              ) : (
-                <img src={logoImg} alt="" className="w-20 h-20 object-contain opacity-40" />
-              )}
-            </div>
-          )}
+          {/* No thumbnail/poster overlay — solid black bg only for fast load */}
           <video
             ref={videoRef}
             src={currentSrc}
-            className="w-full h-full"
+            className="w-full h-full bg-black"
             style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
             playsInline
             preload="auto"
-            poster={poster || undefined}
             controlsList="nodownload noplaybackrate noremoteplayback"
             disablePictureInPicture
             disableRemotePlayback

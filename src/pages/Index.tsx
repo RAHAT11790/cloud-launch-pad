@@ -47,8 +47,8 @@ import { toast } from "sonner";
 import { registerFCMToken } from "@/lib/fcm";
 import { createUnlockLinkForCurrentUser } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
-import { isShortenerEnabled } from "@/lib/monetagAds";
-import MonetagAd from "@/components/MonetagAd";
+// Shortener gate is always-on now (Monetag system removed)
+const isShortenerEnabled = async () => true;
 
 type MainPage = "home" | "series" | "livetv" | "movies";
 
