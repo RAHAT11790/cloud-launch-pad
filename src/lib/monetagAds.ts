@@ -28,12 +28,14 @@ export interface MonetagFormatConfig {
 export interface MonetagSettings {
   masterEnabled: boolean;
   shortenerEnabled: boolean; // master switch for ad-link shortener system
+  verificationCode?: string; // Main SDK / site-ownership verification tag (injected into <head>)
   formats: Partial<Record<MonetagFormat, MonetagFormatConfig>>;
 }
 
 const DEFAULT_SETTINGS: MonetagSettings = {
   masterEnabled: false,
   shortenerEnabled: true,
+  verificationCode: "",
   formats: {},
 };
 
@@ -61,6 +63,7 @@ export function subscribeMonetagSettings(cb: (s: MonetagSettings) => void): () =
     const merged: MonetagSettings = {
       masterEnabled: !!val.masterEnabled,
       shortenerEnabled: val.shortenerEnabled !== false,
+      verificationCode: val.verificationCode || "",
       formats: val.formats || {},
     };
     cachedSettings = merged;
@@ -78,6 +81,7 @@ export async function getMonetagSettings(): Promise<MonetagSettings> {
     cachedSettings = {
       masterEnabled: !!val.masterEnabled,
       shortenerEnabled: val.shortenerEnabled !== false,
+      verificationCode: val.verificationCode || "",
       formats: val.formats || {},
     };
     return cachedSettings;
