@@ -829,6 +829,33 @@ const MonetagAdsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         </div>
       </div>
 
+      {/* Main SDK / Verification Tag — REQUIRED for Monetag site verification */}
+      <div className="bg-zinc-800/40 rounded-xl p-3 border border-blue-500/40 mb-4">
+        <p className="text-xs font-semibold text-white mb-1">🔐 Main SDK / Verification Tag</p>
+        <p className="text-[10px] text-zinc-400 mb-2">
+          Monetag dashboard থেকে site verification এর জন্য যে কোডটা পাবে (পুরো <code>&lt;script&gt;...&lt;/script&gt;</code> বা <code>&lt;meta&gt;</code> tag) এটা এখানে paste করো। এটা <code>&lt;head&gt;</code> এ inject হবে এবং প্রিমিয়াম ইউজারদের জন্যও runs (no ads serve হয় না, শুধু ownership prove)।
+        </p>
+        <textarea
+          value={drafts.__verification ?? settings.verificationCode ?? ""}
+          onChange={(e) => setDrafts((p) => ({ ...p, __verification: e.target.value }))}
+          placeholder={`<script>(function(s){s.dataset.zone='10888265',s.src='https://nap5k.com/tag.min.js'})([document.documentElement,document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>`}
+          rows={4}
+          className={`${inputClass} !text-[10px] font-mono mb-2`}
+        />
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={async () => {
+              const code = (drafts.__verification ?? settings.verificationCode ?? "").trim();
+              await set(ref(db, "settings/monetagAds/verificationCode"), code);
+              toast.success("🔐 Verification tag সেভ হয়েছে — পেজ refresh করো");
+            }}
+            className={`${btnPrimary} !py-1.5 !px-3 !text-[11px]`}
+          >
+            <Save size={11} /> Save Verification
+          </button>
+        </div>
+      </div>
+
       {/* Format cards */}
       <div className="space-y-3">
         {MONETAG_FORMATS.map((fmt) => {
