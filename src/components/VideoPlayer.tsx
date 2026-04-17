@@ -10,6 +10,8 @@ import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
 import { createUnlockLinksForAllServices, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
+import { isShortenerEnabled } from "@/lib/monetagAds";
+import MonetagAd from "@/components/MonetagAd";
 
 interface QualityOption {
   label: string;
@@ -440,19 +442,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setAdGateActive(false);
       return;
     }
-    // No access - block video and show ad gate
-    setAdGateActive(true);
-    // Pause video immediately to prevent playing without access
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.src = '';
-    }
-    setShortenLoading(true);
-    createUnlockLinksForAllServices().then((result) => {
-      setShortenLoading(false);
-      if (result.ok && result.links.length > 0) setAdLinks(result.links);
-      else setAdGateActive(false);
-    }).catch(() => { setShortenLoading(false); setAdGateActive(false); });
+    // Shortener master toggle: if admin disabled it, give free users instant access
+    isShortenerEnabled().then((on) => {
+      if (!on) { setAdGateActive(false); return; }
+      // No access - block video and show ad gate
+      setAdGateActive(true);
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.src = '';
+      }
+      setShortenLoading(true);
+      createUnlockLinksForAllServices().then((result) => {
+        setShortenLoading(false);
+        if (result.ok && result.links.length > 0) setAdLinks(result.links);
+        else setAdGateActive(false);
+      }).catch(() => { setShortenLoading(false); setAdGateActive(false); });
+    });
   }, [isPremium, has24hAccess, unlockBlocked]);
 
   const handleOpenAdLink = useCallback((url: string) => {

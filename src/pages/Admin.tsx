@@ -634,6 +634,9 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
 
   return (
     <div>
+      {/* Monetag Ads Manager */}
+      <MonetagAdsSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+
       {/* Ad Services (Unlock Buttons) */}
       <AdServicesSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
@@ -720,6 +723,222 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== MONETAG ADS SECTION ====================
+const MONETAG_FORMATS: { key: string; label: string; icon: string; description: string; needsScript: boolean; needsDirectUrl?: boolean; needsSwConfig?: boolean; placementsAllowed?: boolean }[] = [
+  { key: "multitag", label: "Multitag (All-in-One)", icon: "🎯", description: "Recommended fully-automated multipurpose monetization. Site-wide global script.", needsScript: true },
+  { key: "banner", label: "Banner (300x250 / 728x90)", icon: "📰", description: "Classic display ad in Home / Details / Search placements.", needsScript: true, placementsAllowed: true },
+  { key: "in_page_push", label: "In-Page Push", icon: "🔔", description: "Native-like banner ads embedded inside content.", needsScript: true, placementsAllowed: true },
+  { key: "push_notifications", label: "Push Notifications (Service Worker)", icon: "📬", description: "Web push notifications. Needs domain + zone ID for the SW.", needsScript: false, needsSwConfig: true },
+  { key: "vignette", label: "Vignette Banner", icon: "🪟", description: "65% higher CPM, AdBlock-resistant overlay banner. Site-wide.", needsScript: true, placementsAllowed: true },
+  { key: "direct_link", label: "Direct Link", icon: "🔗", description: "Direct ad URL — open via buttons / unlock flow.", needsScript: false, needsDirectUrl: true, placementsAllowed: true },
+  { key: "onclick", label: "Onclick / Popunder", icon: "💥", description: "Full-tab popunder ad. High CPM. Site-wide global script.", needsScript: true },
+];
+
+const MonetagAdsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
+  const [settings, setSettings] = useState<any>({ masterEnabled: false, shortenerEnabled: true, formats: {} });
+  const [drafts, setDrafts] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/monetagAds"), (snap) => {
+      const v = snap.val() || {};
+      const s = { masterEnabled: !!v.masterEnabled, shortenerEnabled: v.shortenerEnabled !== false, formats: v.formats || {} };
+      setSettings(s);
+      setDrafts(s.formats);
+    });
+    return () => unsub();
+  }, []);
+
+  const toggleMaster = async () => {
+    await set(ref(db, "settings/monetagAds/masterEnabled"), !settings.masterEnabled);
+    toast.success(settings.masterEnabled ? "🚫 Monetag বন্ধ হয়েছে" : "✅ Monetag চালু হয়েছে");
+  };
+
+  const toggleShortener = async () => {
+    await set(ref(db, "settings/monetagAds/shortenerEnabled"), !settings.shortenerEnabled);
+    toast.success(settings.shortenerEnabled
+      ? "🔓 Shortener বন্ধ — ফ্রি ইউজাররা ad ছাড়াই অ্যাক্সেস পাবে"
+      : "🔒 Shortener চালু — ফ্রি ইউজারদের ad-link ভাঙতে হবে");
+  };
+
+  const toggleFormat = async (key: string) => {
+    const cur = settings.formats?.[key]?.enabled;
+    await set(ref(db, `settings/monetagAds/formats/${key}/enabled`), !cur);
+    toast.success(`${cur ? "🚫" : "✅"} ${key}`);
+  };
+
+  const saveFormat = async (key: string) => {
+    const d = drafts[key] || {};
+    const payload: any = {
+      enabled: !!settings.formats?.[key]?.enabled,
+      scriptCode: d.scriptCode || "",
+      zoneId: d.zoneId || "",
+      domain: d.domain || "",
+      swZoneId: d.swZoneId ? Number(d.swZoneId) : null,
+      swPath: d.swPath || "",
+      directLinkUrl: d.directLinkUrl || "",
+      placements: Array.isArray(d.placements) ? d.placements : [],
+    };
+    await set(ref(db, `settings/monetagAds/formats/${key}`), payload);
+    toast.success(`💾 ${key} সেভ হয়েছে`);
+  };
+
+  const togglePlacement = (key: string, placement: string) => {
+    setDrafts((prev) => {
+      const cur = prev[key] || {};
+      const list: string[] = Array.isArray(cur.placements) ? cur.placements : [];
+      const next = list.includes(placement) ? list.filter((p) => p !== placement) : [...list, placement];
+      return { ...prev, [key]: { ...cur, placements: next } };
+    });
+  };
+
+  return (
+    <div className={`${glassCard} p-4 mb-4`}>
+      <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+        <Zap size={14} className="text-yellow-400" /> 💰 Monetag Ads Manager
+      </h3>
+      <p className="text-[10px] text-zinc-400 mb-4">
+        ৭টি অ্যাড ফরম্যাট। প্রিমিয়াম ইউজাররা সম্পূর্ণ অ্যাড-ফ্রি (০ অ্যাড)। প্রতিটি ফরম্যাটের জন্য Monetag ড্যাশবোর্ড থেকে স্ক্রিপ্ট কোড কপি করে paste করো।
+      </p>
+
+      {/* Master switches */}
+      <div className="bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40 mb-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-white">🌐 Monetag Master</p>
+            <p className="text-[10px] text-zinc-400">পুরো অ্যাড সিস্টেম on/off</p>
+          </div>
+          <button onClick={toggleMaster}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.masterEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${settings.masterEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+        <div className="flex items-center justify-between border-t border-zinc-700/40 pt-3">
+          <div>
+            <p className="text-xs font-semibold text-white">🔗 Link Shortener Gate</p>
+            <p className="text-[10px] text-zinc-400">বন্ধ করলে ফ্রি ইউজার সরাসরি ভিডিও দেখতে পাবে (no ad-gate)</p>
+          </div>
+          <button onClick={toggleShortener}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.shortenerEnabled ? 'bg-green-600' : 'bg-amber-600'}`}>
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${settings.shortenerEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Format cards */}
+      <div className="space-y-3">
+        {MONETAG_FORMATS.map((fmt) => {
+          const cfg = settings.formats?.[fmt.key] || {};
+          const draft = drafts[fmt.key] || {};
+          const enabled = !!cfg.enabled;
+          return (
+            <div key={fmt.key} className={`bg-zinc-800/40 rounded-xl p-3 border ${enabled ? "border-green-500/40" : "border-zinc-700/40"}`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-base">{fmt.icon}</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-white truncate">{fmt.label}</p>
+                    <p className="text-[9px] text-zinc-400 truncate">{fmt.description}</p>
+                  </div>
+                </div>
+                <button onClick={() => toggleFormat(fmt.key)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ${enabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
+                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+
+              {fmt.needsScript && (
+                <div className="mb-2">
+                  <label className="text-[10px] text-zinc-400 mb-1 block">Script Code (Monetag থেকে কপি করো)</label>
+                  <textarea
+                    value={draft.scriptCode || ""}
+                    onChange={(e) => setDrafts((p) => ({ ...p, [fmt.key]: { ...draft, scriptCode: e.target.value } }))}
+                    placeholder={`<script>(function(s){s.dataset.zone='10888265',s.src='https://nap5k.com/tag.min.js'})(...)</script>`}
+                    rows={3}
+                    className={`${inputClass} !text-[10px] font-mono`}
+                  />
+                </div>
+              )}
+
+              {fmt.needsDirectUrl && (
+                <div className="mb-2">
+                  <label className="text-[10px] text-zinc-400 mb-1 block">Direct Link URL</label>
+                  <input
+                    value={draft.directLinkUrl || ""}
+                    onChange={(e) => setDrafts((p) => ({ ...p, [fmt.key]: { ...draft, directLinkUrl: e.target.value } }))}
+                    placeholder="https://nap5k.com/4/..."
+                    className={`${inputClass} !text-[10px]`}
+                  />
+                </div>
+              )}
+
+              {fmt.needsSwConfig && (
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div>
+                    <label className="text-[10px] text-zinc-400 mb-1 block">SW Domain</label>
+                    <input
+                      value={draft.domain || ""}
+                      onChange={(e) => setDrafts((p) => ({ ...p, [fmt.key]: { ...draft, domain: e.target.value } }))}
+                      placeholder="3nbf4.com"
+                      className={`${inputClass} !text-[10px]`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-400 mb-1 block">SW Zone ID</label>
+                    <input
+                      type="number"
+                      value={draft.swZoneId || ""}
+                      onChange={(e) => setDrafts((p) => ({ ...p, [fmt.key]: { ...draft, swZoneId: e.target.value } }))}
+                      placeholder="10888250"
+                      className={`${inputClass} !text-[10px]`}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[10px] text-zinc-400 mb-1 block">SW Path (optional)</label>
+                    <input
+                      value={draft.swPath || ""}
+                      onChange={(e) => setDrafts((p) => ({ ...p, [fmt.key]: { ...draft, swPath: e.target.value } }))}
+                      placeholder="/act/files/service-worker.min.js?r=sw"
+                      className={`${inputClass} !text-[10px] font-mono`}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {fmt.placementsAllowed && (
+                <div className="mb-2">
+                  <label className="text-[10px] text-zinc-400 mb-1 block">কোথায় দেখাবে (Placements)</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { v: "home", l: "🏠 Home" },
+                      { v: "details", l: "📺 Details" },
+                      { v: "player", l: "▶️ Player" },
+                      { v: "search", l: "🔍 Search" },
+                    ].map((p) => {
+                      const active = (draft.placements || []).includes(p.v);
+                      return (
+                        <button key={p.v} onClick={() => togglePlacement(fmt.key, p.v)}
+                          className={`px-2 py-1 rounded-full text-[10px] border transition-colors ${active ? 'bg-green-600 border-green-500 text-white' : 'bg-zinc-900/60 border-zinc-700 text-zinc-400'}`}>
+                          {p.l}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button onClick={() => saveFormat(fmt.key)} className={`${btnPrimary} !py-1.5 !px-3 !text-[11px]`}>
+                  <Save size={11} /> Save
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

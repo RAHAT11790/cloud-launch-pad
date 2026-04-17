@@ -7,6 +7,7 @@ import { getAnimeTitleStyle } from "@/lib/animeFonts";
 import { sendPushToUsers } from "@/lib/fcm";
 import { SITE_URL } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
+import MonetagAd from "@/components/MonetagAd";
 
 interface AnimeDetailsProps {
   anime: AnimeItem;
@@ -339,6 +340,8 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
           <h3 className="text-[15px] font-bold mb-3 flex items-center gap-2">
             <MessageCircle className="w-4 h-4 text-primary" /> Comments ({comments.length})
           </h3>
+          {/* Monetag — details placement */}
+          <MonetagAd placement="details" className="mb-3 min-h-[1px]" />
           {userId && (
             <div className="flex gap-2 mb-3 items-end">
               <textarea

@@ -47,6 +47,8 @@ import { toast } from "sonner";
 import { registerFCMToken } from "@/lib/fcm";
 import { createUnlockLinkForCurrentUser } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
+import { isShortenerEnabled } from "@/lib/monetagAds";
+import MonetagAd from "@/components/MonetagAd";
 
 type MainPage = "home" | "series" | "livetv" | "movies";
 
@@ -269,6 +271,10 @@ const Index = () => {
     if (saltIsPremium) return true;
 
     if (hasFreeAccess()) return true;
+
+    // If admin disabled the shortener system entirely, free users get instant access (no ad-gate).
+    const shortenerOn = await isShortenerEnabled();
+    if (!shortenerOn) return true;
 
     // Show ad-gate
     setSaltAdGateActive(true);
