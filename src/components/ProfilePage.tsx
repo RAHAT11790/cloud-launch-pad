@@ -775,6 +775,28 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
       setTrxInput("");
       setBkashSenderNumber("");
       toast.success(isEditingExistingRequest ? "Payment request updated!" : "Payment request submitted!");
+
+      // 🔁 Instant auto-match attempt — if the SMS has already been forwarded
+      // by the Android side, the user gets premium without admin intervention.
+      try {
+        const { tryMatchPayment } = await import("@/lib/bkashAutoMatcher");
+        const reqId = isEditingExistingRequest
+          ? pendingPaymentRequest!.id
+          : (await get(query(ref(db, "bkashPayments"), orderByChild("transactionId"), equalTo(trxInput.trim()))));
+        const requestSnapshot = isEditingExistingRequest
+          ? { ...pendingPaymentRequest, ...paymentData, id: pendingPaymentRequest!.id }
+          : (() => {
+              const data = (reqId as any)?.val?.() || {};
+              const entry = Object.entries<any>(data)[0];
+              return entry ? { id: entry[0], ...entry[1] } : null;
+            })();
+        if (requestSnapshot) {
+          const matched = await tryMatchPayment(requestSnapshot as any);
+          if (matched) toast.success("⚡ Auto-verified! Premium activated instantly.");
+        }
+      } catch (matchErr) {
+        console.warn("[bkash] auto-match attempt failed", matchErr);
+      }
     } catch (err: any) {
       toast.error("Error: " + err.message);
     } finally {
