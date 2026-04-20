@@ -1389,13 +1389,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
       {/* Close button */}
       {!isFullscreen && (
-        <button onClick={() => {
-          // Stop video completely before closing
-          const v = videoRef.current;
-          if (v) { v.pause(); v.src = ''; v.load(); }
-          if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
-          onClose();
-        }} className="absolute top-5 right-5 z-[310] w-10 h-10 rounded-full gradient-primary flex items-center justify-center transition-all">
+          <button onClick={stopAndClosePlayer} className="absolute top-5 right-5 z-[310] w-10 h-10 rounded-full gradient-primary flex items-center justify-center transition-all">
           <X className="w-5 h-5" />
         </button>
       )}
@@ -1724,13 +1718,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           {/* Locked indicator */}
           {locked && showControls && (
             <div className="absolute top-3 right-3 z-20" onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => { setLocked(false); resetHideTimer(); }} className="player-glass w-10 h-10 rounded-full flex items-center justify-center">
+              <button onClick={() => { setLocked(false); setShowControls(true); scheduleHideTimer(); }} className="player-glass w-10 h-10 rounded-full flex items-center justify-center">
                 <Unlock className="w-4 h-4 text-primary" />
               </button>
             </div>
           )}
           {locked && !showControls && (
-            <div className="absolute inset-0" onClick={(e) => { e.stopPropagation(); resetHideTimer(); }} />
+            <div className="absolute inset-0" onClick={(e) => { e.stopPropagation(); setShowControls(true); scheduleHideTimer(); }} />
           )}
 
           {/* Settings panel */}
