@@ -773,6 +773,45 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     v.volume = muted ? 0 : Math.min(1, boostedVolume / 100);
   }, [boostedVolume, muted, currentSrc]);
 
+  const clearHideTimer = useCallback(() => {
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+  }, []);
+
+  const stopAndClosePlayer = useCallback(async () => {
+    clearHideTimer();
+    setShowControls(false);
+    setLocked(false);
+    setShowSettings(false);
+    setShowAudioPanel(false);
+    setShowQualityPanel(false);
+    setShowServerPanel(false);
+
+    try {
+      if (document.fullscreenElement) {
+        try { (screen.orientation as any).unlock?.(); } catch {}
+        await document.exitFullscreen().catch(() => {});
+      }
+    } catch {}
+
+    const v = videoRef.current;
+    if (v) {
+      try { v.pause(); } catch {}
+      v.removeAttribute("src");
+      v.src = "";
+      v.load();
+    }
+
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = 'none';
+    }
+
+    onClose();
+  }, [clearHideTimer, onClose]);
+
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
     if ('mediaSession' in navigator) {
@@ -801,15 +840,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       navigator.mediaSession.setActionHandler('seekbackward', () => seek(-10));
       navigator.mediaSession.setActionHandler('seekforward', () => seek(10));
       // Stop button - closes video and removes notification
-      navigator.mediaSession.setActionHandler('stop', () => {
-        if (videoRef.current) {
-          videoRef.current.pause();
-          videoRef.current.src = '';
-        }
-        navigator.mediaSession.metadata = null;
-        navigator.mediaSession.playbackState = 'none';
-        onClose();
-      });
+      navigator.mediaSession.setActionHandler('stop', stopAndClosePlayer);
       if (onNextEpisode) {
         navigator.mediaSession.setActionHandler('nexttrack', onNextEpisode);
       }
@@ -820,16 +851,39 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         navigator.mediaSession.setActionHandler('stop', null);
       }
     };
-  }, [title, subtitle, poster, onNextEpisode, onClose]);
+  }, [title, subtitle, poster, onNextEpisode, stopAndClosePlayer]);
 
-  // Pure manual toggle — no auto-hide. One tap shows, another tap hides.
+  const scheduleHideTimer = useCallback(() => {
+    clearHideTimer();
+    if (adGateActive || showSettings || showAudioPanel || showQualityPanel || showServerPanel || showDownloadQualityPicker) return;
+    hideTimer.current = setTimeout(() => {
+      setShowControls(false);
+    }, locked ? 1400 : 2600);
+  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings]);
+
   const resetHideTimer = useCallback(() => {
     setShowControls(true);
-  }, []);
+    scheduleHideTimer();
+  }, [scheduleHideTimer]);
 
   const toggleControls = useCallback(() => {
-    setShowControls(prev => !prev);
-  }, []);
+    setShowControls((prev) => {
+      const next = !prev;
+      if (!next) {
+        clearHideTimer();
+      } else {
+        setTimeout(() => scheduleHideTimer(), 0);
+      }
+      return next;
+    });
+  }, [clearHideTimer, scheduleHideTimer]);
+
+  useEffect(() => {
+    if (showControls) scheduleHideTimer();
+    else clearHideTimer();
+
+    return clearHideTimer;
+  }, [showControls, scheduleHideTimer, clearHideTimer]);
 
   // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
   const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !serverSwitchingRef.current;
