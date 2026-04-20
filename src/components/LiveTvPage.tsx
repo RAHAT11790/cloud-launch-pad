@@ -17,9 +17,10 @@ interface TvChannel {
 interface LiveTvPageProps {
   onBack?: () => void;
   onExitPlayer?: () => void;
+  isActive?: boolean;
 }
 
-const LiveTvPage = ({ onBack, onExitPlayer }: LiveTvPageProps) => {
+const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) => {
   const [channels, setChannels] = useState<TvChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeChannel, setActiveChannel] = useState<TvChannel | null>(null);
@@ -49,6 +50,12 @@ const LiveTvPage = ({ onBack, onExitPlayer }: LiveTvPageProps) => {
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!isActive && activeChannel) {
+      setActiveChannel(null);
+    }
+  }, [isActive, activeChannel]);
 
   const categories = useMemo(() => {
     const cats = new Set<string>();

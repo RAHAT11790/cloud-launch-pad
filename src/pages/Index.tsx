@@ -1928,7 +1928,7 @@ const Index = () => {
             >
               {page === "home" && getPageContent_home()}
               {page === "series" && getPageContent_series()}
-              {page === "livetv" && <LiveTvPage onExitPlayer={() => setActivePage("home")} />}
+              {page === "livetv" && <LiveTvPage isActive={activePage === "livetv"} onExitPlayer={() => setActivePage("home")} />}
               {page === "movies" && getPageContent_movies()}
             </div>
           ))}
