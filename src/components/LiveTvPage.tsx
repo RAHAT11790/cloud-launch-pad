@@ -82,6 +82,7 @@ const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
         onClose={() => setActiveChannel(null)}
         hideDownload
         noProxy
+        noServerSwitch
         suggestedAnime={suggestedChannels.map(ch => ({
           id: ch.id,
           title: ch.name,
