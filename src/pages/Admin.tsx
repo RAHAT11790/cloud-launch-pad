@@ -2217,7 +2217,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     return () => unsub();
   }, [activeSection]);
 
-  // Lazy-load bKash settings & payment requests
+  // Lazy-load bKash settings & payment requests + SMS feed + global auto-matcher
+  const [bkashSmsFeed, setBkashSmsFeed] = useState<any[]>([]);
   useEffect(() => {
     if (activeSection !== "bkash-payments" && activeSection !== "dashboard") return;
     const unsubs: (() => void)[] = [];
@@ -2232,7 +2233,22 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       const data = snap.val() || {};
       setBkashPaymentRequests(Object.entries(data).map(([id, item]: any) => ({ id, ...item })).sort((a: any, b: any) => (b.submittedAt || 0) - (a.submittedAt || 0)));
     }));
-    return () => unsubs.forEach(u => u());
+    unsubs.push(onValue(ref(db, "XNXANIKPAY"), (snap) => {
+      const data = snap.val() || {};
+      setBkashSmsFeed(Object.entries(data).map(([txid, item]: any) => ({ txid, ...item }))
+        .sort((a: any, b: any) => (b.receivedAt || b.consumedAt || 0) - (a.receivedAt || a.consumedAt || 0)));
+    }));
+    // 🔁 Start GLOBAL auto-matcher while admin panel is open on bkash section
+    let stopMatcher: (() => void) | null = null;
+    if (activeSection === "bkash-payments") {
+      import("@/lib/bkashAutoMatcher").then(({ startGlobalAutoMatcher }) => {
+        stopMatcher = startGlobalAutoMatcher();
+      }).catch(() => {});
+    }
+    return () => {
+      unsubs.forEach(u => u());
+      if (stopMatcher) stopMatcher();
+    };
   }, [activeSection]);
 
   // Lazy-load COMMENTS data
