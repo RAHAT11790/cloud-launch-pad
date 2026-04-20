@@ -15,7 +15,7 @@
  *     ANY pending bkashPayments request as soon as a matching SMS lands.
  */
 
-import { db, ref, get, set, update, push, onValue, off, remove } from "@/lib/firebase";
+import { db, ref, get, set, update, push, onValue, remove } from "@/lib/firebase";
 
 const SMS_NODE = "XNXANIKPAY";
 const PAYMENTS_NODE = "bkashPayments";
