@@ -5819,6 +5819,70 @@ ${tgHashtags}`;
                 ))}
               </div>
             </div>
+
+            {/* ==================== LIVE SMS FEED (Auto Payment) ==================== */}
+            <div className={`${glassCard} p-4 mt-4`}>
+              <div className="flex items-center justify-between mb-3.5">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                  </span>
+                  Live SMS Feed (Auto-Match)
+                </h3>
+                <button
+                  onClick={async () => {
+                    const { pruneOldSmsEntries } = await import("@/lib/bkashAutoMatcher");
+                    const n = await pruneOldSmsEntries(30);
+                    toast.success(`Pruned ${n} old SMS entries`);
+                  }}
+                  className="text-[10px] px-2 py-1 rounded-md bg-white/10 hover:bg-white/20"
+                >
+                  🧹 Prune (30d+)
+                </button>
+              </div>
+              <p className="text-[11px] text-zinc-400 mb-3">
+                Android SMS-forwarder app থেকে আসা SMS এখানে দেখাবে। User TrxID submit করলেই auto-match হবে।
+                Total: <span className="text-white font-semibold">{bkashSmsFeed.length}</span> ·
+                Consumed: <span className="text-green-400 font-semibold">{bkashSmsFeed.filter((s:any)=>s.consumed).length}</span> ·
+                Unmatched: <span className="text-yellow-400 font-semibold">{bkashSmsFeed.filter((s:any)=>!s.consumed).length}</span>
+              </p>
+              <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                {bkashSmsFeed.length === 0 && (
+                  <div className="text-center py-8 text-zinc-500 text-xs">
+                    <p>📭 কোনো SMS এখনো forward হয়নি।</p>
+                    <p className="mt-1 text-[10px]">Android app টি ফোনে install করুন এবং Auto Add Money Service চালু করুন।</p>
+                  </div>
+                )}
+                {bkashSmsFeed.slice(0, 50).map((sms: any) => {
+                  const typeMap: Record<string, { label: string; color: string }> = {
+                    B: { label: "bKash", color: "bg-pink-500/20 text-pink-300 border-pink-500/40" },
+                    N: { label: "Nagad", color: "bg-orange-500/20 text-orange-300 border-orange-500/40" },
+                    R: { label: "Rocket", color: "bg-purple-500/20 text-purple-300 border-purple-500/40" },
+                  };
+                  const t = typeMap[sms.type] || { label: sms.type || "Unknown", color: "bg-zinc-500/20 text-zinc-300 border-zinc-500/40" };
+                  return (
+                    <div key={sms.txid} className={`p-2.5 rounded-lg border text-[11px] ${
+                      sms.consumed ? "bg-green-500/5 border-green-500/20 opacity-70" : "bg-white/5 border-white/10"
+                    }`}>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${t.color}`}>{t.label}</span>
+                        <span className="font-mono font-bold text-white">{sms.txid}</span>
+                        <span className="ml-auto font-bold text-green-400">৳{sms.amount}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-zinc-400">
+                        <span>📞 {sms.agent || "—"}</span>
+                        {sms.consumed ? (
+                          <span className="text-green-400">✅ Matched</span>
+                        ) : (
+                          <span className="text-yellow-400">⏳ Awaiting user submit</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
 
