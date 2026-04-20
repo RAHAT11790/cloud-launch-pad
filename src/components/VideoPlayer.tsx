@@ -1378,11 +1378,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           {/* No thumbnail/poster overlay — solid black bg only for fast load */}
           <video
             ref={videoRef}
-            src={currentSrc}
+            src={adGateActive ? "" : currentSrc}
             className="w-full h-full bg-black"
             style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
             playsInline
-            preload="auto"
+            preload={adGateActive ? "none" : "auto"}
+            autoPlay={!adGateActive}
             controlsList="nodownload noplaybackrate noremoteplayback"
             disablePictureInPicture
             disableRemotePlayback
