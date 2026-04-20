@@ -263,12 +263,12 @@ export function startGlobalAutoMatcher(): () => void {
     tryMatchAll();
   };
 
-  onValue(paymentsRef, paymentsCb);
-  onValue(smsRef, smsCb);
+  const unsubPayments = onValue(paymentsRef, paymentsCb);
+  const unsubSms = onValue(smsRef, smsCb);
 
   return () => {
-    try { off(paymentsRef, "value", paymentsCb); } catch {}
-    try { off(smsRef, "value", smsCb); } catch {}
+    try { unsubPayments(); } catch {}
+    try { unsubSms(); } catch {}
   };
 }
 
