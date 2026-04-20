@@ -711,35 +711,58 @@ export const sendPushToTargets = async (
   if (providerConfig.provider === "supabase" && providerConfig.url) {
     onProgress?.({ phase: "sending", totalTokens: 0, sent: 0, success: 0, failed: 0, invalidRemoved: 0, totalUsers: eligibleUserIds.length });
 
-    const result = await postFcmRequest(providerConfig.url, {
-      title: payload.title,
-      body: payload.body,
-      image: payload.image,
-      icon: payload.icon || APP_ICON_URL,
-      badge: payload.badge || APP_ICON_URL,
-      data: normalizePushData(payload),
-      ...(eligibleUserIds.length > 0 ? { userIds: eligibleUserIds } : {}),
-      ...(directTokens.length > 0 ? { tokens: directTokens } : {}),
+    try {
+      const result = await postFcmRequest(providerConfig.url, {
+        title: payload.title,
+        body: payload.body,
+        image: payload.image,
+        icon: payload.icon || APP_ICON_URL,
+        badge: payload.badge || APP_ICON_URL,
+        data: normalizePushData(payload),
+        ...(eligibleUserIds.length > 0 ? { userIds: eligibleUserIds } : {}),
+        ...(directTokens.length > 0 ? { tokens: directTokens } : {}),
+      });
+
+      const finalProgress: PushProgress = {
+        phase: "done",
+        totalTokens: Number(result.totalTokens || 0),
+        sent: Number(result.totalTokens || 0),
+        success: Number(result.success || 0),
+        failed: Number(result.failed || 0),
+        invalidRemoved: Number(result.invalidRemoved || 0),
+        totalUsers: eligibleUserIds.length,
+        failReasons: result.failReasons || { invalid: 0, transient: 0, other: 0 },
+      };
+
+      if (finalProgress.totalTokens > 0) {
+        onProgress?.(finalProgress);
+        return {
+          success: finalProgress.success,
+          failed: finalProgress.failed,
+          total: finalProgress.totalTokens,
+          invalidTokensRemoved: finalProgress.invalidRemoved,
+        };
+      }
+
+      console.warn("[FCM] Server-side token resolution returned 0 tokens, falling back to client token lookup...");
+    } catch (err) {
+      console.warn("[FCM] Server-side targeted push failed, falling back to client token lookup:", err);
+    }
+
+    const fallbackUserTokens = eligibleUserIds.length > 0 ? await getFCMTokens(eligibleUserIds) : [];
+    const fallbackTokens = [...new Set([...directTokens, ...fallbackUserTokens])];
+    if (fallbackTokens.length === 0) {
+      onProgress?.({ phase: "done", totalTokens: 0, sent: 0, success: 0, failed: 0, invalidRemoved: 0, totalUsers: eligibleUserIds.length });
+      return { skipped: true, success: 0, failed: 0, total: 0, invalidTokensRemoved: 0, reason: "NO_TOKENS" };
+    }
+
+    const fallbackResult = await sendPushToTokens(fallbackTokens, payload, (progress) => {
+      onProgress?.({ ...progress, totalUsers: eligibleUserIds.length });
     });
 
-    const finalProgress: PushProgress = {
-      phase: "done",
-      totalTokens: Number(result.totalTokens || 0),
-      sent: Number(result.totalTokens || 0),
-      success: Number(result.success || 0),
-      failed: Number(result.failed || 0),
-      invalidRemoved: Number(result.invalidRemoved || 0),
-      totalUsers: eligibleUserIds.length,
-      failReasons: result.failReasons || { invalid: 0, transient: 0, other: 0 },
-    };
-    onProgress?.(finalProgress);
-
     return {
-      success: finalProgress.success,
-      failed: finalProgress.failed,
-      total: finalProgress.totalTokens,
-      invalidTokensRemoved: finalProgress.invalidRemoved,
-      reason: finalProgress.totalTokens === 0 ? "NO_TOKENS" : undefined,
+      ...fallbackResult,
+      reason: fallbackResult.total === 0 ? "NO_TOKENS" : undefined,
     };
   }
 
@@ -825,17 +848,27 @@ export const sendPushToAllUsers = async (
       };
       onProgress?.(finalProgress);
 
-      return {
-        success: finalProgress.success,
-        failed: finalProgress.failed,
-        total: finalProgress.totalTokens,
-        invalidTokensRemoved: finalProgress.invalidRemoved,
-      };
+      if (finalProgress.totalTokens > 0) {
+        return {
+          success: finalProgress.success,
+          failed: finalProgress.failed,
+          total: finalProgress.totalTokens,
+          invalidTokensRemoved: finalProgress.invalidRemoved,
+        };
+      }
+
+      console.warn("[FCM] Server returned 0 total tokens, falling back to client token lookup...");
     } catch (err: any) {
-      console.error("[FCM] Supabase send failed:", err);
-      onProgress?.({ phase: "done", totalTokens: 0, sent: 0, success: 0, failed: 0, invalidRemoved: 0 });
-      throw err;
+      console.error("[FCM] Supabase send failed, falling back to client token lookup:", err);
     }
+
+    const fallbackTokens = await getAllFCMTokens();
+    if (fallbackTokens.length === 0) {
+      onProgress?.({ phase: "done", totalTokens: 0, sent: 0, success: 0, failed: 0, invalidRemoved: 0 });
+      return { skipped: true, success: 0, failed: 0, total: 0, invalidTokensRemoved: 0, reason: "NO_TOKENS" };
+    }
+
+    return sendPushToTokens(fallbackTokens, payload, onProgress);
   }
 
   // Cloudflare mode — client-side token resolution
