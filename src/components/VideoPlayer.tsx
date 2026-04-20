@@ -110,6 +110,7 @@ interface VideoPlayerProps {
   onSaveProgress?: (currentTime: number, duration: number) => void;
   hideDownload?: boolean;
   noProxy?: boolean;
+  noServerSwitch?: boolean;
   seasons?: Season[];
   currentSeasonIdx?: number;
   onSeasonChange?: (idx: number) => void;
@@ -123,7 +124,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
   const branding = useBranding();
   // Removed preload anime character image - no longer needed
 
@@ -1377,11 +1378,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           {/* No thumbnail/poster overlay — solid black bg only for fast load */}
           <video
             ref={videoRef}
-            src={currentSrc}
+            src={adGateActive ? "" : currentSrc}
             className="w-full h-full bg-black"
             style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
             playsInline
-            preload="auto"
+            preload={adGateActive ? "none" : "auto"}
+            autoPlay={!adGateActive}
             controlsList="nodownload noplaybackrate noremoteplayback"
             disablePictureInPicture
             disableRemotePlayback
@@ -1483,7 +1485,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   <Crop className="w-3.5 h-3.5" />
                   <span className="text-[10px] font-medium">{cropLabels[cropIndex]}</span>
                 </button>
-                {videoServers.length > 1 && (
+                {videoServers.length > 1 && !noServerSwitch && (
                   <div className="relative">
                     <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
