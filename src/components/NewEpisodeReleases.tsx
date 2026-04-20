@@ -17,6 +17,8 @@ interface EpisodeRelease {
   seasonName?: string;
   timestamp: number;
   active?: boolean;
+  weeklyEnabled?: boolean;
+  weeklyEveryDays?: number;
 }
 
 interface NewEpisodeReleasesProps {
@@ -49,6 +51,8 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
       && (r as any).contentType !== "animesalt"
       && allAnimeIds.has(r.contentId)
   );
+
+  const weeklyReleases = activeReleases.filter((r) => r.weeklyEnabled === true);
 
   if (activeReleases.length === 0) return null;
 
@@ -132,6 +136,47 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
           })}
         </div>
       </div>
+
+      {weeklyReleases.length > 0 && (
+        <div className="px-4 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-base font-bold flex items-center gap-2 category-bar">
+              <Zap className="w-4 h-4 text-primary" />
+              Weekly Release
+            </h3>
+          </div>
+
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+            {weeklyReleases.slice(0, 10).map((release) => {
+              const content = getContent(release.contentId);
+              const poster = content?.poster || release.poster || "";
+              const title = content?.title || release.title || "Unknown";
+
+              return (
+                <div
+                  key={`weekly-${release.id}`}
+                  className="relative flex-shrink-0 w-[120px] cursor-pointer group"
+                  onClick={() => handleClick(release)}
+                >
+                  <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card">
+                    <div className="absolute top-1.5 left-1.5 z-10 bg-primary text-primary-foreground text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                      <Zap className="w-2.5 h-2.5" /> WEEKLY
+                    </div>
+                    <img src={poster} alt={title} className="w-full h-full object-cover" loading="lazy" />
+                    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+                    <div className="absolute bottom-0 left-0 right-0 p-2">
+                      <p className="text-[11px] font-semibold leading-tight line-clamp-2" style={getAnimeTitleStyle(title)}>{title}</p>
+                      <p className="text-[9px] text-primary mt-0.5">
+                        Every {Math.max(1, Number(release.weeklyEveryDays || 7))} day{Number(release.weeklyEveryDays || 7) > 1 ? "s" : ""}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* View All Modal */}
       <AnimatePresence>

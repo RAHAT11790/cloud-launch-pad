@@ -16,9 +16,10 @@ interface TvChannel {
 
 interface LiveTvPageProps {
   onBack?: () => void;
+  onExitPlayer?: () => void;
 }
 
-const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
+const LiveTvPage = ({ onBack, onExitPlayer }: LiveTvPageProps) => {
   const [channels, setChannels] = useState<TvChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeChannel, setActiveChannel] = useState<TvChannel | null>(null);
@@ -79,7 +80,10 @@ const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
         title={activeChannel.name}
         subtitle="🔴 LIVE"
         poster={activeChannel.logo}
-        onClose={() => setActiveChannel(null)}
+        onClose={() => {
+          setActiveChannel(null);
+          onExitPlayer?.();
+        }}
         hideDownload
         noProxy
         noServerSwitch
