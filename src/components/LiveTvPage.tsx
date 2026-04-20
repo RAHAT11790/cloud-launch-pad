@@ -16,9 +16,11 @@ interface TvChannel {
 
 interface LiveTvPageProps {
   onBack?: () => void;
+  onExitPlayer?: () => void;
+  isActive?: boolean;
 }
 
-const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
+const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) => {
   const [channels, setChannels] = useState<TvChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeChannel, setActiveChannel] = useState<TvChannel | null>(null);
@@ -48,6 +50,12 @@ const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!isActive && activeChannel) {
+      setActiveChannel(null);
+    }
+  }, [isActive, activeChannel]);
 
   const categories = useMemo(() => {
     const cats = new Set<string>();
@@ -79,7 +87,10 @@ const LiveTvPage = ({ onBack }: LiveTvPageProps) => {
         title={activeChannel.name}
         subtitle="🔴 LIVE"
         poster={activeChannel.logo}
-        onClose={() => setActiveChannel(null)}
+        onClose={() => {
+          setActiveChannel(null);
+          onExitPlayer?.();
+        }}
         hideDownload
         noProxy
         noServerSwitch

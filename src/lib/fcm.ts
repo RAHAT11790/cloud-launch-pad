@@ -299,6 +299,31 @@ const getUserTokenStorageKeys = async (userIds: string[]): Promise<string[]> => 
   }
 };
 
+const getAllUserStorageKeys = async (): Promise<string[]> => {
+  try {
+    const [usersSnap, tokensSnap] = await Promise.all([
+      get(ref(db, "users")),
+      get(ref(db, "fcmTokens")),
+    ]);
+
+    const keys = new Set<string>();
+    const users = usersSnap.val() || {};
+    const tokenRoots = tokensSnap.val() || {};
+
+    Object.keys(tokenRoots).forEach((key) => keys.add(key));
+    Object.entries(users).forEach(([userKey, user]: any) => {
+      if (userKey) keys.add(userKey);
+      if (user?.id) keys.add(String(user.id));
+      if (user?.email) keys.add(String(user.email).replace(/\./g, ","));
+    });
+
+    return [...keys];
+  } catch (err) {
+    console.warn("Failed to get all user storage keys:", err);
+    return [];
+  }
+};
+
 // Register FCM token for a user
 export const registerFCMToken = async (userId: string, showDiagnostics = false) => {
   // If permission is already granted, skip all diagnostic toasts
@@ -470,9 +495,17 @@ export const getFCMTokens = async (userIds: string[]): Promise<string[]> => {
 export const getAllFCMTokens = async (): Promise<string[]> => {
   const tokens: string[] = [];
   try {
-    const snap = await get(ref(db, "fcmTokens"));
-    const data = snap.val();
-    if (data) {
+    const [snap, storageKeys] = await Promise.all([
+      get(ref(db, "fcmTokens")),
+      getAllUserStorageKeys(),
+    ]);
+    const data = snap.val() || {};
+    const keys = new Set<string>([...Object.keys(data), ...storageKeys]);
+    keys.forEach((key) => {
+      tokens.push(...extractTokensFromMap(data[key]));
+    });
+
+    if (tokens.length === 0 && Object.keys(data).length > 0) {
       Object.values(data).forEach((userTokens: any) => {
         tokens.push(...extractTokensFromMap(userTokens));
       });

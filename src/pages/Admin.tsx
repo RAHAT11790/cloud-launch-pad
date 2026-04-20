@@ -2487,7 +2487,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         tmdbId: data.id, title: data.name || "", logo: logoUrl, poster: data.poster_path ? TMDB_IMG_BASE + "original" + data.poster_path : "",
         backdrop: data.backdrop_path ? TMDB_IMG_BASE + "original" + data.backdrop_path : "", trailer: trailerUrl,
         year: data.first_air_date?.split("-")[0] || "", rating: data.vote_average?.toFixed(1) || "",
-        language: "English", category: autoCategory, dubType: "official", storyline: data.overview || "", visibility: "public"
+        language: "English", category: autoCategory, dubType: "official", storyline: data.overview || "", visibility: "public", weeklyEnabled: false, weeklyEveryDays: 7
       });
       if (autoCategory) toast.info(`অটো ক্যাটাগরি: ${autoCategory}`);
       setSeriesCast(cast);
@@ -2540,6 +2540,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       cast: seriesCast,
       seasons: seasonsData,
       type: "webseries",
+      weeklyEnabled: seriesForm.weeklyEnabled === true,
+      weeklyEveryDays: Math.max(1, Number(seriesForm.weeklyEveryDays) || 7),
       visibility: seriesForm.visibility === "private" ? "private" : "public",
       updatedAt: Date.now(),
     };
@@ -2569,7 +2571,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     setSeriesForm({
       tmdbId: data.tmdbId || "", title: data.title || "", logo: data.logo || "", poster: data.poster || "",
       backdrop: data.backdrop || "", trailer: data.trailer || "", year: data.year || "", rating: data.rating || "",
-      language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "", visibility: data.visibility || "public"
+        language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "", visibility: data.visibility || "public",
+        weeklyEnabled: data.weeklyEnabled === true, weeklyEveryDays: Math.max(1, Number(data.weeklyEveryDays) || 7)
     });
     setSeriesCast(data.cast || []);
     setSeasonsData(data.seasons || []);
@@ -2914,7 +2917,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       contentId, contentType, title: content.title, poster: content.poster || "",
       year: content.year || "N/A", rating: content.rating || "N/A",
       visibility: content.visibility || "public",
-      episodeInfo, timestamp: Date.now(), active: true
+      episodeInfo, timestamp: Date.now(), active: true,
+      weeklyEnabled: content.weeklyEnabled === true,
+      weeklyEveryDays: Math.max(1, Number(content.weeklyEveryDays) || 7)
     };
     try {
       await set(push(ref(db, "newEpisodeReleases")), newRelease);
@@ -4141,7 +4146,7 @@ ${tgHashtags}`;
               <button onClick={() => setSeriesTab("ws-add")} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-add" ? "bg-indigo-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
                 Add New
               </button>
-              <button onClick={() => { setSeriesTab("ws-manual"); setSeriesEditId(""); setSeriesForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official" }); setSeasonsData([{ name: "Season 1", seasonNumber: 1, episodes: [] }]); setSeriesCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
+              <button onClick={() => { setSeriesTab("ws-manual"); setSeriesEditId(""); setSeriesForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official", weeklyEnabled: false, weeklyEveryDays: 7 }); setSeasonsData([{ name: "Season 1", seasonNumber: 1, episodes: [] }]); setSeriesCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
                 Manual
               </button>
             </div>
@@ -4300,6 +4305,30 @@ ${tgHashtags}`;
                         <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Storyline</label>
                         <textarea value={seriesForm.storyline || ""} onChange={e => setSeriesForm({ ...seriesForm, storyline: e.target.value })}
                           className={`${inputClass} min-h-[100px] resize-y`} placeholder="Storyline" />
+                      </div>
+                      <div className="mb-4 rounded-xl border border-white/10 bg-black/20 p-3">
+                        <div className="flex items-center justify-between gap-3 mb-3">
+                          <div>
+                            <label className="block text-xs text-[#D1C4E9] font-medium">Weekly Release</label>
+                            <p className="text-[10px] text-[#957DAD] mt-1">Enable this series for the homepage weekly release strip.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSeriesForm({ ...seriesForm, weeklyEnabled: !(seriesForm.weeklyEnabled === true) })}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${seriesForm.weeklyEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${seriesForm.weeklyEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </button>
+                        </div>
+                        <input
+                          type="number"
+                          min="1"
+                          value={seriesForm.weeklyEveryDays || 7}
+                          onChange={e => setSeriesForm({ ...seriesForm, weeklyEveryDays: Math.max(1, Number(e.target.value) || 7) })}
+                          className={inputClass}
+                          placeholder="7"
+                        />
+                        <p className="text-[10px] text-[#957DAD] mt-2">Release interval in days.</p>
                       </div>
                       {seriesCast.length > 0 && (
                         <div className="mb-4">
@@ -4757,7 +4786,9 @@ ${tgHashtags}`;
                         seasonName: season?.name || `Season ${parseInt(wsNotifySeason) + 1}`
                       },
                       timestamp: Date.now(),
-                      active: true
+                      active: true,
+                      weeklyEnabled: ctxForm.weeklyEnabled === true,
+                      weeklyEveryDays: Math.max(1, Number(ctxForm.weeklyEveryDays) || 7)
                     };
                     try {
                       await set(push(ref(db, "newEpisodeReleases")), newRelease);
