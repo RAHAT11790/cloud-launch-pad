@@ -1,9 +1,10 @@
-import { useState, useEffect, forwardRef } from "react";
-import { Zap, ChevronRight, X } from "lucide-react";
+import { useState, useEffect, forwardRef, useMemo } from "react";
+import { Zap, ChevronRight, X, Clock, Flame } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
+import { computeWeeklyStatus, type WeeklyPendingEntry } from "@/lib/weeklyEpManager";
 
 interface EpisodeRelease {
   id: string;
