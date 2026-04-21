@@ -4240,6 +4240,10 @@ ${tgHashtags}`;
               </div>
             )}
 
+            {seriesTab === "ws-weekly" && (
+              <WeeklyEpManager onEditSeries={(id) => editSeries(id)} />
+            )}
+
             {(seriesTab === "ws-add" || seriesTab === "ws-manual") && (
               <div>
                 {seriesTab === "ws-add" && (
