@@ -29,7 +29,9 @@ interface NewEpisodeReleasesProps {
 
 const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>(({ allAnime, onCardClick }, _ref) => {
   const [releases, setReleases] = useState<EpisodeRelease[]>([]);
+  const [weeklyPending, setWeeklyPending] = useState<WeeklyPendingEntry[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     const relRef = ref(db, "newEpisodeReleases");
@@ -45,17 +47,38 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    const wRef = ref(db, "weeklyPending");
+    const unsub = onValue(wRef, (snap) => {
+      const data = snap.val() || {};
+      const list: WeeklyPendingEntry[] = Object.values(data).map((v: any) => v as WeeklyPendingEntry);
+      list.sort((a, b) => a.nextReleaseAt - b.nextReleaseAt);
+      setWeeklyPending(list);
+    });
+    return () => unsub();
+  }, []);
+
+  // Live countdown tick every 30s
+  useEffect(() => {
+    const t = setInterval(() => setTick((x) => x + 1), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
   // Filter active releases within 30 days - only RS Anime content (no AnimeSalt)
-  const allAnimeIds = new Set(allAnime.map(a => a.id));
-  const activeReleases = releases.filter(
+  const allAnimeIds = useMemo(() => new Set(allAnime.map(a => a.id)), [allAnime]);
+  const activeReleases = useMemo(() => releases.filter(
     (r) => r.active !== false && Date.now() - r.timestamp < 30 * 24 * 60 * 60 * 1000
       && (r as any).contentType !== "animesalt"
       && allAnimeIds.has(r.contentId)
-  );
+  ), [releases, allAnimeIds, tick]);
 
-  const weeklyReleases = activeReleases.filter((r) => r.weeklyEnabled === true);
+  const weeklyCards = useMemo(() => {
+    return weeklyPending
+      .map((e) => ({ entry: e, content: allAnime.find((a) => a.id === e.seriesId), status: computeWeeklyStatus(e) }))
+      .filter((x) => !!x.content);
+  }, [weeklyPending, allAnime, tick]);
 
-  if (activeReleases.length === 0) return null;
+  if (activeReleases.length === 0 && weeklyCards.length === 0) return null;
 
   const getContent = (contentId: string) => allAnime.find((a) => a.id === contentId);
 
