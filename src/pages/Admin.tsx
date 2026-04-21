@@ -2572,8 +2572,36 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     }
     lastSavedSeriesIdRef.current = newId;
     set(saveRef, data)
-      .then(() => {
+      .then(async () => {
         toast.success(seriesEditId ? "Series updated!" : "Series saved!");
+        // Sync weekly tracking entry
+        try {
+          const { enableWeeklyForSeries, disableWeeklyForSeries, markWeeklyEpisodeReleased } = await import("@/lib/weeklyEpManager");
+          if (data.weeklyEnabled) {
+            const daysSince = Math.max(0, Number(seriesForm.weeklyDaysSinceLast) || 0);
+            // If editing existing series, treat the save as "new episode released" → reset timer
+            if (seriesEditId) {
+              await enableWeeklyForSeries({
+                seriesId: newId,
+                seriesTitle: data.title,
+                poster: data.poster,
+                weeklyEveryDays: data.weeklyEveryDays,
+                daysSinceLastEpisode: 0,
+              });
+              await markWeeklyEpisodeReleased(newId);
+            } else {
+              await enableWeeklyForSeries({
+                seriesId: newId,
+                seriesTitle: data.title,
+                poster: data.poster,
+                weeklyEveryDays: data.weeklyEveryDays,
+                daysSinceLastEpisode: daysSince,
+              });
+            }
+          } else {
+            await disableWeeklyForSeries(newId);
+          }
+        } catch (e) { console.warn("Weekly sync failed", e); }
         setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list");
       })
       .catch(err => toast.error("Error: " + err.message));
@@ -2588,7 +2616,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       tmdbId: data.tmdbId || "", title: data.title || "", logo: data.logo || "", poster: data.poster || "",
       backdrop: data.backdrop || "", trailer: data.trailer || "", year: data.year || "", rating: data.rating || "",
         language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "", visibility: data.visibility || "public",
-        weeklyEnabled: data.weeklyEnabled === true, weeklyEveryDays: Math.max(1, Number(data.weeklyEveryDays) || 7)
+        weeklyEnabled: data.weeklyEnabled === true, weeklyEveryDays: Math.max(1, Number(data.weeklyEveryDays) || 7), weeklyDaysSinceLast: 0
     });
     setSeriesCast(data.cast || []);
     setSeasonsData(data.seasons || []);
@@ -4162,9 +4190,10 @@ ${tgHashtags}`;
               <button onClick={() => setSeriesTab("ws-add")} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-add" ? "bg-indigo-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
                 Add New
               </button>
-              <button onClick={() => { setSeriesTab("ws-manual"); setSeriesEditId(""); setSeriesForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official", weeklyEnabled: false, weeklyEveryDays: 7 }); setSeasonsData([{ name: "Season 1", seasonNumber: 1, episodes: [] }]); setSeriesCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
+              <button onClick={() => { setSeriesTab("ws-manual"); setSeriesEditId(""); setSeriesForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official", weeklyEnabled: false, weeklyEveryDays: 7, weeklyDaysSinceLast: 0 }); setSeasonsData([{ name: "Season 1", seasonNumber: 1, episodes: [] }]); setSeriesCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
                 Manual
               </button>
+              <WeeklyEpTabButton active={seriesTab === "ws-weekly"} onClick={() => setSeriesTab("ws-weekly")} />
             </div>
 
             {seriesTab === "ws-list" && (
@@ -4325,8 +4354,8 @@ ${tgHashtags}`;
                       <div className="mb-4 rounded-xl border border-white/10 bg-black/20 p-3">
                         <div className="flex items-center justify-between gap-3 mb-3">
                           <div>
-                            <label className="block text-xs text-[#D1C4E9] font-medium">Weekly Release</label>
-                            <p className="text-[10px] text-[#957DAD] mt-1">Enable this series for the homepage weekly release strip.</p>
+                            <label className="block text-xs text-[#D1C4E9] font-medium">Weekly EP Tracking</label>
+                            <p className="text-[10px] text-[#957DAD] mt-1">Track this series for weekly episode releases (auto-countdown).</p>
                           </div>
                           <button
                             type="button"
@@ -4336,15 +4365,37 @@ ${tgHashtags}`;
                             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${seriesForm.weeklyEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                           </button>
                         </div>
-                        <input
-                          type="number"
-                          min="1"
-                          value={seriesForm.weeklyEveryDays || 7}
-                          onChange={e => setSeriesForm({ ...seriesForm, weeklyEveryDays: Math.max(1, Number(e.target.value) || 7) })}
-                          className={inputClass}
-                          placeholder="7"
-                        />
-                        <p className="text-[10px] text-[#957DAD] mt-2">Release interval in days.</p>
+                        {seriesForm.weeklyEnabled && (
+                          <>
+                            <div className="grid grid-cols-2 gap-2 mb-2">
+                              <div>
+                                <label className="block text-[10px] text-[#957DAD] mb-1">Release every (days)</label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={seriesForm.weeklyEveryDays || 7}
+                                  onChange={e => setSeriesForm({ ...seriesForm, weeklyEveryDays: Math.max(1, Number(e.target.value) || 7) })}
+                                  className={inputClass}
+                                  placeholder="7"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-[#957DAD] mb-1">Days since last EP</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={seriesForm.weeklyDaysSinceLast ?? 0}
+                                  onChange={e => setSeriesForm({ ...seriesForm, weeklyDaysSinceLast: Math.max(0, Number(e.target.value) || 0) })}
+                                  className={inputClass}
+                                  placeholder="0 = today"
+                                />
+                              </div>
+                            </div>
+                            <p className="text-[10px] text-emerald-400/80">
+                              💡 e.g. every=7 + days since=5 → next EP appears in <strong>{Math.max(0, (Number(seriesForm.weeklyEveryDays) || 7) - (Number(seriesForm.weeklyDaysSinceLast) || 0))} days</strong>
+                            </p>
+                          </>
+                        )}
                       </div>
                       {seriesCast.length > 0 && (
                         <div className="mb-4">
