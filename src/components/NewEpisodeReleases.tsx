@@ -142,49 +142,6 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
         </div>
       </div>
 
-      {weeklyCards.length > 0 && (
-        <div className="px-4 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-base font-bold flex items-center gap-2 category-bar">
-              <Flame className="w-4 h-4 text-primary" />
-              Weekly EP
-            </h3>
-            <span className="text-[10px] text-muted-foreground">{weeklyCards.length} tracking</span>
-          </div>
-
-          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-            {weeklyCards.map(({ entry, content, status }) => {
-              if (!content) return null;
-              const poster = content.poster || entry.poster || "";
-              const title = content.title || entry.seriesTitle || "Unknown";
-              const isHot = status.isOverdue && !status.isReleasedRecently;
-              return (
-                <div
-                  key={`weekly-${entry.seriesId}`}
-                  className="relative flex-shrink-0 w-[120px] cursor-pointer group"
-                  onClick={() => onCardClick(content)}
-                >
-                  <div className={`relative aspect-[2/3] rounded-xl overflow-hidden bg-card ${isHot ? "ring-2 ring-destructive shadow-[0_0_16px_hsl(var(--destructive)/0.6)]" : ""}`}>
-                    <div className={`absolute top-1.5 left-1.5 z-10 text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 ${isHot ? "bg-destructive text-destructive-foreground animate-pulse" : status.isReleasedRecently ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground"}`}>
-                      {isHot ? <><Flame className="w-2.5 h-2.5" /> DUE</> : status.isReleasedRecently ? <>✓ NEW</> : <><Clock className="w-2.5 h-2.5" /> WEEKLY</>}
-                    </div>
-                    <img src={poster} alt={title} className="w-full h-full object-cover" loading="lazy" />
-                    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, hsl(var(--background) / 0.95) 0%, hsl(var(--background) / 0.3) 40%, transparent 70%)" }} />
-                    <div className="absolute bottom-0 left-0 right-0 p-2">
-                      <p className="text-[11px] font-semibold leading-tight line-clamp-2" style={getAnimeTitleStyle(title)}>{title}</p>
-                      <p className={`text-[9px] mt-0.5 ${isHot ? "text-destructive font-bold" : "text-primary"}`}>
-                        {status.countdownLabel}
-                      </p>
-                      <p className="text-[8px] text-muted-foreground">Every {entry.weeklyEveryDays}d</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* View All Modal */}
       <AnimatePresence>
         {showModal && (
