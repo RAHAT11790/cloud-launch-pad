@@ -2579,7 +2579,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         try {
           const { enableWeeklyForSeries, disableWeeklyForSeries, markWeeklyEpisodeReleased } = await import("@/lib/weeklyEpManager");
           if (data.weeklyEnabled) {
-            const daysSince = Math.max(0, Number(seriesForm.weeklyDaysSinceLast) || 0);
+            const missingDays = Math.max(0, Number(seriesForm.weeklyDaysSinceLast) || 0);
             // If editing existing series, treat the save as "new episode released" → reset timer
             if (seriesEditId) {
               await enableWeeklyForSeries({
@@ -2587,7 +2587,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
                 seriesTitle: data.title,
                 poster: data.poster,
                 weeklyEveryDays: data.weeklyEveryDays,
-                daysSinceLastEpisode: 0,
+                missingDays: 0,
               });
               await markWeeklyEpisodeReleased(newId);
             } else {
@@ -2596,7 +2596,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
                 seriesTitle: data.title,
                 poster: data.poster,
                 weeklyEveryDays: data.weeklyEveryDays,
-                daysSinceLastEpisode: daysSince,
+                missingDays,
               });
             }
           } else {
@@ -4385,7 +4385,7 @@ ${tgHashtags}`;
                                 />
                               </div>
                               <div>
-                                <label className="block text-[10px] text-[#957DAD] mb-1">Days since last EP</label>
+                                <label className="block text-[10px] text-[#957DAD] mb-1">Current / Missing Days (since last EP)</label>
                                 <input
                                   type="number"
                                   min="0"
@@ -4397,7 +4397,7 @@ ${tgHashtags}`;
                               </div>
                             </div>
                             <p className="text-[10px] text-emerald-400/80">
-                              💡 e.g. every=7 + days since=5 → next EP appears in <strong>{Math.max(0, (Number(seriesForm.weeklyEveryDays) || 7) - (Number(seriesForm.weeklyDaysSinceLast) || 0))} days</strong>
+                              💡 Cycle=7 + Current=5 → next EP appears in <strong>{Math.max(0, (Number(seriesForm.weeklyEveryDays) || 7) - (Number(seriesForm.weeklyDaysSinceLast) || 0))} days</strong>
                             </p>
                           </>
                         )}
