@@ -202,7 +202,7 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
 
   if (req.method === "GET")
-    return json({ ok: true, service: "telegram-post", actions: ["send", "edit-buttons", "webhook", "set-webhook"] });
+    return json({ ok: true, service: "telegram-post", actions: ["send", "edit-buttons", "webhook", "set-webhook", "create-unlock-link"] });
 
   try {
     const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
@@ -215,10 +215,17 @@ serve(async (req) => {
     // ========== AUTO-DETECT TELEGRAM WEBHOOK (update_id present = from Telegram) ==========
     if (body?.update_id !== undefined) {
       const message = body?.message;
-      if (message?.text === "/start") {
+      const text = String(message?.text || "");
+      if (text.startsWith("/start")) {
         const chatId = message.chat.id;
         const firstName = message.from?.first_name || "Friend";
-        await sendStartMessage(botToken, chatId, firstName);
+        const tgUserId = message.from?.id;
+        const m = text.match(/^\/start\s+unlock_(.+)$/);
+        if (m && m[1]) {
+          await handleUnlockDeepLink(botToken, chatId, m[1].trim(), tgUserId);
+        } else {
+          await sendStartMessage(botToken, chatId, firstName);
+        }
       }
       return json({ ok: true });
     }
@@ -228,12 +235,31 @@ serve(async (req) => {
       const update = body?.update;
       if (!update) return json({ ok: true, skipped: true });
       const message = update?.message;
-      if (message?.text === "/start") {
+      const text = String(message?.text || "");
+      if (text.startsWith("/start")) {
         const chatId = message.chat.id;
         const firstName = message.from?.first_name || "Friend";
-        await sendStartMessage(botToken, chatId, firstName);
+        const tgUserId = message.from?.id;
+        const m = text.match(/^\/start\s+unlock_(.+)$/);
+        if (m && m[1]) {
+          await handleUnlockDeepLink(botToken, chatId, m[1].trim(), tgUserId);
+        } else {
+          await sendStartMessage(botToken, chatId, firstName);
+        }
       }
       return json({ ok: true });
+    }
+
+    // ========== CREATE UNLOCK LINK (called from website "Verify" button) ==========
+    if (action === "create-unlock-link") {
+      const userId = String(body?.userId || "").trim();
+      if (!userId) return json({ error: "userId required" }, 400);
+      const meRes = await fetch(`${telegramBase}/getMe`);
+      const me = await meRes.json().catch(() => ({}));
+      const username = me?.result?.username;
+      if (!username) return json({ error: "Could not resolve bot username" }, 500);
+      const deepLink = `https://t.me/${username}?start=unlock_${encodeURIComponent(userId)}`;
+      return json({ ok: true, deepLink, botUsername: username });
     }
 
     // ========== SET WEBHOOK ==========
