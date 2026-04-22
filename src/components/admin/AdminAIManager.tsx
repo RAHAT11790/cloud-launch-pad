@@ -34,7 +34,7 @@ export function AdminAIManager() {
     {
       role: "assistant",
       content:
-        "👋 Hi! I'm your **Admin AI Manager**. Ask me anything — add episodes, send notifications, edit series, approve payments, check links, release weekly EPs… I'll show you a preview and you click **Allow** to execute.",
+        "👋 আসসালামু আলাইকুম! আমি আপনার **Admin AI Manager**। যা খুশি বলুন — episode add, notification, series edit, payment approve, link check, weekly EP release — আমি আগে preview দেখাব, আপনি **Allow** চাপলে তবেই execute হবে।\n\nডিফল্ট ভাষা: বাংলা। ইংরেজি চাইলে \"reply in English\" লিখুন।",
     },
   ]);
   const [input, setInput] = useState("");
