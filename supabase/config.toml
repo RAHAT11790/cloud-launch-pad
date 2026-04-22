@@ -2,3 +2,6 @@ project_id = "kqxpzqegtvaiwgdusrin"
 
 [functions.process-email-queue]
 verify_jwt = true
+
+[functions.rs-bot]
+verify_jwt = false
