@@ -455,17 +455,39 @@ When you have nothing to do, just chat / give status updates.`;
     const choice = data.choices?.[0]?.message;
     const reply = choice?.content || "";
     const toolCalls = choice?.tool_calls || [];
-    const proposedOps = toolCalls.map((tc: any) => ({
-      name: tc.function?.name,
-      args: (() => {
-        try {
-          return JSON.parse(tc.function?.arguments || "{}");
-        } catch {
-          return {};
+    const proposedOps = await Promise.all(
+      toolCalls.map(async (tc: any) => {
+        const name = tc.function?.name;
+        let args: Record<string, any> = {};
+        try { args = JSON.parse(tc.function?.arguments || "{}"); } catch {}
+        const preview: Record<string, any> = {};
+        const collection = args.collection || (typeof args.path === "string" ? args.path.split("/")[0] : undefined);
+        const seriesId = args.seriesId || (typeof args.path === "string" ? args.path.split("/")[1] : undefined);
+        if (collection && seriesId) {
+          try {
+            const v: any = await fbGet(`${collection}/${seriesId}`);
+            if (v) {
+              preview.title = v.title || v.name || seriesId;
+              preview.poster = v.poster || v.backdrop || "";
+              preview.year = v.year;
+              preview.category = v.category;
+              preview.collection = collection;
+              preview.seriesId = seriesId;
+            }
+          } catch {}
         }
-      })(),
-    }));
-
+        if (args.paymentId) {
+          try {
+            const p: any = await fbGet(`bkashPayments/${args.paymentId}`);
+            if (p) {
+              preview.title = `bKash payment ৳${p.amount || "?"}`;
+              preview.subtitle = `${p.senderNumber || p.phone || "Unknown"} · ${p.plan || "?"}`;
+            }
+          } catch {}
+        }
+        return { name, args, preview };
+      }),
+    );
     return new Response(JSON.stringify({ reply, operations: proposedOps }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
