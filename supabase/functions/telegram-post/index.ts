@@ -19,6 +19,103 @@ const buildKeyboard = (buttons: InlineButton[]) => ({
     .map((btn) => [{ text: btn.text, url: btn.url }]),
 });
 
+// ====== Site / Firebase / Shortener config (for bot unlock flow) ======
+const SITE_URL = Deno.env.get("SITE_URL") ?? "https://rsanime03.lovable.app";
+const FIREBASE_DB =
+  Deno.env.get("FIREBASE_DATABASE_URL") ??
+  "https://rs-anime-default-rtdb.firebaseio.com";
+const SHRINKME_API_KEY =
+  Deno.env.get("SHRINKME_API_KEY") ?? "ab26a97a3a3540c5be2ce837bd97526f8e76043d";
+const UNLOCK_BANNER_IMAGE = "https://i.ibb.co/PsNMKqnT/IMG-20260417-065611-339.jpg";
+
+async function fbPut(path: string, data: unknown) {
+  await fetch(`${FIREBASE_DB}/${path}.json`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  }).catch(() => null);
+}
+
+const randomToken = () =>
+  `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+
+async function shortenUrl(target: string): Promise<string | null> {
+  try {
+    const url = `https://shrinkme.io/api?api=${encodeURIComponent(SHRINKME_API_KEY)}&url=${encodeURIComponent(target)}`;
+    const r = await fetch(url);
+    const j = await r.json().catch(() => ({}));
+    return j?.shortenedUrl || null;
+  } catch {
+    return null;
+  }
+}
+
+async function sendUnlockMessage(
+  botToken: string,
+  chatId: number | string,
+  shortLink: string,
+) {
+  const telegramBase = `https://api.telegram.org/bot${botToken}`;
+  const caption =
+    `<b>🔓 𝐔𝐧𝐥𝐨𝐜𝐤 𝟐𝟒𝐡 𝐀𝐜𝐜𝐞𝐬𝐬</b>\n\n` +
+    `Open the link below to unlock <b>24 hours</b> of free access to RS Anime.\n\n` +
+    `1️⃣ Tap the button.\n` +
+    `2️⃣ Wait a few seconds on the page.\n` +
+    `3️⃣ You'll be sent back to the website automatically.\n\n` +
+    `<i>One tap • One unlock • Fast & safe</i>`;
+  const keyboard = {
+    inline_keyboard: [[{ text: "🚀 Open Unlock Link", url: shortLink }]],
+  };
+  try {
+    const r = await fetch(`${telegramBase}/sendPhoto`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        photo: UNLOCK_BANNER_IMAGE,
+        caption,
+        parse_mode: "HTML",
+        reply_markup: keyboard,
+      }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d?.ok) return d;
+  } catch (_) {}
+  return await (await fetch(`${telegramBase}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: caption,
+      parse_mode: "HTML",
+      reply_markup: keyboard,
+    }),
+  })).json();
+}
+
+async function handleUnlockDeepLink(
+  botToken: string,
+  chatId: number | string,
+  userId: string,
+  tgUserId: number | string,
+) {
+  const token = randomToken();
+  const now = Date.now();
+  await fbPut(`unlockTokens/${token}`, {
+    token,
+    ownerUserId: userId,
+    createdAt: now,
+    expiresAt: now + 30 * 60 * 1000,
+    status: "pending",
+    consumed: false,
+    source: "telegram_bot",
+    tgUserId: String(tgUserId),
+  });
+  const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}&svc=telegram`;
+  const shortUrl = (await shortenUrl(callbackUrl)) || callbackUrl;
+  await sendUnlockMessage(botToken, chatId, shortUrl);
+}
+
 // ========== /start WELCOME MESSAGE ==========
 async function sendStartMessage(botToken: string, chatId: number | string, firstName: string) {
   const telegramBase = `https://api.telegram.org/bot${botToken}`;
