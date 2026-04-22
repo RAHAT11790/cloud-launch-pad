@@ -392,7 +392,9 @@ Deno.serve(async (req) => {
 
     // ---- PLAN: send chat to AI, get back natural reply + proposed operations ----
     const knowledge = await getKnowledge();
-    const systemPrompt = `You are the **Admin AI Manager** for an anime streaming platform (RS Anime). The admin chats with you in Bengali/English to manage the entire admin panel.
+    const systemPrompt = `You are the **Admin AI Manager** for an anime streaming platform (RS Anime). The admin chats with you to manage the ENTIRE admin panel.
+
+LANGUAGE: Default reply in **Bangla (Bengali)**. Only switch to English if the admin explicitly says "in English" or writes purely in English. Use respectful, friendly tone with light emoji.
 
 Your knowledge of the database (live snapshot, refreshed every 60s):
 ${JSON.stringify(knowledge, null, 2).slice(0, 12000)}
@@ -409,13 +411,13 @@ CAPABILITIES — you can call these tools:
 - set_firebase_path(path, data, mode?) — generic fallback
 
 RULES:
-1. **Always reply in the admin's language** (Bengali if they wrote Bengali).
-2. When the admin gives you free-text like "Naruto S1 EP5 720p https://x.com/a 1080p https://x.com/b", parse it intelligently — find the matching seriesId from the knowledge, identify quality from labels (480p/720p/1080p/4k), and call add_episode with the right links.
-3. **For workflows like "add episode + notify"**: chain multiple tool calls — first add_episode, then check_link for each link, then send_notification.
-4. If a link fails check_link, WARN the admin in your reply and skip the notification.
-5. Never call execute yourself. Just propose tool calls — the admin will Allow/Disallow.
-6. If you don't know which series the admin means, ASK before guessing.
-7. Be concise but show what you understood: "I'll add EP5 to Naruto S1 with 720p+1080p links, then notify users."
+1. Default to **Bangla** unless told otherwise.
+2. Free-text parsing — when the admin writes "Naruto S1 EP5 720p https://… 1080p https://…", find the matching seriesId from the knowledge (match by title), identify qualities (480p/720p/1080p/4k), and call add_episode with the right links.
+3. **Chain workflows automatically**: add_episode → check_link for every link → if all alive, send_notification + send_telegram. If any link is dead, WARN the admin and SKIP notify/telegram.
+4. NEVER execute yourself. Just propose the tool calls — the admin will see a preview and click Allow/Disallow.
+5. If the matching series is ambiguous, ask the admin to clarify (show the top 3 candidates with their titles, NEVER just IDs).
+6. Always describe in Bangla what you understood: "নারুতো S1 EP5 add করব 720p + 1080p দিয়ে, তারপর users-কে notify করব।"
+7. You can also be a normal chat assistant — if the admin just says "hi" or asks how many series, reply naturally without tool calls.
 
 When you have nothing to do, just chat / give status updates.`;
 
@@ -455,17 +457,39 @@ When you have nothing to do, just chat / give status updates.`;
     const choice = data.choices?.[0]?.message;
     const reply = choice?.content || "";
     const toolCalls = choice?.tool_calls || [];
-    const proposedOps = toolCalls.map((tc: any) => ({
-      name: tc.function?.name,
-      args: (() => {
-        try {
-          return JSON.parse(tc.function?.arguments || "{}");
-        } catch {
-          return {};
+    const proposedOps = await Promise.all(
+      toolCalls.map(async (tc: any) => {
+        const name = tc.function?.name;
+        let args: Record<string, any> = {};
+        try { args = JSON.parse(tc.function?.arguments || "{}"); } catch {}
+        const preview: Record<string, any> = {};
+        const collection = args.collection || (typeof args.path === "string" ? args.path.split("/")[0] : undefined);
+        const seriesId = args.seriesId || (typeof args.path === "string" ? args.path.split("/")[1] : undefined);
+        if (collection && seriesId) {
+          try {
+            const v: any = await fbGet(`${collection}/${seriesId}`);
+            if (v) {
+              preview.title = v.title || v.name || seriesId;
+              preview.poster = v.poster || v.backdrop || "";
+              preview.year = v.year;
+              preview.category = v.category;
+              preview.collection = collection;
+              preview.seriesId = seriesId;
+            }
+          } catch {}
         }
-      })(),
-    }));
-
+        if (args.paymentId) {
+          try {
+            const p: any = await fbGet(`bkashPayments/${args.paymentId}`);
+            if (p) {
+              preview.title = `bKash payment ৳${p.amount || "?"}`;
+              preview.subtitle = `${p.senderNumber || p.phone || "Unknown"} · ${p.plan || "?"}`;
+            }
+          } catch {}
+        }
+        return { name, args, preview };
+      }),
+    );
     return new Response(JSON.stringify({ reply, operations: proposedOps }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

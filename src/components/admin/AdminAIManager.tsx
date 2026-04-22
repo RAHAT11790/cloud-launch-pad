@@ -1,9 +1,18 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Send, Check, X, Loader2, Bot, User, AlertCircle } from "lucide-react";
+import { Sparkles, Send, Check, X, Loader2, Bot, User, AlertCircle, Image as ImageIcon } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { toast } from "sonner";
 
-type Operation = { name: string; args: Record<string, any> };
+type OpPreview = {
+  title?: string;
+  poster?: string;
+  year?: string;
+  category?: string;
+  collection?: string;
+  seriesId?: string;
+  subtitle?: string;
+};
+type Operation = { name: string; args: Record<string, any>; preview?: OpPreview };
 type Msg =
   | { role: "user"; content: string }
   | { role: "assistant"; content: string; operations?: Operation[]; status?: "pending" | "approved" | "rejected" | "executed"; results?: any[] };
@@ -25,7 +34,7 @@ export function AdminAIManager() {
     {
       role: "assistant",
       content:
-        "👋 Hi! I'm your **Admin AI Manager**. Ask me anything — add episodes, send notifications, edit series, approve payments, check links, release weekly EPs… I'll show you a preview and you click **Allow** to execute.",
+        "👋 আসসালামু আলাইকুম! আমি আপনার **Admin AI Manager**। যা খুশি বলুন — episode add, notification, series edit, payment approve, link check, weekly EP release — আমি আগে preview দেখাব, আপনি **Allow** চাপলে তবেই execute হবে।\n\nডিফল্ট ভাষা: বাংলা। ইংরেজি চাইলে \"reply in English\" লিখুন।",
     },
   ]);
   const [input, setInput] = useState("");
@@ -179,6 +188,25 @@ export function AdminAIManager() {
                   <div className="space-y-1.5">
                     {m.operations.map((op, j) => {
                       const meta = OP_LABELS[op.name] || { label: op.name, emoji: "⚙️" };
+                      const p = op.preview || {};
+                      const posterSrc = p.poster || "";
+                      const headline =
+                        p.title ||
+                        op.args.seriesId ||
+                        op.args.path ||
+                        op.args.title ||
+                        op.args.paymentId ||
+                        meta.label;
+                      const subline =
+                        p.subtitle ||
+                        [
+                          p.collection,
+                          p.year,
+                          op.args.seasonNumber ? `S${op.args.seasonNumber}` : "",
+                          op.args.episodeNumber ? `EP${op.args.episodeNumber}` : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ");
                       return (
                         <div
                           key={j}
@@ -188,15 +216,45 @@ export function AdminAIManager() {
                               : "bg-white/5 border-white/10"
                           }`}
                         >
-                          <div className="font-semibold text-white">
-                            {meta.emoji} {meta.label}
-                            {meta.danger && (
-                              <span className="ml-2 text-[9px] text-rose-300">⚠️ destructive</span>
+                          <div className="flex gap-2.5">
+                            {posterSrc ? (
+                              <img
+                                src={posterSrc}
+                                alt={headline}
+                                className="w-12 h-16 rounded-md object-cover bg-zinc-800 flex-shrink-0"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="w-12 h-16 rounded-md bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                                <ImageIcon size={16} className="text-zinc-600" />
+                              </div>
                             )}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[11.5px] font-semibold text-white flex items-center gap-1.5 flex-wrap">
+                                <span>{meta.emoji}</span>
+                                <span>{meta.label}</span>
+                                {meta.danger && (
+                                  <span className="text-[9px] text-rose-300 px-1.5 py-0.5 rounded bg-rose-500/20">
+                                    ⚠ destructive
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[12px] text-zinc-100 truncate font-medium mt-0.5">
+                                {headline}
+                              </p>
+                              {subline && (
+                                <p className="text-[10px] text-zinc-400 truncate">{subline}</p>
+                              )}
+                            </div>
                           </div>
-                          <pre className="text-[10px] text-zinc-400 mt-1 overflow-x-auto whitespace-pre-wrap break-all">
-                            {JSON.stringify(op.args, null, 2)}
-                          </pre>
+                          <details className="mt-1.5">
+                            <summary className="text-[9.5px] text-zinc-500 cursor-pointer select-none hover:text-zinc-300">
+                              raw payload
+                            </summary>
+                            <pre className="text-[10px] text-zinc-400 mt-1 overflow-x-auto whitespace-pre-wrap break-all max-h-32">
+                              {JSON.stringify(op.args, null, 2)}
+                            </pre>
+                          </details>
                         </div>
                       );
                     })}
