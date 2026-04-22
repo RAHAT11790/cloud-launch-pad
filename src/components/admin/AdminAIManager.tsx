@@ -1,9 +1,18 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Send, Check, X, Loader2, Bot, User, AlertCircle } from "lucide-react";
+import { Sparkles, Send, Check, X, Loader2, Bot, User, AlertCircle, Image as ImageIcon } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { toast } from "sonner";
 
-type Operation = { name: string; args: Record<string, any> };
+type OpPreview = {
+  title?: string;
+  poster?: string;
+  year?: string;
+  category?: string;
+  collection?: string;
+  seriesId?: string;
+  subtitle?: string;
+};
+type Operation = { name: string; args: Record<string, any>; preview?: OpPreview };
 type Msg =
   | { role: "user"; content: string }
   | { role: "assistant"; content: string; operations?: Operation[]; status?: "pending" | "approved" | "rejected" | "executed"; results?: any[] };
