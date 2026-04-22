@@ -455,7 +455,7 @@ When you have nothing to do, just chat / give status updates.`;
     const choice = data.choices?.[0]?.message;
     const reply = choice?.content || "";
     const toolCalls = choice?.tool_calls || [];
-    const operations = toolCalls.map((tc: any) => ({
+    const proposedOps = toolCalls.map((tc: any) => ({
       name: tc.function?.name,
       args: (() => {
         try {
@@ -466,7 +466,7 @@ When you have nothing to do, just chat / give status updates.`;
       })(),
     }));
 
-    return new Response(JSON.stringify({ reply, operations }), {
+    return new Response(JSON.stringify({ reply, operations: proposedOps }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
