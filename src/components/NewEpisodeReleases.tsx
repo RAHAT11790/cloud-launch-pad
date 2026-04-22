@@ -1,10 +1,9 @@
 import { useState, useEffect, forwardRef, useMemo } from "react";
-import { Zap, ChevronRight, X, Clock, Flame } from "lucide-react";
+import { Zap, ChevronRight, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
-import { computeWeeklyStatus, type WeeklyPendingEntry } from "@/lib/weeklyEpManager";
 
 interface EpisodeRelease {
   id: string;
@@ -29,7 +28,6 @@ interface NewEpisodeReleasesProps {
 
 const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>(({ allAnime, onCardClick }, _ref) => {
   const [releases, setReleases] = useState<EpisodeRelease[]>([]);
-  const [weeklyPending, setWeeklyPending] = useState<WeeklyPendingEntry[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [tick, setTick] = useState(0);
 
@@ -43,17 +41,6 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
       });
       items.sort((a, b) => b.timestamp - a.timestamp);
       setReleases(items);
-    });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const wRef = ref(db, "weeklyPending");
-    const unsub = onValue(wRef, (snap) => {
-      const data = snap.val() || {};
-      const list: WeeklyPendingEntry[] = Object.values(data).map((v: any) => v as WeeklyPendingEntry);
-      list.sort((a, b) => a.nextReleaseAt - b.nextReleaseAt);
-      setWeeklyPending(list);
     });
     return () => unsub();
   }, []);
@@ -72,13 +59,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
       && allAnimeIds.has(r.contentId)
   ), [releases, allAnimeIds, tick]);
 
-  const weeklyCards = useMemo(() => {
-    return weeklyPending
-      .map((e) => ({ entry: e, content: allAnime.find((a) => a.id === e.seriesId), status: computeWeeklyStatus(e) }))
-      .filter((x) => !!x.content);
-  }, [weeklyPending, allAnime, tick]);
-
-  if (activeReleases.length === 0 && weeklyCards.length === 0) return null;
+  if (activeReleases.length === 0) return null;
 
   const getContent = (contentId: string) => allAnime.find((a) => a.id === contentId);
 
