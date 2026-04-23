@@ -258,6 +258,22 @@ const tools = [
         required: ["path", "data"],
       },
     },
+  {
+    type: "function",
+    function: {
+      name: "create_anime_from_tmdb",
+      description: "Create a brand-new anime/series in Firebase using TMDB ID. Auto-fetches poster, backdrop, title, year, overview, genres. Default audio language = Hindi (Official). After creation, the admin can add episodes via add_episode.",
+      parameters: {
+        type: "object",
+        properties: {
+          collection: { type: "string", enum: ["webseries", "movies"] },
+          tmdbId: { type: "string", description: "TMDB ID (movie or tv)" },
+          mediaType: { type: "string", enum: ["tv", "movie"] },
+          customId: { type: "string", description: "Optional custom Firebase ID. If omitted, uses tmdb_<id>." },
+        },
+        required: ["collection", "tmdbId", "mediaType"],
+      },
+    },
   },
 ];
 
@@ -360,6 +376,48 @@ async function executeOperation(op: any) {
       else await fbPatch(args.path, args.data);
       return { ok: true, message: `Wrote ${args.path}` };
     }
+    case "create_anime_from_tmdb": {
+      const TMDB_KEY = Deno.env.get("TMDB_API_KEY") || "8265bd1679663a7ea12ac168da84d2e8";
+      const { collection, tmdbId, mediaType, customId } = args;
+      const tmdbUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_KEY}&language=en-US`;
+      const r = await fetch(tmdbUrl);
+      if (!r.ok) throw new Error(`TMDB fetch failed: ${r.status}`);
+      const t = await r.json();
+      const id = customId || `tmdb_${tmdbId}`;
+      const title = t.title || t.name || "Untitled";
+      const seasons: any[] = [];
+      // For TV: pre-create season skeletons (admin will add episodes via add_episode)
+      if (mediaType === "tv" && Array.isArray(t.seasons)) {
+        t.seasons
+          .filter((s: any) => s.season_number > 0)
+          .forEach((s: any) => {
+            seasons.push({
+              seasonNumber: s.season_number,
+              name: s.name || `Season ${s.season_number}`,
+              episodes: [],
+            });
+          });
+      }
+      const series = {
+        id,
+        title,
+        poster: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : "",
+        backdrop: t.backdrop_path ? `https://image.tmdb.org/t/p/original${t.backdrop_path}` : "",
+        year: String((t.release_date || t.first_air_date || "").slice(0, 4)),
+        rating: String(t.vote_average?.toFixed(1) || ""),
+        language: "Hindi",
+        dubType: "official",
+        category: t.genres?.[0]?.name || "Anime",
+        type: mediaType === "tv" ? "webseries" : "movie",
+        storyline: t.overview || "",
+        tmdbId: String(tmdbId),
+        seasons: seasons.length > 0 ? seasons : undefined,
+        createdAt: Date.now(),
+        source: "firebase",
+      };
+      await fbPut(`${collection}/${id}`, series);
+      return { ok: true, message: `Created ${title} (${id}) — Hindi Official, ${seasons.length} season skeleton${seasons.length !== 1 ? "s" : ""}` };
+    }
     default:
       throw new Error(`Unknown operation: ${name}`);
   }
@@ -400,15 +458,20 @@ Your knowledge of the database (live snapshot, refreshed every 60s):
 ${JSON.stringify(knowledge, null, 2).slice(0, 12000)}
 
 CAPABILITIES — you can call these tools:
+- create_anime_from_tmdb(collection, tmdbId, mediaType, customId?) — Create NEW series/movie from TMDB. Default audio=Hindi Official.
 - add_episode(collection, seriesId, seasonNumber, episodeNumber, title?, link480?, link720?, link1080?, link4k?, link?)
 - edit_series(collection, seriesId, patch{})
-- delete_item(path) — DESTRUCTIVE, use with care
-- send_notification(title, body, link?, imageUrl?) — push to all users
-- send_telegram(collection, seriesId, message?)
-- release_weekly(seriesId)
-- check_link(url)
-- approve_subscription(paymentId, days?)
-- set_firebase_path(path, data, mode?) — generic fallback
+- delete_item(path) — DESTRUCTIVE
+- send_notification, send_telegram, release_weekly, check_link, approve_subscription, set_firebase_path
+
+RULES:
+1. Default to **Bangla** unless told otherwise.
+2. When admin says "add anime X" / "create new anime X" — first try to find it by title in the knowledge. If NOT found, ask for TMDB ID, then call create_anime_from_tmdb. After creation, if the admin gave episode links, call add_episode for each.
+3. Treat link with no quality tag as **1080p** by default. Treat audio as **Hindi Official** by default.
+4. **Free-text parsing** — when the admin writes "Naruto S1 EP5 720p https://… 1080p https://…", find the matching seriesId, identify qualities, call add_episode with the right links.
+5. NEVER execute yourself. Just propose tool calls — admin will see preview & click Allow/Disallow.
+6. If matching is ambiguous, list top 3 candidates with TITLES (never raw IDs).
+7. Always describe in Bangla what you understood.
 
 RULES:
 1. Default to **Bangla** unless told otherwise.
