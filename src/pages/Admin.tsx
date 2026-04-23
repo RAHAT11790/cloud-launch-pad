@@ -16,6 +16,8 @@ import {
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { WeeklyEpTabButton, WeeklyEpManager } from "@/components/admin/WeeklyEpManager";
+import { AdminAIManager } from "@/components/admin/AdminAIManager";
+import { AdminNotificationBell } from "@/components/admin/AdminNotificationBell";
 
 type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service";
 
@@ -4032,6 +4034,12 @@ ${tgHashtags}`;
         {/* ==================== DASHBOARD ==================== */}
         {activeSection === "dashboard" && (
           <div>
+            {/* 🔔 Notification Bell — top right */}
+            <div className="flex justify-end mb-2">
+              <AdminNotificationBell />
+            </div>
+            {/* 🤖 AI Manager — top of admin home */}
+            <AdminAIManager />
             <div className="grid grid-cols-2 gap-2.5 mb-4">
               {[
                 { icon: <Film size={18} />, value: webseriesData.length, label: "Web Series", color: "text-indigo-400" },
