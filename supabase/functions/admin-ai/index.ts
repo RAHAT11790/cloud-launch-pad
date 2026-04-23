@@ -472,6 +472,83 @@ async function executeOperation(op: any) {
       await fbPut(`${collection}/${id}`, series);
       return { ok: true, message: `Created ${title} (${id}) — Hindi Official, ${seasons.length} season skeleton${seasons.length !== 1 ? "s" : ""}` };
     }
+    case "bulk_add_episodes": {
+      const { collection, seriesId, seasonNumber, episodes, trim = true } = args;
+      const seasonsPath = `${collection}/${seriesId}/seasons`;
+      const seasons = (await fbGet(seasonsPath)) || [];
+      const seasonsArr = Array.isArray(seasons) ? seasons : Object.values(seasons);
+      const sIdx = seasonsArr.findIndex((s: any) => s?.seasonNumber === seasonNumber);
+      if (sIdx < 0) throw new Error(`Season ${seasonNumber} not found in ${seriesId}`);
+      const newEps = episodes
+        .map((e: any) => {
+          const out: Record<string, any> = {
+            episodeNumber: e.episodeNumber,
+            title: e.title || `Episode ${e.episodeNumber}`,
+          };
+          if (e.link) out.link = e.link;
+          if (e.link480) out.link480 = e.link480;
+          if (e.link720) out.link720 = e.link720;
+          if (e.link1080) out.link1080 = e.link1080;
+          if (e.link4k) out.link4k = e.link4k;
+          if (e.audioLanguage) out.audioLanguage = e.audioLanguage;
+          if (e.audioTrack) out.audioTrack = e.audioTrack;
+          return out;
+        })
+        .sort((a: any, b: any) => a.episodeNumber - b.episodeNumber);
+      const finalEps = trim
+        ? newEps
+        : (() => {
+            const existing = seasonsArr[sIdx]?.episodes || [];
+            const existingArr = Array.isArray(existing) ? existing : Object.values(existing);
+            const map = new Map<number, any>();
+            existingArr.forEach((e: any) => e?.episodeNumber && map.set(e.episodeNumber, e));
+            newEps.forEach((e: any) => map.set(e.episodeNumber, { ...map.get(e.episodeNumber), ...e }));
+            return [...map.values()].sort((a, b) => a.episodeNumber - b.episodeNumber);
+          })();
+      await fbPut(`${seasonsPath}/${sIdx}/episodes`, finalEps);
+      return {
+        ok: true,
+        message: `${finalEps.length} episode${finalEps.length > 1 ? "s" : ""} saved to ${seriesId} S${seasonNumber}${trim ? " (others removed)" : ""}`,
+      };
+    }
+    case "notify_and_telegram": {
+      const { collection, seriesId, seasonNumber, episodeNumber, customMessage } = args;
+      const series: any = await fbGet(`${collection}/${seriesId}`);
+      if (!series) throw new Error(`Series ${seriesId} not found`);
+      const title = series.title || series.name || seriesId;
+      const epLabel = seasonNumber && episodeNumber ? ` — S${seasonNumber} EP${episodeNumber}` : "";
+      const msg = customMessage || `🆕 New episode: ${title}${epLabel}`;
+      // 1) FCM
+      const fcmUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-fcm`;
+      const fcmRes = await fetch(fcmUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+        },
+        body: JSON.stringify({
+          title: `${title}${epLabel}`,
+          body: msg,
+          image: series.poster || series.backdrop,
+          data: { url: `${series.id ? `?anime=${series.id}` : ""}`, animeId: seriesId },
+        }),
+      });
+      const fcmJson = await fcmRes.json().catch(() => ({}));
+      // 2) Telegram
+      const tgUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-post`;
+      const tgRes = await fetch(tgUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+        },
+        body: JSON.stringify({ collection, seriesId, message: msg, seasonNumber, episodeNumber }),
+      });
+      return {
+        ok: fcmRes.ok || tgRes.ok,
+        message: `📲 FCM: ${fcmJson.success ?? "?"}/${fcmJson.totalTokens ?? "?"} sent · 📢 Telegram: ${tgRes.ok ? "✓" : "✗"}`,
+      };
+    }
     default:
       throw new Error(`Unknown operation: ${name}`);
   }
