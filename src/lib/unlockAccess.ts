@@ -311,3 +311,47 @@ export const consumeUnlockTokenForCurrentUser = async (
 
   return { ok: true, reason: "claimed", serviceId, durationMs };
 };
+
+/**
+ * Build a Telegram-bot deep-link unlock URL for the current user.
+ * The website Verify button calls this and redirects the user into the bot,
+ * which then handles the vplink shortener flow and finally redirects back.
+ */
+export async function createTelegramBotUnlockLink(): Promise<{
+  ok: boolean;
+  deepLink?: string;
+  error?: string;
+}> {
+  const userId = getLocalUserId();
+  if (!userId) return { ok: false, error: "login_required" };
+
+  try {
+    // Try the configured Telegram provider URL first
+    let endpoint = "";
+    try {
+      const snap = await get(ref(db, "settings/telegramFunctionUrl"));
+      endpoint = String(snap.val() || "").trim();
+    } catch {}
+
+    if (!endpoint) {
+      // Fallback: derive from current Supabase project
+      const supaUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "";
+      if (supaUrl) endpoint = `${supaUrl}/functions/v1/telegram-post`;
+    }
+    if (!endpoint) return { ok: false, error: "telegram_endpoint_not_configured" };
+
+    const r = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "create-unlock-link", userId }),
+    });
+    const data = await r.json();
+    if (!r.ok || !data?.deepLink) {
+      return { ok: false, error: data?.error || "bot_link_failed" };
+    }
+    return { ok: true, deepLink: data.deepLink };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "unknown" };
+  }
+}
+
