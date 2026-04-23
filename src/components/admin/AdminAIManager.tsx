@@ -484,6 +484,197 @@ export function AdminAIManager() {
         </div>
       )}
 
+      {/* === Episode Builder Toggle === */}
+      <div className="px-3 py-2 border-t border-white/8 bg-violet-950/20">
+        <button
+          onClick={() => setBuilderOpen((v) => !v)}
+          className="w-full flex items-center justify-between text-[11.5px] font-semibold text-violet-200 hover:text-white"
+        >
+          <span className="flex items-center gap-1.5">
+            <Wand2 size={13} />
+            Episode Builder
+            {queue.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-violet-500/30 text-[9.5px]">
+                {queue.length} queued
+              </span>
+            )}
+            {builderTarget && (
+              <span className="ml-1 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[9.5px] truncate max-w-[140px]">
+                🎯 {builderTarget.title || builderTarget.seriesId} S{builderTarget.seasonNumber}
+              </span>
+            )}
+          </span>
+          {builderOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </button>
+
+        {builderOpen && (
+          <div className="mt-2 space-y-2.5 bg-[#0a0a14] border border-violet-500/30 rounded-xl p-2.5">
+            {/* Target selector */}
+            <div className="flex gap-1.5 items-center">
+              <label className="text-[10px] text-violet-300 font-bold uppercase">Target:</label>
+              <input
+                placeholder="seriesId (e.g. tmdb_46260)"
+                value={builderTarget?.seriesId || ""}
+                onChange={(e) =>
+                  setBuilderTarget((t) => ({
+                    collection: t?.collection || "webseries",
+                    seriesId: e.target.value,
+                    seasonNumber: t?.seasonNumber || 1,
+                    title: t?.title,
+                  }))
+                }
+                className="flex-1 bg-[#141422] border border-white/10 rounded px-2 py-1 text-[11px] text-white"
+              />
+              <select
+                value={builderTarget?.collection || "webseries"}
+                onChange={(e) =>
+                  setBuilderTarget((t) => ({
+                    collection: e.target.value as any,
+                    seriesId: t?.seriesId || "",
+                    seasonNumber: t?.seasonNumber || 1,
+                    title: t?.title,
+                  }))
+                }
+                className="bg-[#141422] border border-white/10 rounded px-1.5 py-1 text-[10px] text-white"
+              >
+                <option value="webseries">webseries</option>
+                <option value="movies">movies</option>
+                <option value="animesalt">animesalt</option>
+              </select>
+              <input
+                type="number"
+                min={1}
+                placeholder="S"
+                value={builderTarget?.seasonNumber || 1}
+                onChange={(e) =>
+                  setBuilderTarget((t) => ({
+                    collection: t?.collection || "webseries",
+                    seriesId: t?.seriesId || "",
+                    seasonNumber: Number(e.target.value) || 1,
+                    title: t?.title,
+                  }))
+                }
+                className="w-12 bg-[#141422] border border-white/10 rounded px-2 py-1 text-[11px] text-white"
+              />
+            </div>
+
+            {/* Episode number + audio */}
+            <div className="flex gap-1.5 items-center">
+              <label className="text-[10px] text-violet-300 font-bold uppercase">EP</label>
+              <input
+                type="number"
+                min={1}
+                value={currentEpNum}
+                onChange={(e) => setCurrentEpNum(Number(e.target.value) || 1)}
+                className="w-16 bg-[#141422] border border-white/10 rounded px-2 py-1 text-[11px] text-white"
+              />
+              <Music2 size={12} className="text-violet-300" />
+              <select
+                value={audioLang}
+                onChange={(e) => setAudioLang(e.target.value)}
+                className="flex-1 bg-[#141422] border border-white/10 rounded px-2 py-1 text-[11px] text-white"
+              >
+                <option>Hindi</option>
+                <option>English</option>
+                <option>Japanese</option>
+                <option>Bangla</option>
+                <option>Multi</option>
+              </select>
+            </div>
+
+            {/* Quality buttons (5) */}
+            <div className="space-y-1">
+              {QUALITY_KEYS.map(({ key, label }) => (
+                <div key={key} className="flex gap-1.5 items-center">
+                  <span className="w-14 text-[10.5px] font-bold text-zinc-400">{label}</span>
+                  <input
+                    placeholder={`paste ${label} link…`}
+                    value={(currentLinks[key] as string) || ""}
+                    onChange={(e) => setQuality(key, e.target.value)}
+                    className="flex-1 bg-[#141422] border border-white/10 rounded px-2 py-1 text-[11px] text-white placeholder:text-zinc-600 font-mono"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Add / Done buttons */}
+            <div className="flex gap-1.5">
+              <button
+                onClick={addToQueue}
+                className="flex-1 px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11.5px] font-bold flex items-center justify-center gap-1"
+              >
+                <Plus size={12} /> Add (next EP)
+              </button>
+              <button
+                onClick={() => submitQueue(false)}
+                disabled={queue.length === 0}
+                className="flex-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 text-white text-[11.5px] font-bold flex items-center justify-center gap-1"
+              >
+                <Check size={12} /> Done · Save {queue.length || ""}
+              </button>
+              <button
+                onClick={() => submitQueue(true)}
+                disabled={queue.length === 0}
+                className="flex-1 px-2.5 py-1.5 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 disabled:opacity-30 text-white text-[11.5px] font-bold flex items-center justify-center gap-1"
+              >
+                ✨ Save + Notify
+              </button>
+            </div>
+
+            {/* Queue list */}
+            {queue.length > 0 && (
+              <div className="bg-white/5 border border-white/10 rounded-lg p-1.5 max-h-24 overflow-y-auto">
+                {queue.map((e) => (
+                  <div key={e.episodeNumber} className="flex justify-between text-[10.5px] py-0.5">
+                    <span className="text-emerald-300">EP{e.episodeNumber}</span>
+                    <span className="text-zinc-400">
+                      {QUALITY_KEYS.filter(({ key }) => (e as any)[key])
+                        .map(({ label }) => label)
+                        .join(" · ")}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setQueue((q) => q.filter((x) => x.episodeNumber !== e.episodeNumber))
+                      }
+                      className="text-rose-400 hover:text-rose-300"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* JSON paste box */}
+            <div>
+              <button
+                onClick={() => setShowJson((v) => !v)}
+                className="text-[10.5px] text-violet-300 hover:text-white flex items-center gap-1"
+              >
+                <FileJson size={11} /> {showJson ? "Hide" : "Paste"} JSON (bulk import)
+              </button>
+              {showJson && (
+                <div className="mt-1.5 space-y-1.5">
+                  <textarea
+                    value={jsonText}
+                    onChange={(e) => setJsonText(e.target.value)}
+                    placeholder='[{"episodeNumber":1,"link1080":"https://..."},{"episodeNumber":2,"link720":"https://..."}]'
+                    rows={4}
+                    className="w-full bg-[#141422] border border-white/10 rounded px-2 py-1.5 text-[10.5px] text-white font-mono placeholder:text-zinc-600"
+                  />
+                  <button
+                    onClick={importJsonEpisodes}
+                    className="w-full px-2 py-1 rounded bg-violet-600 hover:bg-violet-500 text-white text-[11px] font-bold"
+                  >
+                    Import to Queue
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Input */}
       <div className="p-2.5 border-t border-white/8 bg-[#0a0a14] flex gap-2">
         <input
