@@ -24,8 +24,8 @@ const SITE_URL = Deno.env.get("SITE_URL") ?? "https://rsanime03.lovable.app";
 const FIREBASE_DB =
   Deno.env.get("FIREBASE_DATABASE_URL") ??
   "https://rs-anime-default-rtdb.firebaseio.com";
-const VPLINK_API_KEY =
-  Deno.env.get("VPLINK_API_KEY") ?? "ab26a97a3a3540c5be2ce837bd97526f8e76043d";
+const SHRINKME_API_KEY =
+  Deno.env.get("SHRINKME_API_KEY") ?? "ab26a97a3a3540c5be2ce837bd97526f8e76043d";
 const UNLOCK_BANNER_IMAGE = "https://i.ibb.co/PsNMKqnT/IMG-20260417-065611-339.jpg";
 
 async function fbPut(path: string, data: unknown) {
@@ -41,24 +41,13 @@ const randomToken = () =>
 
 async function shortenUrl(target: string): Promise<string | null> {
   try {
-    const url = `https://vplink.in/api?api=${encodeURIComponent(VPLINK_API_KEY)}&url=${encodeURIComponent(target)}`;
+    const url = `https://shrinkme.io/api?api=${encodeURIComponent(SHRINKME_API_KEY)}&url=${encodeURIComponent(target)}`;
     const r = await fetch(url);
     const j = await r.json().catch(() => ({}));
-    if (j?.status === "success" && j?.shortenedUrl) return j.shortenedUrl;
-    return null;
+    return j?.shortenedUrl || null;
   } catch {
     return null;
   }
-}
-
-async function deleteMessage(botToken: string, chatId: number | string, messageId: number) {
-  try {
-    await fetch(`https://api.telegram.org/bot${botToken}/deleteMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
-    });
-  } catch {}
 }
 
 async function sendUnlockMessage(
@@ -68,25 +57,15 @@ async function sendUnlockMessage(
 ) {
   const telegramBase = `https://api.telegram.org/bot${botToken}`;
   const caption =
-    `<b>🔓 𝐔𝐍𝐋𝐎𝐂𝐊 𝐘𝐎𝐔𝐑 𝟐𝟒𝐇 𝐀𝐂𝐂𝐄𝐒𝐒</b>\n\n` +
-    `✨ <i>Open the link below to unlock</i> <b>24 hours</b> <i>of free access to RS Anime.</i>\n\n` +
-    `📌 <b>𝐇𝐨𝐰 𝐢𝐭 𝐰𝐨𝐫𝐤𝐬:</b>\n` +
-    `1️⃣ Tap the <b>Unlock Access</b> button below\n` +
-    `2️⃣ Wait a few seconds on the shortener page\n` +
-    `3️⃣ You'll be redirected back automatically\n\n` +
-    `⏱ <i>One tap • One unlock • Fast & safe</i>`;
-  const noticeText =
-    `⚠️ <b>𝐈𝐌𝐏𝐎𝐑𝐓𝐀𝐍𝐓 𝐍𝐎𝐓𝐈𝐂𝐄</b>\n\n` +
-    `⏰ This link will <b>auto-delete in 30 seconds</b>.\n\n` +
-    `If you miss it, just tap the <b>Free Access</b> button on any Telegram post or the <b>Verify</b> button on the website again.`;
+    `<b>🔓 𝐔𝐧𝐥𝐨𝐜𝐤 𝟐𝟒𝐡 𝐀𝐜𝐜𝐞𝐬𝐬</b>\n\n` +
+    `Open the link below to unlock <b>24 hours</b> of free access to RS Anime.\n\n` +
+    `1️⃣ Tap the button.\n` +
+    `2️⃣ Wait a few seconds on the page.\n` +
+    `3️⃣ You'll be sent back to the website automatically.\n\n` +
+    `<i>One tap • One unlock • Fast & safe</i>`;
   const keyboard = {
-    inline_keyboard: [[{ text: "🔓 𝐔𝐧𝐥𝐨𝐜𝐤 𝐀𝐜𝐜𝐞𝐬𝐬", url: shortLink }]],
+    inline_keyboard: [[{ text: "🚀 Open Unlock Link", url: shortLink }]],
   };
-
-  let mainMessageId: number | null = null;
-  let noticeMessageId: number | null = null;
-
-  // Try sending photo first
   try {
     const r = await fetch(`${telegramBase}/sendPhoto`, {
       method: "POST",
@@ -100,50 +79,18 @@ async function sendUnlockMessage(
       }),
     });
     const d = await r.json().catch(() => ({}));
-    if (r.ok && d?.ok) mainMessageId = d.result?.message_id ?? null;
+    if (r.ok && d?.ok) return d;
   } catch (_) {}
-
-  if (!mainMessageId) {
-    try {
-      const r2 = await fetch(`${telegramBase}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: caption,
-          parse_mode: "HTML",
-          reply_markup: keyboard,
-        }),
-      });
-      const d2 = await r2.json().catch(() => ({}));
-      if (r2.ok && d2?.ok) mainMessageId = d2.result?.message_id ?? null;
-    } catch (_) {}
-  }
-
-  // Send the 30s notice as a separate message
-  try {
-    const rN = await fetch(`${telegramBase}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: noticeText,
-        parse_mode: "HTML",
-      }),
-    });
-    const dN = await rN.json().catch(() => ({}));
-    if (rN.ok && dN?.ok) noticeMessageId = dN.result?.message_id ?? null;
-  } catch (_) {}
-
-  // Schedule auto-cleanup after 30s (best-effort, edge runtime allows ~60s)
-  if (mainMessageId || noticeMessageId) {
-    const ids = [mainMessageId, noticeMessageId].filter((x): x is number => !!x);
-    setTimeout(() => {
-      ids.forEach((mid) => deleteMessage(botToken, chatId, mid));
-    }, 30_000);
-  }
-
-  return { mainMessageId, noticeMessageId };
+  return await (await fetch(`${telegramBase}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: caption,
+      parse_mode: "HTML",
+      reply_markup: keyboard,
+    }),
+  })).json();
 }
 
 async function handleUnlockDeepLink(
@@ -162,7 +109,6 @@ async function handleUnlockDeepLink(
     status: "pending",
     consumed: false,
     source: "telegram_bot",
-    serviceId: "telegram_bot",
     tgUserId: String(tgUserId),
   });
   const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}&svc=telegram`;
@@ -207,7 +153,7 @@ Hey <b>${firstName}</b>! 👋
 
 ━━━━━━━━━━━━━━━━━━
 
-🎬 Tap <b>Free Access</b> on any post to unlock 24h access instantly!
+🎬 Start watching now — tap the buttons below! 👇
 `.trim();
 
   const keyboard = {
@@ -218,6 +164,7 @@ Hey <b>${firstName}</b>! 👋
     ],
   };
 
+  // Try sending with photo first
   try {
     const photoRes = await fetch(`${telegramBase}/sendPhoto`, {
       method: "POST",
@@ -232,8 +179,11 @@ Hey <b>${firstName}</b>! 👋
     });
     const photoData = await photoRes.json();
     if (photoRes.ok && photoData?.ok) return photoData;
-  } catch (_) {}
+  } catch (_) {
+    // fallback to text
+  }
 
+  // Fallback: text only
   const res = await fetch(`${telegramBase}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -245,16 +195,6 @@ Hey <b>${firstName}</b>! 👋
     }),
   });
   return await res.json();
-}
-
-async function getBotUsername(botToken: string): Promise<string | null> {
-  try {
-    const r = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
-    const d = await r.json();
-    return d?.result?.username || null;
-  } catch {
-    return null;
-  }
 }
 
 serve(async (req) => {
@@ -314,7 +254,9 @@ serve(async (req) => {
     if (action === "create-unlock-link") {
       const userId = String(body?.userId || "").trim();
       if (!userId) return json({ error: "userId required" }, 400);
-      const username = await getBotUsername(botToken);
+      const meRes = await fetch(`${telegramBase}/getMe`);
+      const me = await meRes.json().catch(() => ({}));
+      const username = me?.result?.username;
       if (!username) return json({ error: "Could not resolve bot username" }, 500);
       const deepLink = `https://t.me/${username}?start=unlock_${encodeURIComponent(userId)}`;
       return json({ ok: true, deepLink, botUsername: username });
@@ -337,19 +279,18 @@ serve(async (req) => {
       return json(data);
     }
 
+    // ========== DELETE WEBHOOK ==========
     if (action === "delete-webhook") {
       const res = await fetch(`${telegramBase}/deleteWebhook`, { method: "POST" });
-      return json(await res.json());
+      const data = await res.json();
+      return json(data);
     }
 
+    // ========== GET WEBHOOK INFO ==========
     if (action === "webhook-info") {
       const res = await fetch(`${telegramBase}/getWebhookInfo`);
-      return json(await res.json());
-    }
-
-    if (action === "get-bot-username") {
-      const username = await getBotUsername(botToken);
-      return json({ ok: !!username, username });
+      const data = await res.json();
+      return json(data);
     }
 
     // ========== EDIT BUTTONS ==========
@@ -384,8 +325,6 @@ serve(async (req) => {
     const buttonText = String(body?.buttonText || "").trim();
     const buttonUrl = String(body?.buttonUrl || "").trim();
     const extraInlineButtons: InlineButton[] = Array.isArray(body?.inlineButtons) ? body.inlineButtons : [];
-    const includeFreeAccess = body?.includeFreeAccess !== false; // default true
-    const freeAccessUserId = String(body?.freeAccessUserId || "guest").trim() || "guest";
 
     if (!chatId) return json({ error: "chatId required" }, 400);
 
@@ -394,17 +333,6 @@ serve(async (req) => {
     extraInlineButtons.forEach((btn: any) => {
       if (btn?.text && btn?.url) buttons.push({ text: String(btn.text), url: String(btn.url) });
     });
-
-    // ✨ Auto-add Free Access button (deep-links into the bot)
-    if (includeFreeAccess) {
-      const username = await getBotUsername(botToken);
-      if (username) {
-        buttons.push({
-          text: "🔓 𝐅𝐫𝐞𝐞 𝐀𝐜𝐜𝐞𝐬𝐬 (𝟐𝟒𝐡)",
-          url: `https://t.me/${username}?start=unlock_${encodeURIComponent(freeAccessUserId)}`,
-        });
-      }
-    }
 
     const payloadBase: Record<string, unknown> = {
       chat_id: chatId,

@@ -8,7 +8,7 @@ import {
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
-import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getLocalUserId, type AdService } from "@/lib/unlockAccess";
+import { createUnlockLinksForAllServices, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 // Shortener gate is always-on now (Monetag system removed)
 const isShortenerEnabled = async () => true;
@@ -461,15 +461,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     });
   }, [isPremium, has24hAccess, unlockBlocked]);
 
-  const handleOpenAdLink = useCallback(async (url: string) => {
-    // If admin enabled "unlock via Telegram bot", redirect to bot deep-link instead
-    try {
-      const snap = await import("@/lib/firebase").then(m => m.get(m.ref(m.db, "settings/unlockViaTelegramBot")));
-      if (snap.val() === true) {
-        const r = await createTelegramBotUnlockLink();
-        if (r.ok && r.deepLink) { window.location.href = r.deepLink; return; }
-      }
-    } catch {}
+  const handleOpenAdLink = useCallback((url: string) => {
     if (url) window.location.href = url;
   }, []);
 

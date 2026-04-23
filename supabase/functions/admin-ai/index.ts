@@ -259,76 +259,6 @@ const tools = [
       },
     },
   },
-  {
-    type: "function",
-    function: {
-      name: "create_anime_from_tmdb",
-      description: "Create a brand-new anime/series in Firebase using TMDB ID. Auto-fetches poster, backdrop, title, year, overview, genres. Default audio language = Hindi (Official). After creation, the admin can add episodes via add_episode or bulk_add_episodes.",
-      parameters: {
-        type: "object",
-        properties: {
-          collection: { type: "string", enum: ["webseries", "movies"] },
-          tmdbId: { type: "string", description: "TMDB ID (movie or tv)" },
-          mediaType: { type: "string", enum: ["tv", "movie"] },
-          customId: { type: "string", description: "Optional custom Firebase ID. If omitted, uses tmdb_<id>." },
-        },
-        required: ["collection", "tmdbId", "mediaType"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "bulk_add_episodes",
-      description: "Save MULTIPLE episodes at once to a single season. Also TRIMS the season — only the provided episode numbers are kept; all other episodes are deleted. Use this when admin clicks 'Done' after queuing episodes via the AI chat builder.",
-      parameters: {
-        type: "object",
-        properties: {
-          collection: { type: "string", enum: ["webseries", "movies", "animesalt"] },
-          seriesId: { type: "string" },
-          seasonNumber: { type: "number" },
-          trim: { type: "boolean", description: "If true, delete episodes not in this list (default true)" },
-          episodes: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                episodeNumber: { type: "number" },
-                title: { type: "string" },
-                link: { type: "string" },
-                link480: { type: "string" },
-                link720: { type: "string" },
-                link1080: { type: "string" },
-                link4k: { type: "string" },
-                audioLanguage: { type: "string", description: "e.g. Hindi, English, Japanese" },
-                audioTrack: { type: "string", description: "official/dual/sub" },
-              },
-              required: ["episodeNumber"],
-            },
-          },
-        },
-        required: ["collection", "seriesId", "seasonNumber", "episodes"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "notify_and_telegram",
-      description: "Single chained action: send FCM push notification AND post to Telegram channel for a series episode. Use when admin says 'send notify and telegram' or 'post everywhere'.",
-      parameters: {
-        type: "object",
-        properties: {
-          collection: { type: "string", enum: ["webseries", "movies", "animesalt"] },
-          seriesId: { type: "string" },
-          seasonNumber: { type: "number" },
-          episodeNumber: { type: "number" },
-          customMessage: { type: "string", description: "Optional override message" },
-        },
-        required: ["collection", "seriesId"],
-      },
-    },
-  },
 ];
 
 // ---------------- Plan executor ----------------
@@ -430,125 +360,6 @@ async function executeOperation(op: any) {
       else await fbPatch(args.path, args.data);
       return { ok: true, message: `Wrote ${args.path}` };
     }
-    case "create_anime_from_tmdb": {
-      const TMDB_KEY = Deno.env.get("TMDB_API_KEY") || "8265bd1679663a7ea12ac168da84d2e8";
-      const { collection, tmdbId, mediaType, customId } = args;
-      const tmdbUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_KEY}&language=en-US`;
-      const r = await fetch(tmdbUrl);
-      if (!r.ok) throw new Error(`TMDB fetch failed: ${r.status}`);
-      const t = await r.json();
-      const id = customId || `tmdb_${tmdbId}`;
-      const title = t.title || t.name || "Untitled";
-      const seasons: any[] = [];
-      // For TV: pre-create season skeletons (admin will add episodes via add_episode)
-      if (mediaType === "tv" && Array.isArray(t.seasons)) {
-        t.seasons
-          .filter((s: any) => s.season_number > 0)
-          .forEach((s: any) => {
-            seasons.push({
-              seasonNumber: s.season_number,
-              name: s.name || `Season ${s.season_number}`,
-              episodes: [],
-            });
-          });
-      }
-      const series = {
-        id,
-        title,
-        poster: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : "",
-        backdrop: t.backdrop_path ? `https://image.tmdb.org/t/p/original${t.backdrop_path}` : "",
-        year: String((t.release_date || t.first_air_date || "").slice(0, 4)),
-        rating: String(t.vote_average?.toFixed(1) || ""),
-        language: "Hindi",
-        dubType: "official",
-        category: t.genres?.[0]?.name || "Anime",
-        type: mediaType === "tv" ? "webseries" : "movie",
-        storyline: t.overview || "",
-        tmdbId: String(tmdbId),
-        seasons: seasons.length > 0 ? seasons : undefined,
-        createdAt: Date.now(),
-        source: "firebase",
-      };
-      await fbPut(`${collection}/${id}`, series);
-      return { ok: true, message: `Created ${title} (${id}) — Hindi Official, ${seasons.length} season skeleton${seasons.length !== 1 ? "s" : ""}` };
-    }
-    case "bulk_add_episodes": {
-      const { collection, seriesId, seasonNumber, episodes, trim = true } = args;
-      const seasonsPath = `${collection}/${seriesId}/seasons`;
-      const seasons = (await fbGet(seasonsPath)) || [];
-      const seasonsArr = Array.isArray(seasons) ? seasons : Object.values(seasons);
-      const sIdx = seasonsArr.findIndex((s: any) => s?.seasonNumber === seasonNumber);
-      if (sIdx < 0) throw new Error(`Season ${seasonNumber} not found in ${seriesId}`);
-      const newEps = episodes
-        .map((e: any) => {
-          const out: Record<string, any> = {
-            episodeNumber: e.episodeNumber,
-            title: e.title || `Episode ${e.episodeNumber}`,
-          };
-          if (e.link) out.link = e.link;
-          if (e.link480) out.link480 = e.link480;
-          if (e.link720) out.link720 = e.link720;
-          if (e.link1080) out.link1080 = e.link1080;
-          if (e.link4k) out.link4k = e.link4k;
-          if (e.audioLanguage) out.audioLanguage = e.audioLanguage;
-          if (e.audioTrack) out.audioTrack = e.audioTrack;
-          return out;
-        })
-        .sort((a: any, b: any) => a.episodeNumber - b.episodeNumber);
-      const finalEps = trim
-        ? newEps
-        : (() => {
-            const existing = seasonsArr[sIdx]?.episodes || [];
-            const existingArr = Array.isArray(existing) ? existing : Object.values(existing);
-            const map = new Map<number, any>();
-            existingArr.forEach((e: any) => e?.episodeNumber && map.set(e.episodeNumber, e));
-            newEps.forEach((e: any) => map.set(e.episodeNumber, { ...map.get(e.episodeNumber), ...e }));
-            return [...map.values()].sort((a, b) => a.episodeNumber - b.episodeNumber);
-          })();
-      await fbPut(`${seasonsPath}/${sIdx}/episodes`, finalEps);
-      return {
-        ok: true,
-        message: `${finalEps.length} episode${finalEps.length > 1 ? "s" : ""} saved to ${seriesId} S${seasonNumber}${trim ? " (others removed)" : ""}`,
-      };
-    }
-    case "notify_and_telegram": {
-      const { collection, seriesId, seasonNumber, episodeNumber, customMessage } = args;
-      const series: any = await fbGet(`${collection}/${seriesId}`);
-      if (!series) throw new Error(`Series ${seriesId} not found`);
-      const title = series.title || series.name || seriesId;
-      const epLabel = seasonNumber && episodeNumber ? ` — S${seasonNumber} EP${episodeNumber}` : "";
-      const msg = customMessage || `🆕 New episode: ${title}${epLabel}`;
-      // 1) FCM
-      const fcmUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-fcm`;
-      const fcmRes = await fetch(fcmUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
-        },
-        body: JSON.stringify({
-          title: `${title}${epLabel}`,
-          body: msg,
-          image: series.poster || series.backdrop,
-          data: { url: `${series.id ? `?anime=${series.id}` : ""}`, animeId: seriesId },
-        }),
-      });
-      const fcmJson = await fcmRes.json().catch(() => ({}));
-      // 2) Telegram
-      const tgUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-post`;
-      const tgRes = await fetch(tgUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
-        },
-        body: JSON.stringify({ collection, seriesId, message: msg, seasonNumber, episodeNumber }),
-      });
-      return {
-        ok: fcmRes.ok || tgRes.ok,
-        message: `📲 FCM: ${fcmJson.success ?? "?"}/${fcmJson.totalTokens ?? "?"} sent · 📢 Telegram: ${tgRes.ok ? "✓" : "✗"}`,
-      };
-    }
     default:
       throw new Error(`Unknown operation: ${name}`);
   }
@@ -589,25 +400,24 @@ Your knowledge of the database (live snapshot, refreshed every 60s):
 ${JSON.stringify(knowledge, null, 2).slice(0, 12000)}
 
 CAPABILITIES — you can call these tools:
-- create_anime_from_tmdb(collection, tmdbId, mediaType, customId?) — Create NEW series/movie from TMDB. Default audio=Hindi Official.
-- add_episode(collection, seriesId, seasonNumber, episodeNumber, title?, link480?, link720?, link1080?, link4k?, link?) — single episode
-- bulk_add_episodes(collection, seriesId, seasonNumber, episodes[], trim=true) — multi-episode save in ONE go. **trim=true means episodes NOT in the array are DELETED** — use this when admin gives only a few episode links but TMDB has many.
-- notify_and_telegram(collection, seriesId, seasonNumber?, episodeNumber?) — send FCM push + Telegram post in ONE chained action.
+- add_episode(collection, seriesId, seasonNumber, episodeNumber, title?, link480?, link720?, link1080?, link4k?, link?)
 - edit_series(collection, seriesId, patch{})
-- delete_item(path) — DESTRUCTIVE
-- send_notification, send_telegram, release_weekly, check_link, approve_subscription, set_firebase_path
+- delete_item(path) — DESTRUCTIVE, use with care
+- send_notification(title, body, link?, imageUrl?) — push to all users
+- send_telegram(collection, seriesId, message?)
+- release_weekly(seriesId)
+- check_link(url)
+- approve_subscription(paymentId, days?)
+- set_firebase_path(path, data, mode?) — generic fallback
 
 RULES:
 1. Default to **Bangla** unless told otherwise.
-2. When admin says "add anime X" / "create new anime X" — first try to find it by title in the knowledge. If NOT found, ask for TMDB ID, then call create_anime_from_tmdb. After creation, if the admin gave episode links, call bulk_add_episodes (trim=true) so empty TMDB episodes get cleaned up.
-3. **Trim logic** — if admin says "EP1 = link1, EP2 = link2" but the season has 12 episodes from TMDB, ALWAYS use bulk_add_episodes with trim=true so only those 2 stay.
-4. Treat link with no quality tag as **1080p** by default. Treat audio as **Hindi Official** by default.
-5. **Free-text parsing** — when the admin writes "Naruto S1 EP5 720p https://… 1080p https://…", find the matching seriesId, identify qualities, call add_episode (or bulk_add_episodes if multiple).
-6. **Auto-chain** — if admin says "save AND send notify AND telegram" or "post everywhere" — propose bulk_add_episodes FOLLOWED BY notify_and_telegram in the SAME plan.
-7. NEVER execute yourself. Just propose tool calls — admin will see preview & click Allow/Disallow.
-8. If matching is ambiguous, list top 3 candidates with TITLES (never raw IDs).
-9. Always describe in Bangla what you understood: "নারুতো S1 — ২টি episode add করব (S1 EP1 + EP2), বাকি ১০টি delete হবে (trim), তারপর FCM + Telegram পাঠাব।"
-10. You can also be a normal chat assistant — if the admin just says "hi" or asks how many series, reply naturally without tool calls.
+2. Free-text parsing — when the admin writes "Naruto S1 EP5 720p https://… 1080p https://…", find the matching seriesId from the knowledge (match by title), identify qualities (480p/720p/1080p/4k), and call add_episode with the right links.
+3. **Chain workflows automatically**: add_episode → check_link for every link → if all alive, send_notification + send_telegram. If any link is dead, WARN the admin and SKIP notify/telegram.
+4. NEVER execute yourself. Just propose the tool calls — the admin will see a preview and click Allow/Disallow.
+5. If the matching series is ambiguous, ask the admin to clarify (show the top 3 candidates with their titles, NEVER just IDs).
+6. Always describe in Bangla what you understood: "নারুতো S1 EP5 add করব 720p + 1080p দিয়ে, তারপর users-কে notify করব।"
+7. You can also be a normal chat assistant — if the admin just says "hi" or asks how many series, reply naturally without tool calls.
 
 When you have nothing to do, just chat / give status updates.`;
 
