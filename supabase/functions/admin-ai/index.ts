@@ -258,11 +258,12 @@ const tools = [
         required: ["path", "data"],
       },
     },
+  },
   {
     type: "function",
     function: {
       name: "create_anime_from_tmdb",
-      description: "Create a brand-new anime/series in Firebase using TMDB ID. Auto-fetches poster, backdrop, title, year, overview, genres. Default audio language = Hindi (Official). After creation, the admin can add episodes via add_episode.",
+      description: "Create a brand-new anime/series in Firebase using TMDB ID. Auto-fetches poster, backdrop, title, year, overview, genres. Default audio language = Hindi (Official). After creation, the admin can add episodes via add_episode or bulk_add_episodes.",
       parameters: {
         type: "object",
         properties: {
@@ -272,6 +273,59 @@ const tools = [
           customId: { type: "string", description: "Optional custom Firebase ID. If omitted, uses tmdb_<id>." },
         },
         required: ["collection", "tmdbId", "mediaType"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "bulk_add_episodes",
+      description: "Save MULTIPLE episodes at once to a single season. Also TRIMS the season — only the provided episode numbers are kept; all other episodes are deleted. Use this when admin clicks 'Done' after queuing episodes via the AI chat builder.",
+      parameters: {
+        type: "object",
+        properties: {
+          collection: { type: "string", enum: ["webseries", "movies", "animesalt"] },
+          seriesId: { type: "string" },
+          seasonNumber: { type: "number" },
+          trim: { type: "boolean", description: "If true, delete episodes not in this list (default true)" },
+          episodes: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                episodeNumber: { type: "number" },
+                title: { type: "string" },
+                link: { type: "string" },
+                link480: { type: "string" },
+                link720: { type: "string" },
+                link1080: { type: "string" },
+                link4k: { type: "string" },
+                audioLanguage: { type: "string", description: "e.g. Hindi, English, Japanese" },
+                audioTrack: { type: "string", description: "official/dual/sub" },
+              },
+              required: ["episodeNumber"],
+            },
+          },
+        },
+        required: ["collection", "seriesId", "seasonNumber", "episodes"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "notify_and_telegram",
+      description: "Single chained action: send FCM push notification AND post to Telegram channel for a series episode. Use when admin says 'send notify and telegram' or 'post everywhere'.",
+      parameters: {
+        type: "object",
+        properties: {
+          collection: { type: "string", enum: ["webseries", "movies", "animesalt"] },
+          seriesId: { type: "string" },
+          seasonNumber: { type: "number" },
+          episodeNumber: { type: "number" },
+          customMessage: { type: "string", description: "Optional override message" },
+        },
+        required: ["collection", "seriesId"],
       },
     },
   },
