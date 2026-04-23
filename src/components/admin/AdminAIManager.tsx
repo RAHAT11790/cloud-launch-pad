@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Send, Check, X, Loader2, Bot, User, AlertCircle, Image as ImageIcon } from "lucide-react";
+import { Sparkles, Send, Check, X, Loader2, Bot, User, AlertCircle, Image as ImageIcon, Plus, FileJson, Music2, ChevronDown, ChevronUp, Wand2 } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { toast } from "sonner";
 
@@ -17,9 +17,28 @@ type Msg =
   | { role: "user"; content: string }
   | { role: "assistant"; content: string; operations?: Operation[]; status?: "pending" | "approved" | "rejected" | "executed"; results?: any[] };
 
+type EpisodeDraft = {
+  episodeNumber: number;
+  link?: string;
+  link480?: string;
+  link720?: string;
+  link1080?: string;
+  link4k?: string;
+  audioLanguage?: string;
+};
+
+type BuilderTarget = {
+  collection: "webseries" | "movies" | "animesalt";
+  seriesId: string;
+  seasonNumber: number;
+  title?: string;
+};
+
 const OP_LABELS: Record<string, { label: string; danger?: boolean; emoji: string }> = {
   create_anime_from_tmdb: { label: "Create Anime (TMDB)", emoji: "🆕" },
   add_episode: { label: "Add Episode", emoji: "➕" },
+  bulk_add_episodes: { label: "Bulk Save Episodes", emoji: "📦" },
+  notify_and_telegram: { label: "Notify + Telegram", emoji: "📲" },
   edit_series: { label: "Edit Series", emoji: "✏️" },
   delete_item: { label: "Delete", danger: true, emoji: "🗑️" },
   send_notification: { label: "Send Push Notification", emoji: "🔔" },
@@ -29,6 +48,14 @@ const OP_LABELS: Record<string, { label: string; danger?: boolean; emoji: string
   approve_subscription: { label: "Approve Subscription", emoji: "💳" },
   set_firebase_path: { label: "Write Firebase Data", emoji: "📝" },
 };
+
+const QUALITY_KEYS: Array<{ key: keyof EpisodeDraft; label: string }> = [
+  { key: "link", label: "Default" },
+  { key: "link480", label: "480p" },
+  { key: "link720", label: "720p" },
+  { key: "link1080", label: "1080p" },
+  { key: "link4k", label: "4K" },
+];
 
 export function AdminAIManager() {
   const [messages, setMessages] = useState<Msg[]>([
@@ -42,11 +69,142 @@ export function AdminAIManager() {
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Episode Builder state
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [builderTarget, setBuilderTarget] = useState<BuilderTarget | null>(null);
+  const [currentEpNum, setCurrentEpNum] = useState<number>(1);
+  const [currentLinks, setCurrentLinks] = useState<Partial<EpisodeDraft>>({});
+  const [audioLang, setAudioLang] = useState("Hindi");
+  const [queue, setQueue] = useState<EpisodeDraft[]>([]);
+  const [jsonText, setJsonText] = useState("");
+  const [showJson, setShowJson] = useState(false);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
   const aiUrl = `${SUPABASE_URL}/functions/v1/admin-ai`;
+
+  // ===== Builder helpers =====
+  const setQuality = (key: keyof EpisodeDraft, value: string) => {
+    setCurrentLinks((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const addToQueue = () => {
+    const hasLink = QUALITY_KEYS.some(({ key }) => (currentLinks[key] as string)?.trim());
+    if (!hasLink) {
+      toast.error("কমপক্ষে একটা quality link দিন");
+      return;
+    }
+    const draft: EpisodeDraft = {
+      episodeNumber: currentEpNum,
+      audioLanguage: audioLang,
+      ...currentLinks,
+    };
+    setQueue((q) =>
+      [...q.filter((e) => e.episodeNumber !== currentEpNum), draft].sort(
+        (a, b) => a.episodeNumber - b.episodeNumber,
+      ),
+    );
+    setCurrentLinks({});
+    setCurrentEpNum((n) => n + 1);
+    toast.success(`✓ EP${currentEpNum} queued — পরের episode link দিন`);
+  };
+
+  const importJsonEpisodes = () => {
+    try {
+      const parsed = JSON.parse(jsonText);
+      const arr = Array.isArray(parsed) ? parsed : parsed.episodes || [];
+      if (!Array.isArray(arr) || arr.length === 0) throw new Error("empty");
+      const valid = arr
+        .map((e: any, i: number) => ({
+          episodeNumber: Number(e.episodeNumber || e.ep || i + 1),
+          link: e.link,
+          link480: e.link480,
+          link720: e.link720,
+          link1080: e.link1080,
+          link4k: e.link4k,
+          audioLanguage: e.audioLanguage || audioLang,
+        }))
+        .filter(
+          (e) =>
+            e.episodeNumber &&
+            (e.link || e.link480 || e.link720 || e.link1080 || e.link4k),
+        );
+      if (!valid.length) throw new Error("no episode has links");
+      setQueue(valid);
+      setJsonText("");
+      setShowJson(false);
+      toast.success(`✓ ${valid.length} episodes imported from JSON`);
+    } catch (e: any) {
+      toast.error(`Invalid JSON: ${e.message}`);
+    }
+  };
+
+  const submitQueue = (chainNotify: boolean) => {
+    if (!builderTarget) {
+      toast.error("আগে target series বলুন (e.g. 'set target Naruto S1' chat-এ)");
+      return;
+    }
+    if (queue.length === 0) {
+      toast.error("Queue খালি — episode add করুন");
+      return;
+    }
+    const lines = queue
+      .map((e) => {
+        const links = QUALITY_KEYS.filter(({ key }) => (e as any)[key])
+          .map(({ key, label }) => `${label}: ${(e as any)[key]}`)
+          .join(", ");
+        return `EP${e.episodeNumber}: ${links}`;
+      })
+      .join("\n");
+    const audio = audioLang ? ` (Audio: ${audioLang})` : "";
+    const msg = `Save ${queue.length} episodes to **${builderTarget.title || builderTarget.seriesId}** S${builderTarget.seasonNumber}${audio}, **trim other episodes**:\n${lines}${chainNotify ? "\n\nতারপর FCM notification + Telegram পাঠাও।" : ""}`;
+    setBuilderOpen(false);
+    sendWithText(msg);
+    setQueue([]);
+    setCurrentEpNum(1);
+    setCurrentLinks({});
+  };
+
+  const sendWithText = async (text: string) => {
+    if (!text.trim() || loading) return;
+    setInput("");
+    const next: Msg[] = [...messages, { role: "user", content: text }];
+    setMessages(next);
+    setLoading(true);
+    try {
+      const chatHistory = next
+        .filter((m) => m.role === "user" || (m.role === "assistant" && m.content))
+        .map((m) => ({ role: m.role, content: m.content }));
+      const r = await fetch(aiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ mode: "plan", messages: chatHistory }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content: data.reply || "(no reply)",
+          operations: data.operations || [],
+          status: data.operations?.length ? "pending" : undefined,
+        },
+      ]);
+    } catch (e: any) {
+      setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${e.message}` }]);
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const send = async () => {
     const text = input.trim();
@@ -325,6 +483,197 @@ export function AdminAIManager() {
           ))}
         </div>
       )}
+
+      {/* === Episode Builder Toggle === */}
+      <div className="px-3 py-2 border-t border-white/8 bg-violet-950/20">
+        <button
+          onClick={() => setBuilderOpen((v) => !v)}
+          className="w-full flex items-center justify-between text-[11.5px] font-semibold text-violet-200 hover:text-white"
+        >
+          <span className="flex items-center gap-1.5">
+            <Wand2 size={13} />
+            Episode Builder
+            {queue.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-violet-500/30 text-[9.5px]">
+                {queue.length} queued
+              </span>
+            )}
+            {builderTarget && (
+              <span className="ml-1 px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[9.5px] truncate max-w-[140px]">
+                🎯 {builderTarget.title || builderTarget.seriesId} S{builderTarget.seasonNumber}
+              </span>
+            )}
+          </span>
+          {builderOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </button>
+
+        {builderOpen && (
+          <div className="mt-2 space-y-2.5 bg-[#0a0a14] border border-violet-500/30 rounded-xl p-2.5">
+            {/* Target selector */}
+            <div className="flex gap-1.5 items-center">
+              <label className="text-[10px] text-violet-300 font-bold uppercase">Target:</label>
+              <input
+                placeholder="seriesId (e.g. tmdb_46260)"
+                value={builderTarget?.seriesId || ""}
+                onChange={(e) =>
+                  setBuilderTarget((t) => ({
+                    collection: t?.collection || "webseries",
+                    seriesId: e.target.value,
+                    seasonNumber: t?.seasonNumber || 1,
+                    title: t?.title,
+                  }))
+                }
+                className="flex-1 bg-[#141422] border border-white/10 rounded px-2 py-1 text-[11px] text-white"
+              />
+              <select
+                value={builderTarget?.collection || "webseries"}
+                onChange={(e) =>
+                  setBuilderTarget((t) => ({
+                    collection: e.target.value as any,
+                    seriesId: t?.seriesId || "",
+                    seasonNumber: t?.seasonNumber || 1,
+                    title: t?.title,
+                  }))
+                }
+                className="bg-[#141422] border border-white/10 rounded px-1.5 py-1 text-[10px] text-white"
+              >
+                <option value="webseries">webseries</option>
+                <option value="movies">movies</option>
+                <option value="animesalt">animesalt</option>
+              </select>
+              <input
+                type="number"
+                min={1}
+                placeholder="S"
+                value={builderTarget?.seasonNumber || 1}
+                onChange={(e) =>
+                  setBuilderTarget((t) => ({
+                    collection: t?.collection || "webseries",
+                    seriesId: t?.seriesId || "",
+                    seasonNumber: Number(e.target.value) || 1,
+                    title: t?.title,
+                  }))
+                }
+                className="w-12 bg-[#141422] border border-white/10 rounded px-2 py-1 text-[11px] text-white"
+              />
+            </div>
+
+            {/* Episode number + audio */}
+            <div className="flex gap-1.5 items-center">
+              <label className="text-[10px] text-violet-300 font-bold uppercase">EP</label>
+              <input
+                type="number"
+                min={1}
+                value={currentEpNum}
+                onChange={(e) => setCurrentEpNum(Number(e.target.value) || 1)}
+                className="w-16 bg-[#141422] border border-white/10 rounded px-2 py-1 text-[11px] text-white"
+              />
+              <Music2 size={12} className="text-violet-300" />
+              <select
+                value={audioLang}
+                onChange={(e) => setAudioLang(e.target.value)}
+                className="flex-1 bg-[#141422] border border-white/10 rounded px-2 py-1 text-[11px] text-white"
+              >
+                <option>Hindi</option>
+                <option>English</option>
+                <option>Japanese</option>
+                <option>Bangla</option>
+                <option>Multi</option>
+              </select>
+            </div>
+
+            {/* Quality buttons (5) */}
+            <div className="space-y-1">
+              {QUALITY_KEYS.map(({ key, label }) => (
+                <div key={key} className="flex gap-1.5 items-center">
+                  <span className="w-14 text-[10.5px] font-bold text-zinc-400">{label}</span>
+                  <input
+                    placeholder={`paste ${label} link…`}
+                    value={(currentLinks[key] as string) || ""}
+                    onChange={(e) => setQuality(key, e.target.value)}
+                    className="flex-1 bg-[#141422] border border-white/10 rounded px-2 py-1 text-[11px] text-white placeholder:text-zinc-600 font-mono"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Add / Done buttons */}
+            <div className="flex gap-1.5">
+              <button
+                onClick={addToQueue}
+                className="flex-1 px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11.5px] font-bold flex items-center justify-center gap-1"
+              >
+                <Plus size={12} /> Add (next EP)
+              </button>
+              <button
+                onClick={() => submitQueue(false)}
+                disabled={queue.length === 0}
+                className="flex-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 text-white text-[11.5px] font-bold flex items-center justify-center gap-1"
+              >
+                <Check size={12} /> Done · Save {queue.length || ""}
+              </button>
+              <button
+                onClick={() => submitQueue(true)}
+                disabled={queue.length === 0}
+                className="flex-1 px-2.5 py-1.5 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 disabled:opacity-30 text-white text-[11.5px] font-bold flex items-center justify-center gap-1"
+              >
+                ✨ Save + Notify
+              </button>
+            </div>
+
+            {/* Queue list */}
+            {queue.length > 0 && (
+              <div className="bg-white/5 border border-white/10 rounded-lg p-1.5 max-h-24 overflow-y-auto">
+                {queue.map((e) => (
+                  <div key={e.episodeNumber} className="flex justify-between text-[10.5px] py-0.5">
+                    <span className="text-emerald-300">EP{e.episodeNumber}</span>
+                    <span className="text-zinc-400">
+                      {QUALITY_KEYS.filter(({ key }) => (e as any)[key])
+                        .map(({ label }) => label)
+                        .join(" · ")}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setQueue((q) => q.filter((x) => x.episodeNumber !== e.episodeNumber))
+                      }
+                      className="text-rose-400 hover:text-rose-300"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* JSON paste box */}
+            <div>
+              <button
+                onClick={() => setShowJson((v) => !v)}
+                className="text-[10.5px] text-violet-300 hover:text-white flex items-center gap-1"
+              >
+                <FileJson size={11} /> {showJson ? "Hide" : "Paste"} JSON (bulk import)
+              </button>
+              {showJson && (
+                <div className="mt-1.5 space-y-1.5">
+                  <textarea
+                    value={jsonText}
+                    onChange={(e) => setJsonText(e.target.value)}
+                    placeholder='[{"episodeNumber":1,"link1080":"https://..."},{"episodeNumber":2,"link720":"https://..."}]'
+                    rows={4}
+                    className="w-full bg-[#141422] border border-white/10 rounded px-2 py-1.5 text-[10.5px] text-white font-mono placeholder:text-zinc-600"
+                  />
+                  <button
+                    onClick={importJsonEpisodes}
+                    className="w-full px-2 py-1 rounded bg-violet-600 hover:bg-violet-500 text-white text-[11px] font-bold"
+                  >
+                    Import to Queue
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Input */}
       <div className="p-2.5 border-t border-white/8 bg-[#0a0a14] flex gap-2">
