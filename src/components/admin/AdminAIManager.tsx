@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Send, Check, X, Loader2, Bot, User, AlertCircle, Image as ImageIcon } from "lucide-react";
+import { Sparkles, Send, Check, X, Loader2, Bot, User, AlertCircle, Image as ImageIcon, Plus, FileJson, Music2, ChevronDown, ChevronUp, Wand2 } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { toast } from "sonner";
 
@@ -17,9 +17,28 @@ type Msg =
   | { role: "user"; content: string }
   | { role: "assistant"; content: string; operations?: Operation[]; status?: "pending" | "approved" | "rejected" | "executed"; results?: any[] };
 
+type EpisodeDraft = {
+  episodeNumber: number;
+  link?: string;
+  link480?: string;
+  link720?: string;
+  link1080?: string;
+  link4k?: string;
+  audioLanguage?: string;
+};
+
+type BuilderTarget = {
+  collection: "webseries" | "movies" | "animesalt";
+  seriesId: string;
+  seasonNumber: number;
+  title?: string;
+};
+
 const OP_LABELS: Record<string, { label: string; danger?: boolean; emoji: string }> = {
   create_anime_from_tmdb: { label: "Create Anime (TMDB)", emoji: "🆕" },
   add_episode: { label: "Add Episode", emoji: "➕" },
+  bulk_add_episodes: { label: "Bulk Save Episodes", emoji: "📦" },
+  notify_and_telegram: { label: "Notify + Telegram", emoji: "📲" },
   edit_series: { label: "Edit Series", emoji: "✏️" },
   delete_item: { label: "Delete", danger: true, emoji: "🗑️" },
   send_notification: { label: "Send Push Notification", emoji: "🔔" },
@@ -29,6 +48,14 @@ const OP_LABELS: Record<string, { label: string; danger?: boolean; emoji: string
   approve_subscription: { label: "Approve Subscription", emoji: "💳" },
   set_firebase_path: { label: "Write Firebase Data", emoji: "📝" },
 };
+
+const QUALITY_KEYS: Array<{ key: keyof EpisodeDraft; label: string }> = [
+  { key: "link", label: "Default" },
+  { key: "link480", label: "480p" },
+  { key: "link720", label: "720p" },
+  { key: "link1080", label: "1080p" },
+  { key: "link4k", label: "4K" },
+];
 
 export function AdminAIManager() {
   const [messages, setMessages] = useState<Msg[]>([
