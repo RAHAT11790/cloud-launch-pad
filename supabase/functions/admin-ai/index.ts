@@ -258,6 +258,22 @@ const tools = [
         required: ["path", "data"],
       },
     },
+  {
+    type: "function",
+    function: {
+      name: "create_anime_from_tmdb",
+      description: "Create a brand-new anime/series in Firebase using TMDB ID. Auto-fetches poster, backdrop, title, year, overview, genres. Default audio language = Hindi (Official). After creation, the admin can add episodes via add_episode.",
+      parameters: {
+        type: "object",
+        properties: {
+          collection: { type: "string", enum: ["webseries", "movies"] },
+          tmdbId: { type: "string", description: "TMDB ID (movie or tv)" },
+          mediaType: { type: "string", enum: ["tv", "movie"] },
+          customId: { type: "string", description: "Optional custom Firebase ID. If omitted, uses tmdb_<id>." },
+        },
+        required: ["collection", "tmdbId", "mediaType"],
+      },
+    },
   },
 ];
 
@@ -359,6 +375,48 @@ async function executeOperation(op: any) {
       if (args.mode === "put") await fbPut(args.path, args.data);
       else await fbPatch(args.path, args.data);
       return { ok: true, message: `Wrote ${args.path}` };
+    }
+    case "create_anime_from_tmdb": {
+      const TMDB_KEY = Deno.env.get("TMDB_API_KEY") || "8265bd1679663a7ea12ac168da84d2e8";
+      const { collection, tmdbId, mediaType, customId } = args;
+      const tmdbUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_KEY}&language=en-US`;
+      const r = await fetch(tmdbUrl);
+      if (!r.ok) throw new Error(`TMDB fetch failed: ${r.status}`);
+      const t = await r.json();
+      const id = customId || `tmdb_${tmdbId}`;
+      const title = t.title || t.name || "Untitled";
+      const seasons: any[] = [];
+      // For TV: pre-create season skeletons (admin will add episodes via add_episode)
+      if (mediaType === "tv" && Array.isArray(t.seasons)) {
+        t.seasons
+          .filter((s: any) => s.season_number > 0)
+          .forEach((s: any) => {
+            seasons.push({
+              seasonNumber: s.season_number,
+              name: s.name || `Season ${s.season_number}`,
+              episodes: [],
+            });
+          });
+      }
+      const series = {
+        id,
+        title,
+        poster: t.poster_path ? `https://image.tmdb.org/t/p/w500${t.poster_path}` : "",
+        backdrop: t.backdrop_path ? `https://image.tmdb.org/t/p/original${t.backdrop_path}` : "",
+        year: String((t.release_date || t.first_air_date || "").slice(0, 4)),
+        rating: String(t.vote_average?.toFixed(1) || ""),
+        language: "Hindi",
+        dubType: "official",
+        category: t.genres?.[0]?.name || "Anime",
+        type: mediaType === "tv" ? "webseries" : "movie",
+        storyline: t.overview || "",
+        tmdbId: String(tmdbId),
+        seasons: seasons.length > 0 ? seasons : undefined,
+        createdAt: Date.now(),
+        source: "firebase",
+      };
+      await fbPut(`${collection}/${id}`, series);
+      return { ok: true, message: `Created ${title} (${id}) — Hindi Official, ${seasons.length} season skeleton${seasons.length !== 1 ? "s" : ""}` };
     }
     default:
       throw new Error(`Unknown operation: ${name}`);
