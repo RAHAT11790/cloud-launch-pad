@@ -18,6 +18,7 @@ type Msg =
   | { role: "assistant"; content: string; operations?: Operation[]; status?: "pending" | "approved" | "rejected" | "executed"; results?: any[] };
 
 const OP_LABELS: Record<string, { label: string; danger?: boolean; emoji: string }> = {
+  create_anime_from_tmdb: { label: "Create Anime (TMDB)", emoji: "🆕" },
   add_episode: { label: "Add Episode", emoji: "➕" },
   edit_series: { label: "Edit Series", emoji: "✏️" },
   delete_item: { label: "Delete", danger: true, emoji: "🗑️" },
