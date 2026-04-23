@@ -69,11 +69,142 @@ export function AdminAIManager() {
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Episode Builder state
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [builderTarget, setBuilderTarget] = useState<BuilderTarget | null>(null);
+  const [currentEpNum, setCurrentEpNum] = useState<number>(1);
+  const [currentLinks, setCurrentLinks] = useState<Partial<EpisodeDraft>>({});
+  const [audioLang, setAudioLang] = useState("Hindi");
+  const [queue, setQueue] = useState<EpisodeDraft[]>([]);
+  const [jsonText, setJsonText] = useState("");
+  const [showJson, setShowJson] = useState(false);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
   const aiUrl = `${SUPABASE_URL}/functions/v1/admin-ai`;
+
+  // ===== Builder helpers =====
+  const setQuality = (key: keyof EpisodeDraft, value: string) => {
+    setCurrentLinks((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const addToQueue = () => {
+    const hasLink = QUALITY_KEYS.some(({ key }) => (currentLinks[key] as string)?.trim());
+    if (!hasLink) {
+      toast.error("কমপক্ষে একটা quality link দিন");
+      return;
+    }
+    const draft: EpisodeDraft = {
+      episodeNumber: currentEpNum,
+      audioLanguage: audioLang,
+      ...currentLinks,
+    };
+    setQueue((q) =>
+      [...q.filter((e) => e.episodeNumber !== currentEpNum), draft].sort(
+        (a, b) => a.episodeNumber - b.episodeNumber,
+      ),
+    );
+    setCurrentLinks({});
+    setCurrentEpNum((n) => n + 1);
+    toast.success(`✓ EP${currentEpNum} queued — পরের episode link দিন`);
+  };
+
+  const importJsonEpisodes = () => {
+    try {
+      const parsed = JSON.parse(jsonText);
+      const arr = Array.isArray(parsed) ? parsed : parsed.episodes || [];
+      if (!Array.isArray(arr) || arr.length === 0) throw new Error("empty");
+      const valid = arr
+        .map((e: any, i: number) => ({
+          episodeNumber: Number(e.episodeNumber || e.ep || i + 1),
+          link: e.link,
+          link480: e.link480,
+          link720: e.link720,
+          link1080: e.link1080,
+          link4k: e.link4k,
+          audioLanguage: e.audioLanguage || audioLang,
+        }))
+        .filter(
+          (e) =>
+            e.episodeNumber &&
+            (e.link || e.link480 || e.link720 || e.link1080 || e.link4k),
+        );
+      if (!valid.length) throw new Error("no episode has links");
+      setQueue(valid);
+      setJsonText("");
+      setShowJson(false);
+      toast.success(`✓ ${valid.length} episodes imported from JSON`);
+    } catch (e: any) {
+      toast.error(`Invalid JSON: ${e.message}`);
+    }
+  };
+
+  const submitQueue = (chainNotify: boolean) => {
+    if (!builderTarget) {
+      toast.error("আগে target series বলুন (e.g. 'set target Naruto S1' chat-এ)");
+      return;
+    }
+    if (queue.length === 0) {
+      toast.error("Queue খালি — episode add করুন");
+      return;
+    }
+    const lines = queue
+      .map((e) => {
+        const links = QUALITY_KEYS.filter(({ key }) => (e as any)[key])
+          .map(({ key, label }) => `${label}: ${(e as any)[key]}`)
+          .join(", ");
+        return `EP${e.episodeNumber}: ${links}`;
+      })
+      .join("\n");
+    const audio = audioLang ? ` (Audio: ${audioLang})` : "";
+    const msg = `Save ${queue.length} episodes to **${builderTarget.title || builderTarget.seriesId}** S${builderTarget.seasonNumber}${audio}, **trim other episodes**:\n${lines}${chainNotify ? "\n\nতারপর FCM notification + Telegram পাঠাও।" : ""}`;
+    setBuilderOpen(false);
+    sendWithText(msg);
+    setQueue([]);
+    setCurrentEpNum(1);
+    setCurrentLinks({});
+  };
+
+  const sendWithText = async (text: string) => {
+    if (!text.trim() || loading) return;
+    setInput("");
+    const next: Msg[] = [...messages, { role: "user", content: text }];
+    setMessages(next);
+    setLoading(true);
+    try {
+      const chatHistory = next
+        .filter((m) => m.role === "user" || (m.role === "assistant" && m.content))
+        .map((m) => ({ role: m.role, content: m.content }));
+      const r = await fetch(aiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ mode: "plan", messages: chatHistory }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content: data.reply || "(no reply)",
+          operations: data.operations || [],
+          status: data.operations?.length ? "pending" : undefined,
+        },
+      ]);
+    } catch (e: any) {
+      setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${e.message}` }]);
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   const send = async () => {
     const text = input.trim();
