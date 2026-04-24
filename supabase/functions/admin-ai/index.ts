@@ -144,7 +144,7 @@ async function getKnowledge() {
       "Ad Services",
       "User Data / Payments",
     ],
-    settings: settings || {},
+    // intentionally do NOT include full settings to keep payload small
   };
   snapshotCache = { ts: Date.now(), data };
   return data;
