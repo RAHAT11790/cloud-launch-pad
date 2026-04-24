@@ -1921,6 +1921,46 @@ async function handleCallback(chatId: number, data: string, cbId: string, messag
       );
     return;
   }
+
+  // bulk:collection:id:sIdx → start bulk import flow
+  if (data.startsWith("bulk:")) {
+    const [, col, id, sIdx] = data.split(":");
+    await startBulkImport(chatId, col, id, Number(sIdx));
+    return;
+  }
+
+  // bulkedit:<epNum>
+  if (data.startsWith("bulkedit:")) {
+    const epNum = Number(data.split(":")[1]);
+    const s = await getSession(chatId);
+    s.step = "bulk_edit_input";
+    (s as any).bulkEditEpNum = epNum;
+    await setSession(chatId, s);
+    await tgSend(
+      chatId,
+      `✏️ <b>Re-add EP${epNum}</b>\n\nSend the corrected links. Examples:\n\n` +
+        `<code>EP${epNum} | default=URL | 720=URL</code>\n\nor JSON:\n` +
+        `<code>[{"episodeNumber":${epNum},"link":"URL","link720":"URL"}]</code>`,
+    );
+    return;
+  }
+
+  if (data === "bulk_confirm_all") {
+    await tgSend(chatId, "⏳ Saving and posting all...");
+    await bulkConfirmAndPost(chatId, false);
+    return;
+  }
+  if (data === "bulk_confirm_ok") {
+    await tgSend(chatId, "⏳ Saving and posting OK ones only...");
+    await bulkConfirmAndPost(chatId, true);
+    return;
+  }
+  if (data === "bulk_cancel") {
+    await fbDelete(`telegramAdminBulk/${chatId}`);
+    await clearSession(chatId);
+    await tgSend(chatId, "❌ Bulk import cancelled.", { reply_markup: startKeyboard() });
+    return;
+  }
 }
 
 // ---------- Webhook handler ----------
@@ -1948,6 +1988,37 @@ async function handleUpdate(update: any) {
     await tgSend(chatId, "🚫 This bot is admin-only.");
     return;
   }
+
+  // Document upload (.json / .txt) for bulk import
+  if (msg.document) {
+    const sess = await getSession(chatId);
+    if (sess.step === "bulk_wait") {
+      const fname = String(msg.document.file_name || "").toLowerCase();
+      const mime = String(msg.document.mime_type || "").toLowerCase();
+      const isJson = fname.endsWith(".json") || mime.includes("json");
+      const isTxt = fname.endsWith(".txt") || mime.startsWith("text/");
+      if (!isJson && !isTxt) {
+        await tgSend(chatId, "❌ Only .json or .txt files supported.");
+        return;
+      }
+      await tgSend(chatId, "⏳ Downloading file...");
+      const content = await tgDownloadFile(msg.document.file_id);
+      if (!content) {
+        await tgSend(chatId, "❌ Failed to download file.");
+        return;
+      }
+      const eps = parseBulkInput(content);
+      await processBulkParsed(chatId, eps);
+      return;
+    } else {
+      await tgSend(
+        chatId,
+        "📄 Got a file, but I'm not in bulk-import mode.\n\n<i>Open a season → 📥 Bulk Import.</i>",
+      );
+      return;
+    }
+  }
+
   const text = String(msg.text || "");
   if (!text) return;
   await handleText(chatId, text);
