@@ -263,6 +263,120 @@ function escapeHtml(s: string) {
     .replace(/>/g, "&gt;");
 }
 
+// ---------- Website-style Telegram post helpers ----------
+// Reads the SAME settings the website Admin panel writes (admin/*).
+// Channel IDs: admin/telegramChannel (comma/newline separated). Fallback: settings/telegramChatId.
+async function getPostChannelIds(): Promise<string[]> {
+  const raw = (await fbGet("admin/telegramChannel")) as string | null;
+  let ids: string[] = [];
+  if (raw && typeof raw === "string") {
+    ids = raw.split(/[,\n\s]+/).map((x) => x.trim()).filter(Boolean);
+  }
+  if (ids.length === 0) {
+    const fb = await fbGet("settings/telegramChatId");
+    if (fb && typeof fb === "string") ids = [fb.trim()];
+    else if (typeof fb === "number") ids = [String(fb)];
+  }
+  return ids;
+}
+
+// Build the EXACT same caption format the website's Admin "Telegram Post" sends.
+async function buildWebsiteCaption(opts: {
+  title: string;
+  season: string | number;
+  totalEpisodes: string | number;
+  newEpAdded: string | number;
+  rating?: string | number;
+  genres?: string;
+}): Promise<string> {
+  const quality = ((await fbGet("admin/tgQuality")) as string) || "480p,720p,1080p,4K";
+  const languages = ((await fbGet("admin/tgLanguages")) as string) || "Hindi";
+  const dubType = ((await fbGet("admin/tgDubType")) as string) || "official";
+  const hashtags =
+    ((await fbGet("admin/tgHashtags")) as string) || "#ɪᴄғᴀɴɪᴍᴇ #ᴀɴɪᴍᴇ #ᴏғғɪᴄɪᴀʟ";
+  const footerArr = ((await fbGet("admin/tgFooterLinks")) as Array<{
+    label: string;
+    url: string;
+    emoji: string;
+  }>) || [];
+  const footerLinksHtml = footerArr
+    .filter((l) => l?.label && l?.url)
+    .map((l) => `๏ ${l.emoji || "🔰"} <a href="${l.url}">${escapeHtml(l.label)}</a> ${l.emoji || "🔰"}`)
+    .join("\n");
+
+  const dubTag = dubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ";
+  const ratingStr = opts.rating ? `${opts.rating}` : "0.0";
+  const genresStr = opts.genres || "—";
+
+  return (
+    `♨️ <b>Tɪᴛᴇʟ;-</b> ${escapeHtml(String(opts.title))}\n` +
+    `┌──────────────────\n` +
+    `│ ✦ <b>Sᴇᴀsᴏɴ :</b> ${opts.season}\n` +
+    `│ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> ${opts.totalEpisodes}\n` +
+    `│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${escapeHtml(languages)} ${dubTag}\n` +
+    `│ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> ${escapeHtml(quality)}\n` +
+    `│ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ ${ratingStr}/10\n` +
+    `│ ✦ <b>Gᴇɴʀᴇs :</b> ${escapeHtml(genresStr)}\n` +
+    `└──────────────────\n` +
+    `▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n` +
+    `📌 Sᴇᴀsᴏɴ #${opts.season} • Eᴘɪsᴏᴅᴇ #${opts.newEpAdded} Aᴅᴅᴇᴅ\n` +
+    `▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n` +
+    (footerLinksHtml ? `${footerLinksHtml}\n` : "") +
+    `▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n` +
+    hashtags
+  );
+}
+
+// Send to ALL configured channels via the existing telegram-post edge function.
+// Returns { posted, failed, errors }.
+async function postToAllChannels(payload: {
+  caption: string;
+  photoUrl?: string;
+  inlineButtons: Array<{ text: string; url: string }>;
+  collection?: string;
+  seriesId?: string;
+}): Promise<{ posted: number; failed: number; errors: string[] }> {
+  const channels = await getPostChannelIds();
+  if (channels.length === 0) {
+    return { posted: 0, failed: 1, errors: ["No channel configured. Set admin/telegramChannel or settings/telegramChatId in website Admin."] };
+  }
+  let posted = 0,
+    failed = 0;
+  const errors: string[] = [];
+  for (const ch of channels) {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          chatId: ch,
+          caption: payload.caption,
+          photoUrl: payload.photoUrl,
+          buttonText: payload.inlineButtons[0]?.text,
+          buttonUrl: payload.inlineButtons[0]?.url,
+          inlineButtons: payload.inlineButtons.length > 1 ? payload.inlineButtons : undefined,
+          collection: payload.collection,
+          seriesId: payload.seriesId,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && !j?.error) posted++;
+      else {
+        failed++;
+        errors.push(`${ch}: ${j?.error || "API error"}`);
+      }
+    } catch (e: any) {
+      failed++;
+      errors.push(`${ch}: ${e?.message || "fetch failed"}`);
+    }
+  }
+  return { posted, failed, errors };
+}
+
 async function sendStart(chatId: number) {
   const text =
     `<b>━━━━━━━━━━━━━━━━━━━</b>\n` +
@@ -815,12 +929,11 @@ async function bulkConfirmAndPost(chatId: number, onlyOk: boolean) {
     updatedAt: Date.now(),
   });
 
-  // Send Telegram post for each episode
-  let postChatId = await fbGet("settings/telegramChatId");
-  if (!postChatId) postChatId = chatId;
+  // Send Telegram post for each episode (website-style format → all configured channels)
   const sNum = season.seasonNumber || seasonIdx + 1;
   const photoUrl = data.backdrop || data.poster || FALLBACK_POSTER;
   const permanent = ((await fbGet(`animeCustomButtons/${seriesId}`)) as any[]) || [];
+  const totalEps = (season.episodes || []).length;
 
   const progressMsg = await tgSend(
     chatId,
@@ -829,6 +942,7 @@ async function bulkConfirmAndPost(chatId: number, onlyOk: boolean) {
   const pmId = progressMsg?.result?.message_id;
   let posted = 0;
   let failed = 0;
+  const allErrors: string[] = [];
 
   for (let i = 0; i < eps.length; i++) {
     const ep = eps[i];
@@ -841,33 +955,25 @@ async function bulkConfirmAndPost(chatId: number, onlyOk: boolean) {
     if (Array.isArray(permanent)) {
       for (const b of permanent) if (b?.text && b?.url) buttons.push({ text: b.text, url: b.url });
     }
-    const caption =
-      `🎬 <b>${escapeHtml(data.title || "Untitled")}</b>\n` +
-      `📚 Season <b>${sNum}</b> • 🎞 Episode <b>${ep.episodeNumber}</b>\n` +
-      (data.rating ? `⭐ ${data.rating}\n` : "") +
-      (data.category ? `📂 ${data.category}\n` : "");
-    try {
-      const r = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          chatId: postChatId,
-          caption,
-          photoUrl,
-          inlineButtons: buttons,
-          collection,
-          seriesId,
-        }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (j?.ok) posted++;
-      else failed++;
-    } catch {
+    const caption = await buildWebsiteCaption({
+      title: data.title || "Untitled",
+      season: sNum,
+      totalEpisodes: totalEps,
+      newEpAdded: ep.episodeNumber,
+      rating: data.rating,
+      genres: data.category,
+    });
+    const res = await postToAllChannels({
+      caption,
+      photoUrl,
+      inlineButtons: buttons,
+      collection,
+      seriesId,
+    });
+    if (res.posted > 0) posted++;
+    if (res.failed > 0) {
       failed++;
+      allErrors.push(...res.errors);
     }
     if (pmId) {
       const bar = "▰".repeat(i + 1) + "▱".repeat(eps.length - i - 1);
@@ -879,6 +985,12 @@ async function bulkConfirmAndPost(chatId: number, onlyOk: boolean) {
     }
   }
   if (pmId) await tgDeleteMsg(chatId, pmId);
+  if (allErrors.length > 0) {
+    await tgSend(
+      chatId,
+      `⚠️ <b>Failed:</b>\n<code>${escapeHtml(allErrors.slice(0, 5).join("\n"))}</code>`,
+    );
+  }
 
   await fbDelete(`telegramAdminBulk/${chatId}`);
   await clearSession(chatId);
@@ -1224,50 +1336,47 @@ async function confirmAndSend(chatId: number) {
   }
 
   const title = data.title || "Untitled";
-  const caption =
-    `🎬 <b>${escapeHtml(title)}</b>\n` +
-    `📚 Season <b>${sNum}</b> • 🎞 Episode <b>${epNum}</b>\n` +
-    (data.rating ? `⭐ ${data.rating}\n` : "") +
-    (data.category ? `📂 ${data.category}\n` : "");
-
-  // Resolve chatId: Firebase settings → fallback to admin chat
-  let postChatId = await fbGet("settings/telegramChatId");
-  if (!postChatId) postChatId = chatId; // fallback to current admin chat
+  const totalEps = (season.episodes || []).length;
+  const caption = await buildWebsiteCaption({
+    title,
+    season: sNum,
+    totalEpisodes: totalEps,
+    newEpAdded: epNum,
+    rating: data.rating,
+    genres: data.category,
+  });
 
   const photoUrl = data.backdrop || data.poster || FALLBACK_POSTER;
-  const postRes = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    },
-    body: JSON.stringify({
-      chatId: postChatId,
-      caption,
-      photoUrl,
-      inlineButtons: buttons,
-      collection: s.collection,
-      seriesId: s.seriesId,
-    }),
+  const res = await postToAllChannels({
+    caption,
+    photoUrl,
+    inlineButtons: buttons,
+    collection: s.collection,
+    seriesId: s.seriesId,
   });
-  const postData = await postRes.json().catch(() => ({}));
 
   await clearSession(chatId);
 
-  if (postData?.ok) {
+  if (res.posted > 0 && res.failed === 0) {
     await tgSend(
       chatId,
-      `✅ <b>Episode saved & posted to Telegram!</b>\n\n` +
+      `✅ <b>Episode saved & posted to ${res.posted} channel(s)!</b>\n\n` +
         `🎬 ${escapeHtml(title)}\n📚 S${sNum} EP${epNum}`,
+      { reply_markup: startKeyboard() },
+    );
+  } else if (res.posted > 0) {
+    await tgSend(
+      chatId,
+      `⚠️ <b>Posted to ${res.posted}, failed ${res.failed}</b>\n\n` +
+        `<code>${escapeHtml(res.errors.slice(0, 3).join("\n"))}</code>`,
       { reply_markup: startKeyboard() },
     );
   } else {
     await tgSend(
       chatId,
       `⚠️ <b>Episode saved</b> but Telegram post failed.\n\n` +
-        `<code>${escapeHtml(postData?.error || "unknown error")}</code>\n\n` +
-        `<i>Set a chatId at Firebase: settings/telegramChatId</i>`,
+        `<code>${escapeHtml(res.errors.slice(0, 3).join("\n") || "unknown")}</code>\n\n` +
+        `<i>Configure channels in website Admin → Telegram Post.</i>`,
       { reply_markup: startKeyboard() },
     );
   }
@@ -1815,44 +1924,37 @@ async function handleCallback(chatId: number, data: string, cbId: string, messag
     if (Array.isArray(permanent)) {
       for (const b of permanent) if (b?.text && b?.url) buttons.push({ text: b.text, url: b.url });
     }
-    const caption =
-      `🎬 <b>${escapeHtml(d.title || "Untitled")}</b>\n` +
-      `📚 Season <b>${sNum}</b> • 🎞 Episode <b>${epNum}</b>\n` +
-      (d.rating ? `⭐ ${d.rating}\n` : "") +
-      (d.category ? `📂 ${d.category}\n` : "");
-    let postChatId = await fbGet("settings/telegramChatId");
-    if (!postChatId) postChatId = chatId;
-    try {
-      const r = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          chatId: postChatId,
-          caption,
-          photoUrl,
-          inlineButtons: buttons,
-          collection: col,
-          seriesId: id,
-        }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (j?.ok) {
-        await tgSend(
-          chatId,
-          `✅ <b>Resent!</b>\n🎬 ${escapeHtml(d.title)} — S${sNum} EP${epNum}`,
-        );
-      } else {
-        await tgSend(
-          chatId,
-          `❌ Resend failed: <code>${escapeHtml(j?.error || "unknown")}</code>`,
-        );
-      }
-    } catch (e: any) {
-      await tgSend(chatId, `❌ Error: <code>${escapeHtml(e?.message || "fetch failed")}</code>`);
+    const totalEps = (season.episodes || []).length;
+    const caption = await buildWebsiteCaption({
+      title: d.title || "Untitled",
+      season: sNum,
+      totalEpisodes: totalEps,
+      newEpAdded: epNum,
+      rating: d.rating,
+      genres: d.category,
+    });
+    const res = await postToAllChannels({
+      caption,
+      photoUrl,
+      inlineButtons: buttons,
+      collection: col,
+      seriesId: id,
+    });
+    if (res.posted > 0 && res.failed === 0) {
+      await tgSend(
+        chatId,
+        `✅ <b>Resent to ${res.posted} channel(s)!</b>\n🎬 ${escapeHtml(d.title)} — S${sNum} EP${epNum}`,
+      );
+    } else if (res.posted > 0) {
+      await tgSend(
+        chatId,
+        `⚠️ <b>Posted ${res.posted}, failed ${res.failed}</b>\n<code>${escapeHtml(res.errors.slice(0, 3).join("\n"))}</code>`,
+      );
+    } else {
+      await tgSend(
+        chatId,
+        `❌ Resend failed:\n<code>${escapeHtml(res.errors.slice(0, 3).join("\n") || "unknown")}</code>\n\n<i>Configure channels in website Admin → Telegram Post.</i>`,
+      );
     }
     return;
   }
@@ -1962,31 +2064,27 @@ async function handleCallback(chatId: number, data: string, cbId: string, messag
     if (Array.isArray(permanent)) {
       for (const b of permanent) if (b?.text && b?.url) buttons.push({ text: b.text, url: b.url });
     }
-    const caption =
-      `🎬 <b>${escapeHtml(d.title)}</b>\n` +
-      (d.rating ? `⭐ ${d.rating}\n` : "") +
-      (d.category ? `📂 ${d.category}\n` : "");
-    const r = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        caption,
-        photoUrl,
-        inlineButtons: buttons,
-        collection: col,
-        seriesId: id,
-      }),
+    const caption = await buildWebsiteCaption({
+      title: d.title || "Untitled",
+      season: d?.seasons?.[0]?.seasonNumber || 1,
+      totalEpisodes: (d?.seasons?.[0]?.episodes || []).length || "—",
+      newEpAdded: (d?.seasons?.[0]?.episodes || []).length || 1,
+      rating: d.rating,
+      genres: d.category,
     });
-    const j = await r.json().catch(() => ({}));
-    if (j?.ok) await tgSend(chatId, "✅ Posted to Telegram.");
+    const res = await postToAllChannels({
+      caption,
+      photoUrl,
+      inlineButtons: buttons,
+      collection: col,
+      seriesId: id,
+    });
+    if (res.posted > 0)
+      await tgSend(chatId, `✅ Posted to ${res.posted} channel(s).${res.failed ? ` (${res.failed} failed)` : ""}`);
     else
       await tgSend(
         chatId,
-        `❌ Post failed: <code>${escapeHtml(j?.error || "unknown")}</code>\n\n<i>Tip: send /setchatid in your target Telegram chat.</i>`,
+        `❌ Post failed:\n<code>${escapeHtml(res.errors.slice(0, 3).join("\n") || "unknown")}</code>\n\n<i>Configure channels in website Admin → Telegram Post.</i>`,
       );
     return;
   }
