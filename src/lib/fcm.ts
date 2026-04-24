@@ -473,8 +473,116 @@ export const registerFCMToken = async (userId: string, showDiagnostics = false) 
   }
 };
 
-// Get all FCM tokens for specific user IDs
-export const getFCMTokens = async (userIds: string[]): Promise<string[]> => {
+/**
+ * Force-refresh the FCM token: delete existing browser token, request a fresh one,
+ * and prune the user's stale token entries from Firebase. Use when:
+ *  - User has no token saved in Firebase (first visit / cleanup)
+ *  - Server reported user's tokens as invalid (pushTokenState === "stale" or "invalid")
+ *  - Token age is older than 30 days (FCM tokens can rotate)
+ */
+export const refreshFCMToken = async (userId: string): Promise<{ ok: boolean; token?: string; reason?: string }> => {
+  if (!userId) return { ok: false, reason: "no_user" };
+  if (!("Notification" in window) || Notification.permission !== "granted") {
+    return { ok: false, reason: "permission_not_granted" };
+  }
+  const msg = getMessagingInstance();
+  if (!msg) return { ok: false, reason: "messaging_unsupported" };
+
+  try {
+    // 1) Delete current browser-side FCM registration so getToken() issues a fresh one
+    try { await deleteToken(msg); } catch (e) { console.warn("[FCM] deleteToken failed (ok to continue):", e); }
+
+    // 2) Wipe all old tokens for this user from Firebase (server already cleans invalids,
+    //    but here we proactively reset to avoid duplicates)
+    const emailKey = getEmailKey();
+    const storageKey = emailKey || userId;
+    try {
+      await remove(ref(db, `fcmTokens/${storageKey}`));
+      if (emailKey && emailKey !== userId) {
+        await remove(ref(db, `fcmTokens/${userId}`)).catch(() => {});
+      }
+    } catch (e) { console.warn("[FCM] Old token wipe failed:", e); }
+
+    // 3) Ensure SW is registered, then ask for a brand new token
+    const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
+      scope: "/", updateViaCache: "none",
+    });
+    await navigator.serviceWorker.ready;
+
+    const token = await getToken(msg, {
+      vapidKey: VAPID_KEY || undefined,
+      serviceWorkerRegistration: registration,
+    });
+    if (!token) {
+      await update(ref(db, `users/${userId}`), {
+        pushTokenState: "empty_token", lastPushCheckAt: Date.now(),
+      }).catch(() => {});
+      return { ok: false, reason: "empty_token" };
+    }
+
+    const tokenKey = getTokenKey(token);
+    const deviceId = getDeviceId();
+    const tokenData = {
+      token, deviceId, origin: window.location.origin,
+      updatedAt: Date.now(), userAgent: navigator.userAgent.substring(0, 160),
+    };
+    await set(ref(db, `fcmTokens/${storageKey}/${tokenKey}`), tokenData);
+    if (emailKey && emailKey !== userId) {
+      await set(ref(db, `fcmTokens/${userId}/${tokenKey}`), tokenData).catch(() => {});
+    }
+    await update(ref(db, `users/${userId}`), {
+      id: userId,
+      pushEnabled: true,
+      pushPermission: "granted",
+      pushTokenState: "saved",
+      lastPushTokenAt: Date.now(),
+      lastPushCheckAt: Date.now(),
+    }).catch(() => {});
+    console.log("[FCM] Token refreshed successfully");
+    return { ok: true, token };
+  } catch (err: any) {
+    console.error("[FCM] refreshFCMToken failed:", err);
+    return { ok: false, reason: err?.message || "unknown" };
+  }
+};
+
+/**
+ * Smart auto-refresh on visit: check if the user has a valid recent token.
+ * If missing, stale, or marked invalid by previous send attempts, force a refresh.
+ */
+export const ensureFreshFCMToken = async (userId: string): Promise<void> => {
+  if (!userId) return;
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    const [tokenSnap, userSnap] = await Promise.all([
+      get(ref(db, `fcmTokens/${getEmailKey() || userId}`)),
+      get(ref(db, `users/${userId}`)),
+    ]);
+    const tokens = tokenSnap.val() || {};
+    const tokenList = Object.values(tokens).filter((e: any) => e?.token);
+    const user = userSnap.val() || {};
+    const STALE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+    const newest = tokenList.reduce((max: number, e: any) => Math.max(max, Number(e?.updatedAt || 0)), 0);
+    const noToken = tokenList.length === 0;
+    const tooOld = newest > 0 && Date.now() - newest > STALE_MS;
+    const flaggedStale =
+      user.pushTokenState === "stale" ||
+      user.pushTokenState === "invalid" ||
+      user.pushTokenState === "error" ||
+      user.pushTokenState === "empty_token";
+
+    if (noToken || tooOld || flaggedStale) {
+      console.log(`[FCM] Auto-refreshing token (noToken=${noToken}, tooOld=${tooOld}, flagged=${flaggedStale})`);
+      await refreshFCMToken(userId);
+    } else {
+      // Still call standard register to bump updatedAt and re-save (idempotent)
+      await registerFCMToken(userId, false);
+    }
+  } catch (err) {
+    console.warn("[FCM] ensureFreshFCMToken failed, falling back to register:", err);
+    await registerFCMToken(userId, false).catch(() => {});
+  }
+};
   try {
     const storageKeys = await getUserTokenStorageKeys(userIds);
     const snaps = await Promise.all(storageKeys.map((key) => get(ref(db, `fcmTokens/${key}`))));
