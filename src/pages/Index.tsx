@@ -532,9 +532,9 @@ const Index = () => {
         // If no real user, skip FCM registration
         if (!userId) return;
 
-        // If permission already granted, just refresh token silently
+        // If permission already granted, smart-refresh: detects stale/missing tokens and forces a brand-new one
         if ("Notification" in window && Notification.permission === "granted") {
-          await registerFCMToken(userId, false);
+          await ensureFreshFCMToken(userId);
           return;
         }
 
