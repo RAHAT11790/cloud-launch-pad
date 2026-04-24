@@ -1336,50 +1336,47 @@ async function confirmAndSend(chatId: number) {
   }
 
   const title = data.title || "Untitled";
-  const caption =
-    `🎬 <b>${escapeHtml(title)}</b>\n` +
-    `📚 Season <b>${sNum}</b> • 🎞 Episode <b>${epNum}</b>\n` +
-    (data.rating ? `⭐ ${data.rating}\n` : "") +
-    (data.category ? `📂 ${data.category}\n` : "");
-
-  // Resolve chatId: Firebase settings → fallback to admin chat
-  let postChatId = await fbGet("settings/telegramChatId");
-  if (!postChatId) postChatId = chatId; // fallback to current admin chat
+  const totalEps = (season.episodes || []).length;
+  const caption = await buildWebsiteCaption({
+    title,
+    season: sNum,
+    totalEpisodes: totalEps,
+    newEpAdded: epNum,
+    rating: data.rating,
+    genres: data.category,
+  });
 
   const photoUrl = data.backdrop || data.poster || FALLBACK_POSTER;
-  const postRes = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    },
-    body: JSON.stringify({
-      chatId: postChatId,
-      caption,
-      photoUrl,
-      inlineButtons: buttons,
-      collection: s.collection,
-      seriesId: s.seriesId,
-    }),
+  const res = await postToAllChannels({
+    caption,
+    photoUrl,
+    inlineButtons: buttons,
+    collection: s.collection,
+    seriesId: s.seriesId,
   });
-  const postData = await postRes.json().catch(() => ({}));
 
   await clearSession(chatId);
 
-  if (postData?.ok) {
+  if (res.posted > 0 && res.failed === 0) {
     await tgSend(
       chatId,
-      `✅ <b>Episode saved & posted to Telegram!</b>\n\n` +
+      `✅ <b>Episode saved & posted to ${res.posted} channel(s)!</b>\n\n` +
         `🎬 ${escapeHtml(title)}\n📚 S${sNum} EP${epNum}`,
+      { reply_markup: startKeyboard() },
+    );
+  } else if (res.posted > 0) {
+    await tgSend(
+      chatId,
+      `⚠️ <b>Posted to ${res.posted}, failed ${res.failed}</b>\n\n` +
+        `<code>${escapeHtml(res.errors.slice(0, 3).join("\n"))}</code>`,
       { reply_markup: startKeyboard() },
     );
   } else {
     await tgSend(
       chatId,
       `⚠️ <b>Episode saved</b> but Telegram post failed.\n\n` +
-        `<code>${escapeHtml(postData?.error || "unknown error")}</code>\n\n` +
-        `<i>Set a chatId at Firebase: settings/telegramChatId</i>`,
+        `<code>${escapeHtml(res.errors.slice(0, 3).join("\n") || "unknown")}</code>\n\n` +
+        `<i>Configure channels in website Admin → Telegram Post.</i>`,
       { reply_markup: startKeyboard() },
     );
   }
