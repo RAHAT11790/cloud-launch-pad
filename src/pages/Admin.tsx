@@ -641,7 +641,12 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
 
   const saveCustomUrl = async (key: string, customUrl: string) => {
     const current = fnOverrides[key] || { enabled: true, customUrl: "" };
-    await set(ref(db, `settings/functionOverrides/${key}`), { ...current, customUrl: customUrl.trim() });
+    const url = customUrl.trim();
+    await set(ref(db, `settings/functionOverrides/${key}`), { ...current, customUrl: url });
+    // Sync legacy nodes used by other sections (TelegramWebhookSection reads telegramProvider)
+    if (key === "telegram-post" && url) {
+      await set(ref(db, "settings/telegramProvider"), { url });
+    }
     toast.success("✅ কাস্টম URL সেভ হয়েছে!");
   };
 
