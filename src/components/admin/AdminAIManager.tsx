@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Sparkles, Send, Check, X, Loader2, Bot, User, AlertCircle, Image as ImageIcon, Plus, FileJson, Music2, ChevronDown, ChevronUp, Wand2 } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { toast } from "sonner";
+import { db, ref, get } from "@/lib/firebase";
 
 type OpPreview = {
   title?: string;
