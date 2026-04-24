@@ -929,12 +929,11 @@ async function bulkConfirmAndPost(chatId: number, onlyOk: boolean) {
     updatedAt: Date.now(),
   });
 
-  // Send Telegram post for each episode
-  let postChatId = await fbGet("settings/telegramChatId");
-  if (!postChatId) postChatId = chatId;
+  // Send Telegram post for each episode (website-style format → all configured channels)
   const sNum = season.seasonNumber || seasonIdx + 1;
   const photoUrl = data.backdrop || data.poster || FALLBACK_POSTER;
   const permanent = ((await fbGet(`animeCustomButtons/${seriesId}`)) as any[]) || [];
+  const totalEps = (season.episodes || []).length;
 
   const progressMsg = await tgSend(
     chatId,
@@ -943,6 +942,7 @@ async function bulkConfirmAndPost(chatId: number, onlyOk: boolean) {
   const pmId = progressMsg?.result?.message_id;
   let posted = 0;
   let failed = 0;
+  const allErrors: string[] = [];
 
   for (let i = 0; i < eps.length; i++) {
     const ep = eps[i];
@@ -955,33 +955,25 @@ async function bulkConfirmAndPost(chatId: number, onlyOk: boolean) {
     if (Array.isArray(permanent)) {
       for (const b of permanent) if (b?.text && b?.url) buttons.push({ text: b.text, url: b.url });
     }
-    const caption =
-      `🎬 <b>${escapeHtml(data.title || "Untitled")}</b>\n` +
-      `📚 Season <b>${sNum}</b> • 🎞 Episode <b>${ep.episodeNumber}</b>\n` +
-      (data.rating ? `⭐ ${data.rating}\n` : "") +
-      (data.category ? `📂 ${data.category}\n` : "");
-    try {
-      const r = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          chatId: postChatId,
-          caption,
-          photoUrl,
-          inlineButtons: buttons,
-          collection,
-          seriesId,
-        }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (j?.ok) posted++;
-      else failed++;
-    } catch {
+    const caption = await buildWebsiteCaption({
+      title: data.title || "Untitled",
+      season: sNum,
+      totalEpisodes: totalEps,
+      newEpAdded: ep.episodeNumber,
+      rating: data.rating,
+      genres: data.category,
+    });
+    const res = await postToAllChannels({
+      caption,
+      photoUrl,
+      inlineButtons: buttons,
+      collection,
+      seriesId,
+    });
+    if (res.posted > 0) posted++;
+    if (res.failed > 0) {
       failed++;
+      allErrors.push(...res.errors);
     }
     if (pmId) {
       const bar = "▰".repeat(i + 1) + "▱".repeat(eps.length - i - 1);
@@ -993,6 +985,12 @@ async function bulkConfirmAndPost(chatId: number, onlyOk: boolean) {
     }
   }
   if (pmId) await tgDeleteMsg(chatId, pmId);
+  if (allErrors.length > 0) {
+    await tgSend(
+      chatId,
+      `⚠️ <b>Failed:</b>\n<code>${escapeHtml(allErrors.slice(0, 5).join("\n"))}</code>`,
+    );
+  }
 
   await fbDelete(`telegramAdminBulk/${chatId}`);
   await clearSession(chatId);
