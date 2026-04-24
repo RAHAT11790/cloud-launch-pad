@@ -902,15 +902,13 @@ async function handleCallback(cb: any) {
   await tgAnswerCb(cbId);
 
   if (data === "menu") return showMainMenu(chatId);
-  if (data === "help") {
-    await tgSend(chatId,
-      `<b>Help</b>\n\n` +
-      `• 🤖 AI Mode: AI সব RS anime মুখস্ত রাখে। যা বলবেন proposal দিবে, Allow চাপলে কাজ হবে\n` +
-      `• 🔧 Manual Mode: Search → Anime poster → Season → শেষ ৬ EP + Add Episode\n` +
-      `• Add Episode: Auto (post paste) / Manual (button-by-button each quality)\n` +
-      `• শেষে preview → Allow → Telegram Post Yes/No\n` +
-      `• Weekly reminders রাত ৯টায় (BD)`);
+  if (data === "close") {
+    if (cb.message?.message_id) await tgDeleteMessage(chatId, cb.message.message_id);
     return;
+  }
+  if (data === "guide:manual") return showManualHelp(chatId);
+  if (data === "help") {
+    return showManualHelp(chatId);
   }
   if (data === "ai:clear") {
     await fbDelete(`telegramAiHistory/${chatId}`);
@@ -933,6 +931,19 @@ async function handleCallback(cb: any) {
   if (data.startsWith("anime:") || data.startsWith("pick:")) {
     const [, collection, seriesId] = data.split(":");
     return showAnimeDetail(chatId, collection, seriesId);
+  }
+  if (data.startsWith("quickadd:")) {
+    const [, mode, collection, seriesId, sn, en] = data.split(":");
+    if (mode === "manual") {
+      await startAddEpisode(chatId, collection, seriesId, Number(sn), Number(en));
+      return showManualLinkPanel(chatId);
+    }
+    await startAddEpisode(chatId, collection, seriesId, Number(sn), Number(en));
+    await patchSession(chatId, { awaiting: "auto_paste" });
+    await tgSend(chatId,
+      `⚡ <b>Auto Mode</b> — S${sn} EP ${en}\n\n` +
+      `এখন episode post/paste পাঠান। Title/Episode/Quality/URL থাকলে auto detect করবে।`);
+    return;
   }
   if (data.startsWith("season:")) {
     const [, collection, seriesId, sn] = data.split(":");
@@ -981,6 +992,7 @@ async function handleCallback(cb: any) {
   if (data === "manual:finish") {
     return showFinishPreview(chatId);
   }
+  if (data === "manual:back") return showManualLinkPanel(chatId);
   if (data === "save:allow") {
     const sess = await getSession(chatId);
     if (!sess.pendingSave) { await tgSend(chatId, "❌ কিছু pending নেই।"); return; }
