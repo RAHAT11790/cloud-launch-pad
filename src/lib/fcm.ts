@@ -1,4 +1,4 @@
-import { getMessaging, getToken, onMessage } from "firebase/messaging";
+import { getMessaging, getToken, onMessage, deleteToken } from "firebase/messaging";
 import { initializeApp, getApps } from "firebase/app";
 import { db, ref, set, get, update, remove } from "@/lib/firebase";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
