@@ -539,6 +539,11 @@ async function promptQualityLink(chatId: number, q: string) {
     `📥 Send the <b>${label}</b> link now.\n\n` +
       (cur ? `<i>Current:</i> <code>${escapeHtml(cur)}</code>\n\n` : "") +
       `Type <code>skip</code> to leave empty.`,
+    {
+      reply_markup: {
+        inline_keyboard: [[{ text: "⬅ Back to Qualities", callback_data: "back:qualities" }]],
+      },
+    },
   );
 }
 
