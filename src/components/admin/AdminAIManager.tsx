@@ -68,7 +68,32 @@ export function AdminAIManager() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pendingImages, setPendingImages] = useState<string[]>([]); // base64 dataURLs
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImagePick = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const arr = Array.from(files).slice(0, 4); // max 4 images
+    const dataUrls = await Promise.all(
+      arr.map(
+        (f) =>
+          new Promise<string>((resolve, reject) => {
+            if (f.size > 5 * 1024 * 1024) {
+              toast.error(`${f.name}: 5MB এর বড় image চলবে না`);
+              reject("too big");
+              return;
+            }
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result || ""));
+            r.onerror = () => reject(r.error);
+            r.readAsDataURL(f);
+          }),
+      ),
+    ).catch(() => []);
+    setPendingImages((p) => [...p, ...dataUrls.filter(Boolean)].slice(0, 4));
+    if (dataUrls.length) toast.success(`📷 ${dataUrls.length} image attached`);
+  };
 
   // Episode Builder state
   const [builderOpen, setBuilderOpen] = useState(false);
