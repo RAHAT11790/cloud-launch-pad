@@ -269,6 +269,7 @@ serve(async (req) => {
     if (!botToken) return json({ error: "TELEGRAM_BOT_TOKEN not configured" }, 500);
 
     const body = await req.json();
+    if (body?.test === true) return json({ ok: true, ping: "telegram-post" });
     const action = String(body?.action || "send");
     const telegramBase = `https://api.telegram.org/bot${botToken}`;
 

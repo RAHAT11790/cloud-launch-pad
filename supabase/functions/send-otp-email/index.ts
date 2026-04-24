@@ -15,7 +15,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { email, otp, siteName, logoUrl, siteUrl, telegramUrl } = await req.json();
+    const reqBody = await req.json();
+    if (reqBody?.test === true) {
+      return new Response(JSON.stringify({ ok: true, ping: "send-otp-email" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { email, otp, siteName, logoUrl, siteUrl, telegramUrl } = reqBody;
     if (!email || !otp) {
       return new Response(JSON.stringify({ error: "email and otp are required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },

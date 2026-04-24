@@ -641,6 +641,11 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
+    if (body?.test === true) {
+      return new Response(JSON.stringify({ ok: true, ping: "admin-ai" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const { mode, messages, operations } = body;
 
     // ---- EXECUTE: admin clicked "Allow" ----
