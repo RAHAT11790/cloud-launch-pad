@@ -692,6 +692,21 @@ RULES:
 
 When you have nothing to do, just chat / give status updates.`;
 
+    // Convert messages: if a user message has `images` (data-URLs), convert to OpenAI/Gemini multimodal format
+    const aiMessages: any[] = [{ role: "system", content: systemPrompt }];
+    for (const m of messages) {
+      if (m.role === "user" && Array.isArray(m.images) && m.images.length > 0) {
+        const parts: any[] = [];
+        if (m.content) parts.push({ type: "text", text: m.content });
+        for (const img of m.images) {
+          parts.push({ type: "image_url", image_url: { url: img } });
+        }
+        aiMessages.push({ role: "user", content: parts });
+      } else {
+        aiMessages.push({ role: m.role, content: m.content });
+      }
+    }
+
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -700,7 +715,7 @@ When you have nothing to do, just chat / give status updates.`;
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
-        messages: [{ role: "system", content: systemPrompt }, ...messages],
+        messages: aiMessages,
         tools,
         tool_choice: "auto",
       }),
