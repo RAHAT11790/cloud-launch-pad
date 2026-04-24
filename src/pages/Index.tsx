@@ -44,7 +44,7 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
 import { db, ref, set, onValue, get } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
-import { registerFCMToken } from "@/lib/fcm";
+import { registerFCMToken, ensureFreshFCMToken } from "@/lib/fcm";
 import { createUnlockLinkForCurrentUser } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 // Shortener gate is always-on now (Monetag system removed)
