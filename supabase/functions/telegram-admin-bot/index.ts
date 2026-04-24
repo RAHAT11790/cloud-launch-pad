@@ -1550,6 +1550,39 @@ async function handleText(chatId: number, text: string) {
     return;
   }
 
+  // --- Bulk import: paste text/JSON ---
+  if (s.step === "bulk_wait") {
+    const eps = parseBulkInput(t);
+    await processBulkParsed(chatId, eps);
+    return;
+  }
+
+  // --- Bulk edit: replace one episode's links ---
+  if (s.step === "bulk_edit_input" && (s as any).bulkEditEpNum !== undefined) {
+    const epNum = (s as any).bulkEditEpNum as number;
+    const eps = parseBulkInput(t);
+    if (eps.length === 0) {
+      await tgSend(chatId, "❌ Couldn't parse. Try again.");
+      return;
+    }
+    const blob: any = await fbGet(`telegramAdminBulk/${chatId}`);
+    if (blob?.episodes) {
+      const newEp = eps[0];
+      newEp.episodeNumber = epNum;
+      const idx = blob.episodes.findIndex((e: any) => Number(e.episodeNumber) === epNum);
+      if (idx >= 0) blob.episodes[idx] = newEp;
+      else blob.episodes.push(newEp);
+      await fbPut(`telegramAdminBulk/${chatId}`, blob);
+      // restore step to bulk_wait so re-verify works
+      s.step = "bulk_wait";
+      (s as any).bulkEditEpNum = undefined;
+      await setSession(chatId, s);
+      await tgSend(chatId, `✅ Updated EP${epNum}. Re-verifying all...`);
+      await processBulkParsed(chatId, blob.episodes);
+    }
+    return;
+  }
+
   // --- Custom button text ---
   if (s.step === "btn_text") {
     s.customButton = { text: t };
