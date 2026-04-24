@@ -566,14 +566,32 @@ async function showMainMenu(chatId: number, prefix = "") {
     `🎬 <b>RS Anime Admin Bot</b>\n` +
     `━━━━━━━━━━━━━━━━━━\n` +
     `একটা মোড বেছে নিন:\n\n` +
-    `🤖 <b>AI Mode</b> — সব RS anime মুখস্ত, কাজ proposal দিবে\n` +
-    `🔧 <b>Manual Mode</b> — Search → Anime → Episode add/edit/delete\n\n` +
+    `🤖 <b>AI Mode</b> — কথা বলে কাজ + manual feature ও চলবে\n` +
+    `🔧 <b>Manual Mode</b> — পুরোপুরি বাটন-ভিত্তিক admin panel\n\n` +
     `<i>Note: শুধু RS Anime (webseries + movies)। AnimeSalt বাদ।</i>`;
   await tgSend(chatId, text, {
     reply_markup: kb([
       [{ text: "🤖 AI Mode", data: "mode:ai" }, { text: "🔧 Manual Mode", data: "mode:manual" }],
       [{ text: "📺 Weekly Reminder Now", data: "weekly:run" }],
-      [{ text: "🧹 Clear AI History", data: "ai:clear" }, { text: "❓ Help", data: "help" }],
+      [{ text: "🧹 Clear AI History", data: "ai:clear" }, { text: "❓ Help Guide", data: "help" }],
+    ]),
+  });
+}
+
+async function showManualPanel(chatId: number, prefix = "") {
+  await patchSession(chatId, { mode: "manual", awaiting: null });
+  const text =
+    (prefix ? prefix + "\n\n" : "") +
+    `🔧 <b>Manual Admin Panel</b>\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `সব কাজ বাটন দিয়ে। এটা আপনার ওয়েবসাইটের admin panel এর মতই।\n\n` +
+    `নিচের বাটন থেকে বেছে নিন:`;
+  await tgSendPhoto(chatId, FALLBACK_POSTER, text, {
+    reply_markup: kb([
+      [{ text: "🔎 Search Anime", data: "search" }, { text: "📂 Browse All", data: "browse:all" }],
+      [{ text: "🆕 Add to existing series", data: "panel:addexisting" }, { text: "📺 Weekly Pending", data: "weekly:run" }],
+      [{ text: "📢 Telegram Post", data: "panel:tgpost" }, { text: "🗑 Delete Episode", data: "panel:delep" }],
+      [{ text: "📘 Full Guide", data: "help" }, { text: "🏠 Main Menu", data: "menu" }],
     ]),
   });
 }
@@ -581,30 +599,41 @@ async function showMainMenu(chatId: number, prefix = "") {
 async function showManualHelp(chatId: number, prefix = "") {
   const text =
     (prefix ? prefix + "\n\n" : "") +
-    `<b>📘 Manual Mode Guide</b>\n\n` +
-    `Slash commands (BotFather style):\n` +
-    `• <code>/manual</code> — manual mode open\n` +
-    `• <code>/search Re Zero</code> — title search\n` +
-    `• <code>/selected</code> — selected anime খুলবে\n` +
-    `• <code>/season 1</code> — selected season খুলবে\n` +
-    `• <code>/ep 13</code> — selected season/episode details\n` +
+    `<b>📘 Manual Admin Panel — Full Guide</b>\n` +
+    `━━━━━━━━━━━━━━━━━━\n\n` +
+    `<b>🎯 Concept</b>\n` +
+    `Manual mode = আপনার website এর admin panel এর মতই, সব বাটন দিয়ে।\n` +
+    `AI বন্ধ থাকলেও Manual দিয়ে সব করা যাবে।\n\n` +
+    `<b>🔧 Main Buttons</b>\n` +
+    `• 🔎 <b>Search Anime</b> — title টাইপ করে খুঁজুন (typo friendly)\n` +
+    `• 📂 <b>Browse All</b> — সব series list দেখুন\n` +
+    `• 🆕 <b>Add to existing</b> — series → season → EP add\n` +
+    `• 📢 <b>Telegram Post</b> — কোনো episode manually post\n` +
+    `• 🗑 <b>Delete Episode</b> — পুরনো episode মুছুন\n` +
+    `• 📺 <b>Weekly Reminder</b> — আজকের pending list\n\n` +
+    `<b>➕ Add Episode flow (manual)</b>\n` +
+    `1. Search → Anime → Season → <b>Manual EP N</b>\n` +
+    `2. Quality button চাপুন (Default/480p/720p/1080p/4K)\n` +
+    `3. সেই quality এর URL paste করুন\n` +
+    `4. সব quality দেওয়া হলে <b>✅ Finish</b>\n` +
+    `5. <b>🔍 Verifying links...</b> progress চলবে\n` +
+    `6. সব OK হলে → <b>Confirm</b> button → save → Telegram post prompt\n` +
+    `7. কোনো link broken হলে → <b>✏️ Re-add</b> বা <b>⏭ Skip</b>\n` +
+    `8. Skip করলেও <b>Confirm dialog</b> আসবে — confirm দিলেই save\n\n` +
+    `<b>⚡ Auto Mode</b>\n` +
+    `Episode post (Title/Episode/Quality/URL) সরাসরি paste করুন — বট auto-detect করবে।\n\n` +
+    `<b>🎤 Slash Commands</b>\n` +
+    `• <code>/menu</code> — main menu\n` +
+    `• <code>/manual</code> — manual panel\n` +
+    `• <code>/search Re Zero</code> — title দিয়ে search\n` +
     `• <code>/weekly</code> — আজকের reminder\n` +
-    `• <code>/cancel</code> — current flow cancel\n\n` +
-    `ম্যানুয়াল ফ্লো:\n` +
-    `1. Search করুন\n` +
-    `2. Anime poster/card খুলুন\n` +
-    `3. Season চাপুন\n` +
-    `4. <b>Add Episode</b> বা next EP button চাপুন\n` +
-    `5. <b>Manual</b> নিলে quality button-by-button link দিন\n` +
-    `6. <b>Finish → Allow & Save</b>\n` +
-    `7. শেষে <b>Post to Telegram</b> চাইলে Yes চাপুন\n\n` +
-    `সার্চ টিপস:\n` +
-    `• Plain title: <code>The Ramparts Of Ice</code>\n` +
-    `• Banglish/Bangla: <code>ramparts of ice</code>, <code>র‍্যাম্পার্টস অফ আইস</code>\n` +
-    `• AI mode থেকেও লিখতে পারেন: <code>Re Zero find koro</code> বা <code>/search Re Zero</code>`;
+    `• <code>/cancel</code> — current flow বাদ\n` +
+    `• <code>/help</code> — এই guide\n\n` +
+    `<b>🤖 AI Mode</b>\n` +
+    `Plain text লিখলেই বুঝবে। যেকোনো manual button-ও চলবে। AI proposal দিলে Allow/Disallow।`;
   await tgSend(chatId, text, {
     reply_markup: kb([
-      [{ text: "🔎 Search Anime", data: "search" }, { text: "🏠 Menu", data: "menu" }],
+      [{ text: "🔎 Search", data: "search" }, { text: "🔧 Manual Panel", data: "mode:manual" }, { text: "🏠 Menu", data: "menu" }],
     ]),
   });
 }
