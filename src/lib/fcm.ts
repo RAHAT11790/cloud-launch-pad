@@ -583,6 +583,9 @@ export const ensureFreshFCMToken = async (userId: string): Promise<void> => {
     await registerFCMToken(userId, false).catch(() => {});
   }
 };
+
+// Get all FCM tokens for specific user IDs
+export const getFCMTokens = async (userIds: string[]): Promise<string[]> => {
   try {
     const storageKeys = await getUserTokenStorageKeys(userIds);
     const snaps = await Promise.all(storageKeys.map((key) => get(ref(db, `fcmTokens/${key}`))));
