@@ -59,8 +59,21 @@ const QUALITY_KEYS: Array<{ key: keyof EpisodeDraft; label: string }> = [
   { key: "link4k", label: "4K" },
 ];
 
+const HISTORY_KEY = "rs_admin_ai_history_v1";
+const HISTORY_MAX = 60; // keep last 60 messages
+
+const loadHistory = (): Msg[] | null => {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(-HISTORY_MAX);
+  } catch {}
+  return null;
+};
+
 export function AdminAIManager() {
-  const [messages, setMessages] = useState<Msg[]>([
+  const [messages, setMessages] = useState<Msg[]>(() => loadHistory() || [
     {
       role: "assistant",
       content:
