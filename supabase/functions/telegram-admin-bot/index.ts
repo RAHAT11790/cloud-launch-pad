@@ -1,22 +1,22 @@
 // =====================================================================
-// Telegram Admin Bot v2 — RS Anime only (webseries + movies)
+// Telegram Admin Bot v3 — Manual Only (RS Anime + Movies)
 // =====================================================================
-// Features:
-// • Restricted to ADMIN_TG_ID = 6621572366
-// • AI Mode  : full memory of all RS anime (titles + season/ep counts);
-//              proposes ops with Allow/Disallow execution
-// • Manual Mode: fuzzy search → anime → season → buttons (last 6 episodes
-//              + Add Episode). Add flow: Auto / Manual.
-//              Manual = Default/480p/720p/1080p/4k buttons + Finish → Allow
-//              → optional "Post to Telegram"
-// • AnimeSalt is intentionally EXCLUDED from search/edit
-// • Persistent AI history at Firebase telegramAiHistory/{chatId}
-// • Weekly reminders at 21:00 BD via cron (action=weekly_push)
+// Pure manual flow. No AI. Features:
+//  • Stylish /start with banner + 3 buttons (Search Anime / Help / Menu)
+//  • Search anime → poster + details + Seasons grid
+//  • Season → Add/Delete season buttons + 3-per-row EP1/EP2/... list
+//  • Episode click → direct edit (qualities), delete option
+//  • Add Episode → quality buttons (Default/480/720/1080/4K) → Finish
+//  • Link verify → Confirm preview (image + caption + button list) → Save
+//  • Custom buttons: ➕ Add Custom Button (Permanent / One-time)
+//  • Permanent buttons stored at Firebase: animeCustomButtons/{seriesId}
+//  • Telegram post sent via existing telegram-post function (chatId auto)
 // =====================================================================
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const ADMIN_TG_ID = 6621572366;
@@ -25,8 +25,9 @@ const FIREBASE_DB =
   "https://rs-anime-default-rtdb.firebaseio.com";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const FALLBACK_POSTER =
-  "https://i.ibb.co/Yk2DhTk/rs-anime-default.jpg"; // generic fallback
+const START_BANNER =
+  "https://i.ibb.co.com/PsNMKqnT/IMG-20260417-065611-339.jpg";
+const FALLBACK_POSTER = START_BANNER;
 
 const json = (d: unknown, s = 200) =>
   new Response(JSON.stringify(d), {
@@ -36,34 +37,36 @@ const json = (d: unknown, s = 200) =>
 
 // ---------- Firebase REST ----------
 async function fbGet(path: string) {
-  const r = await fetch(`${FIREBASE_DB}/${path}.json`);
-  if (!r.ok) return null;
-  return await r.json();
+  try {
+    const r = await fetch(`${FIREBASE_DB}/${path}.json`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
 }
 async function fbPut(path: string, data: unknown) {
-  await fetch(`${FIREBASE_DB}/${path}.json`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
+  try {
+    await fetch(`${FIREBASE_DB}/${path}.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  } catch {}
 }
 async function fbPatch(path: string, data: unknown) {
-  await fetch(`${FIREBASE_DB}/${path}.json`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-}
-async function fbPush(path: string, data: unknown) {
-  const r = await fetch(`${FIREBASE_DB}/${path}.json`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return await r.json();
+  try {
+    await fetch(`${FIREBASE_DB}/${path}.json`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  } catch {}
 }
 async function fbDelete(path: string) {
-  await fetch(`${FIREBASE_DB}/${path}.json`, { method: "DELETE" });
+  try {
+    await fetch(`${FIREBASE_DB}/${path}.json`, { method: "DELETE" });
+  } catch {}
 }
 
 // ---------- Telegram helpers ----------
@@ -85,7 +88,12 @@ async function tgSend(chatId: number | string, text: string, extra: any = {}) {
   });
   return await r.json();
 }
-async function tgSendPhoto(chatId: number | string, photo: string, caption: string, extra: any = {}) {
+async function tgSendPhoto(
+  chatId: number | string,
+  photo: string,
+  caption: string,
+  extra: any = {},
+) {
   const r = await fetch(tgApi("sendPhoto"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -99,6 +107,26 @@ async function tgSendPhoto(chatId: number | string, photo: string, caption: stri
   });
   return await r.json();
 }
+async function tgEdit(
+  chatId: number | string,
+  messageId: number,
+  text: string,
+  extra: any = {},
+) {
+  const r = await fetch(tgApi("editMessageText"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+      ...extra,
+    }),
+  });
+  return await r.json();
+}
 async function tgAnswerCb(cbId: string, text = "") {
   await fetch(tgApi("answerCallbackQuery"), {
     method: "POST",
@@ -106,411 +134,582 @@ async function tgAnswerCb(cbId: string, text = "") {
     body: JSON.stringify({ callback_query_id: cbId, text }),
   });
 }
-async function tgDeleteMessage(chatId: number | string, messageId: number) {
-  await fetch(tgApi("deleteMessage"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
-  });
-}
-async function tgSetCommands() {
-  await fetch(tgApi("setMyCommands"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      commands: [
-        { command: "start", description: "Open main menu" },
-        { command: "menu", description: "Show main menu" },
-        { command: "help", description: "Manual mode guide" },
-        { command: "ai", description: "Switch to AI mode" },
-        { command: "manual", description: "Switch to manual search" },
-        { command: "search", description: "Search anime by title" },
-        { command: "selected", description: "Open selected anime" },
-        { command: "season", description: "Open selected season" },
-        { command: "ep", description: "Open episode details" },
-        { command: "weekly", description: "Run today reminder" },
-        { command: "cancel", description: "Cancel current flow" },
-      ],
-    }),
-  });
+async function tgDeleteMsg(chatId: number | string, messageId: number) {
+  try {
+    await fetch(tgApi("deleteMessage"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+    });
+  } catch {}
 }
 
-const kb = (rows: { text: string; data?: string; url?: string }[][]) => ({
-  inline_keyboard: rows.map((r) =>
-    r.map((b) => (b.url ? { text: b.text, url: b.url } : { text: b.text, callback_data: b.data })),
-  ),
-});
-
-// ---------- Session state ----------
-type AddingLinks = { def?: string; "480"?: string; "720"?: string; "1080"?: string; "4k"?: string };
+// ---------- Session (per chat) ----------
 type Session = {
-  mode?: "ai" | "manual" | null;
-  awaiting?:
-    | "search_anime"
-    | "ai_chat"
-    | "auto_paste"
-    | "manual_default"
-    | "manual_480"
-    | "manual_720"
-    | "manual_1080"
-    | "manual_4k"
-    | "manual_episode_number"
-    | "post_after_save"
-    | "verify_refix_def"
-    | "verify_refix_480"
-    | "verify_refix_720"
-    | "verify_refix_1080"
-    | "verify_refix_4k"
-    | null;
-  collection?: "webseries" | "movies"; // RS only
+  step?: string;
   seriesId?: string;
-  seasonNumber?: number;
-  episodeNumber?: number;
-  addingLinks?: AddingLinks;
-  pendingOps?: any[]; // AI proposed
-  pendingSave?: { collection: string; seriesId: string; seasonNumber: number; episodeNumber: number; links: AddingLinks }; // manual confirmation pending
-  verifyResults?: any[];
+  collection?: "webseries" | "movies";
+  seasonIdx?: number;
+  episodeIdx?: number;
+  newEpisodeNumber?: number;
+  links?: Record<string, string>;
+  pendingQuality?: string;
+  customButton?: { text?: string; url?: string; mode?: "permanent" | "onetime" };
+  oneTimeButtons?: Array<{ text: string; url: string }>;
+  lastResults?: Array<{ id: string; collection: string; title: string }>;
 };
 async function getSession(chatId: number): Promise<Session> {
-  return ((await fbGet(`telegramBotSessions/${chatId}`)) as Session) || {};
+  const s = await fbGet(`telegramAdminSession/${chatId}`);
+  return (s as Session) || {};
 }
 async function setSession(chatId: number, s: Session) {
-  await fbPut(`telegramBotSessions/${chatId}`, s);
+  await fbPut(`telegramAdminSession/${chatId}`, s);
 }
-async function patchSession(chatId: number, s: Partial<Session>) {
-  const cur = await getSession(chatId);
-  await fbPut(`telegramBotSessions/${chatId}`, { ...cur, ...s });
-}
-
-// ---------- AI history ----------
-async function getHistory(chatId: number): Promise<any[]> {
-  const h = await fbGet(`telegramAiHistory/${chatId}`);
-  if (!h) return [];
-  const arr = Object.values(h);
-  return arr.sort((a: any, b: any) => (a.t || 0) - (b.t || 0));
-}
-async function appendHistory(chatId: number, role: "user" | "assistant", content: string) {
-  await fbPush(`telegramAiHistory/${chatId}`, { role, content, t: Date.now() });
+async function clearSession(chatId: number) {
+  await fbDelete(`telegramAdminSession/${chatId}`);
 }
 
-// ---------- Episode link parser (auto mode) ----------
-function parseEpisodeBlock(text: string) {
-  const lines = text.split(/\r?\n/).map((l) => l.trim());
-  const out: { title?: string; episode?: number; quality?: string; size?: string; url?: string } = {};
-  for (const ln of lines) {
-    const titleM = ln.match(/^(?:Re\s*:\s*)?Title\s*[:\-]\s*(.+)$/i);
-    if (titleM && !out.title) out.title = titleM[1].replace(/[━─]+/g, "").trim();
-    const epM = ln.match(/(?:Episode|EP|এপিসোড)\s*[:\-#]?\s*(\d+)/i);
-    if (epM && out.episode === undefined) out.episode = Number(epM[1]);
-    const qM = ln.match(/(?:Quality|কোয়ালিটি)\s*[:\-]\s*([0-9a-zA-Z]+)/i);
-    if (qM && !out.quality) out.quality = qM[1].toLowerCase();
-    const sM = ln.match(/(?:Size|সাইজ)\s*[:\-]\s*([0-9.]+\s*(?:MB|GB|KB))/i);
-    if (sM && !out.size) out.size = sM[1];
-    const urlM = ln.match(/https?:\/\/\S+/);
-    if (urlM && !out.url) out.url = urlM[0];
-  }
-  if (!out.quality && out.url) {
-    const q = out.url.match(/(2160p|1080p|720p|480p|4k)/i);
-    if (q) out.quality = q[1].toLowerCase();
-  }
-  if (!out.episode && out.url) {
-    const e = out.url.match(/Episode[_\s%20:]*[:\-#]?\s*(\d+)/i);
-    if (e) out.episode = Number(e[1]);
-  }
-  return out;
-}
-function qualityField(q?: string): "link480" | "link720" | "link1080" | "link4k" | "link" {
-  if (!q) return "link";
-  const s = q.toLowerCase();
-  if (s.includes("2160") || s.includes("4k")) return "link4k";
-  if (s.includes("1080")) return "link1080";
-  if (s.includes("720")) return "link720";
-  if (s.includes("480")) return "link480";
-  return "link";
-}
-
-// ---------- Fuzzy normalization & scoring ----------
-function norm(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9\u0980-\u09FF]+/g, "");
-}
-// Levenshtein
-function lev(a: string, b: string): number {
-  if (a === b) return 0;
-  const m = a.length, n = b.length;
-  if (!m) return n;
-  if (!n) return m;
-  const dp = new Array(n + 1);
-  for (let j = 0; j <= n; j++) dp[j] = j;
-  for (let i = 1; i <= m; i++) {
-    let prev = dp[0];
-    dp[0] = i;
-    for (let j = 1; j <= n; j++) {
-      const tmp = dp[j];
-      dp[j] = a[i - 1] === b[j - 1]
-        ? prev
-        : 1 + Math.min(prev, dp[j], dp[j - 1]);
-      prev = tmp;
-    }
-  }
-  return dp[n];
-}
-function fuzzyScore(query: string, candidate: string): number {
-  const q = norm(query), c = norm(candidate);
-  if (!q || !c) return 0;
-  if (c === q) return 1;
-  if (c.includes(q)) return 0.9 + Math.min(0.09, q.length / c.length * 0.09);
-  if (q.includes(c)) return 0.85;
-  // word overlap
-  const qw = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const cw = candidate.toLowerCase().split(/\s+/).filter(Boolean);
-  const overlap = qw.filter((w) => cw.some((x) => x.startsWith(w) || w.startsWith(x))).length;
-  const wScore = qw.length ? overlap / qw.length : 0;
-  // edit distance ratio
-  const d = lev(q, c);
-  const eScore = 1 - d / Math.max(q.length, c.length);
-  return Math.max(wScore * 0.85, eScore);
-}
-
-// ---------- RS-only search (webseries + movies, NO animesalt) ----------
-type Hit = { collection: "webseries" | "movies"; id: string; title: string; score: number };
-function cleanSearchQuery(raw: string): string {
-  const lines = raw
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !/^https?:\/\//i.test(line))
-    .filter((line) => !/^[\-_a-z0-9]{12,}$/i.test(line));
-  const merged = (lines[0] || raw || "")
-    .replace(/^\/(search|find)\s+/i, "")
-    .replace(/(?:এনিমিটা|এনিমে|animeটা|anime)\s*(?:টা)?\s*(find|search|খুঁজে|ফাইন্ড)\s*(করো|কর|দাও)?/gi, "")
-    .replace(/(?:find|search|খুঁজে|ফাইন্ড)\s*(করো|কর|দাও)?/gi, "")
+// ---------- Search ----------
+function normalize(s: string) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0980-\u09ff\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  return merged;
 }
-
-function extractSearchIntentQuery(text: string): string | null {
-  const cmd = text.match(/^\/(search|find)\s+(.+)$/i);
-  if (cmd?.[2]) return cleanSearchQuery(cmd[2]);
-
-  const patterns = [
-    /(.+?)\s+(?:এনিমিটা|এনিমে|animeটা|anime)?\s*(?:find|search|খুঁজে|ফাইন্ড)\s*(?:করো|কর|দাও)?$/i,
-    /(?:find|search|খুঁজে|ফাইন্ড)\s+(.+)/i,
-  ];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    const value = match?.[1] ? cleanSearchQuery(match[1]) : "";
-    if (value) return value;
-  }
-  return null;
+function score(query: string, title: string): number {
+  const q = normalize(query);
+  const t = normalize(title);
+  if (!q || !t) return 0;
+  if (t === q) return 100;
+  if (t.startsWith(q)) return 90;
+  if (t.includes(q)) return 80;
+  // token match
+  const qt = q.split(" ").filter(Boolean);
+  const tt = t.split(" ").filter(Boolean);
+  let hit = 0;
+  for (const tok of qt) if (tt.some((x) => x.startsWith(tok))) hit++;
+  return Math.round((hit / qt.length) * 70);
 }
-
-function isManualIntent(text: string): boolean {
-  return /(manual|ম্যানুয়াল|button|বাটন|manual add|button based|বাটন ভিত্তিক)/i.test(text);
-}
-
-function isInfoIntent(text: string): boolean {
-  return /(কয়টা এপিসোড|কত এপিসোড|episodes? (ache|আছে|count)|ডিটেইল|details|info|তথ্য|episode count)/i.test(text);
-}
-
-async function searchAnimeRS(qRaw: string): Promise<Hit[]> {
-  const q = cleanSearchQuery(qRaw);
-  const qNorm = norm(q);
-  if (!qNorm) return [];
-  const hits: Hit[] = [];
-  for (const collection of ["webseries", "movies"] as const) {
-    const all: any = await fbGet(collection);
+async function searchAnime(
+  query: string,
+): Promise<Array<{ id: string; collection: string; title: string; poster?: string; data: any }>> {
+  const results: Array<{ id: string; collection: string; title: string; poster?: string; data: any; sc: number }> = [];
+  for (const col of ["webseries", "movies"]) {
+    const all = (await fbGet(col)) || {};
     if (!all || typeof all !== "object") continue;
-    for (const [id, v] of Object.entries(all) as [string, any][]) {
-      const title = String(v?.title || v?.name || id);
-      const slug = String(v?.slug || "");
-      const titleScore = fuzzyScore(q, title);
-      const idScore = fuzzyScore(q, id);
-      const slugScore = slug ? fuzzyScore(q, slug) : 0;
-      const tokenHit = q.toLowerCase().split(/\s+/).filter(Boolean)
-        .every((word) => title.toLowerCase().includes(word));
-      const score = Math.max(titleScore, idScore * 0.95, slugScore * 0.9, tokenHit ? 0.93 : 0);
-      if (score >= (qNorm.length <= 4 ? 0.52 : 0.34)) hits.push({ collection, id, title, score });
-    }
-  }
-  hits.sort((a, b) => b.score - a.score);
-  return hits.slice(0, 10);
-}
-
-function extractEpisodeLinks(e: any): AddingLinks {
-  return {
-    def: e?.link || undefined,
-    "480": e?.link480 || undefined,
-    "720": e?.link720 || undefined,
-    "1080": e?.link1080 || undefined,
-    "4k": e?.link4k || undefined,
-  };
-}
-
-function getSeriesNextEpisode(series: any): { seasonNumber: number; episodeNumber: number; totalEpisodes: number; totalSeasons: number } {
-  const seasons = Array.isArray(series?.seasons) ? series.seasons : Object.values(series?.seasons || {});
-  const totalEpisodes = seasons.reduce((acc: number, s: any) => {
-    const e = Array.isArray(s?.episodes) ? s.episodes : Object.values(s?.episodes || {});
-    return acc + e.length;
-  }, 0);
-  if (seasons.length === 0) return { seasonNumber: 1, episodeNumber: 1, totalEpisodes, totalSeasons: 0 };
-
-  const sortedSeasons = [...seasons].sort((a: any, b: any) => (a?.seasonNumber || 0) - (b?.seasonNumber || 0));
-  const lastSeason = sortedSeasons[sortedSeasons.length - 1];
-  const episodes = Array.isArray(lastSeason?.episodes) ? lastSeason.episodes : Object.values(lastSeason?.episodes || {});
-  const maxEpisode = episodes.reduce((acc: number, ep: any) => Math.max(acc, Number(ep?.episodeNumber || 0)), 0);
-  return {
-    seasonNumber: Number(lastSeason?.seasonNumber || 1),
-    episodeNumber: maxEpisode + 1,
-    totalEpisodes,
-    totalSeasons: seasons.length,
-  };
-}
-
-async function getRSAnimeBrief(): Promise<string> {
-  // Build an AI memory: list every RS anime title + season/ep count
-  const lines: string[] = [];
-  for (const collection of ["webseries", "movies"] as const) {
-    const all: any = await fbGet(collection);
-    if (!all || typeof all !== "object") continue;
-    for (const [id, v] of Object.entries(all) as [string, any][]) {
-      const title = String(v?.title || id);
-      if (collection === "movies") {
-        lines.push(`• [${id}] ${title} (movie)`);
-      } else {
-        const seasons = Array.isArray(v?.seasons) ? v.seasons : Object.values(v?.seasons || {});
-        const sumEps = seasons.reduce((acc: number, s: any) => {
-          const e = Array.isArray(s?.episodes) ? s.episodes : Object.values(s?.episodes || {});
-          return acc + e.length;
-        }, 0);
-        lines.push(`• [${id}] ${title} — ${seasons.length} season(s), ${sumEps} ep`);
+    for (const [id, item] of Object.entries(all as any)) {
+      const it: any = item;
+      if (!it || typeof it !== "object") continue;
+      const title = String(it.title || it.name || "");
+      const sc = score(query, title);
+      if (sc >= 40) {
+        results.push({
+          id,
+          collection: col,
+          title,
+          poster: it.backdrop || it.poster,
+          data: it,
+          sc,
+        });
       }
     }
   }
-  return lines.join("\n");
+  results.sort((a, b) => b.sc - a.sc);
+  return results.slice(0, 8).map(({ sc, ...rest }) => rest);
 }
 
-async function getSeriesEpisodes(collection: string, seriesId: string, seasonNumber: number) {
-  const seasons: any = (await fbGet(`${collection}/${seriesId}/seasons`)) || [];
-  const arr = Array.isArray(seasons) ? seasons : Object.values(seasons);
-  const s = arr.find((x: any) => x?.seasonNumber === seasonNumber);
-  if (!s) return { eps: [], seasonsCount: arr.length };
-  const eps = Array.isArray(s.episodes) ? s.episodes : Object.values(s.episodes || {});
-  return { eps, seasonsCount: arr.length };
+// ---------- UI Builders ----------
+function startKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "🔎 Search Anime", callback_data: "act:search" }],
+      [
+        { text: "📋 Menu", callback_data: "act:menu" },
+        { text: "❓ Help", callback_data: "act:help" },
+      ],
+    ],
+  };
+}
+
+function escapeHtml(s: string) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+async function sendStart(chatId: number) {
+  const text =
+    `<b>━━━━━━━━━━━━━━━━━━━</b>\n` +
+    `   🎌 <b>𝐑𝐒 𝐀𝐍𝐈𝐌𝐄 — 𝐀𝐃𝐌𝐈𝐍 𝐁𝐎𝐓</b>\n` +
+    `<b>━━━━━━━━━━━━━━━━━━━</b>\n\n` +
+    `👋 <i>Welcome, Admin!</i>\n\n` +
+    `🛠 <b>Manual Control Panel</b>\n` +
+    `   • Search any anime / movie\n` +
+    `   • Add / Edit / Delete episodes\n` +
+    `   • Send styled posts to Telegram\n\n` +
+    `<i>Tap a button below to begin.</i>`;
+  await tgSendPhoto(chatId, START_BANNER, text, { reply_markup: startKeyboard() });
+}
+
+async function sendHelp(chatId: number) {
+  const text =
+    `<b>📖 𝐇𝐎𝐖 𝐓𝐎 𝐔𝐒𝐄</b>\n` +
+    `<b>━━━━━━━━━━━━━━━</b>\n\n` +
+    `1️⃣ Tap <b>🔎 Search Anime</b>\n` +
+    `2️⃣ Type the anime name\n` +
+    `3️⃣ Pick the correct match\n` +
+    `4️⃣ Choose a season\n` +
+    `5️⃣ See <b>EP1, EP2…</b> grid (3 per row)\n` +
+    `6️⃣ Tap any episode to edit/delete\n` +
+    `7️⃣ Tap <b>➕ Add Episode</b> to add a new one\n\n` +
+    `<b>Quality flow:</b> Default → 480p → 720p → 1080p → 4K → ✅ Finish\n` +
+    `<b>Custom button:</b> Permanent (saved) or One-time (this post only).\n\n` +
+    `<i>Use /start to return home anytime.</i>`;
+  await tgSend(chatId, text, { reply_markup: startKeyboard() });
+}
+
+// ---------- Anime detail view ----------
+async function showAnime(chatId: number, collection: string, id: string) {
+  const data = await fbGet(`${collection}/${id}`);
+  if (!data) {
+    await tgSend(chatId, "❌ Anime not found.");
+    return;
+  }
+  const title = data.title || data.name || "Untitled";
+  const year = data.year ? ` (${data.year})` : "";
+  const rating = data.rating ? ` ⭐ ${data.rating}` : "";
+  const lang = data.language ? `\n🗣 ${data.language}` : "";
+  const dub = data.dubType ? ` • ${data.dubType}` : "";
+  const cat = data.category ? `\n📂 ${data.category}` : "";
+  const seasons = Array.isArray(data.seasons) ? data.seasons : [];
+  const totalEps = seasons.reduce(
+    (n: number, s: any) => n + (Array.isArray(s?.episodes) ? s.episodes.length : 0),
+    0,
+  );
+
+  const caption =
+    `<b>🎬 ${escapeHtml(title)}</b>${escapeHtml(year)}${escapeHtml(rating)}\n` +
+    `<b>━━━━━━━━━━━━━━━</b>${cat}${lang}${dub}\n` +
+    `📚 Seasons: <b>${seasons.length}</b>\n` +
+    `🎞 Episodes: <b>${totalEps}</b>\n\n` +
+    `<i>Pick a season to manage:</i>`;
+
+  const rows: any[][] = [];
+  // Season buttons (3 per row)
+  let row: any[] = [];
+  for (let i = 0; i < seasons.length; i++) {
+    row.push({
+      text: `S${seasons[i]?.seasonNumber || i + 1}`,
+      callback_data: `season:${collection}:${id}:${i}`,
+    });
+    if (row.length === 3) {
+      rows.push(row);
+      row = [];
+    }
+  }
+  if (row.length) rows.push(row);
+  rows.push([
+    { text: "➕ Add Season", callback_data: `addseason:${collection}:${id}` },
+  ]);
+  if (seasons.length > 0) {
+    rows.push([
+      { text: "🗑 Delete Season", callback_data: `delseason_pick:${collection}:${id}` },
+    ]);
+  }
+  rows.push([
+    { text: "📤 Send Telegram Post", callback_data: `post:${collection}:${id}::` },
+    { text: "🏠 Home", callback_data: "act:home" },
+  ]);
+
+  const poster = data.backdrop || data.poster || FALLBACK_POSTER;
+  await tgSendPhoto(chatId, poster, caption, {
+    reply_markup: { inline_keyboard: rows },
+  });
+}
+
+// ---------- Season episode grid ----------
+async function showSeason(
+  chatId: number,
+  collection: string,
+  id: string,
+  seasonIdx: number,
+) {
+  const data = await fbGet(`${collection}/${id}`);
+  if (!data) {
+    await tgSend(chatId, "❌ Anime not found.");
+    return;
+  }
+  const seasons = Array.isArray(data.seasons) ? data.seasons : [];
+  const season = seasons[seasonIdx];
+  if (!season) {
+    await tgSend(chatId, "❌ Season not found.");
+    return;
+  }
+  const title = data.title || "Untitled";
+  const eps = Array.isArray(season.episodes) ? season.episodes : [];
+
+  const text =
+    `<b>🎬 ${escapeHtml(title)}</b>\n` +
+    `<b>━━━━━━━━━━━━━━━</b>\n` +
+    `📚 Season <b>${season.seasonNumber || seasonIdx + 1}</b>\n` +
+    `🎞 Episodes: <b>${eps.length}</b>\n\n` +
+    `<i>Tap an episode to edit. Tap ➕ to add new.</i>`;
+
+  const rows: any[][] = [];
+  let row: any[] = [];
+  for (let i = 0; i < eps.length; i++) {
+    const ep = eps[i];
+    const epNum = ep?.episodeNumber || i + 1;
+    row.push({
+      text: `EP${epNum}`,
+      callback_data: `ep:${collection}:${id}:${seasonIdx}:${i}`,
+    });
+    if (row.length === 3) {
+      rows.push(row);
+      row = [];
+    }
+  }
+  if (row.length) rows.push(row);
+
+  rows.push([
+    {
+      text: "➕ Add Episode",
+      callback_data: `addep:${collection}:${id}:${seasonIdx}`,
+    },
+  ]);
+  rows.push([
+    { text: "⬅ Back", callback_data: `back:${collection}:${id}` },
+    { text: "🏠 Home", callback_data: "act:home" },
+  ]);
+
+  await tgSend(chatId, text, { reply_markup: { inline_keyboard: rows } });
+}
+
+// ---------- Episode edit view ----------
+async function showEpisode(
+  chatId: number,
+  collection: string,
+  id: string,
+  seasonIdx: number,
+  epIdx: number,
+) {
+  const data = await fbGet(`${collection}/${id}`);
+  const season = data?.seasons?.[seasonIdx];
+  const ep = season?.episodes?.[epIdx];
+  if (!ep) {
+    await tgSend(chatId, "❌ Episode not found.");
+    return;
+  }
+  const epNum = ep.episodeNumber || epIdx + 1;
+  const fmt = (l: string) => (l ? "✅" : "—");
+  const text =
+    `<b>🎞 ${escapeHtml(data.title)} — S${season.seasonNumber} EP${epNum}</b>\n` +
+    `<b>━━━━━━━━━━━━━━━</b>\n` +
+    `<b>Default :</b> ${fmt(ep.link)}\n` +
+    `<b>480p    :</b> ${fmt(ep.link480)}\n` +
+    `<b>720p    :</b> ${fmt(ep.link720)}\n` +
+    `<b>1080p   :</b> ${fmt(ep.link1080)}\n` +
+    `<b>4K      :</b> ${fmt(ep.link4k)}\n\n` +
+    `<i>Choose a quality to edit, or delete this episode.</i>`;
+
+  // Seed session links from current
+  await setSession(chatId, {
+    step: "edit_links",
+    seriesId: id,
+    collection: collection as any,
+    seasonIdx,
+    episodeIdx: epIdx,
+    newEpisodeNumber: epNum,
+    links: {
+      default: ep.link || "",
+      "480": ep.link480 || "",
+      "720": ep.link720 || "",
+      "1080": ep.link1080 || "",
+      "4k": ep.link4k || "",
+    },
+  });
+
+  const rows = [
+    [
+      { text: "📺 Default", callback_data: `q:default` },
+      { text: "480p", callback_data: `q:480` },
+    ],
+    [
+      { text: "720p", callback_data: `q:720` },
+      { text: "1080p", callback_data: `q:1080` },
+    ],
+    [
+      { text: "4K", callback_data: `q:4k` },
+      { text: "✅ Finish", callback_data: `q:finish` },
+    ],
+    [
+      { text: "🗑 Delete EP", callback_data: `delep:${collection}:${id}:${seasonIdx}:${epIdx}` },
+    ],
+    [
+      { text: "⬅ Back", callback_data: `season:${collection}:${id}:${seasonIdx}` },
+      { text: "🏠 Home", callback_data: "act:home" },
+    ],
+  ];
+  await tgSend(chatId, text, { reply_markup: { inline_keyboard: rows } });
+}
+
+// ---------- Add episode flow ----------
+async function startAddEpisode(
+  chatId: number,
+  collection: string,
+  id: string,
+  seasonIdx: number,
+) {
+  const data = await fbGet(`${collection}/${id}`);
+  const season = data?.seasons?.[seasonIdx];
+  const eps = Array.isArray(season?.episodes) ? season.episodes : [];
+  const nextNum =
+    eps.length > 0
+      ? Math.max(...eps.map((e: any) => Number(e?.episodeNumber || 0))) + 1
+      : 1;
+  await setSession(chatId, {
+    step: "add_links",
+    seriesId: id,
+    collection: collection as any,
+    seasonIdx,
+    newEpisodeNumber: nextNum,
+    links: { default: "", "480": "", "720": "", "1080": "", "4k": "" },
+  });
+  const text =
+    `<b>➕ Add Episode ${nextNum}</b>\n` +
+    `<b>━━━━━━━━━━━━━━━</b>\n` +
+    `<i>Pick a quality, send the link, then tap next quality. When done tap ✅ Finish.</i>`;
+  const rows = [
+    [
+      { text: "📺 Default", callback_data: `q:default` },
+      { text: "480p", callback_data: `q:480` },
+    ],
+    [
+      { text: "720p", callback_data: `q:720` },
+      { text: "1080p", callback_data: `q:1080` },
+    ],
+    [
+      { text: "4K", callback_data: `q:4k` },
+      { text: "✅ Finish", callback_data: `q:finish` },
+    ],
+    [
+      { text: "❌ Cancel", callback_data: `season:${collection}:${id}:${seasonIdx}` },
+    ],
+  ];
+  await tgSend(chatId, text, { reply_markup: { inline_keyboard: rows } });
+}
+
+// ---------- Quality buttons inside add/edit ----------
+async function promptQualityLink(chatId: number, q: string) {
+  const s = await getSession(chatId);
+  s.pendingQuality = q;
+  s.step = s.step === "edit_links" ? "edit_wait_link" : "add_wait_link";
+  await setSession(chatId, s);
+  const cur = s.links?.[q] || "";
+  const label =
+    q === "default" ? "Default" : q === "4k" ? "4K" : `${q}p`;
+  await tgSend(
+    chatId,
+    `📥 Send the <b>${label}</b> link now.\n\n` +
+      (cur ? `<i>Current:</i> <code>${escapeHtml(cur)}</code>\n\n` : "") +
+      `Type <code>skip</code> to leave empty.`,
+  );
 }
 
 // ---------- Link verification ----------
-// Returns { ok, status, reason } per link. Uses HEAD then GET range fallback.
-async function verifyLink(url: string): Promise<{ ok: boolean; status: number; reason?: string }> {
-  if (!url || !/^https?:\/\//i.test(url)) return { ok: false, status: 0, reason: "invalid url" };
-  const ctrl = new AbortController();
-  const tm = setTimeout(() => ctrl.abort(), 12000);
+async function verifyLink(url: string): Promise<boolean> {
+  if (!url) return false;
   try {
-    let r = await fetch(url, { method: "HEAD", redirect: "follow", signal: ctrl.signal }).catch(() => null);
-    if (!r || r.status === 405 || r.status === 403 || r.status === 0) {
-      // fallback: GET range, just first 1KB
-      r = await fetch(url, {
-        method: "GET",
-        redirect: "follow",
-        headers: { Range: "bytes=0-1023" },
-        signal: ctrl.signal,
-      });
+    const r = await fetch(url, { method: "HEAD", redirect: "follow" });
+    if (r.ok) return true;
+    if (r.status === 405) {
+      const r2 = await fetch(url, { method: "GET", headers: { Range: "bytes=0-512" } });
+      return r2.ok || r2.status === 206;
     }
-    clearTimeout(tm);
-    if (!r) return { ok: false, status: 0, reason: "no response" };
-    const ct = r.headers.get("content-type") || "";
-    const cl = Number(r.headers.get("content-length") || 0);
-    // Acceptable: 2xx, 206 (partial), or redirect followed
-    const okStatus = (r.status >= 200 && r.status < 300) || r.status === 206;
-    if (!okStatus) return { ok: false, status: r.status, reason: `HTTP ${r.status}` };
-    // Reject obvious HTML error pages
-    if (ct.includes("text/html") && cl > 0 && cl < 5000) {
-      return { ok: false, status: r.status, reason: "looks like HTML error page" };
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+async function showFinishVerify(chatId: number) {
+  const s = await getSession(chatId);
+  if (!s.links) return;
+  const qualities = ["default", "480", "720", "1080", "4k"];
+  const present = qualities.filter((q) => s.links?.[q]);
+  if (present.length === 0) {
+    await tgSend(chatId, "⚠️ No links provided. Add at least one quality.");
+    return;
+  }
+  const progressMsg = await tgSend(
+    chatId,
+    `🔄 <b>Verifying links...</b>\n<i>Please wait</i>`,
+  );
+  const msgId = progressMsg?.result?.message_id;
+  const results: Record<string, boolean> = {};
+  let i = 0;
+  for (const q of present) {
+    results[q] = await verifyLink(s.links[q]);
+    i++;
+    if (msgId) {
+      const bar =
+        "▰".repeat(i) + "▱".repeat(present.length - i);
+      await tgEdit(
+        chatId,
+        msgId,
+        `🔄 <b>Verifying links...</b>\n${bar} ${i}/${present.length}`,
+      );
     }
-    return { ok: true, status: r.status };
-  } catch (e: any) {
-    clearTimeout(tm);
-    return { ok: false, status: 0, reason: e?.name === "AbortError" ? "timeout" : (e?.message || "error") };
+  }
+  if (msgId) await tgDeleteMsg(chatId, msgId);
+
+  const broken = Object.entries(results).filter(([_, ok]) => !ok).map(([q]) => q);
+  const okList = Object.entries(results).filter(([_, ok]) => ok).map(([q]) => q);
+
+  const fmt = (q: string) => (q === "default" ? "Default" : q === "4k" ? "4K" : `${q}p`);
+  let text =
+    `<b>🔍 Link Check Result</b>\n` +
+    `<b>━━━━━━━━━━━━━━━</b>\n`;
+  for (const q of present) {
+    text += `${results[q] ? "✅" : "❌"} <b>${fmt(q)}</b>\n`;
+  }
+
+  if (broken.length === 0) {
+    text += `\n<b>All links OK.</b> Tap below to preview & confirm.`;
+    await tgSend(chatId, text, {
+      reply_markup: {
+        inline_keyboard: [[{ text: "👁 Preview & Confirm", callback_data: "preview" }]],
+      },
+    });
+  } else {
+    text += `\n⚠️ <b>${broken.length} broken.</b> Re-add or skip them.`;
+    const rows: any[][] = broken.map((q) => [
+      { text: `✏️ Re-add ${fmt(q)}`, callback_data: `q:${q}` },
+      { text: `⏭ Skip ${fmt(q)}`, callback_data: `skipq:${q}` },
+    ]);
+    rows.push([{ text: "👁 Preview Anyway", callback_data: "preview" }]);
+    await tgSend(chatId, text, { reply_markup: { inline_keyboard: rows } });
   }
 }
 
-type VerifyResult = { quality: keyof AddingLinks; label: string; url: string; ok: boolean; status: number; reason?: string };
-async function verifyAllLinks(links: AddingLinks, onProgress?: (done: number, total: number, current: string) => Promise<void>): Promise<VerifyResult[]> {
-  const entries: { quality: keyof AddingLinks; label: string; url: string }[] = [];
-  if (links.def) entries.push({ quality: "def", label: "Default", url: links.def });
-  if (links["480"]) entries.push({ quality: "480", label: "480p", url: links["480"]! });
-  if (links["720"]) entries.push({ quality: "720", label: "720p", url: links["720"]! });
-  if (links["1080"]) entries.push({ quality: "1080", label: "1080p", url: links["1080"]! });
-  if (links["4k"]) entries.push({ quality: "4k", label: "4K", url: links["4k"]! });
-  const results: VerifyResult[] = [];
-  for (let i = 0; i < entries.length; i++) {
-    const e = entries[i];
-    if (onProgress) await onProgress(i, entries.length, e.label);
-    const v = await verifyLink(e.url);
-    results.push({ ...e, ok: v.ok, status: v.status, reason: v.reason });
+// ---------- Preview & confirm ----------
+async function showPreview(chatId: number) {
+  const s = await getSession(chatId);
+  if (!s.seriesId || !s.collection) return;
+  const data = await fbGet(`${s.collection}/${s.seriesId}`);
+  if (!data) return;
+  const season = data.seasons?.[s.seasonIdx ?? 0];
+  const epNum = s.newEpisodeNumber || 1;
+  const sNum = season?.seasonNumber || (s.seasonIdx ?? 0) + 1;
+  const title = data.title || "Untitled";
+
+  // Build button list (visual only — no real inline keyboard yet)
+  const buttons: Array<{ text: string; url: string }> = [];
+  buttons.push({
+    text: `▶️ Watch S${sNum} EP${epNum}`,
+    url: `https://rsanime03.lovable.app/?anime=${s.seriesId}&season=${sNum}&episode=${epNum}`,
+  });
+  // Permanent custom buttons
+  const permanent = (await fbGet(`animeCustomButtons/${s.seriesId}`)) as Array<any> || [];
+  if (Array.isArray(permanent)) {
+    for (const b of permanent) if (b?.text && b?.url) buttons.push({ text: b.text, url: b.url });
   }
-  if (onProgress) await onProgress(entries.length, entries.length, "done");
-  return results;
-}
-
-function progressBar(done: number, total: number): string {
-  const w = 12;
-  const filled = total === 0 ? 0 : Math.round((done / total) * w);
-  return "▰".repeat(filled) + "▱".repeat(w - filled) + ` ${done}/${total}`;
-}
-
-// ---------- Save episode (multi-quality at once) ----------
-async function saveEpisodeMulti(
-  collection: string,
-  seriesId: string,
-  seasonNumber: number,
-  episodeNumber: number,
-  links: AddingLinks,
-  title?: string,
-) {
-  const seasonsPath = `${collection}/${seriesId}/seasons`;
-  let seasons: any = (await fbGet(seasonsPath)) || [];
-  let seasonsArr = Array.isArray(seasons) ? seasons : Object.values(seasons);
-  let sIdx = seasonsArr.findIndex((s: any) => s?.seasonNumber === seasonNumber);
-  if (sIdx < 0) {
-    seasonsArr.push({ seasonNumber, name: `Season ${seasonNumber}`, episodes: [] });
-    sIdx = seasonsArr.length - 1;
-    await fbPut(seasonsPath, seasonsArr);
+  // One-time buttons
+  if (Array.isArray(s.oneTimeButtons)) {
+    for (const b of s.oneTimeButtons) if (b?.text && b?.url) buttons.push(b);
   }
-  const epPath = `${seasonsPath}/${sIdx}/episodes`;
-  const eps: any[] = (await fbGet(epPath)) || [];
-  const epList = Array.isArray(eps) ? eps : Object.values(eps);
-  const idx = epList.findIndex((e: any) => e?.episodeNumber === episodeNumber);
-  const merged: any = idx >= 0 ? { ...epList[idx] } : { episodeNumber, title: title || `Episode ${episodeNumber}` };
-  if (links.def) merged.link = links.def;
-  if (links["480"]) merged.link480 = links["480"];
-  if (links["720"]) merged.link720 = links["720"];
-  if (links["1080"]) merged.link1080 = links["1080"];
-  if (links["4k"]) merged.link4k = links["4k"];
-  if (idx >= 0) epList[idx] = merged; else epList.push(merged);
-  epList.sort((a: any, b: any) => (a.episodeNumber || 0) - (b.episodeNumber || 0));
-  await fbPut(epPath, epList);
-  return true;
+
+  let btnList = "";
+  buttons.forEach((b, i) => {
+    btnList += `\n  ${i + 1}. <b>${escapeHtml(b.text)}</b>\n     <code>${escapeHtml(b.url)}</code>`;
+  });
+
+  const caption =
+    `<b>🎬 ${escapeHtml(title)}</b>\n` +
+    `<b>━━━━━━━━━━━━━━━</b>\n` +
+    `📚 Season <b>${sNum}</b> • 🎞 Episode <b>${epNum}</b>\n` +
+    (data.rating ? `⭐ ${data.rating}\n` : "") +
+    (data.category ? `📂 ${data.category}\n` : "") +
+    `\n<b>📌 Buttons in this post:</b>${btnList || "\n  (none)"}\n\n` +
+    `<i>Tap Confirm to save the episode and send the post.</i>`;
+
+  const poster = data.backdrop || data.poster || FALLBACK_POSTER;
+  await tgSendPhoto(chatId, poster, caption, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "✅ Confirm & Send", callback_data: "confirm_send" }],
+        [{ text: "➕ Add Custom Button", callback_data: "addbtn" }],
+        [{ text: "❌ Cancel", callback_data: "act:home" }],
+      ],
+    },
+  });
 }
 
-async function deleteEpisode(collection: string, seriesId: string, seasonNumber: number, episodeNumber: number) {
-  const seasonsPath = `${collection}/${seriesId}/seasons`;
-  const seasons: any = (await fbGet(seasonsPath)) || [];
-  const arr = Array.isArray(seasons) ? seasons : Object.values(seasons);
-  const sIdx = arr.findIndex((s: any) => s?.seasonNumber === seasonNumber);
-  if (sIdx < 0) return false;
-  const eps = Array.isArray(arr[sIdx].episodes) ? arr[sIdx].episodes : Object.values(arr[sIdx].episodes || {});
-  const next = eps.filter((e: any) => e?.episodeNumber !== episodeNumber);
-  await fbPut(`${seasonsPath}/${sIdx}/episodes`, next);
-  return true;
-}
+// ---------- Save episode + send post ----------
+async function confirmAndSend(chatId: number) {
+  const s = await getSession(chatId);
+  if (!s.seriesId || !s.collection || s.seasonIdx === undefined) return;
+  const data = await fbGet(`${s.collection}/${s.seriesId}`);
+  if (!data) return;
+  const seasons = Array.isArray(data.seasons) ? data.seasons : [];
+  const season = seasons[s.seasonIdx];
+  if (!season) return;
+  const eps = Array.isArray(season.episodes) ? season.episodes : [];
+  const epNum = s.newEpisodeNumber || 1;
 
-// ---------- Telegram channel post ----------
-async function postEpisodeToChannel(collection: string, seriesId: string, seasonNumber: number, episodeNumber: number) {
-  const series: any = await fbGet(`${collection}/${seriesId}`);
-  if (!series) return { ok: false, error: "series not found" };
-  const url = `${SUPABASE_URL}/functions/v1/telegram-post`;
-  const r = await fetch(url, {
+  const epObj: any = {
+    episodeNumber: epNum,
+    title: `Episode ${epNum}`,
+    link: s.links?.default || "",
+    link480: s.links?.["480"] || "",
+    link720: s.links?.["720"] || "",
+    link1080: s.links?.["1080"] || "",
+    link4k: s.links?.["4k"] || "",
+  };
+
+  // Find existing index by ep number
+  const existingIdx = eps.findIndex((e: any) => Number(e?.episodeNumber) === Number(epNum));
+  if (existingIdx >= 0) {
+    eps[existingIdx] = { ...eps[existingIdx], ...epObj };
+  } else {
+    eps.push(epObj);
+    eps.sort((a: any, b: any) => Number(a.episodeNumber) - Number(b.episodeNumber));
+  }
+  season.episodes = eps;
+  seasons[s.seasonIdx] = season;
+  await fbPatch(`${s.collection}/${s.seriesId}`, {
+    seasons,
+    updatedAt: Date.now(),
+  });
+
+  // Build buttons for the actual telegram post
+  const sNum = season.seasonNumber || (s.seasonIdx ?? 0) + 1;
+  const buttons: Array<{ text: string; url: string }> = [
+    {
+      text: `▶️ Watch S${sNum} EP${epNum}`,
+      url: `https://rsanime03.lovable.app/?anime=${s.seriesId}&season=${sNum}&episode=${epNum}`,
+    },
+  ];
+  const permanent = (await fbGet(`animeCustomButtons/${s.seriesId}`)) as Array<any> || [];
+  if (Array.isArray(permanent)) {
+    for (const b of permanent) if (b?.text && b?.url) buttons.push({ text: b.text, url: b.url });
+  }
+  if (Array.isArray(s.oneTimeButtons)) {
+    for (const b of s.oneTimeButtons) if (b?.text && b?.url) buttons.push(b);
+  }
+
+  const title = data.title || "Untitled";
+  const caption =
+    `🎬 <b>${escapeHtml(title)}</b>\n` +
+    `📚 Season <b>${sNum}</b> • 🎞 Episode <b>${epNum}</b>\n` +
+    (data.rating ? `⭐ ${data.rating}\n` : "") +
+    (data.category ? `📂 ${data.category}\n` : "");
+
+  // Call telegram-post function (it handles chatId resolution from Firebase)
+  const photoUrl = data.backdrop || data.poster || FALLBACK_POSTER;
+  const postRes = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -518,1035 +717,491 @@ async function postEpisodeToChannel(collection: string, seriesId: string, season
       Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     },
     body: JSON.stringify({
-      collection,
-      seriesId,
-      caption:
-        `<b>${series.title || seriesId}</b>\n` +
-        (seasonNumber ? `Season: ${seasonNumber}\n` : "") +
-        (episodeNumber ? `Episode: ${episodeNumber}\n` : "") +
-        `\n🔗 <a href="https://rsanime03.lovable.app/?anime=${encodeURIComponent(seriesId)}">Watch Now</a>`,
-      photoUrl: series.poster || series.backdrop,
+      caption,
+      photoUrl,
+      inlineButtons: buttons,
+      collection: s.collection,
+      seriesId: s.seriesId,
     }),
   });
-  return await r.json();
-}
+  const postData = await postRes.json().catch(() => ({}));
 
-// ---------- AI bridge ----------
-async function callAdminAi(messages: any[]) {
-  const url = `${SUPABASE_URL}/functions/v1/admin-ai`;
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    },
-    body: JSON.stringify({ messages }),
-  });
-  return await r.json();
-}
-async function executeAdminAi(operations: any[]) {
-  const url = `${SUPABASE_URL}/functions/v1/admin-ai`;
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    },
-    body: JSON.stringify({ mode: "execute", operations }),
-  });
-  return await r.json();
-}
+  await clearSession(chatId);
 
-// ---------- UI ----------
-async function showMainMenu(chatId: number, prefix = "") {
-  const text =
-    (prefix ? prefix + "\n\n" : "") +
-    `🎬 <b>RS Anime Admin Bot</b>\n` +
-    `━━━━━━━━━━━━━━━━━━\n` +
-    `একটা মোড বেছে নিন:\n\n` +
-    `🤖 <b>AI Mode</b> — কথা বলে কাজ + manual feature ও চলবে\n` +
-    `🔧 <b>Manual Mode</b> — পুরোপুরি বাটন-ভিত্তিক admin panel\n\n` +
-    `<i>Note: শুধু RS Anime (webseries + movies)। AnimeSalt বাদ।</i>`;
-  await tgSend(chatId, text, {
-    reply_markup: kb([
-      [{ text: "🤖 AI Mode", data: "mode:ai" }, { text: "🔧 Manual Mode", data: "mode:manual" }],
-      [{ text: "📺 Weekly Reminder Now", data: "weekly:run" }],
-      [{ text: "🧹 Clear AI History", data: "ai:clear" }, { text: "❓ Help Guide", data: "help" }],
-    ]),
-  });
-}
-
-async function showManualPanel(chatId: number, prefix = "") {
-  await patchSession(chatId, { mode: "manual", awaiting: null });
-  const text =
-    (prefix ? prefix + "\n\n" : "") +
-    `🔧 <b>Manual Admin Panel</b>\n` +
-    `━━━━━━━━━━━━━━━━━━\n` +
-    `সব কাজ বাটন দিয়ে। এটা আপনার ওয়েবসাইটের admin panel এর মতই।\n\n` +
-    `নিচের বাটন থেকে বেছে নিন:`;
-  await tgSendPhoto(chatId, FALLBACK_POSTER, text, {
-    reply_markup: kb([
-      [{ text: "🔎 Search Anime", data: "search" }, { text: "📂 Browse All", data: "browse:all" }],
-      [{ text: "🆕 Add to existing series", data: "panel:addexisting" }, { text: "📺 Weekly Pending", data: "weekly:run" }],
-      [{ text: "📢 Telegram Post", data: "panel:tgpost" }, { text: "🗑 Delete Episode", data: "panel:delep" }],
-      [{ text: "📘 Full Guide", data: "help" }, { text: "🏠 Main Menu", data: "menu" }],
-    ]),
-  });
-}
-
-async function showManualHelp(chatId: number, prefix = "") {
-  const text =
-    (prefix ? prefix + "\n\n" : "") +
-    `<b>📘 Manual Admin Panel — Full Guide</b>\n` +
-    `━━━━━━━━━━━━━━━━━━\n\n` +
-    `<b>🎯 Concept</b>\n` +
-    `Manual mode = আপনার website এর admin panel এর মতই, সব বাটন দিয়ে।\n` +
-    `AI বন্ধ থাকলেও Manual দিয়ে সব করা যাবে।\n\n` +
-    `<b>🔧 Main Buttons</b>\n` +
-    `• 🔎 <b>Search Anime</b> — title টাইপ করে খুঁজুন (typo friendly)\n` +
-    `• 📂 <b>Browse All</b> — সব series list দেখুন\n` +
-    `• 🆕 <b>Add to existing</b> — series → season → EP add\n` +
-    `• 📢 <b>Telegram Post</b> — কোনো episode manually post\n` +
-    `• 🗑 <b>Delete Episode</b> — পুরনো episode মুছুন\n` +
-    `• 📺 <b>Weekly Reminder</b> — আজকের pending list\n\n` +
-    `<b>➕ Add Episode flow (manual)</b>\n` +
-    `1. Search → Anime → Season → <b>Manual EP N</b>\n` +
-    `2. Quality button চাপুন (Default/480p/720p/1080p/4K)\n` +
-    `3. সেই quality এর URL paste করুন\n` +
-    `4. সব quality দেওয়া হলে <b>✅ Finish</b>\n` +
-    `5. <b>🔍 Verifying links...</b> progress চলবে\n` +
-    `6. সব OK হলে → <b>Confirm</b> button → save → Telegram post prompt\n` +
-    `7. কোনো link broken হলে → <b>✏️ Re-add</b> বা <b>⏭ Skip</b>\n` +
-    `8. Skip করলেও <b>Confirm dialog</b> আসবে — confirm দিলেই save\n\n` +
-    `<b>⚡ Auto Mode</b>\n` +
-    `Episode post (Title/Episode/Quality/URL) সরাসরি paste করুন — বট auto-detect করবে।\n\n` +
-    `<b>🎤 Slash Commands</b>\n` +
-    `• <code>/menu</code> — main menu\n` +
-    `• <code>/manual</code> — manual panel\n` +
-    `• <code>/search Re Zero</code> — title দিয়ে search\n` +
-    `• <code>/weekly</code> — আজকের reminder\n` +
-    `• <code>/cancel</code> — current flow বাদ\n` +
-    `• <code>/help</code> — এই guide\n\n` +
-    `<b>🤖 AI Mode</b>\n` +
-    `Plain text লিখলেই বুঝবে। যেকোনো manual button-ও চলবে। AI proposal দিলে Allow/Disallow।`;
-  await tgSend(chatId, text, {
-    reply_markup: kb([
-      [{ text: "🔎 Search", data: "search" }, { text: "🔧 Manual Panel", data: "mode:manual" }, { text: "🏠 Menu", data: "menu" }],
-    ]),
-  });
-}
-
-async function runAnimeSearch(
-  chatId: number,
-  rawQuery: string,
-  opts: { fromAi?: boolean } = {},
-) {
-  const query = cleanSearchQuery(rawQuery);
-  if (!query) {
-    await tgSend(chatId, `❌ Search title দিন। যেমন: <code>/search Re Zero</code>`);
-    return;
-  }
-
-  const results = await searchAnimeRS(query);
-  if (results.length === 0) {
-    await tgSendPhoto(
+  if (postData?.ok) {
+    await tgSend(
       chatId,
-      FALLBACK_POSTER,
-      `❌ "<b>${query}</b>" এর কাছাকাছি কিছু পাওয়া যায়নি।\n\n` +
-        `আবার চেষ্টা করুন:\n` +
-        `• <code>/search Re Zero</code>\n` +
-        `• <code>/search The Ramparts Of Ice</code>\n` +
-        `• title plain text হিসেবেও পাঠাতে পারেন`,
-      { reply_markup: kb([[{ text: "🔁 Try Again", data: "search" }, { text: "❓ Help", data: "help" }]]) },
+      `✅ <b>Episode saved & posted to Telegram!</b>\n\n` +
+        `🎬 ${escapeHtml(title)}\n📚 S${sNum} EP${epNum}`,
+      { reply_markup: startKeyboard() },
     );
-    return;
+  } else {
+    await tgSend(
+      chatId,
+      `⚠️ <b>Episode saved</b> but Telegram post failed.\n\n` +
+        `<code>${escapeHtml(postData?.error || "unknown error")}</code>\n\n` +
+        `<i>Set a chatId at Firebase: settings/telegramChatId</i>`,
+      { reply_markup: startKeyboard() },
+    );
   }
-
-  await patchSession(chatId, { mode: opts.fromAi ? "ai" : "manual", awaiting: null });
-
-  if (results.length === 1 || results[0].score >= 0.92) {
-    await showAnimeDetail(chatId, results[0].collection, results[0].id);
-    await showAnimeAssistantHint(chatId, results[0].collection, results[0].id, {
-      manualPreferred: isManualIntent(rawQuery),
-      infoPreferred: isInfoIntent(rawQuery),
-    });
-    return;
-  }
-
-  const rows = results.slice(0, 6).map((r) => [{
-    text: `${r.title} (${r.collection}) ${Math.round(r.score * 100)}%`,
-    data: `pick:${r.collection}:${r.id}`,
-  }]);
-  rows.push([{ text: "🔎 Search Again", data: "search" }, { text: "🏠 Menu", data: "menu" }]);
-  await tgSendPhoto(
-    chatId,
-    FALLBACK_POSTER,
-    `🔎 "<b>${query}</b>" এর জন্য <b>${results.length}</b>টা কাছাকাছি match পাওয়া গেছে।\nনিচ থেকে সঠিকটা বেছে নিন:`,
-    { reply_markup: kb(rows) },
-  );
 }
 
-async function showAnimeAssistantHint(
-  chatId: number,
-  collection: string,
-  seriesId: string,
-  opts: { manualPreferred?: boolean; infoPreferred?: boolean } = {},
-) {
-  const series: any = await fbGet(`${collection}/${seriesId}`);
-  if (!series || collection === "movies") return;
-  const next = getSeriesNextEpisode(series);
-  const lead = opts.manualPreferred
-    ? `আপনি button-based manual add করতে চেয়েছেন। নিচের button থেকে next episode add করতে পারবেন।`
-    : opts.infoPreferred
-    ? `এই anime-তে এখন ${next.totalEpisodes} episode add আছে। next logical episode হলো EP ${next.episodeNumber}.`
-    : `এই anime-তে এখন ${next.totalEpisodes} episode add আছে। চাইলে next episode এখনই add করতে পারেন।`;
-
+// ---------- Custom button add flow ----------
+async function startAddButton(chatId: number) {
+  const s = await getSession(chatId);
+  s.step = "btn_text";
+  s.customButton = {};
+  await setSession(chatId, s);
   await tgSend(
     chatId,
-    `<b>${series.title || seriesId}</b>\nID: <code>${seriesId}</code>\n\n${lead}`,
-    {
-      reply_markup: kb([
-        [
-          { text: `✋ Manual EP ${next.episodeNumber}`, data: `quickadd:manual:${collection}:${seriesId}:${next.seasonNumber}:${next.episodeNumber}` },
-          { text: `⚡ Auto EP ${next.episodeNumber}`, data: `quickadd:auto:${collection}:${seriesId}:${next.seasonNumber}:${next.episodeNumber}` },
-        ],
-        [{ text: `📁 Open Season ${next.seasonNumber}`, data: `season:${collection}:${seriesId}:${next.seasonNumber}` }],
-        [{ text: "📘 Manual Guide", data: "guide:manual" }],
-      ]),
-    },
+    `✏️ <b>Add Custom Button</b>\n\nSend the <b>button label</b> (e.g. <code>Telegram Channel</code>):`,
   );
 }
 
-async function showBrowseAll(chatId: number, page = 0) {
-  const PAGE = 12;
-  const items: { collection: string; id: string; title: string; eps: number }[] = [];
-  for (const collection of ["webseries", "movies"] as const) {
-    const all: any = await fbGet(collection);
-    if (!all || typeof all !== "object") continue;
-    for (const [id, v] of Object.entries(all) as [string, any][]) {
-      const title = String(v?.title || id);
-      const seasons = Array.isArray(v?.seasons) ? v.seasons : Object.values(v?.seasons || {});
-      const eps = seasons.reduce((acc: number, s: any) => {
-        const e = Array.isArray(s?.episodes) ? s.episodes : Object.values(s?.episodes || {});
-        return acc + e.length;
-      }, 0);
-      items.push({ collection, id, title, eps });
-    }
-  }
-  items.sort((a, b) => a.title.localeCompare(b.title));
-  const totalPages = Math.max(1, Math.ceil(items.length / PAGE));
-  const slice = items.slice(page * PAGE, (page + 1) * PAGE);
-  const rows = slice.map((it) => [{
-    text: `${it.collection === "movies" ? "🎬" : "📺"} ${it.title}${it.collection === "webseries" ? ` (${it.eps} ep)` : ""}`,
-    data: `pick:${it.collection}:${it.id}`,
-  }]);
-  const nav: any[] = [];
-  if (page > 0) nav.push({ text: "⬅ Prev", data: `browse:${page - 1}` });
-  nav.push({ text: `${page + 1}/${totalPages}`, data: "browse:all" });
-  if (page < totalPages - 1) nav.push({ text: "Next ➡", data: `browse:${page + 1}` });
-  rows.push(nav);
-  rows.push([{ text: "🔎 Search", data: "search" }, { text: "🏠 Menu", data: "menu" }]);
-  await tgSend(chatId, `📂 <b>All RS Anime</b> (${items.length} total)\nPage ${page + 1} of ${totalPages}`, { reply_markup: kb(rows) });
-}
+// ---------- Handle text messages ----------
+async function handleText(chatId: number, text: string) {
+  const t = text.trim();
+  const lower = t.toLowerCase();
 
-async function showSearchPrompt(chatId: number) {
-  await patchSession(chatId, { mode: "manual", awaiting: "search_anime" });
-  await tgSend(
-    chatId,
-    `🔎 <b>Search Anime</b>\n\n` +
-      `এনিমির নাম লিখুন (একটু বানান ভুল হলেও খুঁজে পাবে)।\n` +
-      `যেমন: <code>One Piece</code>, <code>Dr Stone</code>, <code>The Ramparts Of Ice</code>\n\n` +
-      `BotFather style:\n` +
-      `• <code>/search Re Zero</code>\n` +
-      `• শুধু title পাঠালেও search হবে\n\n` +
-      `<code>/cancel</code> = বাদ`,
-  );
-}
-
-async function showAnimeDetail(chatId: number, collection: string, seriesId: string) {
-  const series: any = await fbGet(`${collection}/${seriesId}`);
-  if (!series) {
-    await tgSend(chatId, "❌ Series পাওয়া যায়নি।");
+  if (lower === "/start" || lower === "/home") {
+    await clearSession(chatId);
+    await sendStart(chatId);
     return;
   }
-  const seasons = Array.isArray(series.seasons) ? series.seasons : Object.values(series.seasons || {});
-  const next = getSeriesNextEpisode(series);
-  const totalEps = seasons.reduce((acc: number, s: any) => {
-    const e = Array.isArray(s?.episodes) ? s.episodes : Object.values(s?.episodes || {});
-    return acc + e.length;
-  }, 0);
-  await patchSession(chatId, {
-    collection: collection as any,
-    seriesId,
-    awaiting: null,
-  });
-  const caption =
-    `<b>${series.title || seriesId}</b>\n` +
-    `🆔 <code>${seriesId}</code>\n` +
-    `📂 ${collection}\n` +
-    `📅 Year: ${series.year || "-"}\n` +
-    `⭐ ${series.rating || "-"}\n` +
-    `📺 Seasons: ${seasons.length} · Episodes: ${totalEps}\n` +
-    (collection === "webseries" ? `🆕 Next EP suggestion: S${next.seasonNumber} · EP ${next.episodeNumber}\n\n` : `\n`) +
-    `কোন season এ কাজ করবেন?`;
-  const seasonRows: any[][] = [];
-  if (collection === "webseries") {
-    seasonRows.push([
-      { text: `✋ Manual EP ${next.episodeNumber}`, data: `quickadd:manual:${collection}:${seriesId}:${next.seasonNumber}:${next.episodeNumber}` },
-      { text: `⚡ Auto EP ${next.episodeNumber}`, data: `quickadd:auto:${collection}:${seriesId}:${next.seasonNumber}:${next.episodeNumber}` },
-    ]);
-  }
-  if (seasons.length === 0 && collection === "webseries") {
-    seasonRows.push([{ text: "➕ Add Episode (Season 1)", data: `addep:${collection}:${seriesId}:1` }]);
-  } else {
-    seasons.forEach((s: any) => {
-      const epCount = (Array.isArray(s?.episodes) ? s.episodes : Object.values(s?.episodes || {})).length;
-      seasonRows.push([{
-        text: `📁 Season ${s.seasonNumber} (${epCount} ep)`,
-        data: `season:${collection}:${seriesId}:${s.seasonNumber}`,
-      }]);
-    });
-  }
-  if (collection === "movies") {
-    seasonRows.push([{ text: "🎬 Set Movie Link", data: `movie:${collection}:${seriesId}` }]);
-  }
-  seasonRows.push([{ text: "📘 Manual Guide", data: "guide:manual" }]);
-  seasonRows.push([{ text: "🔎 Search again", data: "search" }, { text: "🏠 Menu", data: "menu" }]);
-
-  const photo = series.poster || series.backdrop || FALLBACK_POSTER;
-  await tgSendPhoto(chatId, photo, caption, { reply_markup: kb(seasonRows) });
-}
-
-async function showSeasonDetail(chatId: number, collection: string, seriesId: string, seasonNumber: number) {
-  const { eps } = await getSeriesEpisodes(collection, seriesId, seasonNumber);
-  await patchSession(chatId, {
-    collection: collection as any,
-    seriesId,
-    seasonNumber,
-    awaiting: null,
-  });
-  const total = eps.length;
-  const last6 = eps.slice(-6); // last 6 from bottom
-  const nextEp = eps.reduce((acc: number, e: any) => Math.max(acc, Number(e?.episodeNumber || 0)), 0) + 1;
-  const list = last6.map((e: any) => `EP ${e.episodeNumber} — ${e.title || ""}`).join("\n") || "(কোনো episode নেই)";
-  const text =
-    `<b>Season ${seasonNumber}</b> (${total} episodes)\n\n` +
-    `Last ${last6.length} episodes:\n${list}\n\n` +
-    `Next suggested episode: <b>${nextEp}</b>`;
-  const epButtons = last6.map((e: any) => ({
-    text: `EP ${e.episodeNumber}`,
-    data: `ep:${collection}:${seriesId}:${seasonNumber}:${e.episodeNumber}`,
-  }));
-  const rows: any[][] = [];
-  for (let i = 0; i < epButtons.length; i += 3) rows.push(epButtons.slice(i, i + 3));
-  rows.push([
-    { text: `✋ Manual EP ${nextEp}`, data: `quickadd:manual:${collection}:${seriesId}:${seasonNumber}:${nextEp}` },
-    { text: `⚡ Auto EP ${nextEp}`, data: `quickadd:auto:${collection}:${seriesId}:${seasonNumber}:${nextEp}` },
-  ]);
-  rows.push([{ text: "➕ Add Episode", data: `addep:${collection}:${seriesId}:${seasonNumber}` }]);
-  if (total > 0) {
-    const latestEp = eps[eps.length - 1].episodeNumber;
-    rows.push([{ text: `📢 Post EP ${latestEp} to Telegram`, data: `post:${collection}:${seriesId}:${seasonNumber}:${latestEp}` }]);
-  }
-  rows.push([{ text: "📘 Manual Guide", data: "guide:manual" }]);
-  rows.push([{ text: "⬅ Back", data: `anime:${collection}:${seriesId}` }, { text: "🏠 Menu", data: "menu" }]);
-  await tgSend(chatId, text, { reply_markup: kb(rows) });
-}
-
-async function showEpisodeDetail(chatId: number, collection: string, seriesId: string, seasonNumber: number, epNum: number) {
-  const { eps } = await getSeriesEpisodes(collection, seriesId, seasonNumber);
-  const e = eps.find((x: any) => x?.episodeNumber === epNum);
-  if (!e) { await tgSend(chatId, "❌ Episode পাওয়া যায়নি।"); return; }
-  const linkLines = [
-    ["Default", e.link],
-    ["480p", e.link480],
-    ["720p", e.link720],
-    ["1080p", e.link1080],
-    ["4K", e.link4k],
-  ].map(([label, value]) => `${value ? "✅" : "—"} <b>${label}</b>${value ? `\n<code>${String(value).slice(0, 90)}</code>` : ""}`).join("\n\n");
-  await tgSend(chatId, `<b>EP ${epNum}</b> — ${e.title || `Episode ${epNum}`}\n\n${linkLines}`, {
-    reply_markup: kb([
-      [{ text: "✏️ Edit", data: `addep:${collection}:${seriesId}:${seasonNumber}:${epNum}` }, { text: "❌ Close", data: "close" }],
-      [{ text: "📢 Post to Telegram", data: `post:${collection}:${seriesId}:${seasonNumber}:${epNum}` }, { text: "🗑 Delete EP", data: `del:${collection}:${seriesId}:${seasonNumber}:${epNum}` }],
-      [{ text: "⬅ Back", data: `season:${collection}:${seriesId}:${seasonNumber}` }],
-    ]),
-  });
-}
-
-// ---------- Add Episode flow (Auto / Manual) ----------
-async function startAddEpisode(chatId: number, collection: string, seriesId: string, seasonNumber: number, presetEp?: number) {
-  let existingLinks: AddingLinks = {};
-  if (presetEp) {
-    const { eps } = await getSeriesEpisodes(collection, seriesId, seasonNumber);
-    const existing = eps.find((e: any) => e?.episodeNumber === presetEp);
-    if (existing) existingLinks = extractEpisodeLinks(existing);
-  }
-  await patchSession(chatId, {
-    collection: collection as any,
-    seriesId,
-    seasonNumber,
-    episodeNumber: presetEp,
-    addingLinks: existingLinks,
-    pendingSave: undefined,
-    awaiting: null,
-  });
-  await tgSend(chatId, `<b>${presetEp ? "✏️ Edit Episode" : "➕ Add Episode"}</b> — Season ${seasonNumber}${presetEp ? ` · EP ${presetEp}` : ""}\n\nকোন মোডে যোগ করবেন?`, {
-    reply_markup: kb([[
-      { text: "⚡ Auto (paste post)", data: `mode_add:auto` },
-      { text: "✋ Manual (button-by-button)", data: `mode_add:manual` },
-    ], [{ text: "⬅ Back to Season", data: `season:${collection}:${seriesId}:${seasonNumber}` }]]),
-  });
-}
-
-async function showManualLinkPanel(chatId: number) {
-  const sess = await getSession(chatId);
-  const links = sess.addingLinks || {};
-  const status = (k: keyof AddingLinks, label: string) => (links[k] ? `✅ ${label}` : label);
-  const epLabel = sess.episodeNumber ? `EP ${sess.episodeNumber}` : "EP ?";
-  const existingStatus = [
-    `Default: ${links.def ? "✅" : "—"}`,
-    `480p: ${links["480"] ? "✅" : "—"}`,
-    `720p: ${links["720"] ? "✅" : "—"}`,
-    `1080p: ${links["1080"] ? "✅" : "—"}`,
-    `4K: ${links["4k"] ? "✅" : "—"}`,
-  ].join("\n");
-  const text =
-    `<b>✋ Manual Mode</b> — Season ${sess.seasonNumber}, ${epLabel}\n\n` +
-    (sess.episodeNumber ? "" : `প্রথমে EP number সেট করুন।\n\n`) +
-    `যে quality এর link দিতে চান সেই button চাপুন। শেষে Finish।\n\n` +
-    `<b>Current status</b>\n${existingStatus}`;
-  const rows: any[][] = [];
-  if (!sess.episodeNumber) {
-    rows.push([{ text: "🔢 Set Episode Number", data: "manual:setep" }]);
-  } else {
-    rows.push([{ text: "🔢 Change Episode Number", data: "manual:setep" }]);
-    rows.push([
-      { text: status("def", "Default"), data: "manual:def" },
-      { text: status("480", "480p"), data: "manual:480" },
-    ]);
-    rows.push([
-      { text: status("720", "720p"), data: "manual:720" },
-      { text: status("1080", "1080p"), data: "manual:1080" },
-    ]);
-    rows.push([{ text: status("4k", "4K"), data: "manual:4k" }]);
-    rows.push([{ text: "✅ Finish", data: "manual:finish" }, { text: "✏️ Continue Edit", data: "manual:back" }]);
-    if (sess.collection && sess.seriesId && sess.seasonNumber) {
-      rows.push([{ text: "⬅ Back to Season", data: `season:${sess.collection}:${sess.seriesId}:${sess.seasonNumber}` }, { text: "🏠 Menu", data: "menu" }]);
-    }
-  }
-  await tgSend(chatId, text, { reply_markup: kb(rows) });
-}
-
-async function showFinishPreview(chatId: number) {
-  const sess = await getSession(chatId);
-  if (!sess.collection || !sess.seriesId || !sess.seasonNumber || !sess.episodeNumber) {
-    await tgSend(chatId, "❌ Incomplete data."); return;
-  }
-  const links = sess.addingLinks || {};
-  if (!Object.values(links).some(Boolean)) {
-    await tgSend(chatId, "❌ কমপক্ষে ১টা quality link দিন, তারপর Finish চাপুন।");
-    await showManualLinkPanel(chatId);
+  if (lower === "/help") {
+    await sendHelp(chatId);
     return;
   }
-  // Step 1: run link verification with progress bar
-  await runLinkVerification(chatId, links);
-}
-
-async function runLinkVerification(chatId: number, links: AddingLinks) {
-  const sess = await getSession(chatId);
-  const total = Object.values(links).filter(Boolean).length;
-  // Send a progress message we update in-place
-  const initial = await tgSend(chatId,
-    `🔍 <b>Verifying ${total} link(s)...</b>\n\n${progressBar(0, total)}\n\n<i>প্রতিটা link reachable + content type check হচ্ছে</i>`);
-  const msgId = initial?.result?.message_id;
-  const editProgress = async (done: number, total: number, current: string) => {
-    if (!msgId) return;
-    const txt = `🔍 <b>Verifying links...</b>\n\n${progressBar(done, total)}\n\n` +
-      (done < total ? `Checking: <b>${current}</b>` : `✅ Verification complete`);
-    await fetch(tgApi("editMessageText"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, message_id: msgId, text: txt, parse_mode: "HTML" }),
-    }).catch(() => {});
-  };
-  const results = await verifyAllLinks(links, editProgress);
-  const broken = results.filter((r) => !r.ok);
-  const okOnes = results.filter((r) => r.ok);
-  // Persist for confirm/edit/skip flow
-  await patchSession(chatId, {
-    pendingSave: {
-      collection: sess.collection!,
-      seriesId: sess.seriesId!,
-      seasonNumber: sess.seasonNumber!,
-      episodeNumber: sess.episodeNumber!,
-      links,
-    },
-    verifyResults: results as any,
-  });
-
-  const series: any = await fbGet(`${sess.collection}/${sess.seriesId}`);
-  const photo = series?.poster || series?.backdrop || FALLBACK_POSTER;
-
-  const summaryLines = results.map((r) =>
-    `${r.ok ? "✅" : "❌"} <b>${r.label}</b>${r.ok ? "" : ` — ${r.reason || `HTTP ${r.status}`}`}`
-  ).join("\n");
-
-  if (broken.length === 0) {
-    // All good → confirm dialog with poster
-    const caption =
-      `<b>${series?.title || sess.seriesId}</b>\n` +
-      `Season ${sess.seasonNumber} — EP ${sess.episodeNumber}\n` +
-      `🆔 <code>${sess.seriesId}</code>\n\n` +
-      `<b>Link Verification:</b>\n${summaryLines}\n\n` +
-      `সব link কাজ করছে। আপনি কি confirm করে save + post করতে চান?`;
-    await tgSendPhoto(chatId, photo, caption, {
-      reply_markup: kb([
-        [{ text: "✅ Confirm & Save", data: "confirm:save" }],
-        [{ text: "✏️ Back to Edit", data: "manual:back" }, { text: "❌ Cancel", data: "save:deny" }],
-      ]),
-    });
+  if (lower === "/cancel") {
+    await clearSession(chatId);
+    await tgSend(chatId, "❌ Cancelled.", { reply_markup: startKeyboard() });
+    return;
+  }
+  if (lower.startsWith("/setchatid")) {
+    // helper to set the post chatId to current chat
+    await fbPut("settings/telegramChatId", chatId);
+    await tgSend(chatId, `✅ Saved this chat as Telegram post target.\n<code>${chatId}</code>`);
+    return;
+  }
+  if (lower === "/search") {
+    const s: Session = { step: "search_query" };
+    await setSession(chatId, s);
+    await tgSend(chatId, "🔎 Type the anime name:");
     return;
   }
 
-  // Some broken → offer edit per quality + skip-all
-  const rows: any[][] = [];
-  for (const b of broken) {
-    rows.push([{ text: `✏️ Re-add ${b.label}`, data: `verifix:${b.quality}` }, { text: `⏭ Skip ${b.label}`, data: `veriskip:${b.quality}` }]);
-  }
-  rows.push([{ text: "⏭ Skip ALL broken & continue", data: "verifix:skipall" }]);
-  rows.push([{ text: "🔁 Re-verify", data: "verifix:retry" }, { text: "❌ Cancel", data: "save:deny" }]);
+  const s = await getSession(chatId);
 
-  const caption =
-    `<b>${series?.title || sess.seriesId}</b>\n` +
-    `Season ${sess.seasonNumber} — EP ${sess.episodeNumber}\n\n` +
-    `⚠️ <b>${broken.length}/${results.length}</b> link কাজ করছে না:\n\n${summaryLines}\n\n` +
-    `সমস্যা থাকা link গুলো re-add করুন বা skip করে এগিয়ে যান।`;
-  await tgSendPhoto(chatId, photo, caption, { reply_markup: kb(rows) });
-}
-
-async function showConfirmDialog(chatId: number) {
-  const sess = await getSession(chatId);
-  if (!sess.pendingSave) { await tgSend(chatId, "❌ কিছু pending নেই।"); return; }
-  const ps = sess.pendingSave;
-  const series: any = await fbGet(`${ps.collection}/${ps.seriesId}`);
-  const photo = series?.poster || series?.backdrop || FALLBACK_POSTER;
-  const linkSummary = Object.entries(ps.links)
-    .filter(([_, v]) => v)
-    .map(([k, _]) => `✅ ${k}`).join("  •  ") || "(no links)";
-  await tgSendPhoto(chatId, photo,
-    `<b>${series?.title || ps.seriesId}</b>\n` +
-    `Season ${ps.seasonNumber} — EP ${ps.episodeNumber}\n\n` +
-    `<b>Final links to save:</b>\n${linkSummary}\n\n` +
-    `আপনি কি confirm করছেন? Confirm দিলে এই episode টি database এ যোগ হবে।`,
-    {
-      reply_markup: kb([
-        [{ text: "✅ Confirm", data: "confirm:save" }],
-        [{ text: "❌ Cancel", data: "save:deny" }],
-      ]),
-    });
-}
-
-// ---------- Weekly reminders ----------
-async function buildWeeklyReminders() {
-  const pending: any = (await fbGet("weeklyPending")) || {};
-  const out: any[] = [];
-  const now = Date.now();
-  for (const [seriesId, e] of Object.entries(pending) as [string, any][]) {
-    if (!e) continue;
-    if (e.endedAt) continue;
-    if (e.status === "ended" || e.fullSeason === true) continue;
-    const next = Number(e.nextReleaseAt || 0);
-    if (next && next > now + 12 * 3600_000) continue;
-    out.push({ seriesId, ...e });
-  }
-  return out;
-}
-async function sendWeeklyReminderTo(chatId: number) {
-  const list = await buildWeeklyReminders();
-  if (list.length === 0) {
-    await tgSend(chatId, "✅ আজ কোনো running anime episode pending নেই।");
-    return;
-  }
-  await tgSend(chatId, `📅 <b>Today's Episode Reminder</b>\n${list.length} টি running anime এর episode আসার কথা:`);
-  for (const item of list) {
-    const collection = item.collection === "movies" ? "movies" : "webseries";
-    const title = item.seriesTitle || item.title || item.seriesId;
-    await tgSend(chatId,
-      `<b>${title}</b>\n📂 ${collection}\nNext: ${item.nextReleaseAt ? new Date(item.nextReleaseAt).toLocaleDateString() : "today"}`,
-      {
-        reply_markup: kb([
-          [{ text: "➕ Add Episode", data: `addep:${collection}:${item.seriesId}:${item.seasonNumber || 1}` }],
-          [{ text: "✅ Mark as Read", data: `weekly:read:${item.seriesId}` }],
-          [{ text: "🏁 End of Season", data: `weekly:end:${item.seriesId}` }],
-        ]),
-      });
-  }
-}
-
-// ---------- Callback handler ----------
-async function handleCallback(cb: any) {
-  const chatId = cb.message?.chat?.id;
-  const data: string = cb.data || "";
-  const cbId = cb.id;
-  if (cb.from?.id !== ADMIN_TG_ID) {
-    await tgAnswerCb(cbId, "❌ Unauthorized");
-    return;
-  }
-  await tgAnswerCb(cbId);
-
-  if (data === "menu") return showMainMenu(chatId);
-  if (data === "close") {
-    if (cb.message?.message_id) await tgDeleteMessage(chatId, cb.message.message_id);
-    return;
-  }
-  if (data === "guide:manual") return showManualHelp(chatId);
-  if (data === "help") {
-    return showManualHelp(chatId);
-  }
-  if (data === "ai:clear") {
-    await fbDelete(`telegramAiHistory/${chatId}`);
-    await tgSend(chatId, "🧹 AI history cleared.");
-    return;
-  }
-  if (data === "weekly:run") return sendWeeklyReminderTo(chatId);
-
-  if (data === "mode:ai") {
-    await patchSession(chatId, { mode: "ai", awaiting: "ai_chat", pendingOps: [] });
-    await tgSend(chatId,
-      `🤖 <b>AI Mode</b>\n\n` +
-      `সব RS anime এর title আমি মুখস্ত রাখি।\n` +
-      `যেকোনো ভাষায় যা বলবেন proposal দিবো → Allow/Disallow।\n\n` +
-      `<code>/menu</code> = main menu, <code>/cancel</code> = exit`);
-    return;
-  }
-  if (data === "mode:manual") return showManualPanel(chatId);
-  if (data === "search") return showSearchPrompt(chatId);
-  if (data === "browse:all" || data.startsWith("browse:")) {
-    const page = data.startsWith("browse:") && data !== "browse:all" ? Number(data.split(":")[1]) || 0 : 0;
-    return showBrowseAll(chatId, page);
-  }
-  if (data === "panel:addexisting") return showSearchPrompt(chatId);
-  if (data === "panel:tgpost" || data === "panel:delep") return showSearchPrompt(chatId);
-
-  if (data.startsWith("anime:") || data.startsWith("pick:")) {
-    const [, collection, seriesId] = data.split(":");
-    return showAnimeDetail(chatId, collection, seriesId);
-  }
-  if (data.startsWith("quickadd:")) {
-    const [, mode, collection, seriesId, sn, en] = data.split(":");
-    if (mode === "manual") {
-      await startAddEpisode(chatId, collection, seriesId, Number(sn), Number(en));
-      return showManualLinkPanel(chatId);
-    }
-    await startAddEpisode(chatId, collection, seriesId, Number(sn), Number(en));
-    await patchSession(chatId, { awaiting: "auto_paste" });
-    await tgSend(chatId,
-      `⚡ <b>Auto Mode</b> — S${sn} EP ${en}\n\n` +
-      `এখন episode post/paste পাঠান। Title/Episode/Quality/URL থাকলে auto detect করবে।`);
-    return;
-  }
-  if (data.startsWith("season:")) {
-    const [, collection, seriesId, sn] = data.split(":");
-    return showSeasonDetail(chatId, collection, seriesId, Number(sn));
-  }
-  if (data.startsWith("ep:")) {
-    const [, collection, seriesId, sn, en] = data.split(":");
-    return showEpisodeDetail(chatId, collection, seriesId, Number(sn), Number(en));
-  }
-  if (data.startsWith("addep:")) {
-    const parts = data.split(":");
-    const collection = parts[1], seriesId = parts[2], sn = Number(parts[3]);
-    const presetEp = parts[4] ? Number(parts[4]) : undefined;
-    return startAddEpisode(chatId, collection, seriesId, sn, presetEp);
-  }
-  if (data === "mode_add:auto") {
-    await patchSession(chatId, { awaiting: "auto_paste" });
-    await tgSend(chatId,
-      `⚡ <b>Auto Mode</b>\n\n` +
-      `Episode post টা paste করুন (Title/Episode/Quality + URL)।\n` +
-      `একসাথে অনেকগুলো block দিতে পারেন (blank line দিয়ে আলাদা)।\n\n` +
-      `<code>/cancel</code> = বাদ`);
-    return;
-  }
-  if (data === "mode_add:manual") {
-    return showManualLinkPanel(chatId);
-  }
-  if (data === "manual:setep") {
-    await patchSession(chatId, { awaiting: "manual_episode_number" });
-    await tgSend(chatId, "🔢 Episode number লিখুন (যেমন: <code>13</code>):");
-    return;
-  }
-  if (data.startsWith("manual:") && ["def","480","720","1080","4k"].includes(data.split(":")[1])) {
-    const q = data.split(":")[1];
-    const map: Record<string, Session["awaiting"]> = {
-      def: "manual_default",
-      "480": "manual_480",
-      "720": "manual_720",
-      "1080": "manual_1080",
-      "4k": "manual_4k",
-    };
-    await patchSession(chatId, { awaiting: map[q] });
-    await tgSend(chatId, `🔗 <b>${q === "def" ? "Default" : q + (q === "4k" ? "" : "p")} link</b> পাঠান:`);
-    return;
-  }
-  if (data === "manual:finish") {
-    return showFinishPreview(chatId);
-  }
-  if (data === "manual:back") return showManualLinkPanel(chatId);
-
-  // ----- Verification flow handlers -----
-  if (data.startsWith("verifix:")) {
-    const what = data.split(":")[1];
-    const sess = await getSession(chatId);
-    if (what === "retry") {
-      const links = sess.pendingSave?.links || sess.addingLinks || {};
-      return runLinkVerification(chatId, links);
-    }
-    if (what === "skipall") {
-      // Drop all broken links from pendingSave then go to confirm
-      const broken = (sess.verifyResults || []).filter((r: any) => !r.ok);
-      const links = { ...(sess.pendingSave?.links || {}) };
-      for (const b of broken) delete links[b.quality as keyof AddingLinks];
-      if (!Object.values(links).some(Boolean)) {
-        await tgSend(chatId, "❌ সব link skip করলে কিছুই save করার নেই।");
-        return showManualLinkPanel(chatId);
-      }
-      if (sess.pendingSave) {
-        await patchSession(chatId, { pendingSave: { ...sess.pendingSave, links } });
-      }
-      return showConfirmDialog(chatId);
-    }
-    // Re-add a specific quality
-    const map: Record<string, Session["awaiting"]> = {
-      def: "verify_refix_def",
-      "480": "verify_refix_480",
-      "720": "verify_refix_720",
-      "1080": "verify_refix_1080",
-      "4k": "verify_refix_4k",
-    };
-    if (map[what]) {
-      // Clear that quality from addingLinks/pendingSave so user re-pastes
-      const links = { ...(sess.addingLinks || sess.pendingSave?.links || {}) };
-      delete links[what as keyof AddingLinks];
-      await patchSession(chatId, { addingLinks: links, awaiting: map[what] });
-      await tgSend(chatId, `✏️ <b>${what === "def" ? "Default" : what + (what === "4k" ? "" : "p")}</b> এর tick উঠে গেছে। নতুন link পাঠান:`);
-      return;
-    }
-  }
-  if (data.startsWith("veriskip:")) {
-    const q = data.split(":")[1];
-    const sess = await getSession(chatId);
-    const links = { ...(sess.pendingSave?.links || {}) };
-    delete links[q as keyof AddingLinks];
-    if (sess.pendingSave) {
-      await patchSession(chatId, { pendingSave: { ...sess.pendingSave, links } });
-    }
-    // Re-render verification dialog with updated state
-    await tgSend(chatId, `⏭ ${q} skip করা হলো।`);
-    return runLinkVerification(chatId, links);
-  }
-
-  if (data === "confirm:save" || data === "save:allow") {
-    const sess = await getSession(chatId);
-    if (!sess.pendingSave) { await tgSend(chatId, "❌ কিছু pending নেই।"); return; }
-    const ps = sess.pendingSave;
-    if (!Object.values(ps.links).some(Boolean)) {
-      await tgSend(chatId, "❌ Save করার মতো কোনো link নেই।");
-      return;
-    }
-    await saveEpisodeMulti(ps.collection, ps.seriesId, ps.seasonNumber, ps.episodeNumber, ps.links);
-    await patchSession(chatId, { addingLinks: {}, episodeNumber: undefined, awaiting: "post_after_save", pendingSave: undefined, verifyResults: undefined });
-    const series: any = await fbGet(`${ps.collection}/${ps.seriesId}`);
-    const photo = series?.poster || series?.backdrop || FALLBACK_POSTER;
-    await tgSendPhoto(chatId, photo,
-      `✅ <b>Saved!</b>\n\n<b>${series?.title || ps.seriesId}</b>\nSeason ${ps.seasonNumber} — EP ${ps.episodeNumber}\n\nএখন Telegram channel এ post করতে চান?`,
-      {
-        reply_markup: kb([
-          [{ text: "✅ Yes, Post to Telegram", data: `post:${ps.collection}:${ps.seriesId}:${ps.seasonNumber}:${ps.episodeNumber}` }],
-          [{ text: "❌ No, Skip", data: "menu" }],
-        ]),
-      });
-    return;
-  }
-  if (data === "save:deny") {
-    await patchSession(chatId, { pendingSave: undefined, verifyResults: undefined });
-    await tgSend(chatId, "❌ Cancelled. কিছু save হয়নি।", {
-      reply_markup: kb([[{ text: "✏️ Back to Edit", data: "manual:back" }, { text: "🏠 Menu", data: "menu" }]]),
-    });
-    return;
-  }
-  if (data.startsWith("post:")) {
-    const [, collection, seriesId, sn, en] = data.split(":");
-    const r = await postEpisodeToChannel(collection, seriesId, Number(sn), Number(en));
-    await tgSend(chatId, r?.ok ? "✅ Posted to Telegram channel." : `❌ Post failed: ${JSON.stringify(r).slice(0, 200)}`);
-    return;
-  }
-  if (data.startsWith("del:")) {
-    const [, collection, seriesId, sn, en] = data.split(":");
-    const ok = await deleteEpisode(collection, seriesId, Number(sn), Number(en));
-    await tgSend(chatId, ok ? `🗑 EP ${en} deleted.` : "❌ Delete failed.");
-    return;
-  }
-  if (data.startsWith("weekly:read:")) {
-    const seriesId = data.split(":")[2];
-    const e: any = await fbGet(`weeklyPending/${seriesId}`);
-    if (e) {
-      const now = Date.now();
-      await fbPatch(`weeklyPending/${seriesId}`, {
-        lastReleasedAt: now,
-        releasedSavedAt: now,
-        nextReleaseAt: now + (e.weeklyEveryDays || 7) * 86400000,
-      });
-    }
-    await tgSend(chatId, "✅ Marked as released.");
-    return;
-  }
-  if (data.startsWith("weekly:end:")) {
-    const seriesId = data.split(":")[2];
-    await fbPatch(`weeklyPending/${seriesId}`, { endedAt: Date.now(), status: "ended", fullSeason: true });
-    await tgSend(chatId, "🏁 Marked End of Season — আর reminder পাবেন না।");
-    return;
-  }
-  if (data.startsWith("aiop:")) {
-    const action = data.split(":")[1];
-    const sess = await getSession(chatId);
-    if (action === "allow" && Array.isArray(sess.pendingOps) && sess.pendingOps.length > 0) {
-      const r = await executeAdminAi(sess.pendingOps);
-      const summary = (r?.results || []).map((x: any) => `${x.ok ? "✅" : "❌"} ${x.op}: ${x.message || ""}`).join("\n");
-      await tgSend(chatId, `<b>Execution result:</b>\n${summary || "(empty)"}`);
-    } else {
-      await tgSend(chatId, "❌ Disallowed — কিছু execute হয়নি।");
-    }
-    await patchSession(chatId, { pendingOps: [] });
-    return;
-  }
-}
-
-// ---------- Message handler ----------
-async function handleMessage(msg: any) {
-  const chatId = msg.chat.id;
-  const text = String(msg.text || "").trim();
-  if (msg.from?.id !== ADMIN_TG_ID) {
-    await tgSend(chatId, "❌ Unauthorized. This bot is private.");
-    return;
-  }
-
-  if (text === "/start" || text === "/menu") return showMainMenu(chatId);
-  if (text === "/cancel") {
-    await setSession(chatId, {});
-    return showMainMenu(chatId, "✖ Cancelled.");
-  }
-  if (text === "/weekly") return sendWeeklyReminderTo(chatId);
-  if (text === "/help") return showManualHelp(chatId);
-  if (text === "/manual") return showManualPanel(chatId);
-  if (text === "/ai") {
-    await patchSession(chatId, { mode: "ai", awaiting: "ai_chat", pendingOps: [] });
-    return tgSend(chatId, `🤖 AI Mode active. যেকোনো কথা/command লিখুন। Manual button-ও কাজ করবে।`);
-  }
-  if (text.startsWith("/search ")) {
-    const q = text.slice(8).trim();
-    return runAnimeSearch(chatId, q);
-  }
-
-  const sess = await getSession(chatId);
-
-  // ---- Search anime (RS only, fuzzy) ----
-  if (sess.awaiting === "search_anime") {
-    const results = await searchAnimeRS(text);
+  // --- Search query ---
+  if (s.step === "search_query") {
+    const results = await searchAnime(t);
     if (results.length === 0) {
-      await tgSendPhoto(chatId, FALLBACK_POSTER,
-        `❌ "<b>${text}</b>" এর কাছাকাছি কিছু পাওয়া যায়নি।\n\nআবার চেষ্টা করুন বা <code>/cancel</code>।`);
+      await tgSend(
+        chatId,
+        `❌ No matches for "<b>${escapeHtml(t)}</b>".\n\n<i>Try a shorter or different name.</i>`,
+      );
       return;
     }
     if (results.length === 1) {
-      // direct open
-      return showAnimeDetail(chatId, results[0].collection, results[0].id);
+      const r = results[0];
+      await clearSession(chatId);
+      await showAnime(chatId, r.collection, r.id);
+      return;
     }
-    const rows = results.map((r) => [{
-      text: `${r.title} (${r.collection}) ${Math.round(r.score * 100)}%`,
-      data: `pick:${r.collection}:${r.id}`,
-    }]);
-    await tgSendPhoto(chatId, FALLBACK_POSTER,
-      `🔎 <b>${results.length}</b> ফলাফল "<i>${text}</i>" — সঠিকটি বেছে নিন:`,
-      { reply_markup: kb(rows) });
+    // multiple — show list
+    const rows = results.map((r) => [
+      { text: r.title.slice(0, 60), callback_data: `pick:${r.collection}:${r.id}` },
+    ]);
+    rows.push([{ text: "❌ Cancel", callback_data: "act:home" }]);
+    await tgSendPhoto(
+      chatId,
+      results[0].poster || FALLBACK_POSTER,
+      `🔎 Found <b>${results.length}</b> matches. Pick one:`,
+      { reply_markup: { inline_keyboard: rows } },
+    );
+    await clearSession(chatId);
     return;
   }
 
-  // ---- Manual: episode number ----
-  if (sess.awaiting === "manual_episode_number") {
-    const n = parseInt(text, 10);
-    if (!n || n < 1) { await tgSend(chatId, "❌ Valid episode number লিখুন।"); return; }
-    await patchSession(chatId, { episodeNumber: n, awaiting: null });
-    return showManualLinkPanel(chatId);
-  }
-
-  // ---- Manual: link inputs ----
-  const linkMap: Record<string, keyof AddingLinks> = {
-    manual_default: "def",
-    manual_480: "480",
-    manual_720: "720",
-    manual_1080: "1080",
-    manual_4k: "4k",
-  };
-  if (sess.awaiting && linkMap[sess.awaiting]) {
-    if (!/^https?:\/\//i.test(text)) {
-      await tgSend(chatId, "❌ Valid URL দিন (https://...)।"); return;
-    }
-    const key = linkMap[sess.awaiting];
-    const links = { ...(sess.addingLinks || {}), [key]: text };
-    await patchSession(chatId, { addingLinks: links, awaiting: null });
-    return showManualLinkPanel(chatId);
-  }
-
-  // ---- Verification re-fix link inputs ----
-  const refixMap: Record<string, keyof AddingLinks> = {
-    verify_refix_def: "def",
-    verify_refix_480: "480",
-    verify_refix_720: "720",
-    verify_refix_1080: "1080",
-    verify_refix_4k: "4k",
-  };
-  if (sess.awaiting && refixMap[sess.awaiting]) {
-    if (!/^https?:\/\//i.test(text)) {
-      await tgSend(chatId, "❌ Valid URL দিন (https://...)।"); return;
-    }
-    const key = refixMap[sess.awaiting];
-    const newLinks = { ...(sess.addingLinks || sess.pendingSave?.links || {}), [key]: text };
-    // Update both addingLinks (so user can edit again) and pendingSave
-    const ps = sess.pendingSave ? { ...sess.pendingSave, links: newLinks } : undefined;
-    await patchSession(chatId, { addingLinks: newLinks, pendingSave: ps, awaiting: null });
-    await tgSend(chatId, `🔁 ${key} updated. পুনরায় verify চালাচ্ছি...`);
-    return runLinkVerification(chatId, newLinks);
-  }
-
-  // ---- Auto paste ----
-  if (sess.awaiting === "auto_paste" && sess.collection && sess.seriesId && sess.seasonNumber) {
-    const blocks = text.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
-    const pieces = blocks.length > 0 ? blocks : [text];
-    const aggregated: Record<number, AddingLinks> = {};
-    const titlesSeen: Record<number, string | undefined> = {};
-    let failed = 0;
-    const lines: string[] = [];
-    for (const blk of pieces) {
-      const p = parseEpisodeBlock(blk);
-      if (!p.url || !p.episode) {
-        failed++;
-        lines.push(`❌ parse failed: ${blk.slice(0, 60)}`);
-        continue;
-      }
-      const k = qualityField(p.quality);
-      const ql: keyof AddingLinks =
-        k === "link480" ? "480" :
-        k === "link720" ? "720" :
-        k === "link1080" ? "1080" :
-        k === "link4k" ? "4k" : "def";
-      aggregated[p.episode] = { ...(aggregated[p.episode] || {}), [ql]: p.url };
-      titlesSeen[p.episode] = p.title;
-      lines.push(`✅ EP ${p.episode} (${ql}) ready`);
-    }
-    let saved = 0;
-    for (const [epStr, links] of Object.entries(aggregated)) {
-      const ep = Number(epStr);
-      try {
-        await saveEpisodeMulti(sess.collection, sess.seriesId, sess.seasonNumber, ep, links, titlesSeen[ep]);
-        saved++;
-      } catch (e: any) {
-        failed++;
-        lines.push(`❌ EP ${ep} save: ${e?.message || e}`);
-      }
-    }
-    const epList = Object.keys(aggregated).map(Number).sort((a, b) => a - b);
-    const series: any = await fbGet(`${sess.collection}/${sess.seriesId}`);
-    await tgSendPhoto(chatId, series?.poster || FALLBACK_POSTER,
-      `<b>${series?.title || sess.seriesId}</b>\nSeason ${sess.seasonNumber}\n\n` +
-      `আপনি EP <b>${epList.join(", ") || "?"}</b> add করেছেন (${saved} saved, ${failed} failed)।\n\nTelegram এ post করতে চান?`,
-      {
-        reply_markup: kb([
-          ...(epList.length > 0 ? [[
-            { text: `✅ Post EP ${epList[epList.length - 1]}`, data: `post:${sess.collection}:${sess.seriesId}:${sess.seasonNumber}:${epList[epList.length - 1]}` },
-          ]] : []),
-          [{ text: "❌ No", data: "menu" }],
-        ]),
-      });
-    await patchSession(chatId, { awaiting: null });
+  // --- Quality link input ---
+  if (s.step === "add_wait_link" || s.step === "edit_wait_link") {
+    const q = s.pendingQuality || "default";
+    const url = lower === "skip" ? "" : t;
+    s.links = s.links || {};
+    s.links[q] = url;
+    s.step = s.step === "add_wait_link" ? "add_links" : "edit_links";
+    s.pendingQuality = undefined;
+    await setSession(chatId, s);
+    const fmt = q === "default" ? "Default" : q === "4k" ? "4K" : `${q}p`;
+    const text =
+      `${url ? "✅" : "⏭"} <b>${fmt}</b> ${url ? "saved" : "skipped"}.\n\n` +
+      `<i>Pick another quality or tap ✅ Finish.</i>`;
+    const rows = [
+      [
+        { text: `📺 Default ${s.links.default ? "✅" : ""}`, callback_data: `q:default` },
+        { text: `480p ${s.links["480"] ? "✅" : ""}`, callback_data: `q:480` },
+      ],
+      [
+        { text: `720p ${s.links["720"] ? "✅" : ""}`, callback_data: `q:720` },
+        { text: `1080p ${s.links["1080"] ? "✅" : ""}`, callback_data: `q:1080` },
+      ],
+      [
+        { text: `4K ${s.links["4k"] ? "✅" : ""}`, callback_data: `q:4k` },
+        { text: "✅ Finish", callback_data: `q:finish` },
+      ],
+    ];
+    await tgSend(chatId, text, { reply_markup: { inline_keyboard: rows } });
     return;
   }
 
-  // ---- AI mode ----
-  if (sess.mode === "ai" || sess.awaiting === "ai_chat") {
-    await appendHistory(chatId, "user", text);
-    const history = await getHistory(chatId);
-    // Build a system memory of all RS anime so AI never says "not found"
-    const brief = await getRSAnimeBrief();
-    const systemMsg = {
-      role: "system",
-      content:
-        `You are the RS Anime Telegram admin assistant.\n` +
-        `IMPORTANT: Below is the FULL list of every RS anime (with id, title, season/episode counts). ` +
-        `Always match the user's query (even with typos / Banglish) to one of these by fuzzy matching. ` +
-        `Never say "not found" — if uncertain, propose the closest match and ask to confirm.\n\n` +
-        `RS ANIME CATALOG:\n${brief.slice(0, 8000)}`,
-    };
-    const messages = [systemMsg, ...history.slice(-30).map((h: any) => ({ role: h.role, content: h.content }))];
-    const r = await callAdminAi(messages);
-    const reply = r?.reply || "(empty)";
-    await appendHistory(chatId, "assistant", reply);
-    const ops = Array.isArray(r?.operations) ? r.operations : [];
-    await patchSession(chatId, { pendingOps: ops });
-
-    let out = reply.slice(0, 3500);
-    if (ops.length > 0) {
-      out += `\n\n<b>Proposed ${ops.length} operation(s):</b>\n` +
-        ops.map((o: any, i: number) => `${i + 1}. <code>${o.name}</code> ${JSON.stringify(o.args).slice(0, 200)}`).join("\n");
-      await tgSend(chatId, out, {
-        reply_markup: kb([[
-          { text: "✅ Allow & Execute", data: "aiop:allow" },
-          { text: "❌ Disallow", data: "aiop:deny" },
-        ]]),
-      });
-    } else {
-      await tgSend(chatId, out);
-    }
+  // --- Add season name ---
+  if (s.step === "add_season_name" && s.seriesId && s.collection) {
+    const data = await fbGet(`${s.collection}/${s.seriesId}`);
+    const seasons = Array.isArray(data?.seasons) ? data.seasons : [];
+    const nextNum = seasons.length + 1;
+    seasons.push({
+      seasonNumber: nextNum,
+      name: t || `Season ${nextNum}`,
+      episodes: [],
+    });
+    await fbPatch(`${s.collection}/${s.seriesId}`, { seasons, updatedAt: Date.now() });
+    await tgSend(chatId, `✅ Season ${nextNum} added.`);
+    await clearSession(chatId);
+    await showAnime(chatId, s.collection, s.seriesId);
     return;
   }
 
-  // Default
-  return showMainMenu(chatId, "Command বুঝিনি — Menu থেকে বেছে নিন।");
+  // --- Custom button text ---
+  if (s.step === "btn_text") {
+    s.customButton = { text: t };
+    s.step = "btn_url";
+    await setSession(chatId, s);
+    await tgSend(chatId, `🔗 Now send the <b>button URL</b>:`);
+    return;
+  }
+  if (s.step === "btn_url") {
+    if (!/^https?:\/\//i.test(t)) {
+      await tgSend(chatId, "❌ Invalid URL. Must start with http:// or https://");
+      return;
+    }
+    s.customButton = { ...(s.customButton || {}), url: t };
+    s.step = "btn_mode";
+    await setSession(chatId, s);
+    await tgSend(chatId, `Choose mode:`, {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "💾 Permanent", callback_data: "btnmode:permanent" },
+            { text: "1️⃣ One-time", callback_data: "btnmode:onetime" },
+          ],
+          [{ text: "❌ Cancel", callback_data: "btnmode:cancel" }],
+        ],
+      },
+    });
+    return;
+  }
+
+  // Default fallback
+  await tgSend(
+    chatId,
+    `<i>Unknown input. Tap /start to return home or /search to find an anime.</i>`,
+    { reply_markup: startKeyboard() },
+  );
 }
 
-// ---------- Entry ----------
+// ---------- Handle callback queries ----------
+async function handleCallback(chatId: number, data: string, cbId: string, messageId?: number) {
+  await tgAnswerCb(cbId);
+
+  if (data === "act:home") {
+    await clearSession(chatId);
+    await sendStart(chatId);
+    return;
+  }
+  if (data === "act:help") {
+    await sendHelp(chatId);
+    return;
+  }
+  if (data === "act:menu") {
+    await sendStart(chatId);
+    return;
+  }
+  if (data === "act:search") {
+    await setSession(chatId, { step: "search_query" });
+    await tgSend(chatId, "🔎 Type the anime name:");
+    return;
+  }
+
+  // pick:collection:id
+  if (data.startsWith("pick:")) {
+    const [, col, id] = data.split(":");
+    await showAnime(chatId, col, id);
+    return;
+  }
+
+  // back:collection:id  →  show anime
+  if (data.startsWith("back:")) {
+    const [, col, id] = data.split(":");
+    await showAnime(chatId, col, id);
+    return;
+  }
+
+  // season:collection:id:idx
+  if (data.startsWith("season:")) {
+    const [, col, id, idx] = data.split(":");
+    await showSeason(chatId, col, id, Number(idx));
+    return;
+  }
+
+  // ep:collection:id:sIdx:eIdx
+  if (data.startsWith("ep:")) {
+    const [, col, id, sIdx, eIdx] = data.split(":");
+    await showEpisode(chatId, col, id, Number(sIdx), Number(eIdx));
+    return;
+  }
+
+  // addep:collection:id:sIdx
+  if (data.startsWith("addep:")) {
+    const [, col, id, sIdx] = data.split(":");
+    await startAddEpisode(chatId, col, id, Number(sIdx));
+    return;
+  }
+
+  // addseason:collection:id
+  if (data.startsWith("addseason:")) {
+    const [, col, id] = data.split(":");
+    await setSession(chatId, {
+      step: "add_season_name",
+      collection: col as any,
+      seriesId: id,
+    });
+    await tgSend(chatId, "📝 Send the <b>season name</b> (or send <code>-</code> for default):");
+    return;
+  }
+
+  // delseason_pick:collection:id
+  if (data.startsWith("delseason_pick:")) {
+    const [, col, id] = data.split(":");
+    const d = await fbGet(`${col}/${id}`);
+    const seasons = Array.isArray(d?.seasons) ? d.seasons : [];
+    if (seasons.length === 0) {
+      await tgSend(chatId, "No seasons.");
+      return;
+    }
+    const rows = seasons.map((s: any, i: number) => [
+      { text: `🗑 S${s.seasonNumber || i + 1}`, callback_data: `delseason:${col}:${id}:${i}` },
+    ]);
+    rows.push([{ text: "❌ Cancel", callback_data: `back:${col}:${id}` }]);
+    await tgSend(chatId, "Pick a season to delete:", {
+      reply_markup: { inline_keyboard: rows },
+    });
+    return;
+  }
+
+  // delseason:collection:id:idx
+  if (data.startsWith("delseason:")) {
+    const [, col, id, idx] = data.split(":");
+    const d = await fbGet(`${col}/${id}`);
+    const seasons = Array.isArray(d?.seasons) ? d.seasons : [];
+    seasons.splice(Number(idx), 1);
+    await fbPatch(`${col}/${id}`, { seasons, updatedAt: Date.now() });
+    await tgSend(chatId, "✅ Season deleted.");
+    await showAnime(chatId, col, id);
+    return;
+  }
+
+  // delep:collection:id:sIdx:eIdx
+  if (data.startsWith("delep:")) {
+    const [, col, id, sIdx, eIdx] = data.split(":");
+    const d = await fbGet(`${col}/${id}`);
+    const seasons = Array.isArray(d?.seasons) ? d.seasons : [];
+    const season = seasons[Number(sIdx)];
+    if (season?.episodes) {
+      season.episodes.splice(Number(eIdx), 1);
+      seasons[Number(sIdx)] = season;
+      await fbPatch(`${col}/${id}`, { seasons, updatedAt: Date.now() });
+    }
+    await tgSend(chatId, "✅ Episode deleted.");
+    await showSeason(chatId, col, id, Number(sIdx));
+    return;
+  }
+
+  // q:default | q:480 | q:720 | q:1080 | q:4k | q:finish
+  if (data.startsWith("q:")) {
+    const q = data.slice(2);
+    if (q === "finish") {
+      await showFinishVerify(chatId);
+    } else {
+      await promptQualityLink(chatId, q);
+    }
+    return;
+  }
+
+  // skipq:quality
+  if (data.startsWith("skipq:")) {
+    const q = data.split(":")[1];
+    const s = await getSession(chatId);
+    if (s.links) s.links[q] = "";
+    await setSession(chatId, s);
+    await tgSend(chatId, `⏭ Skipped ${q}.`);
+    await showFinishVerify(chatId);
+    return;
+  }
+
+  // preview
+  if (data === "preview") {
+    await showPreview(chatId);
+    return;
+  }
+
+  // confirm_send
+  if (data === "confirm_send") {
+    await tgSend(chatId, "⏳ Saving and sending post...");
+    await confirmAndSend(chatId);
+    return;
+  }
+
+  // addbtn
+  if (data === "addbtn") {
+    await startAddButton(chatId);
+    return;
+  }
+
+  // btnmode:permanent | onetime | cancel
+  if (data.startsWith("btnmode:")) {
+    const mode = data.split(":")[1];
+    const s = await getSession(chatId);
+    const btn = s.customButton;
+    if (mode === "cancel" || !btn?.text || !btn?.url) {
+      s.step = undefined;
+      s.customButton = undefined;
+      await setSession(chatId, s);
+      await tgSend(chatId, "❌ Custom button cancelled.");
+      await showPreview(chatId);
+      return;
+    }
+    if (mode === "permanent" && s.seriesId) {
+      const existing = ((await fbGet(`animeCustomButtons/${s.seriesId}`)) as any[]) || [];
+      const arr = Array.isArray(existing) ? existing : [];
+      arr.push({ text: btn.text, url: btn.url });
+      await fbPut(`animeCustomButtons/${s.seriesId}`, arr);
+      await tgSend(chatId, "💾 Saved as <b>permanent</b> button.");
+    } else if (mode === "onetime") {
+      s.oneTimeButtons = s.oneTimeButtons || [];
+      s.oneTimeButtons.push({ text: btn.text!, url: btn.url! });
+      await tgSend(chatId, "✅ Added as <b>one-time</b> button.");
+    }
+    s.step = undefined;
+    s.customButton = undefined;
+    await setSession(chatId, s);
+    await showPreview(chatId);
+    return;
+  }
+
+  // post:collection:id::  → quick post existing anime
+  if (data.startsWith("post:")) {
+    const [, col, id] = data.split(":");
+    await tgSend(chatId, "⏳ Sending post...");
+    const d = await fbGet(`${col}/${id}`);
+    if (!d) {
+      await tgSend(chatId, "❌ Not found.");
+      return;
+    }
+    const photoUrl = d.backdrop || d.poster || FALLBACK_POSTER;
+    const buttons: Array<{ text: string; url: string }> = [
+      { text: `▶️ Watch ${d.title}`, url: `https://rsanime03.lovable.app/?anime=${id}` },
+    ];
+    const permanent = ((await fbGet(`animeCustomButtons/${id}`)) as any[]) || [];
+    if (Array.isArray(permanent)) {
+      for (const b of permanent) if (b?.text && b?.url) buttons.push({ text: b.text, url: b.url });
+    }
+    const caption =
+      `🎬 <b>${escapeHtml(d.title)}</b>\n` +
+      (d.rating ? `⭐ ${d.rating}\n` : "") +
+      (d.category ? `📂 ${d.category}\n` : "");
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        caption,
+        photoUrl,
+        inlineButtons: buttons,
+        collection: col,
+        seriesId: id,
+      }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (j?.ok) await tgSend(chatId, "✅ Posted to Telegram.");
+    else
+      await tgSend(
+        chatId,
+        `❌ Post failed: <code>${escapeHtml(j?.error || "unknown")}</code>\n\n<i>Tip: send /setchatid in your target Telegram chat.</i>`,
+      );
+    return;
+  }
+}
+
+// ---------- Webhook handler ----------
+async function handleUpdate(update: any) {
+  // Callback query
+  if (update.callback_query) {
+    const cq = update.callback_query;
+    const chatId = cq.message?.chat?.id;
+    const fromId = cq.from?.id;
+    if (!chatId || fromId !== ADMIN_TG_ID) {
+      await tgAnswerCb(cq.id, "Not authorized.");
+      return;
+    }
+    await handleCallback(chatId, cq.data || "", cq.id, cq.message?.message_id);
+    return;
+  }
+
+  // Message
+  const msg = update.message;
+  if (!msg) return;
+  const chatId = msg.chat?.id;
+  const fromId = msg.from?.id;
+  if (!chatId) return;
+  if (fromId !== ADMIN_TG_ID) {
+    await tgSend(chatId, "🚫 This bot is admin-only.");
+    return;
+  }
+  const text = String(msg.text || "");
+  if (!text) return;
+  await handleText(chatId, text);
+}
+
+// ---------- HTTP entry ----------
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "GET")
+    return json({ ok: true, service: "telegram-admin-bot", version: "v3-manual" });
+
   try {
     const body = await req.json().catch(() => ({}));
-    if (body?.test === true) return json({ ok: true, ping: "telegram-admin-bot v2" });
+    if (body?.test === true) return json({ ok: true });
 
-    if (body?.action === "weekly_push") {
-      await sendWeeklyReminderTo(ADMIN_TG_ID);
-      return json({ ok: true });
-    }
-
-    if (typeof body?.update_id !== "undefined") {
-      if (body.callback_query) await handleCallback(body.callback_query);
-      else if (body.message) await handleMessage(body.message);
-      return json({ ok: true });
-    }
-
-    if (body?.action === "set_webhook" && body?.url) {
-      const t = Deno.env.get("TELEGRAM_BOT_TOKEN");
-      const r = await fetch(`https://api.telegram.org/bot${t}/setWebhook`, {
+    // set-webhook helper
+    if (body?.action === "set-webhook") {
+      const url = String(body.webhookUrl || "").trim();
+      if (!url) return json({ error: "webhookUrl required" }, 400);
+      const r = await fetch(tgApi("setWebhook"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: body.url, allowed_updates: ["message", "callback_query"] }),
+        body: JSON.stringify({ url, allowed_updates: ["message", "callback_query"] }),
       });
       return json(await r.json());
     }
 
-    return json({ ok: true, hint: "send Telegram update or {action:'weekly_push'|'set_webhook'}" });
+    // Treat as Telegram update
+    await handleUpdate(body);
+    return json({ ok: true });
   } catch (e: any) {
-    console.error("telegram-admin-bot error:", e);
-    return json({ error: e?.message || "Unknown" }, 500);
+    console.error("admin-bot error", e);
+    return json({ error: e?.message || "internal" }, 500);
   }
 });
