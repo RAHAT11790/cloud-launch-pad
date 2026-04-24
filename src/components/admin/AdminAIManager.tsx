@@ -185,6 +185,23 @@ export function AdminAIManager() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
+  // Persist chat history to localStorage so user keeps context across page reloads
+  useEffect(() => {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(messages.slice(-HISTORY_MAX)));
+    } catch {}
+  }, [messages]);
+
+  const clearHistory = () => {
+    if (!window.confirm("Clear AI chat history? এই কাজ undo করা যাবে না।")) return;
+    try { localStorage.removeItem(HISTORY_KEY); } catch {}
+    setMessages([{
+      role: "assistant",
+      content: "🆕 নতুন chat শুরু হলো। কী করতে চান বলুন।",
+    }]);
+    toast.success("Chat history cleared");
+  };
+
   const aiUrl = `${SUPABASE_URL}/functions/v1/admin-ai`;
 
   // ===== Builder helpers =====
