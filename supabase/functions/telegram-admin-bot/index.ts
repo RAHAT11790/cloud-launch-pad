@@ -106,6 +106,34 @@ async function tgAnswerCb(cbId: string, text = "") {
     body: JSON.stringify({ callback_query_id: cbId, text }),
   });
 }
+async function tgDeleteMessage(chatId: number | string, messageId: number) {
+  await fetch(tgApi("deleteMessage"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+  });
+}
+async function tgSetCommands() {
+  await fetch(tgApi("setMyCommands"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      commands: [
+        { command: "start", description: "Open main menu" },
+        { command: "menu", description: "Show main menu" },
+        { command: "help", description: "Manual mode guide" },
+        { command: "ai", description: "Switch to AI mode" },
+        { command: "manual", description: "Switch to manual search" },
+        { command: "search", description: "Search anime by title" },
+        { command: "selected", description: "Open selected anime" },
+        { command: "season", description: "Open selected season" },
+        { command: "ep", description: "Open episode details" },
+        { command: "weekly", description: "Run today reminder" },
+        { command: "cancel", description: "Cancel current flow" },
+      ],
+    }),
+  });
+}
 
 const kb = (rows: { text: string; data?: string; url?: string }[][]) => ({
   inline_keyboard: rows.map((r) =>
@@ -239,19 +267,98 @@ function fuzzyScore(query: string, candidate: string): number {
 
 // ---------- RS-only search (webseries + movies, NO animesalt) ----------
 type Hit = { collection: "webseries" | "movies"; id: string; title: string; score: number };
-async function searchAnimeRS(q: string): Promise<Hit[]> {
+function cleanSearchQuery(raw: string): string {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !/^https?:\/\//i.test(line))
+    .filter((line) => !/^[\-_a-z0-9]{12,}$/i.test(line));
+  const merged = (lines[0] || raw || "")
+    .replace(/^\/(search|find)\s+/i, "")
+    .replace(/(?:এনিমিটা|এনিমে|animeটা|anime)\s*(?:টা)?\s*(find|search|খুঁজে|ফাইন্ড)\s*(করো|কর|দাও)?/gi, "")
+    .replace(/(?:find|search|খুঁজে|ফাইন্ড)\s*(করো|কর|দাও)?/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return merged;
+}
+
+function extractSearchIntentQuery(text: string): string | null {
+  const cmd = text.match(/^\/(search|find)\s+(.+)$/i);
+  if (cmd?.[2]) return cleanSearchQuery(cmd[2]);
+
+  const patterns = [
+    /(.+?)\s+(?:এনিমিটা|এনিমে|animeটা|anime)?\s*(?:find|search|খুঁজে|ফাইন্ড)\s*(?:করো|কর|দাও)?$/i,
+    /(?:find|search|খুঁজে|ফাইন্ড)\s+(.+)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const value = match?.[1] ? cleanSearchQuery(match[1]) : "";
+    if (value) return value;
+  }
+  return null;
+}
+
+function isManualIntent(text: string): boolean {
+  return /(manual|ম্যানুয়াল|button|বাটন|manual add|button based|বাটন ভিত্তিক)/i.test(text);
+}
+
+function isInfoIntent(text: string): boolean {
+  return /(কয়টা এপিসোড|কত এপিসোড|episodes? (ache|আছে|count)|ডিটেইল|details|info|তথ্য|episode count)/i.test(text);
+}
+
+async function searchAnimeRS(qRaw: string): Promise<Hit[]> {
+  const q = cleanSearchQuery(qRaw);
+  const qNorm = norm(q);
+  if (!qNorm) return [];
   const hits: Hit[] = [];
   for (const collection of ["webseries", "movies"] as const) {
     const all: any = await fbGet(collection);
     if (!all || typeof all !== "object") continue;
     for (const [id, v] of Object.entries(all) as [string, any][]) {
       const title = String(v?.title || v?.name || id);
-      const score = fuzzyScore(q, title);
-      if (score >= 0.45) hits.push({ collection, id, title, score });
+      const slug = String(v?.slug || "");
+      const titleScore = fuzzyScore(q, title);
+      const idScore = fuzzyScore(q, id);
+      const slugScore = slug ? fuzzyScore(q, slug) : 0;
+      const tokenHit = q.toLowerCase().split(/\s+/).filter(Boolean)
+        .every((word) => title.toLowerCase().includes(word));
+      const score = Math.max(titleScore, idScore * 0.95, slugScore * 0.9, tokenHit ? 0.93 : 0);
+      if (score >= (qNorm.length <= 4 ? 0.52 : 0.34)) hits.push({ collection, id, title, score });
     }
   }
   hits.sort((a, b) => b.score - a.score);
   return hits.slice(0, 10);
+}
+
+function extractEpisodeLinks(e: any): AddingLinks {
+  return {
+    def: e?.link || undefined,
+    "480": e?.link480 || undefined,
+    "720": e?.link720 || undefined,
+    "1080": e?.link1080 || undefined,
+    "4k": e?.link4k || undefined,
+  };
+}
+
+function getSeriesNextEpisode(series: any): { seasonNumber: number; episodeNumber: number; totalEpisodes: number; totalSeasons: number } {
+  const seasons = Array.isArray(series?.seasons) ? series.seasons : Object.values(series?.seasons || {});
+  const totalEpisodes = seasons.reduce((acc: number, s: any) => {
+    const e = Array.isArray(s?.episodes) ? s.episodes : Object.values(s?.episodes || {});
+    return acc + e.length;
+  }, 0);
+  if (seasons.length === 0) return { seasonNumber: 1, episodeNumber: 1, totalEpisodes, totalSeasons: 0 };
+
+  const sortedSeasons = [...seasons].sort((a: any, b: any) => (a?.seasonNumber || 0) - (b?.seasonNumber || 0));
+  const lastSeason = sortedSeasons[sortedSeasons.length - 1];
+  const episodes = Array.isArray(lastSeason?.episodes) ? lastSeason.episodes : Object.values(lastSeason?.episodes || {});
+  const maxEpisode = episodes.reduce((acc: number, ep: any) => Math.max(acc, Number(ep?.episodeNumber || 0)), 0);
+  return {
+    seasonNumber: Number(lastSeason?.seasonNumber || 1),
+    episodeNumber: maxEpisode + 1,
+    totalEpisodes,
+    totalSeasons: seasons.length,
+  };
 }
 
 async function getRSAnimeBrief(): Promise<string> {
