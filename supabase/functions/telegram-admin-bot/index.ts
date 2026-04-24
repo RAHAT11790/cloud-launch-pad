@@ -1116,7 +1116,73 @@ async function handleCallback(chatId: number, data: string, cbId: string, messag
   }
   if (data === "act:search") {
     await setSession(chatId, { step: "search_query" });
-    await tgSend(chatId, "🔎 Type the anime name:");
+    await tgSend(chatId, "🔎 Type the anime name:", {
+      reply_markup: { inline_keyboard: [[{ text: "⬅ Back", callback_data: "act:home" }]] },
+    });
+    return;
+  }
+  if (data === "act:addnew") {
+    await setSession(chatId, { step: "addnew_query" });
+    await tgSend(
+      chatId,
+      "🆕 <b>Add New Anime</b>\n\nTMDB থেকে fetch করতে anime/movie এর নাম পাঠান:",
+      {
+        reply_markup: { inline_keyboard: [[{ text: "⬅ Back", callback_data: "act:home" }]] },
+      },
+    );
+    return;
+  }
+
+  // tmdbpick:mediaType:tmdbId
+  if (data.startsWith("tmdbpick:")) {
+    const [, mt, id] = data.split(":");
+    await showTmdbPreview(chatId, mt, Number(id));
+    return;
+  }
+
+  // dub:<dubType>
+  if (data.startsWith("dub:")) {
+    const dub = data.slice(4);
+    await tgSend(chatId, "⏳ Saving...");
+    await saveNewAnime(chatId, dub);
+    return;
+  }
+
+  // back:qualities — return to quality picker during link entry
+  if (data === "back:qualities") {
+    const s = await getSession(chatId);
+    if (!s.links) {
+      await sendStart(chatId);
+      return;
+    }
+    s.step = s.step === "edit_wait_link" ? "edit_links" : "add_links";
+    s.pendingQuality = undefined;
+    await setSession(chatId, s);
+    const rows = [
+      [
+        { text: `📺 Default ${s.links.default ? "✅" : ""}`, callback_data: `q:default` },
+        { text: `480p ${s.links["480"] ? "✅" : ""}`, callback_data: `q:480` },
+      ],
+      [
+        { text: `720p ${s.links["720"] ? "✅" : ""}`, callback_data: `q:720` },
+        { text: `1080p ${s.links["1080"] ? "✅" : ""}`, callback_data: `q:1080` },
+      ],
+      [
+        { text: `4K ${s.links["4k"] ? "✅" : ""}`, callback_data: `q:4k` },
+        { text: "✅ Finish", callback_data: `q:finish` },
+      ],
+      [
+        { text: "⬅ Back",
+          callback_data:
+            s.collection && s.seriesId && s.seasonIdx !== undefined
+              ? `season:${s.collection}:${s.seriesId}:${s.seasonIdx}`
+              : "act:home",
+        },
+      ],
+    ];
+    await tgSend(chatId, "<i>Pick a quality to add/edit, or ✅ Finish.</i>", {
+      reply_markup: { inline_keyboard: rows },
+    });
     return;
   }
 
