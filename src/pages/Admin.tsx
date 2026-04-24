@@ -6486,11 +6486,66 @@ ${tgHashtags}`;
               else toast.info("কোনো পরিবর্তনের দরকার নেই");
             };
 
-            // Delete a single post record
+            // Delete a single post — from Telegram channel AND Firebase record
             const deletePostRecord = async (key: string) => {
+              const post = tgPosts.find(p => p.firebaseKey === key);
+              if (!post) return;
+              if (!confirm(`চ্যানেল থেকে এই পোস্টটি ডিলিট করবেন?\n\n${post.title}`)) return;
+              try {
+                const endpoint = await getEdgeFunctionUrl('telegram-post');
+                const r = await fetch(endpoint, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+                  },
+                  body: JSON.stringify({ action: 'delete-message', chatId: post.chatId, messageId: post.messageId }),
+                });
+                const j = await r.json().catch(() => ({}));
+                if (!j?.ok && !j?.alreadyDeleted) {
+                  toast.error(`চ্যানেল থেকে ডিলিট ব্যর্থ: ${j?.error || 'Unknown'}`);
+                  // Continue anyway — also remove the orphaned record
+                }
+              } catch (e: any) {
+                toast.error(`ডিলিট রিকোয়েস্ট ব্যর্থ: ${e?.message || ''}`);
+              }
               await set(ref(db, `telegramPosts/${key}`), null);
-              toast.success("রেকর্ড ডিলিট হয়েছে");
+              toast.success("চ্যানেল ও রেকর্ড থেকে ডিলিট হয়েছে");
             };
+
+            // Bulk delete: every saved post (or only the selected one's title) from ALL channels
+            const [tgDeletingAll, setTgDeletingAll] = useState(false);
+            const deleteAllFromChannels = async () => {
+              const targets = tgSelectedPost === "all"
+                ? tgPosts
+                : tgPosts.filter(p => p.firebaseKey === tgSelectedPost);
+              if (targets.length === 0) { toast.info("কোনো পোস্ট নেই"); return; }
+              if (!confirm(`⚠️ ${targets.length}টি পোস্ট সব চ্যানেল থেকে ডিলিট করবেন?\n\nএই কাজ undo করা যাবে না।`)) return;
+              setTgDeletingAll(true);
+              let ok = 0, fail = 0;
+              const endpoint = await getEdgeFunctionUrl('telegram-post');
+              for (const post of targets) {
+                try {
+                  const r = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+                    },
+                    body: JSON.stringify({ action: 'delete-message', chatId: post.chatId, messageId: post.messageId }),
+                  });
+                  const j = await r.json().catch(() => ({}));
+                  if (j?.ok || j?.alreadyDeleted) {
+                    ok++;
+                    await set(ref(db, `telegramPosts/${post.firebaseKey}`), null);
+                  } else fail++;
+                } catch { fail++; }
+              }
+              setTgDeletingAll(false);
+              if (fail === 0) toast.success(`✅ ${ok}টি পোস্ট সব চ্যানেল থেকে ডিলিট হয়েছে`);
+              else toast.error(`✅ ${ok} ডিলিট, ❌ ${fail} ব্যর্থ`);
+            };
+
 
             return (
               <div>
