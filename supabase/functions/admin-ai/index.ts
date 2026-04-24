@@ -366,7 +366,16 @@ async function executeOperation(op: any) {
   const { name, args } = op;
   switch (name) {
     case "add_episode": {
-      const { collection, seriesId, seasonNumber, episodeNumber, title, link, link480, link720, link1080, link4k } = args;
+      const { collection, seasonNumber, episodeNumber, title, link, link480, link720, link1080, link4k } = args;
+      const resolved = await resolveSeriesId(collection, args.seriesId);
+      if (!resolved.id) {
+        const hint =
+          resolved.candidates.length > 0
+            ? ` Did you mean: ${resolved.candidates.map((c) => `${c.title} (${c.id})`).join(" | ")}?`
+            : "";
+        throw new Error(`Series '${args.seriesId}' not found.${hint}`);
+      }
+      const seriesId = resolved.id;
       const ep: Record<string, any> = { episodeNumber, title: title || `Episode ${episodeNumber}` };
       if (link) ep.link = link;
       if (link480) ep.link480 = link480;
