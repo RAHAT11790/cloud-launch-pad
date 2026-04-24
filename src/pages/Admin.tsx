@@ -599,6 +599,9 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     return `${baseUrl.replace(/\/$/, "")}/${fn.endpoint}`;
   };
 
+  const BUILT_IN_SHORTENERS = CORE_FUNCTIONS.filter((fn) => fn.endpoint.startsWith("shorten-"));
+  const nonShortenerFunctions = CORE_FUNCTIONS.filter((fn) => !fn.endpoint.startsWith("shorten-"));
+
   const checkStatuses = async (url?: string) => {
     setChecking(true);
     const results: typeof statuses = {};
@@ -622,7 +625,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         const text = await res.text().catch(() => "");
         let data: any = null;
         try { data = text ? JSON.parse(text) : null; } catch {}
-        const alive = !!data?.success || !!data?.error || !!data?.result || !!data?.shortUrl || text.includes('"error"') || text.includes('"success"') || res.status < 500;
+        const alive = !!data?.success || !!data?.error || !!data?.result || !!data?.shortUrl || !!data?.ok || text.includes('"error"') || text.includes('"success"') || res.status < 500;
         results[fn.key] = { alive, latency };
       } catch {
         results[fn.key] = { alive: false, latency: 0 };
@@ -643,31 +646,34 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     const current = fnOverrides[key] || { enabled: true, customUrl: "" };
     const url = customUrl.trim();
     await set(ref(db, `settings/functionOverrides/${key}`), { ...current, customUrl: url });
-    // Sync legacy nodes used by other sections (TelegramWebhookSection reads telegramProvider)
     if (key === "telegram-post" && url) {
       await set(ref(db, "settings/telegramProvider"), { url });
     }
     toast.success("✅ কাস্টম URL সেভ হয়েছে!");
   };
 
+  const applyShortenerToAdService = async (serviceId: string, functionUrl: string) => {
+    const target = functionUrl.trim();
+    if (!target) {
+      toast.error("এই shortener-এর URL এখনো set করা হয়নি");
+      return;
+    }
+    await update(ref(db, `settings/adServices/${serviceId}`), { functionUrl: target, updatedAt: Date.now() });
+    toast.success("✅ Shortener URL ad service-এ বসানো হয়েছে");
+  };
+
   return (
     <div>
-      {/* Ad Services (Unlock Buttons) */}
       <AdServicesSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
-
-      {/* FCM Provider Toggle */}
       <FcmProviderSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
-
-      {/* Telegram Bot Webhook (Telegram Post URL configured below in Functions list) */}
       <TelegramWebhookSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
-      {/* Cloudflare Base URL */}
       <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
           <Activity size={14} className="text-cyan-400" /> ☁️ Cloudflare Worker Config
         </h3>
         <p className="text-[10px] text-zinc-400 mb-4">
-          Cloudflare Worker ডিপ্লয় করে Base URL এখানে দাও। প্রতিটি ফাংশনের জন্য আলাদা কাস্টম URL-ও দেওয়া যাবে।
+          Cloudflare Worker ডিপ্লয় করলে base URL এখানে দিন। আলাদা function চাইলে নিচে per-function URL ব্যবহার করতে পারবেন।
         </p>
         <div className="mb-4">
           <label className="text-[10px] text-zinc-400 block mb-1">Worker Base URL</label>
@@ -682,34 +688,90 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         </div>
       </div>
 
-      {/* Per-Function Cards */}
       <div className={`${glassCard} p-4 mb-4`}>
         <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2.5 mb-3">
-          <p className="text-[10px] text-cyan-300 leading-relaxed">
-            💡 <b>Tip:</b> প্রতিটি ফাংশনের জন্য Supabase URL এই প্যাটার্নে হবে:
+          <p className="text-[10px] text-cyan-300 leading-relaxed break-words">
+            💡 <b>Tip:</b> Supabase function URL pattern:
             <br />
             <code className="text-[9px] bg-black/30 px-1 py-0.5 rounded text-cyan-200 break-all inline-block max-w-full">
               {SUPABASE_URL}/functions/v1/<b>function-name</b>
             </code>
-            <br />
-            নিচের প্রতিটা ফাংশনের পাশে "⚡ SB" বাটন আছে — এক ক্লিকে paste + save হয়ে যাবে।
           </p>
         </div>
-        <div className="flex items-center justify-between mb-3 gap-2">
-          <h3 className="text-sm font-semibold flex items-center gap-2 min-w-0">
-            <Zap size={14} className="text-orange-400 flex-shrink-0" /> <span className="truncate">Functions</span>
-          </h3>
-          <div className="flex gap-1.5 flex-shrink-0">
+
+        <div className="mb-4 rounded-xl border border-zinc-700/40 bg-zinc-900/30 p-3">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h3 className="text-sm font-semibold flex items-center gap-2 min-w-0">
+              <Link size={14} className="text-amber-400 flex-shrink-0" />
+              <span className="truncate">Built-in URL Shorteners</span>
+            </h3>
             <button
               onClick={async () => {
                 const updates: Record<string, any> = {};
-                CORE_FUNCTIONS.forEach((fn) => {
+                BUILT_IN_SHORTENERS.forEach((fn) => {
                   const sbUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/${fn.endpoint}`;
                   const cur = fnOverrides[fn.key] || { enabled: true, customUrl: "" };
                   updates[fn.key] = { ...cur, customUrl: sbUrl };
                 });
                 await set(ref(db, "settings/functionOverrides"), { ...fnOverrides, ...updates });
-                toast.success("✅ সব ফাংশনে Supabase URL সেট হয়েছে!");
+                toast.success("✅ সব built-in shortener-এ Supabase URL সেট হয়েছে!");
+              }}
+              className={`${btnSecondary} !py-1 !px-2.5 !text-[10px]`}
+            >
+              ⚡ Auto-fill
+            </button>
+          </div>
+          <div className="space-y-2.5">
+            {BUILT_IN_SHORTENERS.map((fn) => {
+              const override = fnOverrides[fn.key] || { enabled: true, customUrl: "" };
+              const url = getFunctionUrl(fn);
+              const st = statuses[fn.key];
+              return (
+                <div key={fn.key} className="rounded-lg border border-zinc-700/40 bg-zinc-800/40 p-2.5">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <div className="min-w-0 flex items-center gap-2">
+                      <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${st ? (st.alive ? "bg-green-500" : "bg-red-500") : "bg-yellow-500"}`} />
+                      <span className="text-[11px] font-semibold text-white truncate">{fn.label}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => {
+                          const sbUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/${fn.endpoint}`;
+                          setFnOverrides(prev => ({ ...prev, [fn.key]: { ...override, customUrl: sbUrl } }));
+                          saveCustomUrl(fn.key, sbUrl);
+                        }}
+                        className={`${btnSecondary} !px-2 !py-1 !text-[9px] whitespace-nowrap`}
+                      >
+                        ⚡ SB
+                      </button>
+                      <button onClick={() => toggleFunction(fn.key)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${override.enabled !== false ? 'bg-green-600' : 'bg-zinc-600'}`}>
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${override.enabled !== false ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-cyan-300 break-all">{url || "URL not set"}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <h3 className="text-sm font-semibold flex items-center gap-2 min-w-0">
+            <Zap size={14} className="text-orange-400 flex-shrink-0" /> <span className="truncate">Core Functions</span>
+          </h3>
+          <div className="flex gap-1.5 flex-shrink-0">
+            <button
+              onClick={async () => {
+                const updates: Record<string, any> = {};
+                nonShortenerFunctions.forEach((fn) => {
+                  const sbUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/${fn.endpoint}`;
+                  const cur = fnOverrides[fn.key] || { enabled: true, customUrl: "" };
+                  updates[fn.key] = { ...cur, customUrl: sbUrl };
+                });
+                await set(ref(db, "settings/functionOverrides"), { ...fnOverrides, ...updates });
+                toast.success("✅ core functions-এ Supabase URL সেট হয়েছে!");
               }}
               className={`${btnPrimary} !py-1 !px-2.5 !text-[10px]`}
               title="Auto-fill all with Supabase URLs"
@@ -722,7 +784,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
           </div>
         </div>
         <div className="space-y-3">
-          {CORE_FUNCTIONS.map((fn) => {
+          {nonShortenerFunctions.map((fn) => {
             const override = fnOverrides[fn.key] || { enabled: true, customUrl: "" };
             const isEnabled = override.enabled !== false;
             const st = statuses[fn.key];
@@ -751,7 +813,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                     value={override.customUrl || ""}
                     onChange={(e) => setFnOverrides(prev => ({ ...prev, [fn.key]: { ...override, customUrl: e.target.value } }))}
                     placeholder={activeUrl ? activeUrl.slice(0, 40) + "…" : "Paste full function URL…"}
-                    className={`${inputClass} !text-[10px] !py-1.5 flex-1 min-w-0 truncate`}
+                    className={`${inputClass} !text-[10px] !py-1.5 flex-1 min-w-0`}
                   />
                   <button
                     onClick={() => {
@@ -775,6 +837,48 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
               </div>
             );
           })}
+        </div>
+
+        <div className="mt-4 rounded-xl border border-zinc-700/40 bg-zinc-900/30 p-3">
+          <h4 className="text-[11px] font-semibold text-white mb-2">Shortener → Ad button quick set</h4>
+          <p className="text-[10px] text-zinc-400 mb-3 break-words">
+            নিচের list থেকে built-in shortener-এর URL পছন্দ করে আপনার ad service-এ বসিয়ে দিন। নিচে আলাদা duplicate URL box রাখা হয়নি।
+          </p>
+          <div className="space-y-2">
+            {Object.values((fnOverrides && fnOverrides) || {}).length === 0 ? null : null}
+          </div>
+          <div className="space-y-2.5">
+            {BUILT_IN_SHORTENERS.map((fn) => {
+              const shortUrl = getFunctionUrl(fn);
+              return (
+                <div key={`picker-${fn.key}`} className="rounded-lg border border-zinc-700/40 bg-zinc-800/40 p-2.5">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="text-[11px] font-semibold text-white truncate">{fn.label}</span>
+                    <span className="text-[9px] text-cyan-300">{shortUrl ? "Ready" : "Not set"}</span>
+                  </div>
+                  <p className="text-[9px] text-zinc-400 break-all mb-2">{shortUrl || "No URL configured yet"}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={async () => {
+                        const adSnap = await get(ref(db, "settings/adServices"));
+                        const adServices = adSnap.val() || {};
+                        const firstEnabled = Object.values(adServices).find((svc: any) => svc?.enabled !== false) as any;
+                        if (!firstEnabled?.id) {
+                          toast.error("আগে উপরের Ad Link Services section-এ অন্তত ১টা service add করুন");
+                          return;
+                        }
+                        applyShortenerToAdService(firstEnabled.id, shortUrl);
+                      }}
+                      className={`${btnSecondary} !px-2.5 !py-1 !text-[9px]`}
+                      disabled={!shortUrl}
+                    >
+                      Use in first active ad service
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
@@ -1736,9 +1840,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [newPinInput, setNewPinInput] = useState("");
   const [currentPin, setCurrentPin] = useState("");
 
-  const [activeSection, setActiveSection] = useState<Section>(() => {
-    try { return (sessionStorage.getItem("rs_adminSection") as Section) || "ai-manager"; } catch { return "ai-manager"; }
-  });
+  const [activeSection, setActiveSection] = useState<Section>("ai-manager");
 
 
   // Persist admin section
