@@ -10,16 +10,15 @@ import {
   Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
   Shield, LogOut, Search, Save, ChevronDown, Send, Link, ChevronLeft, ChevronRight,
   Lock, Unlock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin,
-  Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail, Sparkles
+  Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { WeeklyEpTabButton, WeeklyEpManager } from "@/components/admin/WeeklyEpManager";
-import { AdminAIManager } from "@/components/admin/AdminAIManager";
 import { AdminNotificationBell } from "@/components/admin/AdminNotificationBell";
 
-type Section = "ai-manager" | "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service";
 
 interface CastMember {
   name: string;
@@ -560,8 +559,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const [fnOverrides, setFnOverrides] = useState<Record<string, { enabled: boolean; customUrl: string }>>({});
 
   const CORE_FUNCTIONS: { key: string; label: string; endpoint: string }[] = [
-    { key: "admin-ai", label: "🤖 Admin AI Agent", endpoint: "admin-ai" },
-    { key: "weekly-auto-detect", label: "📅 Weekly Auto-Detect", endpoint: "weekly-auto-detect" },
+        { key: "weekly-auto-detect", label: "📅 Weekly Auto-Detect", endpoint: "weekly-auto-detect" },
     { key: "send-fcm", label: "🔔 Send FCM Notification", endpoint: "send-fcm" },
     { key: "telegram-post", label: "📢 Telegram Post", endpoint: "telegram-post" },
     { key: "rs-bot", label: "💬 RS Bot (Telegram)", endpoint: "rs-bot" },
@@ -1802,7 +1800,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [newPinInput, setNewPinInput] = useState("");
   const [currentPin, setCurrentPin] = useState("");
 
-  const [activeSection, setActiveSection] = useState<Section>("ai-manager");
+  const [activeSection, setActiveSection] = useState<Section>("dashboard");
 
 
   // Persist admin section
@@ -2430,7 +2428,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   }, []);
 
   // Section history stack for back navigation
-  const [sectionHistory, setSectionHistory] = useState<Section[]>(["ai-manager"]);
+  const [sectionHistory, setSectionHistory] = useState<Section[]>(["dashboard"]);
   const savedScrollPos = useRef<number>(0);
 
   const showSection = (section: Section) => {
@@ -2492,7 +2490,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   };
 
   const sectionTitles: Record<Section, string> = {
-    "ai-manager": "AI Manager",
     dashboard: "Dashboard",
     categories: "Categories",
     webseries: "Web Series",
@@ -3849,7 +3846,6 @@ ${tgHashtags}`;
   const glassCard = "bg-[#16162A] border border-white/6 rounded-xl";
 
   const menuItems: { section: Section; icon: React.ReactNode; label: string; group?: string }[] = [
-    { section: "ai-manager", icon: <Sparkles size={16} />, label: "AI Manager", group: "Main Menu" },
     { section: "dashboard", icon: <LayoutDashboard size={16} />, label: "Dashboard" },
     { section: "categories", icon: <FolderOpen size={16} />, label: "Categories" },
     { section: "webseries", icon: <Film size={16} />, label: "Web Series" },
@@ -4161,16 +4157,6 @@ ${tgHashtags}`;
 
       {/* Main Content */}
       <main className="pt-[64px] px-3 pb-[80px] min-h-screen">
-        {/* ==================== AI MANAGER (default home) ==================== */}
-        {activeSection === "ai-manager" && (
-          <div>
-            <div className="flex justify-end mb-2">
-              <AdminNotificationBell />
-            </div>
-            <AdminAIManager />
-          </div>
-        )}
-
         {/* ==================== DASHBOARD ==================== */}
         {activeSection === "dashboard" && (
           <div>
@@ -8243,7 +8229,6 @@ ${tgHashtags}`;
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 h-[58px] bg-[#0D0D1A]/95 border-t border-white/6 flex items-center justify-around z-[100] px-1">
         {[
-          { section: "ai-manager" as Section, icon: <Sparkles size={18} />, label: "AI" },
           { section: "dashboard" as Section, icon: <LayoutDashboard size={18} />, label: "Dashboard" },
           { section: "webseries" as Section, icon: <Film size={18} />, label: "Series" },
           { section: "movies" as Section, icon: <Video size={18} />, label: "Movies" },
