@@ -10,7 +10,7 @@ import {
   Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
   Shield, LogOut, Search, Save, ChevronDown, Send, Link, ChevronLeft, ChevronRight,
   Lock, Unlock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin,
-  Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail
+  Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail, Sparkles
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
@@ -19,7 +19,7 @@ import { WeeklyEpTabButton, WeeklyEpManager } from "@/components/admin/WeeklyEpM
 import { AdminAIManager } from "@/components/admin/AdminAIManager";
 import { AdminNotificationBell } from "@/components/admin/AdminNotificationBell";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service";
+type Section = "ai-manager" | "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service";
 
 interface CastMember {
   name: string;
@@ -641,7 +641,12 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
 
   const saveCustomUrl = async (key: string, customUrl: string) => {
     const current = fnOverrides[key] || { enabled: true, customUrl: "" };
-    await set(ref(db, `settings/functionOverrides/${key}`), { ...current, customUrl: customUrl.trim() });
+    const url = customUrl.trim();
+    await set(ref(db, `settings/functionOverrides/${key}`), { ...current, customUrl: url });
+    // Sync legacy nodes used by other sections (TelegramWebhookSection reads telegramProvider)
+    if (key === "telegram-post" && url) {
+      await set(ref(db, "settings/telegramProvider"), { url });
+    }
     toast.success("✅ কাস্টম URL সেভ হয়েছে!");
   };
 
@@ -653,10 +658,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
       {/* FCM Provider Toggle */}
       <FcmProviderSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
-      {/* Telegram Provider (Supabase) */}
-      <TelegramProviderSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
-
-      {/* Telegram Bot Webhook */}
+      {/* Telegram Bot Webhook (Telegram Post URL configured below in Functions list) */}
       <TelegramWebhookSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
       {/* Cloudflare Base URL */}
@@ -671,12 +673,12 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
           <label className="text-[10px] text-zinc-400 block mb-1">Worker Base URL</label>
           <div className="flex gap-2">
             <input value={baseUrlInput} onChange={(e) => setBaseUrlInput(e.target.value)}
-              placeholder="https://your-worker.workers.dev" className={`${inputClass} flex-1`} />
-            <button onClick={saveBaseUrl} className={`${btnPrimary} !px-3`}>
+              placeholder="https://your-worker.workers.dev" className={`${inputClass} flex-1 min-w-0`} />
+            <button onClick={saveBaseUrl} className={`${btnPrimary} !px-3 flex-shrink-0`}>
               <Save size={12} /> Save & Test
             </button>
           </div>
-          {baseUrl && <p className="mt-1.5 text-[10px] text-green-400">✓ {baseUrl}</p>}
+          {baseUrl && <p className="mt-1.5 text-[10px] text-green-400 break-all">✓ {baseUrl}</p>}
         </div>
       </div>
 
@@ -686,20 +688,38 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
           <p className="text-[10px] text-cyan-300 leading-relaxed">
             💡 <b>Tip:</b> প্রতিটি ফাংশনের জন্য Supabase URL এই প্যাটার্নে হবে:
             <br />
-            <code className="text-[9px] bg-black/30 px-1 py-0.5 rounded text-cyan-200">
+            <code className="text-[9px] bg-black/30 px-1 py-0.5 rounded text-cyan-200 break-all inline-block max-w-full">
               {SUPABASE_URL}/functions/v1/<b>function-name</b>
             </code>
             <br />
-            নিচের প্রতিটা ফাংশনের পাশে "Use Supabase" বাটন আছে — এক ক্লিকে paste হয়ে যাবে।
+            নিচের প্রতিটা ফাংশনের পাশে "⚡ SB" বাটন আছে — এক ক্লিকে paste + save হয়ে যাবে।
           </p>
         </div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold flex items-center gap-2">
-            <Zap size={14} className="text-orange-400" /> Functions
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <h3 className="text-sm font-semibold flex items-center gap-2 min-w-0">
+            <Zap size={14} className="text-orange-400 flex-shrink-0" /> <span className="truncate">Functions</span>
           </h3>
-          <button onClick={() => checkStatuses()} disabled={checking} className={`${btnSecondary} !py-1 !px-3 !text-[10px]`}>
-            {checking ? <><RefreshCw size={10} className="animate-spin" /> Checking...</> : <><Activity size={10} /> Test All</>}
-          </button>
+          <div className="flex gap-1.5 flex-shrink-0">
+            <button
+              onClick={async () => {
+                const updates: Record<string, any> = {};
+                CORE_FUNCTIONS.forEach((fn) => {
+                  const sbUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/${fn.endpoint}`;
+                  const cur = fnOverrides[fn.key] || { enabled: true, customUrl: "" };
+                  updates[fn.key] = { ...cur, customUrl: sbUrl };
+                });
+                await set(ref(db, "settings/functionOverrides"), { ...fnOverrides, ...updates });
+                toast.success("✅ সব ফাংশনে Supabase URL সেট হয়েছে!");
+              }}
+              className={`${btnPrimary} !py-1 !px-2.5 !text-[10px]`}
+              title="Auto-fill all with Supabase URLs"
+            >
+              ⚡ Auto-fill SB
+            </button>
+            <button onClick={() => checkStatuses()} disabled={checking} className={`${btnSecondary} !py-1 !px-2.5 !text-[10px]`}>
+              {checking ? <><RefreshCw size={10} className="animate-spin" /> Test</> : <><Activity size={10} /> Test All</>}
+            </button>
+          </div>
         </div>
         <div className="space-y-3">
           {CORE_FUNCTIONS.map((fn) => {
@@ -708,30 +728,30 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
             const st = statuses[fn.key];
             const activeUrl = getFunctionUrl(fn);
             return (
-              <div key={fn.key} className="bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`w-2.5 h-2.5 rounded-full ${!isEnabled ? "bg-zinc-600" : st ? (st.alive ? "bg-green-500" : "bg-red-500") : "bg-yellow-500"}`} />
-                    <span className="text-xs font-semibold text-white">{fn.label}</span>
+              <div key={fn.key} className="bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40 overflow-hidden">
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${!isEnabled ? "bg-zinc-600" : st ? (st.alive ? "bg-green-500" : "bg-red-500") : "bg-yellow-500"}`} />
+                    <span className="text-xs font-semibold text-white truncate">{fn.label}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     {st && isEnabled && (
                       <span className={`text-[10px] font-mono ${st.alive ? "text-green-400" : "text-red-400"}`}>
-                        {st.alive ? `${st.latency}ms ✓` : "Down ✕"}
+                        {st.alive ? `${st.latency}ms` : "Down"}
                       </span>
                     )}
                     <button onClick={() => toggleFunction(fn.key)}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
-                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${isEnabled ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${isEnabled ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
                     </button>
                   </div>
                 </div>
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 items-stretch">
                   <input
                     value={override.customUrl || ""}
                     onChange={(e) => setFnOverrides(prev => ({ ...prev, [fn.key]: { ...override, customUrl: e.target.value } }))}
-                    placeholder={activeUrl || "Paste full function URL..."}
-                    className={`${inputClass} !text-[10px] !py-1.5 flex-1`}
+                    placeholder={activeUrl ? activeUrl.slice(0, 40) + "…" : "Paste full function URL…"}
+                    className={`${inputClass} !text-[10px] !py-1.5 flex-1 min-w-0 truncate`}
                   />
                   <button
                     onClick={() => {
@@ -739,18 +759,19 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                       setFnOverrides(prev => ({ ...prev, [fn.key]: { ...override, customUrl: sbUrl } }));
                       saveCustomUrl(fn.key, sbUrl);
                     }}
-                    className={`${btnSecondary} !px-2 !py-1 !text-[9px] whitespace-nowrap`}
+                    className={`${btnSecondary} !px-2 !py-1 !text-[9px] whitespace-nowrap flex-shrink-0`}
                     title="Use Supabase URL"
                   >
                     ⚡ SB
                   </button>
                   <button onClick={() => saveCustomUrl(fn.key, override.customUrl || "")}
-                    className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
-                    <Save size={10} />
+                    className={`${btnSecondary} !px-2 !py-1 flex-shrink-0`}
+                    title="Save">
+                    <Save size={11} />
                   </button>
                 </div>
-                {override.customUrl && <p className="text-[9px] text-cyan-400 mt-1">⚡ কাস্টম URL ব্যবহার হচ্ছে</p>}
-                {!isEnabled && <p className="text-[9px] text-red-400 mt-1">🚫 বন্ধ আছে</p>}
+                {override.customUrl && <p className="text-[9px] text-cyan-400 mt-1 break-all">⚡ {override.customUrl}</p>}
+                {!isEnabled && <p className="text-[9px] text-red-400 mt-1">🚫 Disabled</p>}
               </div>
             );
           })}
@@ -1716,7 +1737,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [currentPin, setCurrentPin] = useState("");
 
   const [activeSection, setActiveSection] = useState<Section>(() => {
-    try { return (sessionStorage.getItem("rs_adminSection") as Section) || "dashboard"; } catch { return "dashboard"; }
+    try { return (sessionStorage.getItem("rs_adminSection") as Section) || "ai-manager"; } catch { return "ai-manager"; }
   });
 
 
@@ -2345,7 +2366,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   }, []);
 
   // Section history stack for back navigation
-  const [sectionHistory, setSectionHistory] = useState<Section[]>(["dashboard"]);
+  const [sectionHistory, setSectionHistory] = useState<Section[]>(["ai-manager"]);
   const savedScrollPos = useRef<number>(0);
 
   const showSection = (section: Section) => {
@@ -2407,6 +2428,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   };
 
   const sectionTitles: Record<Section, string> = {
+    "ai-manager": "AI Manager",
     dashboard: "Dashboard",
     categories: "Categories",
     webseries: "Web Series",
@@ -3763,7 +3785,8 @@ ${tgHashtags}`;
   const glassCard = "bg-[#16162A] border border-white/6 rounded-xl";
 
   const menuItems: { section: Section; icon: React.ReactNode; label: string; group?: string }[] = [
-    { section: "dashboard", icon: <LayoutDashboard size={16} />, label: "Dashboard", group: "Main Menu" },
+    { section: "ai-manager", icon: <Sparkles size={16} />, label: "AI Manager", group: "Main Menu" },
+    { section: "dashboard", icon: <LayoutDashboard size={16} />, label: "Dashboard" },
     { section: "categories", icon: <FolderOpen size={16} />, label: "Categories" },
     { section: "webseries", icon: <Film size={16} />, label: "Web Series" },
     { section: "movies", icon: <Video size={16} />, label: "Movies" },
@@ -4074,6 +4097,16 @@ ${tgHashtags}`;
 
       {/* Main Content */}
       <main className="pt-[64px] px-3 pb-[80px] min-h-screen">
+        {/* ==================== AI MANAGER (default home) ==================== */}
+        {activeSection === "ai-manager" && (
+          <div>
+            <div className="flex justify-end mb-2">
+              <AdminNotificationBell />
+            </div>
+            <AdminAIManager />
+          </div>
+        )}
+
         {/* ==================== DASHBOARD ==================== */}
         {activeSection === "dashboard" && (
           <div>
@@ -4081,8 +4114,6 @@ ${tgHashtags}`;
             <div className="flex justify-end mb-2">
               <AdminNotificationBell />
             </div>
-            {/* 🤖 AI Manager — top of admin home */}
-            <AdminAIManager />
             <div className="grid grid-cols-2 gap-2.5 mb-4">
               {[
                 { icon: <Film size={18} />, value: webseriesData.length, label: "Web Series", color: "text-indigo-400" },
@@ -8146,15 +8177,16 @@ ${tgHashtags}`;
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 h-[58px] bg-[#0D0D1A]/95 border-t border-white/6 flex items-center justify-around z-[100] px-2">
+      <nav className="fixed bottom-0 left-0 right-0 h-[58px] bg-[#0D0D1A]/95 border-t border-white/6 flex items-center justify-around z-[100] px-1">
         {[
-          { section: "dashboard" as Section, icon: <LayoutDashboard size={19} />, label: "Dashboard" },
-          { section: "webseries" as Section, icon: <Film size={19} />, label: "Series" },
-          { section: "movies" as Section, icon: <Video size={19} />, label: "Movies" },
-          { section: "notifications" as Section, icon: <Bell size={19} />, label: "Notify" },
+          { section: "ai-manager" as Section, icon: <Sparkles size={18} />, label: "AI" },
+          { section: "dashboard" as Section, icon: <LayoutDashboard size={18} />, label: "Dashboard" },
+          { section: "webseries" as Section, icon: <Film size={18} />, label: "Series" },
+          { section: "movies" as Section, icon: <Video size={18} />, label: "Movies" },
+          { section: "notifications" as Section, icon: <Bell size={18} />, label: "Notify" },
         ].map(item => (
           <div key={item.section} onClick={() => showSection(item.section)}
-            className={`flex flex-col items-center gap-0.5 py-2 px-3.5 cursor-pointer relative transition-colors ${
+            className={`flex flex-col items-center gap-0.5 py-2 px-2 cursor-pointer relative transition-colors ${
               activeSection === item.section ? "text-indigo-400" : "text-zinc-600"
             }`}>
             {activeSection === item.section && <div className="absolute -top-px left-1/2 -translate-x-1/2 w-7 h-[2px] bg-indigo-500 rounded-b" />}
