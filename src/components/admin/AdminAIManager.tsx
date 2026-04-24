@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Sparkles, Send, Check, X, Loader2, Bot, User, AlertCircle, Image as ImageIcon, Plus, FileJson, Music2, ChevronDown, ChevronUp, Wand2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { toast } from "sonner";
 import { db, ref, get } from "@/lib/firebase";
@@ -398,24 +399,26 @@ export function AdminAIManager() {
             >
               {m.role === "user" ? <User size={14} /> : <Bot size={14} />}
             </div>
-            <div className={`flex-1 max-w-[85%] min-w-0 ${m.role === "user" ? "text-right" : ""}`}>
+            <div className={`flex-1 max-w-[88%] min-w-0 ${m.role === "user" ? "text-right" : ""}`}>
               <div
-                className={`inline-block text-left px-3 py-2 rounded-xl text-[12.5px] whitespace-pre-wrap break-words max-w-full ${
+                className={`inline-block text-left px-3.5 py-3 rounded-2xl text-[12.5px] whitespace-pre-wrap break-words max-w-full overflow-hidden ${
                   m.role === "user"
                     ? "bg-indigo-600/30 border border-indigo-500/40 text-indigo-50"
                     : "bg-[#141422] border border-white/8 text-zinc-100"
                 }`}
                 style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
               >
-                {m.content}
+                <div className="prose prose-invert prose-p:my-0 prose-pre:my-2 prose-pre:max-w-full prose-code:break-all prose-p:break-words prose-li:break-words max-w-none text-inherit [&_*]:break-words">
+                  <ReactMarkdown>{m.content}</ReactMarkdown>
+                </div>
                 {m.role === "user" && (m as any).images?.length > 0 && (
-                  <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                  <div className="flex gap-2 mt-2 flex-wrap">
                     {(m as any).images.map((img: string, k: number) => (
                       <img
                         key={k}
                         src={img}
                         alt={`upload-${k}`}
-                        className="w-20 h-20 object-cover rounded-md border border-white/10"
+                        className="w-20 h-20 object-cover rounded-xl border border-white/10"
                       />
                     ))}
                   </div>
@@ -798,25 +801,23 @@ export function AdminAIManager() {
         )}
       </div>
 
-      {/* Pending image previews */}
       {pendingImages.length > 0 && (
-        <div className="px-2.5 pt-2 flex gap-1.5 flex-wrap bg-[#0a0a14] border-t border-white/8">
+        <div className="px-3 pt-3 pb-1 flex gap-2 flex-wrap bg-[#0a0a14] border-t border-white/8">
           {pendingImages.map((img, i) => (
-            <div key={i} className="relative">
-              <img src={img} alt="" className="w-12 h-12 object-cover rounded-md border border-violet-500/40" />
+            <div key={i} className="relative group">
+              <img src={img} alt="attachment" className="w-16 h-16 object-cover rounded-xl border border-violet-500/40" />
               <button
                 onClick={() => setPendingImages((p) => p.filter((_, k) => k !== i))}
-                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center"
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center shadow-lg"
               >
-                <X size={9} />
+                <X size={10} />
               </button>
             </div>
           ))}
         </div>
       )}
 
-      {/* Input */}
-      <div className="p-2.5 border-t border-white/8 bg-[#0a0a14]">
+      <div className="p-3 border-t border-white/8 bg-[#0a0a14]">
         <input
           ref={fileInputRef}
           type="file"
@@ -828,45 +829,48 @@ export function AdminAIManager() {
             if (fileInputRef.current) fileInputRef.current.value = "";
           }}
         />
-        <div className="flex gap-2 items-end">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={loading}
-            title="Attach screenshot"
-            className="px-2.5 py-2.5 rounded-lg bg-[#141422] border border-white/10 text-violet-300 hover:bg-violet-500/20 disabled:opacity-40 flex-shrink-0"
-          >
-            <ImageIcon size={16} />
-          </button>
-          <textarea
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              // Auto-grow
-              const ta = e.target as HTMLTextAreaElement;
-              ta.style.height = "auto";
-              ta.style.height = Math.min(ta.scrollHeight, 240) + "px";
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            disabled={loading}
-            rows={2}
-            placeholder="যা খুশি লিখুন — কোড, JSON, প্রশ্ন। Enter = send, Shift+Enter = নতুন লাইন।"
-            className="flex-1 bg-[#141422] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-white placeholder:text-zinc-500 focus:outline-none focus:border-violet-500/60 resize-none leading-snug min-h-[44px] max-h-[240px] overflow-y-auto"
-          />
-          <button
-            onClick={send}
-            disabled={loading || (!input.trim() && pendingImages.length === 0)}
-            className="px-3 py-2.5 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white disabled:opacity-40 flex-shrink-0"
-          >
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          </button>
+        <div className="rounded-[24px] border border-white/10 bg-[#11111b] px-3 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
+          <div className="flex items-end gap-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              title="Attach screenshot"
+              className="h-11 w-11 rounded-full bg-[#181825] border border-white/10 text-violet-300 hover:bg-violet-500/20 disabled:opacity-40 flex items-center justify-center flex-shrink-0"
+            >
+              <ImageIcon size={18} />
+            </button>
+            <div className="flex-1 min-w-0">
+              <textarea
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  const ta = e.target as HTMLTextAreaElement;
+                  ta.style.height = "auto";
+                  ta.style.height = Math.min(ta.scrollHeight, 320) + "px";
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                disabled={loading}
+                rows={3}
+                placeholder="মেসেজ, কোড, JSON, UI fix, admin command — সব লিখুন। Enter = send, Shift+Enter = নতুন লাইন।"
+                className="w-full bg-transparent px-1 py-2 text-[14px] text-white placeholder:text-zinc-500 focus:outline-none resize-none leading-6 min-h-[88px] max-h-[320px] overflow-y-auto"
+              />
+            </div>
+            <button
+              onClick={send}
+              disabled={loading || (!input.trim() && pendingImages.length === 0)}
+              className="h-12 w-12 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white disabled:opacity-40 flex items-center justify-center flex-shrink-0"
+            >
+              {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+            </button>
+          </div>
         </div>
-        <p className="text-[9px] text-zinc-500 mt-1 px-1">
-          💡 লম্বা স্ক্রিপ্ট/JSON paste করতে পারবেন — auto-scroll হবে। Shift+Enter = নতুন লাইন।
+        <p className="text-[10px] text-zinc-500 mt-2 px-1 break-words">
+          💡 বড় script / JSON / multi-line prompt paste করতে পারবেন। ছবি attach করলে উপরে preview দেখাবে।
         </p>
       </div>
     </div>
