@@ -178,6 +178,7 @@ serve(async (req) => {
     const accessToken = await getAccessToken(sa);
 
     const body = await req.json();
+    if (body?.test === true) return json({ ok: true, ping: "send-fcm" });
     const { title, body: msgBody, image, icon, badge, data: extra, tokens: directTokens, userIds } = body;
     if (!title) return json({ error: "title required" }, 400);
 

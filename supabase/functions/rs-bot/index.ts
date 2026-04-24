@@ -189,6 +189,11 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
+    if (body?.test === true) {
+      return new Response(JSON.stringify({ ok: true, ping: "rs-bot" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const messages = Array.isArray(body.messages) ? body.messages : [];
     const userContext = typeof body.userContext === "string"
       ? body.userContext
