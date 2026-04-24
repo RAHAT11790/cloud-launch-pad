@@ -2562,6 +2562,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       weeklyEnabled: seriesForm.weeklyEnabled === true,
       weeklyEveryDays: Math.max(1, Number(seriesForm.weeklyEveryDays) || 7),
       visibility: seriesForm.visibility === "private" ? "private" : "public",
+      // Per-series Telegram custom button (auto-attached by telegram-post edge function)
+      telegramCustomButton: (seriesForm.telegramCustomButtonText && seriesForm.telegramCustomButtonUrl)
+        ? { text: String(seriesForm.telegramCustomButtonText).trim(), url: String(seriesForm.telegramCustomButtonUrl).trim() }
+        : null,
       updatedAt: Date.now(),
     };
     let saveRef;
@@ -2619,7 +2623,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       tmdbId: data.tmdbId || "", title: data.title || "", logo: data.logo || "", poster: data.poster || "",
       backdrop: data.backdrop || "", trailer: data.trailer || "", year: data.year || "", rating: data.rating || "",
         language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "", visibility: data.visibility || "public",
-        weeklyEnabled: data.weeklyEnabled === true, weeklyEveryDays: Math.max(1, Number(data.weeklyEveryDays) || 7), weeklyDaysSinceLast: 0
+        weeklyEnabled: data.weeklyEnabled === true, weeklyEveryDays: Math.max(1, Number(data.weeklyEveryDays) || 7), weeklyDaysSinceLast: 0,
+        telegramCustomButtonText: data.telegramCustomButton?.text || "",
+        telegramCustomButtonUrl: data.telegramCustomButton?.url || "",
     });
     setSeriesCast(data.cast || []);
     setSeasonsData(data.seasons || []);
