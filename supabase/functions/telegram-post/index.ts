@@ -378,16 +378,27 @@ serve(async (req) => {
     }
 
     // ========== SEND POST ==========
-    const chatId = body?.chatId;
+    // Resolve a default chatId from settings/telegramChatId if not provided
+    let chatId = body?.chatId;
+    if (!chatId) {
+      try {
+        const r = await fetch(`${FIREBASE_DB}/settings/telegramChatId.json`);
+        const v = await r.json().catch(() => null);
+        if (v) chatId = v;
+      } catch {}
+    }
+    if (!chatId) return json({ error: "chatId required (set settings/telegramChatId in Firebase or pass chatId in body)" }, 400);
+
     const caption = String(body?.caption || "");
     const photoUrl = String(body?.photoUrl || "").trim();
     const buttonText = String(body?.buttonText || "").trim();
     const buttonUrl = String(body?.buttonUrl || "").trim();
     const extraInlineButtons: InlineButton[] = Array.isArray(body?.inlineButtons) ? body.inlineButtons : [];
-    const includeFreeAccess = body?.includeFreeAccess !== false; // default true
+    // Free Access button is now OPTIONAL — default OFF (admin can opt in per call)
+    const includeFreeAccess = body?.includeFreeAccess === true;
     const freeAccessUserId = String(body?.freeAccessUserId || "guest").trim() || "guest";
-
-    if (!chatId) return json({ error: "chatId required" }, 400);
+    const collection = String(body?.collection || "").trim();
+    const seriesId = String(body?.seriesId || "").trim();
 
     const buttons: InlineButton[] = [];
     if (buttonText && buttonUrl) buttons.push({ text: buttonText, url: buttonUrl });
@@ -395,7 +406,16 @@ serve(async (req) => {
       if (btn?.text && btn?.url) buttons.push({ text: String(btn.text), url: String(btn.url) });
     });
 
-    // ✨ Auto-add Free Access button (deep-links into the bot)
+    // 🆕 Auto-attach per-series custom button (saved at <collection>/<seriesId>/telegramCustomButton)
+    if (collection && seriesId && buttons.length === 0) {
+      try {
+        const r = await fetch(`${FIREBASE_DB}/${collection}/${seriesId}/telegramCustomButton.json`);
+        const cb = await r.json().catch(() => null);
+        if (cb?.text && cb?.url) buttons.push({ text: String(cb.text), url: String(cb.url) });
+      } catch {}
+    }
+
+    // ✨ Optional Free Access button — only when admin explicitly requests it
     if (includeFreeAccess) {
       const username = await getBotUsername(botToken);
       if (username) {

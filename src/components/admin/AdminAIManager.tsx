@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Sparkles, Send, Check, X, Loader2, Bot, User, AlertCircle, Image as ImageIcon, Plus, FileJson, Music2, ChevronDown, ChevronUp, Wand2 } from "lucide-react";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { toast } from "sonner";
+import { db, ref, get } from "@/lib/firebase";
 
 type OpPreview = {
   title?: string;
@@ -78,6 +79,44 @@ export function AdminAIManager() {
   const [queue, setQueue] = useState<EpisodeDraft[]>([]);
   const [jsonText, setJsonText] = useState("");
   const [showJson, setShowJson] = useState(false);
+  // Series picker (replaces typing raw seriesId)
+  const [seriesIndex, setSeriesIndex] = useState<
+    { id: string; title: string; collection: "webseries" | "movies" | "animesalt" }[]
+  >([]);
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Load series index when builder opens
+  useEffect(() => {
+    if (!builderOpen || seriesIndex.length > 0) return;
+    (async () => {
+      const collections: ("webseries" | "movies" | "animesalt")[] = [
+        "webseries",
+        "movies",
+        "animesalt",
+      ];
+      const all: { id: string; title: string; collection: any }[] = [];
+      await Promise.all(
+        collections.map(async (c) => {
+          try {
+            const snap = await get(ref(db, c));
+            const v = snap.val();
+            if (v && typeof v === "object") {
+              Object.entries(v).forEach(([id, item]: [string, any]) => {
+                all.push({
+                  id,
+                  title: String(item?.title || item?.name || id),
+                  collection: c,
+                });
+              });
+            }
+          } catch {}
+        }),
+      );
+      all.sort((a, b) => a.title.localeCompare(b.title));
+      setSeriesIndex(all);
+    })();
+  }, [builderOpen, seriesIndex.length]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -509,39 +548,66 @@ export function AdminAIManager() {
 
         {builderOpen && (
           <div className="mt-2 space-y-2.5 bg-[#0a0a14] border border-violet-500/30 rounded-xl p-2.5">
-            {/* Target selector */}
-            <div className="flex gap-1.5 items-center">
-              <label className="text-[10px] text-violet-300 font-bold uppercase">Target:</label>
-              <input
-                placeholder="seriesId (e.g. tmdb_46260)"
-                value={builderTarget?.seriesId || ""}
-                onChange={(e) =>
-                  setBuilderTarget((t) => ({
-                    collection: t?.collection || "webseries",
-                    seriesId: e.target.value,
-                    seasonNumber: t?.seasonNumber || 1,
-                    title: t?.title,
-                  }))
-                }
-                className="flex-1 bg-[#141422] border border-white/10 rounded px-2 py-1 text-[11px] text-white"
-              />
-              <select
-                value={builderTarget?.collection || "webseries"}
-                onChange={(e) =>
-                  setBuilderTarget((t) => ({
-                    collection: e.target.value as any,
-                    seriesId: t?.seriesId || "",
-                    seasonNumber: t?.seasonNumber || 1,
-                    title: t?.title,
-                  }))
-                }
-                className="bg-[#141422] border border-white/10 rounded px-1.5 py-1 text-[10px] text-white"
-              >
-                <option value="webseries">webseries</option>
-                <option value="movies">movies</option>
-                <option value="animesalt">animesalt</option>
-              </select>
-              <input
+            {/* Target selector — Series search dropdown (no more typing wrong IDs) */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] text-violet-300 font-bold uppercase">Target Series:</label>
+              <div className="relative">
+                <input
+                  placeholder={
+                    builderTarget
+                      ? `🎯 ${builderTarget.title} (${builderTarget.collection})`
+                      : "🔍 Search series by name…"
+                  }
+                  value={pickerQuery}
+                  onFocus={() => setPickerOpen(true)}
+                  onChange={(e) => {
+                    setPickerQuery(e.target.value);
+                    setPickerOpen(true);
+                  }}
+                  className="w-full bg-[#141422] border border-white/10 rounded px-2 py-1.5 text-[11.5px] text-white placeholder:text-zinc-500"
+                />
+                {pickerOpen && pickerQuery.trim().length > 0 && (
+                  <div className="absolute z-20 mt-1 left-0 right-0 max-h-48 overflow-y-auto bg-[#0d0d18] border border-violet-500/40 rounded-lg shadow-xl">
+                    {seriesIndex
+                      .filter((s) =>
+                        s.title.toLowerCase().includes(pickerQuery.trim().toLowerCase()),
+                      )
+                      .slice(0, 30)
+                      .map((s) => (
+                        <button
+                          key={`${s.collection}/${s.id}`}
+                          onClick={() => {
+                            setBuilderTarget({
+                              collection: s.collection,
+                              seriesId: s.id,
+                              seasonNumber: builderTarget?.seasonNumber || 1,
+                              title: s.title,
+                            });
+                            setPickerQuery("");
+                            setPickerOpen(false);
+                            toast.success(`🎯 Target: ${s.title}`);
+                          }}
+                          className="w-full text-left px-2 py-1.5 hover:bg-violet-500/20 text-[11px] text-white border-b border-white/5 last:border-b-0 flex justify-between items-center"
+                        >
+                          <span className="truncate">{s.title}</span>
+                          <span className="text-[9px] text-violet-400 ml-2">
+                            {s.collection}
+                          </span>
+                        </button>
+                      ))}
+                    {seriesIndex.filter((s) =>
+                      s.title.toLowerCase().includes(pickerQuery.trim().toLowerCase()),
+                    ).length === 0 && (
+                      <div className="px-2 py-2 text-[11px] text-zinc-500">
+                        No match. Try a different name.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-1.5 items-center">
+                <label className="text-[10px] text-violet-300 font-bold uppercase">Season:</label>
+                <input
                 type="number"
                 min={1}
                 placeholder="S"
@@ -554,8 +620,20 @@ export function AdminAIManager() {
                     title: t?.title,
                   }))
                 }
-                className="w-12 bg-[#141422] border border-white/10 rounded px-2 py-1 text-[11px] text-white"
+                className="w-16 bg-[#141422] border border-white/10 rounded px-2 py-1 text-[11px] text-white"
               />
+                {builderTarget && (
+                  <button
+                    onClick={() => {
+                      setBuilderTarget(null);
+                      setPickerQuery("");
+                    }}
+                    className="ml-auto text-[10px] text-rose-400 hover:text-rose-300"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Episode number + audio */}

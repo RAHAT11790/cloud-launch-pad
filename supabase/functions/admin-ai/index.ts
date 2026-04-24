@@ -332,11 +332,50 @@ const tools = [
 ];
 
 // ---------------- Plan executor ----------------
+// Resolve a seriesId — accepts an actual Firebase key OR a (partial) title.
+// Returns the real Firebase key, or null if nothing matches.
+async function resolveSeriesId(
+  collection: string,
+  rawId: string,
+): Promise<{ id: string | null; candidates: { id: string; title: string }[] }> {
+  if (!rawId) return { id: null, candidates: [] };
+  // 1) Direct hit
+  const direct = await fbGet(`${collection}/${rawId}`);
+  if (direct) return { id: rawId, candidates: [] };
+  // 2) Search whole collection
+  const all: any = await fbGet(collection);
+  if (!all || typeof all !== "object") return { id: null, candidates: [] };
+  const needle = rawId.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const list = Object.entries(all).map(([id, v]: [string, any]) => ({
+    id,
+    title: String(v?.title || v?.name || ""),
+    norm: String(v?.title || v?.name || "").toLowerCase().replace(/[^a-z0-9]/g, ""),
+  }));
+  // exact title
+  const exact = list.find((x) => x.norm === needle);
+  if (exact) return { id: exact.id, candidates: [] };
+  // contains
+  const matches = list.filter((x) => x.norm && (x.norm.includes(needle) || needle.includes(x.norm)));
+  if (matches.length === 1) return { id: matches[0].id, candidates: [] };
+  if (matches.length > 1)
+    return { id: null, candidates: matches.slice(0, 5).map((m) => ({ id: m.id, title: m.title })) };
+  return { id: null, candidates: [] };
+}
+
 async function executeOperation(op: any) {
   const { name, args } = op;
   switch (name) {
     case "add_episode": {
-      const { collection, seriesId, seasonNumber, episodeNumber, title, link, link480, link720, link1080, link4k } = args;
+      const { collection, seasonNumber, episodeNumber, title, link, link480, link720, link1080, link4k } = args;
+      const resolved = await resolveSeriesId(collection, args.seriesId);
+      if (!resolved.id) {
+        const hint =
+          resolved.candidates.length > 0
+            ? ` Did you mean: ${resolved.candidates.map((c) => `${c.title} (${c.id})`).join(" | ")}?`
+            : "";
+        throw new Error(`Series '${args.seriesId}' not found.${hint}`);
+      }
+      const seriesId = resolved.id;
       const ep: Record<string, any> = { episodeNumber, title: title || `Episode ${episodeNumber}` };
       if (link) ep.link = link;
       if (link480) ep.link480 = link480;
@@ -359,9 +398,12 @@ async function executeOperation(op: any) {
       await fbPut(epPath, epList);
       return { ok: true, message: `Episode ${episodeNumber} added to ${seriesId} S${seasonNumber}` };
     }
-    case "edit_series":
-      await fbPatch(`${args.collection}/${args.seriesId}`, args.patch);
-      return { ok: true, message: `${args.seriesId} updated` };
+    case "edit_series": {
+      const r = await resolveSeriesId(args.collection, args.seriesId);
+      if (!r.id) throw new Error(`Series '${args.seriesId}' not found`);
+      await fbPatch(`${args.collection}/${r.id}`, args.patch);
+      return { ok: true, message: `${r.id} updated` };
+    }
     case "delete_item":
       await fbDelete(args.path);
       return { ok: true, message: `Deleted ${args.path}` };
@@ -386,13 +428,22 @@ async function executeOperation(op: any) {
     }
     case "send_telegram": {
       const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-post`;
+      const resolved = await resolveSeriesId(args.collection, args.seriesId);
+      if (!resolved.id) throw new Error(`Series '${args.seriesId}' not found`);
+      const series: any = await fbGet(`${args.collection}/${resolved.id}`);
       const r = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
         },
-        body: JSON.stringify(args),
+        body: JSON.stringify({
+          collection: args.collection,
+          seriesId: resolved.id,
+          chatId: series?.telegramChatId,
+          caption: args.message || `🆕 ${series?.title || resolved.id}`,
+          photoUrl: series?.poster || series?.backdrop,
+        }),
       });
       return { ok: r.ok, message: r.ok ? "Telegram posted" : `TG error ${r.status}` };
     }
@@ -473,12 +524,26 @@ async function executeOperation(op: any) {
       return { ok: true, message: `Created ${title} (${id}) — Hindi Official, ${seasons.length} season skeleton${seasons.length !== 1 ? "s" : ""}` };
     }
     case "bulk_add_episodes": {
-      const { collection, seriesId, seasonNumber, episodes, trim = true } = args;
+      const { collection, seasonNumber, episodes, trim = true } = args;
+      const resolved = await resolveSeriesId(collection, args.seriesId);
+      if (!resolved.id) {
+        const hint =
+          resolved.candidates.length > 0
+            ? ` Did you mean: ${resolved.candidates.map((c) => `${c.title} (${c.id})`).join(" | ")}?`
+            : "";
+        throw new Error(`Series '${args.seriesId}' not found in ${collection}.${hint}`);
+      }
+      const seriesId = resolved.id;
       const seasonsPath = `${collection}/${seriesId}/seasons`;
       const seasons = (await fbGet(seasonsPath)) || [];
       const seasonsArr = Array.isArray(seasons) ? seasons : Object.values(seasons);
-      const sIdx = seasonsArr.findIndex((s: any) => s?.seasonNumber === seasonNumber);
-      if (sIdx < 0) throw new Error(`Season ${seasonNumber} not found in ${seriesId}`);
+      let sIdx = seasonsArr.findIndex((s: any) => s?.seasonNumber === seasonNumber);
+      if (sIdx < 0) {
+        // Auto-create the season if it's missing
+        seasonsArr.push({ seasonNumber, name: `Season ${seasonNumber}`, episodes: [] });
+        sIdx = seasonsArr.length - 1;
+        await fbPut(seasonsPath, seasonsArr);
+      }
       const newEps = episodes
         .map((e: any) => {
           const out: Record<string, any> = {
@@ -512,9 +577,17 @@ async function executeOperation(op: any) {
       };
     }
     case "notify_and_telegram": {
-      const { collection, seriesId, seasonNumber, episodeNumber, customMessage } = args;
+      const { collection, seasonNumber, episodeNumber, customMessage } = args;
+      const resolved = await resolveSeriesId(collection, args.seriesId);
+      if (!resolved.id) {
+        const hint =
+          resolved.candidates.length > 0
+            ? ` Did you mean: ${resolved.candidates.map((c) => `${c.title} (${c.id})`).join(" | ")}?`
+            : "";
+        throw new Error(`Series '${args.seriesId}' not found.${hint}`);
+      }
+      const seriesId = resolved.id;
       const series: any = await fbGet(`${collection}/${seriesId}`);
-      if (!series) throw new Error(`Series ${seriesId} not found`);
       const title = series.title || series.name || seriesId;
       const epLabel = seasonNumber && episodeNumber ? ` — S${seasonNumber} EP${episodeNumber}` : "";
       const msg = customMessage || `🆕 New episode: ${title}${epLabel}`;
@@ -542,7 +615,15 @@ async function executeOperation(op: any) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
         },
-        body: JSON.stringify({ collection, seriesId, message: msg, seasonNumber, episodeNumber }),
+        body: JSON.stringify({
+          collection,
+          seriesId,
+          chatId: series.telegramChatId, // optional override per series
+          caption: msg,
+          photoUrl: series.poster || series.backdrop,
+          seasonNumber,
+          episodeNumber,
+        }),
       });
       return {
         ok: fcmRes.ok || tgRes.ok,
