@@ -398,9 +398,12 @@ async function executeOperation(op: any) {
       await fbPut(epPath, epList);
       return { ok: true, message: `Episode ${episodeNumber} added to ${seriesId} S${seasonNumber}` };
     }
-    case "edit_series":
-      await fbPatch(`${args.collection}/${args.seriesId}`, args.patch);
-      return { ok: true, message: `${args.seriesId} updated` };
+    case "edit_series": {
+      const r = await resolveSeriesId(args.collection, args.seriesId);
+      if (!r.id) throw new Error(`Series '${args.seriesId}' not found`);
+      await fbPatch(`${args.collection}/${r.id}`, args.patch);
+      return { ok: true, message: `${r.id} updated` };
+    }
     case "delete_item":
       await fbDelete(args.path);
       return { ok: true, message: `Deleted ${args.path}` };
@@ -425,13 +428,22 @@ async function executeOperation(op: any) {
     }
     case "send_telegram": {
       const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-post`;
+      const resolved = await resolveSeriesId(args.collection, args.seriesId);
+      if (!resolved.id) throw new Error(`Series '${args.seriesId}' not found`);
+      const series: any = await fbGet(`${args.collection}/${resolved.id}`);
       const r = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
         },
-        body: JSON.stringify(args),
+        body: JSON.stringify({
+          collection: args.collection,
+          seriesId: resolved.id,
+          chatId: series?.telegramChatId,
+          caption: args.message || `🆕 ${series?.title || resolved.id}`,
+          photoUrl: series?.poster || series?.backdrop,
+        }),
       });
       return { ok: r.ok, message: r.ok ? "Telegram posted" : `TG error ${r.status}` };
     }
