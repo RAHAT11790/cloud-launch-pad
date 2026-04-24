@@ -562,7 +562,7 @@ export const ensureFreshFCMToken = async (userId: string): Promise<void> => {
     const tokenList = Object.values(tokens).filter((e: any) => e?.token);
     const user = userSnap.val() || {};
     const STALE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-    const newest = tokenList.reduce((max: number, e: any) => Math.max(max, Number(e?.updatedAt || 0)), 0);
+    const newest = tokenList.reduce<number>((max, e: any) => Math.max(max, Number(e?.updatedAt || 0)), 0);
     const noToken = tokenList.length === 0;
     const tooOld = newest > 0 && Date.now() - newest > STALE_MS;
     const flaggedStale =
