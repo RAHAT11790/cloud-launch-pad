@@ -856,6 +856,45 @@ async function handleText(chatId: number, text: string) {
     return;
   }
 
+  // --- Add new anime: TMDB search ---
+  if (s.step === "addnew_query") {
+    const results = await tmdbSearch(t);
+    if (results.length === 0) {
+      await tgSend(
+        chatId,
+        `❌ TMDB এ "<b>${escapeHtml(t)}</b>" পাওয়া যায়নি। অন্য নাম try করুন।`,
+        {
+          reply_markup: {
+            inline_keyboard: [[{ text: "⬅ Back", callback_data: "act:home" }]],
+          },
+        },
+      );
+      return;
+    }
+    // Save tmdb candidates in session for picking
+    s.lastResults = results.map((r: any) => ({
+      id: String(r.id),
+      collection: r.media_type === "movie" ? "movies" : "webseries",
+      title: r.name || r.title || "",
+    }));
+    await setSession(chatId, s);
+    if (results.length === 1) {
+      await showTmdbPreview(chatId, results[0].media_type, results[0].id);
+      return;
+    }
+    const rows = results.map((r: any) => [
+      {
+        text: `${r.media_type === "tv" ? "📺" : "🎬"} ${(r.name || r.title || "").slice(0, 50)} ${r.first_air_date || r.release_date ? `(${(r.first_air_date || r.release_date || "").slice(0, 4)})` : ""}`,
+        callback_data: `tmdbpick:${r.media_type}:${r.id}`,
+      },
+    ]);
+    rows.push([{ text: "⬅ Back", callback_data: "act:home" }]);
+    await tgSend(chatId, `🔎 TMDB তে <b>${results.length}</b>টি ফলাফল। একটা select করুন:`, {
+      reply_markup: { inline_keyboard: rows },
+    });
+    return;
+  }
+
   // --- Quality link input ---
   if (s.step === "add_wait_link" || s.step === "edit_wait_link") {
     const q = s.pendingQuality || "default";
