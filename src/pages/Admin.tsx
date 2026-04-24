@@ -682,6 +682,17 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
 
       {/* Per-Function Cards */}
       <div className={`${glassCard} p-4 mb-4`}>
+        <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2.5 mb-3">
+          <p className="text-[10px] text-cyan-300 leading-relaxed">
+            💡 <b>Tip:</b> প্রতিটি ফাংশনের জন্য Supabase URL এই প্যাটার্নে হবে:
+            <br />
+            <code className="text-[9px] bg-black/30 px-1 py-0.5 rounded text-cyan-200">
+              {SUPABASE_URL}/functions/v1/<b>function-name</b>
+            </code>
+            <br />
+            নিচের প্রতিটা ফাংশনের পাশে "Use Supabase" বাটন আছে — এক ক্লিকে paste হয়ে যাবে।
+          </p>
+        </div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold flex items-center gap-2">
             <Zap size={14} className="text-orange-400" /> Functions
