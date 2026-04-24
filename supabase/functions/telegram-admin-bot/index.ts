@@ -736,7 +736,10 @@ async function confirmAndSend(chatId: number) {
     (data.rating ? `⭐ ${data.rating}\n` : "") +
     (data.category ? `📂 ${data.category}\n` : "");
 
-  // Call telegram-post function (it handles chatId resolution from Firebase)
+  // Resolve chatId: Firebase settings → fallback to admin chat
+  let postChatId = await fbGet("settings/telegramChatId");
+  if (!postChatId) postChatId = chatId; // fallback to current admin chat
+
   const photoUrl = data.backdrop || data.poster || FALLBACK_POSTER;
   const postRes = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
     method: "POST",
@@ -746,6 +749,7 @@ async function confirmAndSend(chatId: number) {
       Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     },
     body: JSON.stringify({
+      chatId: postChatId,
       caption,
       photoUrl,
       inlineButtons: buttons,
