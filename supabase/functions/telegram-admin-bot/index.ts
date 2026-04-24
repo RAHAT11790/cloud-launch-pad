@@ -156,6 +156,11 @@ type Session = {
     | "manual_4k"
     | "manual_episode_number"
     | "post_after_save"
+    | "verify_refix_def"
+    | "verify_refix_480"
+    | "verify_refix_720"
+    | "verify_refix_1080"
+    | "verify_refix_4k"
     | null;
   collection?: "webseries" | "movies"; // RS only
   seriesId?: string;
@@ -164,6 +169,7 @@ type Session = {
   addingLinks?: AddingLinks;
   pendingOps?: any[]; // AI proposed
   pendingSave?: { collection: string; seriesId: string; seasonNumber: number; episodeNumber: number; links: AddingLinks }; // manual confirmation pending
+  verifyResults?: any[];
 };
 async function getSession(chatId: number): Promise<Session> {
   return ((await fbGet(`telegramBotSessions/${chatId}`)) as Session) || {};
