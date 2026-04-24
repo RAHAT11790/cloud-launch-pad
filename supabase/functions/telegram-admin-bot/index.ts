@@ -328,13 +328,14 @@ async function buildWebsiteCaption(opts: {
 }
 
 // Send to ALL configured channels via the existing telegram-post edge function.
-// Returns { posted, failed, errors }.
+// Also saves a record in Firebase telegramPosts/<key> so the website URL Changer can edit/delete it.
 async function postToAllChannels(payload: {
   caption: string;
   photoUrl?: string;
   inlineButtons: Array<{ text: string; url: string }>;
   collection?: string;
   seriesId?: string;
+  title?: string;
 }): Promise<{ posted: number; failed: number; errors: string[] }> {
   const channels = await getPostChannelIds();
   if (channels.length === 0) {
@@ -364,8 +365,23 @@ async function postToAllChannels(payload: {
         }),
       });
       const j = await r.json().catch(() => ({}));
-      if (r.ok && !j?.error) posted++;
-      else {
+      if (r.ok && !j?.error) {
+        posted++;
+        // Mirror website behaviour — save record so URL Changer can manage it later
+        const msgId = j?.result?.message_id || j?.message_id;
+        if (msgId) {
+          const safeKey = `${String(ch).replace(/[^a-zA-Z0-9_-]/g, "_")}_${msgId}`;
+          await fbPut(`telegramPosts/${safeKey}`, {
+            chatId: ch,
+            messageId: msgId,
+            title: payload.title || "",
+            poster: payload.photoUrl || "",
+            buttons: payload.inlineButtons,
+            sentAt: Date.now(),
+            source: "bot",
+          });
+        }
+      } else {
         failed++;
         errors.push(`${ch}: ${j?.error || "API error"}`);
       }
@@ -969,6 +985,7 @@ async function bulkConfirmAndPost(chatId: number, onlyOk: boolean) {
       inlineButtons: buttons,
       collection,
       seriesId,
+      title: data.title || "Untitled",
     });
     if (res.posted > 0) posted++;
     if (res.failed > 0) {
@@ -1075,6 +1092,7 @@ async function showEpisode(
       { text: "📤 Resend to Telegram", callback_data: `resend:${collection}:${id}:${seasonIdx}:${epIdx}` },
     ],
     [
+      { text: "🧹 Delete from Channel", callback_data: `delch:${collection}:${id}:${seasonIdx}:${epIdx}` },
       { text: "🗑 Delete EP", callback_data: `delep:${collection}:${id}:${seasonIdx}:${epIdx}` },
     ],
     [
@@ -1353,6 +1371,7 @@ async function confirmAndSend(chatId: number) {
     inlineButtons: buttons,
     collection: s.collection,
     seriesId: s.seriesId,
+    title: title,
   });
 
   await clearSession(chatId);
@@ -1939,6 +1958,7 @@ async function handleCallback(chatId: number, data: string, cbId: string, messag
       inlineButtons: buttons,
       collection: col,
       seriesId: id,
+      title: d.title || "Untitled",
     });
     if (res.posted > 0 && res.failed === 0) {
       await tgSend(
@@ -1956,6 +1976,51 @@ async function handleCallback(chatId: number, data: string, cbId: string, messag
         `❌ Resend failed:\n<code>${escapeHtml(res.errors.slice(0, 3).join("\n") || "unknown")}</code>\n\n<i>Configure channels in website Admin → Telegram Post.</i>`,
       );
     }
+    return;
+  }
+
+  // delch:collection:id:sIdx:eIdx → Delete this series' Telegram posts from ALL channels
+  // (Looks up records saved at telegramPosts/* — matches by title.)
+  if (data.startsWith("delch:")) {
+    const [, col, id] = data.split(":");
+    const d = await fbGet(`${col}/${id}`);
+    const title = d?.title || "";
+    if (!title) {
+      await tgSend(chatId, "❌ Series title missing — cannot match channel posts.");
+      return;
+    }
+    await tgSend(chatId, `⏳ Deleting <b>${escapeHtml(title)}</b> posts from all channels...`);
+    const allPosts = ((await fbGet("telegramPosts")) as Record<string, any>) || {};
+    const matches = Object.entries(allPosts).filter(([, p]: any) =>
+      p?.title && String(p.title).toLowerCase() === title.toLowerCase(),
+    );
+    if (matches.length === 0) {
+      await tgSend(chatId, "ℹ️ No saved Telegram post records for this title.");
+      return;
+    }
+    let deleted = 0, failed = 0;
+    for (const [key, p] of matches) {
+      try {
+        const r = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ action: "delete-message", chatId: p.chatId, messageId: p.messageId }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (j?.ok) {
+          deleted++;
+          await fbPut(`telegramPosts/${key}`, null);
+        } else failed++;
+      } catch { failed++; }
+    }
+    await tgSend(
+      chatId,
+      `🧹 <b>Done.</b>\n✅ Deleted: ${deleted}\n❌ Failed: ${failed}`,
+    );
     return;
   }
 
@@ -2078,6 +2143,7 @@ async function handleCallback(chatId: number, data: string, cbId: string, messag
       inlineButtons: buttons,
       collection: col,
       seriesId: id,
+      title: d.title || "Untitled",
     });
     if (res.posted > 0)
       await tgSend(chatId, `✅ Posted to ${res.posted} channel(s).${res.failed ? ` (${res.failed} failed)` : ""}`);
