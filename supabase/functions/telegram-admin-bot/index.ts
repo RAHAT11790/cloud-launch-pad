@@ -1127,23 +1127,86 @@ async function handleCallback(cb: any) {
     return showFinishPreview(chatId);
   }
   if (data === "manual:back") return showManualLinkPanel(chatId);
-  if (data === "save:allow") {
+
+  // ----- Verification flow handlers -----
+  if (data.startsWith("verifix:")) {
+    const what = data.split(":")[1];
+    const sess = await getSession(chatId);
+    if (what === "retry") {
+      const links = sess.pendingSave?.links || sess.addingLinks || {};
+      return runLinkVerification(chatId, links);
+    }
+    if (what === "skipall") {
+      // Drop all broken links from pendingSave then go to confirm
+      const broken = (sess.verifyResults || []).filter((r: any) => !r.ok);
+      const links = { ...(sess.pendingSave?.links || {}) };
+      for (const b of broken) delete links[b.quality as keyof AddingLinks];
+      if (!Object.values(links).some(Boolean)) {
+        await tgSend(chatId, "❌ সব link skip করলে কিছুই save করার নেই।");
+        return showManualLinkPanel(chatId);
+      }
+      if (sess.pendingSave) {
+        await patchSession(chatId, { pendingSave: { ...sess.pendingSave, links } });
+      }
+      return showConfirmDialog(chatId);
+    }
+    // Re-add a specific quality
+    const map: Record<string, Session["awaiting"]> = {
+      def: "verify_refix_def",
+      "480": "verify_refix_480",
+      "720": "verify_refix_720",
+      "1080": "verify_refix_1080",
+      "4k": "verify_refix_4k",
+    };
+    if (map[what]) {
+      // Clear that quality from addingLinks/pendingSave so user re-pastes
+      const links = { ...(sess.addingLinks || sess.pendingSave?.links || {}) };
+      delete links[what as keyof AddingLinks];
+      await patchSession(chatId, { addingLinks: links, awaiting: map[what] });
+      await tgSend(chatId, `✏️ <b>${what === "def" ? "Default" : what + (what === "4k" ? "" : "p")}</b> এর tick উঠে গেছে। নতুন link পাঠান:`);
+      return;
+    }
+  }
+  if (data.startsWith("veriskip:")) {
+    const q = data.split(":")[1];
+    const sess = await getSession(chatId);
+    const links = { ...(sess.pendingSave?.links || {}) };
+    delete links[q as keyof AddingLinks];
+    if (sess.pendingSave) {
+      await patchSession(chatId, { pendingSave: { ...sess.pendingSave, links } });
+    }
+    // Re-render verification dialog with updated state
+    await tgSend(chatId, `⏭ ${q} skip করা হলো।`);
+    return runLinkVerification(chatId, links);
+  }
+
+  if (data === "confirm:save" || data === "save:allow") {
     const sess = await getSession(chatId);
     if (!sess.pendingSave) { await tgSend(chatId, "❌ কিছু pending নেই।"); return; }
     const ps = sess.pendingSave;
+    if (!Object.values(ps.links).some(Boolean)) {
+      await tgSend(chatId, "❌ Save করার মতো কোনো link নেই।");
+      return;
+    }
     await saveEpisodeMulti(ps.collection, ps.seriesId, ps.seasonNumber, ps.episodeNumber, ps.links);
-    await patchSession(chatId, { addingLinks: {}, episodeNumber: undefined, awaiting: "post_after_save" });
-    await tgSend(chatId, `✅ EP ${ps.episodeNumber} saved!\n\nএখন Telegram channel এ post করতে চান?`, {
-      reply_markup: kb([[
-        { text: "✅ Yes, Post", data: `post:${ps.collection}:${ps.seriesId}:${ps.seasonNumber}:${ps.episodeNumber}` },
-        { text: "❌ No", data: "menu" },
-      ]]),
-    });
+    await patchSession(chatId, { addingLinks: {}, episodeNumber: undefined, awaiting: "post_after_save", pendingSave: undefined, verifyResults: undefined });
+    const series: any = await fbGet(`${ps.collection}/${ps.seriesId}`);
+    const photo = series?.poster || series?.backdrop || FALLBACK_POSTER;
+    await tgSendPhoto(chatId, photo,
+      `✅ <b>Saved!</b>\n\n<b>${series?.title || ps.seriesId}</b>\nSeason ${ps.seasonNumber} — EP ${ps.episodeNumber}\n\nএখন Telegram channel এ post করতে চান?`,
+      {
+        reply_markup: kb([
+          [{ text: "✅ Yes, Post to Telegram", data: `post:${ps.collection}:${ps.seriesId}:${ps.seasonNumber}:${ps.episodeNumber}` }],
+          [{ text: "❌ No, Skip", data: "menu" }],
+        ]),
+      });
     return;
   }
   if (data === "save:deny") {
-    await patchSession(chatId, { pendingSave: undefined });
-    await tgSend(chatId, "❌ Cancelled. কিছু save হয়নি।");
+    await patchSession(chatId, { pendingSave: undefined, verifyResults: undefined });
+    await tgSend(chatId, "❌ Cancelled. কিছু save হয়নি।", {
+      reply_markup: kb([[{ text: "✏️ Back to Edit", data: "manual:back" }, { text: "🏠 Menu", data: "menu" }]]),
+    });
     return;
   }
   if (data.startsWith("post:")) {
