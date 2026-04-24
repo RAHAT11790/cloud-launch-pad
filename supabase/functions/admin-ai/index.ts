@@ -441,6 +441,7 @@ async function executeOperation(op: any) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          apikey: String(Deno.env.get("SUPABASE_ANON_KEY") || ""),
           Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
         },
         body: JSON.stringify({
@@ -452,7 +453,13 @@ async function executeOperation(op: any) {
         }),
       });
       const j = await r.json().catch(() => ({}));
-      return { ok: r.ok, message: r.ok ? "Notification sent" : `FCM error: ${JSON.stringify(j)}` };
+      if (!r.ok) {
+        return { ok: false, message: `FCM error: ${JSON.stringify(j)}` };
+      }
+      return {
+        ok: true,
+        message: `Push checked ${Number(j?.totalTokens || 0)} token · success ${Number(j?.success || 0)} · failed ${Number(j?.failed || 0)}${Number(j?.invalidRemoved || 0) > 0 ? ` · removed ${Number(j.invalidRemoved)}` : ""}`,
+      };
     }
     case "send_telegram": {
       const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-post`;
@@ -463,6 +470,7 @@ async function executeOperation(op: any) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          apikey: String(Deno.env.get("SUPABASE_ANON_KEY") || ""),
           Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
         },
         body: JSON.stringify({
@@ -473,7 +481,8 @@ async function executeOperation(op: any) {
           photoUrl: series?.poster || series?.backdrop,
         }),
       });
-      return { ok: r.ok, message: r.ok ? "Telegram posted" : `TG error ${r.status}` };
+      const tg = await r.json().catch(() => ({}));
+      return { ok: r.ok, message: r.ok ? "Telegram posted" : `TG error ${r.status}: ${JSON.stringify(tg)}` };
     }
     case "release_weekly": {
       const e: any = await fbGet(`weeklyPending/${args.seriesId}`);
