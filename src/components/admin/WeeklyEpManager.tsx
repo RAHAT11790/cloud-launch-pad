@@ -25,7 +25,7 @@ export function WeeklyEpTabButton({
   useEffect(() => {
     const unsub = onValue(ref(db, "weeklyPending"), (snap) => {
       const data = snap.val() || {};
-      const entries: WeeklyPendingEntry[] = Object.values(data).filter(shouldShowWeeklyEntry);
+      const entries = (Object.values(data) as WeeklyPendingEntry[]).filter(shouldShowWeeklyEntry);
       const pending = entries.filter((e) => {
         const s = computeWeeklyStatus(e);
         return s.isPending && !s.isReleasedRecently && !s.isStale;
@@ -78,7 +78,7 @@ export function WeeklyEpManager({
   useEffect(() => {
     const unsub = onValue(ref(db, "weeklyPending"), (snap) => {
       const data = snap.val() || {};
-      const list: WeeklyPendingEntry[] = Object.values(data).filter(shouldShowWeeklyEntry);
+      const list = (Object.values(data) as WeeklyPendingEntry[]).filter(shouldShowWeeklyEntry);
       list.sort((a, b) => a.nextReleaseAt - b.nextReleaseAt);
       setEntries(list);
     });

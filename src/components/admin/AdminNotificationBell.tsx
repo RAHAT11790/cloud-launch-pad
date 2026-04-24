@@ -54,7 +54,7 @@ export function AdminNotificationBell() {
 
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 30_000);
-    const u1 = onValue(ref(db, "weeklyPending"), (s) => setWeekly(Object.values(s.val() || {}).filter(shouldShowWeeklyEntry)));
+    const u1 = onValue(ref(db, "weeklyPending"), (s) => setWeekly((Object.values(s.val() || {}) as WeeklyPendingEntry[]).filter(shouldShowWeeklyEntry)));
     const u2 = onValue(ref(db, "bkashPayments"), (s) => {
       const v = s.val() || {};
       setBkash(Object.entries(v).map(([id, x]: [string, any]) => ({ id, ...x })));
