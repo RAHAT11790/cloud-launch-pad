@@ -730,9 +730,20 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                   <input
                     value={override.customUrl || ""}
                     onChange={(e) => setFnOverrides(prev => ({ ...prev, [fn.key]: { ...override, customUrl: e.target.value } }))}
-                    placeholder={activeUrl || "কাস্টম URL (ঐচ্ছিক)"}
+                    placeholder={activeUrl || "Paste full function URL..."}
                     className={`${inputClass} !text-[10px] !py-1.5 flex-1`}
                   />
+                  <button
+                    onClick={() => {
+                      const sbUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/${fn.endpoint}`;
+                      setFnOverrides(prev => ({ ...prev, [fn.key]: { ...override, customUrl: sbUrl } }));
+                      saveCustomUrl(fn.key, sbUrl);
+                    }}
+                    className={`${btnSecondary} !px-2 !py-1 !text-[9px] whitespace-nowrap`}
+                    title="Use Supabase URL"
+                  >
+                    ⚡ SB
+                  </button>
                   <button onClick={() => saveCustomUrl(fn.key, override.customUrl || "")}
                     className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
                     <Save size={10} />
