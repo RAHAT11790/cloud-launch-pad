@@ -779,7 +779,123 @@ async function confirmAndSend(chatId: number) {
   }
 }
 
-// ---------- Custom button add flow ----------
+// ---------- Add New Anime (TMDB) ----------
+async function showTmdbPreview(chatId: number, mediaType: string, tmdbId: number) {
+  const d = await tmdbDetails(mediaType, tmdbId);
+  if (!d) {
+    await tgSend(chatId, "❌ TMDB ডেটা পাওয়া যায়নি।", {
+      reply_markup: { inline_keyboard: [[{ text: "⬅ Back", callback_data: "act:home" }]] },
+    });
+    return;
+  }
+  const title = d.name || d.title || "Untitled";
+  const year = (d.first_air_date || d.release_date || "").slice(0, 4);
+  const rating = d.vote_average ? Number(d.vote_average).toFixed(1) : "";
+  const genres = (d.genres || []).map((g: any) => g.name).join(", ");
+  const overview = (d.overview || "").slice(0, 300);
+  const poster = d.backdrop_path
+    ? `https://image.tmdb.org/t/p/original${d.backdrop_path}`
+    : d.poster_path
+      ? `https://image.tmdb.org/t/p/original${d.poster_path}`
+      : FALLBACK_POSTER;
+
+  // Save preview data in session
+  const s = await getSession(chatId);
+  s.step = "addnew_dub";
+  s.customButton = undefined;
+  // store TMDB data as a temp blob in session via fbPut path
+  await fbPut(`telegramAdminTemp/${chatId}`, {
+    mediaType,
+    tmdbId,
+    title,
+    year,
+    rating,
+    genres,
+    overview,
+    poster:
+      d.backdrop_path
+        ? `https://image.tmdb.org/t/p/original${d.backdrop_path}`
+        : d.poster_path
+          ? `https://image.tmdb.org/t/p/w500${d.poster_path}`
+          : "",
+    backdrop:
+      d.backdrop_path ? `https://image.tmdb.org/t/p/original${d.backdrop_path}` : "",
+    language: (d.original_language || "").toUpperCase(),
+  });
+  await setSession(chatId, s);
+
+  const caption =
+    `<b>🎬 ${escapeHtml(title)}</b>${year ? ` (${year})` : ""}\n` +
+    `<b>━━━━━━━━━━━━━━━</b>\n` +
+    (rating ? `⭐ <b>${rating}</b>\n` : "") +
+    (genres ? `📂 ${escapeHtml(genres)}\n` : "") +
+    (overview ? `\n📝 <i>${escapeHtml(overview)}</i>\n` : "") +
+    `\n<b>🗣 Dub type select করুন:</b>`;
+
+  await tgSendPhoto(chatId, poster, caption, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "🎙 Hindi Dub", callback_data: "dub:Hindi Dub" },
+          { text: "🎙 English Dub", callback_data: "dub:English Dub" },
+        ],
+        [
+          { text: "📝 Subbed", callback_data: "dub:Subbed" },
+          { text: "🎙 Multi Audio", callback_data: "dub:Multi Audio" },
+        ],
+        [{ text: "⬅ Back", callback_data: "act:addnew" }],
+      ],
+    },
+  });
+}
+
+async function saveNewAnime(chatId: number, dubType: string) {
+  const tmp: any = await fbGet(`telegramAdminTemp/${chatId}`);
+  if (!tmp) {
+    await tgSend(chatId, "❌ Session expired. আবার শুরু করুন।");
+    return;
+  }
+  const collection = tmp.mediaType === "movie" ? "movies" : "webseries";
+  // Generate Firebase push id
+  const pushRes = await fetch(`${FIREBASE_DB}/${collection}.json`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: tmp.title,
+      year: tmp.year,
+      rating: tmp.rating,
+      category: tmp.genres,
+      poster: tmp.poster,
+      backdrop: tmp.backdrop || tmp.poster,
+      language: tmp.language,
+      dubType,
+      tmdbId: tmp.tmdbId,
+      type: collection === "movies" ? "movie" : "series",
+      visibility: "public",
+      seasons: [],
+      storyline: tmp.overview,
+      updatedAt: Date.now(),
+    }),
+  });
+  const pushData = await pushRes.json().catch(() => ({}));
+  const newId = pushData?.name;
+  await fbDelete(`telegramAdminTemp/${chatId}`);
+  await clearSession(chatId);
+
+  if (!newId) {
+    await tgSend(chatId, "❌ সেভ করা যায়নি। আবার চেষ্টা করুন।", {
+      reply_markup: startKeyboard(),
+    });
+    return;
+  }
+  await tgSend(
+    chatId,
+    `✅ <b>${escapeHtml(tmp.title)}</b> যুক্ত হয়েছে (${dubType})!\n\n<i>এবার Add Season → Add Episode করুন।</i>`,
+  );
+  await showAnime(chatId, collection, newId);
+}
+
+
 async function startAddButton(chatId: number) {
   const s = await getSession(chatId);
   s.step = "btn_text";
