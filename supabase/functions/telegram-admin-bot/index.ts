@@ -719,6 +719,38 @@ async function showAnimeAssistantHint(
   );
 }
 
+async function showBrowseAll(chatId: number, page = 0) {
+  const PAGE = 12;
+  const items: { collection: string; id: string; title: string; eps: number }[] = [];
+  for (const collection of ["webseries", "movies"] as const) {
+    const all: any = await fbGet(collection);
+    if (!all || typeof all !== "object") continue;
+    for (const [id, v] of Object.entries(all) as [string, any][]) {
+      const title = String(v?.title || id);
+      const seasons = Array.isArray(v?.seasons) ? v.seasons : Object.values(v?.seasons || {});
+      const eps = seasons.reduce((acc: number, s: any) => {
+        const e = Array.isArray(s?.episodes) ? s.episodes : Object.values(s?.episodes || {});
+        return acc + e.length;
+      }, 0);
+      items.push({ collection, id, title, eps });
+    }
+  }
+  items.sort((a, b) => a.title.localeCompare(b.title));
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE));
+  const slice = items.slice(page * PAGE, (page + 1) * PAGE);
+  const rows = slice.map((it) => [{
+    text: `${it.collection === "movies" ? "🎬" : "📺"} ${it.title}${it.collection === "webseries" ? ` (${it.eps} ep)` : ""}`,
+    data: `pick:${it.collection}:${it.id}`,
+  }]);
+  const nav: any[] = [];
+  if (page > 0) nav.push({ text: "⬅ Prev", data: `browse:${page - 1}` });
+  nav.push({ text: `${page + 1}/${totalPages}`, data: "browse:all" });
+  if (page < totalPages - 1) nav.push({ text: "Next ➡", data: `browse:${page + 1}` });
+  rows.push(nav);
+  rows.push([{ text: "🔎 Search", data: "search" }, { text: "🏠 Menu", data: "menu" }]);
+  await tgSend(chatId, `📂 <b>All RS Anime</b> (${items.length} total)\nPage ${page + 1} of ${totalPages}`, { reply_markup: kb(rows) });
+}
+
 async function showSearchPrompt(chatId: number) {
   await patchSession(chatId, { mode: "manual", awaiting: "search_anime" });
   await tgSend(
