@@ -19,7 +19,7 @@ import { WeeklyEpTabButton, WeeklyEpManager } from "@/components/admin/WeeklyEpM
 import { AdminAIManager } from "@/components/admin/AdminAIManager";
 import { AdminNotificationBell } from "@/components/admin/AdminNotificationBell";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service";
+type Section = "ai-manager" | "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service";
 
 interface CastMember {
   name: string;
@@ -1716,7 +1716,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [currentPin, setCurrentPin] = useState("");
 
   const [activeSection, setActiveSection] = useState<Section>(() => {
-    try { return (sessionStorage.getItem("rs_adminSection") as Section) || "dashboard"; } catch { return "dashboard"; }
+    try { return (sessionStorage.getItem("rs_adminSection") as Section) || "ai-manager"; } catch { return "ai-manager"; }
   });
 
 
@@ -2345,7 +2345,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   }, []);
 
   // Section history stack for back navigation
-  const [sectionHistory, setSectionHistory] = useState<Section[]>(["dashboard"]);
+  const [sectionHistory, setSectionHistory] = useState<Section[]>(["ai-manager"]);
   const savedScrollPos = useRef<number>(0);
 
   const showSection = (section: Section) => {
@@ -2407,6 +2407,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   };
 
   const sectionTitles: Record<Section, string> = {
+    "ai-manager": "AI Manager",
     dashboard: "Dashboard",
     categories: "Categories",
     webseries: "Web Series",
@@ -3763,7 +3764,8 @@ ${tgHashtags}`;
   const glassCard = "bg-[#16162A] border border-white/6 rounded-xl";
 
   const menuItems: { section: Section; icon: React.ReactNode; label: string; group?: string }[] = [
-    { section: "dashboard", icon: <LayoutDashboard size={16} />, label: "Dashboard", group: "Main Menu" },
+    { section: "ai-manager", icon: <Sparkles size={16} />, label: "AI Manager", group: "Main Menu" },
+    { section: "dashboard", icon: <LayoutDashboard size={16} />, label: "Dashboard" },
     { section: "categories", icon: <FolderOpen size={16} />, label: "Categories" },
     { section: "webseries", icon: <Film size={16} />, label: "Web Series" },
     { section: "movies", icon: <Video size={16} />, label: "Movies" },
