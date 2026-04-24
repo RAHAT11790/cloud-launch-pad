@@ -1322,6 +1322,27 @@ async function handleMessage(msg: any) {
     return showManualLinkPanel(chatId);
   }
 
+  // ---- Verification re-fix link inputs ----
+  const refixMap: Record<string, keyof AddingLinks> = {
+    verify_refix_def: "def",
+    verify_refix_480: "480",
+    verify_refix_720: "720",
+    verify_refix_1080: "1080",
+    verify_refix_4k: "4k",
+  };
+  if (sess.awaiting && refixMap[sess.awaiting]) {
+    if (!/^https?:\/\//i.test(text)) {
+      await tgSend(chatId, "❌ Valid URL দিন (https://...)।"); return;
+    }
+    const key = refixMap[sess.awaiting];
+    const newLinks = { ...(sess.addingLinks || sess.pendingSave?.links || {}), [key]: text };
+    // Update both addingLinks (so user can edit again) and pendingSave
+    const ps = sess.pendingSave ? { ...sess.pendingSave, links: newLinks } : undefined;
+    await patchSession(chatId, { addingLinks: newLinks, pendingSave: ps, awaiting: null });
+    await tgSend(chatId, `🔁 ${key} updated. পুনরায় verify চালাচ্ছি...`);
+    return runLinkVerification(chatId, newLinks);
+  }
+
   // ---- Auto paste ----
   if (sess.awaiting === "auto_paste" && sess.collection && sess.seriesId && sess.seasonNumber) {
     const blocks = text.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
