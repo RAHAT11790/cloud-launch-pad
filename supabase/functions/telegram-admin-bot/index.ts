@@ -1979,6 +1979,51 @@ async function handleCallback(chatId: number, data: string, cbId: string, messag
     return;
   }
 
+  // delch:collection:id:sIdx:eIdx → Delete this series' Telegram posts from ALL channels
+  // (Looks up records saved at telegramPosts/* — matches by title.)
+  if (data.startsWith("delch:")) {
+    const [, col, id] = data.split(":");
+    const d = await fbGet(`${col}/${id}`);
+    const title = d?.title || "";
+    if (!title) {
+      await tgSend(chatId, "❌ Series title missing — cannot match channel posts.");
+      return;
+    }
+    await tgSend(chatId, `⏳ Deleting <b>${escapeHtml(title)}</b> posts from all channels...`);
+    const allPosts = ((await fbGet("telegramPosts")) as Record<string, any>) || {};
+    const matches = Object.entries(allPosts).filter(([, p]: any) =>
+      p?.title && String(p.title).toLowerCase() === title.toLowerCase(),
+    );
+    if (matches.length === 0) {
+      await tgSend(chatId, "ℹ️ No saved Telegram post records for this title.");
+      return;
+    }
+    let deleted = 0, failed = 0;
+    for (const [key, p] of matches) {
+      try {
+        const r = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ action: "delete-message", chatId: p.chatId, messageId: p.messageId }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (j?.ok) {
+          deleted++;
+          await fbPut(`telegramPosts/${key}`, null);
+        } else failed++;
+      } catch { failed++; }
+    }
+    await tgSend(
+      chatId,
+      `🧹 <b>Done.</b>\n✅ Deleted: ${deleted}\n❌ Failed: ${failed}`,
+    );
+    return;
+  }
+
   // delep:collection:id:sIdx:eIdx
   if (data.startsWith("delep:")) {
     const [, col, id, sIdx, eIdx] = data.split(":");
