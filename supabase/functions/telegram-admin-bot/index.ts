@@ -328,13 +328,14 @@ async function buildWebsiteCaption(opts: {
 }
 
 // Send to ALL configured channels via the existing telegram-post edge function.
-// Returns { posted, failed, errors }.
+// Also saves a record in Firebase telegramPosts/<key> so the website URL Changer can edit/delete it.
 async function postToAllChannels(payload: {
   caption: string;
   photoUrl?: string;
   inlineButtons: Array<{ text: string; url: string }>;
   collection?: string;
   seriesId?: string;
+  title?: string;
 }): Promise<{ posted: number; failed: number; errors: string[] }> {
   const channels = await getPostChannelIds();
   if (channels.length === 0) {
@@ -364,8 +365,23 @@ async function postToAllChannels(payload: {
         }),
       });
       const j = await r.json().catch(() => ({}));
-      if (r.ok && !j?.error) posted++;
-      else {
+      if (r.ok && !j?.error) {
+        posted++;
+        // Mirror website behaviour — save record so URL Changer can manage it later
+        const msgId = j?.result?.message_id || j?.message_id;
+        if (msgId) {
+          const safeKey = `${String(ch).replace(/[^a-zA-Z0-9_-]/g, "_")}_${msgId}`;
+          await fbPut(`telegramPosts/${safeKey}`, {
+            chatId: ch,
+            messageId: msgId,
+            title: payload.title || "",
+            poster: payload.photoUrl || "",
+            buttons: payload.inlineButtons,
+            sentAt: Date.now(),
+            source: "bot",
+          });
+        }
+      } else {
         failed++;
         errors.push(`${ch}: ${j?.error || "API error"}`);
       }
