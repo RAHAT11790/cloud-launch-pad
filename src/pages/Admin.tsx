@@ -556,7 +556,17 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   // Per-function overrides from Firebase
   const [fnOverrides, setFnOverrides] = useState<Record<string, { enabled: boolean; customUrl: string }>>({});
 
-  const CORE_FUNCTIONS: { key: string; label: string; endpoint: string }[] = [];
+  const CORE_FUNCTIONS: { key: string; label: string; endpoint: string }[] = [
+    { key: "admin-ai", label: "🤖 Admin AI Agent", endpoint: "admin-ai" },
+    { key: "weekly-auto-detect", label: "📅 Weekly Auto-Detect", endpoint: "weekly-auto-detect" },
+    { key: "send-fcm", label: "🔔 Send FCM Notification", endpoint: "send-fcm" },
+    { key: "telegram-post", label: "📢 Telegram Post", endpoint: "telegram-post" },
+    { key: "rs-bot", label: "💬 RS Bot (Telegram)", endpoint: "rs-bot" },
+    { key: "send-otp-email", label: "📧 Send OTP Email", endpoint: "send-otp-email" },
+    { key: "shorten-arolinks", label: "🔗 Shorten AroLinks", endpoint: "shorten-arolinks" },
+    { key: "shorten-shrinkme", label: "🔗 Shorten ShrinkMe", endpoint: "shorten-shrinkme" },
+    { key: "shorten-vplink", label: "🔗 Shorten VP Link", endpoint: "shorten-vplink" },
+  ];
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/edgeRouter"), (snap) => {
@@ -672,6 +682,17 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
 
       {/* Per-Function Cards */}
       <div className={`${glassCard} p-4 mb-4`}>
+        <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2.5 mb-3">
+          <p className="text-[10px] text-cyan-300 leading-relaxed">
+            💡 <b>Tip:</b> প্রতিটি ফাংশনের জন্য Supabase URL এই প্যাটার্নে হবে:
+            <br />
+            <code className="text-[9px] bg-black/30 px-1 py-0.5 rounded text-cyan-200">
+              {SUPABASE_URL}/functions/v1/<b>function-name</b>
+            </code>
+            <br />
+            নিচের প্রতিটা ফাংশনের পাশে "Use Supabase" বাটন আছে — এক ক্লিকে paste হয়ে যাবে।
+          </p>
+        </div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold flex items-center gap-2">
             <Zap size={14} className="text-orange-400" /> Functions
@@ -709,9 +730,20 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                   <input
                     value={override.customUrl || ""}
                     onChange={(e) => setFnOverrides(prev => ({ ...prev, [fn.key]: { ...override, customUrl: e.target.value } }))}
-                    placeholder={activeUrl || "কাস্টম URL (ঐচ্ছিক)"}
+                    placeholder={activeUrl || "Paste full function URL..."}
                     className={`${inputClass} !text-[10px] !py-1.5 flex-1`}
                   />
+                  <button
+                    onClick={() => {
+                      const sbUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/${fn.endpoint}`;
+                      setFnOverrides(prev => ({ ...prev, [fn.key]: { ...override, customUrl: sbUrl } }));
+                      saveCustomUrl(fn.key, sbUrl);
+                    }}
+                    className={`${btnSecondary} !px-2 !py-1 !text-[9px] whitespace-nowrap`}
+                    title="Use Supabase URL"
+                  >
+                    ⚡ SB
+                  </button>
                   <button onClick={() => saveCustomUrl(fn.key, override.customUrl || "")}
                     className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
                     <Save size={10} />
