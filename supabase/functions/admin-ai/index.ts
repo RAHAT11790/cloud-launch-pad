@@ -556,9 +556,17 @@ async function executeOperation(op: any) {
       };
     }
     case "notify_and_telegram": {
-      const { collection, seriesId, seasonNumber, episodeNumber, customMessage } = args;
+      const { collection, seasonNumber, episodeNumber, customMessage } = args;
+      const resolved = await resolveSeriesId(collection, args.seriesId);
+      if (!resolved.id) {
+        const hint =
+          resolved.candidates.length > 0
+            ? ` Did you mean: ${resolved.candidates.map((c) => `${c.title} (${c.id})`).join(" | ")}?`
+            : "";
+        throw new Error(`Series '${args.seriesId}' not found.${hint}`);
+      }
+      const seriesId = resolved.id;
       const series: any = await fbGet(`${collection}/${seriesId}`);
-      if (!series) throw new Error(`Series ${seriesId} not found`);
       const title = series.title || series.name || seriesId;
       const epLabel = seasonNumber && episodeNumber ? ` — S${seasonNumber} EP${episodeNumber}` : "";
       const msg = customMessage || `🆕 New episode: ${title}${epLabel}`;
@@ -586,7 +594,15 @@ async function executeOperation(op: any) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
         },
-        body: JSON.stringify({ collection, seriesId, message: msg, seasonNumber, episodeNumber }),
+        body: JSON.stringify({
+          collection,
+          seriesId,
+          chatId: series.telegramChatId, // optional override per series
+          caption: msg,
+          photoUrl: series.poster || series.backdrop,
+          seasonNumber,
+          episodeNumber,
+        }),
       });
       return {
         ok: fcmRes.ok || tgRes.ok,
