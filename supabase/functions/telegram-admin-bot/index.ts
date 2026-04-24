@@ -2064,31 +2064,27 @@ async function handleCallback(chatId: number, data: string, cbId: string, messag
     if (Array.isArray(permanent)) {
       for (const b of permanent) if (b?.text && b?.url) buttons.push({ text: b.text, url: b.url });
     }
-    const caption =
-      `🎬 <b>${escapeHtml(d.title)}</b>\n` +
-      (d.rating ? `⭐ ${d.rating}\n` : "") +
-      (d.category ? `📂 ${d.category}\n` : "");
-    const r = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
-        caption,
-        photoUrl,
-        inlineButtons: buttons,
-        collection: col,
-        seriesId: id,
-      }),
+    const caption = await buildWebsiteCaption({
+      title: d.title || "Untitled",
+      season: d?.seasons?.[0]?.seasonNumber || 1,
+      totalEpisodes: (d?.seasons?.[0]?.episodes || []).length || "—",
+      newEpAdded: (d?.seasons?.[0]?.episodes || []).length || 1,
+      rating: d.rating,
+      genres: d.category,
     });
-    const j = await r.json().catch(() => ({}));
-    if (j?.ok) await tgSend(chatId, "✅ Posted to Telegram.");
+    const res = await postToAllChannels({
+      caption,
+      photoUrl,
+      inlineButtons: buttons,
+      collection: col,
+      seriesId: id,
+    });
+    if (res.posted > 0)
+      await tgSend(chatId, `✅ Posted to ${res.posted} channel(s).${res.failed ? ` (${res.failed} failed)` : ""}`);
     else
       await tgSend(
         chatId,
-        `❌ Post failed: <code>${escapeHtml(j?.error || "unknown")}</code>\n\n<i>Tip: send /setchatid in your target Telegram chat.</i>`,
+        `❌ Post failed:\n<code>${escapeHtml(res.errors.slice(0, 3).join("\n") || "unknown")}</code>\n\n<i>Configure channels in website Admin → Telegram Post.</i>`,
       );
     return;
   }
