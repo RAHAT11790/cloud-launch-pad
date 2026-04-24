@@ -4076,6 +4076,16 @@ ${tgHashtags}`;
 
       {/* Main Content */}
       <main className="pt-[64px] px-3 pb-[80px] min-h-screen">
+        {/* ==================== AI MANAGER (default home) ==================== */}
+        {activeSection === "ai-manager" && (
+          <div>
+            <div className="flex justify-end mb-2">
+              <AdminNotificationBell />
+            </div>
+            <AdminAIManager />
+          </div>
+        )}
+
         {/* ==================== DASHBOARD ==================== */}
         {activeSection === "dashboard" && (
           <div>
@@ -4083,8 +4093,6 @@ ${tgHashtags}`;
             <div className="flex justify-end mb-2">
               <AdminNotificationBell />
             </div>
-            {/* 🤖 AI Manager — top of admin home */}
-            <AdminAIManager />
             <div className="grid grid-cols-2 gap-2.5 mb-4">
               {[
                 { icon: <Film size={18} />, value: webseriesData.length, label: "Web Series", color: "text-indigo-400" },
@@ -8148,15 +8156,16 @@ ${tgHashtags}`;
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 h-[58px] bg-[#0D0D1A]/95 border-t border-white/6 flex items-center justify-around z-[100] px-2">
+      <nav className="fixed bottom-0 left-0 right-0 h-[58px] bg-[#0D0D1A]/95 border-t border-white/6 flex items-center justify-around z-[100] px-1">
         {[
-          { section: "dashboard" as Section, icon: <LayoutDashboard size={19} />, label: "Dashboard" },
-          { section: "webseries" as Section, icon: <Film size={19} />, label: "Series" },
-          { section: "movies" as Section, icon: <Video size={19} />, label: "Movies" },
-          { section: "notifications" as Section, icon: <Bell size={19} />, label: "Notify" },
+          { section: "ai-manager" as Section, icon: <Sparkles size={18} />, label: "AI" },
+          { section: "dashboard" as Section, icon: <LayoutDashboard size={18} />, label: "Dashboard" },
+          { section: "webseries" as Section, icon: <Film size={18} />, label: "Series" },
+          { section: "movies" as Section, icon: <Video size={18} />, label: "Movies" },
+          { section: "notifications" as Section, icon: <Bell size={18} />, label: "Notify" },
         ].map(item => (
           <div key={item.section} onClick={() => showSection(item.section)}
-            className={`flex flex-col items-center gap-0.5 py-2 px-3.5 cursor-pointer relative transition-colors ${
+            className={`flex flex-col items-center gap-0.5 py-2 px-2 cursor-pointer relative transition-colors ${
               activeSection === item.section ? "text-indigo-400" : "text-zinc-600"
             }`}>
             {activeSection === item.section && <div className="absolute -top-px left-1/2 -translate-x-1/2 w-7 h-[2px] bg-indigo-500 rounded-b" />}
