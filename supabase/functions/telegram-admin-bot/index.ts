@@ -1089,7 +1089,14 @@ async function handleCallback(cb: any) {
       `<code>/menu</code> = main menu, <code>/cancel</code> = exit`);
     return;
   }
-  if (data === "mode:manual" || data === "search") return showSearchPrompt(chatId);
+  if (data === "mode:manual") return showManualPanel(chatId);
+  if (data === "search") return showSearchPrompt(chatId);
+  if (data === "browse:all" || data.startsWith("browse:")) {
+    const page = data.startsWith("browse:") && data !== "browse:all" ? Number(data.split(":")[1]) || 0 : 0;
+    return showBrowseAll(chatId, page);
+  }
+  if (data === "panel:addexisting") return showSearchPrompt(chatId);
+  if (data === "panel:tgpost" || data === "panel:delep") return showSearchPrompt(chatId);
 
   if (data.startsWith("anime:") || data.startsWith("pick:")) {
     const [, collection, seriesId] = data.split(":");
