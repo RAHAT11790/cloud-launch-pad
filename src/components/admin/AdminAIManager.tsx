@@ -815,7 +815,7 @@ export function AdminAIManager() {
       )}
 
       {/* Input */}
-      <div className="p-2.5 border-t border-white/8 bg-[#0a0a14] flex gap-2">
+      <div className="p-2.5 border-t border-white/8 bg-[#0a0a14]">
         <input
           ref={fileInputRef}
           type="file"
@@ -827,34 +827,46 @@ export function AdminAIManager() {
             if (fileInputRef.current) fileInputRef.current.value = "";
           }}
         />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={loading}
-          title="Attach screenshot"
-          className="px-2.5 py-2 rounded-lg bg-[#141422] border border-white/10 text-violet-300 hover:bg-violet-500/20 disabled:opacity-40"
-        >
-          <ImageIcon size={15} />
-        </button>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          disabled={loading}
-          placeholder="e.g. Naruto S1 EP5 720p https://… 1080p https://… তারপর notify সব ইউজারকে"
-          className="flex-1 bg-[#141422] border border-white/10 rounded-lg px-3 py-2 text-[13px] text-white placeholder:text-zinc-500 focus:outline-none focus:border-violet-500/60"
-        />
-        <button
-          onClick={send}
-          disabled={loading || (!input.trim() && pendingImages.length === 0)}
-          className="px-3 py-2 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white disabled:opacity-40"
-        >
-          <Send size={15} />
-        </button>
+        <div className="flex gap-2 items-end">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading}
+            title="Attach screenshot"
+            className="px-2.5 py-2.5 rounded-lg bg-[#141422] border border-white/10 text-violet-300 hover:bg-violet-500/20 disabled:opacity-40 flex-shrink-0"
+          >
+            <ImageIcon size={16} />
+          </button>
+          <textarea
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+              // Auto-grow
+              const ta = e.target as HTMLTextAreaElement;
+              ta.style.height = "auto";
+              ta.style.height = Math.min(ta.scrollHeight, 240) + "px";
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            disabled={loading}
+            rows={2}
+            placeholder="যা খুশি লিখুন — কোড, JSON, প্রশ্ন। Enter = send, Shift+Enter = নতুন লাইন।"
+            className="flex-1 bg-[#141422] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-white placeholder:text-zinc-500 focus:outline-none focus:border-violet-500/60 resize-none leading-snug min-h-[44px] max-h-[240px] overflow-y-auto"
+          />
+          <button
+            onClick={send}
+            disabled={loading || (!input.trim() && pendingImages.length === 0)}
+            className="px-3 py-2.5 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white disabled:opacity-40 flex-shrink-0"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+          </button>
+        </div>
+        <p className="text-[9px] text-zinc-500 mt-1 px-1">
+          💡 লম্বা স্ক্রিপ্ট/JSON paste করতে পারবেন — auto-scroll হবে। Shift+Enter = নতুন লাইন।
+        </p>
       </div>
     </div>
   );
