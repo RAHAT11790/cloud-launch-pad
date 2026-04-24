@@ -1092,6 +1092,7 @@ async function showEpisode(
       { text: "📤 Resend to Telegram", callback_data: `resend:${collection}:${id}:${seasonIdx}:${epIdx}` },
     ],
     [
+      { text: "🧹 Delete from Channel", callback_data: `delch:${collection}:${id}:${seasonIdx}:${epIdx}` },
       { text: "🗑 Delete EP", callback_data: `delep:${collection}:${id}:${seasonIdx}:${epIdx}` },
     ],
     [
