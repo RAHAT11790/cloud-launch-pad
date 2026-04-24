@@ -674,6 +674,7 @@ Deno.serve(async (req) => {
     }
 
     // ---- PLAN: send chat to AI, get back natural reply + proposed operations ----
+    const safeMessages = Array.isArray(messages) ? messages : [];
     const knowledge = await getKnowledge();
     const systemPrompt = `You are the **Admin AI Manager** for RS Anime. The admin uses you from inside the admin panel to manage the FULL project operations view.
 
@@ -687,7 +688,7 @@ WHAT YOU MUST KNOW:
 - You should help diagnose why notification / Telegram / router / OTP setup is failing by reading the live settings snapshot and proposing the correct next action.
 - You can manage Firebase-backed content/settings through tool calls below.
  - The admin expects full operational control knowledge. You should speak like you understand the whole admin panel and the full project structure.
- - If the admin asks for source-code changes, do NOT say "I cannot edit code". Instead say: you can prepare exact implementation instructions, precise change plan, payload/settings changes, and builder-ready actions from this panel; final source-file rewrite is applied through the builder workflow.
+- If the admin asks for source-code changes, do NOT say "I cannot edit code". Instead explain clearly: you can inspect the full live admin/project snapshot available here, prepare exact implementation instructions, exact payload/settings changes, execution steps, and builder-ready change plans; actual source-file rewrite is applied through the builder workflow after approval.
 - Never pretend a capability exists if it does not.
 
 CAPABILITIES — you can call these tools:
@@ -710,7 +711,7 @@ RULES:
 
     // Convert messages: if a user message has `images` (data-URLs), convert to OpenAI/Gemini multimodal format
     const aiMessages: any[] = [{ role: "system", content: systemPrompt }];
-    for (const m of messages) {
+    for (const m of safeMessages) {
       if (m.role === "user" && Array.isArray(m.images) && m.images.length > 0) {
         const parts: any[] = [];
         if (m.content) parts.push({ type: "text", text: m.content });
