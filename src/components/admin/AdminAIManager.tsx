@@ -79,6 +79,44 @@ export function AdminAIManager() {
   const [queue, setQueue] = useState<EpisodeDraft[]>([]);
   const [jsonText, setJsonText] = useState("");
   const [showJson, setShowJson] = useState(false);
+  // Series picker (replaces typing raw seriesId)
+  const [seriesIndex, setSeriesIndex] = useState<
+    { id: string; title: string; collection: "webseries" | "movies" | "animesalt" }[]
+  >([]);
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Load series index when builder opens
+  useEffect(() => {
+    if (!builderOpen || seriesIndex.length > 0) return;
+    (async () => {
+      const collections: ("webseries" | "movies" | "animesalt")[] = [
+        "webseries",
+        "movies",
+        "animesalt",
+      ];
+      const all: { id: string; title: string; collection: any }[] = [];
+      await Promise.all(
+        collections.map(async (c) => {
+          try {
+            const snap = await get(ref(db, c));
+            const v = snap.val();
+            if (v && typeof v === "object") {
+              Object.entries(v).forEach(([id, item]: [string, any]) => {
+                all.push({
+                  id,
+                  title: String(item?.title || item?.name || id),
+                  collection: c,
+                });
+              });
+            }
+          } catch {}
+        }),
+      );
+      all.sort((a, b) => a.title.localeCompare(b.title));
+      setSeriesIndex(all);
+    })();
+  }, [builderOpen, seriesIndex.length]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
