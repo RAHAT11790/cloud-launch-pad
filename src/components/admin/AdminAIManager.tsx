@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Sparkles, Send, Check, X, Loader2, Bot, User, AlertCircle, Image as ImageIcon, Plus, FileJson, Music2, ChevronDown, ChevronUp, Wand2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
@@ -64,7 +64,7 @@ export function AdminAIManager() {
     {
       role: "assistant",
       content:
-        "👋 আসসালামু আলাইকুম! আমি আপনার **Admin AI Manager**। যা খুশি বলুন — episode add, notification, series edit, payment approve, link check, weekly EP release — আমি আগে preview দেখাব, আপনি **Allow** চাপলে তবেই execute হবে।\n\nডিফল্ট ভাষা: বাংলা। ইংরেজি চাইলে \"reply in English\" লিখুন।",
+        "👋 আসসালামু আলাইকুম! আমি আপনার **Admin AI Manager**। আমি live admin operations handle করতে পারি — episode add/edit, bulk episode save, notification, Telegram post, weekly release, payment approve, link check, router/settings update, Firebase data patch — সব কিছুর আগে preview দেখাব, আপনি **Allow** চাপলে তবেই execute হবে।\n\nকোড/UI change চাইলে আমি exact execution plan, payload, settings update, আর builder-ready instruction তৈরি করে দেব। ডিফল্ট ভাষা: বাংলা। ইংরেজি চাইলে \"reply in English\" লিখুন।",
     },
   ]);
   const [input, setInput] = useState("");
@@ -72,6 +72,30 @@ export function AdminAIManager() {
   const [pendingImages, setPendingImages] = useState<string[]>([]); // base64 dataURLs
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const executionLogs = useMemo(
+    () =>
+      messages
+        .flatMap((msg, idx) => {
+          if (msg.role !== "assistant") return [] as { id: string; tone: "ok" | "error" | "info"; text: string }[];
+          if (msg.results?.length) {
+            return msg.results.map((result: any, rIdx) => ({
+              id: `${idx}-${rIdx}`,
+              tone: result?.ok ? "ok" : "error",
+              text: `${result?.op || "action"}: ${result?.message || (result?.ok ? "done" : "failed")}`,
+            }));
+          }
+          if (msg.status === "pending" && msg.operations?.length) {
+            return [{ id: `${idx}-pending`, tone: "info", text: `Preview ready · ${msg.operations.length} action waiting for approval` }];
+          }
+          if (msg.content.includes("⚠️")) {
+            return [{ id: `${idx}-error`, tone: "error", text: msg.content.split("⚠️").pop()?.trim() || msg.content }];
+          }
+          return [] as { id: string; tone: "ok" | "error" | "info"; text: string }[];
+        })
+        .slice(-8)
+        .reverse(),
+    [messages],
+  );
 
   const handleImagePick = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -349,7 +373,7 @@ export function AdminAIManager() {
       toast.error(`Execution failed: ${e.message}`);
       setMessages((m) =>
         m.map((x, i) =>
-          i === idx ? { ...x, status: "pending", content: x.content + `\n\n⚠️ ${e.message}\n\n💡 Lovable থেকে ঠিক করিয়া নিন।` } : x,
+          i === idx ? { ...x, status: "pending", content: x.content + `\n\n⚠️ ${e.message}\n\n💡 নিচের execution log দেখে আবার চেষ্টা করুন।` } : x,
         ),
       );
     } finally {
@@ -387,7 +411,7 @@ export function AdminAIManager() {
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="max-h-[420px] overflow-y-auto p-3 space-y-3">
+      <div ref={scrollRef} className="max-h-[460px] overflow-y-auto p-3 space-y-3">
         {messages.map((m, i) => (
           <div key={i} className={`flex gap-2 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
             <div
@@ -399,7 +423,7 @@ export function AdminAIManager() {
             >
               {m.role === "user" ? <User size={14} /> : <Bot size={14} />}
             </div>
-            <div className={`flex-1 max-w-[88%] min-w-0 ${m.role === "user" ? "text-right" : ""}`}>
+            <div className={`flex-1 max-w-[92%] min-w-0 ${m.role === "user" ? "text-right" : ""}`}>
               <div
                 className={`inline-block text-left px-3.5 py-3 rounded-2xl text-[12.5px] whitespace-pre-wrap break-words max-w-full overflow-hidden ${
                   m.role === "user"
