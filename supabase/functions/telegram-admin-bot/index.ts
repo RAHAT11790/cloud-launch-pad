@@ -393,6 +393,66 @@ async function getSeriesEpisodes(collection: string, seriesId: string, seasonNum
   return { eps, seasonsCount: arr.length };
 }
 
+// ---------- Link verification ----------
+// Returns { ok, status, reason } per link. Uses HEAD then GET range fallback.
+async function verifyLink(url: string): Promise<{ ok: boolean; status: number; reason?: string }> {
+  if (!url || !/^https?:\/\//i.test(url)) return { ok: false, status: 0, reason: "invalid url" };
+  const ctrl = new AbortController();
+  const tm = setTimeout(() => ctrl.abort(), 12000);
+  try {
+    let r = await fetch(url, { method: "HEAD", redirect: "follow", signal: ctrl.signal }).catch(() => null);
+    if (!r || r.status === 405 || r.status === 403 || r.status === 0) {
+      // fallback: GET range, just first 1KB
+      r = await fetch(url, {
+        method: "GET",
+        redirect: "follow",
+        headers: { Range: "bytes=0-1023" },
+        signal: ctrl.signal,
+      });
+    }
+    clearTimeout(tm);
+    if (!r) return { ok: false, status: 0, reason: "no response" };
+    const ct = r.headers.get("content-type") || "";
+    const cl = Number(r.headers.get("content-length") || 0);
+    // Acceptable: 2xx, 206 (partial), or redirect followed
+    const okStatus = (r.status >= 200 && r.status < 300) || r.status === 206;
+    if (!okStatus) return { ok: false, status: r.status, reason: `HTTP ${r.status}` };
+    // Reject obvious HTML error pages
+    if (ct.includes("text/html") && cl > 0 && cl < 5000) {
+      return { ok: false, status: r.status, reason: "looks like HTML error page" };
+    }
+    return { ok: true, status: r.status };
+  } catch (e: any) {
+    clearTimeout(tm);
+    return { ok: false, status: 0, reason: e?.name === "AbortError" ? "timeout" : (e?.message || "error") };
+  }
+}
+
+type VerifyResult = { quality: keyof AddingLinks; label: string; url: string; ok: boolean; status: number; reason?: string };
+async function verifyAllLinks(links: AddingLinks, onProgress?: (done: number, total: number, current: string) => Promise<void>): Promise<VerifyResult[]> {
+  const entries: { quality: keyof AddingLinks; label: string; url: string }[] = [];
+  if (links.def) entries.push({ quality: "def", label: "Default", url: links.def });
+  if (links["480"]) entries.push({ quality: "480", label: "480p", url: links["480"]! });
+  if (links["720"]) entries.push({ quality: "720", label: "720p", url: links["720"]! });
+  if (links["1080"]) entries.push({ quality: "1080", label: "1080p", url: links["1080"]! });
+  if (links["4k"]) entries.push({ quality: "4k", label: "4K", url: links["4k"]! });
+  const results: VerifyResult[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    if (onProgress) await onProgress(i, entries.length, e.label);
+    const v = await verifyLink(e.url);
+    results.push({ ...e, ok: v.ok, status: v.status, reason: v.reason });
+  }
+  if (onProgress) await onProgress(entries.length, entries.length, "done");
+  return results;
+}
+
+function progressBar(done: number, total: number): string {
+  const w = 12;
+  const filled = total === 0 ? 0 : Math.round((done / total) * w);
+  return "▰".repeat(filled) + "▱".repeat(w - filled) + ` ${done}/${total}`;
+}
+
 // ---------- Save episode (multi-quality at once) ----------
 async function saveEpisodeMulti(
   collection: string,
