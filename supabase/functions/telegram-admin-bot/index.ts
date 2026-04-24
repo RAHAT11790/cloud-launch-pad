@@ -1339,6 +1339,16 @@ async function handleMessage(msg: any) {
     return showMainMenu(chatId, "✖ Cancelled.");
   }
   if (text === "/weekly") return sendWeeklyReminderTo(chatId);
+  if (text === "/help") return showManualHelp(chatId);
+  if (text === "/manual") return showManualPanel(chatId);
+  if (text === "/ai") {
+    await patchSession(chatId, { mode: "ai", awaiting: "ai_chat", pendingOps: [] });
+    return tgSend(chatId, `🤖 AI Mode active. যেকোনো কথা/command লিখুন। Manual button-ও কাজ করবে।`);
+  }
+  if (text.startsWith("/search ")) {
+    const q = text.slice(8).trim();
+    return runAnimeSearch(chatId, q);
+  }
 
   const sess = await getSession(chatId);
 
