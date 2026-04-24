@@ -156,6 +156,11 @@ type Session = {
     | "manual_4k"
     | "manual_episode_number"
     | "post_after_save"
+    | "verify_refix_def"
+    | "verify_refix_480"
+    | "verify_refix_720"
+    | "verify_refix_1080"
+    | "verify_refix_4k"
     | null;
   collection?: "webseries" | "movies"; // RS only
   seriesId?: string;
@@ -164,6 +169,7 @@ type Session = {
   addingLinks?: AddingLinks;
   pendingOps?: any[]; // AI proposed
   pendingSave?: { collection: string; seriesId: string; seasonNumber: number; episodeNumber: number; links: AddingLinks }; // manual confirmation pending
+  verifyResults?: any[];
 };
 async function getSession(chatId: number): Promise<Session> {
   return ((await fbGet(`telegramBotSessions/${chatId}`)) as Session) || {};
@@ -393,6 +399,66 @@ async function getSeriesEpisodes(collection: string, seriesId: string, seasonNum
   return { eps, seasonsCount: arr.length };
 }
 
+// ---------- Link verification ----------
+// Returns { ok, status, reason } per link. Uses HEAD then GET range fallback.
+async function verifyLink(url: string): Promise<{ ok: boolean; status: number; reason?: string }> {
+  if (!url || !/^https?:\/\//i.test(url)) return { ok: false, status: 0, reason: "invalid url" };
+  const ctrl = new AbortController();
+  const tm = setTimeout(() => ctrl.abort(), 12000);
+  try {
+    let r = await fetch(url, { method: "HEAD", redirect: "follow", signal: ctrl.signal }).catch(() => null);
+    if (!r || r.status === 405 || r.status === 403 || r.status === 0) {
+      // fallback: GET range, just first 1KB
+      r = await fetch(url, {
+        method: "GET",
+        redirect: "follow",
+        headers: { Range: "bytes=0-1023" },
+        signal: ctrl.signal,
+      });
+    }
+    clearTimeout(tm);
+    if (!r) return { ok: false, status: 0, reason: "no response" };
+    const ct = r.headers.get("content-type") || "";
+    const cl = Number(r.headers.get("content-length") || 0);
+    // Acceptable: 2xx, 206 (partial), or redirect followed
+    const okStatus = (r.status >= 200 && r.status < 300) || r.status === 206;
+    if (!okStatus) return { ok: false, status: r.status, reason: `HTTP ${r.status}` };
+    // Reject obvious HTML error pages
+    if (ct.includes("text/html") && cl > 0 && cl < 5000) {
+      return { ok: false, status: r.status, reason: "looks like HTML error page" };
+    }
+    return { ok: true, status: r.status };
+  } catch (e: any) {
+    clearTimeout(tm);
+    return { ok: false, status: 0, reason: e?.name === "AbortError" ? "timeout" : (e?.message || "error") };
+  }
+}
+
+type VerifyResult = { quality: keyof AddingLinks; label: string; url: string; ok: boolean; status: number; reason?: string };
+async function verifyAllLinks(links: AddingLinks, onProgress?: (done: number, total: number, current: string) => Promise<void>): Promise<VerifyResult[]> {
+  const entries: { quality: keyof AddingLinks; label: string; url: string }[] = [];
+  if (links.def) entries.push({ quality: "def", label: "Default", url: links.def });
+  if (links["480"]) entries.push({ quality: "480", label: "480p", url: links["480"]! });
+  if (links["720"]) entries.push({ quality: "720", label: "720p", url: links["720"]! });
+  if (links["1080"]) entries.push({ quality: "1080", label: "1080p", url: links["1080"]! });
+  if (links["4k"]) entries.push({ quality: "4k", label: "4K", url: links["4k"]! });
+  const results: VerifyResult[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    if (onProgress) await onProgress(i, entries.length, e.label);
+    const v = await verifyLink(e.url);
+    results.push({ ...e, ok: v.ok, status: v.status, reason: v.reason });
+  }
+  if (onProgress) await onProgress(entries.length, entries.length, "done");
+  return results;
+}
+
+function progressBar(done: number, total: number): string {
+  const w = 12;
+  const filled = total === 0 ? 0 : Math.round((done / total) * w);
+  return "▰".repeat(filled) + "▱".repeat(w - filled) + ` ${done}/${total}`;
+}
+
 // ---------- Save episode (multi-quality at once) ----------
 async function saveEpisodeMulti(
   collection: string,
@@ -500,14 +566,32 @@ async function showMainMenu(chatId: number, prefix = "") {
     `🎬 <b>RS Anime Admin Bot</b>\n` +
     `━━━━━━━━━━━━━━━━━━\n` +
     `একটা মোড বেছে নিন:\n\n` +
-    `🤖 <b>AI Mode</b> — সব RS anime মুখস্ত, কাজ proposal দিবে\n` +
-    `🔧 <b>Manual Mode</b> — Search → Anime → Episode add/edit/delete\n\n` +
+    `🤖 <b>AI Mode</b> — কথা বলে কাজ + manual feature ও চলবে\n` +
+    `🔧 <b>Manual Mode</b> — পুরোপুরি বাটন-ভিত্তিক admin panel\n\n` +
     `<i>Note: শুধু RS Anime (webseries + movies)। AnimeSalt বাদ।</i>`;
   await tgSend(chatId, text, {
     reply_markup: kb([
       [{ text: "🤖 AI Mode", data: "mode:ai" }, { text: "🔧 Manual Mode", data: "mode:manual" }],
       [{ text: "📺 Weekly Reminder Now", data: "weekly:run" }],
-      [{ text: "🧹 Clear AI History", data: "ai:clear" }, { text: "❓ Help", data: "help" }],
+      [{ text: "🧹 Clear AI History", data: "ai:clear" }, { text: "❓ Help Guide", data: "help" }],
+    ]),
+  });
+}
+
+async function showManualPanel(chatId: number, prefix = "") {
+  await patchSession(chatId, { mode: "manual", awaiting: null });
+  const text =
+    (prefix ? prefix + "\n\n" : "") +
+    `🔧 <b>Manual Admin Panel</b>\n` +
+    `━━━━━━━━━━━━━━━━━━\n` +
+    `সব কাজ বাটন দিয়ে। এটা আপনার ওয়েবসাইটের admin panel এর মতই।\n\n` +
+    `নিচের বাটন থেকে বেছে নিন:`;
+  await tgSendPhoto(chatId, FALLBACK_POSTER, text, {
+    reply_markup: kb([
+      [{ text: "🔎 Search Anime", data: "search" }, { text: "📂 Browse All", data: "browse:all" }],
+      [{ text: "🆕 Add to existing series", data: "panel:addexisting" }, { text: "📺 Weekly Pending", data: "weekly:run" }],
+      [{ text: "📢 Telegram Post", data: "panel:tgpost" }, { text: "🗑 Delete Episode", data: "panel:delep" }],
+      [{ text: "📘 Full Guide", data: "help" }, { text: "🏠 Main Menu", data: "menu" }],
     ]),
   });
 }
@@ -515,30 +599,41 @@ async function showMainMenu(chatId: number, prefix = "") {
 async function showManualHelp(chatId: number, prefix = "") {
   const text =
     (prefix ? prefix + "\n\n" : "") +
-    `<b>📘 Manual Mode Guide</b>\n\n` +
-    `Slash commands (BotFather style):\n` +
-    `• <code>/manual</code> — manual mode open\n` +
-    `• <code>/search Re Zero</code> — title search\n` +
-    `• <code>/selected</code> — selected anime খুলবে\n` +
-    `• <code>/season 1</code> — selected season খুলবে\n` +
-    `• <code>/ep 13</code> — selected season/episode details\n` +
+    `<b>📘 Manual Admin Panel — Full Guide</b>\n` +
+    `━━━━━━━━━━━━━━━━━━\n\n` +
+    `<b>🎯 Concept</b>\n` +
+    `Manual mode = আপনার website এর admin panel এর মতই, সব বাটন দিয়ে।\n` +
+    `AI বন্ধ থাকলেও Manual দিয়ে সব করা যাবে।\n\n` +
+    `<b>🔧 Main Buttons</b>\n` +
+    `• 🔎 <b>Search Anime</b> — title টাইপ করে খুঁজুন (typo friendly)\n` +
+    `• 📂 <b>Browse All</b> — সব series list দেখুন\n` +
+    `• 🆕 <b>Add to existing</b> — series → season → EP add\n` +
+    `• 📢 <b>Telegram Post</b> — কোনো episode manually post\n` +
+    `• 🗑 <b>Delete Episode</b> — পুরনো episode মুছুন\n` +
+    `• 📺 <b>Weekly Reminder</b> — আজকের pending list\n\n` +
+    `<b>➕ Add Episode flow (manual)</b>\n` +
+    `1. Search → Anime → Season → <b>Manual EP N</b>\n` +
+    `2. Quality button চাপুন (Default/480p/720p/1080p/4K)\n` +
+    `3. সেই quality এর URL paste করুন\n` +
+    `4. সব quality দেওয়া হলে <b>✅ Finish</b>\n` +
+    `5. <b>🔍 Verifying links...</b> progress চলবে\n` +
+    `6. সব OK হলে → <b>Confirm</b> button → save → Telegram post prompt\n` +
+    `7. কোনো link broken হলে → <b>✏️ Re-add</b> বা <b>⏭ Skip</b>\n` +
+    `8. Skip করলেও <b>Confirm dialog</b> আসবে — confirm দিলেই save\n\n` +
+    `<b>⚡ Auto Mode</b>\n` +
+    `Episode post (Title/Episode/Quality/URL) সরাসরি paste করুন — বট auto-detect করবে।\n\n` +
+    `<b>🎤 Slash Commands</b>\n` +
+    `• <code>/menu</code> — main menu\n` +
+    `• <code>/manual</code> — manual panel\n` +
+    `• <code>/search Re Zero</code> — title দিয়ে search\n` +
     `• <code>/weekly</code> — আজকের reminder\n` +
-    `• <code>/cancel</code> — current flow cancel\n\n` +
-    `ম্যানুয়াল ফ্লো:\n` +
-    `1. Search করুন\n` +
-    `2. Anime poster/card খুলুন\n` +
-    `3. Season চাপুন\n` +
-    `4. <b>Add Episode</b> বা next EP button চাপুন\n` +
-    `5. <b>Manual</b> নিলে quality button-by-button link দিন\n` +
-    `6. <b>Finish → Allow & Save</b>\n` +
-    `7. শেষে <b>Post to Telegram</b> চাইলে Yes চাপুন\n\n` +
-    `সার্চ টিপস:\n` +
-    `• Plain title: <code>The Ramparts Of Ice</code>\n` +
-    `• Banglish/Bangla: <code>ramparts of ice</code>, <code>র‍্যাম্পার্টস অফ আইস</code>\n` +
-    `• AI mode থেকেও লিখতে পারেন: <code>Re Zero find koro</code> বা <code>/search Re Zero</code>`;
+    `• <code>/cancel</code> — current flow বাদ\n` +
+    `• <code>/help</code> — এই guide\n\n` +
+    `<b>🤖 AI Mode</b>\n` +
+    `Plain text লিখলেই বুঝবে। যেকোনো manual button-ও চলবে। AI proposal দিলে Allow/Disallow।`;
   await tgSend(chatId, text, {
     reply_markup: kb([
-      [{ text: "🔎 Search Anime", data: "search" }, { text: "🏠 Menu", data: "menu" }],
+      [{ text: "🔎 Search", data: "search" }, { text: "🔧 Manual Panel", data: "mode:manual" }, { text: "🏠 Menu", data: "menu" }],
     ]),
   });
 }
@@ -622,6 +717,38 @@ async function showAnimeAssistantHint(
       ]),
     },
   );
+}
+
+async function showBrowseAll(chatId: number, page = 0) {
+  const PAGE = 12;
+  const items: { collection: string; id: string; title: string; eps: number }[] = [];
+  for (const collection of ["webseries", "movies"] as const) {
+    const all: any = await fbGet(collection);
+    if (!all || typeof all !== "object") continue;
+    for (const [id, v] of Object.entries(all) as [string, any][]) {
+      const title = String(v?.title || id);
+      const seasons = Array.isArray(v?.seasons) ? v.seasons : Object.values(v?.seasons || {});
+      const eps = seasons.reduce((acc: number, s: any) => {
+        const e = Array.isArray(s?.episodes) ? s.episodes : Object.values(s?.episodes || {});
+        return acc + e.length;
+      }, 0);
+      items.push({ collection, id, title, eps });
+    }
+  }
+  items.sort((a, b) => a.title.localeCompare(b.title));
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE));
+  const slice = items.slice(page * PAGE, (page + 1) * PAGE);
+  const rows = slice.map((it) => [{
+    text: `${it.collection === "movies" ? "🎬" : "📺"} ${it.title}${it.collection === "webseries" ? ` (${it.eps} ep)` : ""}`,
+    data: `pick:${it.collection}:${it.id}`,
+  }]);
+  const nav: any[] = [];
+  if (page > 0) nav.push({ text: "⬅ Prev", data: `browse:${page - 1}` });
+  nav.push({ text: `${page + 1}/${totalPages}`, data: "browse:all" });
+  if (page < totalPages - 1) nav.push({ text: "Next ➡", data: `browse:${page + 1}` });
+  rows.push(nav);
+  rows.push([{ text: "🔎 Search", data: "search" }, { text: "🏠 Menu", data: "menu" }]);
+  await tgSend(chatId, `📂 <b>All RS Anime</b> (${items.length} total)\nPage ${page + 1} of ${totalPages}`, { reply_markup: kb(rows) });
 }
 
 async function showSearchPrompt(chatId: number) {
@@ -817,40 +944,108 @@ async function showFinishPreview(chatId: number) {
   if (!sess.collection || !sess.seriesId || !sess.seasonNumber || !sess.episodeNumber) {
     await tgSend(chatId, "❌ Incomplete data."); return;
   }
-  const series: any = await fbGet(`${sess.collection}/${sess.seriesId}`);
   const links = sess.addingLinks || {};
   if (!Object.values(links).some(Boolean)) {
     await tgSend(chatId, "❌ কমপক্ষে ১টা quality link দিন, তারপর Finish চাপুন।");
     await showManualLinkPanel(chatId);
     return;
   }
-  const linkSummary = Object.entries(links)
-    .map(([k, v]) => `<code>${k}</code>: ${v ? "✅" : "—"}`)
-    .join("\n");
+  // Step 1: run link verification with progress bar
+  await runLinkVerification(chatId, links);
+}
+
+async function runLinkVerification(chatId: number, links: AddingLinks) {
+  const sess = await getSession(chatId);
+  const total = Object.values(links).filter(Boolean).length;
+  // Send a progress message we update in-place
+  const initial = await tgSend(chatId,
+    `🔍 <b>Verifying ${total} link(s)...</b>\n\n${progressBar(0, total)}\n\n<i>প্রতিটা link reachable + content type check হচ্ছে</i>`);
+  const msgId = initial?.result?.message_id;
+  const editProgress = async (done: number, total: number, current: string) => {
+    if (!msgId) return;
+    const txt = `🔍 <b>Verifying links...</b>\n\n${progressBar(done, total)}\n\n` +
+      (done < total ? `Checking: <b>${current}</b>` : `✅ Verification complete`);
+    await fetch(tgApi("editMessageText"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, message_id: msgId, text: txt, parse_mode: "HTML" }),
+    }).catch(() => {});
+  };
+  const results = await verifyAllLinks(links, editProgress);
+  const broken = results.filter((r) => !r.ok);
+  const okOnes = results.filter((r) => r.ok);
+  // Persist for confirm/edit/skip flow
   await patchSession(chatId, {
     pendingSave: {
-      collection: sess.collection,
-      seriesId: sess.seriesId,
-      seasonNumber: sess.seasonNumber,
-      episodeNumber: sess.episodeNumber,
+      collection: sess.collection!,
+      seriesId: sess.seriesId!,
+      seasonNumber: sess.seasonNumber!,
+      episodeNumber: sess.episodeNumber!,
       links,
     },
+    verifyResults: results as any,
   });
+
+  const series: any = await fbGet(`${sess.collection}/${sess.seriesId}`);
+  const photo = series?.poster || series?.backdrop || FALLBACK_POSTER;
+
+  const summaryLines = results.map((r) =>
+    `${r.ok ? "✅" : "❌"} <b>${r.label}</b>${r.ok ? "" : ` — ${r.reason || `HTTP ${r.status}`}`}`
+  ).join("\n");
+
+  if (broken.length === 0) {
+    // All good → confirm dialog with poster
+    const caption =
+      `<b>${series?.title || sess.seriesId}</b>\n` +
+      `Season ${sess.seasonNumber} — EP ${sess.episodeNumber}\n` +
+      `🆔 <code>${sess.seriesId}</code>\n\n` +
+      `<b>Link Verification:</b>\n${summaryLines}\n\n` +
+      `সব link কাজ করছে। আপনি কি confirm করে save + post করতে চান?`;
+    await tgSendPhoto(chatId, photo, caption, {
+      reply_markup: kb([
+        [{ text: "✅ Confirm & Save", data: "confirm:save" }],
+        [{ text: "✏️ Back to Edit", data: "manual:back" }, { text: "❌ Cancel", data: "save:deny" }],
+      ]),
+    });
+    return;
+  }
+
+  // Some broken → offer edit per quality + skip-all
+  const rows: any[][] = [];
+  for (const b of broken) {
+    rows.push([{ text: `✏️ Re-add ${b.label}`, data: `verifix:${b.quality}` }, { text: `⏭ Skip ${b.label}`, data: `veriskip:${b.quality}` }]);
+  }
+  rows.push([{ text: "⏭ Skip ALL broken & continue", data: "verifix:skipall" }]);
+  rows.push([{ text: "🔁 Re-verify", data: "verifix:retry" }, { text: "❌ Cancel", data: "save:deny" }]);
+
   const caption =
     `<b>${series?.title || sess.seriesId}</b>\n` +
     `Season ${sess.seasonNumber} — EP ${sess.episodeNumber}\n\n` +
-    `${linkSummary}\n\n` +
-    `আপনি এই episode টি add করতে চান?`;
+    `⚠️ <b>${broken.length}/${results.length}</b> link কাজ করছে না:\n\n${summaryLines}\n\n` +
+    `সমস্যা থাকা link গুলো re-add করুন বা skip করে এগিয়ে যান।`;
+  await tgSendPhoto(chatId, photo, caption, { reply_markup: kb(rows) });
+}
+
+async function showConfirmDialog(chatId: number) {
+  const sess = await getSession(chatId);
+  if (!sess.pendingSave) { await tgSend(chatId, "❌ কিছু pending নেই।"); return; }
+  const ps = sess.pendingSave;
+  const series: any = await fbGet(`${ps.collection}/${ps.seriesId}`);
   const photo = series?.poster || series?.backdrop || FALLBACK_POSTER;
-  await tgSendPhoto(chatId, photo, caption, {
-    reply_markup: kb([
-      [
-        { text: "✅ Allow & Save", data: "save:allow" },
-        { text: "✏️ Back to Edit", data: "manual:back" },
-      ],
-      [{ text: "❌ Disallow", data: "save:deny" }],
-    ]),
-  });
+  const linkSummary = Object.entries(ps.links)
+    .filter(([_, v]) => v)
+    .map(([k, _]) => `✅ ${k}`).join("  •  ") || "(no links)";
+  await tgSendPhoto(chatId, photo,
+    `<b>${series?.title || ps.seriesId}</b>\n` +
+    `Season ${ps.seasonNumber} — EP ${ps.episodeNumber}\n\n` +
+    `<b>Final links to save:</b>\n${linkSummary}\n\n` +
+    `আপনি কি confirm করছেন? Confirm দিলে এই episode টি database এ যোগ হবে।`,
+    {
+      reply_markup: kb([
+        [{ text: "✅ Confirm", data: "confirm:save" }],
+        [{ text: "❌ Cancel", data: "save:deny" }],
+      ]),
+    });
 }
 
 // ---------- Weekly reminders ----------
@@ -926,7 +1121,14 @@ async function handleCallback(cb: any) {
       `<code>/menu</code> = main menu, <code>/cancel</code> = exit`);
     return;
   }
-  if (data === "mode:manual" || data === "search") return showSearchPrompt(chatId);
+  if (data === "mode:manual") return showManualPanel(chatId);
+  if (data === "search") return showSearchPrompt(chatId);
+  if (data === "browse:all" || data.startsWith("browse:")) {
+    const page = data.startsWith("browse:") && data !== "browse:all" ? Number(data.split(":")[1]) || 0 : 0;
+    return showBrowseAll(chatId, page);
+  }
+  if (data === "panel:addexisting") return showSearchPrompt(chatId);
+  if (data === "panel:tgpost" || data === "panel:delep") return showSearchPrompt(chatId);
 
   if (data.startsWith("anime:") || data.startsWith("pick:")) {
     const [, collection, seriesId] = data.split(":");
@@ -993,23 +1195,86 @@ async function handleCallback(cb: any) {
     return showFinishPreview(chatId);
   }
   if (data === "manual:back") return showManualLinkPanel(chatId);
-  if (data === "save:allow") {
+
+  // ----- Verification flow handlers -----
+  if (data.startsWith("verifix:")) {
+    const what = data.split(":")[1];
+    const sess = await getSession(chatId);
+    if (what === "retry") {
+      const links = sess.pendingSave?.links || sess.addingLinks || {};
+      return runLinkVerification(chatId, links);
+    }
+    if (what === "skipall") {
+      // Drop all broken links from pendingSave then go to confirm
+      const broken = (sess.verifyResults || []).filter((r: any) => !r.ok);
+      const links = { ...(sess.pendingSave?.links || {}) };
+      for (const b of broken) delete links[b.quality as keyof AddingLinks];
+      if (!Object.values(links).some(Boolean)) {
+        await tgSend(chatId, "❌ সব link skip করলে কিছুই save করার নেই।");
+        return showManualLinkPanel(chatId);
+      }
+      if (sess.pendingSave) {
+        await patchSession(chatId, { pendingSave: { ...sess.pendingSave, links } });
+      }
+      return showConfirmDialog(chatId);
+    }
+    // Re-add a specific quality
+    const map: Record<string, Session["awaiting"]> = {
+      def: "verify_refix_def",
+      "480": "verify_refix_480",
+      "720": "verify_refix_720",
+      "1080": "verify_refix_1080",
+      "4k": "verify_refix_4k",
+    };
+    if (map[what]) {
+      // Clear that quality from addingLinks/pendingSave so user re-pastes
+      const links = { ...(sess.addingLinks || sess.pendingSave?.links || {}) };
+      delete links[what as keyof AddingLinks];
+      await patchSession(chatId, { addingLinks: links, awaiting: map[what] });
+      await tgSend(chatId, `✏️ <b>${what === "def" ? "Default" : what + (what === "4k" ? "" : "p")}</b> এর tick উঠে গেছে। নতুন link পাঠান:`);
+      return;
+    }
+  }
+  if (data.startsWith("veriskip:")) {
+    const q = data.split(":")[1];
+    const sess = await getSession(chatId);
+    const links = { ...(sess.pendingSave?.links || {}) };
+    delete links[q as keyof AddingLinks];
+    if (sess.pendingSave) {
+      await patchSession(chatId, { pendingSave: { ...sess.pendingSave, links } });
+    }
+    // Re-render verification dialog with updated state
+    await tgSend(chatId, `⏭ ${q} skip করা হলো।`);
+    return runLinkVerification(chatId, links);
+  }
+
+  if (data === "confirm:save" || data === "save:allow") {
     const sess = await getSession(chatId);
     if (!sess.pendingSave) { await tgSend(chatId, "❌ কিছু pending নেই।"); return; }
     const ps = sess.pendingSave;
+    if (!Object.values(ps.links).some(Boolean)) {
+      await tgSend(chatId, "❌ Save করার মতো কোনো link নেই।");
+      return;
+    }
     await saveEpisodeMulti(ps.collection, ps.seriesId, ps.seasonNumber, ps.episodeNumber, ps.links);
-    await patchSession(chatId, { addingLinks: {}, episodeNumber: undefined, awaiting: "post_after_save" });
-    await tgSend(chatId, `✅ EP ${ps.episodeNumber} saved!\n\nএখন Telegram channel এ post করতে চান?`, {
-      reply_markup: kb([[
-        { text: "✅ Yes, Post", data: `post:${ps.collection}:${ps.seriesId}:${ps.seasonNumber}:${ps.episodeNumber}` },
-        { text: "❌ No", data: "menu" },
-      ]]),
-    });
+    await patchSession(chatId, { addingLinks: {}, episodeNumber: undefined, awaiting: "post_after_save", pendingSave: undefined, verifyResults: undefined });
+    const series: any = await fbGet(`${ps.collection}/${ps.seriesId}`);
+    const photo = series?.poster || series?.backdrop || FALLBACK_POSTER;
+    await tgSendPhoto(chatId, photo,
+      `✅ <b>Saved!</b>\n\n<b>${series?.title || ps.seriesId}</b>\nSeason ${ps.seasonNumber} — EP ${ps.episodeNumber}\n\nএখন Telegram channel এ post করতে চান?`,
+      {
+        reply_markup: kb([
+          [{ text: "✅ Yes, Post to Telegram", data: `post:${ps.collection}:${ps.seriesId}:${ps.seasonNumber}:${ps.episodeNumber}` }],
+          [{ text: "❌ No, Skip", data: "menu" }],
+        ]),
+      });
     return;
   }
   if (data === "save:deny") {
-    await patchSession(chatId, { pendingSave: undefined });
-    await tgSend(chatId, "❌ Cancelled. কিছু save হয়নি।");
+    await patchSession(chatId, { pendingSave: undefined, verifyResults: undefined });
+    await tgSend(chatId, "❌ Cancelled. কিছু save হয়নি।", {
+      reply_markup: kb([[{ text: "✏️ Back to Edit", data: "manual:back" }, { text: "🏠 Menu", data: "menu" }]]),
+    });
     return;
   }
   if (data.startsWith("post:")) {
@@ -1074,6 +1339,16 @@ async function handleMessage(msg: any) {
     return showMainMenu(chatId, "✖ Cancelled.");
   }
   if (text === "/weekly") return sendWeeklyReminderTo(chatId);
+  if (text === "/help") return showManualHelp(chatId);
+  if (text === "/manual") return showManualPanel(chatId);
+  if (text === "/ai") {
+    await patchSession(chatId, { mode: "ai", awaiting: "ai_chat", pendingOps: [] });
+    return tgSend(chatId, `🤖 AI Mode active. যেকোনো কথা/command লিখুন। Manual button-ও কাজ করবে।`);
+  }
+  if (text.startsWith("/search ")) {
+    const q = text.slice(8).trim();
+    return runAnimeSearch(chatId, q);
+  }
 
   const sess = await getSession(chatId);
 
@@ -1123,6 +1398,27 @@ async function handleMessage(msg: any) {
     const links = { ...(sess.addingLinks || {}), [key]: text };
     await patchSession(chatId, { addingLinks: links, awaiting: null });
     return showManualLinkPanel(chatId);
+  }
+
+  // ---- Verification re-fix link inputs ----
+  const refixMap: Record<string, keyof AddingLinks> = {
+    verify_refix_def: "def",
+    verify_refix_480: "480",
+    verify_refix_720: "720",
+    verify_refix_1080: "1080",
+    verify_refix_4k: "4k",
+  };
+  if (sess.awaiting && refixMap[sess.awaiting]) {
+    if (!/^https?:\/\//i.test(text)) {
+      await tgSend(chatId, "❌ Valid URL দিন (https://...)।"); return;
+    }
+    const key = refixMap[sess.awaiting];
+    const newLinks = { ...(sess.addingLinks || sess.pendingSave?.links || {}), [key]: text };
+    // Update both addingLinks (so user can edit again) and pendingSave
+    const ps = sess.pendingSave ? { ...sess.pendingSave, links: newLinks } : undefined;
+    await patchSession(chatId, { addingLinks: newLinks, pendingSave: ps, awaiting: null });
+    await tgSend(chatId, `🔁 ${key} updated. পুনরায় verify চালাচ্ছি...`);
+    return runLinkVerification(chatId, newLinks);
   }
 
   // ---- Auto paste ----
