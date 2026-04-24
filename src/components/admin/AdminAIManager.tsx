@@ -398,13 +398,14 @@ export function AdminAIManager() {
             >
               {m.role === "user" ? <User size={14} /> : <Bot size={14} />}
             </div>
-            <div className={`flex-1 max-w-[85%] ${m.role === "user" ? "text-right" : ""}`}>
+            <div className={`flex-1 max-w-[85%] min-w-0 ${m.role === "user" ? "text-right" : ""}`}>
               <div
-                className={`inline-block text-left px-3 py-2 rounded-xl text-[12.5px] whitespace-pre-wrap ${
+                className={`inline-block text-left px-3 py-2 rounded-xl text-[12.5px] whitespace-pre-wrap break-words max-w-full ${
                   m.role === "user"
                     ? "bg-indigo-600/30 border border-indigo-500/40 text-indigo-50"
                     : "bg-[#141422] border border-white/8 text-zinc-100"
                 }`}
+                style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
               >
                 {m.content}
                 {m.role === "user" && (m as any).images?.length > 0 && (
