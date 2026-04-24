@@ -20,6 +20,12 @@ async function fbGet(path: string) {
   if (!r.ok) return null;
   return await r.json();
 }
+// shallow=true returns only top-level keys (as { key: true }) — much less memory
+async function fbGetShallow(path: string): Promise<Record<string, true> | null> {
+  const r = await fetch(`${FIREBASE_DB_URL}/${path}.json?shallow=true`);
+  if (!r.ok) return null;
+  return await r.json();
+}
 async function fbPatch(path: string, data: unknown) {
   const r = await fetch(`${FIREBASE_DB_URL}/${path}.json`, {
     method: "PATCH",
