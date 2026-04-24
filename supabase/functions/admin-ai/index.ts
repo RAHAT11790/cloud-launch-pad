@@ -92,15 +92,13 @@ async function getKnowledge() {
       movies: movies ? Object.keys(movies).length : 0,
       animesalt: animesalt ? Object.keys(animesalt).length : 0,
       weeklyPending: weeklyPending ? Object.keys(weeklyPending).length : 0,
-      pendingBkash: bkash
-        ? Object.values(bkash).filter((p: any) => p?.status === "pending").length
-        : 0,
+      pendingBkash: bkash ? Object.values(bkash).filter((p: any) => p?.status === "pending").length : 0,
       unlockRequests: unlock ? Object.keys(unlock).length : 0,
       users: users ? Object.keys(users).length : 0,
     },
-    webseries: summarize(webseries, "webseries").slice(0, 200),
-    movies: summarize(movies, "movies").slice(0, 200),
-    animesalt: summarize(animesalt, "animesalt").slice(0, 200),
+    webseries: summarize(webseries, "webseries").slice(0, 250),
+    movies: summarize(movies, "movies").slice(0, 250),
+    animesalt: summarize(animesalt, "animesalt").slice(0, 250),
     weeklyPending: weeklyPending
       ? Object.values(weeklyPending).map((e: any) => ({
           seriesId: e.seriesId,
@@ -109,6 +107,16 @@ async function getKnowledge() {
           weeklyEveryDays: e.weeklyEveryDays,
         }))
       : [],
+    importantSettings: {
+      telegramChatId: settings?.telegramChatId || settings?.telegramProvider?.chatId || null,
+      telegramProviderUrl: settings?.telegramProvider?.url || null,
+      aiChat: settings?.aiChat || null,
+      functionOverrides: settings?.functionOverrides || null,
+      fcmProvider: settings?.fcmProvider || null,
+      emailService: settings?.emailService || null,
+      adServicesCount: settings?.adServices ? Object.keys(settings.adServices).length : 0,
+      tutorialVideosCount: Array.isArray(settings?.tutorialVideos) ? settings.tutorialVideos.length : settings?.tutorialVideos ? Object.keys(settings.tutorialVideos).length : 0,
+    },
     settings: settings || {},
   };
   snapshotCache = { ts: Date.now(), data };
@@ -667,35 +675,37 @@ Deno.serve(async (req) => {
 
     // ---- PLAN: send chat to AI, get back natural reply + proposed operations ----
     const knowledge = await getKnowledge();
-    const systemPrompt = `You are the **Admin AI Manager** for an anime streaming platform (RS Anime). The admin chats with you to manage the ENTIRE admin panel.
+    const systemPrompt = `You are the **Admin AI Manager** for RS Anime. The admin uses you from inside the admin panel to manage the FULL project operations view.
 
-LANGUAGE: Default reply in **Bangla (Bengali)**. Only switch to English if the admin explicitly says "in English" or writes purely in English. Use respectful, friendly tone with light emoji.
+LANGUAGE: Default reply in **Bangla (Bengali)**. Only switch to English if the admin explicitly asks for English. Be confident, concise, and operational.
 
-Your knowledge of the database (live snapshot, refreshed every 60s):
-${JSON.stringify(knowledge, null, 2).slice(0, 12000)}
+LIVE KNOWLEDGE SNAPSHOT (refresh ~60s):
+${JSON.stringify(knowledge, null, 2).slice(0, 16000)}
+
+WHAT YOU MUST KNOW:
+- The admin expects you to understand admin panel sections like AI Manager, notifications, Telegram, weekly releases, URL/router config, OTP email config, ad services, user data, series/movies/animesalt.
+- You should help diagnose why notification / Telegram / router / OTP setup is failing by reading the live settings snapshot and proposing the correct next action.
+- You can manage Firebase-backed content/settings through tool calls below.
+- You do NOT directly rewrite the local source code files of the project from this admin chat yet. If the admin asks for frontend/backend code edits, explain clearly that you can prepare the plan, data changes, router settings, content changes, and operational fixes here — but source-code rewrite must be done in the builder.
+- Never pretend a capability exists if it does not.
 
 CAPABILITIES — you can call these tools:
-- create_anime_from_tmdb(collection, tmdbId, mediaType, customId?) — Create NEW series/movie from TMDB. Default audio=Hindi Official.
-- add_episode(collection, seriesId, seasonNumber, episodeNumber, title?, link480?, link720?, link1080?, link4k?, link?) — single episode
-- bulk_add_episodes(collection, seriesId, seasonNumber, episodes[], trim=true) — multi-episode save in ONE go. **trim=true means episodes NOT in the array are DELETED** — use this when admin gives only a few episode links but TMDB has many.
-- notify_and_telegram(collection, seriesId, seasonNumber?, episodeNumber?) — send FCM push + Telegram post in ONE chained action.
+- create_anime_from_tmdb(collection, tmdbId, mediaType, customId?)
+- add_episode(collection, seriesId, seasonNumber, episodeNumber, title?, link480?, link720?, link1080?, link4k?, link?)
+- bulk_add_episodes(collection, seriesId, seasonNumber, episodes[], trim=true)
+- notify_and_telegram(collection, seriesId, seasonNumber?, episodeNumber?)
 - edit_series(collection, seriesId, patch{})
-- delete_item(path) — DESTRUCTIVE
+- delete_item(path)
 - send_notification, send_telegram, release_weekly, check_link, approve_subscription, set_firebase_path
 
 RULES:
-1. Default to **Bangla** unless told otherwise.
-2. When admin says "add anime X" / "create new anime X" — first try to find it by title in the knowledge. If NOT found, ask for TMDB ID, then call create_anime_from_tmdb. After creation, if the admin gave episode links, call bulk_add_episodes (trim=true) so empty TMDB episodes get cleaned up.
-3. **Trim logic** — if admin says "EP1 = link1, EP2 = link2" but the season has 12 episodes from TMDB, ALWAYS use bulk_add_episodes with trim=true so only those 2 stay.
-4. Treat link with no quality tag as **1080p** by default. Treat audio as **Hindi Official** by default.
-5. **Free-text parsing** — when the admin writes "Naruto S1 EP5 720p https://… 1080p https://…", find the matching seriesId, identify qualities, call add_episode (or bulk_add_episodes if multiple).
-6. **Auto-chain** — if admin says "save AND send notify AND telegram" or "post everywhere" — propose bulk_add_episodes FOLLOWED BY notify_and_telegram in the SAME plan.
-7. NEVER execute yourself. Just propose tool calls — admin will see preview & click Allow/Disallow.
-8. If matching is ambiguous, list top 3 candidates with TITLES (never raw IDs).
-9. Always describe in Bangla what you understood: "নারুতো S1 — ২টি episode add করব (S1 EP1 + EP2), বাকি ১০টি delete হবে (trim), তারপর FCM + Telegram পাঠাব।"
-10. You can also be a normal chat assistant — if the admin just says "hi" or asks how many series, reply naturally without tool calls.
-
-When you have nothing to do, just chat / give status updates.`;
+1. Default to Bangla unless told otherwise.
+2. Understand the admin's goal first, then explain briefly what you will do.
+3. For ambiguous series matches, show top candidates by title instead of guessing.
+4. If admin asks for code/source changes, be honest: you can assist with project operations and planning here, not full source editing.
+5. Never execute by yourself — only propose operations for Allow/Disallow.
+6. When asked about failures, use the live snapshot to mention likely missing setting/path/tool and the exact thing to fix.
+7. When there is nothing to execute, reply like a smart admin assistant with status, diagnosis, or guidance.`;
 
     // Convert messages: if a user message has `images` (data-URLs), convert to OpenAI/Gemini multimodal format
     const aiMessages: any[] = [{ role: "system", content: systemPrompt }];
