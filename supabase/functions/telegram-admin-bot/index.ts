@@ -1924,44 +1924,37 @@ async function handleCallback(chatId: number, data: string, cbId: string, messag
     if (Array.isArray(permanent)) {
       for (const b of permanent) if (b?.text && b?.url) buttons.push({ text: b.text, url: b.url });
     }
-    const caption =
-      `🎬 <b>${escapeHtml(d.title || "Untitled")}</b>\n` +
-      `📚 Season <b>${sNum}</b> • 🎞 Episode <b>${epNum}</b>\n` +
-      (d.rating ? `⭐ ${d.rating}\n` : "") +
-      (d.category ? `📂 ${d.category}\n` : "");
-    let postChatId = await fbGet("settings/telegramChatId");
-    if (!postChatId) postChatId = chatId;
-    try {
-      const r = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          chatId: postChatId,
-          caption,
-          photoUrl,
-          inlineButtons: buttons,
-          collection: col,
-          seriesId: id,
-        }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (j?.ok) {
-        await tgSend(
-          chatId,
-          `✅ <b>Resent!</b>\n🎬 ${escapeHtml(d.title)} — S${sNum} EP${epNum}`,
-        );
-      } else {
-        await tgSend(
-          chatId,
-          `❌ Resend failed: <code>${escapeHtml(j?.error || "unknown")}</code>`,
-        );
-      }
-    } catch (e: any) {
-      await tgSend(chatId, `❌ Error: <code>${escapeHtml(e?.message || "fetch failed")}</code>`);
+    const totalEps = (season.episodes || []).length;
+    const caption = await buildWebsiteCaption({
+      title: d.title || "Untitled",
+      season: sNum,
+      totalEpisodes: totalEps,
+      newEpAdded: epNum,
+      rating: d.rating,
+      genres: d.category,
+    });
+    const res = await postToAllChannels({
+      caption,
+      photoUrl,
+      inlineButtons: buttons,
+      collection: col,
+      seriesId: id,
+    });
+    if (res.posted > 0 && res.failed === 0) {
+      await tgSend(
+        chatId,
+        `✅ <b>Resent to ${res.posted} channel(s)!</b>\n🎬 ${escapeHtml(d.title)} — S${sNum} EP${epNum}`,
+      );
+    } else if (res.posted > 0) {
+      await tgSend(
+        chatId,
+        `⚠️ <b>Posted ${res.posted}, failed ${res.failed}</b>\n<code>${escapeHtml(res.errors.slice(0, 3).join("\n"))}</code>`,
+      );
+    } else {
+      await tgSend(
+        chatId,
+        `❌ Resend failed:\n<code>${escapeHtml(res.errors.slice(0, 3).join("\n") || "unknown")}</code>\n\n<i>Configure channels in website Admin → Telegram Post.</i>`,
+      );
     }
     return;
   }
