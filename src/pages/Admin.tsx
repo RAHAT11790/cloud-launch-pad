@@ -556,7 +556,17 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   // Per-function overrides from Firebase
   const [fnOverrides, setFnOverrides] = useState<Record<string, { enabled: boolean; customUrl: string }>>({});
 
-  const CORE_FUNCTIONS: { key: string; label: string; endpoint: string }[] = [];
+  const CORE_FUNCTIONS: { key: string; label: string; endpoint: string }[] = [
+    { key: "admin-ai", label: "🤖 Admin AI Agent", endpoint: "admin-ai" },
+    { key: "weekly-auto-detect", label: "📅 Weekly Auto-Detect", endpoint: "weekly-auto-detect" },
+    { key: "send-fcm", label: "🔔 Send FCM Notification", endpoint: "send-fcm" },
+    { key: "telegram-post", label: "📢 Telegram Post", endpoint: "telegram-post" },
+    { key: "rs-bot", label: "💬 RS Bot (Telegram)", endpoint: "rs-bot" },
+    { key: "send-otp-email", label: "📧 Send OTP Email", endpoint: "send-otp-email" },
+    { key: "shorten-arolinks", label: "🔗 Shorten AroLinks", endpoint: "shorten-arolinks" },
+    { key: "shorten-shrinkme", label: "🔗 Shorten ShrinkMe", endpoint: "shorten-shrinkme" },
+    { key: "shorten-vplink", label: "🔗 Shorten VP Link", endpoint: "shorten-vplink" },
+  ];
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/edgeRouter"), (snap) => {
