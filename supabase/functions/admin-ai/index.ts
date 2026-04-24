@@ -332,6 +332,36 @@ const tools = [
 ];
 
 // ---------------- Plan executor ----------------
+// Resolve a seriesId — accepts an actual Firebase key OR a (partial) title.
+// Returns the real Firebase key, or null if nothing matches.
+async function resolveSeriesId(
+  collection: string,
+  rawId: string,
+): Promise<{ id: string | null; candidates: { id: string; title: string }[] }> {
+  if (!rawId) return { id: null, candidates: [] };
+  // 1) Direct hit
+  const direct = await fbGet(`${collection}/${rawId}`);
+  if (direct) return { id: rawId, candidates: [] };
+  // 2) Search whole collection
+  const all: any = await fbGet(collection);
+  if (!all || typeof all !== "object") return { id: null, candidates: [] };
+  const needle = rawId.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const list = Object.entries(all).map(([id, v]: [string, any]) => ({
+    id,
+    title: String(v?.title || v?.name || ""),
+    norm: String(v?.title || v?.name || "").toLowerCase().replace(/[^a-z0-9]/g, ""),
+  }));
+  // exact title
+  const exact = list.find((x) => x.norm === needle);
+  if (exact) return { id: exact.id, candidates: [] };
+  // contains
+  const matches = list.filter((x) => x.norm && (x.norm.includes(needle) || needle.includes(x.norm)));
+  if (matches.length === 1) return { id: matches[0].id, candidates: [] };
+  if (matches.length > 1)
+    return { id: null, candidates: matches.slice(0, 5).map((m) => ({ id: m.id, title: m.title })) };
+  return { id: null, candidates: [] };
+}
+
 async function executeOperation(op: any) {
   const { name, args } = op;
   switch (name) {
