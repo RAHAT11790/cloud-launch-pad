@@ -57,7 +57,7 @@ async function fbPush(path: string, data: unknown) {
 let snapshotCache: { ts: number; data: any } | null = null;
 async function getKnowledge() {
   if (snapshotCache && Date.now() - snapshotCache.ts < 60_000) return snapshotCache.data;
-  const [webseries, movies, animesalt, weeklyPending, bkash, unlock, users, settings] =
+  const [webseries, movies, animesalt, weeklyPending, bkash, unlock, users, settings, fcmTokens, notifications] =
     await Promise.all([
       fbGet("webseries"),
       fbGet("movies"),
@@ -67,6 +67,8 @@ async function getKnowledge() {
       fbGet("unlockRequests"),
       fbGet("users"),
       fbGet("settings"),
+      fbGet("fcmTokens"),
+      fbGet("notifications"),
     ]);
 
   const summarize = (obj: any, type: string) => {
@@ -95,6 +97,11 @@ async function getKnowledge() {
       pendingBkash: bkash ? Object.values(bkash).filter((p: any) => p?.status === "pending").length : 0,
       unlockRequests: unlock ? Object.keys(unlock).length : 0,
       users: users ? Object.keys(users).length : 0,
+      fcmUsers: fcmTokens ? Object.keys(fcmTokens).length : 0,
+      fcmTokens: fcmTokens
+        ? Object.values(fcmTokens).reduce((acc: number, item: any) => acc + (item && typeof item === "object" ? Object.keys(item).length : 0), 0)
+        : 0,
+      notificationUsers: notifications ? Object.keys(notifications).length : 0,
     },
     webseries: summarize(webseries, "webseries").slice(0, 250),
     movies: summarize(movies, "movies").slice(0, 250),
@@ -117,6 +124,19 @@ async function getKnowledge() {
       adServicesCount: settings?.adServices ? Object.keys(settings.adServices).length : 0,
       tutorialVideosCount: Array.isArray(settings?.tutorialVideos) ? settings.tutorialVideos.length : settings?.tutorialVideos ? Object.keys(settings.tutorialVideos).length : 0,
     },
+    adminSections: [
+      "AI Manager",
+      "Dashboard",
+      "Series",
+      "Movies",
+      "Notifications",
+      "Telegram",
+      "Weekly Episodes",
+      "Router / Edge Functions",
+      "OTP / Email Service",
+      "Ad Services",
+      "User Data / Payments",
+    ],
     settings: settings || {},
   };
   snapshotCache = { ts: Date.now(), data };
