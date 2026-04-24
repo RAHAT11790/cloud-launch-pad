@@ -6649,9 +6649,24 @@ ${tgHashtags}`;
 
                 {/* Saved Posts List */}
                 <div className={`${glassCard} p-4`}>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <Send size={14} className="text-blue-400" /> সেভ করা পোস্ট ({tgPosts.length}টি)
-                  </h3>
+                  <div className="flex items-center justify-between mb-3 gap-2">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <Send size={14} className="text-blue-400" /> সেভ করা পোস্ট ({tgPosts.length}টি)
+                    </h3>
+                    {tgPosts.length > 0 && (
+                      <button
+                        onClick={deleteAllFromChannels}
+                        disabled={tgDeletingAll}
+                        className="text-[11px] px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 disabled:opacity-50 flex items-center gap-1.5 font-medium"
+                        title="সব চ্যানেল থেকে ডিলিট করুন">
+                        {tgDeletingAll ? (
+                          <><div className="w-3 h-3 border-2 border-red-300/30 border-t-red-300 rounded-full animate-spin" /> ডিলিট হচ্ছে...</>
+                        ) : (
+                          <><Trash2 size={12} /> {tgSelectedPost === "all" ? "সব ডিলিট" : "সিলেক্টেড ডিলিট"}</>
+                        )}
+                      </button>
+                    )}
+                  </div>
                   {tgPostsLoading ? (
                     <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>
                   ) : tgPosts.length === 0 ? (
