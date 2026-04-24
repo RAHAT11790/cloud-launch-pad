@@ -272,16 +272,23 @@ export function AdminAIManager() {
 
   const send = async () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if ((!text && pendingImages.length === 0) || loading) return;
+    const imagesSnapshot = pendingImages;
     setInput("");
-    const next: Msg[] = [...messages, { role: "user", content: text }];
+    setPendingImages([]);
+    const next: Msg[] = [...messages, { role: "user", content: text || "(image)", images: imagesSnapshot }];
     setMessages(next);
     setLoading(true);
 
     try {
       const chatHistory = next
         .filter((m) => m.role === "user" || (m.role === "assistant" && m.content))
-        .map((m) => ({ role: m.role, content: m.content }));
+        .map((m) => {
+          if (m.role === "user" && (m as any).images?.length) {
+            return { role: m.role, content: m.content, images: (m as any).images };
+          }
+          return { role: m.role, content: m.content };
+        });
 
       const r = await fetch(aiUrl, {
         method: "POST",
