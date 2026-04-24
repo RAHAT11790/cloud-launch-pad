@@ -224,12 +224,36 @@ function startKeyboard() {
   return {
     inline_keyboard: [
       [{ text: "🔎 Search Anime", callback_data: "act:search" }],
+      [{ text: "🆕 Add New Anime", callback_data: "act:addnew" }],
       [
         { text: "📋 Menu", callback_data: "act:menu" },
         { text: "❓ Help", callback_data: "act:help" },
       ],
     ],
   };
+}
+
+const TMDB_KEY = "8265bd1679663a7ea12ac168da84d2e8";
+
+async function tmdbSearch(query: string) {
+  try {
+    const url = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
+    const r = await fetch(url);
+    const j = await r.json();
+    return (j?.results || []).filter((x: any) => x.media_type === "tv" || x.media_type === "movie").slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
+async function tmdbDetails(mediaType: string, tmdbId: number) {
+  try {
+    const url = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_KEY}&language=en-US`;
+    const r = await fetch(url);
+    return await r.json();
+  } catch {
+    return null;
+  }
 }
 
 function escapeHtml(s: string) {
@@ -515,6 +539,11 @@ async function promptQualityLink(chatId: number, q: string) {
     `📥 Send the <b>${label}</b> link now.\n\n` +
       (cur ? `<i>Current:</i> <code>${escapeHtml(cur)}</code>\n\n` : "") +
       `Type <code>skip</code> to leave empty.`,
+    {
+      reply_markup: {
+        inline_keyboard: [[{ text: "⬅ Back to Qualities", callback_data: "back:qualities" }]],
+      },
+    },
   );
 }
 
@@ -707,7 +736,10 @@ async function confirmAndSend(chatId: number) {
     (data.rating ? `⭐ ${data.rating}\n` : "") +
     (data.category ? `📂 ${data.category}\n` : "");
 
-  // Call telegram-post function (it handles chatId resolution from Firebase)
+  // Resolve chatId: Firebase settings → fallback to admin chat
+  let postChatId = await fbGet("settings/telegramChatId");
+  if (!postChatId) postChatId = chatId; // fallback to current admin chat
+
   const photoUrl = data.backdrop || data.poster || FALLBACK_POSTER;
   const postRes = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
     method: "POST",
@@ -717,6 +749,7 @@ async function confirmAndSend(chatId: number) {
       Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
     },
     body: JSON.stringify({
+      chatId: postChatId,
       caption,
       photoUrl,
       inlineButtons: buttons,
@@ -746,7 +779,123 @@ async function confirmAndSend(chatId: number) {
   }
 }
 
-// ---------- Custom button add flow ----------
+// ---------- Add New Anime (TMDB) ----------
+async function showTmdbPreview(chatId: number, mediaType: string, tmdbId: number) {
+  const d = await tmdbDetails(mediaType, tmdbId);
+  if (!d) {
+    await tgSend(chatId, "❌ TMDB ডেটা পাওয়া যায়নি।", {
+      reply_markup: { inline_keyboard: [[{ text: "⬅ Back", callback_data: "act:home" }]] },
+    });
+    return;
+  }
+  const title = d.name || d.title || "Untitled";
+  const year = (d.first_air_date || d.release_date || "").slice(0, 4);
+  const rating = d.vote_average ? Number(d.vote_average).toFixed(1) : "";
+  const genres = (d.genres || []).map((g: any) => g.name).join(", ");
+  const overview = (d.overview || "").slice(0, 300);
+  const poster = d.backdrop_path
+    ? `https://image.tmdb.org/t/p/original${d.backdrop_path}`
+    : d.poster_path
+      ? `https://image.tmdb.org/t/p/original${d.poster_path}`
+      : FALLBACK_POSTER;
+
+  // Save preview data in session
+  const s = await getSession(chatId);
+  s.step = "addnew_dub";
+  s.customButton = undefined;
+  // store TMDB data as a temp blob in session via fbPut path
+  await fbPut(`telegramAdminTemp/${chatId}`, {
+    mediaType,
+    tmdbId,
+    title,
+    year,
+    rating,
+    genres,
+    overview,
+    poster:
+      d.backdrop_path
+        ? `https://image.tmdb.org/t/p/original${d.backdrop_path}`
+        : d.poster_path
+          ? `https://image.tmdb.org/t/p/w500${d.poster_path}`
+          : "",
+    backdrop:
+      d.backdrop_path ? `https://image.tmdb.org/t/p/original${d.backdrop_path}` : "",
+    language: (d.original_language || "").toUpperCase(),
+  });
+  await setSession(chatId, s);
+
+  const caption =
+    `<b>🎬 ${escapeHtml(title)}</b>${year ? ` (${year})` : ""}\n` +
+    `<b>━━━━━━━━━━━━━━━</b>\n` +
+    (rating ? `⭐ <b>${rating}</b>\n` : "") +
+    (genres ? `📂 ${escapeHtml(genres)}\n` : "") +
+    (overview ? `\n📝 <i>${escapeHtml(overview)}</i>\n` : "") +
+    `\n<b>🗣 Dub type select করুন:</b>`;
+
+  await tgSendPhoto(chatId, poster, caption, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "🎙 Hindi Dub", callback_data: "dub:Hindi Dub" },
+          { text: "🎙 English Dub", callback_data: "dub:English Dub" },
+        ],
+        [
+          { text: "📝 Subbed", callback_data: "dub:Subbed" },
+          { text: "🎙 Multi Audio", callback_data: "dub:Multi Audio" },
+        ],
+        [{ text: "⬅ Back", callback_data: "act:addnew" }],
+      ],
+    },
+  });
+}
+
+async function saveNewAnime(chatId: number, dubType: string) {
+  const tmp: any = await fbGet(`telegramAdminTemp/${chatId}`);
+  if (!tmp) {
+    await tgSend(chatId, "❌ Session expired. আবার শুরু করুন।");
+    return;
+  }
+  const collection = tmp.mediaType === "movie" ? "movies" : "webseries";
+  // Generate Firebase push id
+  const pushRes = await fetch(`${FIREBASE_DB}/${collection}.json`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: tmp.title,
+      year: tmp.year,
+      rating: tmp.rating,
+      category: tmp.genres,
+      poster: tmp.poster,
+      backdrop: tmp.backdrop || tmp.poster,
+      language: tmp.language,
+      dubType,
+      tmdbId: tmp.tmdbId,
+      type: collection === "movies" ? "movie" : "series",
+      visibility: "public",
+      seasons: [],
+      storyline: tmp.overview,
+      updatedAt: Date.now(),
+    }),
+  });
+  const pushData = await pushRes.json().catch(() => ({}));
+  const newId = pushData?.name;
+  await fbDelete(`telegramAdminTemp/${chatId}`);
+  await clearSession(chatId);
+
+  if (!newId) {
+    await tgSend(chatId, "❌ সেভ করা যায়নি। আবার চেষ্টা করুন।", {
+      reply_markup: startKeyboard(),
+    });
+    return;
+  }
+  await tgSend(
+    chatId,
+    `✅ <b>${escapeHtml(tmp.title)}</b> যুক্ত হয়েছে (${dubType})!\n\n<i>এবার Add Season → Add Episode করুন।</i>`,
+  );
+  await showAnime(chatId, collection, newId);
+}
+
+
 async function startAddButton(chatId: number) {
   const s = await getSession(chatId);
   s.step = "btn_text";
@@ -820,6 +969,45 @@ async function handleText(chatId: number, text: string) {
       { reply_markup: { inline_keyboard: rows } },
     );
     await clearSession(chatId);
+    return;
+  }
+
+  // --- Add new anime: TMDB search ---
+  if (s.step === "addnew_query") {
+    const results = await tmdbSearch(t);
+    if (results.length === 0) {
+      await tgSend(
+        chatId,
+        `❌ TMDB এ "<b>${escapeHtml(t)}</b>" পাওয়া যায়নি। অন্য নাম try করুন।`,
+        {
+          reply_markup: {
+            inline_keyboard: [[{ text: "⬅ Back", callback_data: "act:home" }]],
+          },
+        },
+      );
+      return;
+    }
+    // Save tmdb candidates in session for picking
+    s.lastResults = results.map((r: any) => ({
+      id: String(r.id),
+      collection: r.media_type === "movie" ? "movies" : "webseries",
+      title: r.name || r.title || "",
+    }));
+    await setSession(chatId, s);
+    if (results.length === 1) {
+      await showTmdbPreview(chatId, results[0].media_type, results[0].id);
+      return;
+    }
+    const rows = results.map((r: any) => [
+      {
+        text: `${r.media_type === "tv" ? "📺" : "🎬"} ${(r.name || r.title || "").slice(0, 50)} ${r.first_air_date || r.release_date ? `(${(r.first_air_date || r.release_date || "").slice(0, 4)})` : ""}`,
+        callback_data: `tmdbpick:${r.media_type}:${r.id}`,
+      },
+    ]);
+    rows.push([{ text: "⬅ Back", callback_data: "act:home" }]);
+    await tgSend(chatId, `🔎 TMDB তে <b>${results.length}</b>টি ফলাফল। একটা select করুন:`, {
+      reply_markup: { inline_keyboard: rows },
+    });
     return;
   }
 
@@ -928,7 +1116,73 @@ async function handleCallback(chatId: number, data: string, cbId: string, messag
   }
   if (data === "act:search") {
     await setSession(chatId, { step: "search_query" });
-    await tgSend(chatId, "🔎 Type the anime name:");
+    await tgSend(chatId, "🔎 Type the anime name:", {
+      reply_markup: { inline_keyboard: [[{ text: "⬅ Back", callback_data: "act:home" }]] },
+    });
+    return;
+  }
+  if (data === "act:addnew") {
+    await setSession(chatId, { step: "addnew_query" });
+    await tgSend(
+      chatId,
+      "🆕 <b>Add New Anime</b>\n\nTMDB থেকে fetch করতে anime/movie এর নাম পাঠান:",
+      {
+        reply_markup: { inline_keyboard: [[{ text: "⬅ Back", callback_data: "act:home" }]] },
+      },
+    );
+    return;
+  }
+
+  // tmdbpick:mediaType:tmdbId
+  if (data.startsWith("tmdbpick:")) {
+    const [, mt, id] = data.split(":");
+    await showTmdbPreview(chatId, mt, Number(id));
+    return;
+  }
+
+  // dub:<dubType>
+  if (data.startsWith("dub:")) {
+    const dub = data.slice(4);
+    await tgSend(chatId, "⏳ Saving...");
+    await saveNewAnime(chatId, dub);
+    return;
+  }
+
+  // back:qualities — return to quality picker during link entry
+  if (data === "back:qualities") {
+    const s = await getSession(chatId);
+    if (!s.links) {
+      await sendStart(chatId);
+      return;
+    }
+    s.step = s.step === "edit_wait_link" ? "edit_links" : "add_links";
+    s.pendingQuality = undefined;
+    await setSession(chatId, s);
+    const rows = [
+      [
+        { text: `📺 Default ${s.links.default ? "✅" : ""}`, callback_data: `q:default` },
+        { text: `480p ${s.links["480"] ? "✅" : ""}`, callback_data: `q:480` },
+      ],
+      [
+        { text: `720p ${s.links["720"] ? "✅" : ""}`, callback_data: `q:720` },
+        { text: `1080p ${s.links["1080"] ? "✅" : ""}`, callback_data: `q:1080` },
+      ],
+      [
+        { text: `4K ${s.links["4k"] ? "✅" : ""}`, callback_data: `q:4k` },
+        { text: "✅ Finish", callback_data: `q:finish` },
+      ],
+      [
+        { text: "⬅ Back",
+          callback_data:
+            s.collection && s.seriesId && s.seasonIdx !== undefined
+              ? `season:${s.collection}:${s.seriesId}:${s.seasonIdx}`
+              : "act:home",
+        },
+      ],
+    ];
+    await tgSend(chatId, "<i>Pick a quality to add/edit, or ✅ Finish.</i>", {
+      reply_markup: { inline_keyboard: rows },
+    });
     return;
   }
 
