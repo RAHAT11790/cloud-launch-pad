@@ -224,12 +224,36 @@ function startKeyboard() {
   return {
     inline_keyboard: [
       [{ text: "🔎 Search Anime", callback_data: "act:search" }],
+      [{ text: "🆕 Add New Anime", callback_data: "act:addnew" }],
       [
         { text: "📋 Menu", callback_data: "act:menu" },
         { text: "❓ Help", callback_data: "act:help" },
       ],
     ],
   };
+}
+
+const TMDB_KEY = "8265bd1679663a7ea12ac168da84d2e8";
+
+async function tmdbSearch(query: string) {
+  try {
+    const url = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_KEY}&query=${encodeURIComponent(query)}&include_adult=false`;
+    const r = await fetch(url);
+    const j = await r.json();
+    return (j?.results || []).filter((x: any) => x.media_type === "tv" || x.media_type === "movie").slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
+async function tmdbDetails(mediaType: string, tmdbId: number) {
+  try {
+    const url = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_KEY}&language=en-US`;
+    const r = await fetch(url);
+    return await r.json();
+  } catch {
+    return null;
+  }
 }
 
 function escapeHtml(s: string) {
