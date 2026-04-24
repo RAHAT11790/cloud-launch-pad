@@ -512,11 +512,129 @@ async function showMainMenu(chatId: number, prefix = "") {
   });
 }
 
+async function showManualHelp(chatId: number, prefix = "") {
+  const text =
+    (prefix ? prefix + "\n\n" : "") +
+    `<b>📘 Manual Mode Guide</b>\n\n` +
+    `Slash commands (BotFather style):\n` +
+    `• <code>/manual</code> — manual mode open\n` +
+    `• <code>/search Re Zero</code> — title search\n` +
+    `• <code>/selected</code> — selected anime খুলবে\n` +
+    `• <code>/season 1</code> — selected season খুলবে\n` +
+    `• <code>/ep 13</code> — selected season/episode details\n` +
+    `• <code>/weekly</code> — আজকের reminder\n` +
+    `• <code>/cancel</code> — current flow cancel\n\n` +
+    `ম্যানুয়াল ফ্লো:\n` +
+    `1. Search করুন\n` +
+    `2. Anime poster/card খুলুন\n` +
+    `3. Season চাপুন\n` +
+    `4. <b>Add Episode</b> বা next EP button চাপুন\n` +
+    `5. <b>Manual</b> নিলে quality button-by-button link দিন\n` +
+    `6. <b>Finish → Allow & Save</b>\n` +
+    `7. শেষে <b>Post to Telegram</b> চাইলে Yes চাপুন\n\n` +
+    `সার্চ টিপস:\n` +
+    `• Plain title: <code>The Ramparts Of Ice</code>\n` +
+    `• Banglish/Bangla: <code>ramparts of ice</code>, <code>র‍্যাম্পার্টস অফ আইস</code>\n` +
+    `• AI mode থেকেও লিখতে পারেন: <code>Re Zero find koro</code> বা <code>/search Re Zero</code>`;
+  await tgSend(chatId, text, {
+    reply_markup: kb([
+      [{ text: "🔎 Search Anime", data: "search" }, { text: "🏠 Menu", data: "menu" }],
+    ]),
+  });
+}
+
+async function runAnimeSearch(
+  chatId: number,
+  rawQuery: string,
+  opts: { fromAi?: boolean } = {},
+) {
+  const query = cleanSearchQuery(rawQuery);
+  if (!query) {
+    await tgSend(chatId, `❌ Search title দিন। যেমন: <code>/search Re Zero</code>`);
+    return;
+  }
+
+  const results = await searchAnimeRS(query);
+  if (results.length === 0) {
+    await tgSendPhoto(
+      chatId,
+      FALLBACK_POSTER,
+      `❌ "<b>${query}</b>" এর কাছাকাছি কিছু পাওয়া যায়নি।\n\n` +
+        `আবার চেষ্টা করুন:\n` +
+        `• <code>/search Re Zero</code>\n` +
+        `• <code>/search The Ramparts Of Ice</code>\n` +
+        `• title plain text হিসেবেও পাঠাতে পারেন`,
+      { reply_markup: kb([[{ text: "🔁 Try Again", data: "search" }, { text: "❓ Help", data: "help" }]]) },
+    );
+    return;
+  }
+
+  await patchSession(chatId, { mode: opts.fromAi ? "ai" : "manual", awaiting: null });
+
+  if (results.length === 1 || results[0].score >= 0.92) {
+    await showAnimeDetail(chatId, results[0].collection, results[0].id);
+    await showAnimeAssistantHint(chatId, results[0].collection, results[0].id, {
+      manualPreferred: isManualIntent(rawQuery),
+      infoPreferred: isInfoIntent(rawQuery),
+    });
+    return;
+  }
+
+  const rows = results.slice(0, 6).map((r) => [{
+    text: `${r.title} (${r.collection}) ${Math.round(r.score * 100)}%`,
+    data: `pick:${r.collection}:${r.id}`,
+  }]);
+  rows.push([{ text: "🔎 Search Again", data: "search" }, { text: "🏠 Menu", data: "menu" }]);
+  await tgSendPhoto(
+    chatId,
+    FALLBACK_POSTER,
+    `🔎 "<b>${query}</b>" এর জন্য <b>${results.length}</b>টা কাছাকাছি match পাওয়া গেছে।\nনিচ থেকে সঠিকটা বেছে নিন:`,
+    { reply_markup: kb(rows) },
+  );
+}
+
+async function showAnimeAssistantHint(
+  chatId: number,
+  collection: string,
+  seriesId: string,
+  opts: { manualPreferred?: boolean; infoPreferred?: boolean } = {},
+) {
+  const series: any = await fbGet(`${collection}/${seriesId}`);
+  if (!series || collection === "movies") return;
+  const next = getSeriesNextEpisode(series);
+  const lead = opts.manualPreferred
+    ? `আপনি button-based manual add করতে চেয়েছেন। নিচের button থেকে next episode add করতে পারবেন।`
+    : opts.infoPreferred
+    ? `এই anime-তে এখন ${next.totalEpisodes} episode add আছে। next logical episode হলো EP ${next.episodeNumber}.`
+    : `এই anime-তে এখন ${next.totalEpisodes} episode add আছে। চাইলে next episode এখনই add করতে পারেন।`;
+
+  await tgSend(
+    chatId,
+    `<b>${series.title || seriesId}</b>\nID: <code>${seriesId}</code>\n\n${lead}`,
+    {
+      reply_markup: kb([
+        [
+          { text: `✋ Manual EP ${next.episodeNumber}`, data: `quickadd:manual:${collection}:${seriesId}:${next.seasonNumber}:${next.episodeNumber}` },
+          { text: `⚡ Auto EP ${next.episodeNumber}`, data: `quickadd:auto:${collection}:${seriesId}:${next.seasonNumber}:${next.episodeNumber}` },
+        ],
+        [{ text: `📁 Open Season ${next.seasonNumber}`, data: `season:${collection}:${seriesId}:${next.seasonNumber}` }],
+        [{ text: "📘 Manual Guide", data: "guide:manual" }],
+      ]),
+    },
+  );
+}
+
 async function showSearchPrompt(chatId: number) {
   await patchSession(chatId, { mode: "manual", awaiting: "search_anime" });
   await tgSend(
     chatId,
-    `🔎 <b>Search Anime</b>\n\nএনিমির নাম লিখুন (একটু বানান ভুল হলেও খুঁজে পাবে)।\nযেমন: <code>One Piece</code>, <code>Dr Stone</code>\n\n<code>/cancel</code> = বাদ`,
+    `🔎 <b>Search Anime</b>\n\n` +
+      `এনিমির নাম লিখুন (একটু বানান ভুল হলেও খুঁজে পাবে)।\n` +
+      `যেমন: <code>One Piece</code>, <code>Dr Stone</code>, <code>The Ramparts Of Ice</code>\n\n` +
+      `BotFather style:\n` +
+      `• <code>/search Re Zero</code>\n` +
+      `• শুধু title পাঠালেও search হবে\n\n` +
+      `<code>/cancel</code> = বাদ`,
   );
 }
 
@@ -527,6 +645,7 @@ async function showAnimeDetail(chatId: number, collection: string, seriesId: str
     return;
   }
   const seasons = Array.isArray(series.seasons) ? series.seasons : Object.values(series.seasons || {});
+  const next = getSeriesNextEpisode(series);
   const totalEps = seasons.reduce((acc: number, s: any) => {
     const e = Array.isArray(s?.episodes) ? s.episodes : Object.values(s?.episodes || {});
     return acc + e.length;
@@ -538,12 +657,20 @@ async function showAnimeDetail(chatId: number, collection: string, seriesId: str
   });
   const caption =
     `<b>${series.title || seriesId}</b>\n` +
+    `🆔 <code>${seriesId}</code>\n` +
     `📂 ${collection}\n` +
     `📅 Year: ${series.year || "-"}\n` +
     `⭐ ${series.rating || "-"}\n` +
-    `📺 Seasons: ${seasons.length} · Episodes: ${totalEps}\n\n` +
+    `📺 Seasons: ${seasons.length} · Episodes: ${totalEps}\n` +
+    (collection === "webseries" ? `🆕 Next EP suggestion: S${next.seasonNumber} · EP ${next.episodeNumber}\n\n` : `\n`) +
     `কোন season এ কাজ করবেন?`;
   const seasonRows: any[][] = [];
+  if (collection === "webseries") {
+    seasonRows.push([
+      { text: `✋ Manual EP ${next.episodeNumber}`, data: `quickadd:manual:${collection}:${seriesId}:${next.seasonNumber}:${next.episodeNumber}` },
+      { text: `⚡ Auto EP ${next.episodeNumber}`, data: `quickadd:auto:${collection}:${seriesId}:${next.seasonNumber}:${next.episodeNumber}` },
+    ]);
+  }
   if (seasons.length === 0 && collection === "webseries") {
     seasonRows.push([{ text: "➕ Add Episode (Season 1)", data: `addep:${collection}:${seriesId}:1` }]);
   } else {
@@ -558,6 +685,7 @@ async function showAnimeDetail(chatId: number, collection: string, seriesId: str
   if (collection === "movies") {
     seasonRows.push([{ text: "🎬 Set Movie Link", data: `movie:${collection}:${seriesId}` }]);
   }
+  seasonRows.push([{ text: "📘 Manual Guide", data: "guide:manual" }]);
   seasonRows.push([{ text: "🔎 Search again", data: "search" }, { text: "🏠 Menu", data: "menu" }]);
 
   const photo = series.poster || series.backdrop || FALLBACK_POSTER;
@@ -574,21 +702,28 @@ async function showSeasonDetail(chatId: number, collection: string, seriesId: st
   });
   const total = eps.length;
   const last6 = eps.slice(-6); // last 6 from bottom
+  const nextEp = eps.reduce((acc: number, e: any) => Math.max(acc, Number(e?.episodeNumber || 0)), 0) + 1;
   const list = last6.map((e: any) => `EP ${e.episodeNumber} — ${e.title || ""}`).join("\n") || "(কোনো episode নেই)";
   const text =
     `<b>Season ${seasonNumber}</b> (${total} episodes)\n\n` +
-    `Last ${last6.length} episodes:\n${list}`;
+    `Last ${last6.length} episodes:\n${list}\n\n` +
+    `Next suggested episode: <b>${nextEp}</b>`;
   const epButtons = last6.map((e: any) => ({
     text: `EP ${e.episodeNumber}`,
     data: `ep:${collection}:${seriesId}:${seasonNumber}:${e.episodeNumber}`,
   }));
   const rows: any[][] = [];
   for (let i = 0; i < epButtons.length; i += 3) rows.push(epButtons.slice(i, i + 3));
+  rows.push([
+    { text: `✋ Manual EP ${nextEp}`, data: `quickadd:manual:${collection}:${seriesId}:${seasonNumber}:${nextEp}` },
+    { text: `⚡ Auto EP ${nextEp}`, data: `quickadd:auto:${collection}:${seriesId}:${seasonNumber}:${nextEp}` },
+  ]);
   rows.push([{ text: "➕ Add Episode", data: `addep:${collection}:${seriesId}:${seasonNumber}` }]);
   if (total > 0) {
     const latestEp = eps[eps.length - 1].episodeNumber;
     rows.push([{ text: `📢 Post EP ${latestEp} to Telegram`, data: `post:${collection}:${seriesId}:${seasonNumber}:${latestEp}` }]);
   }
+  rows.push([{ text: "📘 Manual Guide", data: "guide:manual" }]);
   rows.push([{ text: "⬅ Back", data: `anime:${collection}:${seriesId}` }, { text: "🏠 Menu", data: "menu" }]);
   await tgSend(chatId, text, { reply_markup: kb(rows) });
 }
@@ -597,14 +732,17 @@ async function showEpisodeDetail(chatId: number, collection: string, seriesId: s
   const { eps } = await getSeriesEpisodes(collection, seriesId, seasonNumber);
   const e = eps.find((x: any) => x?.episodeNumber === epNum);
   if (!e) { await tgSend(chatId, "❌ Episode পাওয়া যায়নি।"); return; }
-  const links = ["link", "link480", "link720", "link1080", "link4k"]
-    .filter((k) => e[k])
-    .map((k) => `<code>${k}</code>: ${String(e[k]).slice(0, 80)}...`).join("\n") || "(no links)";
-  await tgSend(chatId, `<b>EP ${epNum}</b> — ${e.title || ""}\n\n${links}`, {
+  const linkLines = [
+    ["Default", e.link],
+    ["480p", e.link480],
+    ["720p", e.link720],
+    ["1080p", e.link1080],
+    ["4K", e.link4k],
+  ].map(([label, value]) => `${value ? "✅" : "—"} <b>${label}</b>${value ? `\n<code>${String(value).slice(0, 90)}</code>` : ""}`).join("\n\n");
+  await tgSend(chatId, `<b>EP ${epNum}</b> — ${e.title || `Episode ${epNum}`}\n\n${linkLines}`, {
     reply_markup: kb([
-      [{ text: "✏️ Replace/Add Links", data: `addep:${collection}:${seriesId}:${seasonNumber}:${epNum}` }],
-      [{ text: "📢 Post to Telegram", data: `post:${collection}:${seriesId}:${seasonNumber}:${epNum}` }],
-      [{ text: "🗑 Delete EP", data: `del:${collection}:${seriesId}:${seasonNumber}:${epNum}` }],
+      [{ text: "✏️ Edit", data: `addep:${collection}:${seriesId}:${seasonNumber}:${epNum}` }, { text: "❌ Close", data: "close" }],
+      [{ text: "📢 Post to Telegram", data: `post:${collection}:${seriesId}:${seasonNumber}:${epNum}` }, { text: "🗑 Delete EP", data: `del:${collection}:${seriesId}:${seasonNumber}:${epNum}` }],
       [{ text: "⬅ Back", data: `season:${collection}:${seriesId}:${seasonNumber}` }],
     ]),
   });
@@ -612,19 +750,26 @@ async function showEpisodeDetail(chatId: number, collection: string, seriesId: s
 
 // ---------- Add Episode flow (Auto / Manual) ----------
 async function startAddEpisode(chatId: number, collection: string, seriesId: string, seasonNumber: number, presetEp?: number) {
+  let existingLinks: AddingLinks = {};
+  if (presetEp) {
+    const { eps } = await getSeriesEpisodes(collection, seriesId, seasonNumber);
+    const existing = eps.find((e: any) => e?.episodeNumber === presetEp);
+    if (existing) existingLinks = extractEpisodeLinks(existing);
+  }
   await patchSession(chatId, {
     collection: collection as any,
     seriesId,
     seasonNumber,
     episodeNumber: presetEp,
-    addingLinks: {},
+    addingLinks: existingLinks,
+    pendingSave: undefined,
     awaiting: null,
   });
-  await tgSend(chatId, `<b>➕ Add Episode</b> — Season ${seasonNumber}\n\nকোন মোডে যোগ করবেন?`, {
+  await tgSend(chatId, `<b>${presetEp ? "✏️ Edit Episode" : "➕ Add Episode"}</b> — Season ${seasonNumber}${presetEp ? ` · EP ${presetEp}` : ""}\n\nকোন মোডে যোগ করবেন?`, {
     reply_markup: kb([[
       { text: "⚡ Auto (paste post)", data: `mode_add:auto` },
       { text: "✋ Manual (button-by-button)", data: `mode_add:manual` },
-    ]]),
+    ], [{ text: "⬅ Back to Season", data: `season:${collection}:${seriesId}:${seasonNumber}` }]]),
   });
 }
 
@@ -633,14 +778,23 @@ async function showManualLinkPanel(chatId: number) {
   const links = sess.addingLinks || {};
   const status = (k: keyof AddingLinks, label: string) => (links[k] ? `✅ ${label}` : label);
   const epLabel = sess.episodeNumber ? `EP ${sess.episodeNumber}` : "EP ?";
+  const existingStatus = [
+    `Default: ${links.def ? "✅" : "—"}`,
+    `480p: ${links["480"] ? "✅" : "—"}`,
+    `720p: ${links["720"] ? "✅" : "—"}`,
+    `1080p: ${links["1080"] ? "✅" : "—"}`,
+    `4K: ${links["4k"] ? "✅" : "—"}`,
+  ].join("\n");
   const text =
     `<b>✋ Manual Mode</b> — Season ${sess.seasonNumber}, ${epLabel}\n\n` +
     (sess.episodeNumber ? "" : `প্রথমে EP number সেট করুন।\n\n`) +
-    `যে quality এর link দিতে চান সেই button চাপুন। শেষে Finish।`;
+    `যে quality এর link দিতে চান সেই button চাপুন। শেষে Finish।\n\n` +
+    `<b>Current status</b>\n${existingStatus}`;
   const rows: any[][] = [];
   if (!sess.episodeNumber) {
     rows.push([{ text: "🔢 Set Episode Number", data: "manual:setep" }]);
   } else {
+    rows.push([{ text: "🔢 Change Episode Number", data: "manual:setep" }]);
     rows.push([
       { text: status("def", "Default"), data: "manual:def" },
       { text: status("480", "480p"), data: "manual:480" },
@@ -650,7 +804,10 @@ async function showManualLinkPanel(chatId: number) {
       { text: status("1080", "1080p"), data: "manual:1080" },
     ]);
     rows.push([{ text: status("4k", "4K"), data: "manual:4k" }]);
-    rows.push([{ text: "✅ Finish", data: "manual:finish" }, { text: "❌ Cancel", data: "menu" }]);
+    rows.push([{ text: "✅ Finish", data: "manual:finish" }, { text: "✏️ Continue Edit", data: "manual:back" }]);
+    if (sess.collection && sess.seriesId && sess.seasonNumber) {
+      rows.push([{ text: "⬅ Back to Season", data: `season:${sess.collection}:${sess.seriesId}:${sess.seasonNumber}` }, { text: "🏠 Menu", data: "menu" }]);
+    }
   }
   await tgSend(chatId, text, { reply_markup: kb(rows) });
 }
@@ -662,6 +819,11 @@ async function showFinishPreview(chatId: number) {
   }
   const series: any = await fbGet(`${sess.collection}/${sess.seriesId}`);
   const links = sess.addingLinks || {};
+  if (!Object.values(links).some(Boolean)) {
+    await tgSend(chatId, "❌ কমপক্ষে ১টা quality link দিন, তারপর Finish চাপুন।");
+    await showManualLinkPanel(chatId);
+    return;
+  }
   const linkSummary = Object.entries(links)
     .map(([k, v]) => `<code>${k}</code>: ${v ? "✅" : "—"}`)
     .join("\n");
@@ -681,10 +843,13 @@ async function showFinishPreview(chatId: number) {
     `আপনি এই episode টি add করতে চান?`;
   const photo = series?.poster || series?.backdrop || FALLBACK_POSTER;
   await tgSendPhoto(chatId, photo, caption, {
-    reply_markup: kb([[
-      { text: "✅ Allow & Save", data: "save:allow" },
-      { text: "❌ Disallow", data: "save:deny" },
-    ]]),
+    reply_markup: kb([
+      [
+        { text: "✅ Allow & Save", data: "save:allow" },
+        { text: "✏️ Back to Edit", data: "manual:back" },
+      ],
+      [{ text: "❌ Disallow", data: "save:deny" }],
+    ]),
   });
 }
 
