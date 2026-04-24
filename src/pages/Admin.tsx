@@ -308,7 +308,10 @@ const TelegramWebhookSection = ({ glassCard, inputClass, btnPrimary, btnSecondar
     try {
       const res = await fetch(tgUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+        },
         body: JSON.stringify({ action, ...extra }),
       });
       const data = await res.json();
@@ -735,14 +738,14 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       <button
-                        onClick={() => {
-                          const sbUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/${fn.endpoint}`;
-                          setFnOverrides(prev => ({ ...prev, [fn.key]: { ...override, customUrl: sbUrl } }));
-                          saveCustomUrl(fn.key, sbUrl);
+                        onClick={async () => {
+                          if (!url) return;
+                          await navigator.clipboard.writeText(url);
+                          toast.success("URL copied");
                         }}
                         className={`${btnSecondary} !px-2 !py-1 !text-[9px] whitespace-nowrap`}
                       >
-                        ⚡ SB
+                        Copy
                       </button>
                       <button onClick={() => toggleFunction(fn.key)}
                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${override.enabled !== false ? 'bg-green-600' : 'bg-zinc-600'}`}>
@@ -839,47 +842,6 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
           })}
         </div>
 
-        <div className="mt-4 rounded-xl border border-zinc-700/40 bg-zinc-900/30 p-3">
-          <h4 className="text-[11px] font-semibold text-white mb-2">Shortener → Ad button quick set</h4>
-          <p className="text-[10px] text-zinc-400 mb-3 break-words">
-            নিচের list থেকে built-in shortener-এর URL পছন্দ করে আপনার ad service-এ বসিয়ে দিন। নিচে আলাদা duplicate URL box রাখা হয়নি।
-          </p>
-          <div className="space-y-2">
-            {Object.values((fnOverrides && fnOverrides) || {}).length === 0 ? null : null}
-          </div>
-          <div className="space-y-2.5">
-            {BUILT_IN_SHORTENERS.map((fn) => {
-              const shortUrl = getFunctionUrl(fn);
-              return (
-                <div key={`picker-${fn.key}`} className="rounded-lg border border-zinc-700/40 bg-zinc-800/40 p-2.5">
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
-                    <span className="text-[11px] font-semibold text-white truncate">{fn.label}</span>
-                    <span className="text-[9px] text-cyan-300">{shortUrl ? "Ready" : "Not set"}</span>
-                  </div>
-                  <p className="text-[9px] text-zinc-400 break-all mb-2">{shortUrl || "No URL configured yet"}</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={async () => {
-                        const adSnap = await get(ref(db, "settings/adServices"));
-                        const adServices = adSnap.val() || {};
-                        const firstEnabled = Object.values(adServices).find((svc: any) => svc?.enabled !== false) as any;
-                        if (!firstEnabled?.id) {
-                          toast.error("আগে উপরের Ad Link Services section-এ অন্তত ১টা service add করুন");
-                          return;
-                        }
-                        applyShortenerToAdService(firstEnabled.id, shortUrl);
-                      }}
-                      className={`${btnSecondary} !px-2.5 !py-1 !text-[9px]`}
-                      disabled={!shortUrl}
-                    >
-                      Use in first active ad service
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -335,17 +335,28 @@ serve(async (req) => {
         }),
       });
       const data = await res.json();
+      if (!data?.ok && String(data?.description || "").toLowerCase().includes("unauthorized")) {
+        return json({ ok: false, error: "Telegram bot token unauthorized", details: data?.description || "Unauthorized" }, 400);
+      }
       return json(data);
     }
 
     if (action === "delete-webhook") {
       const res = await fetch(`${telegramBase}/deleteWebhook`, { method: "POST" });
-      return json(await res.json());
+      const data = await res.json();
+      if (!data?.ok && String(data?.description || "").toLowerCase().includes("unauthorized")) {
+        return json({ ok: false, error: "Telegram bot token unauthorized", details: data?.description || "Unauthorized" }, 400);
+      }
+      return json(data);
     }
 
     if (action === "webhook-info") {
       const res = await fetch(`${telegramBase}/getWebhookInfo`);
-      return json(await res.json());
+      const data = await res.json();
+      if (!data?.ok && String(data?.description || "").toLowerCase().includes("unauthorized")) {
+        return json({ ok: false, error: "Telegram bot token unauthorized", details: data?.description || "Unauthorized" }, 400);
+      }
+      return json(data);
     }
 
     if (action === "get-bot-username") {

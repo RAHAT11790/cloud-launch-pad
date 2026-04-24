@@ -159,6 +159,8 @@ export interface WeeklyStatus {
   isPending: boolean;
   /** Admin saved a new ep within the last 5 minutes. */
   isReleasedRecently: boolean;
+  /** Too old / too many missed cycles — hide from weekly action lists. */
+  isStale: boolean;
   msUntilNext: number;
   daysUntilNext: number;
   hoursUntilNext: number;
@@ -174,6 +176,8 @@ export function computeWeeklyStatus(entry: WeeklyPendingEntry): WeeklyStatus {
   const isPending = msUntilNext === 0;
   const isReleasedRecently =
     !!entry.releasedSavedAt && now - entry.releasedSavedAt < FIVE_MINUTES_MS;
+  const staleThresholdMs = Math.max(entry.weeklyEveryDays * ONE_DAY_MS * 2, 14 * ONE_DAY_MS);
+  const isStale = overdueMs > staleThresholdMs;
 
   const daysUntilNext = Math.floor(msUntilNext / ONE_DAY_MS);
   const hoursUntilNext = Math.floor((msUntilNext % ONE_DAY_MS) / (60 * 60 * 1000));
@@ -214,12 +218,18 @@ export function computeWeeklyStatus(entry: WeeklyPendingEntry): WeeklyStatus {
   return {
     isPending,
     isReleasedRecently,
+    isStale,
     msUntilNext,
     daysUntilNext,
     hoursUntilNext,
     countdownLabel,
     progressLabel,
   };
+}
+
+export function shouldShowWeeklyEntry(entry: WeeklyPendingEntry) {
+  const status = computeWeeklyStatus(entry);
+  return !status.isStale;
 }
 
 /**

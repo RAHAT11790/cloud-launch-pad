@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Sparkles, Send, Check, X, Loader2, Bot, User, AlertCircle, Image as ImageIcon, Plus, FileJson, Music2, ChevronDown, ChevronUp, Wand2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
@@ -64,7 +64,7 @@ export function AdminAIManager() {
     {
       role: "assistant",
       content:
-        "👋 আসসালামু আলাইকুম! আমি আপনার **Admin AI Manager**। যা খুশি বলুন — episode add, notification, series edit, payment approve, link check, weekly EP release — আমি আগে preview দেখাব, আপনি **Allow** চাপলে তবেই execute হবে।\n\nডিফল্ট ভাষা: বাংলা। ইংরেজি চাইলে \"reply in English\" লিখুন।",
+        "👋 আসসালামু আলাইকুম! আমি আপনার **Admin AI Manager**। আমি live admin operations handle করতে পারি — episode add/edit, bulk episode save, notification, Telegram post, weekly release, payment approve, link check, router/settings update, Firebase data patch — সব কিছুর আগে preview দেখাব, আপনি **Allow** চাপলে তবেই execute হবে।\n\nকোড/UI change চাইলে আমি exact execution plan, payload, settings update, আর builder-ready instruction তৈরি করে দেব। ডিফল্ট ভাষা: বাংলা। ইংরেজি চাইলে \"reply in English\" লিখুন।",
     },
   ]);
   const [input, setInput] = useState("");
@@ -72,6 +72,30 @@ export function AdminAIManager() {
   const [pendingImages, setPendingImages] = useState<string[]>([]); // base64 dataURLs
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const executionLogs = useMemo(
+    () =>
+      messages
+        .flatMap((msg, idx) => {
+          if (msg.role !== "assistant") return [] as { id: string; tone: "ok" | "error" | "info"; text: string }[];
+          if (msg.results?.length) {
+            return msg.results.map((result: any, rIdx) => ({
+              id: `${idx}-${rIdx}`,
+              tone: result?.ok ? "ok" : "error",
+              text: `${result?.op || "action"}: ${result?.message || (result?.ok ? "done" : "failed")}`,
+            }));
+          }
+          if (msg.status === "pending" && msg.operations?.length) {
+            return [{ id: `${idx}-pending`, tone: "info", text: `Preview ready · ${msg.operations.length} action waiting for approval` }];
+          }
+          if (msg.content.includes("⚠️")) {
+            return [{ id: `${idx}-error`, tone: "error", text: msg.content.split("⚠️").pop()?.trim() || msg.content }];
+          }
+          return [] as { id: string; tone: "ok" | "error" | "info"; text: string }[];
+        })
+        .slice(-8)
+        .reverse(),
+    [messages],
+  );
 
   const handleImagePick = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -349,7 +373,7 @@ export function AdminAIManager() {
       toast.error(`Execution failed: ${e.message}`);
       setMessages((m) =>
         m.map((x, i) =>
-          i === idx ? { ...x, status: "pending", content: x.content + `\n\n⚠️ ${e.message}\n\n💡 Lovable থেকে ঠিক করিয়া নিন।` } : x,
+          i === idx ? { ...x, status: "pending", content: x.content + `\n\n⚠️ ${e.message}\n\n💡 নিচের execution log দেখে আবার চেষ্টা করুন।` } : x,
         ),
       );
     } finally {
@@ -387,7 +411,7 @@ export function AdminAIManager() {
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="max-h-[420px] overflow-y-auto p-3 space-y-3">
+      <div ref={scrollRef} className="max-h-[460px] overflow-y-auto p-3 space-y-3">
         {messages.map((m, i) => (
           <div key={i} className={`flex gap-2 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
             <div
@@ -399,7 +423,7 @@ export function AdminAIManager() {
             >
               {m.role === "user" ? <User size={14} /> : <Bot size={14} />}
             </div>
-            <div className={`flex-1 max-w-[88%] min-w-0 ${m.role === "user" ? "text-right" : ""}`}>
+            <div className={`flex-1 max-w-[92%] min-w-0 ${m.role === "user" ? "text-right" : ""}`}>
               <div
                 className={`inline-block text-left px-3.5 py-3 rounded-2xl text-[12.5px] whitespace-pre-wrap break-words max-w-full overflow-hidden ${
                   m.role === "user"
@@ -805,7 +829,7 @@ export function AdminAIManager() {
         <div className="px-3 pt-3 pb-1 flex gap-2 flex-wrap bg-[#0a0a14] border-t border-white/8">
           {pendingImages.map((img, i) => (
             <div key={i} className="relative group">
-              <img src={img} alt="attachment" className="w-16 h-16 object-cover rounded-xl border border-violet-500/40" />
+              <img src={img} alt="attachment" className="w-20 h-20 object-cover rounded-2xl border border-violet-500/40" />
               <button
                 onClick={() => setPendingImages((p) => p.filter((_, k) => k !== i))}
                 className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center shadow-lg"
@@ -829,7 +853,7 @@ export function AdminAIManager() {
             if (fileInputRef.current) fileInputRef.current.value = "";
           }}
         />
-        <div className="rounded-[24px] border border-white/10 bg-[#11111b] px-3 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
+        <div className="rounded-[28px] border border-white/10 bg-[#11111b] px-3 py-3.5 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
           <div className="flex items-end gap-2">
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -855,9 +879,9 @@ export function AdminAIManager() {
                   }
                 }}
                 disabled={loading}
-                rows={3}
+                rows={4}
                 placeholder="মেসেজ, কোড, JSON, UI fix, admin command — সব লিখুন। Enter = send, Shift+Enter = নতুন লাইন।"
-                className="w-full bg-transparent px-1 py-2 text-[14px] text-white placeholder:text-zinc-500 focus:outline-none resize-none leading-6 min-h-[88px] max-h-[320px] overflow-y-auto"
+                className="w-full bg-transparent px-1 py-2 text-[14px] text-white placeholder:text-zinc-500 focus:outline-none resize-none leading-6 min-h-[132px] max-h-[420px] overflow-y-auto"
               />
             </div>
             <button
@@ -872,6 +896,24 @@ export function AdminAIManager() {
         <p className="text-[10px] text-zinc-500 mt-2 px-1 break-words">
           💡 বড় script / JSON / multi-line prompt paste করতে পারবেন। ছবি attach করলে উপরে preview দেখাবে।
         </p>
+        <div className="mt-3 rounded-2xl border border-white/8 bg-[#11111b] overflow-hidden">
+          <div className="px-3 py-2 border-b border-white/8 flex items-center justify-between gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Execution Log</p>
+            <span className="text-[10px] text-zinc-500">{executionLogs.length} items</span>
+          </div>
+          <div className="max-h-[180px] overflow-y-auto divide-y divide-white/5">
+            {executionLogs.length === 0 ? (
+              <p className="px-3 py-3 text-[11px] text-zinc-500">এখনো কোনো execution log নেই।</p>
+            ) : (
+              executionLogs.map((log) => (
+                <div key={log.id} className="px-3 py-2.5 flex items-start gap-2">
+                  <span className={`mt-1 h-2 w-2 rounded-full flex-shrink-0 ${log.tone === "ok" ? "bg-emerald-400" : log.tone === "error" ? "bg-rose-400" : "bg-cyan-400"}`} />
+                  <p className="text-[11px] text-zinc-200 break-words">{log.text}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

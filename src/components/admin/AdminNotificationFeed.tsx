@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { db, ref, onValue } from "@/lib/firebase";
 import { Bell, Flame, CreditCard, Unlock, AlertTriangle, Calendar } from "lucide-react";
-import { computeWeeklyStatus, type WeeklyPendingEntry } from "@/lib/weeklyEpManager";
+import { computeWeeklyStatus, shouldShowWeeklyEntry, type WeeklyPendingEntry } from "@/lib/weeklyEpManager";
 
 type FeedItem = {
   id: string;
@@ -28,7 +28,7 @@ export function AdminNotificationFeed() {
 
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 30_000);
-    const u1 = onValue(ref(db, "weeklyPending"), (s) => setWeekly(Object.values(s.val() || {})));
+    const u1 = onValue(ref(db, "weeklyPending"), (s) => setWeekly((Object.values(s.val() || {}) as WeeklyPendingEntry[]).filter(shouldShowWeeklyEntry)));
     const u2 = onValue(ref(db, "bkashPayments"), (s) => {
       const v = s.val() || {};
       setBkash(Object.entries(v).map(([id, x]: [string, any]) => ({ id, ...x })));
@@ -50,7 +50,7 @@ export function AdminNotificationFeed() {
 
     weekly.forEach((e) => {
       const s = computeWeeklyStatus(e);
-      if (s.isPending && !s.isReleasedRecently) {
+      if (s.isPending && !s.isReleasedRecently && !s.isStale) {
         arr.push({
           id: `w-${e.seriesId}`,
           kind: "weekly",
@@ -59,7 +59,7 @@ export function AdminNotificationFeed() {
           ts: e.nextReleaseAt,
           priority: 100,
         });
-      } else if (!s.isReleasedRecently) {
+      } else if (!s.isReleasedRecently && !s.isStale) {
         arr.push({
           id: `w-${e.seriesId}`,
           kind: "weekly",
