@@ -985,6 +985,7 @@ async function bulkConfirmAndPost(chatId: number, onlyOk: boolean) {
       inlineButtons: buttons,
       collection,
       seriesId,
+      title: data.title || "Untitled",
     });
     if (res.posted > 0) posted++;
     if (res.failed > 0) {
@@ -1369,6 +1370,7 @@ async function confirmAndSend(chatId: number) {
     inlineButtons: buttons,
     collection: s.collection,
     seriesId: s.seriesId,
+    title: title,
   });
 
   await clearSession(chatId);
@@ -1955,6 +1957,7 @@ async function handleCallback(chatId: number, data: string, cbId: string, messag
       inlineButtons: buttons,
       collection: col,
       seriesId: id,
+      title: d.title || "Untitled",
     });
     if (res.posted > 0 && res.failed === 0) {
       await tgSend(
@@ -2094,6 +2097,7 @@ async function handleCallback(chatId: number, data: string, cbId: string, messag
       inlineButtons: buttons,
       collection: col,
       seriesId: id,
+      title: d.title || "Untitled",
     });
     if (res.posted > 0)
       await tgSend(chatId, `✅ Posted to ${res.posted} channel(s).${res.failed ? ` (${res.failed} failed)` : ""}`);
