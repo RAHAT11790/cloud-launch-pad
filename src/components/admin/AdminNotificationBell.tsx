@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-import { db, ref, onValue } from "@/lib/firebase";
+import { db, ref, onValue, update } from "@/lib/firebase";
 import {
   Bell,
   Flame,
@@ -10,7 +10,7 @@ import {
   TrendingUp,
   X,
 } from "lucide-react";
-import { computeWeeklyStatus, type WeeklyPendingEntry } from "@/lib/weeklyEpManager";
+import { computeWeeklyStatus, shouldShowWeeklyEntry, type WeeklyPendingEntry } from "@/lib/weeklyEpManager";
 
 type FeedItem = {
   id: string;
@@ -48,12 +48,13 @@ export function AdminNotificationBell() {
   const [unlocks, setUnlocks] = useState<any[]>([]);
   const [freeAccess, setFreeAccess] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<Record<string, any>>({});
+  const [readMap, setReadMap] = useState<Record<string, boolean>>({});
   const [, tick] = useState(0);
   const popRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 30_000);
-    const u1 = onValue(ref(db, "weeklyPending"), (s) => setWeekly(Object.values(s.val() || {})));
+    const u1 = onValue(ref(db, "weeklyPending"), (s) => setWeekly(Object.values(s.val() || {}).filter(shouldShowWeeklyEntry)));
     const u2 = onValue(ref(db, "bkashPayments"), (s) => {
       const v = s.val() || {};
       setBkash(Object.entries(v).map(([id, x]: [string, any]) => ({ id, ...x })));
@@ -67,6 +68,7 @@ export function AdminNotificationBell() {
       setFreeAccess(Object.entries(v).map(([id, x]: [string, any]) => ({ id, ...x })));
     });
     const u5 = onValue(ref(db, "analytics/views"), (s) => setAnalytics(s.val() || {}));
+    const u6 = onValue(ref(db, "settings/adminAiNotifications/read"), (s) => setReadMap(s.val() || {}));
     return () => {
       clearInterval(t);
       u1();
@@ -74,6 +76,7 @@ export function AdminNotificationBell() {
       u3();
       u4();
       u5();
+      u6();
     };
   }, []);
 
@@ -91,9 +94,9 @@ export function AdminNotificationBell() {
     const arr: FeedItem[] = [];
 
     // Weekly pending
-    weekly.forEach((e) => {
+      weekly.forEach((e) => {
       const s = computeWeeklyStatus(e);
-      if (s.isPending && !s.isReleasedRecently) {
+        if (s.isPending && !s.isReleasedRecently && !s.isStale) {
         arr.push({
           id: `w-${e.seriesId}`,
           kind: "weekly",
@@ -161,8 +164,17 @@ export function AdminNotificationBell() {
       });
     });
 
-    return arr.sort((a, b) => b.priority - a.priority || b.ts - a.ts).slice(0, 30);
-  }, [weekly, bkash, unlocks, freeAccess, analytics]);
+    return arr
+      .filter((item) => !readMap[item.id])
+      .sort((a, b) => b.priority - a.priority || b.ts - a.ts)
+      .slice(0, 30);
+  }, [weekly, bkash, unlocks, freeAccess, analytics, readMap]);
+
+  const markAllRead = async () => {
+    if (items.length === 0) return;
+    const payload = Object.fromEntries(items.map((item) => [item.id, true]));
+    await update(ref(db, "settings/adminAiNotifications/read"), payload);
+  };
 
   const urgentCount = items.filter((x) => x.priority >= 80).length;
   const totalCount = items.length;
@@ -195,6 +207,14 @@ export function AdminNotificationBell() {
           <div className="px-3.5 py-2.5 border-b border-white/8 bg-gradient-to-r from-indigo-900/30 to-violet-900/30 flex items-center gap-2">
             <Bell size={14} className="text-indigo-300" />
             <h3 className="text-[13px] font-bold text-white flex-1">AI Notifications</h3>
+            {items.length > 0 && (
+              <button
+                onClick={markAllRead}
+                className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-zinc-300 hover:text-white"
+              >
+                Mark all read
+              </button>
+            )}
             {urgentCount > 0 && (
               <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold">
                 {urgentCount} urgent

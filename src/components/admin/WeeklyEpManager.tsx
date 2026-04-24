@@ -5,6 +5,7 @@ import {
   computeWeeklyStatus,
   disableWeeklyForSeries,
   markWeeklyEpisodeReleased,
+  shouldShowWeeklyEntry,
   sweepExpiredWeekly,
   type WeeklyPendingEntry,
 } from "@/lib/weeklyEpManager";
@@ -24,10 +25,10 @@ export function WeeklyEpTabButton({
   useEffect(() => {
     const unsub = onValue(ref(db, "weeklyPending"), (snap) => {
       const data = snap.val() || {};
-      const entries: WeeklyPendingEntry[] = Object.values(data);
+      const entries: WeeklyPendingEntry[] = Object.values(data).filter(shouldShowWeeklyEntry);
       const pending = entries.filter((e) => {
         const s = computeWeeklyStatus(e);
-        return s.isPending && !s.isReleasedRecently;
+        return s.isPending && !s.isReleasedRecently && !s.isStale;
       }).length;
       setPendingCount(pending);
     });
@@ -77,7 +78,7 @@ export function WeeklyEpManager({
   useEffect(() => {
     const unsub = onValue(ref(db, "weeklyPending"), (snap) => {
       const data = snap.val() || {};
-      const list: WeeklyPendingEntry[] = Object.values(data);
+      const list: WeeklyPendingEntry[] = Object.values(data).filter(shouldShowWeeklyEntry);
       list.sort((a, b) => a.nextReleaseAt - b.nextReleaseAt);
       setEntries(list);
     });
