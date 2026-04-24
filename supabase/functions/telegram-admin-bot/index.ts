@@ -877,40 +877,108 @@ async function showFinishPreview(chatId: number) {
   if (!sess.collection || !sess.seriesId || !sess.seasonNumber || !sess.episodeNumber) {
     await tgSend(chatId, "❌ Incomplete data."); return;
   }
-  const series: any = await fbGet(`${sess.collection}/${sess.seriesId}`);
   const links = sess.addingLinks || {};
   if (!Object.values(links).some(Boolean)) {
     await tgSend(chatId, "❌ কমপক্ষে ১টা quality link দিন, তারপর Finish চাপুন।");
     await showManualLinkPanel(chatId);
     return;
   }
-  const linkSummary = Object.entries(links)
-    .map(([k, v]) => `<code>${k}</code>: ${v ? "✅" : "—"}`)
-    .join("\n");
+  // Step 1: run link verification with progress bar
+  await runLinkVerification(chatId, links);
+}
+
+async function runLinkVerification(chatId: number, links: AddingLinks) {
+  const sess = await getSession(chatId);
+  const total = Object.values(links).filter(Boolean).length;
+  // Send a progress message we update in-place
+  const initial = await tgSend(chatId,
+    `🔍 <b>Verifying ${total} link(s)...</b>\n\n${progressBar(0, total)}\n\n<i>প্রতিটা link reachable + content type check হচ্ছে</i>`);
+  const msgId = initial?.result?.message_id;
+  const editProgress = async (done: number, total: number, current: string) => {
+    if (!msgId) return;
+    const txt = `🔍 <b>Verifying links...</b>\n\n${progressBar(done, total)}\n\n` +
+      (done < total ? `Checking: <b>${current}</b>` : `✅ Verification complete`);
+    await fetch(tgApi("editMessageText"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, message_id: msgId, text: txt, parse_mode: "HTML" }),
+    }).catch(() => {});
+  };
+  const results = await verifyAllLinks(links, editProgress);
+  const broken = results.filter((r) => !r.ok);
+  const okOnes = results.filter((r) => r.ok);
+  // Persist for confirm/edit/skip flow
   await patchSession(chatId, {
     pendingSave: {
-      collection: sess.collection,
-      seriesId: sess.seriesId,
-      seasonNumber: sess.seasonNumber,
-      episodeNumber: sess.episodeNumber,
+      collection: sess.collection!,
+      seriesId: sess.seriesId!,
+      seasonNumber: sess.seasonNumber!,
+      episodeNumber: sess.episodeNumber!,
       links,
     },
+    verifyResults: results as any,
   });
+
+  const series: any = await fbGet(`${sess.collection}/${sess.seriesId}`);
+  const photo = series?.poster || series?.backdrop || FALLBACK_POSTER;
+
+  const summaryLines = results.map((r) =>
+    `${r.ok ? "✅" : "❌"} <b>${r.label}</b>${r.ok ? "" : ` — ${r.reason || `HTTP ${r.status}`}`}`
+  ).join("\n");
+
+  if (broken.length === 0) {
+    // All good → confirm dialog with poster
+    const caption =
+      `<b>${series?.title || sess.seriesId}</b>\n` +
+      `Season ${sess.seasonNumber} — EP ${sess.episodeNumber}\n` +
+      `🆔 <code>${sess.seriesId}</code>\n\n` +
+      `<b>Link Verification:</b>\n${summaryLines}\n\n` +
+      `সব link কাজ করছে। আপনি কি confirm করে save + post করতে চান?`;
+    await tgSendPhoto(chatId, photo, caption, {
+      reply_markup: kb([
+        [{ text: "✅ Confirm & Save", data: "confirm:save" }],
+        [{ text: "✏️ Back to Edit", data: "manual:back" }, { text: "❌ Cancel", data: "save:deny" }],
+      ]),
+    });
+    return;
+  }
+
+  // Some broken → offer edit per quality + skip-all
+  const rows: any[][] = [];
+  for (const b of broken) {
+    rows.push([{ text: `✏️ Re-add ${b.label}`, data: `verifix:${b.quality}` }, { text: `⏭ Skip ${b.label}`, data: `veriskip:${b.quality}` }]);
+  }
+  rows.push([{ text: "⏭ Skip ALL broken & continue", data: "verifix:skipall" }]);
+  rows.push([{ text: "🔁 Re-verify", data: "verifix:retry" }, { text: "❌ Cancel", data: "save:deny" }]);
+
   const caption =
     `<b>${series?.title || sess.seriesId}</b>\n` +
     `Season ${sess.seasonNumber} — EP ${sess.episodeNumber}\n\n` +
-    `${linkSummary}\n\n` +
-    `আপনি এই episode টি add করতে চান?`;
+    `⚠️ <b>${broken.length}/${results.length}</b> link কাজ করছে না:\n\n${summaryLines}\n\n` +
+    `সমস্যা থাকা link গুলো re-add করুন বা skip করে এগিয়ে যান।`;
+  await tgSendPhoto(chatId, photo, caption, { reply_markup: kb(rows) });
+}
+
+async function showConfirmDialog(chatId: number) {
+  const sess = await getSession(chatId);
+  if (!sess.pendingSave) { await tgSend(chatId, "❌ কিছু pending নেই।"); return; }
+  const ps = sess.pendingSave;
+  const series: any = await fbGet(`${ps.collection}/${ps.seriesId}`);
   const photo = series?.poster || series?.backdrop || FALLBACK_POSTER;
-  await tgSendPhoto(chatId, photo, caption, {
-    reply_markup: kb([
-      [
-        { text: "✅ Allow & Save", data: "save:allow" },
-        { text: "✏️ Back to Edit", data: "manual:back" },
-      ],
-      [{ text: "❌ Disallow", data: "save:deny" }],
-    ]),
-  });
+  const linkSummary = Object.entries(ps.links)
+    .filter(([_, v]) => v)
+    .map(([k, _]) => `✅ ${k}`).join("  •  ") || "(no links)";
+  await tgSendPhoto(chatId, photo,
+    `<b>${series?.title || ps.seriesId}</b>\n` +
+    `Season ${ps.seasonNumber} — EP ${ps.episodeNumber}\n\n` +
+    `<b>Final links to save:</b>\n${linkSummary}\n\n` +
+    `আপনি কি confirm করছেন? Confirm দিলে এই episode টি database এ যোগ হবে।`,
+    {
+      reply_markup: kb([
+        [{ text: "✅ Confirm", data: "confirm:save" }],
+        [{ text: "❌ Cancel", data: "save:deny" }],
+      ]),
+    });
 }
 
 // ---------- Weekly reminders ----------
