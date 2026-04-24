@@ -15,7 +15,7 @@ type OpPreview = {
 };
 type Operation = { name: string; args: Record<string, any>; preview?: OpPreview };
 type Msg =
-  | { role: "user"; content: string }
+  | { role: "user"; content: string; images?: string[] }
   | { role: "assistant"; content: string; operations?: Operation[]; status?: "pending" | "approved" | "rejected" | "executed"; results?: any[] };
 
 type EpisodeDraft = {
@@ -68,7 +68,32 @@ export function AdminAIManager() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pendingImages, setPendingImages] = useState<string[]>([]); // base64 dataURLs
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImagePick = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const arr = Array.from(files).slice(0, 4); // max 4 images
+    const dataUrls = await Promise.all(
+      arr.map(
+        (f) =>
+          new Promise<string>((resolve, reject) => {
+            if (f.size > 5 * 1024 * 1024) {
+              toast.error(`${f.name}: 5MB এর বড় image চলবে না`);
+              reject("too big");
+              return;
+            }
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result || ""));
+            r.onerror = () => reject(r.error);
+            r.readAsDataURL(f);
+          }),
+      ),
+    ).catch(() => []);
+    setPendingImages((p) => [...p, ...dataUrls.filter(Boolean)].slice(0, 4));
+    if (dataUrls.length) toast.success(`📷 ${dataUrls.length} image attached`);
+  };
 
   // Episode Builder state
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -247,16 +272,23 @@ export function AdminAIManager() {
 
   const send = async () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if ((!text && pendingImages.length === 0) || loading) return;
+    const imagesSnapshot = pendingImages;
     setInput("");
-    const next: Msg[] = [...messages, { role: "user", content: text }];
+    setPendingImages([]);
+    const next: Msg[] = [...messages, { role: "user", content: text || "(image)", images: imagesSnapshot }];
     setMessages(next);
     setLoading(true);
 
     try {
       const chatHistory = next
         .filter((m) => m.role === "user" || (m.role === "assistant" && m.content))
-        .map((m) => ({ role: m.role, content: m.content }));
+        .map((m) => {
+          if (m.role === "user" && (m as any).images?.length) {
+            return { role: m.role, content: m.content, images: (m as any).images };
+          }
+          return { role: m.role, content: m.content };
+        });
 
       const r = await fetch(aiUrl, {
         method: "POST",
@@ -375,6 +407,18 @@ export function AdminAIManager() {
                 }`}
               >
                 {m.content}
+                {m.role === "user" && (m as any).images?.length > 0 && (
+                  <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                    {(m as any).images.map((img: string, k: number) => (
+                      <img
+                        key={k}
+                        src={img}
+                        alt={`upload-${k}`}
+                        className="w-20 h-20 object-cover rounded-md border border-white/10"
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Operations preview */}
@@ -753,8 +797,44 @@ export function AdminAIManager() {
         )}
       </div>
 
+      {/* Pending image previews */}
+      {pendingImages.length > 0 && (
+        <div className="px-2.5 pt-2 flex gap-1.5 flex-wrap bg-[#0a0a14] border-t border-white/8">
+          {pendingImages.map((img, i) => (
+            <div key={i} className="relative">
+              <img src={img} alt="" className="w-12 h-12 object-cover rounded-md border border-violet-500/40" />
+              <button
+                onClick={() => setPendingImages((p) => p.filter((_, k) => k !== i))}
+                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center"
+              >
+                <X size={9} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Input */}
       <div className="p-2.5 border-t border-white/8 bg-[#0a0a14] flex gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            handleImagePick(e.target.files);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+          }}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={loading}
+          title="Attach screenshot"
+          className="px-2.5 py-2 rounded-lg bg-[#141422] border border-white/10 text-violet-300 hover:bg-violet-500/20 disabled:opacity-40"
+        >
+          <ImageIcon size={15} />
+        </button>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -770,7 +850,7 @@ export function AdminAIManager() {
         />
         <button
           onClick={send}
-          disabled={loading || !input.trim()}
+          disabled={loading || (!input.trim() && pendingImages.length === 0)}
           className="px-3 py-2 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white disabled:opacity-40"
         >
           <Send size={15} />

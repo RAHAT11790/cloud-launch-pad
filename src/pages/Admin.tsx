@@ -2562,6 +2562,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       weeklyEnabled: seriesForm.weeklyEnabled === true,
       weeklyEveryDays: Math.max(1, Number(seriesForm.weeklyEveryDays) || 7),
       visibility: seriesForm.visibility === "private" ? "private" : "public",
+      // Per-series Telegram custom button (auto-attached by telegram-post edge function)
+      telegramCustomButton: (seriesForm.telegramCustomButtonText && seriesForm.telegramCustomButtonUrl)
+        ? { text: String(seriesForm.telegramCustomButtonText).trim(), url: String(seriesForm.telegramCustomButtonUrl).trim() }
+        : null,
       updatedAt: Date.now(),
     };
     let saveRef;
@@ -2619,7 +2623,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       tmdbId: data.tmdbId || "", title: data.title || "", logo: data.logo || "", poster: data.poster || "",
       backdrop: data.backdrop || "", trailer: data.trailer || "", year: data.year || "", rating: data.rating || "",
         language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "", visibility: data.visibility || "public",
-        weeklyEnabled: data.weeklyEnabled === true, weeklyEveryDays: Math.max(1, Number(data.weeklyEveryDays) || 7), weeklyDaysSinceLast: 0
+        weeklyEnabled: data.weeklyEnabled === true, weeklyEveryDays: Math.max(1, Number(data.weeklyEveryDays) || 7), weeklyDaysSinceLast: 0,
+        telegramCustomButtonText: data.telegramCustomButton?.text || "",
+        telegramCustomButtonUrl: data.telegramCustomButton?.url || "",
     });
     setSeriesCast(data.cast || []);
     setSeasonsData(data.seasons || []);
@@ -2733,6 +2739,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       cast: movieCast,
       type: "movie",
       visibility: movieForm.visibility === "private" ? "private" : "public",
+      telegramCustomButton: (movieForm.telegramCustomButtonText && movieForm.telegramCustomButtonUrl)
+        ? { text: String(movieForm.telegramCustomButtonText).trim(), url: String(movieForm.telegramCustomButtonUrl).trim() }
+        : null,
       updatedAt: Date.now(),
     };
     let saveRef;
@@ -2761,7 +2770,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "",
       movieLink: data.movieLink || "", downloadLink: data.downloadLink || "",
       movieLink480: data.movieLink480 || "", movieLink720: data.movieLink720 || "",
-      movieLink1080: data.movieLink1080 || "", movieLink4k: data.movieLink4k || "", visibility: data.visibility || "public"
+      movieLink1080: data.movieLink1080 || "", movieLink4k: data.movieLink4k || "", visibility: data.visibility || "public",
+      telegramCustomButtonText: data.telegramCustomButton?.text || "",
+      telegramCustomButtonUrl: data.telegramCustomButton?.url || "",
     });
     setMovieCast(data.cast || []);
     setMovieEditId(id);
@@ -4409,6 +4420,33 @@ ${tgHashtags}`;
                             </p>
                           </>
                         )}
+                      </div>
+
+                      {/* === Per-Series Telegram Custom Button === */}
+                      <div className={`${glassCard} p-4 mb-4 border-cyan-500/20`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-sm font-semibold text-cyan-300 flex items-center gap-2">
+                            📢 Telegram Custom Button
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">Per-series · Optional</span>
+                          </div>
+                        </div>
+                        <p className="text-[10.5px] text-zinc-400 mb-2.5">
+                          এই সিরিজের Telegram পোস্টে আপনার দেওয়া বাটন (নাম + URL) auto-attach হবে। ফাঁকা রাখলে শুধু default Watch/Download বাটন যাবে।
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            placeholder="Button Name (e.g. 📥 Download HD)"
+                            value={seriesForm.telegramCustomButtonText || ""}
+                            onChange={e => setSeriesForm({ ...seriesForm, telegramCustomButtonText: e.target.value })}
+                            className={inputClass}
+                          />
+                          <input
+                            placeholder="https://your-link.com"
+                            value={seriesForm.telegramCustomButtonUrl || ""}
+                            onChange={e => setSeriesForm({ ...seriesForm, telegramCustomButtonUrl: e.target.value })}
+                            className={inputClass}
+                          />
+                        </div>
                       </div>
                       {seriesCast.length > 0 && (
                         <div className="mb-4">
