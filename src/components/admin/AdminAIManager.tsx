@@ -59,8 +59,21 @@ const QUALITY_KEYS: Array<{ key: keyof EpisodeDraft; label: string }> = [
   { key: "link4k", label: "4K" },
 ];
 
+const HISTORY_KEY = "rs_admin_ai_history_v1";
+const HISTORY_MAX = 60; // keep last 60 messages
+
+const loadHistory = (): Msg[] | null => {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(-HISTORY_MAX);
+  } catch {}
+  return null;
+};
+
 export function AdminAIManager() {
-  const [messages, setMessages] = useState<Msg[]>([
+  const [messages, setMessages] = useState<Msg[]>(() => loadHistory() || [
     {
       role: "assistant",
       content:
@@ -171,6 +184,23 @@ export function AdminAIManager() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
+
+  // Persist chat history to localStorage so user keeps context across page reloads
+  useEffect(() => {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(messages.slice(-HISTORY_MAX)));
+    } catch {}
+  }, [messages]);
+
+  const clearHistory = () => {
+    if (!window.confirm("Clear AI chat history? এই কাজ undo করা যাবে না।")) return;
+    try { localStorage.removeItem(HISTORY_KEY); } catch {}
+    setMessages([{
+      role: "assistant",
+      content: "🆕 নতুন chat শুরু হলো। কী করতে চান বলুন।",
+    }]);
+    toast.success("Chat history cleared");
+  };
 
   const aiUrl = `${SUPABASE_URL}/functions/v1/admin-ai`;
 
@@ -408,6 +438,13 @@ export function AdminAIManager() {
         <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
           ● Live
         </span>
+        <button
+          onClick={clearHistory}
+          title="Clear chat history"
+          className="text-[9px] px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-rose-500/25"
+        >
+          Clear
+        </button>
       </div>
 
       {/* Messages */}

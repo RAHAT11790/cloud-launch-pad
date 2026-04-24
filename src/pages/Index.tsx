@@ -44,7 +44,7 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
 import { db, ref, set, onValue, get } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
-import { registerFCMToken } from "@/lib/fcm";
+import { registerFCMToken, ensureFreshFCMToken } from "@/lib/fcm";
 import { createUnlockLinkForCurrentUser } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 // Shortener gate is always-on now (Monetag system removed)
@@ -532,9 +532,9 @@ const Index = () => {
         // If no real user, skip FCM registration
         if (!userId) return;
 
-        // If permission already granted, just refresh token silently
+        // If permission already granted, smart-refresh: detects stale/missing tokens and forces a brand-new one
         if ("Notification" in window && Notification.permission === "granted") {
-          await registerFCMToken(userId, false);
+          await ensureFreshFCMToken(userId);
           return;
         }
 
