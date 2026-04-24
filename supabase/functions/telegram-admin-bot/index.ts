@@ -263,6 +263,120 @@ function escapeHtml(s: string) {
     .replace(/>/g, "&gt;");
 }
 
+// ---------- Website-style Telegram post helpers ----------
+// Reads the SAME settings the website Admin panel writes (admin/*).
+// Channel IDs: admin/telegramChannel (comma/newline separated). Fallback: settings/telegramChatId.
+async function getPostChannelIds(): Promise<string[]> {
+  const raw = (await fbGet("admin/telegramChannel")) as string | null;
+  let ids: string[] = [];
+  if (raw && typeof raw === "string") {
+    ids = raw.split(/[,\n\s]+/).map((x) => x.trim()).filter(Boolean);
+  }
+  if (ids.length === 0) {
+    const fb = await fbGet("settings/telegramChatId");
+    if (fb && typeof fb === "string") ids = [fb.trim()];
+    else if (typeof fb === "number") ids = [String(fb)];
+  }
+  return ids;
+}
+
+// Build the EXACT same caption format the website's Admin "Telegram Post" sends.
+async function buildWebsiteCaption(opts: {
+  title: string;
+  season: string | number;
+  totalEpisodes: string | number;
+  newEpAdded: string | number;
+  rating?: string | number;
+  genres?: string;
+}): Promise<string> {
+  const quality = ((await fbGet("admin/tgQuality")) as string) || "480p,720p,1080p,4K";
+  const languages = ((await fbGet("admin/tgLanguages")) as string) || "Hindi";
+  const dubType = ((await fbGet("admin/tgDubType")) as string) || "official";
+  const hashtags =
+    ((await fbGet("admin/tgHashtags")) as string) || "#ɪᴄғᴀɴɪᴍᴇ #ᴀɴɪᴍᴇ #ᴏғғɪᴄɪᴀʟ";
+  const footerArr = ((await fbGet("admin/tgFooterLinks")) as Array<{
+    label: string;
+    url: string;
+    emoji: string;
+  }>) || [];
+  const footerLinksHtml = footerArr
+    .filter((l) => l?.label && l?.url)
+    .map((l) => `๏ ${l.emoji || "🔰"} <a href="${l.url}">${escapeHtml(l.label)}</a> ${l.emoji || "🔰"}`)
+    .join("\n");
+
+  const dubTag = dubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ";
+  const ratingStr = opts.rating ? `${opts.rating}` : "0.0";
+  const genresStr = opts.genres || "—";
+
+  return (
+    `♨️ <b>Tɪᴛᴇʟ;-</b> ${escapeHtml(String(opts.title))}\n` +
+    `┌──────────────────\n` +
+    `│ ✦ <b>Sᴇᴀsᴏɴ :</b> ${opts.season}\n` +
+    `│ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> ${opts.totalEpisodes}\n` +
+    `│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${escapeHtml(languages)} ${dubTag}\n` +
+    `│ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> ${escapeHtml(quality)}\n` +
+    `│ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ ${ratingStr}/10\n` +
+    `│ ✦ <b>Gᴇɴʀᴇs :</b> ${escapeHtml(genresStr)}\n` +
+    `└──────────────────\n` +
+    `▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n` +
+    `📌 Sᴇᴀsᴏɴ #${opts.season} • Eᴘɪsᴏᴅᴇ #${opts.newEpAdded} Aᴅᴅᴇᴅ\n` +
+    `▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n` +
+    (footerLinksHtml ? `${footerLinksHtml}\n` : "") +
+    `▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n` +
+    hashtags
+  );
+}
+
+// Send to ALL configured channels via the existing telegram-post edge function.
+// Returns { posted, failed, errors }.
+async function postToAllChannels(payload: {
+  caption: string;
+  photoUrl?: string;
+  inlineButtons: Array<{ text: string; url: string }>;
+  collection?: string;
+  seriesId?: string;
+}): Promise<{ posted: number; failed: number; errors: string[] }> {
+  const channels = await getPostChannelIds();
+  if (channels.length === 0) {
+    return { posted: 0, failed: 1, errors: ["No channel configured. Set admin/telegramChannel or settings/telegramChatId in website Admin."] };
+  }
+  let posted = 0,
+    failed = 0;
+  const errors: string[] = [];
+  for (const ch of channels) {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/telegram-post`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          chatId: ch,
+          caption: payload.caption,
+          photoUrl: payload.photoUrl,
+          buttonText: payload.inlineButtons[0]?.text,
+          buttonUrl: payload.inlineButtons[0]?.url,
+          inlineButtons: payload.inlineButtons.length > 1 ? payload.inlineButtons : undefined,
+          collection: payload.collection,
+          seriesId: payload.seriesId,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && !j?.error) posted++;
+      else {
+        failed++;
+        errors.push(`${ch}: ${j?.error || "API error"}`);
+      }
+    } catch (e: any) {
+      failed++;
+      errors.push(`${ch}: ${e?.message || "fetch failed"}`);
+    }
+  }
+  return { posted, failed, errors };
+}
+
 async function sendStart(chatId: number) {
   const text =
     `<b>━━━━━━━━━━━━━━━━━━━</b>\n` +
