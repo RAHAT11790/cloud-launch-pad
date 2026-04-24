@@ -57,7 +57,7 @@ async function fbPush(path: string, data: unknown) {
 let snapshotCache: { ts: number; data: any } | null = null;
 async function getKnowledge() {
   if (snapshotCache && Date.now() - snapshotCache.ts < 60_000) return snapshotCache.data;
-  const [webseries, movies, animesalt, weeklyPending, bkash, unlock, users, settings] =
+  const [webseries, movies, animesalt, weeklyPending, bkash, unlock, users, settings, fcmTokens, notifications] =
     await Promise.all([
       fbGet("webseries"),
       fbGet("movies"),
@@ -67,6 +67,8 @@ async function getKnowledge() {
       fbGet("unlockRequests"),
       fbGet("users"),
       fbGet("settings"),
+      fbGet("fcmTokens"),
+      fbGet("notifications"),
     ]);
 
   const summarize = (obj: any, type: string) => {
@@ -95,6 +97,11 @@ async function getKnowledge() {
       pendingBkash: bkash ? Object.values(bkash).filter((p: any) => p?.status === "pending").length : 0,
       unlockRequests: unlock ? Object.keys(unlock).length : 0,
       users: users ? Object.keys(users).length : 0,
+      fcmUsers: fcmTokens ? Object.keys(fcmTokens).length : 0,
+      fcmTokens: fcmTokens
+        ? Object.values(fcmTokens).reduce((acc: number, item: any) => acc + (item && typeof item === "object" ? Object.keys(item).length : 0), 0)
+        : 0,
+      notificationUsers: notifications ? Object.keys(notifications).length : 0,
     },
     webseries: summarize(webseries, "webseries").slice(0, 250),
     movies: summarize(movies, "movies").slice(0, 250),
@@ -117,6 +124,19 @@ async function getKnowledge() {
       adServicesCount: settings?.adServices ? Object.keys(settings.adServices).length : 0,
       tutorialVideosCount: Array.isArray(settings?.tutorialVideos) ? settings.tutorialVideos.length : settings?.tutorialVideos ? Object.keys(settings.tutorialVideos).length : 0,
     },
+    adminSections: [
+      "AI Manager",
+      "Dashboard",
+      "Series",
+      "Movies",
+      "Notifications",
+      "Telegram",
+      "Weekly Episodes",
+      "Router / Edge Functions",
+      "OTP / Email Service",
+      "Ad Services",
+      "User Data / Payments",
+    ],
     settings: settings || {},
   };
   snapshotCache = { ts: Date.now(), data };
@@ -421,6 +441,7 @@ async function executeOperation(op: any) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          apikey: String(Deno.env.get("SUPABASE_ANON_KEY") || ""),
           Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
         },
         body: JSON.stringify({
@@ -432,7 +453,13 @@ async function executeOperation(op: any) {
         }),
       });
       const j = await r.json().catch(() => ({}));
-      return { ok: r.ok, message: r.ok ? "Notification sent" : `FCM error: ${JSON.stringify(j)}` };
+      if (!r.ok) {
+        return { ok: false, message: `FCM error: ${JSON.stringify(j)}` };
+      }
+      return {
+        ok: true,
+        message: `Push checked ${Number(j?.totalTokens || 0)} token · success ${Number(j?.success || 0)} · failed ${Number(j?.failed || 0)}${Number(j?.invalidRemoved || 0) > 0 ? ` · removed ${Number(j.invalidRemoved)}` : ""}`,
+      };
     }
     case "send_telegram": {
       const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/telegram-post`;
@@ -443,6 +470,7 @@ async function executeOperation(op: any) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          apikey: String(Deno.env.get("SUPABASE_ANON_KEY") || ""),
           Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
         },
         body: JSON.stringify({
@@ -453,7 +481,8 @@ async function executeOperation(op: any) {
           photoUrl: series?.poster || series?.backdrop,
         }),
       });
-      return { ok: r.ok, message: r.ok ? "Telegram posted" : `TG error ${r.status}` };
+      const tg = await r.json().catch(() => ({}));
+      return { ok: r.ok, message: r.ok ? "Telegram posted" : `TG error ${r.status}: ${JSON.stringify(tg)}` };
     }
     case "release_weekly": {
       const e: any = await fbGet(`weeklyPending/${args.seriesId}`);
@@ -674,6 +703,7 @@ Deno.serve(async (req) => {
     }
 
     // ---- PLAN: send chat to AI, get back natural reply + proposed operations ----
+    const safeMessages = Array.isArray(messages) ? messages : [];
     const knowledge = await getKnowledge();
     const systemPrompt = `You are the **Admin AI Manager** for RS Anime. The admin uses you from inside the admin panel to manage the FULL project operations view.
 
@@ -687,7 +717,7 @@ WHAT YOU MUST KNOW:
 - You should help diagnose why notification / Telegram / router / OTP setup is failing by reading the live settings snapshot and proposing the correct next action.
 - You can manage Firebase-backed content/settings through tool calls below.
  - The admin expects full operational control knowledge. You should speak like you understand the whole admin panel and the full project structure.
- - If the admin asks for source-code changes, do NOT say "I cannot edit code". Instead say: you can prepare exact implementation instructions, precise change plan, payload/settings changes, and builder-ready actions from this panel; final source-file rewrite is applied through the builder workflow.
+- If the admin asks for source-code changes, do NOT say "I cannot edit code". Instead explain clearly: you can inspect the full live admin/project snapshot available here, prepare exact implementation instructions, exact payload/settings changes, execution steps, and builder-ready change plans; actual source-file rewrite is applied through the builder workflow after approval.
 - Never pretend a capability exists if it does not.
 
 CAPABILITIES — you can call these tools:
@@ -710,7 +740,7 @@ RULES:
 
     // Convert messages: if a user message has `images` (data-URLs), convert to OpenAI/Gemini multimodal format
     const aiMessages: any[] = [{ role: "system", content: systemPrompt }];
-    for (const m of messages) {
+    for (const m of safeMessages) {
       if (m.role === "user" && Array.isArray(m.images) && m.images.length > 0) {
         const parts: any[] = [];
         if (m.content) parts.push({ type: "text", text: m.content });

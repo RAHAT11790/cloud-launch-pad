@@ -3,6 +3,7 @@ import { Bell, X, Check, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, set, update } from "@/lib/firebase";
 import { SITE_ICON_URL, SITE_URL } from "@/lib/siteConfig";
+import { ensureFreshFCMToken, registerFCMToken } from "@/lib/fcm";
 
 const NOTIFICATION_BADGE_URL = "/notification-badge.svg";
 
@@ -15,7 +16,7 @@ const PRIMARY_SITE_ORIGIN = (() => {
 })();
 
 // Request notification permission and register FCM SW
-const requestNotificationPermission = async () => {
+const requestNotificationPermission = async (userId?: string) => {
   if (!("Notification" in window) || !("serviceWorker" in navigator)) return;
   if (Notification.permission === "default") {
     await Notification.requestPermission();
@@ -23,6 +24,14 @@ const requestNotificationPermission = async () => {
   try {
     await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
   } catch {}
+
+  if (!userId || Notification.permission !== "granted") return;
+
+  try {
+    await ensureFreshFCMToken(userId);
+  } catch {
+    await registerFCMToken(userId, false).catch(() => {});
+  }
 };
 
 // Show browser notification (foreground only) with duplicate guard
@@ -92,7 +101,9 @@ const NotificationPanel = ({ userId, onOpenContent }: NotificationPanelProps) =>
   const dropdownRef = useRef<HTMLDivElement>(null);
   const knownNotifIdsRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => { requestNotificationPermission(); }, []);
+  useEffect(() => {
+    requestNotificationPermission(userId);
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) { setNotifications([]); knownNotifIdsRef.current = new Set(); return; }
