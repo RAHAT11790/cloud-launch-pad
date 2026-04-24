@@ -960,6 +960,9 @@ async function showEpisode(
       { text: "✅ Finish", callback_data: `q:finish` },
     ],
     [
+      { text: "📤 Resend to Telegram", callback_data: `resend:${collection}:${id}:${seasonIdx}:${epIdx}` },
+    ],
+    [
       { text: "🗑 Delete EP", callback_data: `delep:${collection}:${id}:${seasonIdx}:${epIdx}` },
     ],
     [
