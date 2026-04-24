@@ -797,8 +797,44 @@ export function AdminAIManager() {
         )}
       </div>
 
+      {/* Pending image previews */}
+      {pendingImages.length > 0 && (
+        <div className="px-2.5 pt-2 flex gap-1.5 flex-wrap bg-[#0a0a14] border-t border-white/8">
+          {pendingImages.map((img, i) => (
+            <div key={i} className="relative">
+              <img src={img} alt="" className="w-12 h-12 object-cover rounded-md border border-violet-500/40" />
+              <button
+                onClick={() => setPendingImages((p) => p.filter((_, k) => k !== i))}
+                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center"
+              >
+                <X size={9} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Input */}
       <div className="p-2.5 border-t border-white/8 bg-[#0a0a14] flex gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            handleImagePick(e.target.files);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+          }}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={loading}
+          title="Attach screenshot"
+          className="px-2.5 py-2 rounded-lg bg-[#141422] border border-white/10 text-violet-300 hover:bg-violet-500/20 disabled:opacity-40"
+        >
+          <ImageIcon size={15} />
+        </button>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -814,7 +850,7 @@ export function AdminAIManager() {
         />
         <button
           onClick={send}
-          disabled={loading || !input.trim()}
+          disabled={loading || (!input.trim() && pendingImages.length === 0)}
           className="px-3 py-2 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white disabled:opacity-40"
         >
           <Send size={15} />
