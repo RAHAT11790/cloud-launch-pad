@@ -20,6 +20,12 @@ async function fbGet(path: string) {
   if (!r.ok) return null;
   return await r.json();
 }
+// shallow=true returns only top-level keys (as { key: true }) — much less memory
+async function fbGetShallow(path: string): Promise<Record<string, true> | null> {
+  const r = await fetch(`${FIREBASE_DB_URL}/${path}.json?shallow=true`);
+  if (!r.ok) return null;
+  return await r.json();
+}
 async function fbPatch(path: string, data: unknown) {
   const r = await fetch(`${FIREBASE_DB_URL}/${path}.json`, {
     method: "PATCH",
@@ -57,55 +63,56 @@ async function fbPush(path: string, data: unknown) {
 let snapshotCache: { ts: number; data: any } | null = null;
 async function getKnowledge() {
   if (snapshotCache && Date.now() - snapshotCache.ts < 60_000) return snapshotCache.data;
-  const [webseries, movies, animesalt, weeklyPending, bkash, unlock, users, settings, fcmTokens, notifications] =
+  // Memory-safe: use shallow=true for large nodes (users, fcmTokens, notifications, animesalt)
+  // Only fetch full data for nodes we need to summarize titles from.
+  const [webseriesShallow, moviesShallow, animesaltShallow, weeklyPending, bkash, unlock, usersShallow, settings, fcmTokensShallow, notificationsShallow] =
     await Promise.all([
-      fbGet("webseries"),
-      fbGet("movies"),
-      fbGet("animesaltSelected"),
+      fbGetShallow("webseries"),
+      fbGetShallow("movies"),
+      fbGetShallow("animesaltSelected"),
       fbGet("weeklyPending"),
       fbGet("bkashPayments"),
       fbGet("unlockRequests"),
-      fbGet("users"),
+      fbGetShallow("users"),
       fbGet("settings"),
-      fbGet("fcmTokens"),
-      fbGet("notifications"),
+      fbGetShallow("fcmTokens"),
+      fbGetShallow("notifications"),
     ]);
 
-  const summarize = (obj: any, type: string) => {
-    if (!obj) return [];
-    return Object.entries(obj).map(([id, v]: [string, any]) => ({
+  // Lazily fetch titles only for first 250 webseries/movies (one-by-one would be too many requests).
+  // Strategy: fetch each item's title via shallow-friendly index path. To stay memory-safe and fast,
+  // fetch a compact /webseries (only first N keys) listing using REST orderBy/limit isn't trivial without auth.
+  // Instead, fetch only the small "titles" projection node if it exists; else fall back to id-only listing.
+  const titlesIndex = await fbGet("indexes/titles") as Record<string, string> | null;
+  const titleFor = (id: string, fallbackPrefix = "") =>
+    titlesIndex?.[id] || `${fallbackPrefix}${id}`;
+
+  const summarizeShallow = (shallow: Record<string, true> | null, type: string, limit = 250) => {
+    if (!shallow) return [];
+    return Object.keys(shallow).slice(0, limit).map((id) => ({
       id,
       type,
-      title: v?.title || v?.name || id,
-      seasons: v?.seasons ? Object.keys(v.seasons).length : undefined,
-      episodes:
-        v?.seasons
-          ? Object.values(v.seasons).reduce(
-              (acc: number, s: any) => acc + (s?.episodes ? Object.keys(s.episodes).length : 0),
-              0,
-            )
-          : undefined,
+      title: titleFor(id),
     }));
   };
 
+  const pendingBkashCount = bkash ? Object.values(bkash).filter((p: any) => p?.status === "pending").length : 0;
+
   const data = {
     counts: {
-      webseries: webseries ? Object.keys(webseries).length : 0,
-      movies: movies ? Object.keys(movies).length : 0,
-      animesalt: animesalt ? Object.keys(animesalt).length : 0,
+      webseries: webseriesShallow ? Object.keys(webseriesShallow).length : 0,
+      movies: moviesShallow ? Object.keys(moviesShallow).length : 0,
+      animesalt: animesaltShallow ? Object.keys(animesaltShallow).length : 0,
       weeklyPending: weeklyPending ? Object.keys(weeklyPending).length : 0,
-      pendingBkash: bkash ? Object.values(bkash).filter((p: any) => p?.status === "pending").length : 0,
+      pendingBkash: pendingBkashCount,
       unlockRequests: unlock ? Object.keys(unlock).length : 0,
-      users: users ? Object.keys(users).length : 0,
-      fcmUsers: fcmTokens ? Object.keys(fcmTokens).length : 0,
-      fcmTokens: fcmTokens
-        ? Object.values(fcmTokens).reduce((acc: number, item: any) => acc + (item && typeof item === "object" ? Object.keys(item).length : 0), 0)
-        : 0,
-      notificationUsers: notifications ? Object.keys(notifications).length : 0,
+      users: usersShallow ? Object.keys(usersShallow).length : 0,
+      fcmUsers: fcmTokensShallow ? Object.keys(fcmTokensShallow).length : 0,
+      notificationUsers: notificationsShallow ? Object.keys(notificationsShallow).length : 0,
     },
-    webseries: summarize(webseries, "webseries").slice(0, 250),
-    movies: summarize(movies, "movies").slice(0, 250),
-    animesalt: summarize(animesalt, "animesalt").slice(0, 250),
+    webseries: summarizeShallow(webseriesShallow, "webseries", 100),
+    movies: summarizeShallow(moviesShallow, "movies", 100),
+    animesalt: summarizeShallow(animesaltShallow, "animesalt", 100),
     weeklyPending: weeklyPending
       ? Object.values(weeklyPending).map((e: any) => ({
           seriesId: e.seriesId,
@@ -137,7 +144,7 @@ async function getKnowledge() {
       "Ad Services",
       "User Data / Payments",
     ],
-    settings: settings || {},
+    // intentionally do NOT include full settings to keep payload small
   };
   snapshotCache = { ts: Date.now(), data };
   return data;
