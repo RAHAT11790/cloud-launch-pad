@@ -503,12 +503,26 @@ async function executeOperation(op: any) {
       return { ok: true, message: `Created ${title} (${id}) — Hindi Official, ${seasons.length} season skeleton${seasons.length !== 1 ? "s" : ""}` };
     }
     case "bulk_add_episodes": {
-      const { collection, seriesId, seasonNumber, episodes, trim = true } = args;
+      const { collection, seasonNumber, episodes, trim = true } = args;
+      const resolved = await resolveSeriesId(collection, args.seriesId);
+      if (!resolved.id) {
+        const hint =
+          resolved.candidates.length > 0
+            ? ` Did you mean: ${resolved.candidates.map((c) => `${c.title} (${c.id})`).join(" | ")}?`
+            : "";
+        throw new Error(`Series '${args.seriesId}' not found in ${collection}.${hint}`);
+      }
+      const seriesId = resolved.id;
       const seasonsPath = `${collection}/${seriesId}/seasons`;
       const seasons = (await fbGet(seasonsPath)) || [];
       const seasonsArr = Array.isArray(seasons) ? seasons : Object.values(seasons);
-      const sIdx = seasonsArr.findIndex((s: any) => s?.seasonNumber === seasonNumber);
-      if (sIdx < 0) throw new Error(`Season ${seasonNumber} not found in ${seriesId}`);
+      let sIdx = seasonsArr.findIndex((s: any) => s?.seasonNumber === seasonNumber);
+      if (sIdx < 0) {
+        // Auto-create the season if it's missing
+        seasonsArr.push({ seasonNumber, name: `Season ${seasonNumber}`, episodes: [] });
+        sIdx = seasonsArr.length - 1;
+        await fbPut(seasonsPath, seasonsArr);
+      }
       const newEps = episodes
         .map((e: any) => {
           const out: Record<string, any> = {
