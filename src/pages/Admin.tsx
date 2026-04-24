@@ -2739,6 +2739,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       cast: movieCast,
       type: "movie",
       visibility: movieForm.visibility === "private" ? "private" : "public",
+      telegramCustomButton: (movieForm.telegramCustomButtonText && movieForm.telegramCustomButtonUrl)
+        ? { text: String(movieForm.telegramCustomButtonText).trim(), url: String(movieForm.telegramCustomButtonUrl).trim() }
+        : null,
       updatedAt: Date.now(),
     };
     let saveRef;
@@ -2767,7 +2770,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "",
       movieLink: data.movieLink || "", downloadLink: data.downloadLink || "",
       movieLink480: data.movieLink480 || "", movieLink720: data.movieLink720 || "",
-      movieLink1080: data.movieLink1080 || "", movieLink4k: data.movieLink4k || "", visibility: data.visibility || "public"
+      movieLink1080: data.movieLink1080 || "", movieLink4k: data.movieLink4k || "", visibility: data.visibility || "public",
+      telegramCustomButtonText: data.telegramCustomButton?.text || "",
+      telegramCustomButtonUrl: data.telegramCustomButton?.url || "",
     });
     setMovieCast(data.cast || []);
     setMovieEditId(id);
