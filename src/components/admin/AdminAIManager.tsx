@@ -15,7 +15,7 @@ type OpPreview = {
 };
 type Operation = { name: string; args: Record<string, any>; preview?: OpPreview };
 type Msg =
-  | { role: "user"; content: string }
+  | { role: "user"; content: string; images?: string[] }
   | { role: "assistant"; content: string; operations?: Operation[]; status?: "pending" | "approved" | "rejected" | "executed"; results?: any[] };
 
 type EpisodeDraft = {
