@@ -829,7 +829,7 @@ export function AdminAIManager() {
         <div className="px-3 pt-3 pb-1 flex gap-2 flex-wrap bg-[#0a0a14] border-t border-white/8">
           {pendingImages.map((img, i) => (
             <div key={i} className="relative group">
-              <img src={img} alt="attachment" className="w-16 h-16 object-cover rounded-xl border border-violet-500/40" />
+              <img src={img} alt="attachment" className="w-20 h-20 object-cover rounded-2xl border border-violet-500/40" />
               <button
                 onClick={() => setPendingImages((p) => p.filter((_, k) => k !== i))}
                 className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center shadow-lg"
@@ -853,7 +853,7 @@ export function AdminAIManager() {
             if (fileInputRef.current) fileInputRef.current.value = "";
           }}
         />
-        <div className="rounded-[24px] border border-white/10 bg-[#11111b] px-3 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
+        <div className="rounded-[28px] border border-white/10 bg-[#11111b] px-3 py-3.5 shadow-[0_12px_30px_rgba(0,0,0,0.25)]">
           <div className="flex items-end gap-2">
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -879,9 +879,9 @@ export function AdminAIManager() {
                   }
                 }}
                 disabled={loading}
-                rows={3}
+                rows={4}
                 placeholder="মেসেজ, কোড, JSON, UI fix, admin command — সব লিখুন। Enter = send, Shift+Enter = নতুন লাইন।"
-                className="w-full bg-transparent px-1 py-2 text-[14px] text-white placeholder:text-zinc-500 focus:outline-none resize-none leading-6 min-h-[88px] max-h-[320px] overflow-y-auto"
+                className="w-full bg-transparent px-1 py-2 text-[14px] text-white placeholder:text-zinc-500 focus:outline-none resize-none leading-6 min-h-[132px] max-h-[420px] overflow-y-auto"
               />
             </div>
             <button
@@ -896,6 +896,24 @@ export function AdminAIManager() {
         <p className="text-[10px] text-zinc-500 mt-2 px-1 break-words">
           💡 বড় script / JSON / multi-line prompt paste করতে পারবেন। ছবি attach করলে উপরে preview দেখাবে।
         </p>
+        <div className="mt-3 rounded-2xl border border-white/8 bg-[#11111b] overflow-hidden">
+          <div className="px-3 py-2 border-b border-white/8 flex items-center justify-between gap-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Execution Log</p>
+            <span className="text-[10px] text-zinc-500">{executionLogs.length} items</span>
+          </div>
+          <div className="max-h-[180px] overflow-y-auto divide-y divide-white/5">
+            {executionLogs.length === 0 ? (
+              <p className="px-3 py-3 text-[11px] text-zinc-500">এখনো কোনো execution log নেই।</p>
+            ) : (
+              executionLogs.map((log) => (
+                <div key={log.id} className="px-3 py-2.5 flex items-start gap-2">
+                  <span className={`mt-1 h-2 w-2 rounded-full flex-shrink-0 ${log.tone === "ok" ? "bg-emerald-400" : log.tone === "error" ? "bg-rose-400" : "bg-cyan-400"}`} />
+                  <p className="text-[11px] text-zinc-200 break-words">{log.text}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
