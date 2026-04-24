@@ -407,6 +407,18 @@ export function AdminAIManager() {
                 }`}
               >
                 {m.content}
+                {m.role === "user" && (m as any).images?.length > 0 && (
+                  <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                    {(m as any).images.map((img: string, k: number) => (
+                      <img
+                        key={k}
+                        src={img}
+                        alt={`upload-${k}`}
+                        className="w-20 h-20 object-cover rounded-md border border-white/10"
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Operations preview */}
