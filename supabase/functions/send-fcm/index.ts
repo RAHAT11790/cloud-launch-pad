@@ -179,7 +179,7 @@ serve(async (req) => {
 
     const body = await req.json();
     if (body?.test === true) return json({ ok: true, ping: "send-fcm" });
-    const { title, body: msgBody, image, icon, badge, data: extra, tokens: directTokens, userIds } = body;
+    const { title, body: msgBody, image, imageUrl, icon, badge, data: extra, tokens: directTokens, userIds } = body;
     if (!title) return json({ error: "title required" }, 400);
 
     // ---- Resolve tokens ----
@@ -236,11 +236,15 @@ serve(async (req) => {
     const brandBadge = "https://rsanime03.lovable.app/notification-badge.svg";
     const notifIcon = icon || brandIcon;
     const notifBadge = badge || brandBadge;
-    const notification = { title, body: msgBody || "", image: image || undefined, icon: notifIcon };
+    const notificationImage = image || imageUrl || undefined;
+    const notification = { title, body: msgBody || "", image: notificationImage, icon: notifIcon };
     const dataPayload: Record<string, string> = {
       icon: notifIcon,
       badge: notifBadge,
     };
+    if (notificationImage) {
+      dataPayload.image = notificationImage;
+    }
     if (extra && typeof extra === "object") {
       Object.entries(extra).forEach(([k, v]) => { dataPayload[k] = v == null ? "" : String(v); });
     }
