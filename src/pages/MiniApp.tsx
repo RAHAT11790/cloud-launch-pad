@@ -720,25 +720,53 @@ export default function MiniApp() {
         setError(t.grantFailed);
       } else {
         setGranted(true);
+
+        // Helper: close Telegram Mini App after redirect kicks off
+        const closeAfter = (ms = 1800) => {
+          setTimeout(() => {
+            try { window.Telegram?.WebApp?.close?.(); } catch {}
+          }, ms);
+        };
+
+        // Helper: open URL in external browser (out of Telegram WebView) when possible
+        const openExternal = (url: string) => {
+          try {
+            const tg = window.Telegram?.WebApp;
+            if (tg?.openLink) {
+              tg.openLink(url, { try_instant_view: false });
+              return;
+            }
+          } catch {}
+          window.location.href = url;
+        };
+
         if (mode === "short" && data.dest) {
           setShortDest(data.dest);
           setInfo(t.redirecting);
-          setTimeout(() => {
-            window.location.href = data.dest;
-          }, 1500);
+          setTimeout(() => openExternal(data.dest), 1200);
+          closeAfter(1800);
         } else if (mode === "api") {
           const redirectTo = data.redirectUrl || externalRedirect;
           if (redirectTo) {
             setInfo(t.redirecting);
-            setTimeout(() => {
-              window.location.href = redirectTo;
-            }, 1500);
+            setTimeout(() => openExternal(redirectTo), 1200);
+            closeAfter(1800);
           }
-        } else if (mode === "site" && data.fallbackToken) {
-          const origin = window.location.origin;
-          setFallbackUrl(
-            `${origin}/unlock?mini=${encodeURIComponent(data.fallbackToken)}`,
-          );
+        } else if (mode === "site") {
+          // Build unlock URL (token from backend, fallback to userId-only)
+          const origin = SITE_ORIGIN;
+          const unlockUrl = data.fallbackToken
+            ? `${origin}/unlock?mini=${encodeURIComponent(data.fallbackToken)}`
+            : `${origin}/?unlocked=1&u=${encodeURIComponent(userId)}`;
+          setFallbackUrl(unlockUrl);
+
+          if (cameFromWebsite) {
+            // User came from website unlock button → auto-close & send them back
+            setInfo(t.closingApp);
+            setTimeout(() => openExternal(unlockUrl), 1200);
+            closeAfter(2000);
+          }
+          // else: organic Telegram user → just show the unlock link card with note
         }
       }
     } catch {
