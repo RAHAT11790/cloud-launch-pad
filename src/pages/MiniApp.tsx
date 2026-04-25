@@ -149,8 +149,70 @@ const buildMonetagTrackingId = (userId: string, step: number) => {
   return `${MONETAG_REQUEST_VAR}-${safeUser}-${step}-${Date.now()}`;
 };
 
+function ensureTelegramCloudStorageCompat() {
+  try {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+
+    const safeStorage = {
+      getItem: (key: string, callback?: (err: unknown, value: string) => void) => {
+        let value = "";
+        try {
+          value = localStorage.getItem(`tgcs:${key}`) || "";
+        } catch {}
+        callback?.(null, value);
+      },
+      setItem: (key: string, value: string, callback?: (err: unknown, value: boolean) => void) => {
+        try {
+          localStorage.setItem(`tgcs:${key}`, String(value));
+        } catch {}
+        callback?.(null, true);
+      },
+      removeItem: (key: string, callback?: (err: unknown, value: boolean) => void) => {
+        try {
+          localStorage.removeItem(`tgcs:${key}`);
+        } catch {}
+        callback?.(null, true);
+      },
+      getItems: (keys: string[], callback?: (err: unknown, value: Record<string, string>) => void) => {
+        const out: Record<string, string> = {};
+        for (const key of keys || []) {
+          try {
+            out[key] = localStorage.getItem(`tgcs:${key}`) || "";
+          } catch {
+            out[key] = "";
+          }
+        }
+        callback?.(null, out);
+      },
+      setItems: (items: Record<string, string>, callback?: (err: unknown, value: boolean) => void) => {
+        for (const [key, value] of Object.entries(items || {})) {
+          try {
+            localStorage.setItem(`tgcs:${key}`, String(value));
+          } catch {}
+        }
+        callback?.(null, true);
+      },
+      removeItems: (keys: string[], callback?: (err: unknown, value: boolean) => void) => {
+        for (const key of keys || []) {
+          try {
+            localStorage.removeItem(`tgcs:${key}`);
+          } catch {}
+        }
+        callback?.(null, true);
+      },
+    };
+
+    tg.cloudStorage = {
+      ...safeStorage,
+      ...(tg.cloudStorage || {}),
+    };
+  } catch {}
+}
+
 // Load Monetag SDK exactly once and wait until show_<zone> is registered.
 function loadMonetag(maxWaitMs = 15000): Promise<boolean> {
+  ensureTelegramCloudStorageCompat();
   const fnName = `show_${MONETAG_ZONE}`;
   if (typeof window[fnName] === "function") {
     return Promise.resolve(true);
@@ -290,6 +352,8 @@ export default function MiniApp() {
       window.Telegram?.WebApp?.ready?.();
       window.Telegram?.WebApp?.expand?.();
     } catch {}
+
+    ensureTelegramCloudStorageCompat();
 
     loadMonetag().then((ok) => setSdkReady(ok));
 
