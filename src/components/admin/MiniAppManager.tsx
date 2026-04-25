@@ -231,9 +231,9 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
 
 function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: string }) {
   return (
-    <div className={`p-3 rounded-xl bg-gradient-to-br ${color} text-white`}>
-      <div className="flex items-center gap-1.5 text-xs opacity-90 mb-1">{icon}{label}</div>
-      <div className="text-2xl font-bold">{value.toLocaleString()}</div>
+    <div className={`p-2.5 rounded-xl bg-gradient-to-br ${color} text-white min-w-0 overflow-hidden`}>
+      <div className="flex items-center gap-1 text-[10px] opacity-90 mb-1 truncate">{icon}<span className="truncate">{label}</span></div>
+      <div className="text-xl font-bold truncate">{value.toLocaleString()}</div>
     </div>
   );
 }
