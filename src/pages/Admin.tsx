@@ -4548,32 +4548,7 @@ ${tgHashtags}`;
                       </div>
                       {/* Weekly EP tracking removed */}
 
-                      {/* === Per-Series Telegram Custom Button === */}
-                      <div className={`${glassCard} p-4 mb-4 border-cyan-500/20`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="text-sm font-semibold text-cyan-300 flex items-center gap-2">
-                            📢 Telegram Custom Button
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">Per-series · Optional</span>
-                          </div>
-                        </div>
-                        <p className="text-[10.5px] text-zinc-400 mb-2.5">
-                          এই সিরিজের Telegram পোস্টে আপনার দেওয়া বাটন (নাম + URL) auto-attach হবে। ফাঁকা রাখলে শুধু default Watch/Download বাটন যাবে।
-                        </p>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            placeholder="Button Name (e.g. 📥 Download HD)"
-                            value={seriesForm.telegramCustomButtonText || ""}
-                            onChange={e => setSeriesForm({ ...seriesForm, telegramCustomButtonText: e.target.value })}
-                            className={inputClass}
-                          />
-                          <input
-                            placeholder="https://your-link.com"
-                            value={seriesForm.telegramCustomButtonUrl || ""}
-                            onChange={e => setSeriesForm({ ...seriesForm, telegramCustomButtonUrl: e.target.value })}
-                            className={inputClass}
-                          />
-                        </div>
-                      </div>
+                      {/* Per-series Telegram Custom Button moved to Telegram Post section */}
                       {seriesCast.length > 0 && (
                         <div className="mb-4">
                           <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Cast (Auto-fetched)</label>
