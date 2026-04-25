@@ -294,10 +294,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
 
-    const unsubAccess = onValue(ref(db, `users/${uid}/freeAccess`), (snap) => {
+    const unsubAccess = onValue(ref(db, `users/${uid}/freeAccess`), async (snap) => {
       const data = snap.val();
       if (data?.active && Number(data.expiresAt) > Date.now()) {
-        setUserFreeAccessExpiresAt(Number(data.expiresAt));
+        const { ensureFreeAccessDeviceAllowed } = await import("@/lib/freeAccessDevice");
+        const allowed = await ensureFreeAccessDeviceAllowed(uid, data);
+        setUserFreeAccessExpiresAt(allowed ? Number(data.expiresAt) : 0);
       } else {
         setUserFreeAccessExpiresAt(0);
       }
@@ -513,7 +515,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
   }, [onSaveProgress]);
 
-  // Restore watch position (per-device)
+  // Restore watch position (per-account)
   useEffect(() => {
     if (!animeId) return;
     try {
@@ -521,23 +523,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (!user) return;
       const userId = JSON.parse(user).id;
       if (!userId) return;
-      import("@/lib/premiumDevice").then(({ getDeviceId }) => {
-        const deviceId = getDeviceId();
-        import("@/lib/firebase").then(({ get: fbGet, ref: fbRef, db: fbDb }) => {
-          const histRef = fbRef(fbDb, `users/${userId}/watchHistory/${deviceId}/${animeId}`);
-          fbGet(histRef).then((snap: any) => {
-            if (snap.exists()) {
-              const data = snap.val();
-              if (data.currentTime && data.duration && (data.currentTime / data.duration) < 0.95) {
-                // Set pendingSeek so the main effect restores position as soon as metadata loads
-                pendingSeek.current = data.currentTime;
-                const v = videoRef.current;
-                if (v && v.duration > 0) {
-                  v.currentTime = data.currentTime;
-                }
+      import("@/lib/firebase").then(({ get: fbGet, ref: fbRef, db: fbDb }) => {
+        const histRef = fbRef(fbDb, `users/${userId}/watchHistory/${animeId}`);
+        fbGet(histRef).then((snap: any) => {
+          if (snap.exists()) {
+            const data = snap.val();
+            if (data.currentTime && data.duration && (data.currentTime / data.duration) < 0.95) {
+              pendingSeek.current = data.currentTime;
+              const v = videoRef.current;
+              if (v && v.duration > 0) {
+                v.currentTime = data.currentTime;
               }
             }
-          });
+          }
         });
       });
     } catch {}

@@ -89,6 +89,27 @@ serve(async (req) => {
       return json({ ok: true });
     }
 
+    if (action === "user-info") {
+      const userId = String(body?.userId || "").trim();
+      if (!userId) return json({ ok: false, error: "no_user" }, 400);
+      const u = await fbGet(`users/${userId}`);
+      if (!u) return json({ ok: false, error: "not_found" }, 404);
+      const fa = u.freeAccess || {};
+      return json({
+        ok: true,
+        user: {
+          id: userId,
+          name: u.name || u.displayName || "User",
+          email: u.email || "",
+          photoURL: u.photoURL || u.photo || u.avatar || "",
+        },
+        freeAccess: {
+          active: !!(fa.active && Number(fa.expiresAt || 0) > Date.now()),
+          expiresAt: Number(fa.expiresAt || 0),
+        },
+      });
+    }
+
     if (action === "validate-key") {
       const key = String(body?.apiKey || "").trim();
       if (!key) return json({ ok: false, error: "no_key" }, 400);

@@ -506,18 +506,13 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
       const data = snapshot.val() || {};
       setWatchlist(Object.values(data));
     });
-    // Per-device watch history
-    import("@/lib/premiumDevice").then(({ getDeviceId }) => {
-      const deviceId = getDeviceId();
-      const whRef = ref(db, `users/${userId}/watchHistory/${deviceId}`);
-      const unsub2 = onValue(whRef, (snapshot) => {
-        const data = snapshot.val() || {};
-        const items = Object.values(data) as any[];
-        items.sort((a: any, b: any) => (b.watchedAt || 0) - (a.watchedAt || 0));
-        setWatchHistory(items);
-      });
-      // Store for cleanup
-      (window as any).__rs_wh_unsub = unsub2;
+    // Watch history (per-account)
+    const whRef = ref(db, `users/${userId}/watchHistory`);
+    const unsub2 = onValue(whRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      const items = Object.values(data).filter((v: any) => v && typeof v === "object" && v.id) as any[];
+      items.sort((a: any, b: any) => (b.watchedAt || 0) - (a.watchedAt || 0));
+      setWatchHistory(items);
     });
     const premRef = ref(db, `users/${userId}/premium`);
     const unsub3 = onValue(premRef, (snap) => {
@@ -556,7 +551,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
       }
     });
 
-    return () => { unsub1(); (window as any).__rs_wh_unsub?.(); unsub3(); unsub4(); unsub5(); };
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); };
   }, [userId]);
 
   const formatRemainingTime = (ms: number) => {
