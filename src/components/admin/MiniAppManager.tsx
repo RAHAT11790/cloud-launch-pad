@@ -116,35 +116,37 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
   const completes = Number(stats.completes || 0);
   const apiCompletes = Number(stats.apiCompletes || 0);
 
+  const cardCls = `${glassCard} p-4 overflow-hidden`;
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 max-w-full">
       {/* Hero */}
-      <div className={`${glassCard} relative overflow-hidden`}>
+      <div className={`${cardCls} relative`}>
         <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-fuchsia-500/15 blur-3xl pointer-events-none" />
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-fuchsia-500 to-cyan-400 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-fuchsia-500 to-cyan-400 flex items-center justify-center shrink-0">
             <Sparkles className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <h2 className="text-lg font-bold">Telegram Mini App</h2>
-            <p className="text-xs text-muted-foreground">Monetag-monetized ad gate via Telegram bot</p>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold truncate">Telegram Mini App</h2>
+            <p className="text-xs text-muted-foreground truncate">Monetag-monetized ad gate via Telegram bot</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           <StatCard icon={<Eye className="w-4 h-4" />} label="Visits" value={visits} color="from-cyan-500 to-blue-500" />
-          <StatCard icon={<CheckCircle2 className="w-4 h-4" />} label="Site Completes" value={completes} color="from-emerald-500 to-teal-500" />
-          <StatCard icon={<MousePointerClick className="w-4 h-4" />} label="API Completes" value={apiCompletes} color="from-fuchsia-500 to-purple-500" />
+          <StatCard icon={<CheckCircle2 className="w-4 h-4" />} label="Done" value={completes} color="from-emerald-500 to-teal-500" />
+          <StatCard icon={<MousePointerClick className="w-4 h-4" />} label="API" value={apiCompletes} color="from-fuchsia-500 to-purple-500" />
         </div>
       </div>
 
       {/* Settings */}
-      <div className={glassCard}>
-        <h3 className="font-semibold mb-3 flex items-center gap-2">
+      <div className={cardCls}>
+        <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm">
           <Power className="w-4 h-4" /> Verify Button Routing
         </h3>
-        <label className="flex items-center gap-2 mb-3 cursor-pointer">
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="w-4 h-4" />
+        <label className="flex items-start gap-2 mb-3 cursor-pointer">
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="w-4 h-4 mt-0.5 shrink-0" />
           <span className="text-sm">Route website Verify button to Telegram Mini App</span>
         </label>
         <div className="space-y-2">
@@ -152,50 +154,50 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
           <input
             value={botUsername}
             onChange={(e) => setBotUsername(e.target.value)}
-            placeholder="my_bot"
+            placeholder="RS_ANIME_ACCESS_BOT"
             className={inputClass}
           />
-          <p className="text-xs text-muted-foreground">
-            User will be sent to <code>https://t.me/{botUsername || "bot"}?startapp=u_USER_ID</code>
+          <p className="text-xs text-muted-foreground break-all">
+            Users go to <code className="break-all">https://t.me/{botUsername || "bot"}?startapp=u_USER_ID</code>
           </p>
         </div>
         <div className="flex flex-wrap gap-2 mt-3">
-          <button onClick={saveSettings} className={btnPrimary}>
-            <Save className="w-4 h-4" /> Save Settings
+          <button onClick={saveSettings} className={`${btnPrimary} px-3 py-2 text-xs flex items-center gap-1.5`}>
+            <Save className="w-3.5 h-3.5" /> Save
           </button>
-          <button onClick={setupBotMenu} disabled={setupBusy} className={btnSecondary}>
-            ⚡ {setupBusy ? "Setting up…" : "Auto-Setup Bot Menu Button"}
+          <button onClick={setupBotMenu} disabled={setupBusy} className={`${btnSecondary} px-3 py-2 text-xs`}>
+            ⚡ {setupBusy ? "Setting…" : "Auto-Setup Menu"}
           </button>
         </div>
       </div>
 
       {/* === Dedicated Access Bot (RS_ANIME_ACCESS_BOT) === */}
-      <AccessBotSection glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+      <AccessBotSection glassCard={cardCls} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
       {/* Mini App URL */}
-      <div className={glassCard}>
-        <h3 className="font-semibold mb-2">Mini App URL</h3>
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-xs font-mono break-all">
-          {miniUrl}
-          <button onClick={() => copy(miniUrl)} className="ml-auto p-1.5 hover:bg-muted rounded">
+      <div className={cardCls}>
+        <h3 className="font-semibold mb-2 text-sm">Mini App URL</h3>
+        <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-[11px] font-mono break-all">
+          <span className="min-w-0 break-all flex-1">{miniUrl}</span>
+          <button onClick={() => copy(miniUrl)} className="p-1.5 hover:bg-muted rounded shrink-0">
             <Copy className="w-3.5 h-3.5" />
           </button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          ⚡ Use the "Auto-Setup" button above to register this URL as your bot's Menu Button automatically — no BotFather needed.
+          ⚡ Use Auto-Setup above to register this URL as the bot's Menu Button.
         </p>
       </div>
 
       {/* API Keys */}
-      <div className={glassCard}>
-        <h3 className="font-semibold mb-3 flex items-center gap-2">
+      <div className={cardCls}>
+        <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm">
           <KeyRound className="w-4 h-4" /> API Keys for External Bots
         </h3>
-        <p className="text-xs text-muted-foreground mb-3">
-          Two modes per key: <strong>(1) Direct redirect</strong> — send users to <code>{miniUrl}?key=KEY&user=USER_ID</code>; after 5 ads they're redirected to your default Redirect URL. <strong>(2) Per-link shortener</strong> — call <code>POST /functions/v1/mini-app</code> with <code>{`{action:"shorten", apiKey, url}`}</code> to get a unique short URL <code>{`${miniUrl}?s=SHORT`}</code>; after 5 ads users are redirected to the original URL.
+        <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
+          <strong>(1) Direct redirect</strong> — send users to <code className="break-all">{miniUrl}?key=KEY&user=USER_ID</code>; after 5 ads they go to your Redirect URL. <strong>(2) Per-link shortener</strong> — POST to <code>/functions/v1/mini-app</code> with <code>{`{action:"shorten", apiKey, url}`}</code> for a unique short URL.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+        <div className="grid grid-cols-1 gap-2 mb-3">
           <input
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
@@ -206,10 +208,10 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
             value={newRedirect}
             onChange={(e) => setNewRedirect(e.target.value)}
             placeholder="Redirect URL after ads"
-            className={`${inputClass} md:col-span-1`}
+            className={inputClass}
           />
-          <button onClick={createKey} className={btnPrimary}>
-            <Plus className="w-4 h-4" /> Create Key
+          <button onClick={createKey} className={`${btnPrimary} px-3 py-2 text-xs flex items-center justify-center gap-1.5`}>
+            <Plus className="w-3.5 h-3.5" /> Create Key
           </button>
         </div>
 
