@@ -64,12 +64,14 @@ const STR: Record<Lang, Record<string, string>> = {
     grantFailed: "Failed to grant access. Try again.",
     apiMode: "External access mode",
     redirecting: "Redirecting…",
-    fallbackTitle: "Backup unlock link",
+    closingApp: "Closing Mini App and sending you back…",
+    fallbackTitle: "Your unlock link",
     fallbackDesc:
-      "If your access didn't show up automatically on the website, copy this link and open it in your phone's browser.",
+      "Open this link in your phone's browser to activate 24h access on the website.",
     copy: "Copy",
     copied: "Copied!",
     openShortDest: "Open your link",
+    openInBrowser: "Open in Browser",
     welcome: "Welcome",
     detecting: "Detecting your account…",
     aboutTitle: "About RS ANIME",
@@ -111,12 +113,14 @@ const STR: Record<Lang, Record<string, string>> = {
     grantFailed: "অ্যাক্সেস দিতে ব্যর্থ। আবার চেষ্টা করুন।",
     apiMode: "এক্সটার্নাল অ্যাক্সেস মোড",
     redirecting: "রিডাইরেক্ট হচ্ছে…",
-    fallbackTitle: "ব্যাকআপ আনলক লিঙ্ক",
+    closingApp: "Mini App বন্ধ করে আপনাকে ফেরত পাঠানো হচ্ছে…",
+    fallbackTitle: "আপনার আনলক লিঙ্ক",
     fallbackDesc:
-      "যদি ওয়েবসাইটে অটোমেটিক অ্যাক্সেস না আসে, এই লিঙ্কটি কপি করে ফোনের ব্রাউজারে খুলুন।",
+      "এই লিঙ্কটি আপনার ফোনের ব্রাউজারে খুললেই ওয়েবসাইটে ২৪ ঘণ্টার অ্যাক্সেস চালু হয়ে যাবে।",
     copy: "কপি",
     copied: "কপি হয়েছে!",
     openShortDest: "আপনার লিঙ্ক খুলুন",
+    openInBrowser: "ব্রাউজারে খুলুন",
     welcome: "স্বাগতম",
     detecting: "আপনার একাউন্ট খোঁজা হচ্ছে…",
     aboutTitle: "RS ANIME সম্পর্কে",
@@ -440,6 +444,11 @@ export default function MiniApp() {
 
   const userId = identity.id;
 
+  // Came from website's unlock button (deep link with u_<uid> start_param)
+  const cameFromWebsite = !!websiteStartUserId;
+  // Site origin (where to send the user back after unlock)
+  const SITE_ORIGIN = "https://rsanime03.lovable.app";
+
   const isApiMode = !!apiKey;
   const isShortMode = !!shortId;
   const mode: "site" | "api" | "short" = isShortMode
@@ -711,25 +720,53 @@ export default function MiniApp() {
         setError(t.grantFailed);
       } else {
         setGranted(true);
+
+        // Helper: close Telegram Mini App after redirect kicks off
+        const closeAfter = (ms = 1800) => {
+          setTimeout(() => {
+            try { window.Telegram?.WebApp?.close?.(); } catch {}
+          }, ms);
+        };
+
+        // Helper: open URL in external browser (out of Telegram WebView) when possible
+        const openExternal = (url: string) => {
+          try {
+            const tg = window.Telegram?.WebApp;
+            if (tg?.openLink) {
+              tg.openLink(url, { try_instant_view: false });
+              return;
+            }
+          } catch {}
+          window.location.href = url;
+        };
+
         if (mode === "short" && data.dest) {
           setShortDest(data.dest);
           setInfo(t.redirecting);
-          setTimeout(() => {
-            window.location.href = data.dest;
-          }, 1500);
+          setTimeout(() => openExternal(data.dest), 1200);
+          closeAfter(1800);
         } else if (mode === "api") {
           const redirectTo = data.redirectUrl || externalRedirect;
           if (redirectTo) {
             setInfo(t.redirecting);
-            setTimeout(() => {
-              window.location.href = redirectTo;
-            }, 1500);
+            setTimeout(() => openExternal(redirectTo), 1200);
+            closeAfter(1800);
           }
-        } else if (mode === "site" && data.fallbackToken) {
-          const origin = window.location.origin;
-          setFallbackUrl(
-            `${origin}/unlock?mini=${encodeURIComponent(data.fallbackToken)}`,
-          );
+        } else if (mode === "site") {
+          // Build unlock URL (token from backend, fallback to userId-only)
+          const origin = SITE_ORIGIN;
+          const unlockUrl = data.fallbackToken
+            ? `${origin}/unlock?mini=${encodeURIComponent(data.fallbackToken)}`
+            : `${origin}/?unlocked=1&u=${encodeURIComponent(userId)}`;
+          setFallbackUrl(unlockUrl);
+
+          if (cameFromWebsite) {
+            // User came from website unlock button → auto-close & send them back
+            setInfo(t.closingApp);
+            setTimeout(() => openExternal(unlockUrl), 1200);
+            closeAfter(2000);
+          }
+          // else: organic Telegram user → just show the unlock link card with note
         }
       }
     } catch {
@@ -888,6 +925,19 @@ export default function MiniApp() {
                 <p className="text-[11px] text-white/60 mb-2">
                   {t.fallbackDesc}
                 </p>
+                <button
+                  onClick={() => {
+                    try {
+                      const tg = window.Telegram?.WebApp;
+                      if (tg?.openLink) { tg.openLink(fallbackUrl, { try_instant_view: false }); return; }
+                    } catch {}
+                    window.open(fallbackUrl, "_blank");
+                  }}
+                  className="w-full py-2.5 mb-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-400 text-black font-bold text-xs flex items-center justify-center gap-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  {t.openInBrowser}
+                </button>
                 <div className="flex items-center gap-1 p-2 rounded-lg bg-black/40 text-[11px] font-mono break-all">
                   <span className="flex-1 break-all">{fallbackUrl}</span>
                   <button
