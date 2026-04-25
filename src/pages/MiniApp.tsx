@@ -268,15 +268,20 @@ function loadMonetag(maxWaitMs = 15000): Promise<boolean> {
 
     const script = document.createElement("script");
     script.id = MONETAG_SCRIPT_ID;
-    script.src = MONETAG_SDK;
     script.async = true;
+    // CRITICAL: per Monetag docs the script tag must carry data-zone and
+    // data-sdk *before* the src is set, otherwise the SDK boots without
+    // registering the show_<zone> global.
     script.setAttribute("data-zone", MONETAG_ZONE);
     script.setAttribute("data-sdk", `show_${MONETAG_ZONE}`);
+    script.setAttribute("data-cfasync", "false");
     script.onload = () => {
       script.dataset.loaded = "true";
       void waitUntilReady();
     };
     script.onerror = () => finish(false);
+    // src LAST so the SDK reads our data-* attributes during init.
+    script.src = MONETAG_SDK;
     document.head.appendChild(script);
   });
 
