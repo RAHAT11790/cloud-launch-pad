@@ -1587,6 +1587,24 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
           Join Our Telegram Channel
         </a>
         <p className="text-[10px] text-muted-foreground text-center mt-1 mb-2">Get all updates, news & details about {brandingCfg.siteName}</p>
+
+        {/* Download APK (PWA install) — bottommost CTA */}
+        {!isAppInstalled && (
+          <button
+            onClick={handleInstallApp}
+            className="flex items-center justify-center gap-2.5 w-full py-3.5 rounded-xl font-semibold text-sm transition-all mt-1"
+            style={{ background: 'linear-gradient(135deg, #16a34a, #22c55e)', color: '#fff' }}
+          >
+            <Download className="w-4 h-4" />
+            Download APK
+          </button>
+        )}
+        {isAppInstalled && (
+          <div className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-[12px] text-muted-foreground bg-foreground/5 mt-1">
+            ✅ App is already installed
+          </div>
+        )}
+        <p className="text-[10px] text-muted-foreground text-center mt-1 mb-3">Install {brandingCfg.siteName} as an app on your phone</p>
       </div>
     </motion.div>
   );
