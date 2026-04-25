@@ -2015,6 +2015,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [analyticsViews, setAnalyticsViews] = useState<Record<string, any>>({});
   const [activeViewers, setActiveViewers] = useState<Record<string, any>>({});
   const [dailyActiveUsers, setDailyActiveUsers] = useState<Record<string, any>>({});
+  const [allTimeTotals, setAllTimeTotals] = useState<Record<string, { count: number; title?: string; lastSeen?: number }>>({});
 
   // AnimeSalt selected data for content options
   const [animesaltSelectedData, setAnimesaltSelectedData] = useState<Record<string, any>>({});
