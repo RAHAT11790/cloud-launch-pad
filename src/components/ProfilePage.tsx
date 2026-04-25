@@ -468,6 +468,42 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
   const [deviceExceeded, setDeviceExceeded] = useState(false);
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
 
+  // PWA install prompt — captured beforeinstallprompt for "Download APK"
+  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
+  const [isAppInstalled, setIsAppInstalled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia?.("(display-mode: standalone)")?.matches
+      || (window.navigator as any).standalone === true;
+  });
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setInstallPromptEvent(e);
+    };
+    const installedHandler = () => { setIsAppInstalled(true); setInstallPromptEvent(null); };
+    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", installedHandler);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", installedHandler);
+    };
+  }, []);
+  const handleInstallApp = async () => {
+    if (installPromptEvent) {
+      try {
+        installPromptEvent.prompt();
+        const choice = await installPromptEvent.userChoice;
+        if (choice?.outcome === "accepted") {
+          setIsAppInstalled(true);
+        }
+        setInstallPromptEvent(null);
+      } catch {}
+    } else {
+      // Fallback: Chrome 'Add to Home screen' instruction
+      alert("Open Chrome menu (⋮) → \"Install app\" or \"Add to Home screen\" to install this app as APK.");
+    }
+  };
+
   const getUserId = (): string | null => {
     try {
       const user = localStorage.getItem("rsanime_user");
@@ -1551,6 +1587,24 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
           Join Our Telegram Channel
         </a>
         <p className="text-[10px] text-muted-foreground text-center mt-1 mb-2">Get all updates, news & details about {brandingCfg.siteName}</p>
+
+        {/* Download APK (PWA install) — bottommost CTA */}
+        {!isAppInstalled && (
+          <button
+            onClick={handleInstallApp}
+            className="flex items-center justify-center gap-2.5 w-full py-3.5 rounded-xl font-semibold text-sm transition-all mt-1"
+            style={{ background: 'linear-gradient(135deg, #16a34a, #22c55e)', color: '#fff' }}
+          >
+            <Download className="w-4 h-4" />
+            Download APK
+          </button>
+        )}
+        {isAppInstalled && (
+          <div className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-[12px] text-muted-foreground bg-foreground/5 mt-1">
+            ✅ App is already installed
+          </div>
+        )}
+        <p className="text-[10px] text-muted-foreground text-center mt-1 mb-3">Install {brandingCfg.siteName} as an app on your phone</p>
       </div>
     </motion.div>
   );

@@ -652,17 +652,49 @@ const Index = () => {
     return allAnime;
   }, [activeCategory, allAnime]);
 
+  // Live view counts from analytics — used to rank Trending content (most viewed first)
+  const [analyticsViews, setAnalyticsViews] = useState<Record<string, any>>({});
+  useEffect(() => {
+    const unsub = onValue(ref(db, "analytics/views"), (snap) => {
+      setAnalyticsViews(snap.val() || {});
+    });
+    return () => unsub();
+  }, []);
+
+  const getViewCount = useCallback((id: string): number => {
+    const data = analyticsViews[id];
+    if (!data) return 0;
+    if (typeof data === "number") return data;
+    let total = 0;
+    Object.values(data).forEach((v: any) => {
+      if (typeof v === "number") total += v;
+      else if (v && typeof v === "object") {
+        Object.values(v).forEach((x: any) => { if (typeof x === "number") total += x; });
+      }
+    });
+    return total;
+  }, [analyticsViews]);
+
   const filteredSeries = useMemo(() => {
     let list = activeCategory !== "All" ? allSeries.filter(a => a.category === activeCategory) : allSeries;
     if (dubFilter !== "all") list = list.filter(a => (a.dubType || "official") === dubFilter);
-    return list;
-  }, [activeCategory, allSeries, dubFilter]);
+    // Sort by view count DESC for "Trending" — falls back to recency when ties
+    return [...list].sort((a, b) => {
+      const diff = getViewCount(b.id) - getViewCount(a.id);
+      if (diff !== 0) return diff;
+      return ((b as any).updatedAt || (b as any).createdAt || 0) - ((a as any).updatedAt || (a as any).createdAt || 0);
+    });
+  }, [activeCategory, allSeries, dubFilter, getViewCount]);
 
   const filteredMovies = useMemo(() => {
     let list = activeCategory !== "All" ? allMovies.filter(a => a.category === activeCategory) : allMovies;
     if (dubFilter !== "all") list = list.filter(a => (a.dubType || "official") === dubFilter);
-    return list;
-  }, [activeCategory, allMovies, dubFilter]);
+    return [...list].sort((a, b) => {
+      const diff = getViewCount(b.id) - getViewCount(a.id);
+      if (diff !== 0) return diff;
+      return ((b as any).updatedAt || (b as any).createdAt || 0) - ((a as any).updatedAt || (a as any).createdAt || 0);
+    });
+  }, [activeCategory, allMovies, dubFilter, getViewCount]);
 
   const categoryGroups = useMemo(() => {
     const groups: Record<string, AnimeItem[]> = {};

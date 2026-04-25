@@ -2755,34 +2755,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     set(saveRef, data)
       .then(async () => {
         toast.success(seriesEditId ? "Series updated!" : "Series saved!");
-        // Sync weekly tracking entry
-        try {
-          const { enableWeeklyForSeries, disableWeeklyForSeries, markWeeklyEpisodeReleased } = await import("@/lib/weeklyEpManager");
-          if (data.weeklyEnabled) {
-            const missingDays = Math.max(0, Number(seriesForm.weeklyDaysSinceLast) || 0);
-            // If editing existing series, treat the save as "new episode released" → reset timer
-            if (seriesEditId) {
-              await enableWeeklyForSeries({
-                seriesId: newId,
-                seriesTitle: data.title,
-                poster: data.poster,
-                weeklyEveryDays: data.weeklyEveryDays,
-                missingDays: 0,
-              });
-              await markWeeklyEpisodeReleased(newId);
-            } else {
-              await enableWeeklyForSeries({
-                seriesId: newId,
-                seriesTitle: data.title,
-                poster: data.poster,
-                weeklyEveryDays: data.weeklyEveryDays,
-                missingDays,
-              });
-            }
-          } else {
-            await disableWeeklyForSeries(newId);
-          }
-        } catch (e) { console.warn("Weekly sync failed", e); }
+        // Weekly EP feature removed — no sync needed
         setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list");
       })
       .catch(err => toast.error("Error: " + err.message));
@@ -4386,7 +4359,7 @@ ${tgHashtags}`;
               <button onClick={() => { setSeriesTab("ws-manual"); setSeriesEditId(""); setSeriesForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official", weeklyEnabled: false, weeklyEveryDays: 7, weeklyDaysSinceLast: 0 }); setSeasonsData([{ name: "Season 1", seasonNumber: 1, episodes: [] }]); setSeriesCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
                 Manual
               </button>
-              <WeeklyEpTabButton active={seriesTab === "ws-weekly"} onClick={() => setSeriesTab("ws-weekly")} />
+              {/* Weekly EP feature removed */}
             </div>
 
             {seriesTab === "ws-list" && (
@@ -4432,9 +4405,7 @@ ${tgHashtags}`;
               </div>
             )}
 
-            {seriesTab === "ws-weekly" && (
-              <WeeklyEpManager onEditSeries={(id) => editSeries(id)} />
-            )}
+            {/* Weekly EP manager removed */}
 
             {(seriesTab === "ws-add" || seriesTab === "ws-manual") && (
               <div>
@@ -4548,79 +4519,9 @@ ${tgHashtags}`;
                         <textarea value={seriesForm.storyline || ""} onChange={e => setSeriesForm({ ...seriesForm, storyline: e.target.value })}
                           className={`${inputClass} min-h-[100px] resize-y`} placeholder="Storyline" />
                       </div>
-                      <div className="mb-4 rounded-xl border border-white/10 bg-black/20 p-3">
-                        <div className="flex items-center justify-between gap-3 mb-3">
-                          <div>
-                            <label className="block text-xs text-[#D1C4E9] font-medium">Weekly EP Tracking</label>
-                            <p className="text-[10px] text-[#957DAD] mt-1">Track this series for weekly episode releases (auto-countdown).</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setSeriesForm({ ...seriesForm, weeklyEnabled: !(seriesForm.weeklyEnabled === true) })}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${seriesForm.weeklyEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}
-                          >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${seriesForm.weeklyEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                          </button>
-                        </div>
-                        {seriesForm.weeklyEnabled && (
-                          <>
-                            <div className="grid grid-cols-2 gap-2 mb-2">
-                              <div>
-                                <label className="block text-[10px] text-[#957DAD] mb-1">Release every (days)</label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={seriesForm.weeklyEveryDays || 7}
-                                  onChange={e => setSeriesForm({ ...seriesForm, weeklyEveryDays: Math.max(1, Number(e.target.value) || 7) })}
-                                  className={inputClass}
-                                  placeholder="7"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] text-[#957DAD] mb-1">Current / Missing Days (since last EP)</label>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={seriesForm.weeklyDaysSinceLast ?? 0}
-                                  onChange={e => setSeriesForm({ ...seriesForm, weeklyDaysSinceLast: Math.max(0, Number(e.target.value) || 0) })}
-                                  className={inputClass}
-                                  placeholder="0 = today"
-                                />
-                              </div>
-                            </div>
-                            <p className="text-[10px] text-emerald-400/80">
-                              💡 Cycle=7 + Current=5 → next EP appears in <strong>{Math.max(0, (Number(seriesForm.weeklyEveryDays) || 7) - (Number(seriesForm.weeklyDaysSinceLast) || 0))} days</strong>
-                            </p>
-                          </>
-                        )}
-                      </div>
+                      {/* Weekly EP tracking removed */}
 
-                      {/* === Per-Series Telegram Custom Button === */}
-                      <div className={`${glassCard} p-4 mb-4 border-cyan-500/20`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="text-sm font-semibold text-cyan-300 flex items-center gap-2">
-                            📢 Telegram Custom Button
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">Per-series · Optional</span>
-                          </div>
-                        </div>
-                        <p className="text-[10.5px] text-zinc-400 mb-2.5">
-                          এই সিরিজের Telegram পোস্টে আপনার দেওয়া বাটন (নাম + URL) auto-attach হবে। ফাঁকা রাখলে শুধু default Watch/Download বাটন যাবে।
-                        </p>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            placeholder="Button Name (e.g. 📥 Download HD)"
-                            value={seriesForm.telegramCustomButtonText || ""}
-                            onChange={e => setSeriesForm({ ...seriesForm, telegramCustomButtonText: e.target.value })}
-                            className={inputClass}
-                          />
-                          <input
-                            placeholder="https://your-link.com"
-                            value={seriesForm.telegramCustomButtonUrl || ""}
-                            onChange={e => setSeriesForm({ ...seriesForm, telegramCustomButtonUrl: e.target.value })}
-                            className={inputClass}
-                          />
-                        </div>
-                      </div>
+                      {/* Per-series Telegram Custom Button moved to Telegram Post section */}
                       {seriesCast.length > 0 && (
                         <div className="mb-4">
                           <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Cast (Auto-fetched)</label>
@@ -5205,15 +5106,40 @@ ${tgHashtags}`;
                         <X size={14} /> বাদ দিন
                       </button>
                       <button onClick={async () => {
-                        await sendTelegramPost();
+                        // Step 1: Send the in-app notification first (existing flow already added the release entry)
+                        // Step 2: Auto-redirect to Telegram Post section with anime preselected
+                        const ctx = wsNotifyContextRef.current;
+                        const seriesId = ctx?.seriesId || "";
+                        toast.success("✅ নোটিফিকেশন পাঠানো হয়েছে — টেলিগ্রাম পোস্টে রিডাইরেক্ট হচ্ছে...");
                         setWsSaveNotifyModal(false);
                         setWsNotifyStep("release");
                         setWsNotifySeason("");
                         setWsNotifyEpisode("");
                         wsNotifyContextRef.current = null;
-                      }} disabled={tgSending || !tgTitle.trim()} className="flex-1 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-center gap-2 disabled:opacity-50">
-                        {tgSending ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <Send size={14} />}
-                        পাঠান
+                        // Switch section then preselect — find the matching release (most recent for this seriesId)
+                        setActiveSection("telegram-post");
+                        setTimeout(() => {
+                          const matching = releasesData.find(r => r.contentId === seriesId);
+                          if (matching) {
+                            fillTelegramFromRelease(matching.id);
+                          } else if (seriesId) {
+                            // Fallback: fill directly from webseries data
+                            const ws = webseriesData.find(s => s.id === seriesId);
+                            if (ws) {
+                              setTgSelectedRelease(seriesId);
+                              setTgTitle(ws.title || "");
+                              const backdrop = ws.backdrop || ws.poster || "";
+                              setTgPosterUrl(backdrop.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
+                              if (ws.rating) setTgRating(String(ws.rating));
+                              if (ws.category) setTgGenres(ws.category);
+                              if (ws.language) setTgLanguages(ws.language);
+                              setTgDubType(ws.dubType === "fandub" ? "fandub" : "official");
+                              setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(seriesId)}`);
+                            }
+                          }
+                        }, 350);
+                      }} disabled={!tgTitle.trim()} className="flex-1 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-center gap-2 disabled:opacity-50">
+                        <Send size={14} /> পোস্টে যান
                       </button>
                     </div>
                   </div>
@@ -6177,37 +6103,83 @@ ${tgHashtags}`;
                 নিউ রিলিজ থেকে সিলেক্ট করুন অথবা ম্যানুয়ালি ফিল্ড পূরণ করুন।
               </p>
               <div className="mb-4" ref={tgDropdownRef}>
-                <label className="block text-xs text-zinc-400 mb-2 font-medium">রিলিজ থেকে সিলেক্ট (ঐচ্ছিক)</label>
+                <label className="block text-xs text-zinc-400 mb-2 font-medium">এনিমে / মুভি সিলেক্ট করুন (latest update টপে)</label>
                 <div className="relative z-[130]">
                   <button type="button" onClick={() => setTgDropdownOpen(!tgDropdownOpen)}
                     className={`${selectClass} w-full text-left flex items-center gap-2`}>
                     {tgSelectedRelease ? (
-                      <span className="truncate text-sm">{releasesData.find(r => r.id === tgSelectedRelease)?.title || "Selected"}</span>
-                    ) : <span className="text-zinc-500">রিলিজ সিলেক্ট করুন...</span>}
+                      <span className="truncate text-sm">{
+                        webseriesData.find(s => s.id === tgSelectedRelease)?.title
+                          || moviesData.find(m => m.id === tgSelectedRelease)?.title
+                          || releasesData.find(r => r.id === tgSelectedRelease)?.title
+                          || "Selected"
+                      }</span>
+                    ) : <span className="text-zinc-500">এনিমে সিলেক্ট করুন...</span>}
                     <ChevronDown size={14} className="ml-auto flex-shrink-0" />
                   </button>
-                  {tgDropdownOpen && (
-                    <div className="absolute z-[200] top-full left-0 right-0 mt-1 bg-[#16162A] border border-white/10 rounded-xl max-h-[280px] overflow-hidden flex flex-col">
+                  {tgDropdownOpen && (() => {
+                    // Merged list — ALL webseries + movies, sorted by latest update first
+                    const merged = [
+                      ...webseriesData.map((s: any) => ({ id: s.id, title: s.title, poster: s.poster, type: "webseries" as const, updatedAt: s.updatedAt || s.createdAt || 0 })),
+                      ...moviesData.map((m: any) => ({ id: m.id, title: m.title, poster: m.poster, type: "movie" as const, updatedAt: m.updatedAt || m.createdAt || 0 })),
+                    ].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                    const filtered = merged.filter(r => !tgContentSearch.trim() || (r.title || '').toLowerCase().includes(tgContentSearch.toLowerCase()));
+                    return (
+                    <div className="absolute z-[200] top-full left-0 right-0 mt-1 bg-[#16162A] border border-white/10 rounded-xl max-h-[320px] overflow-hidden flex flex-col">
                       <div className="p-2 border-b border-white/10 flex-shrink-0">
                         <input value={tgContentSearch} onChange={e => setTgContentSearch(e.target.value)}
                           className="w-full px-3 py-2 bg-[#141422] border border-white/10 rounded-lg text-white text-[12px] focus:border-blue-500 focus:outline-none placeholder:text-zinc-500"
                           placeholder="🔍 সার্চ করুন..." autoFocus onClick={e => e.stopPropagation()} />
                       </div>
-                      <div className="overflow-y-auto max-h-[220px]">
-                        {releasesData.filter(r => !tgContentSearch.trim() || (r.title || '').toLowerCase().includes(tgContentSearch.toLowerCase())).map(r => (
-                          <div key={r.id} className={`flex items-center gap-2.5 p-2 cursor-pointer hover:bg-blue-500/20 rounded-lg m-1 ${tgSelectedRelease === r.id ? "bg-blue-500/30" : ""}`}
-                            onClick={() => { fillTelegramFromRelease(r.id); setTgDropdownOpen(false); setTgContentSearch(''); }}>
+                      <div className="overflow-y-auto max-h-[260px]">
+                        {filtered.map(r => {
+                          // Build a synthetic release object so existing fillTelegramFromRelease works.
+                          const matching = releasesData.find(rel => rel.contentId === r.id);
+                          return (
+                          <div key={`${r.type}_${r.id}`} className={`flex items-center gap-2.5 p-2 cursor-pointer hover:bg-blue-500/20 rounded-lg m-1 ${tgSelectedRelease === r.id ? "bg-blue-500/30" : ""}`}
+                            onClick={async () => {
+                              if (matching) {
+                                fillTelegramFromRelease(matching.id);
+                              } else {
+                                // Manual fill from webseries/movies data when no release entry exists
+                                setTgSelectedRelease(r.id);
+                                setTgTitle(r.title || "");
+                                const fullData = r.type === "webseries"
+                                  ? webseriesData.find(s => s.id === r.id)
+                                  : moviesData.find(m => m.id === r.id);
+                                if (fullData) {
+                                  const backdrop = (fullData as any).backdrop || (fullData as any).poster || "";
+                                  setTgPosterUrl(backdrop.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
+                                  if ((fullData as any).rating) setTgRating(String((fullData as any).rating));
+                                  if ((fullData as any).category) setTgGenres((fullData as any).category);
+                                  if ((fullData as any).language) setTgLanguages((fullData as any).language);
+                                  setTgDubType((fullData as any).dubType === "fandub" ? "fandub" : "official");
+                                  setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(r.id)}`);
+                                  if ((fullData as any).tmdbId) {
+                                    setTgImdbId(String((fullData as any).tmdbId));
+                                    try {
+                                      const { genres, rating } = await resolveTelegramGenresAndRating(String((fullData as any).tmdbId), r.title || "");
+                                      if (genres.length > 0) setTgGenres(genres.join(", "));
+                                      if (rating) setTgRating(rating);
+                                    } catch {}
+                                  }
+                                }
+                              }
+                              setTgDropdownOpen(false); setTgContentSearch('');
+                            }}>
                             <img src={r.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0 bg-[#1E1E32]" />
                             <div className="flex-1 min-w-0">
                               <span className="text-sm truncate block">{r.title}</span>
-                              {r.episodeInfo && <span className="text-[10px] text-zinc-500">{r.episodeInfo.seasonName} EP{r.episodeInfo.episodeNumber}</span>}
+                              <span className="text-[9px] text-zinc-500">{r.type === "webseries" ? "📺 Series" : "🎬 Movie"}{matching ? " • 🆕 New EP" : ""}</span>
                             </div>
                           </div>
-                        ))}
-                        {releasesData.length === 0 && <p className="text-zinc-500 text-[11px] text-center py-4">কোনো রিলিজ নেই</p>}
+                          );
+                        })}
+                        {filtered.length === 0 && <p className="text-zinc-500 text-[11px] text-center py-4">কোনো এনিমে নেই</p>}
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
               <div className="space-y-3">

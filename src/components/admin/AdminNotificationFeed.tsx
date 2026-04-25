@@ -1,19 +1,17 @@
 import { useEffect, useState, useMemo } from "react";
 import { db, ref, onValue } from "@/lib/firebase";
-import { Bell, Flame, CreditCard, Unlock, AlertTriangle, Calendar } from "lucide-react";
-import { computeWeeklyStatus, shouldShowWeeklyEntry, type WeeklyPendingEntry } from "@/lib/weeklyEpManager";
+import { Bell, CreditCard, Unlock, AlertTriangle } from "lucide-react";
 
 type FeedItem = {
   id: string;
-  kind: "weekly" | "subscription" | "unlock" | "error" | "system";
+  kind: "subscription" | "unlock" | "error" | "system";
   title: string;
   desc: string;
   ts: number;
-  priority: number; // higher = more urgent
+  priority: number;
 };
 
 const KIND_META: Record<FeedItem["kind"], { icon: any; color: string; bg: string }> = {
-  weekly: { icon: Flame, color: "text-rose-300", bg: "bg-rose-500/15 border-rose-500/30" },
   subscription: { icon: CreditCard, color: "text-amber-300", bg: "bg-amber-500/15 border-amber-500/30" },
   unlock: { icon: Unlock, color: "text-emerald-300", bg: "bg-emerald-500/15 border-emerald-500/30" },
   error: { icon: AlertTriangle, color: "text-orange-300", bg: "bg-orange-500/15 border-orange-500/30" },
@@ -21,14 +19,12 @@ const KIND_META: Record<FeedItem["kind"], { icon: any; color: string; bg: string
 };
 
 export function AdminNotificationFeed() {
-  const [weekly, setWeekly] = useState<WeeklyPendingEntry[]>([]);
   const [bkash, setBkash] = useState<any[]>([]);
   const [unlocks, setUnlocks] = useState<any[]>([]);
   const [, tick] = useState(0);
 
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 30_000);
-    const u1 = onValue(ref(db, "weeklyPending"), (s) => setWeekly((Object.values(s.val() || {}) as WeeklyPendingEntry[]).filter(shouldShowWeeklyEntry)));
     const u2 = onValue(ref(db, "bkashPayments"), (s) => {
       const v = s.val() || {};
       setBkash(Object.entries(v).map(([id, x]: [string, any]) => ({ id, ...x })));
@@ -39,7 +35,6 @@ export function AdminNotificationFeed() {
     });
     return () => {
       clearInterval(t);
-      u1();
       u2();
       u3();
     };
@@ -48,28 +43,7 @@ export function AdminNotificationFeed() {
   const items: FeedItem[] = useMemo(() => {
     const arr: FeedItem[] = [];
 
-    weekly.forEach((e) => {
-      const s = computeWeeklyStatus(e);
-      if (s.isPending && !s.isReleasedRecently && !s.isStale) {
-        arr.push({
-          id: `w-${e.seriesId}`,
-          kind: "weekly",
-          title: `🔥 ${e.seriesTitle} — Episode due now`,
-          desc: `${s.countdownLabel} · cycle ${e.weeklyEveryDays}d`,
-          ts: e.nextReleaseAt,
-          priority: 100,
-        });
-      } else if (!s.isReleasedRecently && !s.isStale) {
-        arr.push({
-          id: `w-${e.seriesId}`,
-          kind: "weekly",
-          title: `📅 ${e.seriesTitle}`,
-          desc: s.countdownLabel,
-          ts: e.nextReleaseAt,
-          priority: 30,
-        });
-      }
-    });
+    // Weekly EP feature removed
 
     bkash
       .filter((p) => p.status === "pending")
@@ -96,7 +70,7 @@ export function AdminNotificationFeed() {
     });
 
     return arr.sort((a, b) => b.priority - a.priority || b.ts - a.ts).slice(0, 30);
-  }, [weekly, bkash, unlocks]);
+  }, [bkash, unlocks]);
 
   if (items.length === 0) {
     return (

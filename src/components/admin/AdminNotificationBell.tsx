@@ -10,11 +10,11 @@ import {
   TrendingUp,
   X,
 } from "lucide-react";
-import { computeWeeklyStatus, shouldShowWeeklyEntry, type WeeklyPendingEntry } from "@/lib/weeklyEpManager";
+// Weekly EP feature removed
 
 type FeedItem = {
   id: string;
-  kind: "weekly" | "subscription" | "unlock" | "error" | "system" | "stats" | "trending";
+  kind: "subscription" | "unlock" | "error" | "system" | "stats" | "trending";
   title: string;
   desc: string;
   ts: number;
@@ -22,7 +22,7 @@ type FeedItem = {
 };
 
 const KIND_META: Record<FeedItem["kind"], { icon: any; color: string; bg: string }> = {
-  weekly: { icon: Flame, color: "text-rose-300", bg: "bg-rose-500/15 border-rose-500/30" },
+  // weekly removed
   subscription: { icon: CreditCard, color: "text-amber-300", bg: "bg-amber-500/15 border-amber-500/30" },
   unlock: { icon: Unlock, color: "text-emerald-300", bg: "bg-emerald-500/15 border-emerald-500/30" },
   error: { icon: AlertTriangle, color: "text-orange-300", bg: "bg-orange-500/15 border-orange-500/30" },
@@ -43,7 +43,7 @@ function isToday(ts: number) {
 
 export function AdminNotificationBell() {
   const [open, setOpen] = useState(false);
-  const [weekly, setWeekly] = useState<WeeklyPendingEntry[]>([]);
+  // weekly state removed
   const [bkash, setBkash] = useState<any[]>([]);
   const [unlocks, setUnlocks] = useState<any[]>([]);
   const [freeAccess, setFreeAccess] = useState<any[]>([]);
@@ -54,7 +54,7 @@ export function AdminNotificationBell() {
 
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 30_000);
-    const u1 = onValue(ref(db, "weeklyPending"), (s) => setWeekly((Object.values(s.val() || {}) as WeeklyPendingEntry[]).filter(shouldShowWeeklyEntry)));
+    const u1 = () => {};
     const u2 = onValue(ref(db, "bkashPayments"), (s) => {
       const v = s.val() || {};
       setBkash(Object.entries(v).map(([id, x]: [string, any]) => ({ id, ...x })));
@@ -93,20 +93,7 @@ export function AdminNotificationBell() {
   const items: FeedItem[] = useMemo(() => {
     const arr: FeedItem[] = [];
 
-    // Weekly pending
-      weekly.forEach((e) => {
-      const s = computeWeeklyStatus(e);
-        if (s.isPending && !s.isReleasedRecently && !s.isStale) {
-        arr.push({
-          id: `w-${e.seriesId}`,
-          kind: "weekly",
-          title: `🔥 ${e.seriesTitle}`,
-          desc: `Episode due now · ${s.countdownLabel}`,
-          ts: e.nextReleaseAt,
-          priority: 100,
-        });
-      }
-    });
+    // Weekly pending removed
 
     // Pending bKash
     bkash
@@ -168,7 +155,7 @@ export function AdminNotificationBell() {
       .filter((item) => !readMap[item.id])
       .sort((a, b) => b.priority - a.priority || b.ts - a.ts)
       .slice(0, 30);
-  }, [weekly, bkash, unlocks, freeAccess, analytics, readMap]);
+  }, [bkash, unlocks, freeAccess, analytics, readMap]);
 
   const markAllRead = async () => {
     if (items.length === 0) return;
