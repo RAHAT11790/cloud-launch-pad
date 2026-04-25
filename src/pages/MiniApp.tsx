@@ -274,6 +274,9 @@ interface UserProfile {
   name: string;
   email?: string;
   photoURL?: string;
+  source?: "site" | "telegram" | "external";
+  username?: string;
+  tag?: string; // short label like "tg_662" or "user_1"
 }
 
 export default function MiniApp() {
@@ -307,36 +310,95 @@ export default function MiniApp() {
   const apiKey = params.get("key") || "";
   const externalUser = params.get("user") || params.get("u") || "";
   const externalRedirect = params.get("redirect") || "";
+  const externalName = params.get("n") || params.get("name") || "";
+  const externalPhoto = params.get("p") || params.get("photo") || "";
   const shortId = params.get("s") || "";
 
-  // Resolve user id with maximum reliability
-  const userId = useMemo(() => {
-    // 1) Telegram start_param u_xxx
+  // Resolve user identity. We track Telegram users separately from website users.
+  // Website users: live in Firebase users/<uid> (existing flow).
+  // Telegram users: identified by tg_<telegram_id>, profile from Telegram WebApp directly.
+  // External (API) users: identified by what the partner bot sent in ?user= (+ optional ?n=&p=).
+  const identity = useMemo(() => {
+    // 1) Telegram WebApp itself (most reliable when opened inside Telegram)
     try {
       const tg = window.Telegram?.WebApp;
+      const tgUser = tg?.initDataUnsafe?.user;
+      if (tgUser?.id) {
+        const fullName = [tgUser.first_name, tgUser.last_name]
+          .filter(Boolean)
+          .join(" ") || tgUser.username || "Telegram User";
+        return {
+          id: `tg_${tgUser.id}`,
+          source: "telegram" as const,
+          name: fullName,
+          username: tgUser.username || "",
+          photoURL: tgUser.photo_url || "",
+          tag: `tg_${String(tgUser.id).slice(-4)}`,
+        };
+      }
+      // 1b) start_param u_<firebase_uid> (website user clicked deep link from website -> bot)
       const sp = tg?.initDataUnsafe?.start_param || "";
       if (typeof sp === "string" && sp.startsWith("u_")) {
-        return decodeURIComponent(sp.slice(2));
+        const uid = decodeURIComponent(sp.slice(2));
+        return {
+          id: uid,
+          source: "site" as const,
+          name: "",
+          tag: `user_${uid.slice(0, 4)}`,
+        };
       }
     } catch {}
-    // 2) ?user= or ?u= URL param
-    if (externalUser) return externalUser;
-    // 3) Telegram WebApp numeric id (fallback)
-    try {
-      const tg = window.Telegram?.WebApp;
-      if (tg?.initDataUnsafe?.user?.id)
-        return `tg_${tg.initDataUnsafe.user.id}`;
-    } catch {}
-    // 4) Local site user
+
+    // 2) ?user= from external bot — treat as external API user
+    if (externalUser) {
+      // If the partner sent name/photo, use them directly
+      if (externalName || externalPhoto) {
+        return {
+          id: externalUser,
+          source: "external" as const,
+          name: externalName || "External User",
+          photoURL: externalPhoto || "",
+          tag: `ext_${externalUser.slice(0, 4)}`,
+        };
+      }
+      // If user looks like a telegram id (numeric), treat as telegram external
+      const isNumeric = /^\d+$/.test(externalUser);
+      return {
+        id: isNumeric ? `tg_${externalUser}` : externalUser,
+        source: isNumeric ? ("telegram" as const) : ("external" as const),
+        name: "",
+        tag: isNumeric
+          ? `tg_${externalUser.slice(-4)}`
+          : `ext_${externalUser.slice(0, 4)}`,
+      };
+    }
+
+    // 3) Local site user (logged in on website)
     try {
       const raw = localStorage.getItem("rsanime_user");
       if (raw) {
         const p = JSON.parse(raw);
-        if (p?.id) return p.id;
+        if (p?.id) {
+          return {
+            id: p.id,
+            source: "site" as const,
+            name: p.name || p.displayName || "",
+            photoURL: p.photoURL || p.photo || "",
+            tag: `user_${String(p.id).slice(0, 4)}`,
+          };
+        }
       }
     } catch {}
-    return "";
-  }, [externalUser]);
+
+    return {
+      id: "",
+      source: "site" as const,
+      name: "",
+      tag: "",
+    };
+  }, [externalUser, externalName, externalPhoto]);
+
+  const userId = identity.id;
 
   const isApiMode = !!apiKey;
   const isShortMode = !!shortId;
@@ -380,12 +442,31 @@ export default function MiniApp() {
     }
   }, [mode, isShortMode, shortId]);
 
-  // Fetch user profile from Firebase the moment we have a userId (site mode)
+  // Build the displayed profile.
+  // - Telegram & external users: use what we already have from initData / URL params.
+  // - Website users: hit Firebase via mini-app edge function for name/email/photo.
   useEffect(() => {
-    if (mode !== "site" || !userId) {
+    if (!userId) {
+      setProfile(null);
       setProfileLoading(false);
       return;
     }
+
+    // Telegram or external API user — we already have what we need locally.
+    if (identity.source === "telegram" || identity.source === "external") {
+      setProfile({
+        id: identity.id,
+        name: identity.name || (identity.source === "telegram" ? "Telegram User" : "User"),
+        photoURL: identity.photoURL || "",
+        source: identity.source,
+        username: identity.username || "",
+        tag: identity.tag || "",
+      });
+      setProfileLoading(false);
+      return;
+    }
+
+    // Website user — fetch from backend
     setProfileLoading(true);
     fetch(FN_URL, {
       method: "POST",
@@ -394,15 +475,36 @@ export default function MiniApp() {
     })
       .then((r) => r.json())
       .then((d) => {
-        if (d?.ok) {
-          setProfile(d.user);
+        if (d?.ok && d.user) {
+          setProfile({
+            id: d.user.id,
+            name: d.user.name || identity.name || "User",
+            email: d.user.email || "",
+            photoURL: d.user.photoURL || identity.photoURL || "",
+            source: "site",
+            tag: identity.tag,
+          });
         } else {
-          setProfile({ id: userId, name: "User" });
+          setProfile({
+            id: userId,
+            name: identity.name || "User",
+            photoURL: identity.photoURL || "",
+            source: "site",
+            tag: identity.tag,
+          });
         }
       })
-      .catch(() => setProfile({ id: userId, name: "User" }))
+      .catch(() =>
+        setProfile({
+          id: userId,
+          name: identity.name || "User",
+          photoURL: identity.photoURL || "",
+          source: "site",
+          tag: identity.tag,
+        }),
+      )
       .finally(() => setProfileLoading(false));
-  }, [userId, mode]);
+  }, [userId, identity]);
 
   // Auto-clear notices
   useEffect(() => {
@@ -483,14 +585,15 @@ export default function MiniApp() {
     setError("");
     setInfo("");
 
-    setAdRunning(true);
-
     // Rewarded unlock must use real successful Monetag ad only.
     if (adType !== "rewarded") {
       setError(t.realOnly);
       return;
     }
 
+    setAdRunning(true);
+
+    // Step 1: ensure SDK is loaded. This is the only hard requirement.
     let ready = sdkReady;
     if (!ready) {
       ready = await loadMonetag(15000);
@@ -498,20 +601,10 @@ export default function MiniApp() {
     }
 
     if (!ready) {
-      const retried = await preloadRewardedAd();
-      if (!retried) {
-        setAdRunning(false);
-        setRewardReady(false);
-        setError(t.adUnavailable);
-        return;
-      }
-    } else if (!rewardReady) {
-      const preloaded = await preloadRewardedAd();
-      if (!preloaded) {
-        setAdRunning(false);
-        setError(t.adUnavailable);
-        return;
-      }
+      setAdRunning(false);
+      setRewardReady(false);
+      setError(t.adUnavailable);
+      return;
     }
 
     const fnName = `show_${MONETAG_ZONE}`;
@@ -524,20 +617,27 @@ export default function MiniApp() {
       return;
     }
 
+    // Step 2: try to call show directly. Per Monetag docs, preload is optional —
+    // calling show_XXX() directly will fetch + display an ad in one shot.
+    // This is more reliable than gating on a separate preload Promise that
+    // sometimes silently never resolves inside the Telegram WebView.
     try {
       const trackingId =
-        preloadedTrackingIdRef.current || buildMonetagTrackingId(userId, views + 1);
+        preloadedTrackingIdRef.current ||
+        buildMonetagTrackingId(userId, views + 1);
       await showFn({ ymid: trackingId, requestVar: MONETAG_REQUEST_VAR });
       preloadedTrackingIdRef.current = "";
       setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
       setRewardReady(false);
       setInfo(t.counted);
-      await preloadRewardedAd();
-    } catch {
+      // Preload the next one in the background (non-blocking)
+      preloadRewardedAd().catch(() => {});
+    } catch (e) {
       preloadedTrackingIdRef.current = "";
       setRewardReady(false);
+      // Real failure (no-fill / user closed early / network). Do NOT count.
       setError(t.adUnavailable);
-      await preloadRewardedAd();
+      preloadRewardedAd().catch(() => {});
     } finally {
       setAdRunning(false);
     }
@@ -657,13 +757,15 @@ export default function MiniApp() {
         </div>
 
         {/* USER PROFILE CARD — auto-detected from start link */}
-        {mode === "site" && (
+        {/* USER PROFILE CARD — works for website, Telegram, and external API users */}
+        {userId && (
           <div className="mb-4 rounded-2xl bg-gradient-to-br from-white/[0.07] to-white/[0.02] border border-white/10 p-3 flex items-center gap-3 backdrop-blur-xl">
             <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-fuchsia-500/40 to-cyan-500/40 flex items-center justify-center border border-white/15 flex-shrink-0">
               {profile?.photoURL ? (
                 <img
                   src={profile.photoURL}
                   alt=""
+                  referrerPolicy="no-referrer"
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = "none";
@@ -671,6 +773,11 @@ export default function MiniApp() {
                 />
               ) : (
                 <UserIcon className="w-5 h-5 text-white/80" />
+              )}
+              {profile?.source === "telegram" && (
+                <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#27a7e7] border-2 border-[#0a0a14] flex items-center justify-center text-[8px] font-bold text-white">
+                  T
+                </div>
               )}
             </div>
             <div className="flex-1 min-w-0">
@@ -687,11 +794,15 @@ export default function MiniApp() {
                   <div className="text-sm font-bold truncate">
                     {profile.name}
                   </div>
-                  {profile.email && (
+                  {profile.username ? (
+                    <div className="text-[10px] text-cyan-300/80 truncate">
+                      @{profile.username}
+                    </div>
+                  ) : profile.email ? (
                     <div className="text-[10px] text-white/50 truncate">
                       {profile.email}
                     </div>
-                  )}
+                  ) : null}
                 </>
               ) : (
                 <div className="text-xs text-rose-300 flex items-center gap-1">
@@ -699,9 +810,9 @@ export default function MiniApp() {
                 </div>
               )}
             </div>
-            {profile && (
+            {profile?.tag && (
               <div className="text-[9px] font-mono px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/60 flex-shrink-0">
-                #{(profile.id || "").slice(0, 6)}
+                #{profile.tag}
               </div>
             )}
           </div>
