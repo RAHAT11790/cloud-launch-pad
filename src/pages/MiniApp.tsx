@@ -20,6 +20,7 @@ import logoImg from "@/assets/logo.png";
 const MONETAG_ZONE = "10924403";
 // Use absolute https URL — protocol-relative can fail inside Telegram WebView
 const MONETAG_SDK = `https://libtl.com/sdk.js`;
+const MONETAG_SCRIPT_ID = `monetag-sdk-${MONETAG_ZONE}`;
 const MONETAG_REQUEST_VAR = "mini_unlock";
 const REQUIRED_VIEWS = 5;
 
@@ -148,28 +149,17 @@ const buildMonetagTrackingId = (userId: string, step: number) => {
   return `${MONETAG_REQUEST_VAR}-${safeUser}-${step}-${Date.now()}`;
 };
 
-// Robust SDK loader with explicit reinjection + wait for show_<zone> registration.
-function loadMonetag(maxWaitMs = 15000, forceReload = false): Promise<boolean> {
+// Load Monetag SDK exactly once and wait until show_<zone> is registered.
+function loadMonetag(maxWaitMs = 15000): Promise<boolean> {
   const fnName = `show_${MONETAG_ZONE}`;
-  if (typeof window[fnName] === "function" && !forceReload) {
+  if (typeof window[fnName] === "function") {
     return Promise.resolve(true);
   }
 
-  if (forceReload) {
-    monetagLoadPromise = null;
-    try {
-      delete window[fnName];
-    } catch {}
-    document
-      .querySelectorAll(`script[data-zone="${MONETAG_ZONE}"]`)
-      .forEach((node) => node.remove());
-  }
-
-  if (monetagLoadPromise && !forceReload) return monetagLoadPromise;
+  if (monetagLoadPromise) return monetagLoadPromise;
 
   monetagLoadPromise = new Promise((resolve) => {
     let settled = false;
-    let retried = false;
 
     const finish = (ok: boolean) => {
       if (settled) return;
@@ -178,42 +168,38 @@ function loadMonetag(maxWaitMs = 15000, forceReload = false): Promise<boolean> {
       resolve(ok);
     };
 
-    const inject = (cacheBust = false) => {
-      document
-        .querySelectorAll(`script[data-zone="${MONETAG_ZONE}"]`)
-        .forEach((node) => node.remove());
-
-      const script = document.createElement("script");
-      script.src = cacheBust ? `${MONETAG_SDK}?_=${Date.now()}` : MONETAG_SDK;
-      script.async = true;
-      script.setAttribute("data-zone", MONETAG_ZONE);
-      script.setAttribute("data-sdk", `show_${MONETAG_ZONE}`);
-
-      script.onload = async () => {
-        const ok = await waitForMonetagFn(maxWaitMs);
-        if (ok) {
-          finish(true);
-        } else if (!retried) {
-          retried = true;
-          inject(true);
-        } else {
-          finish(false);
-        }
-      };
-
-      script.onerror = () => {
-        if (!retried) {
-          retried = true;
-          inject(true);
-        } else {
-          finish(false);
-        }
-      };
-
-      document.head.appendChild(script);
+    const waitUntilReady = async () => {
+      const ok = await waitForMonetagFn(maxWaitMs);
+      finish(ok);
     };
 
-    inject(forceReload);
+    const existing = document.getElementById(MONETAG_SCRIPT_ID) as HTMLScriptElement | null;
+    if (existing) {
+      if (existing.dataset.loaded === "true") {
+        void waitUntilReady();
+        return;
+      }
+      existing.addEventListener("load", () => {
+        existing.dataset.loaded = "true";
+        void waitUntilReady();
+      }, { once: true });
+      existing.addEventListener("error", () => finish(false), { once: true });
+      void waitUntilReady();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = MONETAG_SCRIPT_ID;
+    script.src = MONETAG_SDK;
+    script.async = true;
+    script.setAttribute("data-zone", MONETAG_ZONE);
+    script.setAttribute("data-sdk", `show_${MONETAG_ZONE}`);
+    script.onload = () => {
+      script.dataset.loaded = "true";
+      void waitUntilReady();
+    };
+    script.onerror = () => finish(false);
+    document.head.appendChild(script);
   });
 
   return monetagLoadPromise;
