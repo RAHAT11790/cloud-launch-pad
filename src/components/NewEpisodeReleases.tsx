@@ -38,7 +38,13 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     const unsub = onValue(relRef, (snapshot) => {
       const data = snapshot.val() || {};
       const items: EpisodeRelease[] = [];
+      const now = Date.now();
       Object.entries(data).forEach(([id, item]: [string, any]) => {
+        // Auto-delete entries older than 36h directly from Firebase (no hard delete of anime, only release entry)
+        if (item?.timestamp && now - item.timestamp >= NEW_RELEASE_TTL_MS) {
+          remove(ref(db, `newEpisodeReleases/${id}`)).catch(() => {});
+          return;
+        }
         items.push({ id, ...item });
       });
       items.sort((a, b) => b.timestamp - a.timestamp);
@@ -47,16 +53,16 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     return () => unsub();
   }, []);
 
-  // Live countdown tick every 30s
+  // Live countdown tick every 60s — also triggers cleanup re-evaluation
   useEffect(() => {
-    const t = setInterval(() => setTick((x) => x + 1), 30_000);
+    const t = setInterval(() => setTick((x) => x + 1), 60_000);
     return () => clearInterval(t);
   }, []);
 
-  // Filter active releases within 30 days - only RS Anime content (no AnimeSalt)
+  // Filter active releases within 36h - only RS Anime content (no AnimeSalt)
   const allAnimeIds = useMemo(() => new Set(allAnime.map(a => a.id)), [allAnime]);
   const activeReleases = useMemo(() => releases.filter(
-    (r) => r.active !== false && Date.now() - r.timestamp < 30 * 24 * 60 * 60 * 1000
+    (r) => r.active !== false && Date.now() - r.timestamp < NEW_RELEASE_TTL_MS
       && (r as any).contentType !== "animesalt"
       && allAnimeIds.has(r.contentId)
   ), [releases, allAnimeIds, tick]);
