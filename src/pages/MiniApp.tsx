@@ -310,36 +310,95 @@ export default function MiniApp() {
   const apiKey = params.get("key") || "";
   const externalUser = params.get("user") || params.get("u") || "";
   const externalRedirect = params.get("redirect") || "";
+  const externalName = params.get("n") || params.get("name") || "";
+  const externalPhoto = params.get("p") || params.get("photo") || "";
   const shortId = params.get("s") || "";
 
-  // Resolve user id with maximum reliability
-  const userId = useMemo(() => {
-    // 1) Telegram start_param u_xxx
+  // Resolve user identity. We track Telegram users separately from website users.
+  // Website users: live in Firebase users/<uid> (existing flow).
+  // Telegram users: identified by tg_<telegram_id>, profile from Telegram WebApp directly.
+  // External (API) users: identified by what the partner bot sent in ?user= (+ optional ?n=&p=).
+  const identity = useMemo(() => {
+    // 1) Telegram WebApp itself (most reliable when opened inside Telegram)
     try {
       const tg = window.Telegram?.WebApp;
+      const tgUser = tg?.initDataUnsafe?.user;
+      if (tgUser?.id) {
+        const fullName = [tgUser.first_name, tgUser.last_name]
+          .filter(Boolean)
+          .join(" ") || tgUser.username || "Telegram User";
+        return {
+          id: `tg_${tgUser.id}`,
+          source: "telegram" as const,
+          name: fullName,
+          username: tgUser.username || "",
+          photoURL: tgUser.photo_url || "",
+          tag: `tg_${String(tgUser.id).slice(-4)}`,
+        };
+      }
+      // 1b) start_param u_<firebase_uid> (website user clicked deep link from website -> bot)
       const sp = tg?.initDataUnsafe?.start_param || "";
       if (typeof sp === "string" && sp.startsWith("u_")) {
-        return decodeURIComponent(sp.slice(2));
+        const uid = decodeURIComponent(sp.slice(2));
+        return {
+          id: uid,
+          source: "site" as const,
+          name: "",
+          tag: `user_${uid.slice(0, 4)}`,
+        };
       }
     } catch {}
-    // 2) ?user= or ?u= URL param
-    if (externalUser) return externalUser;
-    // 3) Telegram WebApp numeric id (fallback)
-    try {
-      const tg = window.Telegram?.WebApp;
-      if (tg?.initDataUnsafe?.user?.id)
-        return `tg_${tg.initDataUnsafe.user.id}`;
-    } catch {}
-    // 4) Local site user
+
+    // 2) ?user= from external bot — treat as external API user
+    if (externalUser) {
+      // If the partner sent name/photo, use them directly
+      if (externalName || externalPhoto) {
+        return {
+          id: externalUser,
+          source: "external" as const,
+          name: externalName || "External User",
+          photoURL: externalPhoto || "",
+          tag: `ext_${externalUser.slice(0, 4)}`,
+        };
+      }
+      // If user looks like a telegram id (numeric), treat as telegram external
+      const isNumeric = /^\d+$/.test(externalUser);
+      return {
+        id: isNumeric ? `tg_${externalUser}` : externalUser,
+        source: isNumeric ? ("telegram" as const) : ("external" as const),
+        name: "",
+        tag: isNumeric
+          ? `tg_${externalUser.slice(-4)}`
+          : `ext_${externalUser.slice(0, 4)}`,
+      };
+    }
+
+    // 3) Local site user (logged in on website)
     try {
       const raw = localStorage.getItem("rsanime_user");
       if (raw) {
         const p = JSON.parse(raw);
-        if (p?.id) return p.id;
+        if (p?.id) {
+          return {
+            id: p.id,
+            source: "site" as const,
+            name: p.name || p.displayName || "",
+            photoURL: p.photoURL || p.photo || "",
+            tag: `user_${String(p.id).slice(0, 4)}`,
+          };
+        }
       }
     } catch {}
-    return "";
-  }, [externalUser]);
+
+    return {
+      id: "",
+      source: "site" as const,
+      name: "",
+      tag: "",
+    };
+  }, [externalUser, externalName, externalPhoto]);
+
+  const userId = identity.id;
 
   const isApiMode = !!apiKey;
   const isShortMode = !!shortId;
@@ -383,12 +442,31 @@ export default function MiniApp() {
     }
   }, [mode, isShortMode, shortId]);
 
-  // Fetch user profile from Firebase the moment we have a userId (site mode)
+  // Build the displayed profile.
+  // - Telegram & external users: use what we already have from initData / URL params.
+  // - Website users: hit Firebase via mini-app edge function for name/email/photo.
   useEffect(() => {
-    if (mode !== "site" || !userId) {
+    if (!userId) {
+      setProfile(null);
       setProfileLoading(false);
       return;
     }
+
+    // Telegram or external API user — we already have what we need locally.
+    if (identity.source === "telegram" || identity.source === "external") {
+      setProfile({
+        id: identity.id,
+        name: identity.name || (identity.source === "telegram" ? "Telegram User" : "User"),
+        photoURL: identity.photoURL || "",
+        source: identity.source,
+        username: identity.username || "",
+        tag: identity.tag || "",
+      });
+      setProfileLoading(false);
+      return;
+    }
+
+    // Website user — fetch from backend
     setProfileLoading(true);
     fetch(FN_URL, {
       method: "POST",
@@ -397,15 +475,36 @@ export default function MiniApp() {
     })
       .then((r) => r.json())
       .then((d) => {
-        if (d?.ok) {
-          setProfile(d.user);
+        if (d?.ok && d.user) {
+          setProfile({
+            id: d.user.id,
+            name: d.user.name || identity.name || "User",
+            email: d.user.email || "",
+            photoURL: d.user.photoURL || identity.photoURL || "",
+            source: "site",
+            tag: identity.tag,
+          });
         } else {
-          setProfile({ id: userId, name: "User" });
+          setProfile({
+            id: userId,
+            name: identity.name || "User",
+            photoURL: identity.photoURL || "",
+            source: "site",
+            tag: identity.tag,
+          });
         }
       })
-      .catch(() => setProfile({ id: userId, name: "User" }))
+      .catch(() =>
+        setProfile({
+          id: userId,
+          name: identity.name || "User",
+          photoURL: identity.photoURL || "",
+          source: "site",
+          tag: identity.tag,
+        }),
+      )
       .finally(() => setProfileLoading(false));
-  }, [userId, mode]);
+  }, [userId, identity]);
 
   // Auto-clear notices
   useEffect(() => {
