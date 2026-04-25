@@ -8090,14 +8090,20 @@ ${tgHashtags}`;
           });
           contentViewStats.sort((a, b) => b.viewCount - a.viewCount);
 
+          // All-time stats sourced from persistent counter (analytics/totals/views)
+          // so they survive the nightly cleanup of the per-date buckets.
           const allTimeStats: { animeId: string; title: string; totalViews: number; poster: string }[] = [];
-          Object.entries(analyticsViews).forEach(([aId, dates]: [string, any]) => {
-            let total = 0;
-            Object.values(dates || {}).forEach((dayUsers: any) => { total += Object.keys(dayUsers || {}).length; });
+          Object.entries(allTimeTotals).forEach(([aId, info]: [string, any]) => {
+            const total = Number(info?.count || 0);
             if (total > 0) {
               const ws = webseriesData.find(w => w.id === aId);
               const mv = moviesData.find(m => m.id === aId);
-              allTimeStats.push({ animeId: aId, title: ws?.title || mv?.title || aId, totalViews: total, poster: ws?.poster || mv?.poster || "" });
+              allTimeStats.push({
+                animeId: aId,
+                title: ws?.title || mv?.title || info?.title || aId,
+                totalViews: total,
+                poster: ws?.poster || mv?.poster || "",
+              });
             }
           });
           allTimeStats.sort((a, b) => b.totalViews - a.totalViews);
