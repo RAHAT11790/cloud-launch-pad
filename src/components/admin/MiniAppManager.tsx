@@ -166,6 +166,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
           <button onClick={setupBotMenu} disabled={setupBusy} className={btnSecondary}>
             ⚡ {setupBusy ? "Setting up…" : "Auto-Setup Bot Menu Button"}
           </button>
+        </div>
       </div>
 
       {/* === Dedicated Access Bot (RS_ANIME_ACCESS_BOT) === */}
