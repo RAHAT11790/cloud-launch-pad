@@ -854,6 +854,7 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const [newIcon, setNewIcon] = useState("🔓");
   const [newColor, setNewColor] = useState("linear-gradient(135deg, #6366f1, #8b5cf6)");
   const [newDuration, setNewDuration] = useState(24);
+  const [newMode, setNewMode] = useState<"shortener" | "miniapp">("shortener");
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
 
@@ -867,14 +868,32 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const addService = async () => {
     const name = newName.trim();
     const url = newUrl.trim();
-    if (!name || !url) { toast.error("নাম ও URL দাও!"); return; }
+    if (!name) { toast.error("সার্ভিসের নাম দাও!"); return; }
+    if (newMode === "shortener" && !url) { toast.error("Shortener URL দাও!"); return; }
     const id = `ad_${Date.now()}`;
     await set(ref(db, `settings/adServices/${id}`), {
-      id, name, functionUrl: url, enabled: true, icon: newIcon || "🔓", color: newColor || "",
+      id, name, functionUrl: url || "miniapp://telegram", enabled: true,
+      icon: newIcon || "🔓", color: newColor || "",
       durationHours: newDuration || 24,
+      mode: newMode,
     });
-    setNewName(""); setNewUrl(""); setNewIcon("🔓"); setNewDuration(24);
+    setNewName(""); setNewUrl(""); setNewIcon("🔓"); setNewDuration(24); setNewMode("shortener");
     toast.success(`✅ "${name}" যোগ হয়েছে!`);
+  };
+
+  const addMiniAppPreset = async () => {
+    const id = `ad_${Date.now()}`;
+    await set(ref(db, `settings/adServices/${id}`), {
+      id,
+      name: "Telegram Mini App",
+      functionUrl: "miniapp://telegram",
+      enabled: true,
+      icon: "📱",
+      color: "linear-gradient(135deg, #06b6d4, #3b82f6)",
+      durationHours: 24,
+      mode: "miniapp",
+    });
+    toast.success("✅ Telegram Mini App আনলক বাটন যোগ হয়েছে!");
   };
 
   const toggleService = async (id: string) => {
