@@ -444,6 +444,11 @@ export default function MiniApp() {
 
   const userId = identity.id;
 
+  // Came from website's unlock button (deep link with u_<uid> start_param)
+  const cameFromWebsite = !!websiteStartUserId;
+  // Site origin (where to send the user back after unlock)
+  const SITE_ORIGIN = "https://rsanime03.lovable.app";
+
   const isApiMode = !!apiKey;
   const isShortMode = !!shortId;
   const mode: "site" | "api" | "short" = isShortMode
