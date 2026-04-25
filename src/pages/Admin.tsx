@@ -2049,6 +2049,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [tgButtonLink, setTgButtonLink] = useState("");
   const [tgButtons, setTgButtons] = useState<{ name: string; url: string }[]>([]);
   const [tgDefaultButtonName, setTgDefaultButtonName] = useState("📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥");
+  // Currently-selected anime (for per-anime button persistence)
+  const [tgSelectedAnimeId, setTgSelectedAnimeId] = useState<string>("");
   const [tgSending, setTgSending] = useState(false);
   const [tgDropdownOpen, setTgDropdownOpen] = useState(false);
   const [tgContentSearch, setTgContentSearch] = useState("");
