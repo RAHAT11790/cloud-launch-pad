@@ -274,6 +274,9 @@ interface UserProfile {
   name: string;
   email?: string;
   photoURL?: string;
+  source?: "site" | "telegram" | "external";
+  username?: string;
+  tag?: string; // short label like "tg_662" or "user_1"
 }
 
 export default function MiniApp() {
