@@ -6177,37 +6177,83 @@ ${tgHashtags}`;
                 নিউ রিলিজ থেকে সিলেক্ট করুন অথবা ম্যানুয়ালি ফিল্ড পূরণ করুন।
               </p>
               <div className="mb-4" ref={tgDropdownRef}>
-                <label className="block text-xs text-zinc-400 mb-2 font-medium">রিলিজ থেকে সিলেক্ট (ঐচ্ছিক)</label>
+                <label className="block text-xs text-zinc-400 mb-2 font-medium">এনিমে / মুভি সিলেক্ট করুন (latest update টপে)</label>
                 <div className="relative z-[130]">
                   <button type="button" onClick={() => setTgDropdownOpen(!tgDropdownOpen)}
                     className={`${selectClass} w-full text-left flex items-center gap-2`}>
                     {tgSelectedRelease ? (
-                      <span className="truncate text-sm">{releasesData.find(r => r.id === tgSelectedRelease)?.title || "Selected"}</span>
-                    ) : <span className="text-zinc-500">রিলিজ সিলেক্ট করুন...</span>}
+                      <span className="truncate text-sm">{
+                        webseriesData.find(s => s.id === tgSelectedRelease)?.title
+                          || moviesData.find(m => m.id === tgSelectedRelease)?.title
+                          || releasesData.find(r => r.id === tgSelectedRelease)?.title
+                          || "Selected"
+                      }</span>
+                    ) : <span className="text-zinc-500">এনিমে সিলেক্ট করুন...</span>}
                     <ChevronDown size={14} className="ml-auto flex-shrink-0" />
                   </button>
-                  {tgDropdownOpen && (
-                    <div className="absolute z-[200] top-full left-0 right-0 mt-1 bg-[#16162A] border border-white/10 rounded-xl max-h-[280px] overflow-hidden flex flex-col">
+                  {tgDropdownOpen && (() => {
+                    // Merged list — ALL webseries + movies, sorted by latest update first
+                    const merged = [
+                      ...webseriesData.map((s: any) => ({ id: s.id, title: s.title, poster: s.poster, type: "webseries" as const, updatedAt: s.updatedAt || s.createdAt || 0 })),
+                      ...moviesData.map((m: any) => ({ id: m.id, title: m.title, poster: m.poster, type: "movie" as const, updatedAt: m.updatedAt || m.createdAt || 0 })),
+                    ].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                    const filtered = merged.filter(r => !tgContentSearch.trim() || (r.title || '').toLowerCase().includes(tgContentSearch.toLowerCase()));
+                    return (
+                    <div className="absolute z-[200] top-full left-0 right-0 mt-1 bg-[#16162A] border border-white/10 rounded-xl max-h-[320px] overflow-hidden flex flex-col">
                       <div className="p-2 border-b border-white/10 flex-shrink-0">
                         <input value={tgContentSearch} onChange={e => setTgContentSearch(e.target.value)}
                           className="w-full px-3 py-2 bg-[#141422] border border-white/10 rounded-lg text-white text-[12px] focus:border-blue-500 focus:outline-none placeholder:text-zinc-500"
                           placeholder="🔍 সার্চ করুন..." autoFocus onClick={e => e.stopPropagation()} />
                       </div>
-                      <div className="overflow-y-auto max-h-[220px]">
-                        {releasesData.filter(r => !tgContentSearch.trim() || (r.title || '').toLowerCase().includes(tgContentSearch.toLowerCase())).map(r => (
-                          <div key={r.id} className={`flex items-center gap-2.5 p-2 cursor-pointer hover:bg-blue-500/20 rounded-lg m-1 ${tgSelectedRelease === r.id ? "bg-blue-500/30" : ""}`}
-                            onClick={() => { fillTelegramFromRelease(r.id); setTgDropdownOpen(false); setTgContentSearch(''); }}>
+                      <div className="overflow-y-auto max-h-[260px]">
+                        {filtered.map(r => {
+                          // Build a synthetic release object so existing fillTelegramFromRelease works.
+                          const matching = releasesData.find(rel => rel.contentId === r.id);
+                          return (
+                          <div key={`${r.type}_${r.id}`} className={`flex items-center gap-2.5 p-2 cursor-pointer hover:bg-blue-500/20 rounded-lg m-1 ${tgSelectedRelease === r.id ? "bg-blue-500/30" : ""}`}
+                            onClick={async () => {
+                              if (matching) {
+                                fillTelegramFromRelease(matching.id);
+                              } else {
+                                // Manual fill from webseries/movies data when no release entry exists
+                                setTgSelectedRelease(r.id);
+                                setTgTitle(r.title || "");
+                                const fullData = r.type === "webseries"
+                                  ? webseriesData.find(s => s.id === r.id)
+                                  : moviesData.find(m => m.id === r.id);
+                                if (fullData) {
+                                  const backdrop = (fullData as any).backdrop || (fullData as any).poster || "";
+                                  setTgPosterUrl(backdrop.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
+                                  if ((fullData as any).rating) setTgRating(String((fullData as any).rating));
+                                  if ((fullData as any).category) setTgGenres((fullData as any).category);
+                                  if ((fullData as any).language) setTgLanguages((fullData as any).language);
+                                  setTgDubType((fullData as any).dubType === "fandub" ? "fandub" : "official");
+                                  setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(r.id)}`);
+                                  if ((fullData as any).tmdbId) {
+                                    setTgImdbId(String((fullData as any).tmdbId));
+                                    try {
+                                      const { genres, rating } = await resolveTelegramGenresAndRating(String((fullData as any).tmdbId), r.title || "");
+                                      if (genres.length > 0) setTgGenres(genres.join(", "));
+                                      if (rating) setTgRating(rating);
+                                    } catch {}
+                                  }
+                                }
+                              }
+                              setTgDropdownOpen(false); setTgContentSearch('');
+                            }}>
                             <img src={r.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0 bg-[#1E1E32]" />
                             <div className="flex-1 min-w-0">
                               <span className="text-sm truncate block">{r.title}</span>
-                              {r.episodeInfo && <span className="text-[10px] text-zinc-500">{r.episodeInfo.seasonName} EP{r.episodeInfo.episodeNumber}</span>}
+                              <span className="text-[9px] text-zinc-500">{r.type === "webseries" ? "📺 Series" : "🎬 Movie"}{matching ? " • 🆕 New EP" : ""}</span>
                             </div>
                           </div>
-                        ))}
-                        {releasesData.length === 0 && <p className="text-zinc-500 text-[11px] text-center py-4">কোনো রিলিজ নেই</p>}
+                          );
+                        })}
+                        {filtered.length === 0 && <p className="text-zinc-500 text-[11px] text-center py-4">কোনো এনিমে নেই</p>}
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
               <div className="space-y-3">
