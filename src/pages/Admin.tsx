@@ -10,15 +10,16 @@ import {
   Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
   Shield, LogOut, Search, Save, ChevronDown, Send, Link, ChevronLeft, ChevronRight,
   Lock, Unlock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin,
-  Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail
+  Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail, Sparkles
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { WeeklyEpTabButton, WeeklyEpManager } from "@/components/admin/WeeklyEpManager";
 import { AdminNotificationBell } from "@/components/admin/AdminNotificationBell";
+import MiniAppManager from "@/components/admin/MiniAppManager";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "mini-app";
 
 interface CastMember {
   name: string;
@@ -2523,7 +2524,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "video-servers": "Video Servers",
     "unlock-duration": "Unlock Duration",
     "email-service": "Email Service",
-    
+    "mini-app": "Telegram Mini App",
   };
 
   // ==================== CATEGORIES ====================
@@ -3869,6 +3870,7 @@ ${tgHashtags}`;
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
     { section: "email-service", icon: <Mail size={16} />, label: "Email Service" },
+    { section: "mini-app", icon: <Sparkles size={16} />, label: "Telegram Mini App" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
@@ -7049,6 +7051,11 @@ ${tgHashtags}`;
         {/* ==================== EMAIL SERVICE ==================== */}
         {activeSection === "email-service" && (
           <EmailServiceSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+        )}
+
+        {/* ==================== TELEGRAM MINI APP ==================== */}
+        {activeSection === "mini-app" && (
+          <MiniAppManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
         {/* ==================== AI CONFIG ==================== */}
