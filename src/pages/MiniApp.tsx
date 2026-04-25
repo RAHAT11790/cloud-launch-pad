@@ -216,6 +216,16 @@ function ensureTelegramCloudStorageCompat() {
   } catch {}
 }
 
+// Patch CloudStorage immediately at module load — Telegram WebApp script is in
+// <head>, so it's already on window by the time this module evaluates.
+ensureTelegramCloudStorageCompat();
+if (typeof window !== "undefined") {
+  // Re-patch a few times in case Telegram WebApp re-initializes after first paint.
+  setTimeout(ensureTelegramCloudStorageCompat, 0);
+  setTimeout(ensureTelegramCloudStorageCompat, 200);
+  setTimeout(ensureTelegramCloudStorageCompat, 1000);
+}
+
 // Load Monetag SDK exactly once and wait until show_<zone> is registered.
 function loadMonetag(maxWaitMs = 15000): Promise<boolean> {
   ensureTelegramCloudStorageCompat();
