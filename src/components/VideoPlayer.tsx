@@ -330,10 +330,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const uid = getUserId();
     if (!uid) return;
 
-    // 1. Log a view count
+    // 1. Log a view count (per-day, per-user)
     const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
     const viewRef = ref(db, `analytics/views/${animeId}/${today}/${uid}`);
     set(viewRef, { timestamp: Date.now(), title: title || "" }).catch(() => {});
+
+    // 1b. All-time total counter (never reset by daily cleanup)
+    import("@/lib/firebase").then(({ runTransaction, ref: fbRef, db: fbDb }) => {
+      runTransaction(fbRef(fbDb, `analytics/totals/views/${animeId}`), (curr: any) => {
+        const base = curr && typeof curr === "object" ? curr : { count: 0, title: "" };
+        return { count: (base.count || 0) + 1, title: title || base.title || "", lastSeen: Date.now() };
+      }).catch(() => {});
+    });
 
     // 2. Track as active viewer (presence)
     const activeRef = ref(db, `analytics/activeViewers/${animeId}/${uid}`);
