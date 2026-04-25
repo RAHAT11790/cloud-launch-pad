@@ -189,7 +189,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
           <KeyRound className="w-4 h-4" /> API Keys for External Bots
         </h3>
         <p className="text-xs text-muted-foreground mb-3">
-          Generate keys for partner bots. They send users to <code>{miniUrl}?key=KEY&user=USER_ID</code>; after 5 ads, user is redirected to your <strong>Redirect URL</strong>. No site access is granted.
+          Two modes per key: <strong>(1) Direct redirect</strong> — send users to <code>{miniUrl}?key=KEY&user=USER_ID</code>; after 5 ads they're redirected to your default Redirect URL. <strong>(2) Per-link shortener</strong> — call <code>POST /functions/v1/mini-app</code> with <code>{`{action:"shorten", apiKey, url}`}</code> to get a unique short URL <code>{`${miniUrl}?s=SHORT`}</code>; after 5 ads users are redirected to the original URL.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
