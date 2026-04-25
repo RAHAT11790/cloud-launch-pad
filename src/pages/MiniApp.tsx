@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   Play,
@@ -20,8 +20,10 @@ import logoImg from "@/assets/logo.png";
 const MONETAG_ZONE = "10924403";
 // Use absolute https URL — protocol-relative can fail inside Telegram WebView
 const MONETAG_SDK = `https://libtl.com/sdk.js`;
+const MONETAG_REQUEST_VAR = "mini_unlock";
 const REQUIRED_VIEWS = 5;
-const MIN_AD_DURATION_SEC = 15;
+
+let monetagLoadPromise: Promise<boolean> | null = null;
 
 declare global {
   interface Window {
@@ -55,6 +57,9 @@ const STR: Record<Lang, Record<string, string>> = {
       "Account not detected. Please open from the Telegram bot link.",
     notCounted: "Ad closed too early or skipped. Not counted.",
     counted: "✅ Ad counted!",
+    realOnly: "Only real Rewarded ads can unlock access.",
+    adUnavailable: "Monetag did not return a real ad, so nothing was counted.",
+    rewardReady: "Rewarded ad is ready",
     grantFailed: "Failed to grant access. Try again.",
     apiMode: "External access mode",
     redirecting: "Redirecting…",
@@ -98,6 +103,10 @@ const STR: Record<Lang, Record<string, string>> = {
     invalidUser: "একাউন্ট পাওয়া যায়নি। টেলিগ্রাম বট লিঙ্ক থেকে খুলুন।",
     notCounted: "অ্যাড আগেই বন্ধ করেছেন বা স্কিপ করেছেন। গণনা হয়নি।",
     counted: "✅ অ্যাড গণনা হয়েছে!",
+    realOnly: "আনলকের জন্য শুধু রিয়াল Rewarded Ad ব্যবহার করা যাবে।",
+    adUnavailable:
+      "Monetag কোনো রিয়াল অ্যাড দেয়নি, তাই কিছু কাউন্ট হয়নি।",
+    rewardReady: "Rewarded ad প্রস্তুত",
     grantFailed: "অ্যাক্সেস দিতে ব্যর্থ। আবার চেষ্টা করুন।",
     apiMode: "এক্সটার্নাল অ্যাক্সেস মোড",
     redirecting: "রিডাইরেক্ট হচ্ছে…",
@@ -122,43 +131,92 @@ const STR: Record<Lang, Record<string, string>> = {
   },
 };
 
-// Robust SDK loader with retries + waits for the show_<zone> function to register
-function loadMonetag(maxWaitMs = 15000): Promise<boolean> {
-  return new Promise((resolve) => {
+const waitForMonetagFn = (maxWaitMs = 15000): Promise<boolean> =>
+  new Promise((resolve) => {
     const fnName = `show_${MONETAG_ZONE}`;
-    if (typeof window[fnName] === "function") return resolve(true);
-
-    // Inject script if not present
-    let s = document.querySelector(
-      `script[data-zone="${MONETAG_ZONE}"]`,
-    ) as HTMLScriptElement | null;
-    if (!s) {
-      s = document.createElement("script");
-      s.src = MONETAG_SDK;
-      s.setAttribute("data-zone", MONETAG_ZONE);
-      s.setAttribute("data-sdk", `show_${MONETAG_ZONE}`);
-      s.async = true;
-      s.onerror = () => {
-        // Retry once with cache-buster
-        const r = document.createElement("script");
-        r.src = `${MONETAG_SDK}?_=${Date.now()}`;
-        r.setAttribute("data-zone", MONETAG_ZONE);
-        r.setAttribute("data-sdk", `show_${MONETAG_ZONE}`);
-        r.async = true;
-        document.head.appendChild(r);
-      };
-      document.head.appendChild(s);
-    }
-
-    // Poll for the show_<zone> function (Monetag registers it AFTER the script loads).
     const started = Date.now();
     const tick = () => {
       if (typeof window[fnName] === "function") return resolve(true);
-      if (Date.now() - started > maxWaitMs) return resolve(false);
+      if (Date.now() - started >= maxWaitMs) return resolve(false);
       setTimeout(tick, 150);
     };
     tick();
   });
+
+const buildMonetagTrackingId = (userId: string, step: number) => {
+  const safeUser = (userId || "guest").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48);
+  return `${MONETAG_REQUEST_VAR}-${safeUser}-${step}-${Date.now()}`;
+};
+
+// Robust SDK loader with explicit reinjection + wait for show_<zone> registration.
+function loadMonetag(maxWaitMs = 15000, forceReload = false): Promise<boolean> {
+  const fnName = `show_${MONETAG_ZONE}`;
+  if (typeof window[fnName] === "function" && !forceReload) {
+    return Promise.resolve(true);
+  }
+
+  if (forceReload) {
+    monetagLoadPromise = null;
+    try {
+      delete window[fnName];
+    } catch {}
+    document
+      .querySelectorAll(`script[data-zone="${MONETAG_ZONE}"]`)
+      .forEach((node) => node.remove());
+  }
+
+  if (monetagLoadPromise && !forceReload) return monetagLoadPromise;
+
+  monetagLoadPromise = new Promise((resolve) => {
+    let settled = false;
+    let retried = false;
+
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (!ok) monetagLoadPromise = null;
+      resolve(ok);
+    };
+
+    const inject = (cacheBust = false) => {
+      document
+        .querySelectorAll(`script[data-zone="${MONETAG_ZONE}"]`)
+        .forEach((node) => node.remove());
+
+      const script = document.createElement("script");
+      script.src = cacheBust ? `${MONETAG_SDK}?_=${Date.now()}` : MONETAG_SDK;
+      script.async = true;
+      script.setAttribute("data-zone", MONETAG_ZONE);
+      script.setAttribute("data-sdk", `show_${MONETAG_ZONE}`);
+
+      script.onload = async () => {
+        const ok = await waitForMonetagFn(maxWaitMs);
+        if (ok) {
+          finish(true);
+        } else if (!retried) {
+          retried = true;
+          inject(true);
+        } else {
+          finish(false);
+        }
+      };
+
+      script.onerror = () => {
+        if (!retried) {
+          retried = true;
+          inject(true);
+        } else {
+          finish(false);
+        }
+      };
+
+      document.head.appendChild(script);
+    };
+
+    inject(forceReload);
+  });
+
+  return monetagLoadPromise;
 }
 
 const FN_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/mini-app`;
