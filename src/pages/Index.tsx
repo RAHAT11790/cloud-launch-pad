@@ -2078,7 +2078,10 @@ const Index = () => {
               </div>
             ) : saltAdGateLink ? (
               <button
-                onClick={() => { window.location.href = saltAdGateLink; }}
+                onClick={async () => {
+                  const { openExternalBrowser } = await import("@/lib/openExternal");
+                  openExternalBrowser(saltAdGateLink);
+                }}
                 className="w-full gradient-primary text-primary-foreground font-bold py-3.5 rounded-xl btn-glow flex items-center justify-center gap-2 text-[15px]"
               >
                 <ExternalLink className="w-5 h-5" />
