@@ -1018,20 +1018,6 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         })}
       </div>
 
-      {/* Add New Service */}
-      <div className="bg-zinc-800/30 rounded-xl p-3 border border-dashed border-zinc-600/50">
-        <h4 className="text-[11px] font-semibold text-white mb-2 flex items-center gap-1.5">
-          <PlusCircle size={12} className="text-green-400" /> নতুন সার্ভিস যোগ করো
-        </h4>
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <input value={newIcon} onChange={(e) => setNewIcon(e.target.value)} placeholder="🔓" className={`${inputClass} !w-12 !text-center`} />
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="সার্ভিসের নাম (যেমন: AroLinks)" className={`${inputClass} flex-1`} />
-          </div>
-          <input value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
-            placeholder="Supabase Function URL (যেমন: https://xxx.supabase.co/functions/v1/shorten-arolinks)" className={inputClass} />
-          <input value={newColor} onChange={(e) => setNewColor(e.target.value)}
-            placeholder="বাটন কালার CSS (যেমন: linear-gradient(135deg, #f59e0b, #ef4444))" className={inputClass} />
       {/* Quick preset: Telegram Mini App */}
       <button onClick={addMiniAppPreset}
         className="w-full mb-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 text-white transition-all hover:scale-[1.02]"
