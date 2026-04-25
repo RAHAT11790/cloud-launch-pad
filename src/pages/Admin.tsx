@@ -1032,6 +1032,42 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
             placeholder="Supabase Function URL (যেমন: https://xxx.supabase.co/functions/v1/shorten-arolinks)" className={inputClass} />
           <input value={newColor} onChange={(e) => setNewColor(e.target.value)}
             placeholder="বাটন কালার CSS (যেমন: linear-gradient(135deg, #f59e0b, #ef4444))" className={inputClass} />
+      {/* Quick preset: Telegram Mini App */}
+      <button onClick={addMiniAppPreset}
+        className="w-full mb-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 text-white transition-all hover:scale-[1.02]"
+        style={{ background: "linear-gradient(135deg, #06b6d4, #3b82f6)" }}>
+        📱 ➕ Telegram Mini App আনলক বাটন (One-click)
+      </button>
+
+      {/* Add New Service */}
+      <div className="bg-zinc-800/30 rounded-xl p-3 border border-dashed border-zinc-600/50">
+        <h4 className="text-[11px] font-semibold text-white mb-2 flex items-center gap-1.5">
+          <PlusCircle size={12} className="text-green-400" /> নতুন সার্ভিস যোগ করো
+        </h4>
+        <div className="space-y-2">
+          {/* Mode selector */}
+          <div className="flex items-center gap-2 bg-zinc-900/50 rounded-lg p-2">
+            <span className="text-[10px] text-zinc-400">Mode:</span>
+            <button type="button" onClick={() => setNewMode("shortener")}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold ${newMode === "shortener" ? "bg-amber-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
+              🔗 Shortener
+            </button>
+            <button type="button" onClick={() => setNewMode("miniapp")}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold ${newMode === "miniapp" ? "bg-cyan-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
+              📱 Mini App
+            </button>
+            {newMode === "miniapp" && <span className="text-[9px] text-cyan-300 ml-auto">URL লাগবে না</span>}
+          </div>
+          <div className="flex gap-2">
+            <input value={newIcon} onChange={(e) => setNewIcon(e.target.value)} placeholder="🔓" className={`${inputClass} !w-12 !text-center`} />
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={newMode === "miniapp" ? "বাটনের নাম (যেমন: Telegram Mini App)" : "সার্ভিসের নাম (যেমন: AroLinks)"} className={`${inputClass} flex-1`} />
+          </div>
+          {newMode === "shortener" && (
+            <input value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
+              placeholder="Supabase Function URL (যেমন: https://xxx.supabase.co/functions/v1/shorten-arolinks)" className={inputClass} />
+          )}
+          <input value={newColor} onChange={(e) => setNewColor(e.target.value)}
+            placeholder="বাটন কালার CSS (যেমন: linear-gradient(135deg, #f59e0b, #ef4444))" className={inputClass} />
           <div className="flex gap-2 items-center">
             <Clock size={12} className="text-amber-400" />
             <input type="number" min={1} max={720} value={newDuration} onChange={e => setNewDuration(Number(e.target.value))}
