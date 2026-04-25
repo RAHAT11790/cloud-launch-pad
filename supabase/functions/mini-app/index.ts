@@ -1,12 +1,19 @@
-// Mini App backend: handles unlock grant + API key validation for Telegram Mini App
-// Endpoints:
-//   POST /  { action: "grant", userId, source?, apiKey?, redirect? }
-//   POST /  { action: "validate-key", apiKey }
-//   POST /  { action: "stats" }   (admin-style read)
+// Mini App backend: handles unlock grant + API key validation + URL shortening
+// Endpoints (action-based POST):
+//   { action: "visit", source }
+//   { action: "validate-key", apiKey }
+//   { action: "grant", userId, source, apiKey?, shortId? }
+//   { action: "shorten", apiKey, url } -> returns short URL (used by external bots like a link-shortener)
+//   { action: "resolve", shortId } -> returns destination URL + apiKey owner
+//   { action: "create-fallback-token", userId } -> creates a one-time unlock token for browser fallback
+//   { action: "setup-bot", miniUrl } -> sets bot menu button
+//   { action: "stats" }
 //
 // FIREBASE structure:
-//   miniApp/stats/{visits, completes, grantsBySource}
+//   miniApp/stats/{visits, completes, apiCompletes, ...}
 //   miniApp/apiKeys/{keyId}: { key, label, redirectUrl, enabled, createdAt, uses, lastUsedAt }
+//   miniApp/shortLinks/{shortId}: { dest, apiKey, createdAt, hits, completes }
+//   miniApp/fallbackTokens/{token}: { userId, createdAt, expiresAt, consumed }
 //   users/{uid}/freeAccess: { active, grantedAt, expiresAt, viaToken: 'mini-app' }
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -52,6 +59,22 @@ async function incCounter(path: string, by = 1) {
   return next;
 }
 
+const randomId = (len = 8) =>
+  Array.from({ length: len }, () =>
+    "abcdefghijkmnpqrstuvwxyz23456789"[Math.floor(Math.random() * 32)]
+  ).join("");
+
+// Find a key entry by its key string
+async function findApiKey(key: string): Promise<{ id: string; entry: any } | null> {
+  const all = (await fbGet("miniApp/apiKeys")) || {};
+  for (const id of Object.keys(all)) {
+    if (all[id]?.key === key && all[id]?.enabled !== false) {
+      return { id, entry: all[id] };
+    }
+  }
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
@@ -60,7 +83,6 @@ serve(async (req) => {
     const action = String(body?.action || "");
 
     if (action === "visit") {
-      // mini app opened
       await incCounter("miniApp/stats/visits");
       const src = String(body?.source || "default");
       await incCounter(`miniApp/stats/visitsBySource/${src}`);
@@ -70,41 +92,117 @@ serve(async (req) => {
     if (action === "validate-key") {
       const key = String(body?.apiKey || "").trim();
       if (!key) return json({ ok: false, error: "no_key" }, 400);
-      const all = (await fbGet("miniApp/apiKeys")) || {};
-      const entry = Object.values(all).find(
-        (k: any) => k && k.key === key && k.enabled !== false,
-      ) as any;
-      if (!entry) return json({ ok: false, error: "invalid_key" }, 401);
+      const found = await findApiKey(key);
+      if (!found) return json({ ok: false, error: "invalid_key" }, 401);
       return json({
         ok: true,
-        label: entry.label || "External",
-        redirectUrl: entry.redirectUrl || "",
+        label: found.entry.label || "External",
+        redirectUrl: found.entry.redirectUrl || "",
       });
+    }
+
+    // External bots use this like a URL shortener.
+    if (action === "shorten") {
+      const key = String(body?.apiKey || "").trim();
+      const url = String(body?.url || "").trim();
+      if (!key) return json({ ok: false, error: "no_key" }, 400);
+      if (!url || !/^https?:\/\//i.test(url))
+        return json({ ok: false, error: "invalid_url" }, 400);
+
+      const found = await findApiKey(key);
+      if (!found) return json({ ok: false, error: "invalid_key" }, 401);
+
+      const shortId = randomId(8);
+      await fbPut(`miniApp/shortLinks/${shortId}`, {
+        dest: url,
+        apiKey: key,
+        keyId: found.id,
+        label: found.entry.label || "",
+        createdAt: Date.now(),
+        hits: 0,
+        completes: 0,
+      });
+
+      // Build the public mini-app URL — the caller (admin UI) will know the origin.
+      // We return shortId so caller can construct: <origin>/mini?s=<shortId>
+      return json({ ok: true, shortId });
+    }
+
+    if (action === "resolve") {
+      const shortId = String(body?.shortId || "").trim();
+      if (!shortId) return json({ ok: false, error: "no_id" }, 400);
+      const entry = await fbGet(`miniApp/shortLinks/${shortId}`);
+      if (!entry) return json({ ok: false, error: "not_found" }, 404);
+      // increment hit counter
+      await fbPatch(`miniApp/shortLinks/${shortId}`, {
+        hits: (entry.hits || 0) + 1,
+      });
+      return json({
+        ok: true,
+        dest: entry.dest,
+        label: entry.label || "External",
+        // We do NOT return the raw apiKey to the client; only that it's valid.
+        hasKey: !!entry.apiKey,
+      });
+    }
+
+    if (action === "create-fallback-token") {
+      const userId = String(body?.userId || "").trim();
+      if (!userId) return json({ ok: false, error: "no_user" }, 400);
+      const token = `fb_${randomId(10)}${Date.now().toString(36)}`;
+      const now = Date.now();
+      await fbPut(`miniApp/fallbackTokens/${token}`, {
+        userId,
+        createdAt: now,
+        expiresAt: now + 30 * 60 * 1000, // 30 min validity
+        consumed: false,
+      });
+      return json({ ok: true, token });
     }
 
     if (action === "grant") {
       const userId = String(body?.userId || "").trim();
-      const source = String(body?.source || "site").trim(); // 'site' | 'api'
+      const source = String(body?.source || "site").trim(); // 'site' | 'api' | 'short'
       const apiKey = String(body?.apiKey || "").trim();
+      const shortId = String(body?.shortId || "").trim();
       if (!userId) return json({ ok: false, error: "no_user" }, 400);
 
-      // ===== External API mode =====
+      // ===== Short-link mode (external bot via /mini?s=ID) =====
+      if (source === "short" && shortId) {
+        const entry = await fbGet(`miniApp/shortLinks/${shortId}`);
+        if (!entry) return json({ ok: false, error: "not_found" }, 404);
+        await fbPatch(`miniApp/shortLinks/${shortId}`, {
+          completes: (entry.completes || 0) + 1,
+          lastUsedAt: Date.now(),
+        });
+        if (entry.keyId) {
+          const keyData = await fbGet(`miniApp/apiKeys/${entry.keyId}`);
+          await fbPatch(`miniApp/apiKeys/${entry.keyId}`, {
+            uses: ((keyData?.uses) || 0) + 1,
+            lastUsedAt: Date.now(),
+          });
+        }
+        await incCounter("miniApp/stats/apiCompletes");
+        return json({
+          ok: true,
+          mode: "short",
+          dest: entry.dest,
+          label: entry.label || "External",
+        });
+      }
+
+      // ===== Direct API mode (legacy: /mini?key=...&user=...) =====
       if (source === "api") {
         if (!apiKey) return json({ ok: false, error: "no_key" }, 400);
-        const all = (await fbGet("miniApp/apiKeys")) || {};
-        const keyId = Object.keys(all).find(
-          (id) => all[id]?.key === apiKey && all[id]?.enabled !== false,
-        );
-        if (!keyId) return json({ ok: false, error: "invalid_key" }, 401);
-        const entry = all[keyId];
+        const found = await findApiKey(apiKey);
+        if (!found) return json({ ok: false, error: "invalid_key" }, 401);
 
-        // Record completion under the key's own bucket — DO NOT touch site freeAccess
-        await fbPatch(`miniApp/apiKeys/${keyId}`, {
-          uses: (entry.uses || 0) + 1,
+        await fbPatch(`miniApp/apiKeys/${found.id}`, {
+          uses: (found.entry.uses || 0) + 1,
           lastUsedAt: Date.now(),
         });
         await incCounter("miniApp/stats/apiCompletes");
-        await fbPut(`miniApp/apiCompletions/${keyId}/${userId}`, {
+        await fbPut(`miniApp/apiCompletions/${found.id}/${userId}`, {
           completedAt: Date.now(),
           userId,
         });
@@ -112,13 +210,12 @@ serve(async (req) => {
         return json({
           ok: true,
           mode: "api",
-          redirectUrl: entry.redirectUrl || "",
-          label: entry.label || "External",
+          redirectUrl: found.entry.redirectUrl || "",
+          label: found.entry.label || "External",
         });
       }
 
-      // ===== Site mode: grant 24h access =====
-      // Get configured duration
+      // ===== Site mode: grant 24h access to userId =====
       const hoursSnap = await fbGet("settings/unlockDurationHours");
       const hours =
         typeof hoursSnap === "number" && hoursSnap > 0 ? hoursSnap : 24;
@@ -140,10 +237,51 @@ serve(async (req) => {
         expiresAt,
       });
 
-      return json({ ok: true, mode: "site", expiresAt });
+      // Also create a one-time fallback token for the user to paste in browser
+      const token = `fb_${randomId(10)}${Date.now().toString(36)}`;
+      await fbPut(`miniApp/fallbackTokens/${token}`, {
+        userId,
+        createdAt: now,
+        expiresAt: now + 30 * 60 * 1000,
+        consumed: false,
+      });
+
+      return json({ ok: true, mode: "site", expiresAt, fallbackToken: token });
     }
 
-    // Telegram Bot setup: register mini app menu button
+    if (action === "consume-fallback-token") {
+      const token = String(body?.token || "").trim();
+      if (!token) return json({ ok: false, error: "no_token" }, 400);
+      const entry = await fbGet(`miniApp/fallbackTokens/${token}`);
+      if (!entry) return json({ ok: false, error: "invalid" }, 404);
+      if (entry.consumed) return json({ ok: false, error: "used" }, 410);
+      if (Date.now() > Number(entry.expiresAt || 0))
+        return json({ ok: false, error: "expired" }, 410);
+
+      const userId = String(entry.userId || "");
+      if (!userId) return json({ ok: false, error: "no_user" }, 500);
+
+      const hoursSnap = await fbGet("settings/unlockDurationHours");
+      const hours =
+        typeof hoursSnap === "number" && hoursSnap > 0 ? hoursSnap : 24;
+      const now = Date.now();
+      const expiresAt = now + hours * 60 * 60 * 1000;
+
+      await fbPut(`users/${userId}/freeAccess`, {
+        active: true,
+        grantedAt: now,
+        expiresAt,
+        viaToken: "mini-app-fallback",
+        source: "telegram-mini-app-fallback",
+      });
+      await fbPatch(`miniApp/fallbackTokens/${token}`, {
+        consumed: true,
+        consumedAt: now,
+      });
+
+      return json({ ok: true, userId, expiresAt });
+    }
+
     if (action === "setup-bot") {
       const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
       if (!token) return json({ ok: false, error: "no_bot_token" }, 500);
