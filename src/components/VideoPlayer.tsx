@@ -428,9 +428,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, [isPremium, videoServers]);
 
-  // Ad gate - only run after premium check completes
+  // Ad gate - only run after premium AND freeAccess data have loaded
   useEffect(() => {
     if (isPremium === null) return; // still loading premium status
+    if (!freeAccessLoaded) return; // wait for Firebase freeAccess snapshot — prevents unlock-button flash
 
     const uid = getLocalUserId();
     if (!uid) {
