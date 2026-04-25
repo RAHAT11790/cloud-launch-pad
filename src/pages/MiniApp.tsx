@@ -233,6 +233,7 @@ export default function MiniApp() {
   const [rewardReady, setRewardReady] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const preloadedTrackingIdRef = useRef<string>("");
   const autoGrantedRef = useRef(false);
   const preloadAttemptedRef = useRef(false);
 
@@ -350,11 +351,12 @@ export default function MiniApp() {
   }, [info, error]);
 
   const preloadRewardedAd = useCallback(
-    async (forceReload = false) => {
-      const ready = await loadMonetag(15000, forceReload);
+    async () => {
+      const ready = await loadMonetag(15000);
       setSdkReady(ready);
       if (!ready) {
         setRewardReady(false);
+        preloadedTrackingIdRef.current = "";
         return false;
       }
 
@@ -367,10 +369,12 @@ export default function MiniApp() {
       try {
         const trackingId = buildMonetagTrackingId(userId, views + 1);
         await showFn({ type: "preload", ymid: trackingId, requestVar: MONETAG_REQUEST_VAR });
+        preloadedTrackingIdRef.current = trackingId;
         setRewardReady(true);
         setInfo(t.rewardReady);
         return true;
       } catch {
+        preloadedTrackingIdRef.current = "";
         setRewardReady(false);
         return false;
       }
@@ -430,7 +434,7 @@ export default function MiniApp() {
     }
 
     if (!ready) {
-      const retried = await preloadRewardedAd(true);
+      const retried = await preloadRewardedAd();
       if (!retried) {
         setAdRunning(false);
         setRewardReady(false);
@@ -457,16 +461,19 @@ export default function MiniApp() {
     }
 
     try {
-      const trackingId = buildMonetagTrackingId(userId, views + 1);
+      const trackingId =
+        preloadedTrackingIdRef.current || buildMonetagTrackingId(userId, views + 1);
       await showFn({ ymid: trackingId, requestVar: MONETAG_REQUEST_VAR });
+      preloadedTrackingIdRef.current = "";
       setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
       setRewardReady(false);
       setInfo(t.counted);
       await preloadRewardedAd();
     } catch {
+      preloadedTrackingIdRef.current = "";
       setRewardReady(false);
       setError(t.adUnavailable);
-      await preloadRewardedAd(true);
+      await preloadRewardedAd();
     } finally {
       setAdRunning(false);
     }
