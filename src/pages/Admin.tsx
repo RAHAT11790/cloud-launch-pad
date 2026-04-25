@@ -2049,6 +2049,24 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [tgButtonLink, setTgButtonLink] = useState("");
   const [tgButtons, setTgButtons] = useState<{ name: string; url: string }[]>([]);
   const [tgDefaultButtonName, setTgDefaultButtonName] = useState("📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥");
+  // Currently-selected anime (for per-anime button persistence)
+  const [tgSelectedAnimeId, setTgSelectedAnimeId] = useState<string>("");
+  // Auto-save per-anime telegram custom buttons whenever the admin edits them
+  useEffect(() => {
+    if (!tgSelectedAnimeId) return;
+    const safeId = String(tgSelectedAnimeId).replace(/[^a-zA-Z0-9_-]/g, "_");
+    const t = setTimeout(() => {
+      const cleanedButtons = tgButtons
+        .map(b => ({ name: String(b?.name || "").trim(), url: String(b?.url || "").trim() }))
+        .filter(b => b.name && b.url);
+      set(ref(db, `telegramPerAnimeButtons/${safeId}`), {
+        defaultButtonName: tgDefaultButtonName || "",
+        buttons: cleanedButtons,
+        updatedAt: Date.now(),
+      }).catch(() => {});
+    }, 600);
+    return () => clearTimeout(t);
+  }, [tgSelectedAnimeId, tgButtons, tgDefaultButtonName]);
   const [tgSending, setTgSending] = useState(false);
   const [tgDropdownOpen, setTgDropdownOpen] = useState(false);
   const [tgContentSearch, setTgContentSearch] = useState("");
@@ -3906,6 +3924,29 @@ ${tgHashtags}`;
     // Set button link with deep link to the specific anime
     const animeId = release.contentId || release.id;
     setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(animeId)}`);
+    setTgSelectedAnimeId(String(animeId));
+    // Load saved per-anime custom buttons (if any)
+    try {
+      const safeId = String(animeId).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));
+      const saved = savedSnap.val();
+      if (saved && typeof saved === "object") {
+        if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) {
+          setTgDefaultButtonName(saved.defaultButtonName);
+        }
+        if (Array.isArray(saved.buttons)) {
+          setTgButtons(saved.buttons.filter((b: any) => b && typeof b === "object").map((b: any) => ({
+            name: String(b.name || ""),
+            url: String(b.url || ""),
+          })));
+        } else {
+          setTgButtons([]);
+        }
+      } else {
+        // No saved data → reset to empty extras (keep default name as-is)
+        setTgButtons([]);
+      }
+    } catch {}
     // Auto-set dub type from content
     if (cType === "webseries") {
       const ws = webseriesData.find(s => s.id === cId);
@@ -5136,6 +5177,18 @@ ${tgHashtags}`;
                       }));
                       if (quals.length > 0) setTgQuality([...new Set(quals)].join(","));
                       setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(ctxSeriesId)}`);
+                      setTgSelectedAnimeId(String(ctxSeriesId));
+                      // Load any saved per-anime custom buttons
+                      try {
+                        const safeId = String(ctxSeriesId).replace(/[^a-zA-Z0-9_-]/g, "_");
+                        const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));
+                        const saved = savedSnap.val();
+                        if (saved && typeof saved === "object") {
+                          if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) setTgDefaultButtonName(saved.defaultButtonName);
+                          if (Array.isArray(saved.buttons)) setTgButtons(saved.buttons.map((b: any) => ({ name: String(b?.name || ""), url: String(b?.url || "") })));
+                          else setTgButtons([]);
+                        } else { setTgButtons([]); }
+                      } catch {}
                       setWsNotifyStep("telegram");
                     } catch (err: any) { toast.error("Error: " + err.message); }
                   }} className="w-full py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-pink-600 to-purple-600 text-white flex items-center justify-center gap-2">
@@ -5202,6 +5255,19 @@ ${tgHashtags}`;
                               if (ws.language) setTgLanguages(ws.language);
                               setTgDubType(ws.dubType === "fandub" ? "fandub" : "official");
                               setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(seriesId)}`);
+                              setTgSelectedAnimeId(String(seriesId));
+                              (async () => {
+                                try {
+                                  const safeId = String(seriesId).replace(/[^a-zA-Z0-9_-]/g, "_");
+                                  const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));
+                                  const saved = savedSnap.val();
+                                  if (saved && typeof saved === "object") {
+                                    if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) setTgDefaultButtonName(saved.defaultButtonName);
+                                    if (Array.isArray(saved.buttons)) setTgButtons(saved.buttons.map((b: any) => ({ name: String(b?.name || ""), url: String(b?.url || "") })));
+                                    else setTgButtons([]);
+                                  } else { setTgButtons([]); }
+                                } catch {}
+                              })();
                             }
                           }
                         }, 350);
@@ -6222,6 +6288,17 @@ ${tgHashtags}`;
                                   if ((fullData as any).language) setTgLanguages((fullData as any).language);
                                   setTgDubType((fullData as any).dubType === "fandub" ? "fandub" : "official");
                                   setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(r.id)}`);
+                                  setTgSelectedAnimeId(String(r.id));
+                                  try {
+                                    const safeId = String(r.id).replace(/[^a-zA-Z0-9_-]/g, "_");
+                                    const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));
+                                    const saved = savedSnap.val();
+                                    if (saved && typeof saved === "object") {
+                                      if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) setTgDefaultButtonName(saved.defaultButtonName);
+                                      if (Array.isArray(saved.buttons)) setTgButtons(saved.buttons.map((b: any) => ({ name: String(b?.name || ""), url: String(b?.url || "") })));
+                                      else setTgButtons([]);
+                                    } else { setTgButtons([]); }
+                                  } catch {}
                                   if ((fullData as any).tmdbId) {
                                     setTgImdbId(String((fullData as any).tmdbId));
                                     try {

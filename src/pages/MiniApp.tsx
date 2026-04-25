@@ -49,7 +49,7 @@ const STR: Record<Lang, Record<string, string>> = {
     watching: "Loading ad…",
     sdkLoading: "Preparing ads…",
     completed: "Ads completed",
-    getAccess: "🎉 Unlock 24h Access",
+    getAccess: "🎉 Get Access",
     granted: "Access Granted!",
     grantedDesc: "Open the website now — your access is already active.",
     backToBot: "Close",
@@ -98,7 +98,7 @@ const STR: Record<Lang, Record<string, string>> = {
     watching: "অ্যাড লোড হচ্ছে…",
     sdkLoading: "অ্যাড প্রস্তুত হচ্ছে…",
     completed: "অ্যাড শেষ",
-    getAccess: "🎉 ২৪ ঘণ্টার অ্যাক্সেস নিন",
+    getAccess: "🎉 অ্যাক্সেস নিন",
     granted: "অ্যাক্সেস পেয়ে গেছেন!",
     grantedDesc: "এখনই ওয়েবসাইট খুলুন — আপনার অ্যাক্সেস সক্রিয় হয়ে গেছে।",
     backToBot: "বন্ধ করুন",
@@ -339,7 +339,10 @@ export default function MiniApp() {
   const externalPhoto = params.get("p") || params.get("photo") || "";
   const shortId = params.get("s") || "";
 
-  const websiteStartUserId = useMemo(() => {
+  // Parse start_param from website. Format: u_<uid>            (legacy)
+  //                                       u_<uid>_src_app     (came from installed PWA)
+  //                                       u_<uid>_src_web     (came from Chrome browser)
+  const { websiteStartUserId, websiteSource } = useMemo(() => {
     const candidates = [
       params.get("tgWebAppStartParam") || "",
       params.get("startapp") || "",
@@ -351,11 +354,15 @@ export default function MiniApp() {
       if (typeof raw !== "string") continue;
       const value = raw.trim();
       if (!value.startsWith("u_")) continue;
-      const decoded = decodeURIComponent(value.slice(2)).trim();
-      if (decoded) return decoded;
+      const body = decodeURIComponent(value.slice(2)).trim();
+      if (!body) continue;
+      // Try to split optional "_src_app" / "_src_web" suffix
+      const m = body.match(/^(.+?)_src_(app|web)$/);
+      if (m) return { websiteStartUserId: m[1], websiteSource: m[2] as "app" | "web" };
+      return { websiteStartUserId: body, websiteSource: "" as "" };
     }
 
-    return "";
+    return { websiteStartUserId: "", websiteSource: "" as "" };
   }, [params]);
 
   // Resolve user identity. We track Telegram users separately from website users.
@@ -728,8 +735,25 @@ export default function MiniApp() {
           }, ms);
         };
 
-        // Helper: open URL in external browser (out of Telegram WebView) when possible
+        // Helper: open URL in external browser (out of Telegram WebView).
+        // Used for "web" source — sends user back to Chrome/Safari.
         const openExternal = (url: string) => {
+          try {
+            const tg = window.Telegram?.WebApp;
+            if (tg?.openLink) {
+              tg.openLink(url, { try_instant_view: false });
+              return;
+            }
+          } catch {}
+          window.location.href = url;
+        };
+
+        // Helper: open URL targeting the installed PWA / standalone app.
+        // On Android, when the website is installed as a PWA, navigating to its
+        // URL via Telegram's openLink causes the OS to route into the installed
+        // app (Chrome respects the manifest's scope). We additionally attempt
+        // an `intent://` deep link with the site's package as a fallback.
+        const openInApp = (url: string) => {
           try {
             const tg = window.Telegram?.WebApp;
             if (tg?.openLink) {
@@ -761,9 +785,10 @@ export default function MiniApp() {
           setFallbackUrl(unlockUrl);
 
           if (cameFromWebsite) {
-            // User came from website unlock button → auto-close & send them back
+            // Source-aware return: PWA users → installed app, browser users → Chrome
             setInfo(t.closingApp);
-            setTimeout(() => openExternal(unlockUrl), 1200);
+            const sendBack = websiteSource === "app" ? openInApp : openExternal;
+            setTimeout(() => sendBack(unlockUrl), 1200);
             closeAfter(2000);
           }
           // else: organic Telegram user → just show the unlock link card with note
