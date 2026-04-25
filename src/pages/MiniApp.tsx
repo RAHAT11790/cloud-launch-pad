@@ -20,6 +20,7 @@ import logoImg from "@/assets/logo.png";
 const MONETAG_ZONE = "10924403";
 // Use absolute https URL — protocol-relative can fail inside Telegram WebView
 const MONETAG_SDK = `https://libtl.com/sdk.js`;
+const MONETAG_SCRIPT_ID = `monetag-sdk-${MONETAG_ZONE}`;
 const MONETAG_REQUEST_VAR = "mini_unlock";
 const REQUIRED_VIEWS = 5;
 
@@ -148,28 +149,79 @@ const buildMonetagTrackingId = (userId: string, step: number) => {
   return `${MONETAG_REQUEST_VAR}-${safeUser}-${step}-${Date.now()}`;
 };
 
-// Robust SDK loader with explicit reinjection + wait for show_<zone> registration.
-function loadMonetag(maxWaitMs = 15000, forceReload = false): Promise<boolean> {
+function ensureTelegramCloudStorageCompat() {
+  try {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return;
+
+    const safeStorage = {
+      getItem: (key: string, callback?: (err: unknown, value: string) => void) => {
+        let value = "";
+        try {
+          value = localStorage.getItem(`tgcs:${key}`) || "";
+        } catch {}
+        callback?.(null, value);
+      },
+      setItem: (key: string, value: string, callback?: (err: unknown, value: boolean) => void) => {
+        try {
+          localStorage.setItem(`tgcs:${key}`, String(value));
+        } catch {}
+        callback?.(null, true);
+      },
+      removeItem: (key: string, callback?: (err: unknown, value: boolean) => void) => {
+        try {
+          localStorage.removeItem(`tgcs:${key}`);
+        } catch {}
+        callback?.(null, true);
+      },
+      getItems: (keys: string[], callback?: (err: unknown, value: Record<string, string>) => void) => {
+        const out: Record<string, string> = {};
+        for (const key of keys || []) {
+          try {
+            out[key] = localStorage.getItem(`tgcs:${key}`) || "";
+          } catch {
+            out[key] = "";
+          }
+        }
+        callback?.(null, out);
+      },
+      setItems: (items: Record<string, string>, callback?: (err: unknown, value: boolean) => void) => {
+        for (const [key, value] of Object.entries(items || {})) {
+          try {
+            localStorage.setItem(`tgcs:${key}`, String(value));
+          } catch {}
+        }
+        callback?.(null, true);
+      },
+      removeItems: (keys: string[], callback?: (err: unknown, value: boolean) => void) => {
+        for (const key of keys || []) {
+          try {
+            localStorage.removeItem(`tgcs:${key}`);
+          } catch {}
+        }
+        callback?.(null, true);
+      },
+    };
+
+    tg.cloudStorage = {
+      ...safeStorage,
+      ...(tg.cloudStorage || {}),
+    };
+  } catch {}
+}
+
+// Load Monetag SDK exactly once and wait until show_<zone> is registered.
+function loadMonetag(maxWaitMs = 15000): Promise<boolean> {
+  ensureTelegramCloudStorageCompat();
   const fnName = `show_${MONETAG_ZONE}`;
-  if (typeof window[fnName] === "function" && !forceReload) {
+  if (typeof window[fnName] === "function") {
     return Promise.resolve(true);
   }
 
-  if (forceReload) {
-    monetagLoadPromise = null;
-    try {
-      delete window[fnName];
-    } catch {}
-    document
-      .querySelectorAll(`script[data-zone="${MONETAG_ZONE}"]`)
-      .forEach((node) => node.remove());
-  }
-
-  if (monetagLoadPromise && !forceReload) return monetagLoadPromise;
+  if (monetagLoadPromise) return monetagLoadPromise;
 
   monetagLoadPromise = new Promise((resolve) => {
     let settled = false;
-    let retried = false;
 
     const finish = (ok: boolean) => {
       if (settled) return;
@@ -178,42 +230,38 @@ function loadMonetag(maxWaitMs = 15000, forceReload = false): Promise<boolean> {
       resolve(ok);
     };
 
-    const inject = (cacheBust = false) => {
-      document
-        .querySelectorAll(`script[data-zone="${MONETAG_ZONE}"]`)
-        .forEach((node) => node.remove());
-
-      const script = document.createElement("script");
-      script.src = cacheBust ? `${MONETAG_SDK}?_=${Date.now()}` : MONETAG_SDK;
-      script.async = true;
-      script.setAttribute("data-zone", MONETAG_ZONE);
-      script.setAttribute("data-sdk", `show_${MONETAG_ZONE}`);
-
-      script.onload = async () => {
-        const ok = await waitForMonetagFn(maxWaitMs);
-        if (ok) {
-          finish(true);
-        } else if (!retried) {
-          retried = true;
-          inject(true);
-        } else {
-          finish(false);
-        }
-      };
-
-      script.onerror = () => {
-        if (!retried) {
-          retried = true;
-          inject(true);
-        } else {
-          finish(false);
-        }
-      };
-
-      document.head.appendChild(script);
+    const waitUntilReady = async () => {
+      const ok = await waitForMonetagFn(maxWaitMs);
+      finish(ok);
     };
 
-    inject(forceReload);
+    const existing = document.getElementById(MONETAG_SCRIPT_ID) as HTMLScriptElement | null;
+    if (existing) {
+      if (existing.dataset.loaded === "true") {
+        void waitUntilReady();
+        return;
+      }
+      existing.addEventListener("load", () => {
+        existing.dataset.loaded = "true";
+        void waitUntilReady();
+      }, { once: true });
+      existing.addEventListener("error", () => finish(false), { once: true });
+      void waitUntilReady();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = MONETAG_SCRIPT_ID;
+    script.src = MONETAG_SDK;
+    script.async = true;
+    script.setAttribute("data-zone", MONETAG_ZONE);
+    script.setAttribute("data-sdk", `show_${MONETAG_ZONE}`);
+    script.onload = () => {
+      script.dataset.loaded = "true";
+      void waitUntilReady();
+    };
+    script.onerror = () => finish(false);
+    document.head.appendChild(script);
   });
 
   return monetagLoadPromise;
@@ -247,6 +295,7 @@ export default function MiniApp() {
   const [rewardReady, setRewardReady] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const preloadedTrackingIdRef = useRef<string>("");
   const autoGrantedRef = useRef(false);
   const preloadAttemptedRef = useRef(false);
 
@@ -303,6 +352,8 @@ export default function MiniApp() {
       window.Telegram?.WebApp?.ready?.();
       window.Telegram?.WebApp?.expand?.();
     } catch {}
+
+    ensureTelegramCloudStorageCompat();
 
     loadMonetag().then((ok) => setSdkReady(ok));
 
@@ -364,11 +415,12 @@ export default function MiniApp() {
   }, [info, error]);
 
   const preloadRewardedAd = useCallback(
-    async (forceReload = false) => {
-      const ready = await loadMonetag(15000, forceReload);
+    async () => {
+      const ready = await loadMonetag(15000);
       setSdkReady(ready);
       if (!ready) {
         setRewardReady(false);
+        preloadedTrackingIdRef.current = "";
         return false;
       }
 
@@ -381,10 +433,12 @@ export default function MiniApp() {
       try {
         const trackingId = buildMonetagTrackingId(userId, views + 1);
         await showFn({ type: "preload", ymid: trackingId, requestVar: MONETAG_REQUEST_VAR });
+        preloadedTrackingIdRef.current = trackingId;
         setRewardReady(true);
         setInfo(t.rewardReady);
         return true;
       } catch {
+        preloadedTrackingIdRef.current = "";
         setRewardReady(false);
         return false;
       }
@@ -444,7 +498,7 @@ export default function MiniApp() {
     }
 
     if (!ready) {
-      const retried = await preloadRewardedAd(true);
+      const retried = await preloadRewardedAd();
       if (!retried) {
         setAdRunning(false);
         setRewardReady(false);
@@ -471,16 +525,19 @@ export default function MiniApp() {
     }
 
     try {
-      const trackingId = buildMonetagTrackingId(userId, views + 1);
+      const trackingId =
+        preloadedTrackingIdRef.current || buildMonetagTrackingId(userId, views + 1);
       await showFn({ ymid: trackingId, requestVar: MONETAG_REQUEST_VAR });
+      preloadedTrackingIdRef.current = "";
       setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
       setRewardReady(false);
       setInfo(t.counted);
       await preloadRewardedAd();
     } catch {
+      preloadedTrackingIdRef.current = "";
       setRewardReady(false);
       setError(t.adUnavailable);
-      await preloadRewardedAd(true);
+      await preloadRewardedAd();
     } finally {
       setAdRunning(false);
     }
