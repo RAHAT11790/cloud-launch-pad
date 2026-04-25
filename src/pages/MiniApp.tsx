@@ -18,7 +18,8 @@ import logoImg from "@/assets/logo.png";
 
 // Monetag SDK zone id
 const MONETAG_ZONE = "10924403";
-const MONETAG_SDK = `//libtl.com/sdk.js`;
+// Use absolute https URL — protocol-relative can fail inside Telegram WebView
+const MONETAG_SDK = `https://libtl.com/sdk.js`;
 const REQUIRED_VIEWS = 5;
 const MIN_AD_DURATION_SEC = 15;
 
