@@ -1617,8 +1617,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
   );
 };
 
-// Change Password sub-component
+// Change Password sub-component (English UI + Email OTP forgot-password)
 const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
+  const { branding } = useBranding();
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -1629,12 +1630,20 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
   const [hasExistingPassword, setHasExistingPassword] = useState<boolean | null>(null);
   const [checkingPassword, setCheckingPassword] = useState(true);
 
+  // Forgot-password (email OTP) state
+  const [forgotMode, setForgotMode] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>("");
+
   // Check if user already has a password
   useEffect(() => {
     const checkPassword = async () => {
       try {
         const user = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
         if (!user.email) { setHasExistingPassword(false); setCheckingPassword(false); return; }
+        setUserEmail(user.email);
         const emailKey = user.email.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
         const legacyKey = user.email.toLowerCase().replace(/[^a-z0-9]/g, "_");
         for (const key of [emailKey, legacyKey]) {
@@ -1654,16 +1663,14 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
 
   const handleSetOrChangePassword = async () => {
     if (hasExistingPassword) {
-      // Change password flow - need old password
-      if (!oldPassword.trim() || !newPassword.trim()) { toast.error("সব ফিল্ড পূরণ করুন"); return; }
-      if (newPassword.length < 4) { toast.error("নতুন পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে"); return; }
-      if (oldPassword === newPassword) { toast.error("নতুন পাসওয়ার্ড আগেরটার মতো হতে পারবে না"); return; }
-      if (newPassword !== confirmPassword) { toast.error("পাসওয়ার্ড মিলছে না!"); return; }
+      if (!oldPassword.trim() || !newPassword.trim()) { toast.error("Please fill in all fields"); return; }
+      if (newPassword.length < 4) { toast.error("New password must be at least 4 characters"); return; }
+      if (oldPassword === newPassword) { toast.error("New password cannot be the same as the old one"); return; }
+      if (newPassword !== confirmPassword) { toast.error("Passwords don't match!"); return; }
     } else {
-      // Set password flow - no old password needed
-      if (!newPassword.trim()) { toast.error("পাসওয়ার্ড দিন"); return; }
-      if (newPassword.length < 4) { toast.error("পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে"); return; }
-      if (newPassword !== confirmPassword) { toast.error("পাসওয়ার্ড মিলছে না!"); return; }
+      if (!newPassword.trim()) { toast.error("Please enter a password"); return; }
+      if (newPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; }
+      if (newPassword !== confirmPassword) { toast.error("Passwords don't match!"); return; }
     }
 
     setLoading(true);
@@ -1686,25 +1693,118 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
       }
 
       if (!foundKey) {
-        // Create appUsers entry if not found
         foundKey = emailKey;
         userData = { id: user.id, name: user.name, email: user.email, createdAt: Date.now() };
       }
 
       if (hasExistingPassword) {
         if (userData.password !== oldPassword) {
-          toast.error("পুরানো পাসওয়ার্ড ভুল!");
+          toast.error("Old password is incorrect!");
           setLoading(false); return;
         }
       }
 
-      // Update password
       await update(ref(db, `appUsers/${foundKey}`), { password: newPassword });
-      toast.success(hasExistingPassword ? "পাসওয়ার্ড পরিবর্তন হয়েছে! ✅" : "পাসওয়ার্ড সেট হয়েছে! ✅");
+      toast.success(hasExistingPassword ? "Password changed successfully! ✅" : "Password set successfully! ✅");
       setOldPassword(""); setNewPassword(""); setConfirmPassword("");
       onBack();
     } catch (err: any) { toast.error("Error: " + err.message); }
     setLoading(false);
+  };
+
+  // ----- Forgot password via email OTP -----
+  const handleSendOtp = async () => {
+    if (!userEmail) { toast.error("No email on this account"); return; }
+    setOtpLoading(true);
+    try {
+      const emailKey = userEmail.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
+      const emailServiceSnap = await get(ref(db, "settings/emailService/otpFunctionUrl"));
+      const customUrl = emailServiceSnap.val();
+
+      if (customUrl) {
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        await set(ref(db, `otpCodes/${emailKey}`), { code, expires: Date.now() + 5 * 60 * 1000 });
+        const res = await fetch(customUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: userEmail,
+            otp: code,
+            siteName: branding.siteName || SITE_NAME,
+            logoUrl: branding.logoUrl || "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png",
+            siteUrl: "https://rsanime03.lovable.app",
+            telegramUrl: TELEGRAM_ADMIN_URL,
+          }),
+        });
+        if (!res.ok) throw new Error("Email sending failed");
+      } else {
+        const { supabase } = await import("@/integrations/supabase/client");
+        const { error } = await supabase.auth.signInWithOtp({
+          email: userEmail,
+          options: { shouldCreateUser: true },
+        });
+        if (error) throw error;
+      }
+      setOtpSent(true);
+      toast.success(`📧 Code sent to: ${userEmail}`);
+    } catch (err: any) {
+      toast.error("Failed to send code: " + (err.message || "unknown"));
+    }
+    setOtpLoading(false);
+  };
+
+  const handleResetWithOtp = async () => {
+    if (!otp.trim() || !newPassword.trim()) { toast.error("Please fill in all fields"); return; }
+    if (newPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; }
+    if (newPassword !== confirmPassword) { toast.error("Passwords don't match!"); return; }
+
+    setOtpLoading(true);
+    try {
+      const emailKey = userEmail.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
+      const emailServiceSnap = await get(ref(db, "settings/emailService/otpFunctionUrl"));
+      const customUrl = emailServiceSnap.val();
+
+      if (customUrl) {
+        const otpSnap = await get(ref(db, `otpCodes/${emailKey}`));
+        const otpData = otpSnap.val();
+        if (!otpData || otpData.code !== otp.trim()) {
+          toast.error("❌ Incorrect code!");
+          setOtpLoading(false); return;
+        }
+        if (Date.now() > otpData.expires) {
+          toast.error("⏰ Code expired! Please request a new one.");
+          await remove(ref(db, `otpCodes/${emailKey}`));
+          setOtpLoading(false); return;
+        }
+        await remove(ref(db, `otpCodes/${emailKey}`));
+      } else {
+        const { supabase } = await import("@/integrations/supabase/client");
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          email: userEmail,
+          token: otp.trim(),
+          type: 'email',
+        });
+        if (verifyError) {
+          toast.error(verifyError.message.includes("expired") ? "⏰ Code expired! Please request a new one." : "❌ Incorrect code!");
+          setOtpLoading(false); return;
+        }
+      }
+
+      const snap = await get(ref(db, `appUsers/${emailKey}`));
+      if (!snap.exists()) {
+        const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
+        await set(ref(db, `appUsers/${emailKey}`), { id: u.id, name: u.name, email: userEmail, createdAt: Date.now(), password: newPassword });
+      } else {
+        await set(ref(db, `appUsers/${emailKey}/password`), newPassword);
+      }
+
+      toast.success("✅ New password set successfully!");
+      setOtp(""); setNewPassword(""); setConfirmPassword(""); setOtpSent(false); setForgotMode(false);
+      onBack();
+    } catch (err: any) {
+      toast.error("Error: " + err.message);
+    }
+    setOtpLoading(false);
   };
 
   if (checkingPassword) {
@@ -1723,7 +1823,7 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
       transition={{ type: "tween", duration: 0.3 }}>
       <button onClick={onBack} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-5 h-5" />
-        <span className="font-medium">{hasExistingPassword ? "Change Password" : "Set Password"}</span>
+        <span className="font-medium">{forgotMode ? "Reset Password" : (hasExistingPassword ? "Change Password" : "Set Password")}</span>
       </button>
 
       <div className="glass-card p-5 rounded-2xl mb-5">
@@ -1732,73 +1832,152 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
             <KeyRound className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h3 className="text-sm font-bold">{hasExistingPassword ? "পাসওয়ার্ড পরিবর্তন" : "পাসওয়ার্ড সেট করুন"}</h3>
+            <h3 className="text-sm font-bold">
+              {forgotMode ? "Reset via Email OTP" : (hasExistingPassword ? "Change Password" : "Set Password")}
+            </h3>
             <p className="text-[10px] text-muted-foreground">
-              {hasExistingPassword ? "পুরানো পাসওয়ার্ড দিয়ে নতুন পাসওয়ার্ড সেট করুন" : "আপনার অ্যাকাউন্টে এখনও পাসওয়ার্ড সেট করা হয়নি"}
+              {forgotMode
+                ? `We'll send a 6-digit code to ${userEmail || "your email"}`
+                : (hasExistingPassword ? "Enter your old password and choose a new one" : "Your account doesn't have a password yet")}
             </p>
           </div>
         </div>
 
-        <div className="space-y-4">
-          {hasExistingPassword && (
+        {!forgotMode && (
+          <div className="space-y-4">
+            {hasExistingPassword && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-2 block">Old Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input type={showOld ? "text" : "password"} value={oldPassword} onChange={e => setOldPassword(e.target.value)}
+                    placeholder="Enter old password"
+                    className="w-full py-3 pl-10 pr-10 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none focus:shadow-[0_0_20px_hsla(355,85%,55%,0.3)] transition-all placeholder:text-muted-foreground" />
+                  <button type="button" onClick={() => setShowOld(!showOld)} className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {showOld ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div>
-              <label className="text-xs text-muted-foreground mb-2 block">পুরানো পাসওয়ার্ড</label>
+              <label className="text-xs text-muted-foreground mb-2 block">{hasExistingPassword ? "New Password" : "Password"}</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input type={showOld ? "text" : "password"} value={oldPassword} onChange={e => setOldPassword(e.target.value)}
-                  placeholder="পুরানো পাসওয়ার্ড দিন"
+                <input type={showNew ? "text" : "password"} value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Enter password"
                   className="w-full py-3 pl-10 pr-10 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none focus:shadow-[0_0_20px_hsla(355,85%,55%,0.3)] transition-all placeholder:text-muted-foreground" />
-                <button type="button" onClick={() => setShowOld(!showOld)} className="absolute right-3 top-1/2 -translate-y-1/2">
-                  {showOld ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
+                <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {showNew ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
                 </button>
               </div>
             </div>
-          )}
 
-          <div>
-            <label className="text-xs text-muted-foreground mb-2 block">{hasExistingPassword ? "নতুন পাসওয়ার্ড" : "পাসওয়ার্ড"}</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input type={showNew ? "text" : "password"} value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                placeholder="পাসওয়ার্ড দিন"
-                className="w-full py-3 pl-10 pr-10 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none focus:shadow-[0_0_20px_hsla(355,85%,55%,0.3)] transition-all placeholder:text-muted-foreground" />
-              <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2">
-                {showNew ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
-              </button>
+            <div>
+              <label className="text-xs text-muted-foreground mb-2 block">Confirm Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password"
+                  className="w-full py-3 pl-10 pr-10 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none focus:shadow-[0_0_20px_hsla(355,85%,55%,0.3)] transition-all placeholder:text-muted-foreground" />
+                <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {showConfirm ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="text-xs text-muted-foreground mb-2 block">কনফার্ম পাসওয়ার্ড</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
-                placeholder="আবার পাসওয়ার্ড দিন"
-                className="w-full py-3 pl-10 pr-10 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none focus:shadow-[0_0_20px_hsla(355,85%,55%,0.3)] transition-all placeholder:text-muted-foreground" />
-              <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2">
-                {showConfirm ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
-              </button>
-            </div>
+            {newPassword && confirmPassword && newPassword === confirmPassword && (
+              <p className="text-xs text-green-500 flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> Passwords match</p>
+            )}
+            {newPassword && confirmPassword && newPassword !== confirmPassword && (
+              <p className="text-xs text-destructive">Passwords don't match!</p>
+            )}
           </div>
+        )}
 
-          {newPassword && confirmPassword && newPassword === confirmPassword && (
-            <p className="text-xs text-green-500 flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> পাসওয়ার্ড মিলছে</p>
-          )}
-          {newPassword && confirmPassword && newPassword !== confirmPassword && (
-            <p className="text-xs text-destructive">পাসওয়ার্ড মিলছে না!</p>
-          )}
-        </div>
+        {forgotMode && (
+          <div className="space-y-4">
+            {!otpSent ? (
+              <>
+                <div className="text-xs text-muted-foreground bg-foreground/5 rounded-lg p-3">
+                  A 6-digit verification code will be sent to:<br />
+                  <span className="font-semibold text-foreground">{userEmail || "—"}</span>
+                </div>
+                <button onClick={handleSendOtp} disabled={otpLoading || !userEmail}
+                  className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                  {otpLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <>📧 Send Verification Code</>}
+                </button>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-2 block">Verification Code (6 digits)</label>
+                  <input type="text" value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000" maxLength={6}
+                    className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-center text-lg tracking-[0.5em] font-mono focus:border-primary focus:outline-none transition-all" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-2 block">New Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input type={showNew ? "text" : "password"} value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                      placeholder="Enter new password"
+                      className="w-full py-3 pl-10 pr-10 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none transition-all placeholder:text-muted-foreground" />
+                    <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2">
+                      {showNew ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-2 block">Confirm New Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input type={showConfirm ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter new password"
+                      className="w-full py-3 pl-10 pr-10 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm focus:border-primary focus:outline-none transition-all placeholder:text-muted-foreground" />
+                    <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2">
+                      {showConfirm ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
+                    </button>
+                  </div>
+                </div>
+                <button onClick={handleSendOtp} disabled={otpLoading}
+                  className="w-full text-xs text-primary underline">
+                  Resend code
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
-      <button onClick={handleSetOrChangePassword} disabled={loading}
-        className="w-full py-3 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 disabled:opacity-50 mb-3">
-        {loading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><Save className="w-4 h-4" /> {hasExistingPassword ? "পাসওয়ার্ড পরিবর্তন করুন" : "পাসওয়ার্ড সেট করুন"}</>}
-      </button>
+      {!forgotMode ? (
+        <>
+          <button onClick={handleSetOrChangePassword} disabled={loading}
+            className="w-full py-3 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-90 disabled:opacity-50 mb-3">
+            {loading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><Save className="w-4 h-4" /> {hasExistingPassword ? "Change Password" : "Set Password"}</>}
+          </button>
 
-      <a href={TELEGRAM_ADMIN_URL} target="_blank" rel="noopener noreferrer"
-        className="w-full py-3 rounded-xl bg-[#0088cc] text-white font-medium flex items-center justify-center gap-2 text-sm transition-all hover:opacity-90">
-        📩 সমস্যা হলে Contact Owner
-      </a>
+          {hasExistingPassword && (
+            <button onClick={() => { setForgotMode(true); setOldPassword(""); setNewPassword(""); setConfirmPassword(""); }}
+              className="w-full py-3 rounded-xl bg-foreground/10 hover:bg-foreground/20 text-foreground font-medium flex items-center justify-center gap-2 text-sm transition-all">
+              🔑 Forgot password? Reset via Email
+            </button>
+          )}
+        </>
+      ) : (
+        <>
+          {otpSent && (
+            <button onClick={handleResetWithOtp} disabled={otpLoading}
+              className="w-full py-3 rounded-xl gradient-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 mb-3 disabled:opacity-50">
+              {otpLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <><Check className="w-4 h-4" /> Verify & Reset Password</>}
+            </button>
+          )}
+          <button onClick={() => { setForgotMode(false); setOtp(""); setOtpSent(false); setNewPassword(""); setConfirmPassword(""); }}
+            className="w-full py-3 rounded-xl bg-foreground/10 hover:bg-foreground/20 text-foreground font-medium flex items-center justify-center gap-2 text-sm transition-all">
+            <ArrowLeft className="w-4 h-4" /> Back to Change Password
+          </button>
+        </>
+      )}
     </motion.div>
   );
 };
