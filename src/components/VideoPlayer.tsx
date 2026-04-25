@@ -471,6 +471,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
 
   const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
+    const { openExternalBrowser } = await import("@/lib/openExternal");
     try {
       const fb = await import("@/lib/firebase");
 
@@ -489,7 +490,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         const botUsername = String(botSnap.val() || "RS_ANIME_ACCESS_BOT").replace(/^@/, "").trim();
         const uid = getLocalUserId();
         if (botUsername && uid) {
-          // startapp param is forwarded by Telegram into the WebApp's start_param
+          // t.me link → opens Telegram app (or Telegram web). Same flow either way.
           window.location.href = `https://t.me/${botUsername}?startapp=u_${encodeURIComponent(uid)}`;
           return;
         }
@@ -502,7 +503,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         if (r.ok && r.deepLink) { window.location.href = r.deepLink; return; }
       }
     } catch {}
-    if (url && url !== "miniapp://telegram") window.location.href = url;
+    if (url && url !== "miniapp://telegram") {
+      // Use external browser opener — escapes Telegram WebView when needed
+      openExternalBrowser(url);
+    }
   }, []);
 
   // Save progress every 10s
