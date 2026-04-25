@@ -461,14 +461,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     });
   }, [isPremium, has24hAccess, unlockBlocked]);
 
-  const handleOpenAdLink = useCallback(async (url: string) => {
-    // Priority 1: Telegram Mini App unlock (Monetag-monetized, requires bot interaction)
+  const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
     try {
       const fb = await import("@/lib/firebase");
-      const miniSnap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramMini"));
-      if (miniSnap.val() === true) {
+
+      // Per-service Mini App mode takes priority
+      const isMiniMode = service?.mode === "miniapp";
+
+      // Global fallback: settings/unlockViaTelegramMini
+      let globalMini = false;
+      if (!isMiniMode) {
+        const miniSnap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramMini"));
+        globalMini = miniSnap.val() === true;
+      }
+
+      if (isMiniMode || globalMini) {
         const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramMiniBotUsername"));
-        const botUsername = String(botSnap.val() || "").replace(/^@/, "").trim();
+        const botUsername = String(botSnap.val() || "Rs_forwards_bot").replace(/^@/, "").trim();
         const uid = getLocalUserId();
         if (botUsername && uid) {
           // startapp param is forwarded by Telegram into the WebApp's start_param
@@ -476,14 +485,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           return;
         }
       }
-      // Priority 2: legacy Telegram bot deep-link unlock
+
+      // Priority: legacy Telegram bot deep-link unlock
       const snap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramBot"));
       if (snap.val() === true) {
         const r = await createTelegramBotUnlockLink();
         if (r.ok && r.deepLink) { window.location.href = r.deepLink; return; }
       }
     } catch {}
-    if (url) window.location.href = url;
+    if (url && url !== "miniapp://telegram") window.location.href = url;
   }, []);
 
   // Save progress every 10s
@@ -1856,15 +1866,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   {adLinks.map((link, i) => (
                     <button
                       key={link.service.id || i}
-                      onClick={() => handleOpenAdLink(link.shortUrl)}
+                      onClick={() => handleOpenAdLink(link.shortUrl, link.service)}
                       className="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all hover:scale-105 text-white"
                       style={{ background: link.service.color || (i === 0 ? "linear-gradient(135deg, #6366f1, #8b5cf6)" : "linear-gradient(135deg, #f59e0b, #ef4444)") }}
                     >
                       <ExternalLink className="w-4 h-4" />
                       {link.service.icon || "🔓"} {link.service.name || `Unlock ${i + 1}`}
-                      {link.service.durationHours && (
+                      {link.service.mode === "miniapp" ? (
+                        <span className="text-[10px] opacity-80 ml-1">(Telegram)</span>
+                      ) : link.service.durationHours ? (
                         <span className="text-[10px] opacity-80 ml-1">({link.service.durationHours}h access)</span>
-                      )}
+                      ) : null}
                     </button>
                   ))}
                 </div>

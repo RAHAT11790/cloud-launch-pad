@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Play, Sparkles, Globe, ExternalLink, Lock, Loader2 } from "lucide-react";
+import {
+  CheckCircle2,
+  Play,
+  Sparkles,
+  Globe,
+  ExternalLink,
+  Lock,
+  Loader2,
+  Copy,
+  AlertTriangle,
+} from "lucide-react";
 
 // Monetag SDK zone id (provided by user)
 const MONETAG_ZONE = "10924403";
@@ -28,25 +38,25 @@ const STR: Record<Lang, Record<string, string>> = {
     progress: "Progress",
     watchAd: "Watch Ad",
     watching: "Loading ad…",
-    nextIn: "Next ad in",
-    sec: "s",
     completed: "Ads completed",
     getAccess: "Get 24h Access",
     granted: "🎉 Access Granted!",
     grantedDesc: "Your 24h access is now active.",
     backToBot: "Back to Bot",
-    rules: "Rules",
-    rule1: "• Each ad must run for at least 15 seconds",
-    rule2: "• You must tap Open and view the page in browser",
-    rule3: "• Closing early will not count",
-    rule4: "• Complete all 5 ads to unlock 24h access",
     needTg: "Open this page from Telegram bot to unlock access.",
-    invalidUser: "User not detected. Please open from Telegram.",
-    notCounted: "Ad closed too early. Not counted.",
-    counted: "Ad counted!",
+    invalidUser:
+      "User not detected. Please open from the Telegram bot, or use the browser fallback below.",
+    notCounted: "Ad closed too early or skipped. Not counted.",
+    counted: "✅ Ad counted!",
     grantFailed: "Failed to grant access. Try again.",
     apiMode: "External access mode",
     redirecting: "Redirecting…",
+    fallbackTitle: "Backup unlock link",
+    fallbackDesc:
+      "If your account didn't unlock automatically, copy this link and open it in your phone's browser to unlock instantly.",
+    copy: "Copy",
+    copied: "Copied!",
+    openShortDest: "Open your link",
   },
   bn: {
     title: "২৪ ঘণ্টার ফ্রি অ্যাক্সেস",
@@ -59,25 +69,26 @@ const STR: Record<Lang, Record<string, string>> = {
     progress: "অগ্রগতি",
     watchAd: "অ্যাড দেখুন",
     watching: "অ্যাড লোড হচ্ছে…",
-    nextIn: "পরবর্তী অ্যাড",
-    sec: " সেকেন্ডে",
     completed: "অ্যাড শেষ",
     getAccess: "২৪ ঘণ্টার অ্যাক্সেস নিন",
     granted: "🎉 অ্যাক্সেস পেয়ে গেছেন!",
     grantedDesc: "আপনার ২৪ ঘণ্টার অ্যাক্সেস এখন সক্রিয়।",
     backToBot: "বটে ফিরে যান",
-    rules: "নিয়মাবলি",
-    rule1: "• প্রতিটি অ্যাড অন্তত ১৫ সেকেন্ড চলতে হবে",
-    rule2: "• Open বাটনে ক্লিক করে ব্রাউজারে পেইজ দেখতে হবে",
-    rule3: "• অ্যাড আগে বন্ধ করলে গণনা হবে না",
-    rule4: "• ৫টি অ্যাড সম্পন্ন করলেই ২৪ ঘণ্টার অ্যাক্সেস",
     needTg: "অ্যাক্সেস পেতে এই পেইজটি টেলিগ্রাম বট থেকে খুলতে হবে।",
-    invalidUser: "ইউজার পাওয়া যায়নি। টেলিগ্রাম থেকে খুলুন।",
-    notCounted: "অ্যাড আগেই বন্ধ হয়েছে। গণনা হয়নি।",
-    counted: "অ্যাড গণনা হয়েছে!",
+    invalidUser:
+      "ইউজার পাওয়া যায়নি। টেলিগ্রাম বট থেকে খুলুন, অথবা নিচের ব্যাকআপ লিঙ্ক ব্যবহার করুন।",
+    notCounted:
+      "অ্যাড আগেই বন্ধ করেছেন বা স্কিপ করেছেন। গণনা হয়নি।",
+    counted: "✅ অ্যাড গণনা হয়েছে!",
     grantFailed: "অ্যাক্সেস দিতে ব্যর্থ। আবার চেষ্টা করুন।",
     apiMode: "এক্সটার্নাল অ্যাক্সেস মোড",
     redirecting: "রিডাইরেক্ট হচ্ছে…",
+    fallbackTitle: "ব্যাকআপ আনলক লিঙ্ক",
+    fallbackDesc:
+      "যদি আপনার একাউন্টে অটোমেটিক আনলক না হয়, তাহলে এই লিঙ্কটি কপি করে আপনার ফোনের ব্রাউজারে খুললেই সাথে সাথে আনলক হয়ে যাবে।",
+    copy: "কপি",
+    copied: "কপি হয়েছে!",
+    openShortDest: "আপনার লিঙ্ক খুলুন",
   },
 };
 
@@ -85,10 +96,11 @@ function loadMonetag(): Promise<void> {
   return new Promise((resolve) => {
     const fnName = `show_${MONETAG_ZONE}`;
     if (typeof window[fnName] === "function") return resolve();
-    const existing = document.querySelector(`script[data-zone="${MONETAG_ZONE}"]`);
+    const existing = document.querySelector(
+      `script[data-zone="${MONETAG_ZONE}"]`,
+    );
     if (existing) {
       existing.addEventListener("load", () => resolve());
-      // resolve regardless after timeout
       setTimeout(() => resolve(), 3000);
       return;
     }
@@ -104,6 +116,8 @@ function loadMonetag(): Promise<void> {
   });
 }
 
+const FN_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/mini-app`;
+
 export default function MiniApp() {
   const [lang, setLang] = useState<Lang>("bn");
   const t = STR[lang];
@@ -115,15 +129,24 @@ export default function MiniApp() {
   const [granting, setGranting] = useState(false);
   const [error, setError] = useState<string>("");
   const [info, setInfo] = useState<string>("");
+  const [fallbackUrl, setFallbackUrl] = useState<string>("");
+  const [shortDest, setShortDest] = useState<string>("");
+  const [shortLabel, setShortLabel] = useState<string>("");
+  const [copyOk, setCopyOk] = useState(false);
 
   // Parse url params
-  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const params = useMemo(
+    () => new URLSearchParams(window.location.search),
+    [],
+  );
   const apiKey = params.get("key") || "";
-  const externalUser = params.get("user") || "";
+  const externalUser = params.get("user") || params.get("u") || "";
   const externalRedirect = params.get("redirect") || "";
+  const shortId = params.get("s") || "";
 
-  // Resolve user id (priority: Telegram start_param u_xxx > ?user= > Telegram tg user > local site user)
+  // Resolve user id with maximum reliability
   const userId = useMemo(() => {
+    // 1) Telegram start_param u_xxx (forwarded from t.me/<bot>?startapp=u_xxx)
     try {
       const tg = window.Telegram?.WebApp;
       const sp = tg?.initDataUnsafe?.start_param || "";
@@ -131,11 +154,15 @@ export default function MiniApp() {
         return decodeURIComponent(sp.slice(2));
       }
     } catch {}
+    // 2) Explicit ?user= or ?u= URL param
     if (externalUser) return externalUser;
+    // 3) Telegram WebApp user id (real telegram numeric id)
     try {
       const tg = window.Telegram?.WebApp;
-      if (tg?.initDataUnsafe?.user?.id) return `tg_${tg.initDataUnsafe.user.id}`;
+      if (tg?.initDataUnsafe?.user?.id)
+        return `tg_${tg.initDataUnsafe.user.id}`;
     } catch {}
+    // 4) Local site user (rare; only if user opened /mini directly while logged in)
     try {
       const raw = localStorage.getItem("rsanime_user");
       if (raw) {
@@ -147,23 +174,50 @@ export default function MiniApp() {
   }, [externalUser]);
 
   const isApiMode = !!apiKey;
+  const isShortMode = !!shortId;
+  const mode: "site" | "api" | "short" = isShortMode
+    ? "short"
+    : isApiMode
+      ? "api"
+      : "site";
 
+  // Boot SDK + Telegram + visit log + resolve short link
   useEffect(() => {
-    // Boot Telegram WebApp + Monetag SDK
-    try { window.Telegram?.WebApp?.ready?.(); window.Telegram?.WebApp?.expand?.(); } catch {}
+    try {
+      window.Telegram?.WebApp?.ready?.();
+      window.Telegram?.WebApp?.expand?.();
+    } catch {}
     loadMonetag();
-    // Visit log
-    fetch(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/mini-app`, {
+    fetch(FN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "visit", source: isApiMode ? "api" : "site" }),
+      body: JSON.stringify({ action: "visit", source: mode }),
     }).catch(() => {});
-  }, [isApiMode]);
+
+    if (isShortMode) {
+      fetch(FN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resolve", shortId }),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d?.ok && d.dest) {
+            setShortDest(d.dest);
+            setShortLabel(d.label || "");
+          }
+        })
+        .catch(() => {});
+    }
+  }, [mode, isShortMode, shortId]);
 
   // Auto-clear notices
   useEffect(() => {
     if (!info && !error) return;
-    const id = setTimeout(() => { setInfo(""); setError(""); }, 4000);
+    const id = setTimeout(() => {
+      setInfo("");
+      setError("");
+    }, 4000);
     return () => clearTimeout(id);
   }, [info, error]);
 
@@ -171,7 +225,8 @@ export default function MiniApp() {
     if (adRunning) return;
     if (!adType) return;
     setAdRunning(true);
-    setError(""); setInfo("");
+    setError("");
+    setInfo("");
 
     const fnName = `show_${MONETAG_ZONE}`;
     const showFn = window[fnName];
@@ -184,24 +239,30 @@ export default function MiniApp() {
     const startedAt = Date.now();
     try {
       if (adType === "rewarded") {
+        // Rewarded interstitial — Monetag resolves only if user actually viewed/closed.
         await showFn();
       } else {
-        // In-App: fire one
+        // In-App Interstitial: short trigger
         await showFn({
           type: "inApp",
           inAppSettings: {
-            frequency: 1, capping: 0.05, interval: 15, timeout: 5, everyPage: false,
+            frequency: 1,
+            capping: 0.05,
+            interval: 15,
+            timeout: 5,
+            everyPage: false,
           },
         });
       }
       const elapsed = (Date.now() - startedAt) / 1000;
+      // Strict gate: must have spent >=15s on the ad. Closing earlier = not counted.
       if (elapsed < MIN_AD_DURATION_SEC) {
         setError(t.notCounted);
       } else {
         setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
         setInfo(t.counted);
       }
-    } catch (e) {
+    } catch {
       setError(t.notCounted);
     } finally {
       setAdRunning(false);
@@ -211,33 +272,56 @@ export default function MiniApp() {
   const handleGetAccess = async () => {
     if (granting) return;
     if (views < REQUIRED_VIEWS) return;
-    if (!userId) { setError(t.invalidUser); return; }
-    setGranting(true); setError("");
+
+    // Short-link mode doesn't require a user id at all
+    if (mode !== "short" && !userId) {
+      setError(t.invalidUser);
+      return;
+    }
+    setGranting(true);
+    setError("");
 
     try {
-      const r = await fetch(
-        `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/mini-app`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "grant",
-            userId,
-            source: isApiMode ? "api" : "site",
-            apiKey: apiKey || undefined,
-          }),
-        },
-      );
+      const r = await fetch(FN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "grant",
+          userId: userId || "anon",
+          source: mode,
+          apiKey: apiKey || undefined,
+          shortId: shortId || undefined,
+        }),
+      });
       const data = await r.json();
       if (!r.ok || !data?.ok) {
         setError(t.grantFailed);
       } else {
         setGranted(true);
-        // External api mode: redirect after short delay
-        const redirectTo = data.redirectUrl || externalRedirect;
-        if (isApiMode && redirectTo) {
+        // Short-link mode: redirect to original destination
+        if (mode === "short" && data.dest) {
+          setShortDest(data.dest);
           setInfo(t.redirecting);
-          setTimeout(() => { window.location.href = redirectTo; }, 1500);
+          setTimeout(() => {
+            window.location.href = data.dest;
+          }, 1500);
+        }
+        // Api mode: redirect after delay
+        else if (mode === "api") {
+          const redirectTo = data.redirectUrl || externalRedirect;
+          if (redirectTo) {
+            setInfo(t.redirecting);
+            setTimeout(() => {
+              window.location.href = redirectTo;
+            }, 1500);
+          }
+        }
+        // Site mode: show fallback unlock URL so user can paste in browser
+        else if (mode === "site" && data.fallbackToken) {
+          const origin = window.location.origin;
+          setFallbackUrl(
+            `${origin}/unlock?mini=${encodeURIComponent(data.fallbackToken)}`,
+          );
         }
       }
     } catch {
@@ -248,7 +332,17 @@ export default function MiniApp() {
   };
 
   const closeMini = () => {
-    try { window.Telegram?.WebApp?.close?.(); } catch {}
+    try {
+      window.Telegram?.WebApp?.close?.();
+    } catch {}
+  };
+
+  const copy = (txt: string) => {
+    try {
+      navigator.clipboard.writeText(txt);
+      setCopyOk(true);
+      setTimeout(() => setCopyOk(false), 2000);
+    } catch {}
   };
 
   const progress = (views / REQUIRED_VIEWS) * 100;
@@ -268,7 +362,9 @@ export default function MiniApp() {
             </div>
             <div>
               <div className="text-sm text-white/60 leading-none">Mini App</div>
-              <div className="text-base font-semibold leading-tight">RS Access</div>
+              <div className="text-base font-semibold leading-tight">
+                {shortLabel || "RS Access"}
+              </div>
             </div>
           </div>
           <button
@@ -280,10 +376,21 @@ export default function MiniApp() {
           </button>
         </div>
 
-        {/* API mode badge */}
-        {isApiMode && (
+        {/* Mode badge */}
+        {(isApiMode || isShortMode) && (
           <div className="mb-4 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-400/30 text-amber-200 text-xs flex items-center gap-2">
-            <Lock className="w-3.5 h-3.5" /> {t.apiMode}
+            <Lock className="w-3.5 h-3.5" />
+            {isShortMode
+              ? `${shortLabel || "External"} link · unlock after 5 ads`
+              : t.apiMode}
+          </div>
+        )}
+
+        {/* No user warning (site mode only) */}
+        {mode === "site" && !userId && (
+          <div className="mb-4 px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-400/30 text-rose-200 text-xs flex items-start gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+            <span>{t.invalidUser}</span>
           </div>
         )}
 
@@ -294,9 +401,48 @@ export default function MiniApp() {
             <h2 className="text-2xl font-bold mb-2">{t.granted}</h2>
             <p className="text-white/70 text-sm mb-5">{t.grantedDesc}</p>
             {info && <p className="text-cyan-300 text-xs mb-3">{info}</p>}
+
+            {/* Short-link destination */}
+            {mode === "short" && shortDest && (
+              <a
+                href={shortDest}
+                className="block w-full py-3 mb-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-400 text-black font-semibold shadow-lg hover:scale-[1.02] active:scale-[0.98] transition"
+              >
+                <ExternalLink className="inline w-4 h-4 mr-2" />
+                {t.openShortDest}
+              </a>
+            )}
+
+            {/* Site fallback unlock link */}
+            {mode === "site" && fallbackUrl && (
+              <div className="text-left rounded-xl bg-white/5 border border-white/15 p-3 mb-4">
+                <div className="text-xs font-semibold text-amber-300 mb-1 flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {t.fallbackTitle}
+                </div>
+                <p className="text-[11px] text-white/60 mb-2">
+                  {t.fallbackDesc}
+                </p>
+                <div className="flex items-center gap-1 p-2 rounded-lg bg-black/40 text-[11px] font-mono break-all">
+                  <span className="flex-1 break-all">{fallbackUrl}</span>
+                  <button
+                    onClick={() => copy(fallbackUrl)}
+                    className="p-1.5 rounded bg-white/10 hover:bg-white/20 shrink-0"
+                  >
+                    <Copy className="w-3 h-3" />
+                  </button>
+                </div>
+                {copyOk && (
+                  <div className="text-[10px] text-emerald-300 mt-1">
+                    {t.copied}
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
               onClick={closeMini}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-fuchsia-500 to-cyan-400 text-black font-semibold shadow-lg shadow-fuchsia-500/30 hover:scale-[1.02] active:scale-[0.98] transition"
+              className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold border border-white/10 transition"
             >
               {t.backToBot}
             </button>
@@ -336,7 +482,9 @@ export default function MiniApp() {
             {/* Ad type chooser */}
             {!adType && views < REQUIRED_VIEWS && (
               <>
-                <div className="text-sm font-semibold text-white/80 mb-2">{t.chooseAd}</div>
+                <div className="text-sm font-semibold text-white/80 mb-2">
+                  {t.chooseAd}
+                </div>
                 <div className="grid grid-cols-1 gap-3 mb-5">
                   <button
                     onClick={() => setAdType("rewarded")}
@@ -348,7 +496,9 @@ export default function MiniApp() {
                       </div>
                       <div className="flex-1">
                         <div className="font-semibold">{t.rewarded}</div>
-                        <div className="text-xs text-white/60 mt-0.5">{t.rewardedDesc}</div>
+                        <div className="text-xs text-white/60 mt-0.5">
+                          {t.rewardedDesc}
+                        </div>
                       </div>
                       <ExternalLink className="w-4 h-4 text-white/40 group-hover:text-white/80 transition" />
                     </div>
@@ -364,7 +514,9 @@ export default function MiniApp() {
                       </div>
                       <div className="flex-1">
                         <div className="font-semibold">{t.inApp}</div>
-                        <div className="text-xs text-white/60 mt-0.5">{t.inAppDesc}</div>
+                        <div className="text-xs text-white/60 mt-0.5">
+                          {t.inAppDesc}
+                        </div>
                       </div>
                       <ExternalLink className="w-4 h-4 text-white/40 group-hover:text-white/80 transition" />
                     </div>
@@ -398,7 +550,8 @@ export default function MiniApp() {
                     </>
                   ) : (
                     <>
-                      <Play className="w-5 h-5" /> {t.watchAd} ({views + 1}/{REQUIRED_VIEWS})
+                      <Play className="w-5 h-5" /> {t.watchAd} ({views + 1}/
+                      {REQUIRED_VIEWS})
                     </>
                   )}
                 </button>
@@ -412,35 +565,53 @@ export default function MiniApp() {
                 disabled={granting}
                 className="w-full py-4 mb-5 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-400 text-black font-bold text-lg shadow-lg shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] transition disabled:opacity-60 flex items-center justify-center gap-2"
               >
-                {granting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+                {granting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-5 h-5" />
+                )}
                 {t.getAccess}
               </button>
             )}
 
             {/* Notices */}
             {info && (
-              <div className="mb-3 px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-xs text-center">
+              <div className="mb-3 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-400/30 text-emerald-300 text-xs">
                 {info}
               </div>
             )}
             {error && (
-              <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/15 border border-red-400/30 text-red-200 text-xs text-center">
+              <div className="mb-3 px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-400/30 text-rose-300 text-xs">
                 {error}
               </div>
             )}
 
             {/* Rules */}
-            <div className="rounded-2xl bg-white/5 border border-white/10 p-4 text-xs text-white/70 leading-relaxed">
-              <div className="font-semibold text-white/90 mb-2">{t.rules}</div>
-              <div>{t.rule1}</div>
-              <div>{t.rule2}</div>
-              <div>{t.rule3}</div>
-              <div>{t.rule4}</div>
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-4 text-xs text-white/70 space-y-1 leading-relaxed">
+              <div className="font-semibold text-white/90 mb-1">
+                {lang === "en" ? "Rules" : "নিয়মাবলি"}
+              </div>
+              <div>
+                {lang === "en"
+                  ? "• Each ad must run for at least 15 seconds"
+                  : "• প্রতিটি অ্যাড অন্তত ১৫ সেকেন্ড চলতে হবে"}
+              </div>
+              <div>
+                {lang === "en"
+                  ? "• You must tap Open and view the page in browser"
+                  : "• Open বাটনে ক্লিক করে ব্রাউজারে পেইজ দেখতে হবে"}
+              </div>
+              <div>
+                {lang === "en"
+                  ? "• Closing early will not count"
+                  : "• অ্যাড আগে বন্ধ করলে গণনা হবে না"}
+              </div>
+              <div>
+                {lang === "en"
+                  ? "• Complete all 5 ads to unlock 24h access"
+                  : "• ৫টি অ্যাড সম্পন্ন করলেই ২৪ ঘণ্টার অ্যাক্সেস"}
+              </div>
             </div>
-
-            {!userId && (
-              <p className="mt-4 text-center text-xs text-amber-300/80">{t.needTg}</p>
-            )}
           </>
         )}
       </div>
