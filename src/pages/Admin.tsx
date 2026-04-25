@@ -1285,6 +1285,45 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
         </div>
       </div>
 
+      {/* APK Download URLs */}
+      <div className={`${glassCard} p-4 mb-4`}>
+        <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">📦 APK ডাউনলোড লিঙ্ক</h4>
+        <p className="text-[10px] text-zinc-400 mb-3">
+          User APK লিঙ্ক ইউজার প্যানেলে দেখাবে। Admin APK লিঙ্ক শুধু এই অ্যাডমিন প্যানেলে দেখাবে। দুটো আলাদা ভার্সন।
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="text-[10px] text-zinc-400 block mb-1">User App APK URL (ইউজার প্যানেলে দেখাবে)</label>
+            <input
+              value={config["userApkUrl"] || ""}
+              onChange={(e) => updateField("userApkUrl", e.target.value)}
+              placeholder="https://example.com/rsanime-user.apk"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-zinc-400 block mb-1">Admin App APK URL (শুধু অ্যাডমিন প্যানেলে দেখাবে)</label>
+            <input
+              value={config["adminApkUrl"] || ""}
+              onChange={(e) => updateField("adminApkUrl", e.target.value)}
+              placeholder="https://example.com/rsanime-admin.apk"
+              className={inputClass}
+            />
+            {config["adminApkUrl"] && (
+              <a
+                href={config["adminApkUrl"]}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="inline-flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
+              >
+                <Download size={12} /> Download Admin APK
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Save Button */}
       <button onClick={saveAll} disabled={saving} className={`${btnPrimary} w-full !py-3 text-sm`}>
         {saving ? <><RefreshCw size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> সব সেভ করো</>}
