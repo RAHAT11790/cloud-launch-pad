@@ -159,14 +159,19 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
             User will be sent to <code>https://t.me/{botUsername || "bot"}?startapp=u_USER_ID</code>
           </p>
         </div>
-        <button onClick={saveSettings} className={`${btnPrimary} mt-3`}>
-          <Save className="w-4 h-4" /> Save Settings
-        </button>
+        <div className="flex flex-wrap gap-2 mt-3">
+          <button onClick={saveSettings} className={btnPrimary}>
+            <Save className="w-4 h-4" /> Save Settings
+          </button>
+          <button onClick={setupBotMenu} disabled={setupBusy} className={btnSecondary}>
+            ⚡ {setupBusy ? "Setting up…" : "Auto-Setup Bot Menu Button"}
+          </button>
+        </div>
       </div>
 
       {/* Mini App URL */}
       <div className={glassCard}>
-        <h3 className="font-semibold mb-2">Mini App URL (set this in BotFather)</h3>
+        <h3 className="font-semibold mb-2">Mini App URL</h3>
         <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-xs font-mono break-all">
           {miniUrl}
           <button onClick={() => copy(miniUrl)} className="ml-auto p-1.5 hover:bg-muted rounded">
@@ -174,7 +179,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
           </button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          BotFather → /mybots → Bot Settings → Configure Mini App → set URL above.
+          ⚡ Use the "Auto-Setup" button above to register this URL as your bot's Menu Button automatically — no BotFather needed.
         </p>
       </div>
 
