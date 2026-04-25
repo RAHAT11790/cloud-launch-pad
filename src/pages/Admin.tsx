@@ -1300,6 +1300,17 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
               placeholder="https://example.com/rsanime-user.apk"
               className={inputClass}
             />
+            {config["userApkUrl"] && (
+              <a
+                href={config["userApkUrl"]}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="inline-flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold"
+              >
+                <Download size={12} /> Download User APK
+              </a>
+            )}
           </div>
           <div>
             <label className="text-[10px] text-zinc-400 block mb-1">Admin App APK URL (শুধু অ্যাডমিন প্যানেলে দেখাবে)</label>
