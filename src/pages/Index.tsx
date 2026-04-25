@@ -1154,39 +1154,35 @@ const Index = () => {
       const userId = JSON.parse(user).id;
       if (!userId) return;
 
-      // Get device-specific path
-      import("@/lib/premiumDevice").then(({ getDeviceId }) => {
-        const deviceId = getDeviceId();
-        const historyItem: any = {
-          id: anime.id,
-          title: anime.title,
-          poster: anime.poster,
-          year: anime.year,
-          rating: anime.rating,
-          type: anime.type,
-          watchedAt: Date.now(),
+      const historyItem: any = {
+        id: anime.id,
+        title: anime.title,
+        poster: anime.poster,
+        year: anime.year,
+        rating: anime.rating,
+        type: anime.type,
+        watchedAt: Date.now(),
+      };
+
+      if (seasonIdx !== undefined && epIdx !== undefined && anime.seasons) {
+        const season = anime.seasons[seasonIdx];
+        historyItem.episodeInfo = {
+          season: seasonIdx + 1,
+          episode: epIdx + 1,
+          seasonName: season.name,
+          episodeNumber: season.episodes[epIdx].episodeNumber,
+          seasonIdx,
+          epIdx,
         };
+      }
 
-        if (seasonIdx !== undefined && epIdx !== undefined && anime.seasons) {
-          const season = anime.seasons[seasonIdx];
-          historyItem.episodeInfo = {
-            season: seasonIdx + 1,
-            episode: epIdx + 1,
-            seasonName: season.name,
-            episodeNumber: season.episodes[epIdx].episodeNumber,
-            seasonIdx,
-            epIdx,
-          };
-        }
-
-        if (preserveProgress) {
-          import("@/lib/firebase").then(({ update }) => {
-            update(ref(db, `users/${userId}/watchHistory/${anime.id}`), historyItem).catch(() => {});
-          });
-        } else {
-          set(ref(db, `users/${userId}/watchHistory/${anime.id}`), historyItem);
-        }
-      });
+      if (preserveProgress) {
+        import("@/lib/firebase").then(({ update }) => {
+          update(ref(db, `users/${userId}/watchHistory/${anime.id}`), historyItem).catch(() => {});
+        });
+      } else {
+        set(ref(db, `users/${userId}/watchHistory/${anime.id}`), historyItem);
+      }
     } catch (e) {
       console.error("Failed to save watch history:", e);
     }
