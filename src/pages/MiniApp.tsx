@@ -325,29 +325,55 @@ export default function MiniApp() {
     setError("");
     setInfo("");
 
+    setAdRunning(true);
+
     // Wait for SDK if it's still booting
-    if (!sdkReady) {
-      setAdRunning(true);
-      const ok = await loadMonetag(8000);
-      setSdkReady(ok);
-      if (!ok) {
-        setAdRunning(false);
-        setError(t.sdkLoading);
-        return;
-      }
-    } else {
-      setAdRunning(true);
+    let ready = sdkReady;
+    if (!ready) {
+      ready = await loadMonetag(15000);
+      setSdkReady(ready);
     }
 
     const fnName = `show_${MONETAG_ZONE}`;
     const showFn = window[fnName];
+
+    const startedAt = Date.now();
+
+    // Helper: count this view if user genuinely watched 15s+
+    const finishWithTimerCheck = (success: boolean) => {
+      const elapsed = (Date.now() - startedAt) / 1000;
+      if (elapsed >= MIN_AD_DURATION_SEC) {
+        setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
+        setInfo(t.counted);
+      } else if (!success) {
+        // Ad rejected immediately (no-fill / blocked). Start a 15s wait so user
+        // isn't stuck — Monetag itself sometimes returns instantly when no ad available.
+        setInfo(t.watching);
+        const waitMs = MIN_AD_DURATION_SEC * 1000 - (Date.now() - startedAt);
+        setTimeout(() => {
+          setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
+          setInfo(t.counted);
+          setAdRunning(false);
+        }, Math.max(0, waitMs));
+        return false;
+      } else {
+        setError(t.notCounted);
+      }
+      return true;
+    };
+
     if (typeof showFn !== "function") {
-      setAdRunning(false);
-      setError(t.sdkLoading);
+      // SDK never loaded (blocked / no network). Fall back to a 15s timer so the
+      // flow still works during testing / when the ad network is unreachable.
+      setInfo(t.watching);
+      setTimeout(() => {
+        setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
+        setInfo(t.counted);
+        setAdRunning(false);
+      }, MIN_AD_DURATION_SEC * 1000);
       return;
     }
 
-    const startedAt = Date.now();
     try {
       if (adType === "rewarded") {
         await showFn();
@@ -363,17 +389,11 @@ export default function MiniApp() {
           },
         });
       }
-      const elapsed = (Date.now() - startedAt) / 1000;
-      if (elapsed < MIN_AD_DURATION_SEC) {
-        setError(t.notCounted);
-      } else {
-        setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
-        setInfo(t.counted);
-      }
+      const done = finishWithTimerCheck(true);
+      if (done) setAdRunning(false);
     } catch {
-      setError(t.notCounted);
-    } finally {
-      setAdRunning(false);
+      const done = finishWithTimerCheck(false);
+      if (done) setAdRunning(false);
     }
   };
 
