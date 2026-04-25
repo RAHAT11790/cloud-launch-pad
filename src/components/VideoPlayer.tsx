@@ -330,10 +330,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const uid = getUserId();
     if (!uid) return;
 
-    // 1. Log a view count
+    // 1. Log a view count (per-day, per-user)
     const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
     const viewRef = ref(db, `analytics/views/${animeId}/${today}/${uid}`);
     set(viewRef, { timestamp: Date.now(), title: title || "" }).catch(() => {});
+
+    // 1b. All-time total counter (never reset by daily cleanup)
+    import("@/lib/firebase").then(({ runTransaction, ref: fbRef, db: fbDb }) => {
+      runTransaction(fbRef(fbDb, `analytics/totals/views/${animeId}`), (curr: any) => {
+        const base = curr && typeof curr === "object" ? curr : { count: 0, title: "" };
+        return { count: (base.count || 0) + 1, title: title || base.title || "", lastSeen: Date.now() };
+      }).catch(() => {});
+    });
 
     // 2. Track as active viewer (presence)
     const activeRef = ref(db, `analytics/activeViewers/${animeId}/${uid}`);
@@ -471,6 +479,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
 
   const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
+    const { openExternalBrowser } = await import("@/lib/openExternal");
     try {
       const fb = await import("@/lib/firebase");
 
@@ -489,7 +498,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         const botUsername = String(botSnap.val() || "RS_ANIME_ACCESS_BOT").replace(/^@/, "").trim();
         const uid = getLocalUserId();
         if (botUsername && uid) {
-          // startapp param is forwarded by Telegram into the WebApp's start_param
+          // t.me link → opens Telegram app (or Telegram web). Same flow either way.
           window.location.href = `https://t.me/${botUsername}?startapp=u_${encodeURIComponent(uid)}`;
           return;
         }
@@ -502,7 +511,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         if (r.ok && r.deepLink) { window.location.href = r.deepLink; return; }
       }
     } catch {}
-    if (url && url !== "miniapp://telegram") window.location.href = url;
+    if (url && url !== "miniapp://telegram") {
+      // Use external browser opener — escapes Telegram WebView when needed
+      openExternalBrowser(url);
+    }
   }, []);
 
   // Save progress every 10s

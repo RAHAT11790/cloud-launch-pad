@@ -1285,6 +1285,45 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
         </div>
       </div>
 
+      {/* APK Download URLs */}
+      <div className={`${glassCard} p-4 mb-4`}>
+        <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">📦 APK ডাউনলোড লিঙ্ক</h4>
+        <p className="text-[10px] text-zinc-400 mb-3">
+          User APK লিঙ্ক ইউজার প্যানেলে দেখাবে। Admin APK লিঙ্ক শুধু এই অ্যাডমিন প্যানেলে দেখাবে। দুটো আলাদা ভার্সন।
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="text-[10px] text-zinc-400 block mb-1">User App APK URL (ইউজার প্যানেলে দেখাবে)</label>
+            <input
+              value={config["userApkUrl"] || ""}
+              onChange={(e) => updateField("userApkUrl", e.target.value)}
+              placeholder="https://example.com/rsanime-user.apk"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-zinc-400 block mb-1">Admin App APK URL (শুধু অ্যাডমিন প্যানেলে দেখাবে)</label>
+            <input
+              value={config["adminApkUrl"] || ""}
+              onChange={(e) => updateField("adminApkUrl", e.target.value)}
+              placeholder="https://example.com/rsanime-admin.apk"
+              className={inputClass}
+            />
+            {config["adminApkUrl"] && (
+              <a
+                href={config["adminApkUrl"]}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="inline-flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
+              >
+                <Download size={12} /> Download Admin APK
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Save Button */}
       <button onClick={saveAll} disabled={saving} className={`${btnPrimary} w-full !py-3 text-sm`}>
         {saving ? <><RefreshCw size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> সব সেভ করো</>}
@@ -1976,6 +2015,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [analyticsViews, setAnalyticsViews] = useState<Record<string, any>>({});
   const [activeViewers, setActiveViewers] = useState<Record<string, any>>({});
   const [dailyActiveUsers, setDailyActiveUsers] = useState<Record<string, any>>({});
+  const [allTimeTotals, setAllTimeTotals] = useState<Record<string, { count: number; title?: string; lastSeen?: number }>>({});
 
   // AnimeSalt selected data for content options
   const [animesaltSelectedData, setAnimesaltSelectedData] = useState<Record<string, any>>({});
@@ -2450,18 +2490,48 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     return () => unsub();
   }, [activeSection]);
 
-  // Lazy-load ANALYTICS data
+  // Lazy-load ANALYTICS data + nightly cleanup of old date-buckets
   useEffect(() => {
     if (activeSection !== "analytics") return;
     const unsubs: (() => void)[] = [];
     unsubs.push(onValue(ref(db, "analytics/views"), (snap) => {
-      setAnalyticsViews(snap.val() || {});
+      const data = snap.val() || {};
+      setAnalyticsViews(data);
+
+      // 🧹 Auto-cleanup: delete every date bucket older than today.
+      // Today's bucket is preserved so the dashboard always shows fresh stats.
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        Object.entries(data).forEach(([animeId, byDate]: any) => {
+          if (!byDate || typeof byDate !== "object") return;
+          Object.keys(byDate).forEach((dateKey) => {
+            if (dateKey !== today) {
+              remove(ref(db, `analytics/views/${animeId}/${dateKey}`)).catch(() => {});
+            }
+          });
+        });
+      } catch {}
     }));
     unsubs.push(onValue(ref(db, "analytics/activeViewers"), (snap) => {
       setActiveViewers(snap.val() || {});
     }));
     unsubs.push(onValue(ref(db, "analytics/dailyActive"), (snap) => {
-      setDailyActiveUsers(snap.val() || {});
+      const data = snap.val() || {};
+      setDailyActiveUsers(data);
+
+      // 🧹 Cleanup older daily-active buckets too (keep today only)
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        Object.keys(data).forEach((dateKey) => {
+          if (dateKey !== today) {
+            remove(ref(db, `analytics/dailyActive/${dateKey}`)).catch(() => {});
+          }
+        });
+      } catch {}
+    }));
+    // Subscribe to persistent all-time totals (never reset)
+    unsubs.push(onValue(ref(db, "analytics/totals/views"), (snap) => {
+      setAllTimeTotals(snap.val() || {});
     }));
     return () => unsubs.forEach(u => u());
   }, [activeSection]);
@@ -8020,14 +8090,20 @@ ${tgHashtags}`;
           });
           contentViewStats.sort((a, b) => b.viewCount - a.viewCount);
 
+          // All-time stats sourced from persistent counter (analytics/totals/views)
+          // so they survive the nightly cleanup of the per-date buckets.
           const allTimeStats: { animeId: string; title: string; totalViews: number; poster: string }[] = [];
-          Object.entries(analyticsViews).forEach(([aId, dates]: [string, any]) => {
-            let total = 0;
-            Object.values(dates || {}).forEach((dayUsers: any) => { total += Object.keys(dayUsers || {}).length; });
+          Object.entries(allTimeTotals).forEach(([aId, info]: [string, any]) => {
+            const total = Number(info?.count || 0);
             if (total > 0) {
               const ws = webseriesData.find(w => w.id === aId);
               const mv = moviesData.find(m => m.id === aId);
-              allTimeStats.push({ animeId: aId, title: ws?.title || mv?.title || aId, totalViews: total, poster: ws?.poster || mv?.poster || "" });
+              allTimeStats.push({
+                animeId: aId,
+                title: ws?.title || mv?.title || info?.title || aId,
+                totalViews: total,
+                poster: ws?.poster || mv?.poster || "",
+              });
             }
           });
           allTimeStats.sort((a, b) => b.totalViews - a.totalViews);
@@ -8206,23 +8282,16 @@ ${tgHashtags}`;
                     // Build full list of ALL content with their view counts
                     const fullList = [
                       ...webseriesData.map(ws => {
-                        let todayViews = 0;
-                        let totalViews = 0;
                         const viewData = analyticsViews[ws.id];
-                        if (viewData) {
-                          if (viewData[today]) todayViews = Object.keys(viewData[today]).length;
-                          Object.values(viewData).forEach((dayUsers: any) => { totalViews += Object.keys(dayUsers || {}).length; });
-                        }
+                        const todayViews = viewData?.[today] ? Object.keys(viewData[today]).length : 0;
+                        // All-time = persistent counter (survives daily cleanup)
+                        const totalViews = Number(allTimeTotals[ws.id]?.count || 0);
                         return { id: ws.id, title: ws.title || "Untitled", poster: ws.poster || "", type: "Series", todayViews, totalViews };
                       }),
                       ...moviesData.map(mv => {
-                        let todayViews = 0;
-                        let totalViews = 0;
                         const viewData = analyticsViews[mv.id];
-                        if (viewData) {
-                          if (viewData[today]) todayViews = Object.keys(viewData[today]).length;
-                          Object.values(viewData).forEach((dayUsers: any) => { totalViews += Object.keys(dayUsers || {}).length; });
-                        }
+                        const todayViews = viewData?.[today] ? Object.keys(viewData[today]).length : 0;
+                        const totalViews = Number(allTimeTotals[mv.id]?.count || 0);
                         return { id: mv.id, title: mv.title || "Untitled", poster: mv.poster || "", type: "Movie", todayViews, totalViews };
                       }),
                     ];
