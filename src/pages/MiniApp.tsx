@@ -149,64 +149,70 @@ const buildMonetagTrackingId = (userId: string, step: number) => {
   return `${MONETAG_REQUEST_VAR}-${safeUser}-${step}-${Date.now()}`;
 };
 
+// Telegram WebApp on older clients (incl. Lovable preview & some Android builds)
+// throws "CloudStorage is not supported in version 6.0" the moment Monetag SDK
+// touches tg.cloudStorage.getItem/setItem. We FORCE-override these methods with
+// a localStorage-backed shim so Monetag never sees the native error.
 function ensureTelegramCloudStorageCompat() {
   try {
     const tg = window.Telegram?.WebApp;
     if (!tg) return;
 
-    const safeStorage = {
-      getItem: (key: string, callback?: (err: unknown, value: string) => void) => {
-        let value = "";
-        try {
-          value = localStorage.getItem(`tgcs:${key}`) || "";
-        } catch {}
-        callback?.(null, value);
+    const get = (key: string) => {
+      try { return localStorage.getItem(`tgcs:${key}`) || ""; } catch { return ""; }
+    };
+    const set = (key: string, value: string) => {
+      try { localStorage.setItem(`tgcs:${key}`, String(value)); } catch {}
+    };
+    const del = (key: string) => {
+      try { localStorage.removeItem(`tgcs:${key}`); } catch {}
+    };
+
+    const safeStorage: any = {
+      getItem: (key: string, cb?: (err: unknown, value: string) => void) => {
+        const v = get(key); cb?.(null, v); return Promise.resolve(v);
       },
-      setItem: (key: string, value: string, callback?: (err: unknown, value: boolean) => void) => {
-        try {
-          localStorage.setItem(`tgcs:${key}`, String(value));
-        } catch {}
-        callback?.(null, true);
+      setItem: (key: string, value: string, cb?: (err: unknown, ok: boolean) => void) => {
+        set(key, value); cb?.(null, true); return Promise.resolve(true);
       },
-      removeItem: (key: string, callback?: (err: unknown, value: boolean) => void) => {
-        try {
-          localStorage.removeItem(`tgcs:${key}`);
-        } catch {}
-        callback?.(null, true);
+      removeItem: (key: string, cb?: (err: unknown, ok: boolean) => void) => {
+        del(key); cb?.(null, true); return Promise.resolve(true);
       },
-      getItems: (keys: string[], callback?: (err: unknown, value: Record<string, string>) => void) => {
+      getItems: (keys: string[], cb?: (err: unknown, value: Record<string, string>) => void) => {
         const out: Record<string, string> = {};
-        for (const key of keys || []) {
-          try {
-            out[key] = localStorage.getItem(`tgcs:${key}`) || "";
-          } catch {
-            out[key] = "";
+        for (const k of keys || []) out[k] = get(k);
+        cb?.(null, out); return Promise.resolve(out);
+      },
+      setItems: (items: Record<string, string>, cb?: (err: unknown, ok: boolean) => void) => {
+        for (const [k, v] of Object.entries(items || {})) set(k, v);
+        cb?.(null, true); return Promise.resolve(true);
+      },
+      removeItems: (keys: string[], cb?: (err: unknown, ok: boolean) => void) => {
+        for (const k of keys || []) del(k);
+        cb?.(null, true); return Promise.resolve(true);
+      },
+      getKeys: (cb?: (err: unknown, keys: string[]) => void) => {
+        const keys: string[] = [];
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith("tgcs:")) keys.push(k.slice(5));
           }
-        }
-        callback?.(null, out);
-      },
-      setItems: (items: Record<string, string>, callback?: (err: unknown, value: boolean) => void) => {
-        for (const [key, value] of Object.entries(items || {})) {
-          try {
-            localStorage.setItem(`tgcs:${key}`, String(value));
-          } catch {}
-        }
-        callback?.(null, true);
-      },
-      removeItems: (keys: string[], callback?: (err: unknown, value: boolean) => void) => {
-        for (const key of keys || []) {
-          try {
-            localStorage.removeItem(`tgcs:${key}`);
-          } catch {}
-        }
-        callback?.(null, true);
+        } catch {}
+        cb?.(null, keys); return Promise.resolve(keys);
       },
     };
 
-    tg.cloudStorage = {
-      ...safeStorage,
-      ...(tg.cloudStorage || {}),
-    };
+    // FORCE override (do NOT spread native after — native throws on v6.0)
+    try {
+      Object.defineProperty(tg, "cloudStorage", {
+        value: safeStorage,
+        writable: true,
+        configurable: true,
+      });
+    } catch {
+      tg.cloudStorage = safeStorage;
+    }
   } catch {}
 }
 
