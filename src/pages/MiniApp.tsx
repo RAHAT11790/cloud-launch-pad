@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   Play,
@@ -20,8 +20,10 @@ import logoImg from "@/assets/logo.png";
 const MONETAG_ZONE = "10924403";
 // Use absolute https URL — protocol-relative can fail inside Telegram WebView
 const MONETAG_SDK = `https://libtl.com/sdk.js`;
+const MONETAG_REQUEST_VAR = "mini_unlock";
 const REQUIRED_VIEWS = 5;
-const MIN_AD_DURATION_SEC = 15;
+
+let monetagLoadPromise: Promise<boolean> | null = null;
 
 declare global {
   interface Window {
@@ -55,6 +57,9 @@ const STR: Record<Lang, Record<string, string>> = {
       "Account not detected. Please open from the Telegram bot link.",
     notCounted: "Ad closed too early or skipped. Not counted.",
     counted: "✅ Ad counted!",
+    realOnly: "Only real Rewarded ads can unlock access.",
+    adUnavailable: "Monetag did not return a real ad, so nothing was counted.",
+    rewardReady: "Rewarded ad is ready",
     grantFailed: "Failed to grant access. Try again.",
     apiMode: "External access mode",
     redirecting: "Redirecting…",
@@ -98,6 +103,10 @@ const STR: Record<Lang, Record<string, string>> = {
     invalidUser: "একাউন্ট পাওয়া যায়নি। টেলিগ্রাম বট লিঙ্ক থেকে খুলুন।",
     notCounted: "অ্যাড আগেই বন্ধ করেছেন বা স্কিপ করেছেন। গণনা হয়নি।",
     counted: "✅ অ্যাড গণনা হয়েছে!",
+    realOnly: "আনলকের জন্য শুধু রিয়াল Rewarded Ad ব্যবহার করা যাবে।",
+    adUnavailable:
+      "Monetag কোনো রিয়াল অ্যাড দেয়নি, তাই কিছু কাউন্ট হয়নি।",
+    rewardReady: "Rewarded ad প্রস্তুত",
     grantFailed: "অ্যাক্সেস দিতে ব্যর্থ। আবার চেষ্টা করুন।",
     apiMode: "এক্সটার্নাল অ্যাক্সেস মোড",
     redirecting: "রিডাইরেক্ট হচ্ছে…",
@@ -122,43 +131,92 @@ const STR: Record<Lang, Record<string, string>> = {
   },
 };
 
-// Robust SDK loader with retries + waits for the show_<zone> function to register
-function loadMonetag(maxWaitMs = 15000): Promise<boolean> {
-  return new Promise((resolve) => {
+const waitForMonetagFn = (maxWaitMs = 15000): Promise<boolean> =>
+  new Promise((resolve) => {
     const fnName = `show_${MONETAG_ZONE}`;
-    if (typeof window[fnName] === "function") return resolve(true);
-
-    // Inject script if not present
-    let s = document.querySelector(
-      `script[data-zone="${MONETAG_ZONE}"]`,
-    ) as HTMLScriptElement | null;
-    if (!s) {
-      s = document.createElement("script");
-      s.src = MONETAG_SDK;
-      s.setAttribute("data-zone", MONETAG_ZONE);
-      s.setAttribute("data-sdk", `show_${MONETAG_ZONE}`);
-      s.async = true;
-      s.onerror = () => {
-        // Retry once with cache-buster
-        const r = document.createElement("script");
-        r.src = `${MONETAG_SDK}?_=${Date.now()}`;
-        r.setAttribute("data-zone", MONETAG_ZONE);
-        r.setAttribute("data-sdk", `show_${MONETAG_ZONE}`);
-        r.async = true;
-        document.head.appendChild(r);
-      };
-      document.head.appendChild(s);
-    }
-
-    // Poll for the show_<zone> function (Monetag registers it AFTER the script loads).
     const started = Date.now();
     const tick = () => {
       if (typeof window[fnName] === "function") return resolve(true);
-      if (Date.now() - started > maxWaitMs) return resolve(false);
+      if (Date.now() - started >= maxWaitMs) return resolve(false);
       setTimeout(tick, 150);
     };
     tick();
   });
+
+const buildMonetagTrackingId = (userId: string, step: number) => {
+  const safeUser = (userId || "guest").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48);
+  return `${MONETAG_REQUEST_VAR}-${safeUser}-${step}-${Date.now()}`;
+};
+
+// Robust SDK loader with explicit reinjection + wait for show_<zone> registration.
+function loadMonetag(maxWaitMs = 15000, forceReload = false): Promise<boolean> {
+  const fnName = `show_${MONETAG_ZONE}`;
+  if (typeof window[fnName] === "function" && !forceReload) {
+    return Promise.resolve(true);
+  }
+
+  if (forceReload) {
+    monetagLoadPromise = null;
+    try {
+      delete window[fnName];
+    } catch {}
+    document
+      .querySelectorAll(`script[data-zone="${MONETAG_ZONE}"]`)
+      .forEach((node) => node.remove());
+  }
+
+  if (monetagLoadPromise && !forceReload) return monetagLoadPromise;
+
+  monetagLoadPromise = new Promise((resolve) => {
+    let settled = false;
+    let retried = false;
+
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (!ok) monetagLoadPromise = null;
+      resolve(ok);
+    };
+
+    const inject = (cacheBust = false) => {
+      document
+        .querySelectorAll(`script[data-zone="${MONETAG_ZONE}"]`)
+        .forEach((node) => node.remove());
+
+      const script = document.createElement("script");
+      script.src = cacheBust ? `${MONETAG_SDK}?_=${Date.now()}` : MONETAG_SDK;
+      script.async = true;
+      script.setAttribute("data-zone", MONETAG_ZONE);
+      script.setAttribute("data-sdk", `show_${MONETAG_ZONE}`);
+
+      script.onload = async () => {
+        const ok = await waitForMonetagFn(maxWaitMs);
+        if (ok) {
+          finish(true);
+        } else if (!retried) {
+          retried = true;
+          inject(true);
+        } else {
+          finish(false);
+        }
+      };
+
+      script.onerror = () => {
+        if (!retried) {
+          retried = true;
+          inject(true);
+        } else {
+          finish(false);
+        }
+      };
+
+      document.head.appendChild(script);
+    };
+
+    inject(forceReload);
+  });
+
+  return monetagLoadPromise;
 }
 
 const FN_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/mini-app`;
@@ -186,9 +244,11 @@ export default function MiniApp() {
   const [shortLabel, setShortLabel] = useState<string>("");
   const [copyOk, setCopyOk] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
+  const [rewardReady, setRewardReady] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const autoGrantedRef = useRef(false);
+  const preloadAttemptedRef = useRef(false);
 
   // Parse url params
   const params = useMemo(
@@ -303,6 +363,50 @@ export default function MiniApp() {
     return () => clearTimeout(id);
   }, [info, error]);
 
+  const preloadRewardedAd = useCallback(
+    async (forceReload = false) => {
+      const ready = await loadMonetag(15000, forceReload);
+      setSdkReady(ready);
+      if (!ready) {
+        setRewardReady(false);
+        return false;
+      }
+
+      const showFn = window[`show_${MONETAG_ZONE}`];
+      if (typeof showFn !== "function") {
+        setRewardReady(false);
+        return false;
+      }
+
+      try {
+        const trackingId = buildMonetagTrackingId(userId, views + 1);
+        await showFn({ type: "preload", ymid: trackingId, requestVar: MONETAG_REQUEST_VAR });
+        setRewardReady(true);
+        setInfo(t.rewardReady);
+        return true;
+      } catch {
+        setRewardReady(false);
+        return false;
+      }
+    },
+    [t.rewardReady, userId, views],
+  );
+
+  useEffect(() => {
+    if (views >= REQUIRED_VIEWS) return;
+    if (adType !== "rewarded") {
+      setRewardReady(false);
+      preloadAttemptedRef.current = false;
+      return;
+    }
+    if (preloadAttemptedRef.current) return;
+
+    preloadAttemptedRef.current = true;
+    preloadRewardedAd().finally(() => {
+      preloadAttemptedRef.current = false;
+    });
+  }, [adType, preloadRewardedAd, views]);
+
   // AUTO-GRANT: when 5 ads done in site mode, auto-call grant so user is unlocked
   // even if they close Telegram without tapping the button.
   useEffect(() => {
@@ -327,73 +431,58 @@ export default function MiniApp() {
 
     setAdRunning(true);
 
-    // Wait for SDK if it's still booting
+    // Rewarded unlock must use real successful Monetag ad only.
+    if (adType !== "rewarded") {
+      setError(t.realOnly);
+      return;
+    }
+
     let ready = sdkReady;
     if (!ready) {
       ready = await loadMonetag(15000);
       setSdkReady(ready);
     }
 
+    if (!ready) {
+      const retried = await preloadRewardedAd(true);
+      if (!retried) {
+        setAdRunning(false);
+        setRewardReady(false);
+        setError(t.adUnavailable);
+        return;
+      }
+    } else if (!rewardReady) {
+      const preloaded = await preloadRewardedAd();
+      if (!preloaded) {
+        setAdRunning(false);
+        setError(t.adUnavailable);
+        return;
+      }
+    }
+
     const fnName = `show_${MONETAG_ZONE}`;
     const showFn = window[fnName];
 
-    const startedAt = Date.now();
-
-    // Helper: count this view if user genuinely watched 15s+
-    const finishWithTimerCheck = (success: boolean) => {
-      const elapsed = (Date.now() - startedAt) / 1000;
-      if (elapsed >= MIN_AD_DURATION_SEC) {
-        setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
-        setInfo(t.counted);
-      } else if (!success) {
-        // Ad rejected immediately (no-fill / blocked). Start a 15s wait so user
-        // isn't stuck — Monetag itself sometimes returns instantly when no ad available.
-        setInfo(t.watching);
-        const waitMs = MIN_AD_DURATION_SEC * 1000 - (Date.now() - startedAt);
-        setTimeout(() => {
-          setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
-          setInfo(t.counted);
-          setAdRunning(false);
-        }, Math.max(0, waitMs));
-        return false;
-      } else {
-        setError(t.notCounted);
-      }
-      return true;
-    };
-
     if (typeof showFn !== "function") {
-      // SDK never loaded (blocked / no network). Fall back to a 15s timer so the
-      // flow still works during testing / when the ad network is unreachable.
-      setInfo(t.watching);
-      setTimeout(() => {
-        setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
-        setInfo(t.counted);
-        setAdRunning(false);
-      }, MIN_AD_DURATION_SEC * 1000);
+      setAdRunning(false);
+      setRewardReady(false);
+      setError(t.adUnavailable);
       return;
     }
 
     try {
-      if (adType === "rewarded") {
-        await showFn();
-      } else {
-        await showFn({
-          type: "inApp",
-          inAppSettings: {
-            frequency: 1,
-            capping: 0.05,
-            interval: 15,
-            timeout: 5,
-            everyPage: false,
-          },
-        });
-      }
-      const done = finishWithTimerCheck(true);
-      if (done) setAdRunning(false);
+      const trackingId = buildMonetagTrackingId(userId, views + 1);
+      await showFn({ ymid: trackingId, requestVar: MONETAG_REQUEST_VAR });
+      setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
+      setRewardReady(false);
+      setInfo(t.counted);
+      await preloadRewardedAd();
     } catch {
-      const done = finishWithTimerCheck(false);
-      if (done) setAdRunning(false);
+      setRewardReady(false);
+      setError(t.adUnavailable);
+      await preloadRewardedAd(true);
+    } finally {
+      setAdRunning(false);
     }
   };
 
@@ -713,24 +802,6 @@ export default function MiniApp() {
                       <ExternalLink className="w-4 h-4 text-white/30 group-hover:text-white/80 transition" />
                     </div>
                   </button>
-
-                  <button
-                    onClick={() => setAdType("inApp")}
-                    className="text-left p-3.5 rounded-2xl bg-gradient-to-br from-cyan-500/15 to-sky-600/5 border border-cyan-400/30 hover:border-cyan-300/60 transition group active:scale-[0.99]"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-cyan-500 to-sky-600 flex items-center justify-center shadow-lg shadow-cyan-500/40">
-                        <Sparkles className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-bold text-[14px]">{t.inApp}</div>
-                        <div className="text-[11px] text-white/55 mt-0.5 leading-snug">
-                          {t.inAppDesc}
-                        </div>
-                      </div>
-                      <ExternalLink className="w-4 h-4 text-white/30 group-hover:text-white/80 transition" />
-                    </div>
-                  </button>
                 </div>
               </>
             )}
@@ -740,10 +811,15 @@ export default function MiniApp() {
               <div className="mb-5">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[11px] uppercase tracking-wider text-white/55 font-semibold">
-                    {adType === "rewarded" ? t.rewarded : t.inApp}
+                    {t.rewarded}
                     {!sdkReady && (
                       <span className="ml-2 text-amber-300 normal-case tracking-normal">
                         · {t.sdkLoading}
+                      </span>
+                    )}
+                    {sdkReady && rewardReady && (
+                      <span className="ml-2 text-emerald-300 normal-case tracking-normal">
+                        · {t.rewardReady}
                       </span>
                     )}
                   </span>
