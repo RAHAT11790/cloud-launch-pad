@@ -484,33 +484,28 @@ const Index = () => {
     return URL.createObjectURL(blob);
   }, []);
 
-  // Continue watching data (per-device)
+  // Continue watching data (per-account, NOT per-device)
   const [continueWatching, setContinueWatching] = useState<any[]>([]);
 
-  // Load continue watching from Firebase - per device
+  // Load continue watching from Firebase - per ACCOUNT
   useEffect(() => {
     if (!isLoggedIn) return;
     try {
       const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
       if (!u.id) return;
-      // Get device-specific watch history
-      import("@/lib/premiumDevice").then(({ getDeviceId }) => {
-        const deviceId = getDeviceId();
-        const whRef = ref(db, `users/${u.id}/watchHistory/${deviceId}`);
-        const unsub = onValue(whRef, (snapshot) => {
-          const data = snapshot.val() || {};
-          const items = Object.values(data) as any[];
-          const withProgress = items.filter((i: any) => {
-            if (i.id?.startsWith('as_')) return true;
-            return i.currentTime && i.duration && (i.currentTime / i.duration) < 0.95;
-          });
-          withProgress.sort((a: any, b: any) => (b.watchedAt || 0) - (a.watchedAt || 0));
-          setContinueWatching(withProgress);
+      const whRef = ref(db, `users/${u.id}/watchHistory`);
+      const unsub = onValue(whRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        // Skip legacy per-device nested keys (objects without `id` field)
+        const items = Object.values(data).filter((v: any) => v && typeof v === "object" && v.id) as any[];
+        const withProgress = items.filter((i: any) => {
+          if (i.id?.startsWith('as_')) return true;
+          return i.currentTime && i.duration && (i.currentTime / i.duration) < 0.95;
         });
-        // Store unsub for cleanup
-        (window as any).__rs_cw_unsub = unsub;
+        withProgress.sort((a: any, b: any) => (b.watchedAt || 0) - (a.watchedAt || 0));
+        setContinueWatching(withProgress);
       });
-      return () => { (window as any).__rs_cw_unsub?.(); };
+      return () => unsub();
     } catch {}
   }, [isLoggedIn]);
 
@@ -1186,10 +1181,10 @@ const Index = () => {
 
         if (preserveProgress) {
           import("@/lib/firebase").then(({ update }) => {
-            update(ref(db, `users/${userId}/watchHistory/${deviceId}/${anime.id}`), historyItem).catch(() => {});
+            update(ref(db, `users/${userId}/watchHistory/${anime.id}`), historyItem).catch(() => {});
           });
         } else {
-          set(ref(db, `users/${userId}/watchHistory/${deviceId}/${anime.id}`), historyItem);
+          set(ref(db, `users/${userId}/watchHistory/${anime.id}`), historyItem);
         }
       });
     } catch (e) {
