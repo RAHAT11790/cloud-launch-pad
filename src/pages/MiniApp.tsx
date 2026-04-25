@@ -757,13 +757,15 @@ export default function MiniApp() {
         </div>
 
         {/* USER PROFILE CARD — auto-detected from start link */}
-        {mode === "site" && (
+        {/* USER PROFILE CARD — works for website, Telegram, and external API users */}
+        {userId && (
           <div className="mb-4 rounded-2xl bg-gradient-to-br from-white/[0.07] to-white/[0.02] border border-white/10 p-3 flex items-center gap-3 backdrop-blur-xl">
             <div className="relative w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-fuchsia-500/40 to-cyan-500/40 flex items-center justify-center border border-white/15 flex-shrink-0">
               {profile?.photoURL ? (
                 <img
                   src={profile.photoURL}
                   alt=""
+                  referrerPolicy="no-referrer"
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = "none";
@@ -771,6 +773,11 @@ export default function MiniApp() {
                 />
               ) : (
                 <UserIcon className="w-5 h-5 text-white/80" />
+              )}
+              {profile?.source === "telegram" && (
+                <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#27a7e7] border-2 border-[#0a0a14] flex items-center justify-center text-[8px] font-bold text-white">
+                  T
+                </div>
               )}
             </div>
             <div className="flex-1 min-w-0">
@@ -787,11 +794,15 @@ export default function MiniApp() {
                   <div className="text-sm font-bold truncate">
                     {profile.name}
                   </div>
-                  {profile.email && (
+                  {profile.username ? (
+                    <div className="text-[10px] text-cyan-300/80 truncate">
+                      @{profile.username}
+                    </div>
+                  ) : profile.email ? (
                     <div className="text-[10px] text-white/50 truncate">
                       {profile.email}
                     </div>
-                  )}
+                  ) : null}
                 </>
               ) : (
                 <div className="text-xs text-rose-300 flex items-center gap-1">
@@ -799,9 +810,9 @@ export default function MiniApp() {
                 </div>
               )}
             </div>
-            {profile && (
+            {profile?.tag && (
               <div className="text-[9px] font-mono px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/60 flex-shrink-0">
-                #{(profile.id || "").slice(0, 6)}
+                #{profile.tag}
               </div>
             )}
           </div>
