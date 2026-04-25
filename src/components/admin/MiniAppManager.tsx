@@ -30,9 +30,10 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
   const [stats, setStats] = useState<any>({});
   const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([]);
   const [enabled, setEnabled] = useState(false);
-  const [botUsername, setBotUsername] = useState("");
+  const [botUsername, setBotUsername] = useState("Rs_forwards_bot");
   const [newLabel, setNewLabel] = useState("");
   const [newRedirect, setNewRedirect] = useState("");
+  const [setupBusy, setSetupBusy] = useState(false);
 
   useEffect(() => {
     const u1 = onValue(ref(db, "miniApp/stats"), (snap) => setStats(snap.val() || {}));
@@ -45,7 +46,10 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
       setApiKeys(arr);
     });
     const u3 = onValue(ref(db, "settings/unlockViaTelegramMini"), (snap) => setEnabled(snap.val() === true));
-    const u4 = onValue(ref(db, "settings/telegramMiniBotUsername"), (snap) => setBotUsername(String(snap.val() || "")));
+    const u4 = onValue(ref(db, "settings/telegramMiniBotUsername"), (snap) => {
+      const v = String(snap.val() || "").trim();
+      setBotUsername(v || "Rs_forwards_bot");
+    });
     return () => { u1(); u2(); u3(); u4(); };
   }, []);
 
@@ -53,6 +57,27 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
     await set(ref(db, "settings/unlockViaTelegramMini"), enabled);
     await set(ref(db, "settings/telegramMiniBotUsername"), botUsername.trim().replace(/^@/, ""));
     toast.success("Settings saved");
+  };
+
+  const setupBotMenu = async () => {
+    setSetupBusy(true);
+    try {
+      const r = await fetch(
+        `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/mini-app`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "setup-bot", miniUrl: `${window.location.origin}/mini` }),
+        },
+      );
+      const data = await r.json();
+      if (data?.ok) toast.success("✅ Bot menu button set! Open the bot in Telegram.");
+      else toast.error(`Setup failed: ${data?.telegram?.description || data?.error || "unknown"}`);
+    } catch (e: any) {
+      toast.error(`Setup error: ${e?.message || "unknown"}`);
+    } finally {
+      setSetupBusy(false);
+    }
   };
 
   const createKey = async () => {
