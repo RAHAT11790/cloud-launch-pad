@@ -1866,7 +1866,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   {adLinks.map((link, i) => (
                     <button
                       key={link.service.id || i}
-                      onClick={() => handleOpenAdLink(link.shortUrl)}
+                      onClick={() => handleOpenAdLink(link.shortUrl, link.service)}
                       className="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all hover:scale-105 text-white"
                       style={{ background: link.service.color || (i === 0 ? "linear-gradient(135deg, #6366f1, #8b5cf6)" : "linear-gradient(135deg, #f59e0b, #ef4444)") }}
                     >
