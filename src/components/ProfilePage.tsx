@@ -551,7 +551,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
       }
     });
 
-    return () => { unsub1(); (window as any).__rs_wh_unsub?.(); unsub3(); unsub4(); unsub5(); };
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); };
   }, [userId]);
 
   const formatRemainingTime = (ms: number) => {
