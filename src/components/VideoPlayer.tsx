@@ -253,6 +253,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [deviceBlocked, setDeviceBlocked] = useState(false);
   const [deviceBlockInfo, setDeviceBlockInfo] = useState<{ maxDevices: number; currentCount: number } | null>(null);
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
+  const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
   const [unlockBlocked, setUnlockBlocked] = useState(false);
 
   useEffect(() => {
@@ -291,6 +292,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!uid) {
       setUserFreeAccessExpiresAt(0);
       setUnlockBlocked(false);
+      setFreeAccessLoaded(true);
       return;
     }
 
@@ -303,6 +305,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       } else {
         setUserFreeAccessExpiresAt(0);
       }
+      setFreeAccessLoaded(true);
+    }, () => {
+      // On error, mark loaded so UI doesn't hang forever
+      setFreeAccessLoaded(true);
     });
 
     const unsubBlocked = onValue(ref(db, `users/${uid}/security/unlockBlocked`), (snap) => {
@@ -422,9 +428,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, [isPremium, videoServers]);
 
-  // Ad gate - only run after premium check completes
+  // Ad gate - only run after premium AND freeAccess data have loaded
   useEffect(() => {
     if (isPremium === null) return; // still loading premium status
+    if (!freeAccessLoaded) return; // wait for Firebase freeAccess snapshot — prevents unlock-button flash
 
     const uid = getLocalUserId();
     if (!uid) {
@@ -461,7 +468,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         else setAdGateActive(false);
       }).catch(() => { setShortenLoading(false); setAdGateActive(false); });
     });
-  }, [isPremium, has24hAccess, unlockBlocked]);
+  }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
 
   const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
     try {
