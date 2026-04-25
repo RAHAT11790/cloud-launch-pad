@@ -925,6 +925,19 @@ export default function MiniApp() {
                 <p className="text-[11px] text-white/60 mb-2">
                   {t.fallbackDesc}
                 </p>
+                <button
+                  onClick={() => {
+                    try {
+                      const tg = window.Telegram?.WebApp;
+                      if (tg?.openLink) { tg.openLink(fallbackUrl, { try_instant_view: false }); return; }
+                    } catch {}
+                    window.open(fallbackUrl, "_blank");
+                  }}
+                  className="w-full py-2.5 mb-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-400 text-black font-bold text-xs flex items-center justify-center gap-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  {t.openInBrowser}
+                </button>
                 <div className="flex items-center gap-1 p-2 rounded-lg bg-black/40 text-[11px] font-mono break-all">
                   <span className="flex-1 break-all">{fallbackUrl}</span>
                   <button
