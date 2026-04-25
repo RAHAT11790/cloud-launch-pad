@@ -5205,15 +5205,40 @@ ${tgHashtags}`;
                         <X size={14} /> বাদ দিন
                       </button>
                       <button onClick={async () => {
-                        await sendTelegramPost();
+                        // Step 1: Send the in-app notification first (existing flow already added the release entry)
+                        // Step 2: Auto-redirect to Telegram Post section with anime preselected
+                        const ctx = wsNotifyContextRef.current;
+                        const seriesId = ctx?.seriesId || "";
+                        toast.success("✅ নোটিফিকেশন পাঠানো হয়েছে — টেলিগ্রাম পোস্টে রিডাইরেক্ট হচ্ছে...");
                         setWsSaveNotifyModal(false);
                         setWsNotifyStep("release");
                         setWsNotifySeason("");
                         setWsNotifyEpisode("");
                         wsNotifyContextRef.current = null;
-                      }} disabled={tgSending || !tgTitle.trim()} className="flex-1 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-center gap-2 disabled:opacity-50">
-                        {tgSending ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <Send size={14} />}
-                        পাঠান
+                        // Switch section then preselect — find the matching release (most recent for this seriesId)
+                        setActiveSection("telegram-post");
+                        setTimeout(() => {
+                          const matching = releasesData.find(r => r.contentId === seriesId);
+                          if (matching) {
+                            fillTelegramFromRelease(matching.id);
+                          } else if (seriesId) {
+                            // Fallback: fill directly from webseries data
+                            const ws = webseriesData.find(s => s.id === seriesId);
+                            if (ws) {
+                              setTgSelectedRelease(seriesId);
+                              setTgTitle(ws.title || "");
+                              const backdrop = ws.backdrop || ws.poster || "";
+                              setTgPosterUrl(backdrop.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
+                              if (ws.rating) setTgRating(String(ws.rating));
+                              if (ws.category) setTgGenres(ws.category);
+                              if (ws.language) setTgLanguages(ws.language);
+                              setTgDubType(ws.dubType === "fandub" ? "fandub" : "official");
+                              setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(seriesId)}`);
+                            }
+                          }
+                        }, 350);
+                      }} disabled={!tgTitle.trim()} className="flex-1 py-3 rounded-lg text-sm font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-center gap-2 disabled:opacity-50">
+                        <Send size={14} /> পোস্টে যান
                       </button>
                     </div>
                   </div>
