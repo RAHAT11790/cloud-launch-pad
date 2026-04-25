@@ -780,11 +780,6 @@ export default function MiniApp() {
               ) : (
                 <UserIcon className="w-5 h-5 text-white/80" />
               )}
-              {profile?.source === "telegram" && (
-                <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#27a7e7] border-2 border-[#0a0a14] flex items-center justify-center text-[8px] font-bold text-white">
-                  T
-                </div>
-              )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[10px] uppercase tracking-wider text-white/50 leading-none mb-0.5">
@@ -816,11 +811,6 @@ export default function MiniApp() {
                 </div>
               )}
             </div>
-            {profile?.tag && (
-              <div className="text-[9px] font-mono px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/60 flex-shrink-0">
-                #{profile.tag}
-              </div>
-            )}
           </div>
         )}
 
