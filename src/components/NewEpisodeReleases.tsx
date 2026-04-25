@@ -1,9 +1,11 @@
 import { useState, useEffect, forwardRef, useMemo } from "react";
 import { Zap, ChevronRight, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { db, ref, onValue } from "@/lib/firebase";
+import { db, ref, onValue, remove } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
+
+const NEW_RELEASE_TTL_MS = 36 * 60 * 60 * 1000; // 36 hours
 
 interface EpisodeRelease {
   id: string;
