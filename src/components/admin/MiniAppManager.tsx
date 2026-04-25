@@ -30,7 +30,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
   const [stats, setStats] = useState<any>({});
   const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([]);
   const [enabled, setEnabled] = useState(false);
-  const [botUsername, setBotUsername] = useState("Rs_forwards_bot");
+  const [botUsername, setBotUsername] = useState("RS_ANIME_ACCESS_BOT");
   const [newLabel, setNewLabel] = useState("");
   const [newRedirect, setNewRedirect] = useState("");
   const [setupBusy, setSetupBusy] = useState(false);
@@ -48,7 +48,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
     const u3 = onValue(ref(db, "settings/unlockViaTelegramMini"), (snap) => setEnabled(snap.val() === true));
     const u4 = onValue(ref(db, "settings/telegramMiniBotUsername"), (snap) => {
       const v = String(snap.val() || "").trim();
-      setBotUsername(v || "Rs_forwards_bot");
+      setBotUsername(v || "RS_ANIME_ACCESS_BOT");
     });
     return () => { u1(); u2(); u3(); u4(); };
   }, []);
