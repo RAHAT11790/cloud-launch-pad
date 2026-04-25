@@ -4432,9 +4432,7 @@ ${tgHashtags}`;
               </div>
             )}
 
-            {seriesTab === "ws-weekly" && (
-              <WeeklyEpManager onEditSeries={(id) => editSeries(id)} />
-            )}
+            {/* Weekly EP manager removed */}
 
             {(seriesTab === "ws-add" || seriesTab === "ws-manual") && (
               <div>
