@@ -123,18 +123,30 @@ const STR: Record<Lang, Record<string, string>> = {
 };
 
 // Robust SDK loader with retries + waits for the show_<zone> function to register
-function loadMonetag(maxWaitMs = 12000): Promise<boolean> {
+function loadMonetag(maxWaitMs = 15000): Promise<boolean> {
   return new Promise((resolve) => {
     const fnName = `show_${MONETAG_ZONE}`;
     if (typeof window[fnName] === "function") return resolve(true);
 
     // Inject script if not present
-    if (!document.querySelector(`script[data-zone="${MONETAG_ZONE}"]`)) {
-      const s = document.createElement("script");
+    let s = document.querySelector(
+      `script[data-zone="${MONETAG_ZONE}"]`,
+    ) as HTMLScriptElement | null;
+    if (!s) {
+      s = document.createElement("script");
       s.src = MONETAG_SDK;
       s.setAttribute("data-zone", MONETAG_ZONE);
       s.setAttribute("data-sdk", `show_${MONETAG_ZONE}`);
       s.async = true;
+      s.onerror = () => {
+        // Retry once with cache-buster
+        const r = document.createElement("script");
+        r.src = `${MONETAG_SDK}?_=${Date.now()}`;
+        r.setAttribute("data-zone", MONETAG_ZONE);
+        r.setAttribute("data-sdk", `show_${MONETAG_ZONE}`);
+        r.async = true;
+        document.head.appendChild(r);
+      };
       document.head.appendChild(s);
     }
 
@@ -143,7 +155,7 @@ function loadMonetag(maxWaitMs = 12000): Promise<boolean> {
     const tick = () => {
       if (typeof window[fnName] === "function") return resolve(true);
       if (Date.now() - started > maxWaitMs) return resolve(false);
-      setTimeout(tick, 200);
+      setTimeout(tick, 150);
     };
     tick();
   });
