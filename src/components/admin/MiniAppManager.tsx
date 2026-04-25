@@ -216,38 +216,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
           )}
           {apiKeys.map((k) => {
             const fullUrl = `${miniUrl}?key=${k.key}&user=USER_ID`;
-            return (
-              <div key={k.id} className="p-3 rounded-lg bg-muted/40 border border-border/50 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${k.enabled ? "bg-emerald-500" : "bg-gray-400"}`} />
-                  <span className="font-medium text-sm flex-1 truncate">{k.label}</span>
-                  <span className="text-xs text-muted-foreground">{k.uses || 0} uses</span>
-                  <button onClick={() => toggleKey(k.id, k.enabled)} className="p-1.5 hover:bg-muted rounded" title="Toggle">
-                    <Power className={`w-3.5 h-3.5 ${k.enabled ? "text-emerald-500" : "text-gray-400"}`} />
-                  </button>
-                  <button onClick={() => deleteKey(k.id)} className="p-1.5 hover:bg-muted rounded text-red-500">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div className="flex items-center gap-2 p-2 rounded bg-background/50 text-xs font-mono break-all">
-                  <span className="opacity-60">key:</span> {k.key}
-                  <button onClick={() => copy(k.key)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
-                    <Copy className="w-3 h-3" />
-                  </button>
-                </div>
-                <div className="flex items-center gap-2 p-2 rounded bg-background/50 text-xs font-mono break-all">
-                  <span className="opacity-60">url:</span> {fullUrl}
-                  <button onClick={() => copy(fullUrl)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
-                    <Copy className="w-3 h-3" />
-                  </button>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <ExternalLink className="w-3 h-3 opacity-60" />
-                  <span className="opacity-60">redirect:</span>
-                  <span className="truncate">{k.redirectUrl}</span>
-                </div>
-              </div>
-            );
+            return <ApiKeyRow key={k.id} k={k} fullUrl={fullUrl} miniUrl={miniUrl} copy={copy} toggleKey={toggleKey} deleteKey={deleteKey} />;
           })}
         </div>
       </div>
