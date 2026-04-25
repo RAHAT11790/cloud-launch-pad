@@ -802,24 +802,6 @@ export default function MiniApp() {
                       <ExternalLink className="w-4 h-4 text-white/30 group-hover:text-white/80 transition" />
                     </div>
                   </button>
-
-                  <button
-                    onClick={() => setAdType("inApp")}
-                    className="text-left p-3.5 rounded-2xl bg-gradient-to-br from-cyan-500/15 to-sky-600/5 border border-cyan-400/30 hover:border-cyan-300/60 transition group active:scale-[0.99]"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-cyan-500 to-sky-600 flex items-center justify-center shadow-lg shadow-cyan-500/40">
-                        <Sparkles className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-bold text-[14px]">{t.inApp}</div>
-                        <div className="text-[11px] text-white/55 mt-0.5 leading-snug">
-                          {t.inAppDesc}
-                        </div>
-                      </div>
-                      <ExternalLink className="w-4 h-4 text-white/30 group-hover:text-white/80 transition" />
-                    </div>
-                  </button>
                 </div>
               </>
             )}
@@ -829,10 +811,15 @@ export default function MiniApp() {
               <div className="mb-5">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[11px] uppercase tracking-wider text-white/55 font-semibold">
-                    {adType === "rewarded" ? t.rewarded : t.inApp}
+                    {t.rewarded}
                     {!sdkReady && (
                       <span className="ml-2 text-amber-300 normal-case tracking-normal">
                         · {t.sdkLoading}
+                      </span>
+                    )}
+                    {sdkReady && rewardReady && (
+                      <span className="ml-2 text-emerald-300 normal-case tracking-normal">
+                        · {t.rewardReady}
                       </span>
                     )}
                   </span>
