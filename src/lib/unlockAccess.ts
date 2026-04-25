@@ -131,6 +131,11 @@ export const createUnlockLinksForAllServices = async (): Promise<{ ok: boolean; 
 
   const results: { service: AdService; shortUrl: string }[] = [];
   await Promise.all(services.map(async (svc) => {
+    // Mini App mode: no shortener — VideoPlayer will redirect to Telegram instead
+    if (svc.mode === "miniapp") {
+      results.push({ service: svc, shortUrl: "miniapp://telegram" });
+      return;
+    }
     const token = randomToken();
     await set(ref(db, `unlockTokens/${token}`), {
       token,
