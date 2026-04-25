@@ -68,7 +68,7 @@ const startKeyboard = {
     [
       {
         text: "🎁 Open Mini App",
-        web_app: { url: MINI_APP_URL },
+        web_app: { url: `${MINI_APP_URL}?entry=telegram` },
       },
     ],
     [
@@ -181,7 +181,10 @@ serve(async (req) => {
     }
 
     if (action === "set-menu") {
-      const miniUrl = String(body?.miniUrl || MINI_APP_URL).trim();
+      const requestedMiniUrl = String(body?.miniUrl || MINI_APP_URL).trim();
+      const miniUrl = requestedMiniUrl.includes("?")
+        ? `${requestedMiniUrl}&entry=telegram`
+        : `${requestedMiniUrl}?entry=telegram`;
       const r = await fetch(`${base}/setChatMenuButton`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
