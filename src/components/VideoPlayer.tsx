@@ -462,9 +462,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [isPremium, has24hAccess, unlockBlocked]);
 
   const handleOpenAdLink = useCallback(async (url: string) => {
-    // If admin enabled "unlock via Telegram bot", redirect to bot deep-link instead
+    // Priority 1: Telegram Mini App unlock (Monetag-monetized, requires bot interaction)
     try {
-      const snap = await import("@/lib/firebase").then(m => m.get(m.ref(m.db, "settings/unlockViaTelegramBot")));
+      const fb = await import("@/lib/firebase");
+      const miniSnap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramMini"));
+      if (miniSnap.val() === true) {
+        const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramMiniBotUsername"));
+        const botUsername = String(botSnap.val() || "").replace(/^@/, "").trim();
+        const uid = getLocalUserId();
+        if (botUsername && uid) {
+          // startapp param is forwarded by Telegram into the WebApp's start_param
+          window.location.href = `https://t.me/${botUsername}?startapp=u_${encodeURIComponent(uid)}`;
+          return;
+        }
+      }
+      // Priority 2: legacy Telegram bot deep-link unlock
+      const snap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramBot"));
       if (snap.val() === true) {
         const r = await createTelegramBotUnlockLink();
         if (r.ok && r.deepLink) { window.location.href = r.deepLink; return; }
