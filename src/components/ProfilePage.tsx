@@ -491,40 +491,25 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
   const [deviceExceeded, setDeviceExceeded] = useState(false);
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
 
-  // PWA install prompt — captured beforeinstallprompt for "Download APK"
-  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
-  const [isAppInstalled, setIsAppInstalled] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia?.("(display-mode: standalone)")?.matches
-      || (window.navigator as any).standalone === true;
-  });
+  // User APK download URL — set by admin in Branding settings (settings/branding/userApkUrl)
+  const [userApkUrl, setUserApkUrl] = useState<string>("");
   useEffect(() => {
-    const handler = (e: any) => {
-      e.preventDefault();
-      setInstallPromptEvent(e);
-    };
-    const installedHandler = () => { setIsAppInstalled(true); setInstallPromptEvent(null); };
-    window.addEventListener("beforeinstallprompt", handler);
-    window.addEventListener("appinstalled", installedHandler);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handler);
-      window.removeEventListener("appinstalled", installedHandler);
-    };
+    const unsub = onValue(ref(db, "settings/branding/userApkUrl"), (snap) => {
+      setUserApkUrl(String(snap.val() || "").trim());
+    });
+    return () => unsub();
   }, []);
-  const handleInstallApp = async () => {
-    if (installPromptEvent) {
-      try {
-        installPromptEvent.prompt();
-        const choice = await installPromptEvent.userChoice;
-        if (choice?.outcome === "accepted") {
-          setIsAppInstalled(true);
-        }
-        setInstallPromptEvent(null);
-      } catch {}
-    } else {
-      // Fallback: Chrome 'Add to Home screen' instruction
-      alert("Open Chrome menu (⋮) → \"Install app\" or \"Add to Home screen\" to install this app as APK.");
-    }
+  const handleDownloadUserApk = () => {
+    if (!userApkUrl) return;
+    // Force download via anchor with download attribute (works in Chrome external browser)
+    const a = document.createElement("a");
+    a.href = userApkUrl;
+    a.download = "";
+    a.rel = "noopener noreferrer";
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const getUserId = (): string | null => {
