@@ -468,6 +468,42 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
   const [deviceExceeded, setDeviceExceeded] = useState(false);
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
 
+  // PWA install prompt — captured beforeinstallprompt for "Download APK"
+  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
+  const [isAppInstalled, setIsAppInstalled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia?.("(display-mode: standalone)")?.matches
+      || (window.navigator as any).standalone === true;
+  });
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setInstallPromptEvent(e);
+    };
+    const installedHandler = () => { setIsAppInstalled(true); setInstallPromptEvent(null); };
+    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", installedHandler);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", installedHandler);
+    };
+  }, []);
+  const handleInstallApp = async () => {
+    if (installPromptEvent) {
+      try {
+        installPromptEvent.prompt();
+        const choice = await installPromptEvent.userChoice;
+        if (choice?.outcome === "accepted") {
+          setIsAppInstalled(true);
+        }
+        setInstallPromptEvent(null);
+      } catch {}
+    } else {
+      // Fallback: Chrome 'Add to Home screen' instruction
+      alert("Open Chrome menu (⋮) → \"Install app\" or \"Add to Home screen\" to install this app as APK.");
+    }
+  };
+
   const getUserId = (): string | null => {
     try {
       const user = localStorage.getItem("rsanime_user");
