@@ -76,6 +76,7 @@ const AccessTimer = () => {
   const [hasAccess, setHasAccess] = useState(false);
   const [paused, setPaused] = useState(false);
   const [globalFree, setGlobalFree] = useState<{ active: boolean; expiresAt: number } | null>(null);
+  const [userFreeExpiry, setUserFreeExpiry] = useState<number>(0);
 
   // Check maintenance status and pause/extend timer
   useEffect(() => {
@@ -114,9 +115,28 @@ const AccessTimer = () => {
     return () => unsub();
   }, []);
 
+  // Listen for UID-based free access (primary source — works across devices)
+  useEffect(() => {
+    let uid: string | null = null;
+    try {
+      const u = localStorage.getItem("rsanime_user");
+      if (u) uid = JSON.parse(u).id;
+    } catch {}
+    if (!uid) { setUserFreeExpiry(0); return; }
+    const unsub = onValue(ref(db, `users/${uid}/freeAccess`), (snap) => {
+      const data = snap.val();
+      if (data?.active && Number(data.expiresAt) > Date.now()) {
+        setUserFreeExpiry(Number(data.expiresAt));
+      } else {
+        setUserFreeExpiry(0);
+      }
+    });
+    return () => unsub();
+  }, []);
+
   useEffect(() => {
     const tick = () => {
-      // Check global free access first
+      // Priority 1: Global free access
       if (globalFree?.active && globalFree.expiresAt > Date.now()) {
         setHasAccess(true);
         const diff = globalFree.expiresAt - Date.now();
@@ -126,10 +146,13 @@ const AccessTimer = () => {
         setTimeLeft(`${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`);
         return;
       }
-      const expiry = localStorage.getItem("rsanime_ad_access");
-      if (!expiry) { setHasAccess(false); setTimeLeft(null); return; }
-      const diff = parseInt(expiry) - Date.now();
-      if (diff <= 0) { setHasAccess(false); setTimeLeft(null); return; }
+      // Priority 2: UID-based free access from Firebase (cross-device, persistent)
+      const localExpiry = parseInt(localStorage.getItem("rsanime_ad_access") || "0");
+      const effectiveExpiry = Math.max(userFreeExpiry, localExpiry);
+      if (effectiveExpiry <= Date.now()) {
+        setHasAccess(false); setTimeLeft(null); return;
+      }
+      const diff = effectiveExpiry - Date.now();
       setHasAccess(true);
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
@@ -139,7 +162,7 @@ const AccessTimer = () => {
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [globalFree]);
+  }, [globalFree, userFreeExpiry]);
 
   return (
     <div className="mb-5">
