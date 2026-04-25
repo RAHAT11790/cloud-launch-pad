@@ -479,7 +479,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
       if (isMiniMode || globalMini) {
         const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramMiniBotUsername"));
-        const botUsername = String(botSnap.val() || "Rs_forwards_bot").replace(/^@/, "").trim();
+        const botUsername = String(botSnap.val() || "RS_ANIME_ACCESS_BOT").replace(/^@/, "").trim();
         const uid = getLocalUserId();
         if (botUsername && uid) {
           // startapp param is forwarded by Telegram into the WebApp's start_param
