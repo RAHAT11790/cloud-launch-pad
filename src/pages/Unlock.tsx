@@ -13,6 +13,38 @@ const Unlock = () => {
 
   useEffect(() => {
     const doUnlock = async () => {
+      // ===== Mini App fallback token mode =====
+      const miniToken = searchParams.get("mini") || "";
+      if (miniToken) {
+        try {
+          const r = await fetch(
+            `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/mini-app`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "consume-fallback-token", token: miniToken }),
+            },
+          );
+          const data = await r.json();
+          if (!r.ok || !data?.ok) {
+            setStatus("denied");
+            setTimeout(() => navigate("/", { replace: true }), 2500);
+            return;
+          }
+          const expiry = Number(data.expiresAt) || (Date.now() + 24 * 3600 * 1000);
+          localStorage.setItem("rsanime_ad_access", expiry.toString());
+          const hours = Math.floor((expiry - Date.now()) / 3600000);
+          setPrizeHours(hours || 24);
+          setPrizeMinutes(0);
+          setStatus("success");
+          setTimeout(() => navigate("/", { replace: true }), 4000);
+        } catch {
+          setStatus("denied");
+          setTimeout(() => navigate("/", { replace: true }), 2500);
+        }
+        return;
+      }
+
       const token = searchParams.get("t") || "";
       const userId = getLocalUserId();
 
