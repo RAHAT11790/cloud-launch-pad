@@ -8282,23 +8282,16 @@ ${tgHashtags}`;
                     // Build full list of ALL content with their view counts
                     const fullList = [
                       ...webseriesData.map(ws => {
-                        let todayViews = 0;
-                        let totalViews = 0;
                         const viewData = analyticsViews[ws.id];
-                        if (viewData) {
-                          if (viewData[today]) todayViews = Object.keys(viewData[today]).length;
-                          Object.values(viewData).forEach((dayUsers: any) => { totalViews += Object.keys(dayUsers || {}).length; });
-                        }
+                        const todayViews = viewData?.[today] ? Object.keys(viewData[today]).length : 0;
+                        // All-time = persistent counter (survives daily cleanup)
+                        const totalViews = Number(allTimeTotals[ws.id]?.count || 0);
                         return { id: ws.id, title: ws.title || "Untitled", poster: ws.poster || "", type: "Series", todayViews, totalViews };
                       }),
                       ...moviesData.map(mv => {
-                        let todayViews = 0;
-                        let totalViews = 0;
                         const viewData = analyticsViews[mv.id];
-                        if (viewData) {
-                          if (viewData[today]) todayViews = Object.keys(viewData[today]).length;
-                          Object.values(viewData).forEach((dayUsers: any) => { totalViews += Object.keys(dayUsers || {}).length; });
-                        }
+                        const todayViews = viewData?.[today] ? Object.keys(viewData[today]).length : 0;
+                        const totalViews = Number(allTimeTotals[mv.id]?.count || 0);
                         return { id: mv.id, title: mv.title || "Untitled", poster: mv.poster || "", type: "Movie", todayViews, totalViews };
                       }),
                     ];
