@@ -339,7 +339,10 @@ export default function MiniApp() {
   const externalPhoto = params.get("p") || params.get("photo") || "";
   const shortId = params.get("s") || "";
 
-  const websiteStartUserId = useMemo(() => {
+  // Parse start_param from website. Format: u_<uid>            (legacy)
+  //                                       u_<uid>_src_app     (came from installed PWA)
+  //                                       u_<uid>_src_web     (came from Chrome browser)
+  const { websiteStartUserId, websiteSource } = useMemo(() => {
     const candidates = [
       params.get("tgWebAppStartParam") || "",
       params.get("startapp") || "",
@@ -351,11 +354,15 @@ export default function MiniApp() {
       if (typeof raw !== "string") continue;
       const value = raw.trim();
       if (!value.startsWith("u_")) continue;
-      const decoded = decodeURIComponent(value.slice(2)).trim();
-      if (decoded) return decoded;
+      const body = decodeURIComponent(value.slice(2)).trim();
+      if (!body) continue;
+      // Try to split optional "_src_app" / "_src_web" suffix
+      const m = body.match(/^(.+?)_src_(app|web)$/);
+      if (m) return { websiteStartUserId: m[1], websiteSource: m[2] as "app" | "web" };
+      return { websiteStartUserId: body, websiteSource: "" as "" };
     }
 
-    return "";
+    return { websiteStartUserId: "", websiteSource: "" as "" };
   }, [params]);
 
   // Resolve user identity. We track Telegram users separately from website users.
