@@ -1197,13 +1197,10 @@ const Index = () => {
       const userId = JSON.parse(user).id;
       if (!userId || !playerState.anime.id) return;
 
-      import("@/lib/premiumDevice").then(({ getDeviceId }) => {
-        const deviceId = getDeviceId();
-        const updates: any = { currentTime, duration, watchedAt: Date.now() };
-        const histRef = ref(db, `users/${userId}/watchHistory/${deviceId}/${playerState.anime.id}`);
-        import("@/lib/firebase").then(({ update }) => {
-          update(histRef, updates).catch(() => {});
-        });
+      const updates: any = { currentTime, duration, watchedAt: Date.now() };
+      const histRef = ref(db, `users/${userId}/watchHistory/${playerState.anime.id}`);
+      import("@/lib/firebase").then(({ update }) => {
+        update(histRef, updates).catch(() => {});
       });
     } catch {}
   }, [playerState]);
