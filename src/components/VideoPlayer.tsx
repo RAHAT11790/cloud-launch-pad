@@ -468,7 +468,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         else setAdGateActive(false);
       }).catch(() => { setShortenLoading(false); setAdGateActive(false); });
     });
-  }, [isPremium, has24hAccess, unlockBlocked]);
+  }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
 
   const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
     try {
