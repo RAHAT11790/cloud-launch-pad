@@ -3870,6 +3870,7 @@ ${tgHashtags}`;
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
     { section: "email-service", icon: <Mail size={16} />, label: "Email Service" },
+    { section: "mini-app", icon: <Sparkles size={16} />, label: "Telegram Mini App" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
@@ -7050,6 +7051,11 @@ ${tgHashtags}`;
         {/* ==================== EMAIL SERVICE ==================== */}
         {activeSection === "email-service" && (
           <EmailServiceSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+        )}
+
+        {/* ==================== TELEGRAM MINI APP ==================== */}
+        {activeSection === "mini-app" && (
+          <MiniAppManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
         {/* ==================== AI CONFIG ==================== */}
