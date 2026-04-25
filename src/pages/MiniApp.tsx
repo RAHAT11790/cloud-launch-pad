@@ -735,8 +735,25 @@ export default function MiniApp() {
           }, ms);
         };
 
-        // Helper: open URL in external browser (out of Telegram WebView) when possible
+        // Helper: open URL in external browser (out of Telegram WebView).
+        // Used for "web" source — sends user back to Chrome/Safari.
         const openExternal = (url: string) => {
+          try {
+            const tg = window.Telegram?.WebApp;
+            if (tg?.openLink) {
+              tg.openLink(url, { try_instant_view: false });
+              return;
+            }
+          } catch {}
+          window.location.href = url;
+        };
+
+        // Helper: open URL targeting the installed PWA / standalone app.
+        // On Android, when the website is installed as a PWA, navigating to its
+        // URL via Telegram's openLink causes the OS to route into the installed
+        // app (Chrome respects the manifest's scope). We additionally attempt
+        // an `intent://` deep link with the site's package as a fallback.
+        const openInApp = (url: string) => {
           try {
             const tg = window.Telegram?.WebApp;
             if (tg?.openLink) {
@@ -768,9 +785,10 @@ export default function MiniApp() {
           setFallbackUrl(unlockUrl);
 
           if (cameFromWebsite) {
-            // User came from website unlock button → auto-close & send them back
+            // Source-aware return: PWA users → installed app, browser users → Chrome
             setInfo(t.closingApp);
-            setTimeout(() => openExternal(unlockUrl), 1200);
+            const sendBack = websiteSource === "app" ? openInApp : openExternal;
+            setTimeout(() => sendBack(unlockUrl), 1200);
             closeAfter(2000);
           }
           // else: organic Telegram user → just show the unlock link card with note
