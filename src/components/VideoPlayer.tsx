@@ -461,14 +461,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     });
   }, [isPremium, has24hAccess, unlockBlocked]);
 
-  const handleOpenAdLink = useCallback(async (url: string) => {
-    // Priority 1: Telegram Mini App unlock (Monetag-monetized, requires bot interaction)
+  const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
     try {
       const fb = await import("@/lib/firebase");
-      const miniSnap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramMini"));
-      if (miniSnap.val() === true) {
+
+      // Per-service Mini App mode takes priority
+      const isMiniMode = service?.mode === "miniapp";
+
+      // Global fallback: settings/unlockViaTelegramMini
+      let globalMini = false;
+      if (!isMiniMode) {
+        const miniSnap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramMini"));
+        globalMini = miniSnap.val() === true;
+      }
+
+      if (isMiniMode || globalMini) {
         const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramMiniBotUsername"));
-        const botUsername = String(botSnap.val() || "").replace(/^@/, "").trim();
+        const botUsername = String(botSnap.val() || "Rs_forwards_bot").replace(/^@/, "").trim();
         const uid = getLocalUserId();
         if (botUsername && uid) {
           // startapp param is forwarded by Telegram into the WebApp's start_param
@@ -476,14 +485,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           return;
         }
       }
-      // Priority 2: legacy Telegram bot deep-link unlock
+
+      // Priority: legacy Telegram bot deep-link unlock
       const snap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramBot"));
       if (snap.val() === true) {
         const r = await createTelegramBotUnlockLink();
         if (r.ok && r.deepLink) { window.location.href = r.deepLink; return; }
       }
     } catch {}
-    if (url) window.location.href = url;
+    if (url && url !== "miniapp://telegram") window.location.href = url;
   }, []);
 
   // Save progress every 10s
