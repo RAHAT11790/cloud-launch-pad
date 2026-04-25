@@ -232,3 +232,109 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
     </div>
   );
 }
+
+function ApiKeyRow({
+  k, fullUrl, miniUrl, copy, toggleKey, deleteKey,
+}: {
+  k: ApiKeyEntry; fullUrl: string; miniUrl: string;
+  copy: (s: string) => void;
+  toggleKey: (id: string, enabled: boolean) => void;
+  deleteKey: (id: string) => void;
+}) {
+  const [shortenInput, setShortenInput] = useState("");
+  const [shortenResult, setShortenResult] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const doShorten = async () => {
+    if (!shortenInput.trim()) { toast.error("URL required"); return; }
+    setBusy(true);
+    try {
+      const r = await fetch(
+        `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/mini-app`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "shorten", apiKey: k.key, url: shortenInput.trim() }),
+        },
+      );
+      const data = await r.json();
+      if (data?.ok && data.shortId) {
+        const s = `${miniUrl}?s=${data.shortId}`;
+        setShortenResult(s);
+        toast.success("Shortened!");
+      } else {
+        toast.error(data?.error || "Failed");
+      }
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="p-3 rounded-lg bg-muted/40 border border-border/50 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className={`w-2 h-2 rounded-full ${k.enabled ? "bg-emerald-500" : "bg-gray-400"}`} />
+        <span className="font-medium text-sm flex-1 truncate">{k.label}</span>
+        <span className="text-xs text-muted-foreground">{k.uses || 0} uses</span>
+        <button onClick={() => toggleKey(k.id, k.enabled)} className="p-1.5 hover:bg-muted rounded" title="Toggle">
+          <Power className={`w-3.5 h-3.5 ${k.enabled ? "text-emerald-500" : "text-gray-400"}`} />
+        </button>
+        <button onClick={() => deleteKey(k.id)} className="p-1.5 hover:bg-muted rounded text-red-500">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="flex items-center gap-2 p-2 rounded bg-background/50 text-xs font-mono break-all">
+        <span className="opacity-60">key:</span> {k.key}
+        <button onClick={() => copy(k.key)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
+          <Copy className="w-3 h-3" />
+        </button>
+      </div>
+      <div className="flex items-center gap-2 p-2 rounded bg-background/50 text-xs font-mono break-all">
+        <span className="opacity-60">redirect url:</span> {fullUrl}
+        <button onClick={() => copy(fullUrl)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
+          <Copy className="w-3 h-3" />
+        </button>
+      </div>
+      <div className="flex items-center gap-2 text-xs">
+        <ExternalLink className="w-3 h-3 opacity-60" />
+        <span className="opacity-60">default redirect:</span>
+        <span className="truncate">{k.redirectUrl}</span>
+      </div>
+
+      {/* Inline URL shortener */}
+      <div className="pt-2 border-t border-border/40 space-y-1.5">
+        <div className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+          🔗 Shorten any URL with this key
+        </div>
+        <div className="flex gap-1.5">
+          <input
+            value={shortenInput}
+            onChange={(e) => setShortenInput(e.target.value)}
+            placeholder="https://your-link.com/whatever"
+            className="flex-1 px-2 py-1 rounded bg-background/60 border border-border/50 text-xs"
+          />
+          <button
+            onClick={doShorten}
+            disabled={busy}
+            className="px-3 py-1 rounded bg-fuchsia-500 hover:bg-fuchsia-600 text-white text-xs disabled:opacity-60"
+          >
+            {busy ? "…" : "Shorten"}
+          </button>
+        </div>
+        {shortenResult && (
+          <div className="flex items-center gap-2 p-2 rounded bg-background/50 text-[11px] font-mono break-all">
+            {shortenResult}
+            <button onClick={() => copy(shortenResult)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
+              <Copy className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+        <p className="text-[10px] text-muted-foreground">
+          Users opening this short URL must watch 5 ads, then are redirected to the original link.
+        </p>
+      </div>
+    </div>
+  );
+}
