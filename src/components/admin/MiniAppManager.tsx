@@ -413,16 +413,16 @@ function AccessBotSection({ glassCard, btnPrimary, btnSecondary }: { glassCard: 
       </div>
 
       <div className="flex flex-wrap gap-2 mb-3">
-        <button onClick={setWebhook} disabled={!!busy} className={btnPrimary}>
+        <button onClick={setWebhook} disabled={!!busy} className={`${btnPrimary} px-3 py-2 text-xs`}>
           🔗 {busy === "set" ? "Setting…" : "Set Webhook"}
         </button>
-        <button onClick={setMenu} disabled={!!busy} className={btnSecondary}>
-          🎁 {busy === "menu" ? "Setting…" : "Set Menu Button"}
+        <button onClick={setMenu} disabled={!!busy} className={`${btnSecondary} px-3 py-2 text-xs`}>
+          🎁 {busy === "menu" ? "Setting…" : "Set Menu"}
         </button>
-        <button onClick={checkWebhook} disabled={!!busy} className={btnSecondary}>
-          🔍 Check Webhook
+        <button onClick={checkWebhook} disabled={!!busy} className={`${btnSecondary} px-3 py-2 text-xs`}>
+          🔍 Check
         </button>
-        <button onClick={deleteWebhook} disabled={!!busy} className="px-3 py-1.5 rounded-lg text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition">
+        <button onClick={deleteWebhook} disabled={!!busy} className="px-3 py-2 rounded-lg text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition">
           🗑️ Remove
         </button>
       </div>
