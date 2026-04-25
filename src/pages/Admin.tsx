@@ -4546,52 +4546,7 @@ ${tgHashtags}`;
                         <textarea value={seriesForm.storyline || ""} onChange={e => setSeriesForm({ ...seriesForm, storyline: e.target.value })}
                           className={`${inputClass} min-h-[100px] resize-y`} placeholder="Storyline" />
                       </div>
-                      <div className="mb-4 rounded-xl border border-white/10 bg-black/20 p-3">
-                        <div className="flex items-center justify-between gap-3 mb-3">
-                          <div>
-                            <label className="block text-xs text-[#D1C4E9] font-medium">Weekly EP Tracking</label>
-                            <p className="text-[10px] text-[#957DAD] mt-1">Track this series for weekly episode releases (auto-countdown).</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setSeriesForm({ ...seriesForm, weeklyEnabled: !(seriesForm.weeklyEnabled === true) })}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${seriesForm.weeklyEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}
-                          >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${seriesForm.weeklyEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                          </button>
-                        </div>
-                        {seriesForm.weeklyEnabled && (
-                          <>
-                            <div className="grid grid-cols-2 gap-2 mb-2">
-                              <div>
-                                <label className="block text-[10px] text-[#957DAD] mb-1">Release every (days)</label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={seriesForm.weeklyEveryDays || 7}
-                                  onChange={e => setSeriesForm({ ...seriesForm, weeklyEveryDays: Math.max(1, Number(e.target.value) || 7) })}
-                                  className={inputClass}
-                                  placeholder="7"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] text-[#957DAD] mb-1">Current / Missing Days (since last EP)</label>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={seriesForm.weeklyDaysSinceLast ?? 0}
-                                  onChange={e => setSeriesForm({ ...seriesForm, weeklyDaysSinceLast: Math.max(0, Number(e.target.value) || 0) })}
-                                  className={inputClass}
-                                  placeholder="0 = today"
-                                />
-                              </div>
-                            </div>
-                            <p className="text-[10px] text-emerald-400/80">
-                              💡 Cycle=7 + Current=5 → next EP appears in <strong>{Math.max(0, (Number(seriesForm.weeklyEveryDays) || 7) - (Number(seriesForm.weeklyDaysSinceLast) || 0))} days</strong>
-                            </p>
-                          </>
-                        )}
-                      </div>
+                      {/* Weekly EP tracking removed */}
 
                       {/* === Per-Series Telegram Custom Button === */}
                       <div className={`${glassCard} p-4 mb-4 border-cyan-500/20`}>
