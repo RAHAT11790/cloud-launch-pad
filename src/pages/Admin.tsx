@@ -3906,6 +3906,29 @@ ${tgHashtags}`;
     // Set button link with deep link to the specific anime
     const animeId = release.contentId || release.id;
     setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(animeId)}`);
+    setTgSelectedAnimeId(String(animeId));
+    // Load saved per-anime custom buttons (if any)
+    try {
+      const safeId = String(animeId).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));
+      const saved = savedSnap.val();
+      if (saved && typeof saved === "object") {
+        if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) {
+          setTgDefaultButtonName(saved.defaultButtonName);
+        }
+        if (Array.isArray(saved.buttons)) {
+          setTgButtons(saved.buttons.filter((b: any) => b && typeof b === "object").map((b: any) => ({
+            name: String(b.name || ""),
+            url: String(b.url || ""),
+          })));
+        } else {
+          setTgButtons([]);
+        }
+      } else {
+        // No saved data → reset to empty extras (keep default name as-is)
+        setTgButtons([]);
+      }
+    } catch {}
     // Auto-set dub type from content
     if (cType === "webseries") {
       const ws = webseriesData.find(s => s.id === cId);
