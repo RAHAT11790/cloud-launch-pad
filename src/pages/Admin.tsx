@@ -2051,6 +2051,22 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [tgDefaultButtonName, setTgDefaultButtonName] = useState("📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥");
   // Currently-selected anime (for per-anime button persistence)
   const [tgSelectedAnimeId, setTgSelectedAnimeId] = useState<string>("");
+  // Auto-save per-anime telegram custom buttons whenever the admin edits them
+  useEffect(() => {
+    if (!tgSelectedAnimeId) return;
+    const safeId = String(tgSelectedAnimeId).replace(/[^a-zA-Z0-9_-]/g, "_");
+    const t = setTimeout(() => {
+      const cleanedButtons = tgButtons
+        .map(b => ({ name: String(b?.name || "").trim(), url: String(b?.url || "").trim() }))
+        .filter(b => b.name && b.url);
+      set(ref(db, `telegramPerAnimeButtons/${safeId}`), {
+        defaultButtonName: tgDefaultButtonName || "",
+        buttons: cleanedButtons,
+        updatedAt: Date.now(),
+      }).catch(() => {});
+    }, 600);
+    return () => clearTimeout(t);
+  }, [tgSelectedAnimeId, tgButtons, tgDefaultButtonName]);
   const [tgSending, setTgSending] = useState(false);
   const [tgDropdownOpen, setTgDropdownOpen] = useState(false);
   const [tgContentSearch, setTgContentSearch] = useState("");
