@@ -275,6 +275,11 @@ Deno.serve(async (req) => {
       }
 
       try {
+        if (!payload.to || !payload.from || !payload.subject || !payload.html || !payload.text) {
+          await moveToDlq(supabase, queue, msg, 'Missing required email fields')
+          continue
+        }
+
         await sendLovableEmail(
           {
             run_id: payload.run_id,
