@@ -122,16 +122,20 @@ export default function MiniApp() {
   const externalUser = params.get("user") || "";
   const externalRedirect = params.get("redirect") || "";
 
-  // Resolve user id (Telegram WebApp first, fallback to ?user=)
+  // Resolve user id (priority: Telegram start_param u_xxx > ?user= > Telegram tg user > local site user)
   const userId = useMemo(() => {
     try {
       const tg = window.Telegram?.WebApp;
-      if (tg?.initDataUnsafe?.user?.id) {
-        return `tg_${tg.initDataUnsafe.user.id}`;
+      const sp = tg?.initDataUnsafe?.start_param || "";
+      if (typeof sp === "string" && sp.startsWith("u_")) {
+        return decodeURIComponent(sp.slice(2));
       }
     } catch {}
     if (externalUser) return externalUser;
-    // fallback: site logged-in user
+    try {
+      const tg = window.Telegram?.WebApp;
+      if (tg?.initDataUnsafe?.user?.id) return `tg_${tg.initDataUnsafe.user.id}`;
+    } catch {}
     try {
       const raw = localStorage.getItem("rsanime_user");
       if (raw) {
