@@ -49,7 +49,7 @@ const STR: Record<Lang, Record<string, string>> = {
     watching: "Loading ad…",
     sdkLoading: "Preparing ads…",
     completed: "Ads completed",
-    getAccess: "🎉 Unlock 24h Access",
+    getAccess: "🎉 Get Access",
     granted: "Access Granted!",
     grantedDesc: "Open the website now — your access is already active.",
     backToBot: "Close",
