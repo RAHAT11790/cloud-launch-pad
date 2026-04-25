@@ -36,6 +36,7 @@ export interface AdService {
   icon?: string;
   color?: string;
   durationHours?: number; // per-service unlock duration
+  mode?: "shortener" | "miniapp"; // routing for unlock button
 }
 
 // --- Get ad services from Firebase ---
