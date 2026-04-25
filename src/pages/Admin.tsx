@@ -961,6 +961,23 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                 </div>
               </div>
               <p className="text-[9px] text-zinc-400 font-mono truncate mb-2">{svc.functionUrl}</p>
+              {/* Mode selector: shortener vs telegram mini app */}
+              <div className="flex items-center gap-2 bg-zinc-900/50 rounded-lg p-2 mb-2">
+                <span className="text-[10px] text-zinc-400">Mode:</span>
+                <button
+                  onClick={() => set(ref(db, `settings/adServices/${svc.id}/mode`), "shortener").then(() => toast.success("Shortener mode"))}
+                  className={`px-2 py-0.5 rounded text-[10px] font-semibold ${(!svc.mode || svc.mode === "shortener") ? "bg-amber-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
+                  🔗 Shortener
+                </button>
+                <button
+                  onClick={() => set(ref(db, `settings/adServices/${svc.id}/mode`), "miniapp").then(() => toast.success("Mini App mode"))}
+                  className={`px-2 py-0.5 rounded text-[10px] font-semibold ${svc.mode === "miniapp" ? "bg-cyan-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
+                  📱 Mini App
+                </button>
+                {svc.mode === "miniapp" && (
+                  <span className="text-[9px] text-cyan-300 ml-auto">→ Telegram auto</span>
+                )}
+              </div>
               {/* Per-service duration */}
               <div className="flex items-center gap-2 bg-zinc-900/50 rounded-lg p-2">
                 <Clock size={10} className="text-amber-400 flex-shrink-0" />
