@@ -70,7 +70,7 @@ export function AdminNotificationFeed() {
     });
 
     return arr.sort((a, b) => b.priority - a.priority || b.ts - a.ts).slice(0, 30);
-  }, [weekly, bkash, unlocks]);
+  }, [bkash, unlocks]);
 
   if (items.length === 0) {
     return (
