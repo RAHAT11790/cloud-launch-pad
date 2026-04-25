@@ -585,14 +585,15 @@ export default function MiniApp() {
     setError("");
     setInfo("");
 
-    setAdRunning(true);
-
     // Rewarded unlock must use real successful Monetag ad only.
     if (adType !== "rewarded") {
       setError(t.realOnly);
       return;
     }
 
+    setAdRunning(true);
+
+    // Step 1: ensure SDK is loaded. This is the only hard requirement.
     let ready = sdkReady;
     if (!ready) {
       ready = await loadMonetag(15000);
@@ -600,20 +601,10 @@ export default function MiniApp() {
     }
 
     if (!ready) {
-      const retried = await preloadRewardedAd();
-      if (!retried) {
-        setAdRunning(false);
-        setRewardReady(false);
-        setError(t.adUnavailable);
-        return;
-      }
-    } else if (!rewardReady) {
-      const preloaded = await preloadRewardedAd();
-      if (!preloaded) {
-        setAdRunning(false);
-        setError(t.adUnavailable);
-        return;
-      }
+      setAdRunning(false);
+      setRewardReady(false);
+      setError(t.adUnavailable);
+      return;
     }
 
     const fnName = `show_${MONETAG_ZONE}`;
@@ -626,20 +617,27 @@ export default function MiniApp() {
       return;
     }
 
+    // Step 2: try to call show directly. Per Monetag docs, preload is optional —
+    // calling show_XXX() directly will fetch + display an ad in one shot.
+    // This is more reliable than gating on a separate preload Promise that
+    // sometimes silently never resolves inside the Telegram WebView.
     try {
       const trackingId =
-        preloadedTrackingIdRef.current || buildMonetagTrackingId(userId, views + 1);
+        preloadedTrackingIdRef.current ||
+        buildMonetagTrackingId(userId, views + 1);
       await showFn({ ymid: trackingId, requestVar: MONETAG_REQUEST_VAR });
       preloadedTrackingIdRef.current = "";
       setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
       setRewardReady(false);
       setInfo(t.counted);
-      await preloadRewardedAd();
-    } catch {
+      // Preload the next one in the background (non-blocking)
+      preloadRewardedAd().catch(() => {});
+    } catch (e) {
       preloadedTrackingIdRef.current = "";
       setRewardReady(false);
+      // Real failure (no-fill / user closed early / network). Do NOT count.
       setError(t.adUnavailable);
-      await preloadRewardedAd();
+      preloadRewardedAd().catch(() => {});
     } finally {
       setAdRunning(false);
     }
