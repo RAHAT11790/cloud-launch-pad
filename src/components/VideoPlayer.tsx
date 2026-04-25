@@ -253,6 +253,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [deviceBlocked, setDeviceBlocked] = useState(false);
   const [deviceBlockInfo, setDeviceBlockInfo] = useState<{ maxDevices: number; currentCount: number } | null>(null);
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
+  const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
   const [unlockBlocked, setUnlockBlocked] = useState(false);
 
   useEffect(() => {
@@ -291,6 +292,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!uid) {
       setUserFreeAccessExpiresAt(0);
       setUnlockBlocked(false);
+      setFreeAccessLoaded(true);
       return;
     }
 
@@ -303,6 +305,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       } else {
         setUserFreeAccessExpiresAt(0);
       }
+      setFreeAccessLoaded(true);
+    }, () => {
+      // On error, mark loaded so UI doesn't hang forever
+      setFreeAccessLoaded(true);
     });
 
     const unsubBlocked = onValue(ref(db, `users/${uid}/security/unlockBlocked`), (snap) => {
