@@ -30,7 +30,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
   const [stats, setStats] = useState<any>({});
   const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([]);
   const [enabled, setEnabled] = useState(false);
-  const [botUsername, setBotUsername] = useState("Rs_forwards_bot");
+  const [botUsername, setBotUsername] = useState("RS_ANIME_ACCESS_BOT");
   const [newLabel, setNewLabel] = useState("");
   const [newRedirect, setNewRedirect] = useState("");
   const [setupBusy, setSetupBusy] = useState(false);
@@ -48,7 +48,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
     const u3 = onValue(ref(db, "settings/unlockViaTelegramMini"), (snap) => setEnabled(snap.val() === true));
     const u4 = onValue(ref(db, "settings/telegramMiniBotUsername"), (snap) => {
       const v = String(snap.val() || "").trim();
-      setBotUsername(v || "Rs_forwards_bot");
+      setBotUsername(v || "RS_ANIME_ACCESS_BOT");
     });
     return () => { u1(); u2(); u3(); u4(); };
   }, []);
@@ -168,6 +168,9 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
           </button>
         </div>
       </div>
+
+      {/* === Dedicated Access Bot (RS_ANIME_ACCESS_BOT) === */}
+      <AccessBotSection glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
       {/* Mini App URL */}
       <div className={glassCard}>
@@ -335,6 +338,100 @@ function ApiKeyRow({
           Users opening this short URL must watch 5 ads, then are redirected to the original link.
         </p>
       </div>
+    </div>
+  );
+}
+
+// ===== Dedicated Access Bot (separate webhook + menu) =====
+function AccessBotSection({ glassCard, btnPrimary, btnSecondary }: { glassCard: string; btnPrimary: string; btnSecondary: string }) {
+  const [busy, setBusy] = useState<"" | "menu" | "set" | "info" | "delete" | "send">("");
+  const [info, setInfo] = useState<any>(null);
+  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const fnUrl = `https://${projectId}.supabase.co/functions/v1/access-bot`;
+  const miniUrl = `${window.location.origin}/mini`;
+
+  const call = async (action: string, extra: Record<string, unknown> = {}) => {
+    setBusy(action as any);
+    try {
+      const r = await fetch(fnUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...extra }),
+      });
+      const d = await r.json();
+      return d;
+    } catch (e: any) {
+      toast.error(e?.message || "Network error");
+      return null;
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const setMenu = async () => {
+    const d = await call("set-menu", { miniUrl });
+    if (d?.ok) toast.success("✅ Access bot menu button set!");
+    else toast.error(d?.description || d?.error || "Failed");
+  };
+
+  const setWebhook = async () => {
+    const d = await call("set-webhook", { webhookUrl: fnUrl });
+    if (d?.ok) {
+      toast.success("✅ Access bot webhook set!");
+      checkWebhook();
+    } else {
+      toast.error(d?.description || d?.error || "Failed");
+    }
+  };
+
+  const deleteWebhook = async () => {
+    const d = await call("delete-webhook");
+    if (d?.ok) {
+      toast.success("Webhook deleted");
+      setInfo(null);
+    } else toast.error(d?.description || d?.error || "Failed");
+  };
+
+  const checkWebhook = async () => {
+    const d = await call("webhook-info");
+    if (d?.result) setInfo(d.result);
+  };
+
+  return (
+    <div className={glassCard}>
+      <h3 className="font-semibold mb-2 flex items-center gap-2">
+        🤖 Access Bot — @RS_ANIME_ACCESS_BOT
+      </h3>
+      <p className="text-xs text-muted-foreground mb-3">
+        Dedicated bot for the Mini App. Set its webhook so /start sends the welcome message + Open Mini App button, and pin a persistent menu button.
+      </p>
+
+      <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-xs font-mono break-all mb-3">
+        <span className="opacity-60">webhook url:</span> {fnUrl}
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-3">
+        <button onClick={setWebhook} disabled={!!busy} className={btnPrimary}>
+          🔗 {busy === "set" ? "Setting…" : "Set Webhook"}
+        </button>
+        <button onClick={setMenu} disabled={!!busy} className={btnSecondary}>
+          🎁 {busy === "menu" ? "Setting…" : "Set Menu Button"}
+        </button>
+        <button onClick={checkWebhook} disabled={!!busy} className={btnSecondary}>
+          🔍 Check Webhook
+        </button>
+        <button onClick={deleteWebhook} disabled={!!busy} className="px-3 py-1.5 rounded-lg text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition">
+          🗑️ Remove
+        </button>
+      </div>
+
+      {info && (
+        <div className="rounded-lg bg-background/50 p-3 text-[11px] space-y-1">
+          <div><span className="opacity-60">URL:</span> <span className={info.url ? "text-emerald-400" : "text-rose-400"}>{info.url || "Not set"}</span></div>
+          {info.last_error_message && <div className="text-rose-400">⚠️ {info.last_error_message}</div>}
+          {info.pending_update_count !== undefined && <div className="opacity-70">Pending: {info.pending_update_count}</div>}
+        </div>
+      )}
     </div>
   );
 }

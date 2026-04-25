@@ -304,7 +304,10 @@ serve(async (req) => {
     }
 
     if (action === "setup-bot") {
-      const token = Deno.env.get("TELEGRAM_BOT_TOKEN");
+      // Prefer the dedicated access bot token; fall back to main token.
+      const token =
+        Deno.env.get("RS_ACCESS_BOT_TOKEN") ||
+        Deno.env.get("TELEGRAM_BOT_TOKEN");
       if (!token) return json({ ok: false, error: "no_bot_token" }, 500);
       const miniUrl = String(body?.miniUrl || "").trim();
       if (!miniUrl) return json({ ok: false, error: "no_url" }, 400);
