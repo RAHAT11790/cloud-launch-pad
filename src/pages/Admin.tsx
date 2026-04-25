@@ -5256,16 +5256,18 @@ ${tgHashtags}`;
                               setTgDubType(ws.dubType === "fandub" ? "fandub" : "official");
                               setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(seriesId)}`);
                               setTgSelectedAnimeId(String(seriesId));
-                              try {
-                                const safeId = String(seriesId).replace(/[^a-zA-Z0-9_-]/g, "_");
-                                const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));
-                                const saved = savedSnap.val();
-                                if (saved && typeof saved === "object") {
-                                  if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) setTgDefaultButtonName(saved.defaultButtonName);
-                                  if (Array.isArray(saved.buttons)) setTgButtons(saved.buttons.map((b: any) => ({ name: String(b?.name || ""), url: String(b?.url || "") })));
-                                  else setTgButtons([]);
-                                } else { setTgButtons([]); }
-                              } catch {}
+                              (async () => {
+                                try {
+                                  const safeId = String(seriesId).replace(/[^a-zA-Z0-9_-]/g, "_");
+                                  const savedSnap = await get(ref(db, `telegramPerAnimeButtons/${safeId}`));
+                                  const saved = savedSnap.val();
+                                  if (saved && typeof saved === "object") {
+                                    if (typeof saved.defaultButtonName === "string" && saved.defaultButtonName.trim()) setTgDefaultButtonName(saved.defaultButtonName);
+                                    if (Array.isArray(saved.buttons)) setTgButtons(saved.buttons.map((b: any) => ({ name: String(b?.name || ""), url: String(b?.url || "") })));
+                                    else setTgButtons([]);
+                                  } else { setTgButtons([]); }
+                                } catch {}
+                              })();
                             }
                           }
                         }, 350);
