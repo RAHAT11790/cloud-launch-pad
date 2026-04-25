@@ -1619,7 +1619,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
 
 // Change Password sub-component (English UI + Email OTP forgot-password)
 const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
-  const { branding } = useBranding();
+  const branding = useBranding();
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
