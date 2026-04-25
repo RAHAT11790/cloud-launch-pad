@@ -98,7 +98,7 @@ const STR: Record<Lang, Record<string, string>> = {
     watching: "অ্যাড লোড হচ্ছে…",
     sdkLoading: "অ্যাড প্রস্তুত হচ্ছে…",
     completed: "অ্যাড শেষ",
-    getAccess: "🎉 ২৪ ঘণ্টার অ্যাক্সেস নিন",
+    getAccess: "🎉 অ্যাক্সেস নিন",
     granted: "অ্যাক্সেস পেয়ে গেছেন!",
     grantedDesc: "এখনই ওয়েবসাইট খুলুন — আপনার অ্যাক্সেস সক্রিয় হয়ে গেছে।",
     backToBot: "বন্ধ করুন",
