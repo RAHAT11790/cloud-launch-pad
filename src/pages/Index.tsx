@@ -189,10 +189,13 @@ const Index = () => {
     }
     if (!uid) return;
 
-    const unsubAccess = onValue(ref(db, `users/${uid}/freeAccess`), (snap) => {
+    const unsubAccess = onValue(ref(db, `users/${uid}/freeAccess`), async (snap) => {
       const data = snap.val();
       if (data?.active && Number(data.expiresAt) > Date.now()) {
-        setUserFreeAccessExpiresAt(Number(data.expiresAt));
+        // 2-device limit: only allow current device if it's registered or within limit
+        const { ensureFreeAccessDeviceAllowed } = await import("@/lib/freeAccessDevice");
+        const allowed = await ensureFreeAccessDeviceAllowed(uid, data);
+        setUserFreeAccessExpiresAt(allowed ? Number(data.expiresAt) : 0);
       } else {
         setUserFreeAccessExpiresAt(0);
       }

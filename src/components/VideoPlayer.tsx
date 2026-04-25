@@ -294,10 +294,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
 
-    const unsubAccess = onValue(ref(db, `users/${uid}/freeAccess`), (snap) => {
+    const unsubAccess = onValue(ref(db, `users/${uid}/freeAccess`), async (snap) => {
       const data = snap.val();
       if (data?.active && Number(data.expiresAt) > Date.now()) {
-        setUserFreeAccessExpiresAt(Number(data.expiresAt));
+        const { ensureFreeAccessDeviceAllowed } = await import("@/lib/freeAccessDevice");
+        const allowed = await ensureFreeAccessDeviceAllowed(uid, data);
+        setUserFreeAccessExpiresAt(allowed ? Number(data.expiresAt) : 0);
       } else {
         setUserFreeAccessExpiresAt(0);
       }
