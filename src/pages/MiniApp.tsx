@@ -335,12 +335,42 @@ export default function MiniApp() {
   const externalPhoto = params.get("p") || params.get("photo") || "";
   const shortId = params.get("s") || "";
 
+  const websiteStartUserId = useMemo(() => {
+    const candidates = [
+      params.get("tgWebAppStartParam") || "",
+      params.get("startapp") || "",
+      params.get("start_param") || "",
+      window.Telegram?.WebApp?.initDataUnsafe?.start_param || "",
+    ];
+
+    for (const raw of candidates) {
+      if (typeof raw !== "string") continue;
+      const value = raw.trim();
+      if (!value.startsWith("u_")) continue;
+      const decoded = decodeURIComponent(value.slice(2)).trim();
+      if (decoded) return decoded;
+    }
+
+    return "";
+  }, [params]);
+
   // Resolve user identity. We track Telegram users separately from website users.
   // Website users: live in Firebase users/<uid> (existing flow).
   // Telegram users: identified by tg_<telegram_id>, profile from Telegram WebApp directly.
   // External (API) users: identified by what the partner bot sent in ?user= (+ optional ?n=&p=).
   const identity = useMemo(() => {
-    // 1) Telegram WebApp itself (most reliable when opened inside Telegram)
+    // 1) Website deep-link into Telegram Mini App must keep the website account ID.
+    if (websiteStartUserId) {
+      return {
+        id: websiteStartUserId,
+        source: "site" as const,
+        name: "",
+        photoURL: "",
+        tag: `user_${websiteStartUserId.slice(0, 4)}`,
+      };
+    }
+
+    // 2) Telegram WebApp direct open (menu button / direct bot open)
     try {
       const tg = window.Telegram?.WebApp;
       const tgUser = tg?.initDataUnsafe?.user;
@@ -357,20 +387,9 @@ export default function MiniApp() {
           tag: `tg_${String(tgUser.id).slice(-4)}`,
         };
       }
-      // 1b) start_param u_<firebase_uid> (website user clicked deep link from website -> bot)
-      const sp = tg?.initDataUnsafe?.start_param || "";
-      if (typeof sp === "string" && sp.startsWith("u_")) {
-        const uid = decodeURIComponent(sp.slice(2));
-        return {
-          id: uid,
-          source: "site" as const,
-          name: "",
-          tag: `user_${uid.slice(0, 4)}`,
-        };
-      }
     } catch {}
 
-    // 2) ?user= from external bot — treat as external API user
+    // 3) ?user= from external bot — treat as external API user
     if (externalUser) {
       // If the partner sent name/photo, use them directly
       if (externalName || externalPhoto) {
@@ -394,7 +413,7 @@ export default function MiniApp() {
       };
     }
 
-    // 3) Local site user (logged in on website)
+    // 4) Local site user (logged in on website)
     try {
       const raw = localStorage.getItem("rsanime_user");
       if (raw) {
@@ -417,7 +436,7 @@ export default function MiniApp() {
       name: "",
       tag: "",
     };
-  }, [externalUser, externalName, externalPhoto]);
+  }, [externalUser, externalName, externalPhoto, websiteStartUserId]);
 
   const userId = identity.id;
 
