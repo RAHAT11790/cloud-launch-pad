@@ -2489,18 +2489,48 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     return () => unsub();
   }, [activeSection]);
 
-  // Lazy-load ANALYTICS data
+  // Lazy-load ANALYTICS data + nightly cleanup of old date-buckets
   useEffect(() => {
     if (activeSection !== "analytics") return;
     const unsubs: (() => void)[] = [];
     unsubs.push(onValue(ref(db, "analytics/views"), (snap) => {
-      setAnalyticsViews(snap.val() || {});
+      const data = snap.val() || {};
+      setAnalyticsViews(data);
+
+      // 🧹 Auto-cleanup: delete every date bucket older than today.
+      // Today's bucket is preserved so the dashboard always shows fresh stats.
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        Object.entries(data).forEach(([animeId, byDate]: any) => {
+          if (!byDate || typeof byDate !== "object") return;
+          Object.keys(byDate).forEach((dateKey) => {
+            if (dateKey !== today) {
+              remove(ref(db, `analytics/views/${animeId}/${dateKey}`)).catch(() => {});
+            }
+          });
+        });
+      } catch {}
     }));
     unsubs.push(onValue(ref(db, "analytics/activeViewers"), (snap) => {
       setActiveViewers(snap.val() || {});
     }));
     unsubs.push(onValue(ref(db, "analytics/dailyActive"), (snap) => {
-      setDailyActiveUsers(snap.val() || {});
+      const data = snap.val() || {};
+      setDailyActiveUsers(data);
+
+      // 🧹 Cleanup older daily-active buckets too (keep today only)
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        Object.keys(data).forEach((dateKey) => {
+          if (dateKey !== today) {
+            remove(ref(db, `analytics/dailyActive/${dateKey}`)).catch(() => {});
+          }
+        });
+      } catch {}
+    }));
+    // Subscribe to persistent all-time totals (never reset)
+    unsubs.push(onValue(ref(db, "analytics/totals/views"), (snap) => {
+      setAllTimeTotals(snap.val() || {});
     }));
     return () => unsubs.forEach(u => u());
   }, [activeSection]);
