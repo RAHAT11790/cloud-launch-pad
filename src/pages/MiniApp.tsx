@@ -244,9 +244,11 @@ export default function MiniApp() {
   const [shortLabel, setShortLabel] = useState<string>("");
   const [copyOk, setCopyOk] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
+  const [rewardReady, setRewardReady] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const autoGrantedRef = useRef(false);
+  const preloadAttemptedRef = useRef(false);
 
   // Parse url params
   const params = useMemo(
@@ -361,6 +363,50 @@ export default function MiniApp() {
     return () => clearTimeout(id);
   }, [info, error]);
 
+  const preloadRewardedAd = useCallback(
+    async (forceReload = false) => {
+      const ready = await loadMonetag(15000, forceReload);
+      setSdkReady(ready);
+      if (!ready) {
+        setRewardReady(false);
+        return false;
+      }
+
+      const showFn = window[`show_${MONETAG_ZONE}`];
+      if (typeof showFn !== "function") {
+        setRewardReady(false);
+        return false;
+      }
+
+      try {
+        const trackingId = buildMonetagTrackingId(userId, views + 1);
+        await showFn({ type: "preload", ymid: trackingId, requestVar: MONETAG_REQUEST_VAR });
+        setRewardReady(true);
+        setInfo(t.rewardReady);
+        return true;
+      } catch {
+        setRewardReady(false);
+        return false;
+      }
+    },
+    [t.rewardReady, userId, views],
+  );
+
+  useEffect(() => {
+    if (views >= REQUIRED_VIEWS) return;
+    if (adType !== "rewarded") {
+      setRewardReady(false);
+      preloadAttemptedRef.current = false;
+      return;
+    }
+    if (preloadAttemptedRef.current) return;
+
+    preloadAttemptedRef.current = true;
+    preloadRewardedAd().finally(() => {
+      preloadAttemptedRef.current = false;
+    });
+  }, [adType, preloadRewardedAd, views]);
+
   // AUTO-GRANT: when 5 ads done in site mode, auto-call grant so user is unlocked
   // even if they close Telegram without tapping the button.
   useEffect(() => {
@@ -385,73 +431,58 @@ export default function MiniApp() {
 
     setAdRunning(true);
 
-    // Wait for SDK if it's still booting
+    // Rewarded unlock must use real successful Monetag ad only.
+    if (adType !== "rewarded") {
+      setError(t.realOnly);
+      return;
+    }
+
     let ready = sdkReady;
     if (!ready) {
       ready = await loadMonetag(15000);
       setSdkReady(ready);
     }
 
+    if (!ready) {
+      const retried = await preloadRewardedAd(true);
+      if (!retried) {
+        setAdRunning(false);
+        setRewardReady(false);
+        setError(t.adUnavailable);
+        return;
+      }
+    } else if (!rewardReady) {
+      const preloaded = await preloadRewardedAd();
+      if (!preloaded) {
+        setAdRunning(false);
+        setError(t.adUnavailable);
+        return;
+      }
+    }
+
     const fnName = `show_${MONETAG_ZONE}`;
     const showFn = window[fnName];
 
-    const startedAt = Date.now();
-
-    // Helper: count this view if user genuinely watched 15s+
-    const finishWithTimerCheck = (success: boolean) => {
-      const elapsed = (Date.now() - startedAt) / 1000;
-      if (elapsed >= MIN_AD_DURATION_SEC) {
-        setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
-        setInfo(t.counted);
-      } else if (!success) {
-        // Ad rejected immediately (no-fill / blocked). Start a 15s wait so user
-        // isn't stuck — Monetag itself sometimes returns instantly when no ad available.
-        setInfo(t.watching);
-        const waitMs = MIN_AD_DURATION_SEC * 1000 - (Date.now() - startedAt);
-        setTimeout(() => {
-          setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
-          setInfo(t.counted);
-          setAdRunning(false);
-        }, Math.max(0, waitMs));
-        return false;
-      } else {
-        setError(t.notCounted);
-      }
-      return true;
-    };
-
     if (typeof showFn !== "function") {
-      // SDK never loaded (blocked / no network). Fall back to a 15s timer so the
-      // flow still works during testing / when the ad network is unreachable.
-      setInfo(t.watching);
-      setTimeout(() => {
-        setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
-        setInfo(t.counted);
-        setAdRunning(false);
-      }, MIN_AD_DURATION_SEC * 1000);
+      setAdRunning(false);
+      setRewardReady(false);
+      setError(t.adUnavailable);
       return;
     }
 
     try {
-      if (adType === "rewarded") {
-        await showFn();
-      } else {
-        await showFn({
-          type: "inApp",
-          inAppSettings: {
-            frequency: 1,
-            capping: 0.05,
-            interval: 15,
-            timeout: 5,
-            everyPage: false,
-          },
-        });
-      }
-      const done = finishWithTimerCheck(true);
-      if (done) setAdRunning(false);
+      const trackingId = buildMonetagTrackingId(userId, views + 1);
+      await showFn({ ymid: trackingId, requestVar: MONETAG_REQUEST_VAR });
+      setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
+      setRewardReady(false);
+      setInfo(t.counted);
+      await preloadRewardedAd();
     } catch {
-      const done = finishWithTimerCheck(false);
-      if (done) setAdRunning(false);
+      setRewardReady(false);
+      setError(t.adUnavailable);
+      await preloadRewardedAd(true);
+    } finally {
+      setAdRunning(false);
     }
   };
 
