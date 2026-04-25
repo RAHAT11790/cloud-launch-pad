@@ -2755,34 +2755,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     set(saveRef, data)
       .then(async () => {
         toast.success(seriesEditId ? "Series updated!" : "Series saved!");
-        // Sync weekly tracking entry
-        try {
-          const { enableWeeklyForSeries, disableWeeklyForSeries, markWeeklyEpisodeReleased } = await import("@/lib/weeklyEpManager");
-          if (data.weeklyEnabled) {
-            const missingDays = Math.max(0, Number(seriesForm.weeklyDaysSinceLast) || 0);
-            // If editing existing series, treat the save as "new episode released" → reset timer
-            if (seriesEditId) {
-              await enableWeeklyForSeries({
-                seriesId: newId,
-                seriesTitle: data.title,
-                poster: data.poster,
-                weeklyEveryDays: data.weeklyEveryDays,
-                missingDays: 0,
-              });
-              await markWeeklyEpisodeReleased(newId);
-            } else {
-              await enableWeeklyForSeries({
-                seriesId: newId,
-                seriesTitle: data.title,
-                poster: data.poster,
-                weeklyEveryDays: data.weeklyEveryDays,
-                missingDays,
-              });
-            }
-          } else {
-            await disableWeeklyForSeries(newId);
-          }
-        } catch (e) { console.warn("Weekly sync failed", e); }
+        // Weekly EP feature removed — no sync needed
         setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list");
       })
       .catch(err => toast.error("Error: " + err.message));
