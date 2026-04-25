@@ -43,28 +43,7 @@ export function AdminNotificationFeed() {
   const items: FeedItem[] = useMemo(() => {
     const arr: FeedItem[] = [];
 
-    weekly.forEach((e) => {
-      const s = computeWeeklyStatus(e);
-      if (s.isPending && !s.isReleasedRecently && !s.isStale) {
-        arr.push({
-          id: `w-${e.seriesId}`,
-          kind: "weekly",
-          title: `🔥 ${e.seriesTitle} — Episode due now`,
-          desc: `${s.countdownLabel} · cycle ${e.weeklyEveryDays}d`,
-          ts: e.nextReleaseAt,
-          priority: 100,
-        });
-      } else if (!s.isReleasedRecently && !s.isStale) {
-        arr.push({
-          id: `w-${e.seriesId}`,
-          kind: "weekly",
-          title: `📅 ${e.seriesTitle}`,
-          desc: s.countdownLabel,
-          ts: e.nextReleaseAt,
-          priority: 30,
-        });
-      }
-    });
+    // Weekly EP feature removed
 
     bkash
       .filter((p) => p.status === "pending")
