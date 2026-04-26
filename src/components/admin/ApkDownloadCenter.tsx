@@ -15,6 +15,7 @@ import { db, ref, onValue, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import { Download, Save, Shield, Power, Smartphone, Link as LinkIcon } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { triggerApkDownload } from "@/lib/apkDownload";
 
 interface Props {
   glassCard: string;
@@ -69,7 +70,8 @@ export default function ApkDownloadCenter({ glassCard, inputClass, btnPrimary }:
   const openUrl = (url: string) => {
     const u = (url || "").trim();
     if (!u) { toast.error("URL is empty"); return; }
-    window.open(u, "_blank", "noopener,noreferrer");
+    const ok = triggerApkDownload(u);
+    if (!ok) toast.error("Download could not be started");
   };
 
   return (
@@ -93,8 +95,8 @@ export default function ApkDownloadCenter({ glassCard, inputClass, btnPrimary }:
 
       {/* User panel ON/OFF */}
       <div className={`${glassCard} p-4`}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-start gap-2 min-w-0 flex-1">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+          <div className="flex items-start gap-2 min-w-0">
             <Power className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1">
               <h3 className="text-sm font-semibold leading-tight">User Panel Download Button</h3>
@@ -103,12 +105,17 @@ export default function ApkDownloadCenter({ glassCard, inputClass, btnPrimary }:
               </p>
             </div>
           </div>
-          <Switch
-            checked={userEnabled}
-            onCheckedChange={toggleUser}
-            aria-label="Toggle user panel download button"
-            className="shrink-0"
-          />
+          <div className="flex items-center gap-2 justify-self-end shrink-0">
+            <span className="text-[10px] font-semibold text-muted-foreground whitespace-nowrap">
+              {userEnabled ? "ON" : "OFF"}
+            </span>
+            <Switch
+              checked={userEnabled}
+              onCheckedChange={toggleUser}
+              aria-label="Toggle user panel download button"
+              className="shrink-0"
+            />
+          </div>
         </div>
       </div>
 
