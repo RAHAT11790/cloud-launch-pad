@@ -3806,9 +3806,7 @@ ${tgHashtags}`;
           chatId,
           caption,
           photoUrl: tgPosterUrl || undefined,
-          buttonText: inlineButtons.length > 0 ? inlineButtons[0].text : undefined,
-          buttonUrl: inlineButtons.length > 0 ? inlineButtons[0].url : undefined,
-          inlineButtons: inlineButtons.length > 1 ? inlineButtons : undefined,
+          inlineButtons: inlineButtons.length > 0 ? inlineButtons : undefined,
         };
         try {
           const endpoint = await getEdgeFunctionUrl('telegram-post');
