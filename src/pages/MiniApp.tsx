@@ -686,9 +686,10 @@ export default function MiniApp() {
 
     const failActiveAd = () => {
       const elapsed = Date.now() - adStartAtRef.current;
-      if (elapsed < 10000 || !adContinueReady) {
+      if (elapsed < 10000 || !adContinueReady || !pendingAdCompletion) {
         setAdCountdownActive(false);
         setAdContinueReady(false);
+        setPendingAdCompletion(false);
         setAdRunning(false);
         setError(t.notCounted);
         setInfo("");
@@ -702,7 +703,7 @@ export default function MiniApp() {
       window.removeEventListener("pagehide", failActiveAd);
       document.removeEventListener("visibilitychange", failActiveAd);
     };
-  }, [adContinueReady, adCountdownActive, t.notCounted]);
+  }, [adContinueReady, adCountdownActive, pendingAdCompletion, t.notCounted]);
 
   const handleWatchAd = async () => {
     if (adRunning) return;
@@ -719,6 +720,7 @@ export default function MiniApp() {
     setAdRunning(true);
     setAdCountdownActive(true);
     setAdContinueReady(false);
+    setPendingAdCompletion(false);
 
     // Step 1: ensure SDK is loaded. This is the only hard requirement.
     let ready = sdkReady;
@@ -730,6 +732,7 @@ export default function MiniApp() {
     if (!ready) {
       setAdRunning(false);
       setAdCountdownActive(false);
+      setPendingAdCompletion(false);
       setRewardReady(false);
       setError(t.adUnavailable);
       return;
@@ -741,6 +744,7 @@ export default function MiniApp() {
     if (typeof showFn !== "function") {
       setAdRunning(false);
       setAdCountdownActive(false);
+      setPendingAdCompletion(false);
       setRewardReady(false);
       setError(t.adUnavailable);
       return;
@@ -760,25 +764,42 @@ export default function MiniApp() {
       if (!adContinueReady || Date.now() - adStartAtRef.current < 10000) {
         setError(t.notCounted);
         setInfo("");
+        setAdCountdownActive(false);
+        setAdContinueReady(false);
+        setPendingAdCompletion(false);
+        setAdRunning(false);
       } else {
-        setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
-        setRewardReady(false);
-        setInfo(t.counted);
-        // Preload the next one in the background (non-blocking)
-        preloadRewardedAd().catch(() => {});
+        setInfo(t.continueReady);
+        setPendingAdCompletion(true);
+        setAdRunning(false);
       }
     } catch (e) {
       preloadedTrackingIdRef.current = "";
       setRewardReady(false);
       // Real failure (no-fill / user closed early / network). Do NOT count.
       setError(t.adUnavailable);
-      preloadRewardedAd().catch(() => {});
-    } finally {
+      setPendingAdCompletion(false);
       setAdCountdownActive(false);
       setAdContinueReady(false);
+      preloadRewardedAd().catch(() => {});
       setAdRunning(false);
     }
   };
+
+  const handleContinueAfterAd = useCallback(() => {
+    if (!pendingAdCompletion || !adContinueReady) {
+      setError(t.notCounted);
+      return;
+    }
+
+    setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
+    setRewardReady(false);
+    setInfo(t.counted);
+    setPendingAdCompletion(false);
+    setAdCountdownActive(false);
+    setAdContinueReady(false);
+    preloadRewardedAd().catch(() => {});
+  }, [adContinueReady, pendingAdCompletion, preloadRewardedAd, t.counted, t.notCounted]);
 
   const handleGetAccess = async () => {
     if (granting) return;
