@@ -27,6 +27,8 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   const [[current, direction], setSlide] = useState([0, 1]);
   const autoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchAxisRef = useRef<"x" | "y" | null>(null);
 
   const SLIDE_DURATION = 6000;
 
@@ -63,6 +65,52 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       goTo((current - 1 + slides.length) % slides.length, -1);
     }
   };
+
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    touchAxisRef.current = null;
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (!touchStartRef.current) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+
+    if (!touchAxisRef.current && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) {
+      touchAxisRef.current = Math.abs(dx) > Math.abs(dy) * 1.25 ? "x" : "y";
+    }
+
+    if (touchAxisRef.current === "x") {
+      e.preventDefault();
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (!touchStartRef.current) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStartRef.current.x;
+    const axis = touchAxisRef.current;
+
+    touchStartRef.current = null;
+    touchAxisRef.current = null;
+
+    if (axis !== "x") return;
+    if (dx < -45) {
+      goTo((current + 1) % slides.length, 1);
+    } else if (dx > 45) {
+      goTo((current - 1 + slides.length) % slides.length, -1);
+    }
+  }, [current, goTo, slides.length]);
+
+  const handleTouchCancel = useCallback(() => {
+    touchStartRef.current = null;
+    touchAxisRef.current = null;
+  }, []);
 
   if (slides.length === 0) {
     return (
@@ -103,7 +151,15 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   };
 
   return (
-    <div data-no-swipe="true" className="relative w-full h-[42vh] min-h-[300px] overflow-hidden rounded-b-3xl" style={{ boxShadow: "0 8px 30px rgba(0,0,0,0.1)" }}>
+    <div
+      data-no-swipe="true"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
+      className="relative w-full h-[42vh] min-h-[300px] overflow-hidden rounded-b-3xl"
+      style={{ boxShadow: "0 8px 30px rgba(0,0,0,0.1)", touchAction: "pan-y" }}
+    >
       {/* Background with cinematic zoom-out effect */}
       <AnimatePresence initial={false} custom={direction} mode="popLayout">
         <motion.div
@@ -113,11 +169,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
           initial="enter"
           animate="center"
           exit="exit"
-          drag="x"
-          dragConstraints={{ left: 0, right: 0 }}
-          dragElastic={0.08}
-          onDragEnd={handleDragEnd}
-          className="absolute inset-0 cursor-grab active:cursor-grabbing will-change-transform"
+          className="absolute inset-0 will-change-transform"
           style={{ touchAction: "pan-y" }}
         >
           <img
