@@ -1552,9 +1552,7 @@ const Index = () => {
   // ===== SWIPE NAVIGATION — ALL PAGES ALWAYS RENDERED (ZERO FLASH) =====
   const [visualPage, setVisualPage] = useState<MainPage>(activePage);
   const activePageIdx = MAIN_PAGE_ORDER.indexOf(activePage);
-  const swipeRef = useRef<{ startX: number; startY: number; isHorizontal: boolean | null } | null>(null);
   const swipeTrackRef = useRef<HTMLDivElement | null>(null);
-  const swipeDxRef = useRef(0);
   const swipeRafRef = useRef<number | null>(null);
   const isSwipeAnimatingRef = useRef(false);
 
@@ -1605,7 +1603,6 @@ const Index = () => {
 
     const onDone = () => {
       isSwipeAnimatingRef.current = false;
-      swipeDxRef.current = 0;
       setActivePage(nextPage);
       restorePageScroll(nextPage);
     };
@@ -1629,82 +1626,6 @@ const Index = () => {
   useEffect(() => {
     return () => { if (swipeRafRef.current !== null) cancelAnimationFrame(swipeRafRef.current); };
   }, []);
-
-  const handleMainTouchStart = useCallback((e: React.TouchEvent) => {
-    if (showProfile || showSearch || selectedAnime || playerState || saltPlayerState || isSwipeAnimatingRef.current) return;
-    const target = e.target as HTMLElement;
-    let el: HTMLElement | null = target;
-    while (el && el !== e.currentTarget) {
-      // Opt-out: any element marked data-no-swipe (e.g. HeroSlider) handles its own gestures
-      if (el.dataset && el.dataset.noSwipe === "true") return;
-      if (el.scrollWidth > el.clientWidth + 5) return;
-      el = el.parentElement;
-    }
-    const touch = e.touches[0];
-    swipeRef.current = { startX: touch.clientX, startY: touch.clientY, isHorizontal: null };
-  }, [playerState, saltPlayerState, selectedAnime, showProfile, showSearch]);
-
-  const handleMainTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!swipeRef.current || isSwipeAnimatingRef.current) return;
-    const touch = e.touches[0];
-    const dx = touch.clientX - swipeRef.current.startX;
-    const dy = touch.clientY - swipeRef.current.startY;
-    if (swipeRef.current.isHorizontal === null && (Math.abs(dx) > 14 || Math.abs(dy) > 14)) {
-      swipeRef.current.isHorizontal = Math.abs(dx) > Math.abs(dy) * 1.45;
-    }
-    if (!swipeRef.current.isHorizontal || Math.abs(dx) < 18) return;
-    e.preventDefault();
-    const idx = activePageIdx;
-    const atStart = idx === 0 && dx > 0;
-    const atEnd = idx === MAIN_PAGE_ORDER.length - 1 && dx < 0;
-    const nextDx = (atStart || atEnd) ? dx * 0.15 : dx;
-    swipeDxRef.current = nextDx;
-    queueStripTransform(idx, nextDx, false);
-  }, [activePageIdx, queueStripTransform]);
-
-  const handleMainTouchEnd = useCallback(() => {
-    if (!swipeRef.current) return;
-    const isH = swipeRef.current.isHorizontal;
-    swipeRef.current = null;
-    const swipeDx = swipeDxRef.current;
-    if (!isH || Math.abs(swipeDx) < 5) {
-      swipeDxRef.current = 0;
-      queueStripTransform(activePageIdx, 0, true);
-      return;
-    }
-    const threshold = window.innerWidth * 0.2;
-    const idx = activePageIdx;
-    if (swipeDx < -threshold && idx < MAIN_PAGE_ORDER.length - 1) {
-      const nextIdx = idx + 1;
-      const nextPage = MAIN_PAGE_ORDER[nextIdx];
-      isSwipeAnimatingRef.current = true;
-      setVisualPage(nextPage); // BottomNav updates instantly
-      queueStripTransform(nextIdx, 0, true);
-      const track = swipeTrackRef.current;
-      const onDone = () => { isSwipeAnimatingRef.current = false; swipeDxRef.current = 0; setActivePage(nextPage); restorePageScroll(nextPage); };
-      if (track) {
-        const handler = () => { track.removeEventListener("transitionend", handler); onDone(); };
-        track.addEventListener("transitionend", handler);
-        setTimeout(() => { track.removeEventListener("transitionend", handler); onDone(); }, 350);
-      } else onDone();
-    } else if (swipeDx > threshold && idx > 0) {
-      const nextIdx = idx - 1;
-      const nextPage = MAIN_PAGE_ORDER[nextIdx];
-      isSwipeAnimatingRef.current = true;
-      setVisualPage(nextPage);
-      queueStripTransform(nextIdx, 0, true);
-      const track = swipeTrackRef.current;
-      const onDone = () => { isSwipeAnimatingRef.current = false; swipeDxRef.current = 0; setActivePage(nextPage); restorePageScroll(nextPage); };
-      if (track) {
-        const handler = () => { track.removeEventListener("transitionend", handler); onDone(); };
-        track.addEventListener("transitionend", handler);
-        setTimeout(() => { track.removeEventListener("transitionend", handler); onDone(); }, 350);
-      } else onDone();
-    } else {
-      swipeDxRef.current = 0;
-      queueStripTransform(activePageIdx, 0, true);
-    }
-  }, [activePage, activePageIdx, queueStripTransform, restorePageScroll]);
 
   // Memoized page contents for the horizontal strip
 
