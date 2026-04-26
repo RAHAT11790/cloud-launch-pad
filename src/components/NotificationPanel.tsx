@@ -3,7 +3,7 @@ import { Bell, X, Check, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, set, update } from "@/lib/firebase";
 import { SITE_ICON_URL, SITE_URL } from "@/lib/siteConfig";
-import { ensureFreshFCMToken, registerFCMToken } from "@/lib/fcm";
+// FCM removed — in-app bell only
 
 const NOTIFICATION_BADGE_URL = "/notification-badge.svg";
 
@@ -15,53 +15,11 @@ const PRIMARY_SITE_ORIGIN = (() => {
   }
 })();
 
-// Request notification permission and register FCM SW
-const requestNotificationPermission = async (userId?: string) => {
-  if (!("Notification" in window) || !("serviceWorker" in navigator)) return;
-  if (Notification.permission === "default") {
-    await Notification.requestPermission();
-  }
-  try {
-    await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
-  } catch {}
+// FCM permission/token registration removed — bell uses Firebase realtime only.
+const requestNotificationPermission = async (_userId?: string) => { /* no-op */ };
 
-  if (!userId || Notification.permission !== "granted") return;
-
-  try {
-    await ensureFreshFCMToken(userId);
-  } catch {
-    await registerFCMToken(userId, false).catch(() => {});
-  }
-};
-
-// Show browser notification (foreground only) with duplicate guard
-const showBrowserNotification = (title: string, body: string, contentId?: string, image?: string): boolean => {
-  try {
-    const pushPref = localStorage.getItem("rs_notif_push");
-    if (pushPref === "false") return false;
-  } catch {}
-
-  if (typeof window === "undefined" || window.location.origin !== PRIMARY_SITE_ORIGIN) return false;
-  if (typeof document !== "undefined" && document.visibilityState !== "hidden") return false;
-
-  if (!("Notification" in window) || Notification.permission !== "granted") return false;
-
-  try {
-    const options = {
-      body,
-        icon: SITE_ICON_URL,
-        badge: NOTIFICATION_BADGE_URL,
-      image: image || undefined,
-      tag: contentId ? `rsanime-${contentId}` : `rsanime-${Date.now()}`,
-      data: { url: contentId ? `/?anime=${contentId}` : "/" },
-      vibrate: [200, 100, 200],
-      requireInteraction: false,
-    } as NotificationOptions;
-
-    new Notification(title, options);
-    return true;
-  } catch { return false; }
-};
+// Browser push notifications removed — bell shows everything in-app
+const showBrowserNotification = (_title: string, _body: string, _contentId?: string, _image?: string): boolean => false;
 
 interface NotifItem {
   id: string;

@@ -64,10 +64,8 @@ const ensureInstallWorker = async () => {
   swRegistrationStarted = true;
 
   try {
-    await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
-      scope: "/",
-      updateViaCache: "none",
-    });
+    // FCM service worker registration removed — install worker no longer needed
+    return;
     await navigator.serviceWorker.ready;
   } catch {
     swRegistrationStarted = false;

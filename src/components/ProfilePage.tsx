@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, set, remove, get, update, push, query, orderByChild, equalTo } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
-import { registerFCMToken } from "@/lib/fcm";
+// FCM removed
 import { TELEGRAM_ADMIN_URL, TELEGRAM_CHANNEL_URL, SITE_NAME } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
 import { triggerApkDownload } from "@/lib/apkDownload";
@@ -796,15 +796,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
           }));
         }
 
-        if (adminIds.length > 0 || adminTokens.length > 0) {
-          const { sendPushToTargets } = await import("@/lib/fcm");
-          await sendPushToTargets({ userIds: adminIds, tokens: adminTokens }, {
-            title: isEditingExistingRequest ? "Payment Request Updated" : "New Payment Request",
-            body: `${userName} — ৳${selectedPlan.price} (TrxID: ${trxInput.trim()})`,
-            url: "/admin",
-            data: { type: "payment", userId, transactionId: trxInput.trim(), planName: selectedPlan.name },
-          }).catch(() => {});
-        }
+        // FCM push removed — in-app admin notification (above) is enough
 
         if (inboxTargets.length === 0 && adminIds.length === 0 && adminTokens.length === 0) {
           // Fallback: save to notifications/admin key
@@ -862,14 +854,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
           <span className="font-medium">Settings</span>
         </button>
         <div className="space-y-3">
-          <div onClick={() => setActivePanel("notification-settings")} className="glass-card px-4 py-4 rounded-xl cursor-pointer transition-all hover:border-primary flex items-center gap-3">
-            <Bell className="w-5 h-5 text-primary" />
-            <div className="flex-1">
-              <p className="text-sm font-medium">Notifications</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Manage notification preferences</p>
-            </div>
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          </div>
+          {/* Notifications settings entry removed — FCM disabled */}
           <div onClick={() => setActivePanel("quality")} className="glass-card px-4 py-4 rounded-xl cursor-pointer transition-all hover:border-primary flex items-center gap-3">
             <Monitor className="w-5 h-5 text-primary" />
             <div className="flex-1">
@@ -967,28 +952,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
     return <PrivacyPolicyPage onBack={() => setActivePanel("settings")} siteName={brandingCfg.siteName} />;
   }
 
-  // Notification Settings
-  if (activePanel === "notification-settings") {
-    return (
-      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
-        initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
-        transition={{ type: "tween", duration: 0.3 }}>
-        <button onClick={() => setActivePanel("settings")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">Notifications</span>
-        </button>
-        <div className="space-y-3">
-          <NotificationToggle label="Push Notifications" desc="Show browser popup notifications" defaultOn={true} storageKey="rs_notif_push" />
-          <NotificationToggle label="New Episode Alerts" desc="Get notified for new episodes" defaultOn={true} storageKey="rs_notif_episodes" />
-          <NotificationToggle label="Recommendations" desc="Personalized anime suggestions" defaultOn={true} storageKey="rs_notif_recs" />
-          <NotificationToggle label="App Updates" desc="New features and improvements" defaultOn={false} storageKey="rs_notif_updates" />
-        </div>
-
-        {/* Push Debug Info */}
-        <PushDebugInfo />
-      </motion.div>
-    );
-  }
+  // Notification Settings panel removed — FCM disabled site-wide
 
   // Premium Panel
   if (activePanel === "premium") {
@@ -1991,173 +1955,7 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
   );
 };
 
-// Push Debug Info sub-component
-const PushDebugInfo = () => {
-  const [debugInfo, setDebugInfo] = useState<Record<string, string>>({});
-  const [reregistering, setReregistering] = useState(false);
-
-  const loadDebugInfo = () => {
-    const info: Record<string, string> = {};
-    info["Origin"] = window.location.origin;
-    info["Permission"] = "Notification" in window ? Notification.permission : "unsupported";
-    info["Device ID"] = localStorage.getItem("rs_fcm_device_id") || "not set";
-    
-    try {
-      const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-      info["User ID"] = u.id || "none";
-    } catch { info["User ID"] = "error"; }
-
-    info["Push Pref"] = localStorage.getItem("rs_notif_push") || "default (true)";
-    info["SW Support"] = "serviceWorker" in navigator ? "yes" : "no";
-    
-    // Check SW registration
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistrations().then((regs) => {
-        const fcmSw = regs.find(r => r.active?.scriptURL?.includes("firebase-messaging-sw"));
-        info["FCM SW"] = fcmSw ? `active (scope: ${fcmSw.scope})` : "not registered";
-        info["Total SWs"] = String(regs.length);
-        setDebugInfo({ ...info });
-      });
-    }
-
-    // Load token count from Firebase
-    try {
-      const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-      if (u.id) {
-        import("@/lib/firebase").then(({ db, ref, get }) => {
-          const emailKey = u.email ? String(u.email).replace(/\./g, ",") : null;
-          Promise.all([
-            get(ref(db, `fcmTokens/${u.id}`)),
-            emailKey ? get(ref(db, `fcmTokens/${emailKey}`)) : Promise.resolve({ val: () => null }),
-          ]).then(([idSnap, emailSnap]: any[]) => {
-            const merged = {
-              ...(idSnap?.val?.() || {}),
-              ...(emailSnap?.val?.() || {}),
-            };
-            const entries = Object.values(merged) as any[];
-            info["Token Count"] = String(entries.length);
-            if (entries.length > 0) {
-              const latest = entries.reduce((a: any, b: any) => (a.updatedAt || 0) > (b.updatedAt || 0) ? a : b);
-              info["Last Token"] = latest.updatedAt ? new Date(latest.updatedAt).toLocaleString() : "unknown";
-              // Check if current origin has a token
-              const originMatch = entries.find((e: any) => e.origin === window.location.origin);
-              info["This Origin"] = originMatch ? "✅ has token" : "❌ no token";
-            }
-            setDebugInfo({ ...info });
-          }).catch(() => {});
-        });
-      }
-    } catch {}
-    
-    setDebugInfo(info);
-  };
-
-  useEffect(() => { loadDebugInfo(); }, []);
-
-  const handleForceReregister = async () => {
-    setReregistering(true);
-    try {
-      const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-      if (!u.id) {
-        toast.error("No user ID found");
-        setReregistering(false);
-        return;
-      }
-      await registerFCMToken(u.id, true);
-      // Reload debug info after re-register
-      setTimeout(() => loadDebugInfo(), 1500);
-    } catch (err: any) {
-      toast.error("Re-register failed: " + err.message);
-    }
-    setReregistering(false);
-  };
-
-  return (
-    <div className="mt-6 glass-card p-4 rounded-xl">
-      <h4 className="text-xs font-bold text-primary mb-3 flex items-center gap-2">
-        <Info className="w-3.5 h-3.5" /> Push Debug Info
-      </h4>
-      <div className="space-y-1.5">
-        {Object.entries(debugInfo).map(([key, val]) => (
-          <div key={key} className="flex justify-between text-[11px]">
-            <span className="text-muted-foreground">{key}:</span>
-            <span className="text-foreground font-mono text-right max-w-[60%] truncate">{val}</span>
-          </div>
-        ))}
-      </div>
-      <button 
-        onClick={handleForceReregister} 
-        disabled={reregistering}
-        className="w-full mt-3 py-2.5 rounded-xl bg-primary/20 text-primary text-xs font-semibold flex items-center justify-center gap-2 transition-all hover:bg-primary/30 disabled:opacity-50"
-      >
-        {reregistering ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
-        Force Re-register Push Token
-      </button>
-    </div>
-  );
-};
-
-
-const NotificationToggle = ({ label, desc, defaultOn, storageKey }: { label: string; desc: string; defaultOn: boolean; storageKey: string }) => {
-  const [enabled, setEnabled] = useState(() => {
-    try { const v = localStorage.getItem(storageKey); return v !== null ? v === "true" : defaultOn; } catch { return defaultOn; }
-  });
-  const toggle = async () => {
-    const next = !enabled;
-    const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-
-    if (storageKey === "rs_notif_push" && next) {
-      try {
-        // Force browser permission prompt first
-        if ("Notification" in window && Notification.permission === "default") {
-          const permission = await Notification.requestPermission();
-          if (permission !== "granted") {
-            toast.error("নোটিফিকেশন অনুমতি দেওয়া হয়নি। ব্রাউজার সেটিংস থেকে Allow করুন।");
-            return; // Don't toggle on if not granted
-          }
-        } else if ("Notification" in window && Notification.permission === "denied") {
-          toast.error("❌ নোটিফিকেশন ব্লক করা আছে! ব্রাউজার Settings → Notifications → Allow করুন।");
-          return;
-        }
-        setEnabled(next);
-        localStorage.setItem(storageKey, String(next));
-        if (u?.id) await registerFCMToken(u.id, true);
-      } catch {
-        setEnabled(!next);
-      }
-    } else {
-      setEnabled(next);
-      localStorage.setItem(storageKey, String(next));
-      if (storageKey === "rs_notif_push" && u?.id) {
-        try {
-          await update(ref(db, `users/${u.id}`), {
-            id: u.id,
-            pushEnabled: false,
-            pushTokenState: "disabled",
-            lastPushCheckAt: Date.now(),
-          });
-          await remove(ref(db, `fcmTokens/${u.id}`));
-          if (u.email) {
-            await remove(ref(db, `fcmTokens/${String(u.email).replace(/\./g, ",")}`)).catch(() => {});
-          }
-        } catch {
-          toast.error("Push disable sync ব্যর্থ");
-        }
-      }
-    }
-  };
-  return (
-    <div onClick={() => { void toggle(); }} className="glass-card px-4 py-4 rounded-xl cursor-pointer transition-all hover:border-primary flex items-center justify-between">
-      <div>
-        <p className="text-sm font-medium">{label}</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
-      </div>
-      <div className={`w-11 h-6 rounded-full transition-all relative ${enabled ? "bg-primary" : "bg-foreground/20"}`}>
-        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${enabled ? "left-[22px]" : "left-0.5"}`} />
-      </div>
-    </div>
-  );
-};
+// PushDebugInfo and NotificationToggle removed — FCM disabled site-wide
 
 const ProfilePage = forwardRef<HTMLDivElement, ProfilePageProps>((props, _ref) => {
   return <ProfilePageInner {...props} />;

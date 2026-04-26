@@ -45,7 +45,7 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
 import { db, ref, set, onValue, get } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
-import { registerFCMToken, ensureFreshFCMToken } from "@/lib/fcm";
+// FCM removed — push notifications no longer used
 import { createUnlockLinkForCurrentUser } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 // Shortener gate is always-on now (Monetag system removed)
@@ -529,72 +529,7 @@ const Index = () => {
       return () => unsub();
     } catch {}
   }, [isLoggedIn]);
-
-  // Register/refresh FCM token silently (no prompts, no diagnostics)
-  // Also check admin "forceNotifPrompt" setting to prompt users who haven't allowed yet
-  useEffect(() => {
-    const registerPushToken = async () => {
-      try {
-        const pushPref = localStorage.getItem("rs_notif_push");
-        if (pushPref === "false") return;
-
-        // Get existing user ID (don't create guest accounts)
-        let userId: string | undefined;
-        try {
-          const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-          if (u?.id && u?.email) userId = u.id;
-        } catch {}
-
-        // If no real user, skip FCM registration
-        if (!userId) return;
-
-        // If permission already granted, smart-refresh: detects stale/missing tokens and forces a brand-new one
-        if ("Notification" in window && Notification.permission === "granted") {
-          await ensureFreshFCMToken(userId);
-          return;
-        }
-
-        // If permission is "default" (not yet asked), check admin forceNotifPrompt
-        if ("Notification" in window && Notification.permission === "default") {
-          try {
-            const snap = await get(ref(db, "settings/forceNotifPrompt"));
-            if (snap.val() === true) {
-              // Check if we already prompted this session
-              const sessionKey = "rs_notif_prompted_session";
-              if (!sessionStorage.getItem(sessionKey)) {
-                sessionStorage.setItem(sessionKey, "1");
-                // Small delay so page loads first
-                await new Promise(r => setTimeout(r, 2000));
-                const permission = await Notification.requestPermission();
-                if (permission === "granted") {
-                  await registerFCMToken(userId, false);
-                  toast.success("✅ নোটিফিকেশন চালু হয়েছে!", { duration: 3000 });
-                }
-              }
-            }
-          } catch {}
-        }
-      } catch {}
-    };
-
-    // Run for ALL visitors, not just logged-in
-    registerPushToken();
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") registerPushToken();
-    };
-
-    window.addEventListener("focus", registerPushToken);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    const refreshTimer = setInterval(registerPushToken, 10 * 60 * 1000);
-
-    return () => {
-      window.removeEventListener("focus", registerPushToken);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      clearInterval(refreshTimer);
-    };
-  }, []);
-
+  // FCM token registration & forceNotifPrompt removed — push notifications fully disabled
   // Back button handler
   const getCurrentLayer = useCallback(() => {
     if (playerState) return "player";
