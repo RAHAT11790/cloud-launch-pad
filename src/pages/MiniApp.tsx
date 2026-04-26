@@ -775,13 +775,13 @@ export default function MiniApp() {
         if (mode === "short" && data.dest) {
           setShortDest(data.dest);
           setInfo(t.redirecting);
-          setTimeout(() => openExternal(data.dest), 1200);
+          setTimeout(() => openExternalBrowser(data.dest), 1200);
           closeAfter(1800);
         } else if (mode === "api") {
           const redirectTo = data.redirectUrl || externalRedirect;
           if (redirectTo) {
             setInfo(t.redirecting);
-            setTimeout(() => openExternal(redirectTo), 1200);
+            setTimeout(() => openExternalBrowser(redirectTo), 1200);
             closeAfter(1800);
           }
         } else if (mode === "site") {
