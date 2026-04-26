@@ -157,6 +157,11 @@ export function usePwaInstall(options: UsePwaInstallOptions = {}) {
       return;
     }
 
+    if (!window.location.pathname.startsWith(installPath)) {
+      window.location.assign(`${installPath}?install=1`);
+      return;
+    }
+
     // Fallback messaging
     const ua = navigator.userAgent || "";
     const isIOS = /iPhone|iPad|iPod/i.test(ua);
