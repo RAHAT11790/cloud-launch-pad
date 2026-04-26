@@ -8232,7 +8232,7 @@ ${tgHashtags}`;
                 </div>
               </div>
 
-              {/* Currently Watching - Live */}
+              {/* Currently Watching - Live (series only, no user data) */}
               <div className={`${glassCard} p-4 mb-4`}>
                 <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
                   <Activity size={14} className="text-green-500 animate-pulse" /> Currently Watching (Live)
@@ -8240,23 +8240,14 @@ ${tgHashtags}`;
                 {currentViewersList.length === 0 ? (
                   <p className="text-[#957DAD] text-[13px] text-center py-5">No one watching right now</p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {currentViewersList.map(item => (
-                      <div key={item.animeId} className="bg-[#1A1A2E] border border-green-500/20 rounded-xl p-3.5">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[13px] font-semibold truncate flex-1">{item.title}</span>
-                          <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full font-bold ml-2 flex items-center gap-1">
-                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                            {item.viewers.length}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {item.viewers.map(v => (
-                            <span key={v.uid} className="text-[10px] bg-green-500/10 text-green-300 px-2 py-1 rounded-lg">
-                              👤 {v.userName} ({formatTime(v.startedAt)})
-                            </span>
-                          ))}
-                        </div>
+                      <div key={item.animeId} className="bg-[#1A1A2E] border border-green-500/20 rounded-xl p-3 flex items-center justify-between">
+                        <span className="text-[13px] font-semibold truncate flex-1 pr-2">{item.title}</span>
+                        <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 flex-shrink-0">
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                          {item.viewers.length}
+                        </span>
                       </div>
                     ))}
                   </div>
