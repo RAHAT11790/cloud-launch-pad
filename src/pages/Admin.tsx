@@ -3,7 +3,8 @@ import { db, ref, onValue, push, set, remove, update, get, auth, googleProvider,
 import { supabase } from "@/integrations/supabase/client";
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import { useBranding } from "@/hooks/useBranding";
-import { sendPushToUsers, sendPushToAllUsers, type PushProgress } from "@/lib/fcm";
+// FCM removed — notifications now go via Telegram posts only
+type PushProgress = { phase: string; totalTokens: number; sent: number; success: number; failed: number; invalidRemoved: number };
 import { toast } from "sonner";
 import {
   LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
