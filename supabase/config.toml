@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.rs-bot]
 verify_jwt = false
+
+[functions.apk-download]
+verify_jwt = false
