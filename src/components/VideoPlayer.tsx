@@ -920,8 +920,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const savedTime = isEmbedPlayback
       ? (embedTimeRef.current.currentTime || currentTime || 0)
       : (v?.currentTime || 0);
+    const targetServer = videoServers[serverIndex];
+    const targetMode: ServerMode = targetServer.mode || inferServerMode(targetServer.domain);
     const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
-    const resolved = resolvePlaybackSrc(newRawSrc);
+    const resolved = resolvePlaybackSrc(newRawSrc, targetMode);
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
