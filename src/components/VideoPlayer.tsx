@@ -1537,9 +1537,34 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               is the *visual* surface only — UI/controls stay in this player
               and drive the embed via postMessage (see useEffect below). */}
           {currentSrc && /hf\.space|huggingface/i.test(currentSrc) ? (
-            <iframe
-              ref={embedIframeRef}
-              src={`https://rahat1102-video-hosting-bot.hf.space/req.html?src=${encodeURIComponent(currentSrc)}`}
+            (() => {
+              // Server 2 expects URLs with /watch/ prefix on the path.
+              // Saved links don't have it, so inject /watch/ right after the
+              // host if it's missing. Example:
+              //   https://host.hf.space/9964/file.mkv?hash=xx
+              //   → https://host.hf.space/watch/9964/file.mkv?hash=xx
+              let watchSrc = currentSrc;
+              try {
+                const u = new URL(currentSrc);
+                if (!/^\/watch\//i.test(u.pathname)) {
+                  u.pathname = "/watch" + u.pathname;
+                }
+                watchSrc = u.toString();
+              } catch {}
+              return (
+                <iframe
+                  ref={embedIframeRef}
+                  src={`https://rahat1102-video-hosting-bot.hf.space/req.html?src=${encodeURIComponent(watchSrc)}`}
+                  className="w-full h-full bg-black border-0"
+                  style={{ pointerEvents: "none" }}
+                  allow="autoplay; fullscreen; encrypted-media"
+                  allowFullScreen
+                  referrerPolicy="no-referrer"
+                  title="player"
+                />
+              );
+            })()
+          ) : (
               className="w-full h-full bg-black border-0"
               style={{ pointerEvents: "none" }}
               allow="autoplay; fullscreen; encrypted-media"
