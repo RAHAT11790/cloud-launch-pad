@@ -670,49 +670,98 @@ const Index = () => {
     return allAnime;
   }, [activeCategory, allAnime]);
 
-  // Live view counts from analytics — used to rank Trending content (most viewed first)
+  // Live popularity signals from analytics — used to rank Trending content
   const [analyticsViews, setAnalyticsViews] = useState<Record<string, any>>({});
+  const [analyticsTotals, setAnalyticsTotals] = useState<Record<string, any>>({});
+  const [analyticsClicks, setAnalyticsClicks] = useState<Record<string, any>>({});
   useEffect(() => {
-    const unsub = onValue(ref(db, "analytics/views"), (snap) => {
-      setAnalyticsViews(snap.val() || {});
-    });
-    return () => unsub();
+    const unsubV = onValue(ref(db, "analytics/views"), (snap) => setAnalyticsViews(snap.val() || {}));
+    const unsubT = onValue(ref(db, "analytics/totals/views"), (snap) => setAnalyticsTotals(snap.val() || {}));
+    const unsubC = onValue(ref(db, "analytics/totals/clicks"), (snap) => setAnalyticsClicks(snap.val() || {}));
+    return () => { unsubV(); unsubT(); unsubC(); };
   }, []);
 
   const getViewCount = useCallback((id: string): number => {
+    // Prefer all-time totals counter (never reset)
+    const t = analyticsTotals[id];
+    let totalViews = 0;
+    if (t) {
+      if (typeof t === "number") totalViews = t;
+      else if (typeof t === "object" && typeof t.count === "number") totalViews = t.count;
+    }
+    // Fallback / boost from per-day views
     const data = analyticsViews[id];
-    if (!data) return 0;
-    if (typeof data === "number") return data;
-    let total = 0;
-    Object.values(data).forEach((v: any) => {
-      if (typeof v === "number") total += v;
-      else if (v && typeof v === "object") {
-        Object.values(v).forEach((x: any) => { if (typeof x === "number") total += x; });
+    if (data) {
+      if (typeof data === "number") totalViews += data;
+      else {
+        Object.values(data).forEach((v: any) => {
+          if (typeof v === "number") totalViews += v;
+          else if (v && typeof v === "object") {
+            Object.values(v).forEach((x: any) => { if (typeof x === "number") totalViews += x; });
+          }
+        });
       }
-    });
-    return total;
-  }, [analyticsViews]);
+    }
+    return totalViews;
+  }, [analyticsViews, analyticsTotals]);
 
+  const getClickCount = useCallback((id: string): number => {
+    const c = analyticsClicks[id];
+    if (!c) return 0;
+    if (typeof c === "number") return c;
+    if (typeof c === "object" && typeof c.count === "number") return c.count;
+    return 0;
+  }, [analyticsClicks]);
+
+  // Popularity score = views*2 + clicks (views weighted higher since they imply real watching)
+  const getPopularity = useCallback((id: string): number => {
+    return getViewCount(id) * 2 + getClickCount(id);
+  }, [getViewCount, getClickCount]);
+
+  // Rotation tick — every 45s reshuffle ties so Trending feels alive even with stable counters
+  const [trendingTick, setTrendingTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTrendingTick(x => x + 1), 45000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Trending Series — strictly popularity-ranked (NOT recency). Items with 0 popularity
+  // shuffle randomly so Trending stays fresh and doesn't mirror "New Releases".
+  const trendingSeries = useMemo(() => {
+    let list = activeCategory !== "All" ? allSeries.filter(a => a.category === activeCategory) : allSeries;
+    if (dubFilter !== "all") list = list.filter(a => (a.dubType || "official") === dubFilter);
+    // Stable random offset per item, reshuffled by trendingTick
+    const seed = trendingTick;
+    const rand = (id: string) => {
+      let h = seed;
+      for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0;
+      return (Math.abs(h) % 1000) / 1000;
+    };
+    return [...list].sort((a, b) => {
+      const diff = getPopularity(b.id) - getPopularity(a.id);
+      if (diff !== 0) return diff;
+      return rand(a.id) - rand(b.id);
+    });
+  }, [activeCategory, allSeries, dubFilter, getPopularity, trendingTick]);
+
+  // For grids/category pages — keep recency-based ordering
   const filteredSeries = useMemo(() => {
     let list = activeCategory !== "All" ? allSeries.filter(a => a.category === activeCategory) : allSeries;
     if (dubFilter !== "all") list = list.filter(a => (a.dubType || "official") === dubFilter);
-    // Sort by view count DESC for "Trending" — falls back to recency when ties
     return [...list].sort((a, b) => {
-      const diff = getViewCount(b.id) - getViewCount(a.id);
-      if (diff !== 0) return diff;
       return ((b as any).updatedAt || (b as any).createdAt || 0) - ((a as any).updatedAt || (a as any).createdAt || 0);
     });
-  }, [activeCategory, allSeries, dubFilter, getViewCount]);
+  }, [activeCategory, allSeries, dubFilter]);
 
   const filteredMovies = useMemo(() => {
     let list = activeCategory !== "All" ? allMovies.filter(a => a.category === activeCategory) : allMovies;
     if (dubFilter !== "all") list = list.filter(a => (a.dubType || "official") === dubFilter);
     return [...list].sort((a, b) => {
-      const diff = getViewCount(b.id) - getViewCount(a.id);
+      const diff = getPopularity(b.id) - getPopularity(a.id);
       if (diff !== 0) return diff;
       return ((b as any).updatedAt || (b as any).createdAt || 0) - ((a as any).updatedAt || (a as any).createdAt || 0);
     });
-  }, [activeCategory, allMovies, dubFilter, getViewCount]);
+  }, [activeCategory, allMovies, dubFilter, getPopularity]);
 
   const categoryGroups = useMemo(() => {
     const groups: Record<string, AnimeItem[]> = {};
