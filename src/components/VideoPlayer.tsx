@@ -155,7 +155,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const adGateActiveRef = useRef(false);
   const [volume, setVolume] = useState(1);
   const [boostedVolume, setBoostedVolume] = useState(100); // 0-100%
   const [muted, setMuted] = useState(false);
@@ -179,52 +178,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
   const sourceBaseRef = useRef(src);
-  const [isServerSwitching, setIsServerSwitching] = useState(false);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
-
-  const isEmbedPlayback = useMemo(() => {
-    return !!currentSrc && /hf\.space|huggingface/i.test(currentSrc);
-  }, [currentSrc]);
-
-  const syncUiProgress = useCallback((nextTime: number, nextDuration: number) => {
-    setCurrentTime(nextTime);
-    if (Number.isFinite(nextDuration) && nextDuration >= 0) {
-      setDuration(nextDuration);
-    }
-
-    if (progressRef.current && nextDuration > 0) {
-      progressRef.current.style.width = `${(nextTime / nextDuration) * 100}%`;
-    }
-
-    if (timeDisplayRef.current) {
-      timeDisplayRef.current.textContent = nextDuration > 0
-        ? `${formatTime(nextTime)} / ${formatTime(nextDuration)}`
-        : formatTime(nextTime);
-    }
-  }, []);
-
-  const getEmbedWatchSrc = useCallback((rawUrl: string) => {
-    try {
-      const u = new URL(rawUrl);
-      if (!/^\/watch\//i.test(u.pathname)) {
-        u.pathname = `/watch${u.pathname.startsWith("/") ? "" : "/"}${u.pathname}`;
-      }
-      return u.toString();
-    } catch {
-      return rawUrl;
-    }
-  }, []);
-
-  const getEmbedReqSrc = useCallback((rawUrl: string) => {
-    const watchSrc = getEmbedWatchSrc(rawUrl);
-    try {
-      const u = new URL(watchSrc);
-      return `${u.origin}/req.html?src=${encodeURIComponent(watchSrc)}`;
-    } catch {
-      return `https://rahat1102-video-hosting-bot.hf.space/req.html?src=${encodeURIComponent(watchSrc)}`;
-    }
-  }, [getEmbedWatchSrc]);
 
   // ===== SERVER CHANGER =====
   const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
@@ -263,84 +218,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   useEffect(() => {
     function onMsg(ev: MessageEvent) {
-      const d = ev.data as { source?: string; type?: string; currentTime?: number; duration?: number; code?: number } | null;
+      const d = ev.data as { source?: string; type?: string; currentTime?: number; duration?: number } | null;
       if (!d || d.source !== "rs-embed") return;
-
       switch (d.type) {
         case "ready":
-          sendEmbedCmd("mute", { muted });
-          sendEmbedCmd("volume", { volume: muted ? 0 : Math.min(1, boostedVolume / 100) });
-          sendEmbedCmd("rate", { rate: playbackRate });
-          if (pendingSeek.current !== null) {
-            sendEmbedCmd("seek", { time: pendingSeek.current });
-            embedTimeRef.current.currentTime = pendingSeek.current;
-          }
-          if (!adGateActiveRef.current) sendEmbedCmd("play");
+          // iframe loaded and waiting; nothing to do — src is already in URL
           break;
-        case "meta": {
-          const nextDuration = d.duration ?? 0;
+        case "time":
           embedTimeRef.current = {
-            currentTime: embedTimeRef.current.currentTime,
-            duration: nextDuration,
+            currentTime: d.currentTime ?? 0,
+            duration: d.duration ?? 0,
           };
-          syncUiProgress(embedTimeRef.current.currentTime, nextDuration);
-          setIsServerSwitching(false);
-          break;
-        }
-        case "time": {
-          const nextCurrentTime = d.currentTime ?? 0;
-          const nextDuration = d.duration ?? embedTimeRef.current.duration ?? 0;
-          embedTimeRef.current = {
-            currentTime: nextCurrentTime,
-            duration: nextDuration,
-          };
-          syncUiProgress(nextCurrentTime, nextDuration);
-          break;
-        }
-        case "canplay":
-          setVideoError(false);
-          setIsBuffering(false);
-          setShowFixedLoader(false);
-          setIsServerSwitching(false);
-          if (pendingSeek.current !== null) {
-            sendEmbedCmd("seek", { time: pendingSeek.current });
-            embedTimeRef.current.currentTime = pendingSeek.current;
-            pendingSeek.current = null;
-          }
-          if (!adGateActiveRef.current) sendEmbedCmd("play");
-          break;
-        case "playing":
-          setPlaying(true);
-          setVideoError(false);
-          setIsBuffering(false);
-          setShowFixedLoader(false);
-          setIsServerSwitching(false);
-          break;
-        case "pause":
-          setPlaying(false);
-          break;
-        case "waiting":
-          setIsBuffering(true);
           break;
         case "ended":
           embedTimeRef.current.currentTime = embedTimeRef.current.duration;
-          syncUiProgress(embedTimeRef.current.duration, embedTimeRef.current.duration);
-          setPlaying(false);
-          if (onNextEpisode) onNextEpisode();
-          break;
-        case "error":
-          console.log("Embed video error. URL:", currentSrc, "Code:", d.code);
-          setPlaying(false);
-          setIsBuffering(false);
-          setShowFixedLoader(false);
-          setIsServerSwitching(false);
-          setVideoError(true);
           break;
       }
     }
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [boostedVolume, currentSrc, muted, onNextEpisode, playbackRate, sendEmbedCmd, syncUiProgress]);
+  }, []);
 
   
   // Load CDN + proxy settings from Firebase (skip if noProxy)
@@ -409,10 +306,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
   const [unlockBlocked, setUnlockBlocked] = useState(false);
-
-  useEffect(() => {
-    adGateActiveRef.current = adGateActive;
-  }, [adGateActive]);
 
   useEffect(() => {
     let unsub: (() => void) | undefined;
@@ -685,37 +578,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Save progress every 10s
   useEffect(() => {
     if (!onSaveProgress) return;
-
-    const getPlaybackSnapshot = () => {
-      if (isEmbedPlayback) {
-        const embeddedTime = embedTimeRef.current.currentTime || currentTime;
-        const embeddedDuration = embedTimeRef.current.duration || duration;
-        return { time: embeddedTime, total: embeddedDuration };
-      }
-
-      const v = videoRef.current;
-      return { time: v?.currentTime || 0, total: v?.duration || 0 };
-    };
-
-    const saveNow = () => {
-      const { time, total } = getPlaybackSnapshot();
-      if (time > 0 && total > 0) onSaveProgress(time, total);
-    };
-
-    const saveInterval = setInterval(saveNow, 10000);
     const v = videoRef.current;
-    if (v && !isEmbedPlayback) {
-      v.addEventListener("pause", saveNow);
-    }
-
+    if (!v) return;
+    const saveInterval = setInterval(() => {
+      if (v.currentTime > 0 && v.duration > 0) onSaveProgress(v.currentTime, v.duration);
+    }, 10000);
+    const onPause = () => { if (v.currentTime > 0 && v.duration > 0) onSaveProgress(v.currentTime, v.duration); };
+    v.addEventListener("pause", onPause);
     return () => {
       clearInterval(saveInterval);
-      if (v && !isEmbedPlayback) {
-        v.removeEventListener("pause", saveNow);
-      }
-      saveNow();
+      v.removeEventListener("pause", onPause);
+      if (v.currentTime > 0 && v.duration > 0) onSaveProgress(v.currentTime, v.duration);
     };
-  }, [currentTime, duration, isEmbedPlayback, onSaveProgress]);
+  }, [onSaveProgress]);
 
   // Restore watch position (per-account)
   useEffect(() => {
@@ -798,20 +673,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
     if (videoServers[serverIndex].locked && !isPremium) return;
     if (serverSwitchingRef.current) return;
-
     const v = videoRef.current;
-    const savedTime = isEmbedPlayback
-      ? (embedTimeRef.current.currentTime || currentTime || 0)
-      : (v?.currentTime || 0);
+    if (!v) return;
+
+    const savedTime = v.currentTime || 0;
     const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
     const resolved = resolvePlaybackSrc(newRawSrc);
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
-    setIsServerSwitching(true);
-    setVideoError(false);
-    setIsBuffering(true);
-    setShowFixedLoader(true);
 
     // Keep last frame visible by NOT clearing src — just swap directly
     setManualServerSelected(true);
@@ -819,10 +689,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
     setCurrentSrc(resolved);
-    window.setTimeout(() => {
-      serverSwitchingRef.current = false;
-    }, 160);
-  }, [activeServerIndex, applyServerDomain, currentTime, isEmbedPlayback, isPremium, resolvePlaybackSrc, videoServers]);
+    serverSwitchingRef.current = false;
+  }, [activeServerIndex, videoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
@@ -1124,7 +992,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [showControls, scheduleHideTimer, clearHideTimer]);
 
   // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
-  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !isServerSwitching;
+  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !serverSwitchingRef.current;
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
@@ -1400,12 +1268,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Pause video when app goes background / tab hidden
   useEffect(() => {
     const pausePlayback = () => {
-      if (isEmbedPlayback) {
-        sendEmbedCmd("pause");
-        setPlaying(false);
-        return;
-      }
-
       const v = videoRef.current;
       if (!v) return;
       if (!v.paused) {
@@ -1427,21 +1289,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       window.removeEventListener('beforeunload', pausePlayback);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [isEmbedPlayback, sendEmbedCmd]);
+  }, []);
 
   const togglePlay = useCallback(() => {
-    if (isEmbedPlayback) {
-      sendEmbedCmd(playing ? "pause" : "play");
-      setPlaying(prev => !prev);
-      resetHideTimer();
-      return;
-    }
-
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) v.play(); else v.pause();
     resetHideTimer();
-  }, [isEmbedPlayback, playing, resetHideTimer, sendEmbedCmd]);
+  }, [resetHideTimer]);
 
   const MAX_VOL = 100;
   const applyPlayerVolume = useCallback((nextBoost: number, nextMuted = muted) => {
@@ -1450,19 +1305,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setBoostedVolume(clampedBoost);
     setMuted(effectiveMuted);
     setVolume(Math.min(1, clampedBoost / 100));
-
-    if (isEmbedPlayback) {
-      sendEmbedCmd("mute", { muted: effectiveMuted });
-      sendEmbedCmd("volume", { volume: effectiveMuted ? 0 : Math.min(1, clampedBoost / 100) });
-      return;
-    }
-
     const v = videoRef.current;
     if (v) {
       v.muted = effectiveMuted;
       v.volume = effectiveMuted ? 0 : Math.min(1, clampedBoost / 100);
     }
-  }, [isEmbedPlayback, muted, sendEmbedCmd]);
+  }, [muted]);
 
   const getSafeSeekTime = useCallback((v: HTMLVideoElement, target: number) => {
     if (!Number.isFinite(v.duration) || v.duration <= 0) return 0;
@@ -1480,19 +1328,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, []);
 
   const seek = useCallback((seconds: number) => {
-    if (isEmbedPlayback) {
-      const total = embedTimeRef.current.duration || duration || 0;
-      const nextTime = Math.min(Math.max((embedTimeRef.current.currentTime || currentTime) + seconds, 0), total || Number.MAX_SAFE_INTEGER);
-      embedTimeRef.current.currentTime = nextTime;
-      sendEmbedCmd("seek", { time: nextTime });
-      syncUiProgress(nextTime, total);
-
-      setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
-      setTimeout(() => setSkipIndicator(null), 600);
-      resetHideTimer();
-      return;
-    }
-
     const v = videoRef.current;
     if (!v) return;
 
@@ -1502,7 +1337,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
     setTimeout(() => setSkipIndicator(null), 600);
     resetHideTimer();
-  }, [currentTime, duration, getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd, syncUiProgress]);
+  }, [getSafeSeekTime, resetHideTimer]);
 
   const toggleFullscreen = useCallback(async () => {
     const el = videoContainerRef.current;
@@ -1522,11 +1357,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, []);
 
   const setSpeed = useCallback((rate: number) => {
-    if (isEmbedPlayback) sendEmbedCmd("rate", { rate });
-    else if (videoRef.current) videoRef.current.playbackRate = rate;
+    if (videoRef.current) videoRef.current.playbackRate = rate;
     setPlaybackRate(rate);
     setShowSettings(false);
-  }, [isEmbedPlayback, sendEmbedCmd]);
+  }, []);
 
   const switchQuality = useCallback((option: QualityOption) => {
     // Block 4K for non-premium users
@@ -1553,24 +1387,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-
-    if (isEmbedPlayback) {
-      const total = embedTimeRef.current.duration || duration || 0;
-      const target = pct * total;
-      embedTimeRef.current.currentTime = target;
-      sendEmbedCmd("seek", { time: target });
-      syncUiProgress(target, total);
-      resetHideTimer();
-      return;
-    }
-
     const v = videoRef.current;
     if (!v) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     v.currentTime = getSafeSeekTime(v, pct * v.duration);
     resetHideTimer();
-  }, [duration, getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd, syncUiProgress]);
+  }, [getSafeSeekTime, resetHideTimer]);
 
   // Touch drag seeking on progress bar
   const progressBarRef = useRef<HTMLDivElement>(null);
@@ -1579,42 +1402,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const handleProgressTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     isSeeking.current = true;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
-
-    if (isEmbedPlayback) {
-      const total = embedTimeRef.current.duration || duration || 0;
-      const target = pct * total;
-      embedTimeRef.current.currentTime = target;
-      sendEmbedCmd("seek", { time: target });
-      syncUiProgress(target, total);
-      resetHideTimer();
-      return;
-    }
-
     const v = videoRef.current;
     if (!v) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     v.currentTime = getSafeSeekTime(v, pct * v.duration);
     resetHideTimer();
-  }, [duration, getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd, syncUiProgress]);
+  }, [getSafeSeekTime, resetHideTimer]);
 
   const handleProgressTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (!isSeeking.current) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
-
-    if (isEmbedPlayback) {
-      const total = embedTimeRef.current.duration || duration || 0;
-      const target = pct * total;
-      embedTimeRef.current.currentTime = target;
-      sendEmbedCmd("seek", { time: target });
-      syncUiProgress(target, total);
-      return;
-    }
-
     const v = videoRef.current;
     if (!v) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     const target = getSafeSeekTime(v, pct * v.duration);
     v.currentTime = target;
 
@@ -1625,7 +1427,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (timeDisplayRef.current && v.duration > 0) {
       timeDisplayRef.current.textContent = `${formatTime(target)} / ${formatTime(v.duration)}`;
     }
-  }, [duration, getSafeSeekTime, isEmbedPlayback, sendEmbedCmd, syncUiProgress]);
+  }, [getSafeSeekTime]);
 
   const handleProgressTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -1734,18 +1536,34 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               the browser doesn't choke on the Matroska container. The iframe
               is the *visual* surface only — UI/controls stay in this player
               and drive the embed via postMessage (see useEffect below). */}
-          {isEmbedPlayback ? (
-            <iframe
-              ref={embedIframeRef}
-              key={currentSrc}
-              src={getEmbedReqSrc(currentSrc)}
-              className="w-full h-full bg-black border-0"
-              style={{ pointerEvents: "none" }}
-              allow="autoplay; fullscreen; encrypted-media"
-              allowFullScreen
-              referrerPolicy="no-referrer"
-              title="player"
-            />
+          {currentSrc && /hf\.space|huggingface/i.test(currentSrc) ? (
+            (() => {
+              // Server 2 expects URLs with /watch/ prefix on the path.
+              // Saved links don't have it, so inject /watch/ right after the
+              // host if it's missing. Example:
+              //   https://host.hf.space/9964/file.mkv?hash=xx
+              //   → https://host.hf.space/watch/9964/file.mkv?hash=xx
+              let watchSrc = currentSrc;
+              try {
+                const u = new URL(currentSrc);
+                if (!/^\/watch\//i.test(u.pathname)) {
+                  u.pathname = "/watch" + u.pathname;
+                }
+                watchSrc = u.toString();
+              } catch {}
+              return (
+                <iframe
+                  ref={embedIframeRef}
+                  src={`https://rahat1102-video-hosting-bot.hf.space/req.html?src=${encodeURIComponent(watchSrc)}`}
+                  className="w-full h-full bg-black border-0"
+                  style={{ pointerEvents: "none" }}
+                  allow="autoplay; fullscreen; encrypted-media"
+                  allowFullScreen
+                  referrerPolicy="no-referrer"
+                  title="player"
+                />
+              );
+            })()
           ) : (
             <video
               ref={videoRef}
@@ -1771,21 +1589,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               </div>
               <p className="text-base font-semibold text-foreground mb-1">Video Unavailable</p>
               <p className="text-xs text-muted-foreground mb-4 text-center px-6">Server is not responding. Try another episode or quality.</p>
-              <button onClick={(e) => {
-                e.stopPropagation();
-                setVideoError(false);
-                setIsBuffering(true);
-                setShowFixedLoader(true);
-                if (isEmbedPlayback) {
-                  sendEmbedCmd("load", { src: getEmbedWatchSrc(currentSrc) });
-                  sendEmbedCmd("play");
-                } else {
-                  const v = videoRef.current;
-                  if (v) {
-                    v.load();
-                  }
-                }
-              }} className="px-4 py-2 rounded-lg gradient-primary text-sm font-semibold btn-glow">
+              <button onClick={(e) => { e.stopPropagation(); setVideoError(false); setIsBuffering(true); const v = videoRef.current; if (v) { v.load(); } }} className="px-4 py-2 rounded-lg gradient-primary text-sm font-semibold btn-glow">
                 Retry
               </button>
             </div>
