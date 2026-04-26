@@ -55,8 +55,10 @@ serve(async (req) => {
     }
 
     const upstreamType = upstream.headers.get("content-type") || "application/vnd.android.package-archive";
-    const upstreamDisposition = upstream.headers.get("content-disposition");
+    const upstreamDisposition = upstream.headers.get("content-disposition") || "";
     const defaultName = decodeURIComponent(parsed.pathname.split("/").pop() || "app.apk").replace(/[^\w. -]/g, "") || "app.apk";
+    const fileNameMatch = upstreamDisposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i);
+    const finalName = (fileNameMatch?.[1] ? decodeURIComponent(fileNameMatch[1]) : defaultName).replace(/[^\w. -]/g, "") || defaultName;
 
     return new Response(upstream.body, {
       status: 200,
@@ -66,7 +68,7 @@ serve(async (req) => {
         "Content-Length": upstream.headers.get("content-length") || "",
         "Accept-Ranges": upstream.headers.get("accept-ranges") || "bytes",
         "Cache-Control": "no-store",
-        "Content-Disposition": upstreamDisposition || `attachment; filename="${defaultName}"`,
+        "Content-Disposition": `attachment; filename="${finalName}"`,
       },
     });
   } catch (error) {
