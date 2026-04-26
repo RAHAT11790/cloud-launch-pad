@@ -1608,34 +1608,38 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           onTouchEnd={handleTouchEnd}
         >
           {/* No thumbnail/poster overlay — solid black bg only for fast load */}
-          {/* ===== Server 2 (HuggingFace HTTPS) iframe mode =====
-              When the active server domain is hf.space (or any domain that
-              hosts our branded `req.html`), play the MKV inside that page so
-              the browser doesn't choke on the Matroska container. The iframe
-              is the *visual* surface only — UI/controls stay in this player
-              and drive the embed via postMessage (see useEffect below). */}
-          {currentSrc && /hf\.space|huggingface/i.test(currentSrc) ? (
+          {/* ===== Server 1 (HuggingFace / Firem) iframe mode =====
+              When the active server domain is hf.space (or any host serving
+              our branded `req.html`), play the MKV inside that page so the
+              browser doesn't choke on the Matroska container. The iframe is
+              the *visual* surface — UI/controls live in this player and drive
+              the embed via postMessage (see useEffect above). */}
+          {isEmbedPlayback ? (
             (() => {
-              // Server 2 expects URLs with /watch/ prefix on the path.
-              // Saved links don't have it, so inject /watch/ right after the
-              // host if it's missing. Example:
-              //   https://host.hf.space/9964/file.mkv?hash=xx
-              //   → https://host.hf.space/watch/9964/file.mkv?hash=xx
+              // Build BOTH the watch URL (path with /watch/ prefix for the
+              // upstream) AND the req.html host. We use the SAME hf.space
+              // origin as the video so cross-origin iframe→video requests
+              // never trip CORS. Falls back to our self-hosted /req.html
+              // only if the URL parsing fails.
               let watchSrc = currentSrc;
+              let embedHost = "";
               try {
                 const u = new URL(currentSrc);
                 if (!/^\/watch\//i.test(u.pathname)) {
                   u.pathname = "/watch" + u.pathname;
                 }
                 watchSrc = u.toString();
+                embedHost = `${u.protocol}//${u.host}`;
               } catch {}
+              const iframeSrc = embedHost
+                ? `${embedHost}/req.html?src=${encodeURIComponent(watchSrc)}`
+                : `/req.html?src=${encodeURIComponent(watchSrc)}`;
               return (
                 <iframe
                   ref={embedIframeRef}
-                  src={`https://rahat1102-video-hosting-bot.hf.space/req.html?src=${encodeURIComponent(watchSrc)}`}
-                  className="w-full h-full bg-black border-0"
-                  style={{ pointerEvents: "none" }}
-                  allow="autoplay; fullscreen; encrypted-media"
+                  src={iframeSrc}
+                  className="absolute inset-0 w-full h-full bg-black border-0 block"
+                  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                   allowFullScreen
                   referrerPolicy="no-referrer"
                   title="player"
