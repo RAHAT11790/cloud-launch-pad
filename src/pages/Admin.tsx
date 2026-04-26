@@ -3,7 +3,10 @@ import { db, ref, onValue, push, set, remove, update, get, auth, googleProvider,
 import { supabase } from "@/integrations/supabase/client";
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import { useBranding } from "@/hooks/useBranding";
-import { sendPushToUsers, sendPushToAllUsers, type PushProgress } from "@/lib/fcm";
+// FCM removed — notifications now go via Telegram posts only. Stubs preserved so legacy callers no-op silently.
+type PushProgress = { phase: string; totalTokens?: number; totalUsers?: number; sent: number; success: number; failed: number; invalidRemoved: number; failReasons?: Record<string, number> };
+const sendPushToUsers = async (..._args: any[]) => ({ total: 0, success: 0, failed: 0 });
+const sendPushToAllUsers = async (..._args: any[]) => ({ total: 0, success: 0, failed: 0 });
 import { toast } from "sonner";
 import {
   LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
@@ -562,7 +565,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
 
   const CORE_FUNCTIONS: { key: string; label: string; endpoint: string }[] = [
         { key: "weekly-auto-detect", label: "📅 Weekly Auto-Detect", endpoint: "weekly-auto-detect" },
-    { key: "send-fcm", label: "🔔 Send FCM Notification", endpoint: "send-fcm" },
+    // FCM endpoint removed
     { key: "telegram-post", label: "📢 Telegram Post", endpoint: "telegram-post" },
     { key: "rs-bot", label: "💬 RS Bot (Telegram)", endpoint: "rs-bot" },
     { key: "send-otp-email", label: "📧 Send OTP Email", endpoint: "send-otp-email" },
@@ -668,7 +671,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   return (
     <div>
       <AdServicesSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
-      <FcmProviderSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+      {/* FCM provider section removed — Telegram-only delivery */}
       <TelegramWebhookSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
       <div className={`${glassCard} p-4 mb-4`}>
@@ -4039,7 +4042,6 @@ ${tgHashtags}`;
     { section: "users", icon: <Users size={16} />, label: "Users" },
     { section: "comments", icon: <MessageCircle size={16} />, label: "Comments", group: "New Features" },
     { section: "live-support", icon: <MessageCircle size={16} />, label: "Live Support" },
-    { section: "notifications", icon: <Bell size={16} />, label: "Notifications" },
     { section: "new-releases", icon: <Zap size={16} />, label: "New Releases" },
     { section: "add-content", icon: <PlusCircle size={16} />, label: "Add Content", group: "Quick Actions" },
     { section: "animesalt-manager", icon: <CloudDownload size={16} />, label: "AnimeSalt" },
@@ -4348,7 +4350,21 @@ ${tgHashtags}`;
         {/* ==================== DASHBOARD ==================== */}
         {activeSection === "dashboard" && (
           <div>
-            {/* AI Notification Bell removed */}
+            {/* Quick action: Telegram Post (replaces removed FCM notification bell) */}
+            <button
+              onClick={() => showSection("telegram-post")}
+              className="w-full mb-3 p-3 rounded-xl bg-gradient-to-r from-blue-600/20 to-cyan-600/20 border border-blue-500/40 flex items-center gap-3 hover:from-blue-600/30 hover:to-cyan-600/30 transition-all"
+            >
+              <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-300">
+                <Send size={18} />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="text-[13px] font-bold text-white">Telegram Post</p>
+                <p className="text-[10.5px] text-zinc-400">Quick post to your channel</p>
+              </div>
+              <ChevronRight size={16} className="text-blue-300" />
+            </button>
+
             <div className="grid grid-cols-2 gap-2.5 mb-4">
               {[
                 { icon: <Film size={18} />, value: webseriesData.length, label: "Web Series", color: "text-indigo-400" },
@@ -4516,8 +4532,8 @@ ${tgHashtags}`;
 
             {seriesTab === "ws-list" && (
               <div>
-                {/* Search bar */}
-                <div className="mb-3">
+                {/* Search bar — sticky so it stays visible while scrolling the list */}
+                <div className="sticky top-[56px] z-30 -mx-3 px-3 py-2 mb-3 bg-[#0D0D1A]/95 backdrop-blur-md border-b border-white/5">
                   <div className="relative">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-500" />
                     <input value={wsListSearch} onChange={e => setWsListSearch(e.target.value)}
@@ -5137,44 +5153,8 @@ ${tgHashtags}`;
                     try {
                       await set(push(ref(db, "newEpisodeReleases")), newRelease);
                       toast.success("✅ New Release added!");
-                      // Send FCM + in-app notifications
-                      const usersSnap = await get(ref(db, "users"));
-                      const users = usersSnap.val() || {};
-                      const notifTitle = `New Episode: ${ctxForm.title}`;
-                      const notifMsg = `${season?.name || "New Season"} - Episode ${episode?.episodeNumber || parseInt(wsNotifyEpisode) + 1} is now available!`;
-                      const userNotifUpdates: Record<string, any> = {};
-                      const seenUserIds = new Set<string>();
-                      const targetUserIds: string[] = [];
-                      Object.entries(users).forEach(([userKey, userData]: any) => {
-                        const uid = String(userData?.id || userKey || "").trim();
-                        if (!uid || seenUserIds.has(uid)) return;
-                        seenUserIds.add(uid);
-                        targetUserIds.push(uid);
-                        const nKey = push(ref(db, `notifications/${uid}`)).key;
-                        if (!nKey) return;
-                        userNotifUpdates[`notifications/${uid}/${nKey}`] = {
-                          title: notifTitle, message: notifMsg, type: "new_episode",
-                          contentId: ctxSeriesId, contentType: "webseries",
-                          image: ctxForm.poster || "", poster: ctxForm.poster || "",
-                          timestamp: Date.now(), read: false,
-                        };
-                      });
-                      if (Object.keys(userNotifUpdates).length > 0) await update(ref(db), userNotifUpdates);
-                      toast.success("In-app notifications sent!");
-                      // Send FCM push
-                      try {
-                        const pushPayload = {
-                          title: notifTitle, body: notifMsg,
-                          image: ctxForm.poster || undefined,
-                          url: `/?anime=${ctxSeriesId}`,
-                          data: { url: `/?anime=${ctxSeriesId}`, type: "new_episode", contentId: ctxSeriesId },
-                        };
-                        setPushSending(true);
-                        setPushProgress({ phase: "tokens", totalTokens: 0, sent: 0, success: 0, failed: 0, invalidRemoved: 0 });
-                        const result = await sendPushToAllUsers(pushPayload, (p) => setPushProgress({ ...p }));
-                        if ((result?.total || 0) > 0) toast.success(`Push: ${result?.success || 0} delivered`);
-                        setTimeout(() => { setPushSending(false); setPushProgress(null); }, 4000);
-                      } catch { toast.warning("Push delivery failed"); setPushSending(false); setPushProgress(null); }
+                      // FCM removed — notifications go through Telegram only.
+                      // Skip straight to telegram step (no in-app push, no FCM).
                       // Auto-fill telegram fields
                       setTgTitle(ctxForm.title);
                       const backdropUrl = ctxForm.backdrop || ctxForm.poster || "";
@@ -5648,112 +5628,7 @@ ${tgHashtags}`;
           </div>
         )}
 
-        {/* ==================== NOTIFICATIONS ==================== */}
-        {activeSection === "notifications" && (
-          <div>
-            <div className={`${glassCard} p-4 mb-4`}>
-              <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <Bell size={14} className="text-purple-500" /> Send Notification to Users
-              </h3>
-              <div className="mb-4">
-                <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Notification Title</label>
-                <input value={notifTitle} onChange={e => setNotifTitle(e.target.value)} className={inputClass} placeholder="Enter notification title" />
-              </div>
-              <div className="mb-4">
-                <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Notification Message</label>
-                <textarea value={notifMessage} onChange={e => setNotifMessage(e.target.value)}
-                  className={`${inputClass} min-h-[80px] resize-y`} placeholder="Enter notification message" rows={3} />
-              </div>
-              <div className="mb-4" ref={notifDropdownRef}>
-                <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Select Content (Optional)</label>
-                <div className="relative">
-                  <button type="button" onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                    className={`${selectClass} w-full text-left flex items-center gap-2`}>
-                    {notifContent ? (
-                      <>
-                        <img src={contentOptions.find(o => o.value === notifContent)?.poster} alt="" className="w-7 h-10 rounded object-cover flex-shrink-0" />
-                        <span className="truncate text-sm">{contentOptions.find(o => o.value === notifContent)?.label}</span>
-                      </>
-                    ) : <span className="text-[#957DAD]">No specific content</span>}
-                    <ChevronDown size={14} className="ml-auto flex-shrink-0" />
-                  </button>
-                  {notifDropdownOpen && (
-                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[#1A1A2E] border border-purple-500/40 rounded-xl max-h-[280px] overflow-y-auto shadow-xl">
-                      <div className="p-2 cursor-pointer hover:bg-purple-500/20 rounded-lg m-1 text-sm text-[#957DAD]"
-                        onClick={() => { setNotifContent(""); setNotifDropdownOpen(false); }}>No specific content</div>
-                      {contentOptions.map(o => (
-                        <div key={o.value} className={`flex items-center gap-2.5 p-2 cursor-pointer hover:bg-purple-500/20 rounded-lg m-1 ${notifContent === o.value ? "bg-purple-500/30" : ""}`}
-                          onClick={() => { setNotifContent(o.value); setNotifDropdownOpen(false); }}>
-                          <img src={o.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0 bg-[#2A2A3E]" />
-                          <span className="text-sm truncate">{o.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="mb-4">
-                <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Notification Type</label>
-                <select value={notifType} onChange={e => setNotifType(e.target.value)} className={selectClass}>
-                  <option value="info">Info</option>
-                  <option value="new_episode">New Episode</option>
-                  <option value="update">Update</option>
-                  <option value="announcement">Announcement</option>
-                </select>
-              </div>
-              <div className="mb-4">
-                <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Send to</label>
-                <select value={notifTarget} onChange={e => setNotifTarget(e.target.value)} className={selectClass}>
-                  <option value="all">All Users</option>
-                  <option value="online">Online Users Only</option>
-                </select>
-              </div>
-              <button onClick={sendNotification} className={`${btnPrimary} w-full py-4 text-[15px] font-semibold flex items-center justify-center gap-2 mt-2.5`}>
-                <Send size={18} /> Send Notification
-              </button>
-            </div>
-
-            <div className={`${glassCard} p-4`}>
-              <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <RefreshCw size={14} className="text-purple-500" /> Recent Notifications
-              </h3>
-              {(() => {
-                // Deduplicate notifications - group by title+message, show unique ones only
-                const seen = new Set<string>();
-                const uniqueNotifs = notificationsData.filter(notif => {
-                  const key = `${notif.title}||${notif.message}`;
-                  if (seen.has(key)) return false;
-                  seen.add(key);
-                  return true;
-                });
-                return uniqueNotifs.length === 0 ? (
-                  <p className="text-[#957DAD] text-[13px] text-center py-5">No notifications sent yet</p>
-                ) : uniqueNotifs.slice(0, 15).map((notif, idx) => (
-                  <div key={`notif-${idx}-${notif.timestamp}`} className="bg-[#1A1A2E] border border-purple-500/30 rounded-xl p-4 mb-3">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <span className="bg-gradient-to-r from-pink-500 to-pink-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-[10px] inline-flex items-center gap-1">
-                          <Bell size={10} /> {notif.type}
-                        </span>
-                        <span className="text-[11px] text-[#957DAD] ml-2.5">{formatTime(notif.timestamp)}</span>
-                      </div>
-                      <button onClick={() => deleteNotification(notif.title, notif.message, notif.timestamp)} className="text-[#957DAD] hover:text-red-400 transition-colors">
-                        <X size={14} />
-                      </button>
-                    </div>
-                    <h4 className="text-[13px] font-semibold mb-1.5">{notif.title}</h4>
-                    <p className="text-xs text-[#D1C4E9]">{notif.message}</p>
-                    {notif.contentId && (
-                      <div className="mt-2 text-[11px] text-purple-500 flex items-center gap-1">
-                        <Link size={10} /> Linked to content
-                      </div>
-                    )}
-                  </div>
-                ));
-              })()}
-            </div>
-          </div>
-        )}
+        {/* NOTIFICATIONS section fully removed — Telegram posts handle release announcements now */}
 
         {/* ==================== NEW RELEASES ==================== */}
         {activeSection === "new-releases" && (
@@ -7098,72 +6973,7 @@ ${tgHashtags}`;
         {/* ==================== SETTINGS ==================== */}
         {activeSection === "settings" && (
           <div>
-            {/* Admin User ID for Notifications */}
-            <div className={`${glassCard} p-4 mb-4`}>
-              <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <Bell size={14} className="text-yellow-500" /> অ্যাডমিন নোটিফিকেশন সেটিং
-              </h3>
-              <p className="text-[11px] text-[#D1C4E9] mb-4">
-                ইউজার bKash payment, subscription approve/reject, আর comment reply-এর জন্য এখানে Admin User ID / Email এবং FCM token দিন। একাধিক value হলে প্রতি লাইনে একটি করে দিন।
-              </p>
-              <div className="space-y-3">
-                <textarea
-                  value={adminUserIdInput}
-                  onChange={(e) => setAdminUserIdInput(e.target.value)}
-                  placeholder="Admin User ID / Email\nএক লাইনে একটি"
-                  rows={4}
-                  className={`${inputClass} min-h-[110px] resize-y`}
-                />
-                <textarea
-                  value={adminFcmTokensInput}
-                  onChange={(e) => setAdminFcmTokensInput(e.target.value)}
-                  placeholder="Admin FCM Token\nএক লাইনে একটি"
-                  rows={4}
-                  className={`${inputClass} min-h-[110px] resize-y`}
-                />
-                <button
-                  onClick={async () => {
-                    const userIds = adminUserIdInput.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
-                    const tokens = adminFcmTokensInput.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
-                    if (userIds.length === 0 && tokens.length === 0) {
-                      toast.error("কমপক্ষে একটি User ID অথবা FCM token দিন");
-                      return;
-                    }
-                    try {
-                      await update(ref(db, "admin"), {
-                        userId: userIds[0] || "",
-                        notificationTargets: { userIds, tokens, updatedAt: Date.now() },
-                      });
-                      toast.success("Admin notification targets সেভ হয়েছে");
-                    } catch {
-                      toast.error("Failed to save");
-                    }
-                  }}
-                  className={`${btnPrimary} w-full !px-4`}
-                >
-                  <Save size={14} /> Save Notification Targets
-                </button>
-              </div>
-              {savedAdminUserId && (
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="text-[11px] text-green-400">✓ Active:</span>
-                  <span className="text-[11px] text-zinc-400 font-mono truncate max-w-[250px]">{savedAdminUserId}</span>
-                </div>
-              )}
-              {savedAdminFcmTokens.length > 0 && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-[11px] text-green-400">✓ Tokens:</span>
-                  <span className="text-[11px] text-zinc-400 font-mono">{savedAdminFcmTokens.length} saved</span>
-                </div>
-              )}
-              {!savedAdminUserId && savedAdminFcmTokens.length === 0 && (
-                <div className="mt-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                  <p className="text-[11px] text-yellow-400 flex items-center gap-1.5">
-                    <AlertTriangle size={12} /> Admin User ID বা FCM token সেট না করলে পেমেন্ট নোটিফিকেশন আসবে না!
-                  </p>
-                </div>
-              )}
-            </div>
+            {/* Admin notification & FCM token settings removed — Telegram-only delivery */}
 
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
@@ -7265,16 +7075,7 @@ ${tgHashtags}`;
               </div>
             </div>
 
-            {/* Force Notification Re-Prompt */}
-            <div className={`${glassCard} p-4 mb-4`}>
-              <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <Bell size={14} className="text-red-400" /> রি-নোটিফিকেশন প্রম্পট
-              </h3>
-              <p className="text-[11px] text-zinc-400 mb-3">
-                এটি অন করলে সাইটে ভিজিট করা সব লগইনড ইউজারকে ব্রাউজার নোটিফিকেশন পারমিশন প্রম্পট দেখাবে। Allow করলে সাথে সাথে FCM টোকেন সেভ হবে এবং পুশ নোটিফিকেশন পাবে।
-              </p>
-              <ForceNotifToggle glassCard={glassCard} />
-            </div>
+            {/* Force notification re-prompt removed — FCM disabled site-wide */}
 
 
             {/* Proxy Server Selector */}
@@ -8489,7 +8290,7 @@ ${tgHashtags}`;
           { section: "dashboard" as Section, icon: <LayoutDashboard size={18} />, label: "Dashboard" },
           { section: "webseries" as Section, icon: <Film size={18} />, label: "Series" },
           { section: "movies" as Section, icon: <Video size={18} />, label: "Movies" },
-          { section: "notifications" as Section, icon: <Bell size={18} />, label: "Notify" },
+          { section: "telegram-post" as Section, icon: <Send size={18} />, label: "Telegram" },
         ].map(item => (
           <div key={item.section} onClick={() => showSection(item.section)}
             className={`flex flex-col items-center gap-0.5 py-2 px-2 cursor-pointer relative transition-colors ${
