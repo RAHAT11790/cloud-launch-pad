@@ -53,7 +53,13 @@ const isDirectPlaybackUrl = (url: string): boolean => {
   return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
 };
 
-const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
+const buildPlaybackCandidates = (
+  url: string,
+  cdnEnabled: boolean,
+  proxyUrl?: string,
+  proxyApiKey?: string,
+  mode?: "firem" | "proxy" | "direct",
+): string[] => {
   if (!url) return [];
 
   const candidates: string[] = [];
@@ -65,6 +71,26 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const encoded = encodeURIComponent(url);
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+
+  // === EXPLICIT MODE — admin selected per-server ===
+  if (mode === "direct") {
+    // Pure direct, no proxy ever (e.g. RS PR S1 onrender https links)
+    addCandidate(url);
+    return candidates;
+  }
+
+  if (mode === "proxy") {
+    // Force through Supabase stream-proxy (e.g. RS 02 bot-hosting http link)
+    if (BUILTIN_STREAM_PROXY) {
+      addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
+    }
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+    addCandidate(url); // last-resort
+    return candidates;
+  }
+
+  // === LEGACY HEURISTIC (for entries without explicit mode) ===
   const prefersDirectPlayback = isDirectPlaybackUrl(url);
 
   if (prefersDirectPlayback) {
@@ -77,15 +103,10 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
   if (customProxyCandidate) addCandidate(customProxyCandidate);
 
-  // http:// cannot be loaded directly on https pages (mixed content).
-  // Always fall back to the built-in Supabase stream-proxy so playback works
-  // out-of-the-box on Server 1 (bot-hosting.net) without any admin config.
   if (BUILTIN_STREAM_PROXY) {
     addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
   }
 
-  // If still nothing, fall back to direct (will fail on mixed content but
-  // preserves prior behaviour for unknown schemes).
   if (candidates.length === 0) {
     addCandidate(url);
   }
@@ -93,8 +114,14 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   return candidates;
 };
 
-const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
-  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
+const getPrimaryPlaybackSrc = (
+  url: string,
+  cdnEnabled: boolean,
+  proxyUrl?: string,
+  proxyApiKey?: string,
+  mode?: "firem" | "proxy" | "direct",
+): string => {
+  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey, mode)[0] || url;
 };
 
 // Per-server playback mode. Admin selects this in Server Manager.
