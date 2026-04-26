@@ -328,6 +328,7 @@ export default function MiniApp() {
   const [rewardReady, setRewardReady] = useState(false);
   const [adCountdownActive, setAdCountdownActive] = useState(false);
   const [adContinueReady, setAdContinueReady] = useState(false);
+  const [pendingAdCompletion, setPendingAdCompletion] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const preloadedTrackingIdRef = useRef<string>("");
