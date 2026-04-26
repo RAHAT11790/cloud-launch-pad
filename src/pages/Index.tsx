@@ -1635,6 +1635,8 @@ const Index = () => {
     const target = e.target as HTMLElement;
     let el: HTMLElement | null = target;
     while (el && el !== e.currentTarget) {
+      // Opt-out: any element marked data-no-swipe (e.g. HeroSlider) handles its own gestures
+      if (el.dataset && el.dataset.noSwipe === "true") return;
       if (el.scrollWidth > el.clientWidth + 5) return;
       el = el.parentElement;
     }
