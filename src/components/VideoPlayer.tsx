@@ -1424,11 +1424,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, []);
 
   const togglePlay = useCallback(() => {
+    if (isEmbedPlayback) {
+      sendEmbedCmd(playing ? "pause" : "play");
+      setPlaying(prev => !prev);
+      resetHideTimer();
+      return;
+    }
+
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) v.play(); else v.pause();
     resetHideTimer();
-  }, [resetHideTimer]);
+  }, [isEmbedPlayback, playing, resetHideTimer, sendEmbedCmd]);
 
   const MAX_VOL = 100;
   const applyPlayerVolume = useCallback((nextBoost: number, nextMuted = muted) => {
@@ -1437,12 +1444,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setBoostedVolume(clampedBoost);
     setMuted(effectiveMuted);
     setVolume(Math.min(1, clampedBoost / 100));
+
+    if (isEmbedPlayback) {
+      sendEmbedCmd("mute", { muted: effectiveMuted });
+      sendEmbedCmd("volume", { volume: effectiveMuted ? 0 : Math.min(1, clampedBoost / 100) });
+      return;
+    }
+
     const v = videoRef.current;
     if (v) {
       v.muted = effectiveMuted;
       v.volume = effectiveMuted ? 0 : Math.min(1, clampedBoost / 100);
     }
-  }, [muted]);
+  }, [isEmbedPlayback, muted, sendEmbedCmd]);
 
   const getSafeSeekTime = useCallback((v: HTMLVideoElement, target: number) => {
     if (!Number.isFinite(v.duration) || v.duration <= 0) return 0;
@@ -1460,6 +1474,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, []);
 
   const seek = useCallback((seconds: number) => {
+    if (isEmbedPlayback) {
+      const total = embedTimeRef.current.duration || duration || 0;
+      const nextTime = Math.min(Math.max((embedTimeRef.current.currentTime || currentTime) + seconds, 0), total || Number.MAX_SAFE_INTEGER);
+      embedTimeRef.current.currentTime = nextTime;
+      sendEmbedCmd("seek", { time: nextTime });
+      syncUiProgress(nextTime, total);
+
+      setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
+      setTimeout(() => setSkipIndicator(null), 600);
+      resetHideTimer();
+      return;
+    }
+
     const v = videoRef.current;
     if (!v) return;
 
@@ -1469,7 +1496,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
     setTimeout(() => setSkipIndicator(null), 600);
     resetHideTimer();
-  }, [getSafeSeekTime, resetHideTimer]);
+  }, [currentTime, duration, getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd, syncUiProgress]);
 
   const toggleFullscreen = useCallback(async () => {
     const el = videoContainerRef.current;
@@ -1489,10 +1516,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, []);
 
   const setSpeed = useCallback((rate: number) => {
-    if (videoRef.current) videoRef.current.playbackRate = rate;
+    if (isEmbedPlayback) sendEmbedCmd("rate", { rate });
+    else if (videoRef.current) videoRef.current.playbackRate = rate;
     setPlaybackRate(rate);
     setShowSettings(false);
-  }, []);
+  }, [isEmbedPlayback, sendEmbedCmd]);
 
   const switchQuality = useCallback((option: QualityOption) => {
     // Block 4K for non-premium users
@@ -1519,13 +1547,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const v = videoRef.current;
-    if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+
+    if (isEmbedPlayback) {
+      const total = embedTimeRef.current.duration || duration || 0;
+      const target = pct * total;
+      embedTimeRef.current.currentTime = target;
+      sendEmbedCmd("seek", { time: target });
+      syncUiProgress(target, total);
+      resetHideTimer();
+      return;
+    }
+
+    const v = videoRef.current;
+    if (!v) return;
     v.currentTime = getSafeSeekTime(v, pct * v.duration);
     resetHideTimer();
-  }, [getSafeSeekTime, resetHideTimer]);
+  }, [duration, getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd, syncUiProgress]);
 
   // Touch drag seeking on progress bar
   const progressBarRef = useRef<HTMLDivElement>(null);
@@ -1534,21 +1573,42 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const handleProgressTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     isSeeking.current = true;
-    const v = videoRef.current;
-    if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
+
+    if (isEmbedPlayback) {
+      const total = embedTimeRef.current.duration || duration || 0;
+      const target = pct * total;
+      embedTimeRef.current.currentTime = target;
+      sendEmbedCmd("seek", { time: target });
+      syncUiProgress(target, total);
+      resetHideTimer();
+      return;
+    }
+
+    const v = videoRef.current;
+    if (!v) return;
     v.currentTime = getSafeSeekTime(v, pct * v.duration);
     resetHideTimer();
-  }, [getSafeSeekTime, resetHideTimer]);
+  }, [duration, getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd, syncUiProgress]);
 
   const handleProgressTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (!isSeeking.current) return;
-    const v = videoRef.current;
-    if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
+
+    if (isEmbedPlayback) {
+      const total = embedTimeRef.current.duration || duration || 0;
+      const target = pct * total;
+      embedTimeRef.current.currentTime = target;
+      sendEmbedCmd("seek", { time: target });
+      syncUiProgress(target, total);
+      return;
+    }
+
+    const v = videoRef.current;
+    if (!v) return;
     const target = getSafeSeekTime(v, pct * v.duration);
     v.currentTime = target;
 
@@ -1559,7 +1619,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (timeDisplayRef.current && v.duration > 0) {
       timeDisplayRef.current.textContent = `${formatTime(target)} / ${formatTime(v.duration)}`;
     }
-  }, [getSafeSeekTime]);
+  }, [duration, getSafeSeekTime, isEmbedPlayback, sendEmbedCmd, syncUiProgress]);
 
   const handleProgressTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
