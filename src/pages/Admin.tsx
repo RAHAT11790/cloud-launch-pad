@@ -7288,6 +7288,11 @@ ${tgHashtags}`;
           <MiniAppManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
+        {/* ==================== APK DW (Download Center) ==================== */}
+        {activeSection === "apk-dw" && (
+          <ApkDownloadCenter glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+        )}
+
         {/* ==================== AI CONFIG ==================== */}
         {activeSection === "ai-config" && (
           <AiConfigSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
