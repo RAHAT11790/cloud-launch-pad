@@ -1649,10 +1649,10 @@ const Index = () => {
     const touch = e.touches[0];
     const dx = touch.clientX - swipeRef.current.startX;
     const dy = touch.clientY - swipeRef.current.startY;
-    if (swipeRef.current.isHorizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-      swipeRef.current.isHorizontal = Math.abs(dx) > Math.abs(dy) * 1.2;
+    if (swipeRef.current.isHorizontal === null && (Math.abs(dx) > 14 || Math.abs(dy) > 14)) {
+      swipeRef.current.isHorizontal = Math.abs(dx) > Math.abs(dy) * 1.45;
     }
-    if (!swipeRef.current.isHorizontal) return;
+    if (!swipeRef.current.isHorizontal || Math.abs(dx) < 18) return;
     e.preventDefault();
     const idx = activePageIdx;
     const atStart = idx === 0 && dx > 0;
@@ -1943,7 +1943,7 @@ const Index = () => {
         onTouchMove={handleMainTouchMove}
         onTouchEnd={handleMainTouchEnd}
         className="relative overflow-hidden"
-        style={{ height: "calc(100vh - 65px)", marginTop: 0 }}
+        style={{ height: "calc(100vh - 65px)", marginTop: 0, touchAction: "pan-y" }}
       >
         <div ref={swipeTrackRef} style={{
           display: "flex",
