@@ -30,12 +30,13 @@ export default function ManifestManager() {
 
   useEffect(() => {
     const isAdminRoute = location.pathname.startsWith("/admin");
+    const isUserAppRoute = location.pathname.startsWith("/app");
     const appName = isAdminRoute ? `${branding.siteName} Admin` : branding.siteName;
     const iconUrl = toAbsoluteUrl(branding.logoUrl) || "/android-chrome-512x512.png";
-    const startUrl = isAdminRoute ? "/admin?source=homescreen" : "/?source=homescreen";
-    const scope = isAdminRoute ? "/admin" : "/";
+    const startUrl = isAdminRoute ? "/admin?source=homescreen" : "/app?source=homescreen";
+    const scope = isAdminRoute ? "/admin" : "/app";
     const manifest = {
-      id: isAdminRoute ? "/install/admin-panel" : "/install/user-panel",
+      id: isAdminRoute ? "/install/admin-panel-v2" : "/install/user-panel-v2",
       name: appName,
       short_name: appName,
       description: isAdminRoute
