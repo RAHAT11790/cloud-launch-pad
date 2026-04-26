@@ -180,6 +180,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const rafId = useRef<number>(0);
   const progressRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
+  // Throttle React state updates of currentTime/duration to ~1Hz so the
+  // 2700-line player doesn't re-render 60x/sec during playback.
+  // The progress bar + time text update via DOM refs above for smooth visuals.
+  const lastStateSyncRef = useRef(0);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -218,19 +222,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [activeRawSrc]);
 
   const syncUiProgress = useCallback((nextTime: number, nextDuration: number) => {
-    setCurrentTime(nextTime);
-    if (Number.isFinite(nextDuration) && nextDuration >= 0) {
-      setDuration(nextDuration);
-    }
-
+    // Live DOM updates — smooth, zero React cost
     if (progressRef.current && nextDuration > 0) {
       progressRef.current.style.width = `${(nextTime / nextDuration) * 100}%`;
     }
-
     if (timeDisplayRef.current) {
       timeDisplayRef.current.textContent = nextDuration > 0
         ? `${formatTime(nextTime)} / ${formatTime(nextDuration)}`
         : formatTime(nextTime);
+    }
+    // Throttled React state — only ~1x/sec for downstream consumers
+    // (auto-next-episode overlay, save-progress, etc.)
+    const now = performance.now();
+    if (now - lastStateSyncRef.current >= 1000) {
+      lastStateSyncRef.current = now;
+      setCurrentTime(nextTime);
+      if (Number.isFinite(nextDuration) && nextDuration >= 0) {
+        setDuration(nextDuration);
+      }
     }
   }, []);
 
@@ -1243,8 +1252,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           if (timeDisplayRef.current && dur > 0) {
             timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
           }
-          // Update React state less frequently (every ~500ms) for other consumers
-          setCurrentTime(ct);
+          // Throttle React state updates to ~1Hz so the giant component
+          // doesn't re-render every frame. The DOM refs above keep the
+          // visible UI buttery smooth at 60fps.
+          const now = performance.now();
+          if (now - lastStateSyncRef.current >= 1000) {
+            lastStateSyncRef.current = now;
+            setCurrentTime(ct);
+            if (Number.isFinite(dur) && dur > 0) setDuration(dur);
+          }
           rafId.current = requestAnimationFrame(tick);
         }
       };
