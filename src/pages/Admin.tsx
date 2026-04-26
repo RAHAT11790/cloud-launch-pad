@@ -5565,7 +5565,30 @@ ${tgHashtags}`;
                 Removes every account without an email (guest / anonymous). Those users will be force-logged out the next time they open the app and must sign up again with email or Google.
               </p>
               {(() => {
-                const guestList = usersData.filter(u => !u?.email || String(u.email).trim() === "");
+                // Build a set of "registered" identifiers from appUsers (email-or-google signups).
+                // Any users/* row whose id matches one of these uids OR whose own email is set,
+                // OR which has googleAuth/authProvider markers, is NOT a guest.
+                const registeredUids = new Set<string>();
+                const registeredEmails = new Set<string>();
+                Object.values(appUsersGlobal || {}).forEach((au: any) => {
+                  if (!au) return;
+                  if (au.id) registeredUids.add(String(au.id));
+                  if (au.email) registeredEmails.add(String(au.email).trim().toLowerCase());
+                });
+                const isGuest = (u: any) => {
+                  if (!u) return false;
+                  if (u.email && String(u.email).trim()) return false;
+                  if (u.googleAuth) return false;
+                  if (u.authProvider === "email" || u.authProvider === "google") return false;
+                  if (u.id && registeredUids.has(String(u.id))) return false;
+                  // comma-key rows store id separately; also guard against the row id itself being the comma-key of a registered email
+                  if (typeof u.id === "string" && u.id.includes(",")) {
+                    const guess = u.id.replace(/,/g, ".").toLowerCase();
+                    if (registeredEmails.has(guess)) return false;
+                  }
+                  return true;
+                };
+                const guestList = usersData.filter(isGuest);
                 return (
                   <>
                     <div className="text-xs text-[#D1C4E9] mb-3">
