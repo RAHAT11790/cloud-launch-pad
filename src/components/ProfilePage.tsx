@@ -492,24 +492,28 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
   const [deviceExceeded, setDeviceExceeded] = useState(false);
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
 
-  // User-side install button visibility — controlled by admin via APK DW.
-  // Path: settings/apk/userEnabled (default true).
+  // User-side APK download — admin sets URL + ON/OFF toggle from APK DW.
+  // Paths: settings/apk/userEnabled (bool), settings/apk/userUrl (string).
   const [userApkEnabled, setUserApkEnabled] = useState<boolean>(true);
+  const [userApkUrl, setUserApkUrl] = useState<string>("");
   useEffect(() => {
-    const unsub = onValue(ref(db, "settings/apk/userEnabled"), (snap) => {
+    const u1 = onValue(ref(db, "settings/apk/userEnabled"), (snap) => {
       const v = snap.val();
       setUserApkEnabled(v === undefined || v === null ? true : !!v);
     });
-    return () => unsub();
+    const u2 = onValue(ref(db, "settings/apk/userUrl"), (snap) => {
+      setUserApkUrl(String(snap.val() || ""));
+    });
+    return () => { u1(); u2(); };
   }, []);
-  const { promptInstall: promptUserInstall, isStandalone: userIsInstalled } = usePwaInstall({
-    appName: brandingCfg.siteName,
-    installPath: "/app",
-  });
   const handleDownloadUserApk = () => {
-    // Triggers Chrome's native "Add to Home screen / Install app" dialog.
-    // Falls back to instructions on iOS or unsupported browsers.
-    promptUserInstall();
+    const url = (userApkUrl || "").trim();
+    if (!url) {
+      toast.error("Download link is not configured yet");
+      return;
+    }
+    // Open APK URL — browser will download directly.
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const getUserId = (): string | null => {
@@ -1598,7 +1602,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
 
         {/* Download APK — User panel install button.
             Hidden if admin disabled it via APK DW > User Panel Download Button. */}
-        {userApkEnabled ? (
+        {userApkEnabled && userApkUrl ? (
           <>
             <button
               onClick={handleDownloadUserApk}
