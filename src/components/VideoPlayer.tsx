@@ -1491,20 +1491,39 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           onTouchEnd={handleTouchEnd}
         >
           {/* No thumbnail/poster overlay — solid black bg only for fast load */}
-          <video
-            ref={videoRef}
-            src={adGateActive ? "" : currentSrc}
-            className="w-full h-full bg-black"
-            style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
-            playsInline
-            preload={adGateActive ? "none" : "auto"}
-            autoPlay={!adGateActive}
-            controlsList="nodownload noplaybackrate noremoteplayback"
-            disablePictureInPicture
-            disableRemotePlayback
-            onContextMenu={(e) => e.preventDefault()}
-            onDragStart={(e) => e.preventDefault()}
-          />
+          {/* ===== Server 2 (HuggingFace HTTPS) iframe mode =====
+              When the active server domain is hf.space (or any domain that
+              hosts our branded `req.html`), play the MKV inside that page so
+              the browser doesn't choke on the Matroska container. The iframe
+              is the *visual* surface only — UI/controls stay in this player
+              and drive the embed via postMessage (see useEffect below). */}
+          {currentSrc && /hf\.space|huggingface/i.test(currentSrc) ? (
+            <iframe
+              ref={embedIframeRef}
+              src={`https://rahat1102-video-hosting-bot.hf.space/req.html?src=${encodeURIComponent(currentSrc)}`}
+              className="w-full h-full bg-black border-0"
+              style={{ pointerEvents: "none" }}
+              allow="autoplay; fullscreen; encrypted-media"
+              allowFullScreen
+              referrerPolicy="no-referrer"
+              title="player"
+            />
+          ) : (
+            <video
+              ref={videoRef}
+              src={adGateActive ? "" : currentSrc}
+              className="w-full h-full bg-black"
+              style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
+              playsInline
+              preload={adGateActive ? "none" : "auto"}
+              autoPlay={!adGateActive}
+              controlsList="nodownload noplaybackrate noremoteplayback"
+              disablePictureInPicture
+              disableRemotePlayback
+              onContextMenu={(e) => e.preventDefault()}
+              onDragStart={(e) => e.preventDefault()}
+            />
+          )}
 
           {/* Video Error Overlay */}
           {videoError && (
