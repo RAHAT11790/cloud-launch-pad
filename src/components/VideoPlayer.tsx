@@ -692,12 +692,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     const server = videoServers[serverIndex];
     if (!server?.domain) return rawUrl;
+    const domainTrim = server.domain.trim().replace(/\/$/, "");
+    // ===== Firem / hf.space mode =====
+    // If the admin-supplied domain ends with `/watch` (or the host is hf.space),
+    // we treat it as the iframe-embed server. The ORIGINAL full upstream URL is
+    // appended verbatim after `/watch/` so the embed can fetch it through its
+    // proxy (e.g. https://xxx.hf.space/watch/http://fi3.bot-hosting.net/.../file.mkv).
+    const isFiremDomain = /\/watch\/?$/i.test(server.domain.trim()) || /hf\.space|huggingface/i.test(domainTrim);
+    if (isFiremDomain) {
+      const base = /\/watch$/i.test(domainTrim) ? domainTrim : `${domainTrim}/watch`;
+      // Don't double-wrap if rawUrl is already pointing at this server
+      try {
+        const u = new URL(rawUrl);
+        if (/hf\.space|huggingface/i.test(u.host)) return rawUrl;
+      } catch {}
+      return `${base}/${rawUrl}`;
+    }
     try {
       const url = new URL(rawUrl);
-      return `${server.domain.replace(/\/$/, "")}${url.pathname}${url.search}${url.hash}`;
+      return `${domainTrim}${url.pathname}${url.search}${url.hash}`;
     } catch {
       const match = rawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
-      return `${server.domain.replace(/\/$/, "")}${match ? match[1] : rawUrl}`;
+      return `${domainTrim}${match ? match[1] : rawUrl}`;
     }
   }, [videoServers]);
 
