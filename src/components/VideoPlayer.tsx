@@ -796,7 +796,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
     if (videoServers[serverIndex].locked && !isPremium) return;
-    if (serverSwitchingRef.current) return;
 
     const v = videoRef.current;
     const savedTime = isEmbedPlayback
@@ -817,11 +816,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
+    embedTimeRef.current = {
+      currentTime: savedTime,
+      duration: embedTimeRef.current.duration || duration || 0,
+    };
     setCurrentSrc(resolved);
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
     }, 160);
-  }, [activeServerIndex, applyServerDomain, currentTime, isEmbedPlayback, isPremium, resolvePlaybackSrc, videoServers]);
+  }, [activeServerIndex, applyServerDomain, currentTime, duration, isEmbedPlayback, isPremium, resolvePlaybackSrc, videoServers]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
@@ -2537,9 +2540,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             {/* Horizontal episode scroll */}
             <div className="grid grid-cols-5 gap-2 pb-2">
               {episodeList.map((ep) => (
-                <button
-                  key={ep.number}
-                  onClick={ep.onClick}
+              <button
+                key={ep.number}
+                onClick={() => {
+                  if (ep.active) return;
+                  setVideoError(false);
+                  setIsBuffering(true);
+                  setShowFixedLoader(true);
+                  setIsServerSwitching(true);
+                  setPlaying(false);
+                  pendingSeek.current = null;
+                  embedTimeRef.current = { currentTime: 0, duration: 0 };
+                  ep.onClick();
+                }}
                   className={`w-full h-12 rounded-xl flex items-center justify-center transition-all border text-center ${
                     ep.active
                       ? "gradient-primary border-primary/40 text-primary-foreground shadow-[0_0_12px_hsla(170,75%,45%,0.3)]"
