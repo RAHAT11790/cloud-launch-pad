@@ -1927,6 +1927,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [webseriesData, setWebseriesData] = useState<any[]>([]);
   const [moviesData, setMoviesData] = useState<any[]>([]);
   const [usersData, setUsersData] = useState<any[]>([]);
+  const [appUsersGlobal, setAppUsersGlobal] = useState<Record<string, any>>({});
   const [notificationsData, setNotificationsData] = useState<any[]>([]);
   const [releasesData, setReleasesData] = useState<any[]>([]);
   const [commentsData, setCommentsData] = useState<any[]>([]);
