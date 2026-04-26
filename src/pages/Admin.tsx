@@ -4025,6 +4025,7 @@ ${tgHashtags}`;
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
     { section: "email-service", icon: <Mail size={16} />, label: "Email Service" },
     { section: "mini-app", icon: <Sparkles size={16} />, label: "Telegram Mini App" },
+    { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
