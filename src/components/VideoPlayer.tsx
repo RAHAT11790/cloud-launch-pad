@@ -1124,7 +1124,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [showControls, scheduleHideTimer, clearHideTimer]);
 
   // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
-  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !serverSwitchingRef.current;
+  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !isServerSwitching;
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
@@ -1400,6 +1400,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Pause video when app goes background / tab hidden
   useEffect(() => {
     const pausePlayback = () => {
+      if (isEmbedPlayback) {
+        sendEmbedCmd("pause");
+        setPlaying(false);
+        return;
+      }
+
       const v = videoRef.current;
       if (!v) return;
       if (!v.paused) {
@@ -1421,7 +1427,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       window.removeEventListener('beforeunload', pausePlayback);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, []);
+  }, [isEmbedPlayback, sendEmbedCmd]);
 
   const togglePlay = useCallback(() => {
     if (isEmbedPlayback) {
