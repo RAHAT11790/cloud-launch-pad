@@ -9,6 +9,7 @@ import NotFound from "./pages/NotFound";
 import Unlock from "./pages/Unlock";
 import MiniApp from "./pages/MiniApp";
 import DynamicMeta from "./components/DynamicMeta";
+import ManifestManager from "./components/ManifestManager";
 
 const queryClient = new QueryClient();
 
@@ -16,9 +17,10 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <DynamicMeta />
-      <Toaster />
-      <Sonner />
       <BrowserRouter>
+        <ManifestManager />
+        <Toaster />
+        <Sonner />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/admin" element={<Admin />} />
