@@ -19,8 +19,9 @@ import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
 import AnimeDetails from "@/components/AnimeDetails";
 import VideoPlayer from "@/components/VideoPlayer";
-import SearchPage from "@/components/SearchPage";
-import ProfilePage from "@/components/ProfilePage";
+import { lazy, Suspense } from "react";
+const SearchPage = lazy(() => import("@/components/SearchPage"));
+const ProfilePage = lazy(() => import("@/components/ProfilePage"));
 import NewEpisodeReleases from "@/components/NewEpisodeReleases";
 import LoginPage from "@/components/LoginPage";
 import { useFirebaseData } from "@/hooks/useFirebaseData";
@@ -1634,6 +1635,8 @@ const Index = () => {
     const target = e.target as HTMLElement;
     let el: HTMLElement | null = target;
     while (el && el !== e.currentTarget) {
+      // Opt-out: any element marked data-no-swipe (e.g. HeroSlider) handles its own gestures
+      if (el.dataset && el.dataset.noSwipe === "true") return;
       if (el.scrollWidth > el.clientWidth + 5) return;
       el = el.parentElement;
     }
@@ -1978,13 +1981,17 @@ const Index = () => {
 
       <AnimatePresence>
         {showSearch && (
-          <SearchPage allAnime={allAnime} onClose={() => setShowSearch(false)} onCardClick={(anime) => { setShowSearch(false); handleCardClick(anime); }} />
+          <Suspense fallback={null}>
+            <SearchPage allAnime={allAnime} onClose={() => setShowSearch(false)} onCardClick={(anime) => { setShowSearch(false); handleCardClick(anime); }} />
+          </Suspense>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {showProfile && (
-          <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
+          <Suspense fallback={null}>
+            <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
+          </Suspense>
         )}
       </AnimatePresence>
 

@@ -1038,10 +1038,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const scheduleHideTimer = useCallback(() => {
     clearHideTimer();
     if (adGateActive || showSettings || showAudioPanel || showQualityPanel || showServerPanel || showDownloadQualityPicker) return;
+    // Keep controls visible while a video error is showing — user must reach the server switcher
+    if (videoError) return;
     hideTimer.current = setTimeout(() => {
       setShowControls(false);
     }, locked ? 1400 : 2600);
-  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings]);
+  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings, videoError]);
 
   const resetHideTimer = useCallback(() => {
     setShowControls(true);
@@ -1066,6 +1068,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     return clearHideTimer;
   }, [showControls, scheduleHideTimer, clearHideTimer]);
+
+  // Force controls visible whenever a video error is shown so the server switcher is always reachable
+  useEffect(() => {
+    if (videoError) {
+      setShowControls(true);
+      clearHideTimer();
+    }
+  }, [videoError, clearHideTimer]);
 
   // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
   const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !serverSwitchingRef.current;
@@ -1681,17 +1691,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             />
           )}
 
-          {/* Video Error Overlay */}
+          {/* Video Error Banner — non-blocking, controls always remain accessible above (z-40) */}
           {videoError && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20">
-              <div className="w-16 h-16 rounded-full bg-destructive/20 flex items-center justify-center mb-4">
-                <X className="w-8 h-8 text-destructive" />
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[5] pointer-events-none px-3 max-w-[90%]">
+              <div className="player-glass rounded-xl px-3 py-2 flex items-center gap-2 pointer-events-auto shadow-lg border border-destructive/40 bg-black/70">
+                <div className="w-7 h-7 rounded-full bg-destructive/20 flex items-center justify-center shrink-0">
+                  <X className="w-4 h-4 text-destructive" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold text-white truncate">Video unavailable</p>
+                  <p className="text-[10px] text-white/70 truncate">Tap a different server below</p>
+                </div>
+                <button onClick={(e) => { e.stopPropagation(); setVideoError(false); setIsBuffering(true); const v = videoRef.current; if (v) { v.load(); } }} className="px-2.5 py-1 rounded-md gradient-primary text-[10px] font-semibold shrink-0">
+                  Retry
+                </button>
               </div>
-              <p className="text-base font-semibold text-foreground mb-1">Video Unavailable</p>
-              <p className="text-xs text-muted-foreground mb-4 text-center px-6">Server is not responding. Try another episode or quality.</p>
-              <button onClick={(e) => { e.stopPropagation(); setVideoError(false); setIsBuffering(true); const v = videoRef.current; if (v) { v.load(); } }} className="px-4 py-2 rounded-lg gradient-primary text-sm font-semibold btn-glow">
-                Retry
-              </button>
             </div>
           )}
 
