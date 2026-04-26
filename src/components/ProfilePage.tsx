@@ -1602,7 +1602,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
 
         {/* Download APK — User panel install button.
             Hidden if admin disabled it via APK DW > User Panel Download Button. */}
-        {userApkEnabled ? (
+        {userApkEnabled && userApkUrl ? (
           <>
             <button
               onClick={handleDownloadUserApk}
