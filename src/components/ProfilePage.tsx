@@ -9,6 +9,7 @@ import { TELEGRAM_ADMIN_URL, TELEGRAM_CHANNEL_URL, SITE_NAME } from "@/lib/siteC
 import { useBranding } from "@/hooks/useBranding";
 import AboutPage from "./AboutPage";
 import PrivacyPolicyPage from "./PrivacyPolicyPage";
+import { usePwaInstall } from "@/hooks/usePwaInstall";
 
 const VideoPlayer = lazy(() => import("@/components/VideoPlayer"));
 
