@@ -3363,6 +3363,31 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const totalCategories = useMemo(() => Object.keys(categoriesData).length, [categoriesData]);
   const onlineUsers = useMemo(() => usersData.filter(u => u.online).length, [usersData]);
   const offlineUsers = useMemo(() => usersData.length - onlineUsers, [usersData.length, onlineUsers]);
+
+  // Strict guest detection — matches the bulk-delete logic so the badge and the action stay in sync.
+  const guestUidSet = useMemo(() => {
+    const registeredUids = new Set<string>();
+    const registeredEmails = new Set<string>();
+    Object.values(appUsersGlobal || {}).forEach((au: any) => {
+      if (!au) return;
+      if (au.id) registeredUids.add(String(au.id));
+      if (au.email) registeredEmails.add(String(au.email).trim().toLowerCase());
+    });
+    const guests = new Set<string>();
+    usersData.forEach((u: any) => {
+      if (!u) return;
+      if (u.email && String(u.email).trim()) return;
+      if (u.googleAuth) return;
+      if (u.authProvider === "email" || u.authProvider === "google") return;
+      if (u.id && registeredUids.has(String(u.id))) return;
+      if (typeof u.id === "string" && u.id.includes(",")) {
+        const guess = u.id.replace(/,/g, ".").toLowerCase();
+        if (registeredEmails.has(guess)) return;
+      }
+      guests.add(String(u.id));
+    });
+    return guests;
+  }, [usersData, appUsersGlobal]);
   const recentContent = useMemo(() => [...webseriesData, ...moviesData].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3), [webseriesData, moviesData]);
   const categoryList = useMemo(() => Object.entries(categoriesData).map(([id, cat]: any) => ({ id, name: cat.name })), [categoriesData]);
   const languageOptions = useMemo(() => ["English", "Hindi", "Tamil", "Telugu", "Korean", "Japanese", "Spanish", "Multi"], []);
