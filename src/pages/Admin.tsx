@@ -3302,35 +3302,24 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const onlineUsers = useMemo(() => usersData.filter(u => u.online).length, [usersData]);
   const offlineUsers = useMemo(() => usersData.length - onlineUsers, [usersData.length, onlineUsers]);
 
-  // Strict guest detection: a user is REAL only if they exist in `appUsers` (Firebase Auth registered via email or Google).
-  // Anything in `users/` node without a matching `appUsers/{uid}` entry is a guest and can be deleted.
+  // Strict guest detection (per user spec):
+  // A REAL user MUST have a valid email address (Firebase Email or Google sign-in always provides one).
+  // Anything else — entries whose id looks like `user_1773xxx...` and have no email — is a guest.
+  const isValidEmail = (val: any): boolean => {
+    if (!val || typeof val !== "string") return false;
+    const s = val.trim().toLowerCase();
+    if (!s) return false;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+  };
   const guestUidSet = useMemo(() => {
-    const registeredUids = new Set<string>();
-    const registeredEmails = new Set<string>();
-    Object.entries(appUsersGlobal || {}).forEach(([key, au]: any) => {
-      if (key) registeredUids.add(String(key));
-      if (!au) return;
-      if (au.id) registeredUids.add(String(au.id));
-      if (au.uid) registeredUids.add(String(au.uid));
-      if (au.email) registeredEmails.add(String(au.email).trim().toLowerCase());
-    });
     const guests = new Set<string>();
     usersData.forEach((u: any) => {
       if (!u || !u.id) return;
-      const uid = String(u.id);
-      // REAL user: must be present in appUsers (Firebase Auth registry)
-      if (registeredUids.has(uid)) return;
-      // Email-key fallback: some legacy entries use email-as-key (dots replaced with commas)
-      if (uid.includes(",")) {
-        const guess = uid.replace(/,/g, ".").toLowerCase();
-        if (registeredEmails.has(guess)) return;
-      }
-      // Email field fallback: cross-check by email if present
-      if (u.email && registeredEmails.has(String(u.email).trim().toLowerCase())) return;
-      guests.add(uid);
+      if (isValidEmail(u.email)) return; // real user (email or Google sign-in)
+      guests.add(String(u.id));
     });
     return guests;
-  }, [usersData, appUsersGlobal]);
+  }, [usersData]);
   const recentContent = useMemo(() => [...webseriesData, ...moviesData].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3), [webseriesData, moviesData]);
   const categoryList = useMemo(() => Object.entries(categoriesData).map(([id, cat]: any) => ({ id, name: cat.name })), [categoriesData]);
   const languageOptions = useMemo(() => ["English", "Hindi", "Tamil", "Telugu", "Korean", "Japanese", "Spanish", "Multi"], []);
