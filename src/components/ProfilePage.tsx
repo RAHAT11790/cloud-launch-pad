@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { registerFCMToken } from "@/lib/fcm";
 import { TELEGRAM_ADMIN_URL, TELEGRAM_CHANNEL_URL, SITE_NAME } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
+import { triggerApkDownload } from "@/lib/apkDownload";
 import AboutPage from "./AboutPage";
 import PrivacyPolicyPage from "./PrivacyPolicyPage";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
@@ -512,8 +513,11 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
       toast.error("Download link is not configured yet");
       return;
     }
-    // Open APK URL — browser will download directly.
-    window.open(url, "_blank", "noopener,noreferrer");
+
+    const ok = triggerApkDownload(url, `${brandingCfg.siteName}.apk`);
+    if (!ok) {
+      toast.error("Download could not be started");
+    }
   };
 
   const getUserId = (): string | null => {
