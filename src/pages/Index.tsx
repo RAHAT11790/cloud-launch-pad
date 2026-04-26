@@ -1864,8 +1864,8 @@ const Index = () => {
           )}
 
           <NewEpisodeReleases allAnime={allAnime} onCardClick={handleCardClick} />
-          {filteredSeries.length > 0 && (
-            <AnimeSection title="Trending Anime Series" items={filteredSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("series")} />
+          {trendingSeries.length > 0 && (
+            <AnimeSection title="🔥 Trending Anime Series" items={trendingSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("series")} />
           )}
           {filteredMovies.length > 0 && (
             <AnimeSection title="Popular Anime Movies" items={filteredMovies.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("movies")} />
