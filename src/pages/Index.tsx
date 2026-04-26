@@ -1979,13 +1979,17 @@ const Index = () => {
 
       <AnimatePresence>
         {showSearch && (
-          <SearchPage allAnime={allAnime} onClose={() => setShowSearch(false)} onCardClick={(anime) => { setShowSearch(false); handleCardClick(anime); }} />
+          <Suspense fallback={null}>
+            <SearchPage allAnime={allAnime} onClose={() => setShowSearch(false)} onCardClick={(anime) => { setShowSearch(false); handleCardClick(anime); }} />
+          </Suspense>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {showProfile && (
-          <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
+          <Suspense fallback={null}>
+            <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
+          </Suspense>
         )}
       </AnimatePresence>
 
