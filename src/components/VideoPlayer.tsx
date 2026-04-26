@@ -1252,8 +1252,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           if (timeDisplayRef.current && dur > 0) {
             timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
           }
-          // Update React state less frequently (every ~500ms) for other consumers
-          setCurrentTime(ct);
+          // Throttle React state updates to ~1Hz so the giant component
+          // doesn't re-render every frame. The DOM refs above keep the
+          // visible UI buttery smooth at 60fps.
+          const now = performance.now();
+          if (now - lastStateSyncRef.current >= 1000) {
+            lastStateSyncRef.current = now;
+            setCurrentTime(ct);
+            if (Number.isFinite(dur) && dur > 0) setDuration(dur);
+          }
           rafId.current = requestAnimationFrame(tick);
         }
       };
