@@ -18,6 +18,40 @@ type BIPEvent = Event & {
 
 let cachedPrompt: BIPEvent | null = null;
 const listeners = new Set<(e: BIPEvent | null) => void>();
+let swRegistrationStarted = false;
+
+const shouldSkipInstallWorker = () => {
+  if (typeof window === "undefined") return true;
+
+  const host = window.location.hostname;
+  const isPreviewHost =
+    host.includes("id-preview--") || host.includes("lovable.app");
+
+  try {
+    if (window.self !== window.top) return true;
+  } catch {
+    return true;
+  }
+
+  return isPreviewHost;
+};
+
+const ensureInstallWorker = async () => {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+  if (swRegistrationStarted || shouldSkipInstallWorker()) return;
+
+  swRegistrationStarted = true;
+
+  try {
+    await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
+      scope: "/",
+      updateViaCache: "none",
+    });
+    await navigator.serviceWorker.ready;
+  } catch {
+    swRegistrationStarted = false;
+  }
+};
 
 if (typeof window !== "undefined") {
   window.addEventListener("beforeinstallprompt", (e) => {
@@ -36,6 +70,8 @@ export function usePwaInstall() {
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
+    ensureInstallWorker();
+
     const update = (e: BIPEvent | null) => setPrompt(e);
     listeners.add(update);
     setPrompt(cachedPrompt);
