@@ -216,28 +216,81 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     } catch { /* noop */ }
   }, []);
 
+  // Iframe is the active playback surface when currentSrc points to hf.space
+  const isEmbedPlayback = useMemo(
+    () => !!currentSrc && /hf\.space|huggingface/i.test(currentSrc),
+    [currentSrc],
+  );
+
+  // Throttle React state updates from the iframe → ~1 update/sec
+  const lastEmbedSyncRef = useRef(0);
+
   useEffect(() => {
     function onMsg(ev: MessageEvent) {
       const d = ev.data as { source?: string; type?: string; currentTime?: number; duration?: number } | null;
       if (!d || d.source !== "rs-embed") return;
       switch (d.type) {
         case "ready":
-          // iframe loaded and waiting; nothing to do — src is already in URL
+        case "meta":
+        case "canplay":
+          // Iframe is loaded — kick off playback and clear the buffering UI
+          setIsBuffering(false);
+          setShowFixedLoader(false);
+          setVideoError(false);
+          // Auto-trigger play; muted-fallback if browser blocks audio autoplay.
+          sendEmbedCmd("play");
+          // If we have a pending seek (e.g. from server switch / resume), apply it
+          if (pendingSeek.current !== null) {
+            sendEmbedCmd("seek", { time: pendingSeek.current });
+            pendingSeek.current = null;
+          }
           break;
-        case "time":
-          embedTimeRef.current = {
-            currentTime: d.currentTime ?? 0,
-            duration: d.duration ?? 0,
-          };
+        case "playing":
+          setPlaying(true);
+          setIsBuffering(false);
+          setShowFixedLoader(false);
           break;
+        case "pause":
+          setPlaying(false);
+          break;
+        case "waiting":
+          setIsBuffering(true);
+          break;
+        case "time": {
+          const ct = d.currentTime ?? 0;
+          const dur = d.duration ?? 0;
+          embedTimeRef.current = { currentTime: ct, duration: dur };
+          // Live DOM updates → 60fps smooth, zero React cost
+          if (progressRef.current && dur > 0) {
+            progressRef.current.style.width = `${(ct / dur) * 100}%`;
+          }
+          if (timeDisplayRef.current && dur > 0) {
+            timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
+          }
+          // Throttle React re-renders to ~1 Hz
+          const now = performance.now();
+          if (now - lastEmbedSyncRef.current >= 1000) {
+            lastEmbedSyncRef.current = now;
+            setCurrentTime(ct);
+            if (Number.isFinite(dur) && dur > 0) setDuration(dur);
+          }
+          break;
+        }
         case "ended":
           embedTimeRef.current.currentTime = embedTimeRef.current.duration;
+          setPlaying(false);
+          if (onNextEpisode) onNextEpisode();
+          break;
+        case "error":
+          setVideoError(true);
+          setIsBuffering(false);
           break;
       }
     }
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, []);
+  }, [sendEmbedCmd, onNextEpisode]);
+
 
   
   // Load CDN + proxy settings from Firebase (skip if noProxy)
