@@ -19,8 +19,15 @@ interface QualityOption {
 }
 
 // Cloudflare CDN proxy for fast video streaming
-import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
+import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
+
+// Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
+// Auto-applied to plain http:// sources (e.g. Server 1 bot-hosting.net) to bypass
+// browser mixed-content blocks. HTTPS sources stay direct (zero overhead).
+const BUILTIN_STREAM_PROXY = SUPABASE_URL
+  ? `${SUPABASE_URL}/functions/v1/stream-proxy?url={url}`
+  : "";
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -70,10 +77,15 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
   if (customProxyCandidate) addCandidate(customProxyCandidate);
 
-  // http:// cannot be loaded directly on https pages (mixed content)
-  // so only proxy candidates are valid
+  // http:// cannot be loaded directly on https pages (mixed content).
+  // Always fall back to the built-in Supabase stream-proxy so playback works
+  // out-of-the-box on Server 1 (bot-hosting.net) without any admin config.
+  if (BUILTIN_STREAM_PROXY) {
+    addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
+  }
 
-  // If no proxy and direct URL, use direct
+  // If still nothing, fall back to direct (will fail on mixed content but
+  // preserves prior behaviour for unknown schemes).
   if (candidates.length === 0) {
     addCandidate(url);
   }
