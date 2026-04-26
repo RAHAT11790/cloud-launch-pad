@@ -73,7 +73,7 @@
 </head>
 <body>
   <div id="stage">
-    <video id="v" playsinline webkit-playsinline preload="auto" crossorigin="anonymous"></video>
+  <video id="v" playsinline webkit-playsinline preload="auto"></video>
   </div>
 
   <div id="loader">
@@ -120,6 +120,9 @@
     errBox.classList.remove("show");
     showLoader(true);
     try {
+      try { v.pause(); } catch (_) {}
+      v.removeAttribute("src");
+      v.load();
       v.src = url;
       v.load();
     } catch (e) { showError(); }
