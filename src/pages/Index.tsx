@@ -1860,11 +1860,8 @@ const Index = () => {
     <div className="min-h-screen bg-background" style={customBgImage ? { backgroundImage: `url(${customBgImage})`, backgroundSize: 'cover', backgroundAttachment: 'fixed', backgroundPosition: 'center' } : undefined}>
       <Header onSearchClick={() => setShowSearch(true)} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
       <main
-        onTouchStart={handleMainTouchStart}
-        onTouchMove={handleMainTouchMove}
-        onTouchEnd={handleMainTouchEnd}
         className="relative overflow-hidden"
-        style={{ height: "calc(100vh - 65px)", marginTop: 0, touchAction: "pan-y" }}
+        style={{ height: "calc(100vh - 65px)", marginTop: 0, touchAction: "pan-y pinch-zoom" }}
       >
         <div ref={swipeTrackRef} style={{
           display: "flex",
