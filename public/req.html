@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<meta name="referrer" content="no-referrer" />
+<title>RS ANIME Player</title>
+<style>
+  /* ============================================================
+     RS ANIME — bare embed video page.
+     Renders ONLY the video. All UI/controls live in the parent
+     (VideoPlayer.tsx) and drive this page via postMessage.
+     ============================================================ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #000;
+    overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  #stage {
+    position: fixed; inset: 0;
+    background: #000;
+    display: flex; align-items: center; justify-content: center;
+  }
+  video {
+    width: 100%; height: 100%;
+    background: #000;
+    object-fit: contain;
+    outline: none;
+  }
+  /* Hide default controls completely — parent owns the UI */
+  video::-webkit-media-controls,
+  video::-webkit-media-controls-enclosure,
+  video::-webkit-media-controls-panel { display: none !important; }
+
+  /* Branded loading shimmer (matches RS ANIME splash) */
+  #loader {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 50%, #1a1a1a 0%, #000 70%);
+    color: #fff;
+    transition: opacity .35s ease;
+    z-index: 5;
+  }
+  #loader.hidden { opacity: 0; pointer-events: none; }
+  .ring {
+    width: 56px; height: 56px;
+    border: 3px solid rgba(255,255,255,.12);
+    border-top-color: #ef4444; /* RS ANIME accent red */
+    border-radius: 50%;
+    animation: spin .9s linear infinite;
+  }
+  .brand {
+    margin-top: 18px;
+    font-weight: 700; font-size: 14px; letter-spacing: 2px;
+    color: rgba(255,255,255,.85);
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #err {
+    position: fixed; inset: 0;
+    display: none; align-items: center; justify-content: center;
+    background: #000; color: #fca5a5;
+    text-align: center; padding: 24px; font-size: 14px;
+    z-index: 6;
+  }
+  #err.show { display: flex; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <video id="v" playsinline webkit-playsinline preload="auto" crossorigin="anonymous"></video>
+  </div>
+
+  <div id="loader">
+    <div class="ring"></div>
+    <div class="brand">RS ANIME</div>
+  </div>
+
+  <div id="err">😔 Server is not responding right now.<br>Try again later.</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var v       = document.getElementById("v");
+  var loader  = document.getElementById("loader");
+  var errBox  = document.getElementById("err");
+  var parentOrigin = "*"; // parent will identify itself via first message
+
+  // -------- helpers --------
+  function send(type, payload) {
+    try {
+      window.parent.postMessage(
+        Object.assign({ source: "rs-embed", type: type }, payload || {}),
+        parentOrigin
+      );
+    } catch (_) {}
+  }
+  function showLoader(on) {
+    loader.classList.toggle("hidden", !on);
+  }
+  function showError(msg) {
+    if (msg) errBox.firstChild.textContent = msg;
+    errBox.classList.add("show");
+    showLoader(false);
+  }
+
+  // -------- source from query string --------
+  // e.g. req.html?src=<encoded-url>
+  var qs = new URLSearchParams(location.search);
+  var initialSrc = qs.get("src") || qs.get("url") || "";
+
+  function loadSrc(url) {
+    if (!url) return;
+    errBox.classList.remove("show");
+    showLoader(true);
+    try {
+      v.src = url;
+      v.load();
+    } catch (e) { showError(); }
+  }
+  if (initialSrc) loadSrc(initialSrc);
+
+  // -------- video events → parent --------
+  v.addEventListener("loadedmetadata", function () {
+    send("meta", { duration: v.duration || 0, width: v.videoWidth, height: v.videoHeight });
+  });
+  v.addEventListener("canplay",      function () { showLoader(false); send("canplay"); });
+  v.addEventListener("playing",      function () { showLoader(false); send("playing"); });
+  v.addEventListener("pause",        function () { send("pause"); });
+  v.addEventListener("ended",        function () { send("ended"); });
+  v.addEventListener("waiting",      function () { showLoader(true); send("waiting"); });
+  v.addEventListener("timeupdate",   function () {
+    send("time", { currentTime: v.currentTime, duration: v.duration || 0 });
+  });
+  v.addEventListener("progress",     function () {
+    var b = 0;
+    try { if (v.buffered.length) b = v.buffered.end(v.buffered.length - 1); } catch(_){}
+    send("buffer", { buffered: b });
+  });
+  v.addEventListener("error", function () {
+    var code = v.error && v.error.code;
+    showError();
+    send("error", { code: code });
+  });
+
+  // -------- parent → embed commands --------
+  window.addEventListener("message", function (ev) {
+    var d = ev.data;
+    if (!d || d.target !== "rs-embed") return;
+
+    // Lock origin to the first parent that talks to us
+    if (parentOrigin === "*" && ev.origin) parentOrigin = ev.origin;
+
+    switch (d.cmd) {
+      case "load":      loadSrc(d.src); break;
+      case "play":      v.play().catch(function(){}); break;
+      case "pause":     v.pause(); break;
+      case "seek":      if (typeof d.time === "number") { try { v.currentTime = d.time; } catch(_){} } break;
+      case "rate":      if (typeof d.rate === "number") v.playbackRate = d.rate; break;
+      case "volume":    if (typeof d.volume === "number") v.volume = Math.max(0, Math.min(1, d.volume)); break;
+      case "mute":      v.muted = !!d.muted; break;
+      case "ping":      send("pong"); break;
+    }
+  });
+
+  // Tell parent we're ready
+  send("ready");
+})();
+</script>
+</body>
+</html>

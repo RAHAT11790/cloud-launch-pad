@@ -141,6 +141,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Removed preload anime character image - no longer needed
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const embedIframeRef = useRef<HTMLIFrameElement>(null);
+  // Mirror state from iframe embed (Server 2 mode)
+  const embedTimeRef = useRef({ currentTime: 0, duration: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -199,8 +202,44 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => unsub();
   }, []);
 
-  
+  // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
+  // The branded `req.html` page on the embed server posts video events to us
+  // and accepts commands (play/pause/seek/etc). We mirror those events into
+  // a hidden HTMLVideoElement-like surface so the rest of the player UI
+  // (progress bar, time display, server switcher, ad-gate, etc.) keeps
+  // working unchanged.
+  const sendEmbedCmd = useCallback((cmd: string, payload?: Record<string, unknown>) => {
+    const w = embedIframeRef.current?.contentWindow;
+    if (!w) return;
+    try {
+      w.postMessage({ target: "rs-embed", cmd, ...(payload || {}) }, "*");
+    } catch { /* noop */ }
+  }, []);
 
+  useEffect(() => {
+    function onMsg(ev: MessageEvent) {
+      const d = ev.data as { source?: string; type?: string; currentTime?: number; duration?: number } | null;
+      if (!d || d.source !== "rs-embed") return;
+      switch (d.type) {
+        case "ready":
+          // iframe loaded and waiting; nothing to do — src is already in URL
+          break;
+        case "time":
+          embedTimeRef.current = {
+            currentTime: d.currentTime ?? 0,
+            duration: d.duration ?? 0,
+          };
+          break;
+        case "ended":
+          embedTimeRef.current.currentTime = embedTimeRef.current.duration;
+          break;
+      }
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
+  
   // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
     if (noProxy) {
@@ -1491,20 +1530,39 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           onTouchEnd={handleTouchEnd}
         >
           {/* No thumbnail/poster overlay — solid black bg only for fast load */}
-          <video
-            ref={videoRef}
-            src={adGateActive ? "" : currentSrc}
-            className="w-full h-full bg-black"
-            style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
-            playsInline
-            preload={adGateActive ? "none" : "auto"}
-            autoPlay={!adGateActive}
-            controlsList="nodownload noplaybackrate noremoteplayback"
-            disablePictureInPicture
-            disableRemotePlayback
-            onContextMenu={(e) => e.preventDefault()}
-            onDragStart={(e) => e.preventDefault()}
-          />
+          {/* ===== Server 2 (HuggingFace HTTPS) iframe mode =====
+              When the active server domain is hf.space (or any domain that
+              hosts our branded `req.html`), play the MKV inside that page so
+              the browser doesn't choke on the Matroska container. The iframe
+              is the *visual* surface only — UI/controls stay in this player
+              and drive the embed via postMessage (see useEffect below). */}
+          {currentSrc && /hf\.space|huggingface/i.test(currentSrc) ? (
+            <iframe
+              ref={embedIframeRef}
+              src={`https://rahat1102-video-hosting-bot.hf.space/req.html?src=${encodeURIComponent(currentSrc)}`}
+              className="w-full h-full bg-black border-0"
+              style={{ pointerEvents: "none" }}
+              allow="autoplay; fullscreen; encrypted-media"
+              allowFullScreen
+              referrerPolicy="no-referrer"
+              title="player"
+            />
+          ) : (
+            <video
+              ref={videoRef}
+              src={adGateActive ? "" : currentSrc}
+              className="w-full h-full bg-black"
+              style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
+              playsInline
+              preload={adGateActive ? "none" : "auto"}
+              autoPlay={!adGateActive}
+              controlsList="nodownload noplaybackrate noremoteplayback"
+              disablePictureInPicture
+              disableRemotePlayback
+              onContextMenu={(e) => e.preventDefault()}
+              onDragStart={(e) => e.preventDefault()}
+            />
+          )}
 
           {/* Video Error Overlay */}
           {videoError && (
