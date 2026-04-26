@@ -2426,24 +2426,73 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     return () => unsub();
   }, [activeSection]);
 
-  // Lazy-load FREE ACCESS USERS data
+  // Lazy-load FREE ACCESS USERS data — merges freeAccessUsers + users/*/freeAccess (Mini App)
   useEffect(() => {
     if (activeSection !== "free-access") return;
-    const unsub = onValue(ref(db, "freeAccessUsers"), (snap) => {
-      const data = snap.val() || {};
+
+    // Instant render from cache
+    try {
+      const cached = sessionStorage.getItem("admin_freeAccessUsers_cache");
+      if (cached) setFreeAccessUsers(JSON.parse(cached));
+    } catch {}
+
+    let faData: Record<string, any> = {};
+    let usersData: Record<string, any> = {};
+    let usersLoaded = false;
+    let faLoaded = false;
+
+    const merge = () => {
+      if (!usersLoaded || !faLoaded) return;
       const now = Date.now();
-      const activeUsers: any[] = [];
-      Object.entries(data).forEach(([id, user]: [string, any]) => {
+      const map: Record<string, any> = {};
+
+      // 1) Direct freeAccessUsers entries (browser unlock + mini-app mirror)
+      Object.entries(faData || {}).forEach(([id, user]: [string, any]) => {
+        if (!user) return;
         if (user.expiresAt > now) {
-          activeUsers.push({ id, ...user });
+          map[id] = { id, ...user };
         } else {
           remove(ref(db, `freeAccessUsers/${id}`)).catch(() => {});
         }
       });
-      activeUsers.sort((a, b) => b.unlockedAt - a.unlockedAt);
-      setFreeAccessUsers(activeUsers);
+
+      // 2) Backfill from users/*/freeAccess (covers older Mini App users)
+      Object.entries(usersData || {}).forEach(([uid, u]: [string, any]) => {
+        const fa = u?.freeAccess;
+        if (!fa || !fa.active || !fa.expiresAt || fa.expiresAt <= now) return;
+        if (map[uid]) return;
+        const isMini = fa.viaToken === "mini-app" || fa.viaToken === "mini-app-fallback" || (typeof fa.source === "string" && fa.source.includes("telegram"));
+        map[uid] = {
+          id: uid,
+          userId: uid,
+          name: u.name || u.username || (isMini ? `Telegram ${uid}` : "Unknown"),
+          email: u.email || "",
+          unlockedAt: fa.grantedAt || now,
+          expiresAt: fa.expiresAt,
+          prizeHours: Math.max(0, Math.floor((fa.expiresAt - (fa.grantedAt || now)) / 3600000)),
+          prizeMinutes: 0,
+          mode: isMini ? "miniapp" : "normal",
+          source: fa.source || fa.viaToken || "",
+        };
+      });
+
+      const list = Object.values(map).sort((a: any, b: any) => b.unlockedAt - a.unlockedAt);
+      setFreeAccessUsers(list);
+      try { sessionStorage.setItem("admin_freeAccessUsers_cache", JSON.stringify(list)); } catch {}
+    };
+
+    const unsub1 = onValue(ref(db, "freeAccessUsers"), (snap) => {
+      faData = snap.val() || {};
+      faLoaded = true;
+      merge();
     });
-    return () => unsub();
+    const unsub2 = onValue(ref(db, "users"), (snap) => {
+      usersData = snap.val() || {};
+      usersLoaded = true;
+      merge();
+    });
+
+    return () => { unsub1(); unsub2(); };
   }, [activeSection]);
 
   // Lazy-load PRIZE POOL data
