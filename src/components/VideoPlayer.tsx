@@ -685,19 +685,37 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Save progress every 10s
   useEffect(() => {
     if (!onSaveProgress) return;
+
+    const getPlaybackSnapshot = () => {
+      if (isEmbedPlayback) {
+        const embeddedTime = embedTimeRef.current.currentTime || currentTime;
+        const embeddedDuration = embedTimeRef.current.duration || duration;
+        return { time: embeddedTime, total: embeddedDuration };
+      }
+
+      const v = videoRef.current;
+      return { time: v?.currentTime || 0, total: v?.duration || 0 };
+    };
+
+    const saveNow = () => {
+      const { time, total } = getPlaybackSnapshot();
+      if (time > 0 && total > 0) onSaveProgress(time, total);
+    };
+
+    const saveInterval = setInterval(saveNow, 10000);
     const v = videoRef.current;
-    if (!v) return;
-    const saveInterval = setInterval(() => {
-      if (v.currentTime > 0 && v.duration > 0) onSaveProgress(v.currentTime, v.duration);
-    }, 10000);
-    const onPause = () => { if (v.currentTime > 0 && v.duration > 0) onSaveProgress(v.currentTime, v.duration); };
-    v.addEventListener("pause", onPause);
+    if (v && !isEmbedPlayback) {
+      v.addEventListener("pause", saveNow);
+    }
+
     return () => {
       clearInterval(saveInterval);
-      v.removeEventListener("pause", onPause);
-      if (v.currentTime > 0 && v.duration > 0) onSaveProgress(v.currentTime, v.duration);
+      if (v && !isEmbedPlayback) {
+        v.removeEventListener("pause", saveNow);
+      }
+      saveNow();
     };
-  }, [onSaveProgress]);
+  }, [currentTime, duration, isEmbedPlayback, onSaveProgress]);
 
   // Restore watch position (per-account)
   useEffect(() => {
