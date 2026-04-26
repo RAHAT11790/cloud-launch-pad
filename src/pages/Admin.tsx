@@ -5442,7 +5442,7 @@ ${tgHashtags}`;
                 <Trash2 size={14} className="text-red-400" /> Delete All Guest Users
               </h3>
               <p className="text-[11px] text-[#957DAD] mb-3">
-                Removes every account without an email (guest / anonymous). Those users will be force-logged out the next time they open the app and must sign up again with email or Google.
+                Real users = those registered in Firebase Auth (Email or Google). Everyone else in the database is a guest and will be removed in one click.
               </p>
               {(() => {
                 const guestList = usersData.filter(u => guestUidSet.has(String(u.id)));
