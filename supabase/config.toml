@@ -1,10 +1,4 @@
 project_id = "kqxpzqegtvaiwgdusrin"
 
-[functions.process-email-queue]
-verify_jwt = true
-
-[functions.rs-bot]
-verify_jwt = false
-
-[functions.apk-download]
+[functions.stream-proxy]
 verify_jwt = false
