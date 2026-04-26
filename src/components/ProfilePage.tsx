@@ -1591,9 +1591,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
         </a>
         <p className="text-[10px] text-muted-foreground text-center mt-1 mb-2">Get all updates, news & details about {brandingCfg.siteName}</p>
 
-        {/* Download APK — User panel (separate from admin APK).
-            Hidden if URL not set OR admin disabled it via APK DW > User Panel Visibility. */}
-        {userApkUrl && userApkEnabled ? (
+        {/* Download APK — User panel install button.
+            Hidden if admin disabled it via APK DW > User Panel Download Button. */}
+        {userApkEnabled ? (
           <>
             <button
               onClick={handleDownloadUserApk}
@@ -1601,7 +1601,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
               style={{ background: 'linear-gradient(135deg, #16a34a, #22c55e)', color: '#fff' }}
             >
               <Download className="w-4 h-4" />
-              Download App (APK){userApkVersion ? ` • ${userApkVersion}` : ""}
+              Download App
             </button>
             <p className="text-[10px] text-muted-foreground text-center mt-1 mb-3">
               Install {brandingCfg.siteName} as an app on your phone
