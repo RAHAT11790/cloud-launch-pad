@@ -321,7 +321,27 @@ serve(async (req) => {
         viaToken: "mini-app-fallback",
         source: "telegram-mini-app-fallback",
       });
+      // Mirror into freeAccessUsers/{userId}
+      try {
+        const uSnap = await fbGet(`users/${userId}`);
+        const uName = uSnap?.name || uSnap?.username || `Telegram ${userId}`;
+        const uEmail = uSnap?.email || "";
+        await fbPut(`freeAccessUsers/${userId}`, {
+          userId,
+          name: uName,
+          email: uEmail,
+          unlockedAt: now,
+          expiresAt,
+          prizeHours: hours,
+          prizeMinutes: 0,
+          mode: "miniapp",
+          source: "telegram-mini-app-fallback",
+        });
+      } catch (_) {}
       await fbPatch(`miniApp/fallbackTokens/${token}`, {
+        consumed: true,
+        consumedAt: now,
+      });
         consumed: true,
         consumedAt: now,
       });
