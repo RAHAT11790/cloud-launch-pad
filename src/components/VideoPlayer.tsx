@@ -3,54 +3,67 @@ import { useBranding } from "@/hooks/useBranding";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock,
-  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server
+  ChevronRight, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Server
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
-import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
-import logoImg from "@/assets/logo.png";
+import { db, ref, onValue, set, remove } from "@/lib/firebase";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
-// Shortener gate is always-on now (Monetag system removed)
+import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
+
 const isShortenerEnabled = async () => true;
+const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
+const BUILTIN_STREAM_PROXY = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/stream-proxy?url=` : "";
 
 interface QualityOption {
   label: string;
   src: string;
 }
 
-// Cloudflare CDN proxy for fast video streaming
-import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
-const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
-
-// Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
-// Auto-applied to plain http:// sources (e.g. Server 1 bot-hosting.net) to bypass
-// browser mixed-content blocks. HTTPS sources stay direct (zero overhead).
-const BUILTIN_STREAM_PROXY = SUPABASE_URL
-  ? `${SUPABASE_URL}/functions/v1/stream-proxy?url={url}`
-  : "";
-
+// ============================================
+// PROXY FUNCTIONS - Supports both {url} placeholder and direct append
+// ============================================
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
   const encoded = encodeURIComponent(targetUrl);
+  
   if (!base) return targetUrl;
+  
   let url: string;
-  // Support {url} placeholder: https://proxy.example.com/?url={url}
-  if (base.includes('{url}')) url = base.split('{url}').join(encoded);
-  // Support ending with = or ?url= or &url=
-  else if (/[?&]url=$/.test(base) || base.endsWith('=')) url = `${base}${encoded}`;
-  else if (base.includes('?url=') || base.includes('&url=')) url = `${base}${encoded}`;
+  
+  // Type 1: {url} placeholder
+  if (base.includes('{url}')) {
+    url = base.split('{url}').join(encoded);
+  }
+  // Type 2: Already has ?url= or &url= or ends with = or ?url
+  else if (base.includes('?url=') || base.includes('&url=') || base.endsWith('?url') || base.endsWith('=')) {
+    if (base.endsWith('?url')) {
+      url = `${base}=${encoded}`;
+    } else {
+      url = `${base}${encoded}`;
+    }
+  }
   // Default: append ?url=
-  else url = `${base.replace(/\/$/, '')}?url=${encoded}`;
-  // Append API key if provided
+  else {
+    url = `${base.replace(/\/$/, '')}?url=${encoded}`;
+  }
+  
   if (apiKey) {
     url += (url.includes('?') ? '&' : '?') + `apikey=${encodeURIComponent(apiKey)}`;
   }
+  
   return url;
 };
 
-const isDirectPlaybackUrl = (url: string): boolean => {
-  const normalized = url.trim().toLowerCase();
-  return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
+const shouldUseEmbedPlayback = (url: string): boolean => {
+  if (!url) return false;
+  try {
+    const { hostname, pathname } = new URL(url);
+    const isHfHost = /(^|\.)hf\.space$/i.test(hostname) || /huggingface/i.test(hostname);
+    return isHfHost && /^\/watch(?:\/|$)/i.test(pathname);
+  } catch {
+    return false;
+  }
 };
 
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
@@ -62,34 +75,44 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
     candidates.push(candidate);
   };
 
-  const encoded = encodeURIComponent(url);
-  const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
-  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  const prefersDirectPlayback = isDirectPlaybackUrl(url);
-
-  if (prefersDirectPlayback) {
+  const isHttp = url.trim().toLowerCase().startsWith("http://");
+  const isHttps = url.trim().toLowerCase().startsWith("https://");
+  
+  // Hugging Face embed mode
+  if (shouldUseEmbedPlayback(url)) {
     addCandidate(url);
-    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
-    if (customProxyCandidate) addCandidate(customProxyCandidate);
     return candidates;
   }
 
-  if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
-  if (customProxyCandidate) addCandidate(customProxyCandidate);
-
-  // http:// cannot be loaded directly on https pages (mixed content).
-  // Always fall back to the built-in Supabase stream-proxy so playback works
-  // out-of-the-box on Server 1 (bot-hosting.net) without any admin config.
-  if (BUILTIN_STREAM_PROXY) {
-    addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
-  }
-
-  // If still nothing, fall back to direct (will fail on mixed content but
-  // preserves prior behaviour for unknown schemes).
-  if (candidates.length === 0) {
+  // HTTPS: Direct play (NO proxy)
+  if (isHttps) {
     addCandidate(url);
+    return candidates;
   }
 
+  // HTTP: Must use proxy (mixed-content bypass)
+  if (isHttp) {
+    const encoded = encodeURIComponent(url);
+    
+    // Cloudflare CDN proxy
+    const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
+    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+    
+    // Custom proxy from admin settings
+    const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    
+    // Built-in Supabase proxy fallback
+    if (BUILTIN_STREAM_PROXY) {
+      const builtinCandidate = buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url);
+      if (builtinCandidate) addCandidate(builtinCandidate);
+    }
+    
+    if (candidates.length === 0) addCandidate(url);
+    return candidates;
+  }
+
+  addCandidate(url);
   return candidates;
 };
 
@@ -97,16 +120,11 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
 };
 
-interface AudioTrackOption {
-  language: string;
-  label: string;
-  src?: string; // If set, switch to this URL for this language
-  src480?: string;
-  src720?: string;
-  src1080?: string;
-  src4k?: string;
-  nativeIndex?: number; // If set, switch native audio track
-}
+const formatTime = (t: number) => {
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+};
 
 interface VideoPlayerProps {
   src: string;
@@ -117,7 +135,6 @@ interface VideoPlayerProps {
   onNextEpisode?: () => void;
   episodeList?: { number: number; title?: string; active: boolean; onClick: () => void }[];
   qualityOptions?: QualityOption[];
-  audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
   animeId?: string;
   onSaveProgress?: (currentTime: number, duration: number) => void;
   hideDownload?: boolean;
@@ -130,19 +147,29 @@ interface VideoPlayerProps {
   onSuggestedClick?: (anime: AnimeItem) => void;
 }
 
-const formatTime = (t: number) => {
-  const m = Math.floor(t / 60);
-  const s = Math.floor(t % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-};
-
-const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
+const VideoPlayer = ({
+  src,
+  title,
+  subtitle,
+  poster,
+  onClose,
+  onNextEpisode,
+  episodeList,
+  qualityOptions,
+  animeId,
+  onSaveProgress,
+  hideDownload,
+  noProxy,
+  noServerSwitch,
+  seasons,
+  currentSeasonIdx,
+  onSeasonChange,
+  suggestedAnime,
+  onSuggestedClick
+}: VideoPlayerProps) => {
   const branding = useBranding();
-  // Removed preload anime character image - no longer needed
-
   const videoRef = useRef<HTMLVideoElement>(null);
   const embedIframeRef = useRef<HTMLIFrameElement>(null);
-  // Mirror state from iframe embed (Server 2 mode)
   const embedTimeRef = useRef({ currentTime: 0, duration: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -151,12 +178,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const rafId = useRef<number>(0);
   const progressRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const isSeeking = useRef(false);
+  const lastTap = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
+  const premiumServerApplied = useRef(false);
+  const adGateActiveRef = useRef(false);
 
+  // State
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [boostedVolume, setBoostedVolume] = useState(100); // 0-100%
+  const [boostedVolume, setBoostedVolume] = useState(100);
   const [muted, setMuted] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -166,115 +199,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [skipIndicator, setSkipIndicator] = useState<{ side: "left" | "right" | "center"; text: string } | null>(null);
   const [brightness, setBrightness] = useState(1);
   const [swipeState, setSwipeState] = useState<{ startX: number; startY: number; type: string | null } | null>(null);
-  const cropModes = ["contain", "cover", "fill"] as const;
-  const cropLabels = ["Fit", "Crop", "Stretch"];
   const [cropIndex, setCropIndex] = useState(0);
-  const [settingsTab, setSettingsTab] = useState<"speed" | "quality" | "audio">("speed");
+  const [settingsTab, setSettingsTab] = useState<"speed" | "quality">("speed");
   const [currentQuality, setCurrentQuality] = useState<string>("Auto");
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>('');
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
-  const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
-  const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
-  const sourceBaseRef = useRef(src);
-  const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
-  const [showAudioPanel, setShowAudioPanel] = useState(false);
-
-  // ===== SERVER CHANGER =====
+  const [currentSrc, setCurrentSrc] = useState('');
+  const [activeRawSrc, setActiveRawSrc] = useState(src);
+  const [isServerSwitching, setIsServerSwitching] = useState(false);
   const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
   const [showServerPanel, setShowServerPanel] = useState(false);
-  const premiumServerApplied = useRef(false);
-
-  useEffect(() => {
-    const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
-      const val = snap.val();
-      let servers: { name: string; domain: string; locked?: boolean }[] = [];
-      if (val && Array.isArray(val)) {
-        servers = val.filter((s: any) => s && s.domain);
-      } else if (val && typeof val === "object") {
-        servers = Object.values(val).filter((s: any) => s && s.domain) as any[];
-      }
-      setVideoServers(servers);
-    });
-    return () => unsub();
-  }, []);
-
-  // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
-  // The branded `req.html` page on the embed server posts video events to us
-  // and accepts commands (play/pause/seek/etc). We mirror those events into
-  // a hidden HTMLVideoElement-like surface so the rest of the player UI
-  // (progress bar, time display, server switcher, ad-gate, etc.) keeps
-  // working unchanged.
-  const sendEmbedCmd = useCallback((cmd: string, payload?: Record<string, unknown>) => {
-    const w = embedIframeRef.current?.contentWindow;
-    if (!w) return;
-    try {
-      w.postMessage({ target: "rs-embed", cmd, ...(payload || {}) }, "*");
-    } catch { /* noop */ }
-  }, []);
-
-  useEffect(() => {
-    function onMsg(ev: MessageEvent) {
-      const d = ev.data as { source?: string; type?: string; currentTime?: number; duration?: number } | null;
-      if (!d || d.source !== "rs-embed") return;
-      switch (d.type) {
-        case "ready":
-          // iframe loaded and waiting; nothing to do — src is already in URL
-          break;
-        case "time":
-          embedTimeRef.current = {
-            currentTime: d.currentTime ?? 0,
-            duration: d.duration ?? 0,
-          };
-          break;
-        case "ended":
-          embedTimeRef.current.currentTime = embedTimeRef.current.duration;
-          break;
-      }
-    }
-    window.addEventListener("message", onMsg);
-    return () => window.removeEventListener("message", onMsg);
-  }, []);
-
-  
-  // Load CDN + proxy settings from Firebase (skip if noProxy)
-  useEffect(() => {
-    if (noProxy) {
-      setCdnEnabled(false);
-      setProxyUrl('');
-      setProxyApiKey('');
-      setPlaybackRouteReady(true);
-      return;
-    }
-
-    setPlaybackRouteReady(true);
-
-    const unsub1 = onValue(ref(db, "settings/cdnEnabled"), (snap) => {
-      const val = snap.val();
-      const enabled = val !== false;
-      setCdnEnabled(enabled);
-    });
-
-    const unsub2 = onValue(ref(db, "settings/proxyServer"), (snap) => {
-      const val = snap.val();
-      if (val && val.url) {
-        setProxyUrl(val.url);
-        setProxyApiKey(val.apiKey || '');
-      } else {
-        setProxyUrl('');
-        setProxyApiKey('');
-      }
-    });
-
-    return () => {
-      unsub1();
-      unsub2();
-    };
-  }, [noProxy, src]);
-  const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
+  const [isPremium, setIsPremium] = useState<boolean | null>(null);
   const [adGateActive, setAdGateActive] = useState(false);
   const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
   const [shortenLoading, setShortenLoading] = useState(false);
@@ -285,344 +224,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
   const [videoError, setVideoError] = useState(false);
   const [qualityFailMsg, setQualityFailMsg] = useState<string | null>(null);
-  const failedSrcsRef = useRef<Set<string>>(new Set());
   const [isBuffering, setIsBuffering] = useState(true);
   const [showFixedLoader, setShowFixedLoader] = useState(true);
-  const loaderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const [tutorialLink, setTutorialLink] = useState<string | null>(null);
   const [tutorialVideos, setTutorialVideos] = useState<{ title: string; url: string }[]>([]);
   const [showTutorialVideo, setShowTutorialVideo] = useState(false);
   const [activeTutorialIdx, setActiveTutorialIdx] = useState(0);
   const [showNextEpOverlay, setShowNextEpOverlay] = useState(false);
   const [nextEpCountdown, setNextEpCountdown] = useState(0);
-  const nextEpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const nextEpCancelledRef = useRef(false);
-  // Global download manager state
   const [activeDownloads, setActiveDownloads] = useState<Map<string, any>>(new Map());
   const [globalFreeAccess, setGlobalFreeAccess] = useState<boolean>(false);
   const [deviceBlocked, setDeviceBlocked] = useState(false);
-  const [deviceBlockInfo, setDeviceBlockInfo] = useState<{ maxDevices: number; currentCount: number } | null>(null);
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
-  const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
+  const [freeAccessLoaded, setFreeAccessLoaded] = useState(false);
   const [unlockBlocked, setUnlockBlocked] = useState(false);
+  const failedSrcsRef = useRef<Set<string>>(new Set());
+  const loaderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    let unsub: (() => void) | undefined;
-    import("@/lib/downloadManager").then(({ downloadManager }) => {
-      unsub = downloadManager.subscribe(setActiveDownloads);
-    });
-    return () => { unsub?.(); };
-  }, []);
-
-  // Check IndexedDB for already downloaded episodes matching this title
-  useEffect(() => {
-    import("@/lib/downloadStore").then(({ getAllDownloads }) => {
-      getAllDownloads().then((all) => {
-        const matching = all.filter(d => d.title === title);
-        setDownloadedEpisodes(matching);
-      });
-    });
-  }, [title, activeDownloads]);
-
-  // Listen for global free access from Firebase
-  useEffect(() => {
-    const unsub = onValue(ref(db, "globalFreeAccess"), (snap) => {
-      const data = snap.val();
-      if (data?.active && data?.expiresAt > Date.now()) {
-        setGlobalFreeAccess(true);
-      } else {
-        setGlobalFreeAccess(false);
-      }
-    });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const uid = getLocalUserId();
-    if (!uid) {
-      setUserFreeAccessExpiresAt(0);
-      setUnlockBlocked(false);
-      setFreeAccessLoaded(true);
-      return;
-    }
-
-    const unsubAccess = onValue(ref(db, `users/${uid}/freeAccess`), async (snap) => {
-      const data = snap.val();
-      if (data?.active && Number(data.expiresAt) > Date.now()) {
-        const { ensureFreeAccessDeviceAllowed } = await import("@/lib/freeAccessDevice");
-        const allowed = await ensureFreeAccessDeviceAllowed(uid, data);
-        setUserFreeAccessExpiresAt(allowed ? Number(data.expiresAt) : 0);
-      } else {
-        setUserFreeAccessExpiresAt(0);
-      }
-      setFreeAccessLoaded(true);
-    }, () => {
-      // On error, mark loaded so UI doesn't hang forever
-      setFreeAccessLoaded(true);
-    });
-
-    const unsubBlocked = onValue(ref(db, `users/${uid}/security/unlockBlocked`), (snap) => {
-      setUnlockBlocked(isUnlockBlockActive(snap.val()));
-    });
-
-    return () => {
-      unsubAccess();
-      unsubBlocked();
-    };
-  }, []);
-
-  // ===== VIDEO VIEW TRACKING =====
-  useEffect(() => {
-    if (!animeId) return;
-    const getUserId = (): string | null => {
-      try { const u = localStorage.getItem("rsanime_user"); if (u) return JSON.parse(u).id; } catch {} return null;
-    };
-    const uid = getUserId();
-    if (!uid) return;
-
-    // 1. Log a view count (per-day, per-user)
-    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-    const viewRef = ref(db, `analytics/views/${animeId}/${today}/${uid}`);
-    set(viewRef, { timestamp: Date.now(), title: title || "" }).catch(() => {});
-
-    // 1b. All-time total counter (never reset by daily cleanup)
-    import("@/lib/firebase").then(({ runTransaction, ref: fbRef, db: fbDb }) => {
-      runTransaction(fbRef(fbDb, `analytics/totals/views/${animeId}`), (curr: any) => {
-        const base = curr && typeof curr === "object" ? curr : { count: 0, title: "" };
-        return { count: (base.count || 0) + 1, title: title || base.title || "", lastSeen: Date.now() };
-      }).catch(() => {});
-    });
-
-    // 2. Track as active viewer (presence)
-    const activeRef = ref(db, `analytics/activeViewers/${animeId}/${uid}`);
-    const userName = (() => {
-      try { return localStorage.getItem("rs_display_name") || JSON.parse(localStorage.getItem("rsanime_user") || "{}").name || "User"; } catch { return "User"; }
-    })();
-    set(activeRef, { title: title || "", userName, startedAt: Date.now() }).catch(() => {});
-
-    // 3. Log to daily aggregate
-    const dailyRef = ref(db, `analytics/dailyActive/${today}/${uid}`);
-    set(dailyRef, { lastSeen: Date.now(), userName }).catch(() => {});
-
-    return () => {
-      // Remove active viewer on unmount
-      remove(activeRef).catch(() => {});
-    };
-  }, [animeId, title]);
-
-  // Check 24h access
-  const has24hAccess = useCallback((): boolean => {
-    if (globalFreeAccess) return true;
-    return userFreeAccessExpiresAt > Date.now();
-  }, [globalFreeAccess, userFreeAccessExpiresAt]);
-
-  // Load tutorial videos from Firebase
-  useEffect(() => {
-    const unsubs: (() => void)[] = [];
-    unsubs.push(onValue(ref(db, "settings/tutorialLink"), (snap) => {
-      setTutorialLink(snap.val() || null);
-    }));
-    unsubs.push(onValue(ref(db, "settings/tutorialVideos"), (snap) => {
-      const val = snap.val();
-      if (val && typeof val === "object") {
-        const list = Object.values(val).map((v: any) => ({ title: v.title || "", url: v.url || "" }));
-        setTutorialVideos(list);
-      } else {
-        setTutorialVideos([]);
-      }
-    }));
-    return () => unsubs.forEach(u => u());
-  }, []);
-
-  // Maintenance pause listener
-  useEffect(() => {
-    const unsub = onValue(ref(db, "maintenance"), (snap) => {
-      const maint = snap.val();
-      if (!maint?.active && maint?.lastPauseDuration && maint?.lastResumedAt) {
-        const appliedKey = `rsanime_pause_applied_${maint.lastResumedAt}`;
-        if (!localStorage.getItem(appliedKey)) {
-          const expiry = localStorage.getItem("rsanime_ad_access");
-          if (expiry) {
-            const newExpiry = parseInt(expiry) + maint.lastPauseDuration;
-            localStorage.setItem("rsanime_ad_access", newExpiry.toString());
-          }
-          localStorage.setItem(appliedKey, "true");
-        }
-      }
-    });
-    return () => unsub();
-  }, []);
-
-  const grant24hAccess = useCallback(() => {
-    const expiry = Date.now() + 24 * 60 * 60 * 1000;
-    localStorage.setItem("rsanime_ad_access", expiry.toString());
-  }, []);
-
-  // Premium check (device limit is now enforced at login time)
-  useEffect(() => {
-    const getUserId = (): string | null => {
-      try { const u = localStorage.getItem("rsanime_user"); if (u) return JSON.parse(u).id; } catch {} return null;
-    };
-    const uid = getUserId();
-    if (!uid) { setIsPremium(false); return; }
-
-    const premRef = ref(db, `users/${uid}/premium`);
-    const unsub = onValue(premRef, (snap) => {
-      const data = snap.val();
-      const isPrem = !!(data && data.active === true && data.expiresAt > Date.now());
-      setIsPremium(isPrem);
-    });
-    return () => unsub();
-  }, []);
-
-  // Auto-switch to premium server for premium users
-  useEffect(() => {
-    if (isPremium && videoServers.length > 0 && !premiumServerApplied.current) {
-      const premIdx = videoServers.findIndex(s => s.locked);
-      if (premIdx >= 0 && premIdx !== activeServerIndex) {
-        premiumServerApplied.current = true;
-        setTimeout(() => switchServer(premIdx), 300);
-      }
-    }
-  }, [isPremium, videoServers]);
-
-  // Ad gate - only run after premium AND freeAccess data have loaded
-  useEffect(() => {
-    if (isPremium === null) return; // still loading premium status
-    if (!freeAccessLoaded) return; // wait for Firebase freeAccess snapshot — prevents unlock-button flash
-
-    const uid = getLocalUserId();
-    if (!uid) {
-      setAdGateActive(false);
-      return;
-    }
-
-    if (unlockBlocked) {
-      setAdGateActive(false);
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.src = "";
-      }
-      return;
-    }
-
-    if (isPremium || has24hAccess()) {
-      setAdGateActive(false);
-      return;
-    }
-    // Shortener master toggle: if admin disabled it, give free users instant access
-    isShortenerEnabled().then((on) => {
-      if (!on) { setAdGateActive(false); return; }
-      // No access - block video and show ad gate
-      setAdGateActive(true);
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.src = '';
-      }
-      setShortenLoading(true);
-      createUnlockLinksForAllServices().then((result) => {
-        setShortenLoading(false);
-        if (result.ok && result.links.length > 0) setAdLinks(result.links);
-        else setAdGateActive(false);
-      }).catch(() => { setShortenLoading(false); setAdGateActive(false); });
-    });
-  }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
-
-  const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
-    const { openExternalBrowser } = await import("@/lib/openExternal");
-    try {
-      const fb = await import("@/lib/firebase");
-
-      // Per-service Mini App mode takes priority
-      const isMiniMode = service?.mode === "miniapp";
-
-      // Global fallback: settings/unlockViaTelegramMini
-      let globalMini = false;
-      if (!isMiniMode) {
-        const miniSnap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramMini"));
-        globalMini = miniSnap.val() === true;
-      }
-
-      if (isMiniMode || globalMini) {
-        const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramMiniBotUsername"));
-        const botUsername = String(botSnap.val() || "RS_ANIME_ACCESS_BOT").replace(/^@/, "").trim();
-        const uid = getLocalUserId();
-        if (botUsername && uid) {
-          // Detect entry source: installed app vs regular Chrome browser.
-          // We also preserve which panel launched the flow so return routing stays exact.
-          const isStandaloneApp =
-            window.matchMedia?.("(display-mode: standalone)")?.matches
-            || (window.navigator as any).standalone === true;
-          const sourceTag = isStandaloneApp ? "app" : "web";
-          const panelTag = window.location.pathname.startsWith("/admin") ? "admin" : "user";
-          const safeUid = String(uid).replace(/[^A-Za-z0-9_-]/g, "");
-          window.location.href = `https://t.me/${botUsername}?startapp=u_${safeUid}_src_${sourceTag}_panel_${panelTag}`;
-          return;
-        }
-      }
-
-      // Priority: legacy Telegram bot deep-link unlock
-      const snap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramBot"));
-      if (snap.val() === true) {
-        const r = await createTelegramBotUnlockLink();
-        if (r.ok && r.deepLink) { window.location.href = r.deepLink; return; }
-      }
-    } catch {}
-    if (url && url !== "miniapp://telegram") {
-      // Use external browser opener — escapes Telegram WebView when needed
-      openExternalBrowser(url);
-    }
-  }, []);
-
-  // Save progress every 10s
-  useEffect(() => {
-    if (!onSaveProgress) return;
-    const v = videoRef.current;
-    if (!v) return;
-    const saveInterval = setInterval(() => {
-      if (v.currentTime > 0 && v.duration > 0) onSaveProgress(v.currentTime, v.duration);
-    }, 10000);
-    const onPause = () => { if (v.currentTime > 0 && v.duration > 0) onSaveProgress(v.currentTime, v.duration); };
-    v.addEventListener("pause", onPause);
-    return () => {
-      clearInterval(saveInterval);
-      v.removeEventListener("pause", onPause);
-      if (v.currentTime > 0 && v.duration > 0) onSaveProgress(v.currentTime, v.duration);
-    };
-  }, [onSaveProgress]);
-
-  // Restore watch position (per-account)
-  useEffect(() => {
-    if (!animeId) return;
-    try {
-      const user = localStorage.getItem("rsanime_user");
-      if (!user) return;
-      const userId = JSON.parse(user).id;
-      if (!userId) return;
-      import("@/lib/firebase").then(({ get: fbGet, ref: fbRef, db: fbDb }) => {
-        const histRef = fbRef(fbDb, `users/${userId}/watchHistory/${animeId}`);
-        fbGet(histRef).then((snap: any) => {
-          if (snap.exists()) {
-            const data = snap.val();
-            if (data.currentTime && data.duration && (data.currentTime / data.duration) < 0.95) {
-              pendingSeek.current = data.currentTime;
-              const v = videoRef.current;
-              if (v && v.duration > 0) {
-                v.currentTime = data.currentTime;
-              }
-            }
-          }
-        });
-      });
-    } catch {}
-  }, [animeId]);
-
-  // Build quality list - 4K is premium-only
-  const is4KLabel = (label: string) => /4k|2160|uhd/i.test(label);
+  const cropModes = ["contain", "cover", "fill"] as const;
+  const cropLabels = ["Fit", "Crop", "Stretch"];
+  const isEmbedPlayback = useMemo(() => shouldUseEmbedPlayback(activeRawSrc), [activeRawSrc]);
 
   const availableQualities: QualityOption[] = useMemo(() => {
-    // Keep raw URLs here; proxy is applied only when actually loading/switching source
     const list: QualityOption[] = [{ label: "Auto", src }];
     if (qualityOptions?.length) qualityOptions.forEach(q => { if (q.src) list.push({ ...q }); });
     return list;
@@ -644,570 +268,419 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, [videoServers]);
 
-  const preloadVideoRef = useRef<HTMLVideoElement | null>(null);
-  const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
-  const serverSwitchingRef = useRef(false);
+  // ============================================
+  // IFRAME EMBED BRIDGE (Hugging Face)
+  // ============================================
+  const sendEmbedCmd = useCallback((cmd: string, payload?: Record<string, unknown>) => {
+    const w = embedIframeRef.current?.contentWindow;
+    if (!w) return;
+    try {
+      w.postMessage({ target: "rs-embed", cmd, ...(payload || {}) }, "*");
+    } catch { }
+  }, []);
 
-  // Preload next episode for instant switching
-  useEffect(() => {
-    if (!episodeList || episodeList.length <= 1) return;
-    const activeIdx = episodeList.findIndex(ep => ep.active);
-    if (activeIdx < 0 || activeIdx >= episodeList.length - 1) return;
-    // Find the next episode's src from qualityOptions or main src
-    // We preload via <link rel="preload"> which is lightweight
-    const nextSrc = src; // Will be resolved when episode actually switches
-    // Clean up old preload
-    if (preloadLinkRef.current) {
-      try { document.head.removeChild(preloadLinkRef.current); } catch {}
-      preloadLinkRef.current = null;
+  const syncUiProgress = useCallback((nextTime: number, nextDuration: number) => {
+    setCurrentTime(nextTime);
+    if (Number.isFinite(nextDuration) && nextDuration >= 0) setDuration(nextDuration);
+    if (progressRef.current && nextDuration > 0) {
+      progressRef.current.style.width = `${(nextTime / nextDuration) * 100}%`;
     }
-    return () => {
-      if (preloadLinkRef.current) {
-        try { document.head.removeChild(preloadLinkRef.current); } catch {}
-        preloadLinkRef.current = null;
+    if (timeDisplayRef.current) {
+      timeDisplayRef.current.textContent = nextDuration > 0
+        ? `${formatTime(nextTime)} / ${formatTime(nextDuration)}`
+        : formatTime(nextTime);
+    }
+  }, []);
+
+  useEffect(() => {
+    function onMsg(ev: MessageEvent) {
+      const d = ev.data as { source?: string; type?: string; currentTime?: number; duration?: number; code?: number } | null;
+      if (!d || d.source !== "rs-embed") return;
+
+      switch (d.type) {
+        case "ready":
+          sendEmbedCmd("mute", { muted });
+          sendEmbedCmd("volume", { volume: muted ? 0 : Math.min(1, boostedVolume / 100) });
+          sendEmbedCmd("rate", { rate: playbackRate });
+          if (pendingSeek.current !== null) {
+            sendEmbedCmd("seek", { time: pendingSeek.current });
+            embedTimeRef.current.currentTime = pendingSeek.current;
+          }
+          if (!adGateActiveRef.current) sendEmbedCmd("play");
+          break;
+        case "meta":
+          embedTimeRef.current = { currentTime: embedTimeRef.current.currentTime, duration: d.duration ?? 0 };
+          syncUiProgress(embedTimeRef.current.currentTime, d.duration ?? 0);
+          setIsServerSwitching(false);
+          break;
+        case "time":
+          embedTimeRef.current = { currentTime: d.currentTime ?? 0, duration: d.duration ?? embedTimeRef.current.duration ?? 0 };
+          syncUiProgress(embedTimeRef.current.currentTime, embedTimeRef.current.duration);
+          break;
+        case "canplay":
+          setVideoError(false);
+          setIsBuffering(false);
+          setShowFixedLoader(false);
+          setIsServerSwitching(false);
+          if (pendingSeek.current !== null) {
+            sendEmbedCmd("seek", { time: pendingSeek.current });
+            embedTimeRef.current.currentTime = pendingSeek.current;
+            pendingSeek.current = null;
+          }
+          if (!adGateActiveRef.current) sendEmbedCmd("play");
+          break;
+        case "playing":
+          setPlaying(true);
+          setVideoError(false);
+          setIsBuffering(false);
+          setShowFixedLoader(false);
+          setIsServerSwitching(false);
+          break;
+        case "pause":
+          setPlaying(false);
+          break;
+        case "waiting":
+          setIsBuffering(true);
+          break;
+        case "ended":
+          syncUiProgress(embedTimeRef.current.duration, embedTimeRef.current.duration);
+          setPlaying(false);
+          if (onNextEpisode) onNextEpisode();
+          break;
+        case "error":
+          setPlaying(false);
+          setIsBuffering(false);
+          setShowFixedLoader(false);
+          setIsServerSwitching(false);
+          setVideoError(true);
+          break;
+      }
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [boostedVolume, muted, onNextEpisode, playbackRate, sendEmbedCmd, syncUiProgress]);
+
+  // ============================================
+  // LOAD FIREBASE SETTINGS
+  // ============================================
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
+      const val = snap.val();
+      let servers: { name: string; domain: string; locked?: boolean }[] = [];
+      if (val && Array.isArray(val)) {
+        servers = val.filter((s: any) => s && s.domain);
+      } else if (val && typeof val === "object") {
+        servers = Object.values(val).filter((s: any) => s && s.domain) as any[];
+      }
+      setVideoServers(servers);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (noProxy) {
+      setCdnEnabled(false);
+      setProxyUrl('');
+      setProxyApiKey('');
+      setPlaybackRouteReady(true);
+      return;
+    }
+    setPlaybackRouteReady(true);
+    const unsub1 = onValue(ref(db, "settings/cdnEnabled"), (snap) => {
+      setCdnEnabled(snap.val() !== false);
+    });
+    const unsub2 = onValue(ref(db, "settings/proxyServer"), (snap) => {
+      const val = snap.val();
+      if (val && val.url) {
+        setProxyUrl(val.url);
+        setProxyApiKey(val.apiKey || '');
+      } else {
+        setProxyUrl('');
+        setProxyApiKey('');
+      }
+    });
+    return () => { unsub1(); unsub2(); };
+  }, [noProxy]);
+
+  // Premium check
+  useEffect(() => {
+    const getUserId = (): string | null => {
+      try { const u = localStorage.getItem("rsanime_user"); if (u) return JSON.parse(u).id; } catch { return null; }
+    };
+    const uid = getUserId();
+    if (!uid) { setIsPremium(false); return; }
+    const premRef = ref(db, `users/${uid}/premium`);
+    const unsub = onValue(premRef, (snap) => {
+      const data = snap.val();
+      setIsPremium(!!(data && data.active === true && data.expiresAt > Date.now()));
+    });
+    return () => unsub();
+  }, []);
+
+  // Auto-switch to premium server
+  useEffect(() => {
+    if (isPremium && videoServers.length > 0 && !premiumServerApplied.current) {
+      const premIdx = videoServers.findIndex(s => s.locked);
+      if (premIdx >= 0 && premIdx !== activeServerIndex) {
+        premiumServerApplied.current = true;
+        setTimeout(() => switchServer(premIdx), 300);
+      }
+    }
+  }, [isPremium, videoServers]);
+
+  // Ad gate
+  useEffect(() => {
+    if (isPremium === null) return;
+    if (!freeAccessLoaded) return;
+    const uid = getLocalUserId();
+    if (!uid) { setAdGateActive(false); return; }
+    if (unlockBlocked) { setAdGateActive(false); return; }
+    if (isPremium || (globalFreeAccess || userFreeAccessExpiresAt > Date.now())) {
+      setAdGateActive(false);
+      return;
+    }
+    isShortenerEnabled().then((on) => {
+      if (!on) { setAdGateActive(false); return; }
+      setAdGateActive(true);
+      setShortenLoading(true);
+      createUnlockLinksForAllServices().then((result) => {
+        setShortenLoading(false);
+        if (result.ok && result.links.length > 0) setAdLinks(result.links);
+        else setAdGateActive(false);
+      }).catch(() => { setShortenLoading(false); setAdGateActive(false); });
+    });
+  }, [isPremium, globalFreeAccess, userFreeAccessExpiresAt, unlockBlocked, freeAccessLoaded]);
+
+  useEffect(() => {
+    adGateActiveRef.current = adGateActive;
+  }, [adGateActive]);
+
+  // Watch history restore
+  useEffect(() => {
+    if (!animeId) return;
+    try {
+      const user = localStorage.getItem("rsanime_user");
+      if (!user) return;
+      const userId = JSON.parse(user).id;
+      if (!userId) return;
+      import("@/lib/firebase").then(({ get: fbGet, ref: fbRef, db: fbDb }) => {
+        const histRef = fbRef(fbDb, `users/${userId}/watchHistory/${animeId}`);
+        fbGet(histRef).then((snap: any) => {
+          if (snap.exists()) {
+            const data = snap.val();
+            if (data.currentTime && data.duration && (data.currentTime / data.duration) < 0.95) {
+              pendingSeek.current = data.currentTime;
+            }
+          }
+        });
+      });
+    } catch { }
+  }, [animeId]);
+
+  // Save progress
+  useEffect(() => {
+    if (!onSaveProgress) return;
+    const saveNow = () => {
+      if (isEmbedPlayback) {
+        const { currentTime: time, duration: total } = embedTimeRef.current;
+        if (time > 0 && total > 0) onSaveProgress(time, total);
+      } else {
+        const v = videoRef.current;
+        if (v && v.currentTime > 0 && v.duration > 0) onSaveProgress(v.currentTime, v.duration);
       }
     };
-  }, [episodeList, src]);
+    const interval = setInterval(saveNow, 10000);
+    return () => { clearInterval(interval); saveNow(); };
+  }, [isEmbedPlayback, onSaveProgress]);
 
+  // Load free access status
+  useEffect(() => {
+    const uid = getLocalUserId();
+    if (!uid) {
+      setUserFreeAccessExpiresAt(0);
+      setUnlockBlocked(false);
+      setFreeAccessLoaded(true);
+      return;
+    }
+    const unsubAccess = onValue(ref(db, `users/${uid}/freeAccess`), async (snap) => {
+      const data = snap.val();
+      if (data?.active && Number(data.expiresAt) > Date.now()) {
+        const { ensureFreeAccessDeviceAllowed } = await import("@/lib/freeAccessDevice");
+        const allowed = await ensureFreeAccessDeviceAllowed(uid, data);
+        setUserFreeAccessExpiresAt(allowed ? Number(data.expiresAt) : 0);
+      } else {
+        setUserFreeAccessExpiresAt(0);
+      }
+      setFreeAccessLoaded(true);
+    }, () => setFreeAccessLoaded(true));
+    const unsubBlocked = onValue(ref(db, `users/${uid}/security/unlockBlocked`), (snap) => {
+      setUnlockBlocked(isUnlockBlockActive(snap.val()));
+    });
+    return () => { unsubAccess(); unsubBlocked(); };
+  }, []);
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "globalFreeAccess"), (snap) => {
+      const data = snap.val();
+      setGlobalFreeAccess(!!(data?.active && data?.expiresAt > Date.now()));
+    });
+    return () => unsub();
+  }, []);
+
+  // Download manager
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+    import("@/lib/downloadManager").then(({ downloadManager }) => {
+      unsub = downloadManager.subscribe(setActiveDownloads);
+    });
+    return () => unsub?.();
+  }, []);
+
+  useEffect(() => {
+    import("@/lib/downloadStore").then(({ getAllDownloads }) => {
+      getAllDownloads().then((all) => {
+        setDownloadedEpisodes(all.filter(d => d.title === title));
+      });
+    });
+  }, [title, activeDownloads]);
+
+  // Switch server function
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
     if (videoServers[serverIndex].locked && !isPremium) return;
-    if (serverSwitchingRef.current) return;
-    const v = videoRef.current;
-    if (!v) return;
 
-    const savedTime = v.currentTime || 0;
-    const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
+    const savedTime = isEmbedPlayback
+      ? (embedTimeRef.current.currentTime || currentTime || 0)
+      : (videoRef.current?.currentTime || 0);
+    const newRawSrc = applyServerDomain(src, serverIndex);
     const resolved = resolvePlaybackSrc(newRawSrc);
 
     setShowServerPanel(false);
-    serverSwitchingRef.current = true;
-
-    // Keep last frame visible by NOT clearing src — just swap directly
+    setIsServerSwitching(true);
+    setVideoError(false);
+    setIsBuffering(true);
+    setShowFixedLoader(true);
     setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
-    activeSourceBaseRef.current = newRawSrc;
+    setActiveRawSrc(newRawSrc);
     pendingSeek.current = savedTime;
+    embedTimeRef.current = { currentTime: savedTime, duration: embedTimeRef.current.duration || duration || 0 };
     setCurrentSrc(resolved);
-    serverSwitchingRef.current = false;
-  }, [activeServerIndex, videoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
+  }, [activeServerIndex, applyServerDomain, currentTime, duration, isEmbedPlayback, isPremium, resolvePlaybackSrc, src, videoServers]);
 
-  const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
-
-
-  // Build audio track options from props + detect native audio tracks on video load
-  useEffect(() => {
-    const tracks: AudioTrackOption[] = [];
-    // Add manual audio tracks from props
-    if (propAudioTracks?.length) {
-      propAudioTracks.forEach(t => {
-        tracks.push({ language: t.language, label: t.label, src: t.link, src480: t.link480, src720: t.link720, src1080: t.link1080, src4k: t.link4k });
-      });
-    }
-    setAudioTrackOptions(tracks);
-    setCurrentAudioTrack("Default");
-  }, [propAudioTracks, src]);
-
-  // Detect native audio tracks when video loads
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const detectNativeTracks = () => {
-      const audioTracks = (v as any).audioTracks;
-      if (audioTracks && audioTracks.length > 1) {
-        const nativeTracks: AudioTrackOption[] = [];
-        for (let i = 0; i < audioTracks.length; i++) {
-          const t = audioTracks[i];
-          nativeTracks.push({
-            language: t.language || `Track ${i + 1}`,
-            label: t.label || t.language || `Audio ${i + 1}`,
-            nativeIndex: i,
-          });
-        }
-        setAudioTrackOptions(prev => {
-          // Merge: native tracks first, then manual tracks
-          const manualTracks = prev.filter(t => t.src);
-          return [...nativeTracks, ...manualTracks];
-        });
-      }
-    };
-    v.addEventListener("loadedmetadata", detectNativeTracks);
-    return () => v.removeEventListener("loadedmetadata", detectNativeTracks);
-  }, [currentSrc]);
-
-  const switchAudioTrack = useCallback((track: AudioTrackOption) => {
-    const v = videoRef.current;
-    if (!v) return;
-    const savedTime = v.currentTime;
-    const wasPlaying = !v.paused;
-
-    if (track.nativeIndex !== undefined) {
-      // Switch native audio track
-      const audioTracks = (v as any).audioTracks;
-      if (audioTracks) {
-        for (let i = 0; i < audioTracks.length; i++) {
-          audioTracks[i].enabled = i === track.nativeIndex;
-        }
-      }
-      setCurrentAudioTrack(track.label);
-    } else if (track.src) {
-      // Pick quality-matched audio URL based on current quality selection
-      let audioUrl = track.src;
-      const q = currentQuality.toLowerCase();
-      if (q.includes('4k') || q.includes('2160') || q.includes('uhd')) audioUrl = track.src4k || track.src1080 || track.src;
-      else if (q.includes('1080')) audioUrl = track.src1080 || track.src;
-      else if (q.includes('720')) audioUrl = track.src720 || track.src;
-      else if (q.includes('480')) audioUrl = track.src480 || track.src;
-      // Switch to a different URL for this language
-      sourceBaseRef.current = audioUrl;
-      const finalAudioUrl = manualServerSelected ? applyServerDomain(audioUrl, activeServerIndex) : audioUrl;
-      const proxiedSrc = resolvePlaybackSrc(finalAudioUrl);
-      activeSourceBaseRef.current = finalAudioUrl;
-      setCurrentSrc(proxiedSrc);
-      setCurrentAudioTrack(track.label);
-    // Restore playback position after source change
-      const restoreTime = () => {
-        if (v.duration > 0) {
-          v.currentTime = savedTime;
-          if (wasPlaying) v.play().catch(() => {});
-          v.removeEventListener("loadedmetadata", restoreTime);
-        }
-      };
-      v.addEventListener("loadedmetadata", restoreTime);
-    }
-    setShowAudioPanel(false);
-  }, [currentQuality, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
-
-  const resetToDefaultAudio = useCallback(() => {
-    const v = videoRef.current;
-    const defaultRawSrc = src;
-    const defaultResolvedSrc = resolvePlaybackSrc(defaultRawSrc);
-    const savedTime = v?.currentTime || 0;
-    const wasPlaying = !!v && !v.paused;
-
-    const audioTracks = (v as any)?.audioTracks;
-    if (audioTracks?.length) {
-      for (let i = 0; i < audioTracks.length; i++) {
-        audioTracks[i].enabled = i === 0;
-      }
-    }
-
-    sourceBaseRef.current = defaultRawSrc;
-    activeSourceBaseRef.current = defaultRawSrc;
-    setCurrentAudioTrack("Default");
-    setShowAudioPanel(false);
-
-    const finalDefaultSrc = manualServerSelected ? applyServerDomain(defaultRawSrc, activeServerIndex) : defaultRawSrc;
-    const finalResolvedSrc = resolvePlaybackSrc(finalDefaultSrc);
-
-    if (v && currentSrc !== finalResolvedSrc) {
-      const restoreTime = () => {
-        if (v.duration > 0) {
-          v.currentTime = savedTime;
-          if (wasPlaying) v.play().catch(() => {});
-          v.removeEventListener("loadedmetadata", restoreTime);
-        }
-      };
-
-      v.addEventListener("loadedmetadata", restoreTime);
-      activeSourceBaseRef.current = finalDefaultSrc;
-      setCurrentSrc(finalResolvedSrc);
-    }
-
-  }, [currentSrc, resolvePlaybackSrc, src, manualServerSelected, activeServerIndex, applyServerDomain]);
-
+  // Reset when src changes
   useEffect(() => {
     if (!playbackRouteReady) return;
-    sourceBaseRef.current = src;
-    activeSourceBaseRef.current = src;
+    setActiveRawSrc(src);
     const resolvedSrc = resolvePlaybackSrc(src);
+    pendingSeek.current = null;
+    embedTimeRef.current = { currentTime: 0, duration: 0 };
     setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
     setManualServerSelected(false);
+    setPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsBuffering(true);
+    setShowFixedLoader(true);
+    setIsServerSwitching(false);
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
+  }, [src, playbackRouteReady, resolvePlaybackSrc]);
 
-  // 5-second max loader: disappears when video loads OR after 5s, whichever comes first
+  // Loader timeout
   useEffect(() => {
-    if (loaderTimeoutRef.current) {
-      clearTimeout(loaderTimeoutRef.current);
-      loaderTimeoutRef.current = null;
-    }
-
-    if (!currentSrc) {
-      setShowFixedLoader(false);
-      return;
-    }
-
+    if (loaderTimeoutRef.current) clearTimeout(loaderTimeoutRef.current);
+    if (!currentSrc) { setShowFixedLoader(false); return; }
     setShowFixedLoader(true);
-
-    // Auto-hide after 5 seconds regardless
     loaderTimeoutRef.current = setTimeout(() => {
       setShowFixedLoader(false);
       loaderTimeoutRef.current = null;
     }, 800);
-
-    // Also hide immediately when video fires canplay/playing
     const v = videoRef.current;
-    if (v) {
+    if (v && !isEmbedPlayback) {
       const hideLoader = () => {
         setShowFixedLoader(false);
-        if (loaderTimeoutRef.current) {
-          clearTimeout(loaderTimeoutRef.current);
-          loaderTimeoutRef.current = null;
-        }
+        if (loaderTimeoutRef.current) clearTimeout(loaderTimeoutRef.current);
       };
       v.addEventListener("canplay", hideLoader, { once: true });
       v.addEventListener("playing", hideLoader, { once: true });
     }
+    return () => { if (loaderTimeoutRef.current) clearTimeout(loaderTimeoutRef.current); };
+  }, [currentSrc, isEmbedPlayback]);
 
-    return () => {
-      if (loaderTimeoutRef.current) {
-        clearTimeout(loaderTimeoutRef.current);
-        loaderTimeoutRef.current = null;
-      }
-    };
-  }, [currentSrc]);
-
-  // Simple volume sync - no AudioContext needed
+  // Volume sync
   useEffect(() => {
+    if (isEmbedPlayback) {
+      sendEmbedCmd("mute", { muted });
+      sendEmbedCmd("volume", { volume: muted ? 0 : Math.min(1, boostedVolume / 100) });
+    } else {
+      const v = videoRef.current;
+      if (v) { v.muted = muted; v.volume = muted ? 0 : Math.min(1, boostedVolume / 100); }
+    }
+  }, [boostedVolume, muted, isEmbedPlayback, sendEmbedCmd]);
+
+  // Video event handlers (non-embed)
+  useEffect(() => {
+    if (isEmbedPlayback || !videoRef.current || !currentSrc || adGateActive) return;
     const v = videoRef.current;
-    if (!v) return;
-    v.muted = muted;
-    v.volume = muted ? 0 : Math.min(1, boostedVolume / 100);
-  }, [boostedVolume, muted, currentSrc]);
-
-  const clearHideTimer = useCallback(() => {
-    if (hideTimer.current) {
-      clearTimeout(hideTimer.current);
-      hideTimer.current = null;
-    }
-  }, []);
-
-  const stopAndClosePlayer = useCallback(async () => {
-    clearHideTimer();
-    setShowControls(false);
-    setLocked(false);
-    setShowSettings(false);
-    setShowAudioPanel(false);
-    setShowQualityPanel(false);
-    setShowServerPanel(false);
-
-    try {
-      if (document.fullscreenElement) {
-        try { (screen.orientation as any).unlock?.(); } catch {}
-        await document.exitFullscreen().catch(() => {});
-      }
-    } catch {}
-
-    const v = videoRef.current;
-    if (v) {
-      try { v.pause(); } catch {}
-      v.removeAttribute("src");
-      v.src = "";
-      v.load();
-    }
-
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.metadata = null;
-      navigator.mediaSession.playbackState = 'none';
-    }
-
-    onClose();
-  }, [clearHideTimer, onClose]);
-
-  // MediaSession API - show anime title + artwork in Chrome media notification
-  useEffect(() => {
-    if ('mediaSession' in navigator) {
-      const artworkSrc = (() => {
-        if (!poster) return `${window.location.origin}/favicon.ico`;
-        try {
-          return poster.startsWith("http") ? poster : new URL(poster, window.location.origin).toString();
-        } catch {
-          return `${window.location.origin}/favicon.ico`;
-        }
-      })();
-
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: title,
-        artist: subtitle || 'RS ANIME',
-        album: 'RS ANIME',
-        artwork: [
-          { src: artworkSrc, sizes: "96x96" },
-          { src: artworkSrc, sizes: "192x192" },
-          { src: artworkSrc, sizes: "384x384" },
-          { src: artworkSrc, sizes: "512x512" },
-        ],
-      });
-      navigator.mediaSession.setActionHandler('play', () => { videoRef.current?.play(); });
-      navigator.mediaSession.setActionHandler('pause', () => { videoRef.current?.pause(); });
-      navigator.mediaSession.setActionHandler('seekbackward', () => seek(-10));
-      navigator.mediaSession.setActionHandler('seekforward', () => seek(10));
-      // Stop button - closes video and removes notification
-      navigator.mediaSession.setActionHandler('stop', stopAndClosePlayer);
-      if (onNextEpisode) {
-        navigator.mediaSession.setActionHandler('nexttrack', onNextEpisode);
-      }
-    }
-    return () => {
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = null;
-        navigator.mediaSession.setActionHandler('stop', null);
-      }
-    };
-  }, [title, subtitle, poster, onNextEpisode, stopAndClosePlayer]);
-
-  const scheduleHideTimer = useCallback(() => {
-    clearHideTimer();
-    if (adGateActive || showSettings || showAudioPanel || showQualityPanel || showServerPanel || showDownloadQualityPicker) return;
-    hideTimer.current = setTimeout(() => {
-      setShowControls(false);
-    }, locked ? 1400 : 2600);
-  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings]);
-
-  const resetHideTimer = useCallback(() => {
-    setShowControls(true);
-    scheduleHideTimer();
-  }, [scheduleHideTimer]);
-
-  const toggleControls = useCallback(() => {
-    setShowControls((prev) => {
-      const next = !prev;
-      if (!next) {
-        clearHideTimer();
-      } else {
-        setTimeout(() => scheduleHideTimer(), 0);
-      }
-      return next;
-    });
-  }, [clearHideTimer, scheduleHideTimer]);
-
-  useEffect(() => {
-    if (showControls) scheduleHideTimer();
-    else clearHideTimer();
-
-    return clearHideTimer;
-  }, [showControls, scheduleHideTimer, clearHideTimer]);
-
-  // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
-  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !serverSwitchingRef.current;
-
-  // ===== AUTO NEXT EPISODE OVERLAY =====
-  useEffect(() => {
-    if (!onNextEpisode || duration <= 0 || currentTime <= 0) return;
-    if (nextEpCancelledRef.current) return;
-    const remaining = duration - currentTime;
-    // ONLY show in the last 60 seconds - strict check
-    const inLast60 = remaining <= 60 && remaining > 0;
-    if (inLast60 && !showNextEpOverlay) {
-      setShowNextEpOverlay(true);
-      setNextEpCountdown(Math.ceil(remaining));
-    } else if (inLast60 && showNextEpOverlay) {
-      setNextEpCountdown(Math.ceil(remaining));
-    } else if (!inLast60 && showNextEpOverlay) {
-      // User seeked back out of the last 60s zone - hide timer
-      setShowNextEpOverlay(false);
-      setNextEpCountdown(0);
-    }
-  }, [currentTime, duration, onNextEpisode, showNextEpOverlay]);
-
-  // Reset next ep overlay when src OR currentSrc changes (covers both prop change and quality switch)
-  useEffect(() => {
-    setShowNextEpOverlay(false);
-    setNextEpCountdown(0);
-    nextEpCancelledRef.current = false;
-  }, [src, currentSrc]);
-
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v || !playbackRouteReady || !currentSrc) return;
-
-    // Track last known good position for fallback recovery
     let lastKnownTime = 0;
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+
     const onLoaded = () => {
       setDuration(v.duration);
-      if (pendingSeek.current !== null) {
-        v.currentTime = pendingSeek.current;
-        pendingSeek.current = null;
-      }
-      // Only autoplay if ad gate is not active
-      if (!adGateActive) {
-        // Keep native audio path; do not force muted autoplay fallback
-        v.play().catch(() => {});
-      }
+      if (pendingSeek.current !== null) { v.currentTime = pendingSeek.current; pendingSeek.current = null; }
+      if (!adGateActive) v.play().catch(() => { });
     };
     const onPlay = () => {
       setPlaying(true);
-      // Start RAF loop for smooth progress
       const tick = () => {
         if (!v.paused && !v.ended) {
           const ct = v.currentTime;
           if (ct > 0) lastKnownTime = ct;
           const dur = v.duration;
-          // Direct DOM updates for progress bar - avoids React re-renders
-          if (progressRef.current && dur > 0) {
-            progressRef.current.style.width = `${(ct / dur) * 100}%`;
-          }
-          if (timeDisplayRef.current && dur > 0) {
-            timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
-          }
-          // Update React state less frequently (every ~500ms) for other consumers
+          if (progressRef.current && dur > 0) progressRef.current.style.width = `${(ct / dur) * 100}%`;
+          if (timeDisplayRef.current && dur > 0) timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
           setCurrentTime(ct);
           rafId.current = requestAnimationFrame(tick);
         }
       };
       rafId.current = requestAnimationFrame(tick);
     };
-    const onPause = () => {
-      setPlaying(false);
-      cancelAnimationFrame(rafId.current);
-    };
-    const onEnded = () => {
-      setPlaying(false);
-      cancelAnimationFrame(rafId.current);
-      // Auto next episode
-      if (onNextEpisode) {
-        onNextEpisode();
-      }
-    };
-    let retryCount = 0;
-    const MAX_RETRIES = 3;
+    const onPause = () => { setPlaying(false); cancelAnimationFrame(rafId.current); };
+    const onEnded = () => { setPlaying(false); cancelAnimationFrame(rafId.current); if (onNextEpisode) onNextEpisode(); };
     const onError = () => {
       if (retryCount >= MAX_RETRIES) {
-        console.log('Video failed after retries. URL:', currentSrc);
         failedSrcsRef.current.add(currentSrc);
-        const failedQualityLabel = currentQuality;
-        
-        const sameQualityRouteFallback = buildPlaybackCandidates(
-          activeSourceBaseRef.current,
-          cdnEnabled,
-          proxyUrl || undefined,
-          proxyApiKey || undefined
-        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
-
-        if (sameQualityRouteFallback) {
-          setQualityFailMsg(`"${failedQualityLabel}" source blocked. Trying fallback route...`);
-          setTimeout(() => setQualityFailMsg(null), 3500);
-          pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          setCurrentSrc(sameQualityRouteFallback);
-          return;
-        }
-
         const nextOption = availableQualities.find((q) => {
           const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
           return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
         });
-
         if (nextOption) {
-          setQualityFailMsg(`"${failedQualityLabel}" quality not available. Switching to "${nextOption.label}"...`);
+          setQualityFailMsg(`Switching to ${nextOption.label}...`);
           setTimeout(() => setQualityFailMsg(null), 4000);
-          pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-          activeSourceBaseRef.current = nextOption.src;
-          if (newFallbackSrc === currentSrc) {
-            v.currentTime = pendingSeek.current;
-            pendingSeek.current = null;
-            v.load();
-          } else {
-            setCurrentSrc(newFallbackSrc);
-          }
+          pendingSeek.current = lastKnownTime || v.currentTime || 0;
+          setCurrentSrc(getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined));
           setCurrentQuality(nextOption.label);
         } else {
-          // ===== AUTO SERVER FAILOVER =====
-          // All quality/route fallbacks exhausted — try next server automatically
-          if (videoServers.length > 1) {
-            const nextServerIdx = (activeServerIndex + 1) % videoServers.length;
-            // Only auto-failover if we haven't cycled through all servers
-            const failoverKey = `__server_failover_${nextServerIdx}`;
-            if (!failedSrcsRef.current.has(failoverKey)) {
-              failedSrcsRef.current.add(failoverKey);
-              const serverName = videoServers[nextServerIdx]?.name || `Server ${nextServerIdx + 1}`;
-              setQualityFailMsg(`Server down. Switching to ${serverName}...`);
-              setTimeout(() => setQualityFailMsg(null), 3500);
-              // Reset failed srcs for the new server (keep failover keys)
-              const failoverKeys = new Set([...failedSrcsRef.current].filter(k => k.startsWith("__server_failover_")));
-              failedSrcsRef.current = failoverKeys;
-              switchServer(nextServerIdx);
-              return;
-            }
-          }
           setVideoError(true);
         }
         return;
       }
       retryCount++;
-      console.log(`Video error, retry ${retryCount}/${MAX_RETRIES}...`);
-      // Exponential backoff: 500ms, 1000ms, 1500ms
-      const delay = retryCount * 500;
-      setTimeout(() => {
-        if (v) {
-          const savedTime = v.currentTime || lastKnownTime;
-          // For MKV files, try removing the src attribute and re-setting it
-          v.src = currentSrc;
-          v.load();
-          v.addEventListener('loadedmetadata', () => {
-            if (savedTime > 0) v.currentTime = savedTime;
-            v.play().catch(() => {});
-          }, { once: true });
-          // Also listen for canplay as fallback for MKV
-          v.addEventListener('canplay', () => {
-            if (savedTime > 0 && Math.abs(v.currentTime - savedTime) > 2) {
-              v.currentTime = savedTime;
-            }
-            v.play().catch(() => {});
-          }, { once: true });
-        }
-      }, delay);
+      setTimeout(() => { v.load(); }, retryCount * 500);
     };
     const onCanPlay = () => {
       setVideoError(false);
       setIsBuffering(false);
-      // Also apply pending seek here in case loadedmetadata didn't fire
-      if (pendingSeek.current !== null && v.duration > 0) {
-        v.currentTime = pendingSeek.current;
-        pendingSeek.current = null;
-      }
-      if (v.paused && !adGateActive) {
-        // Keep native audio path; manual user interaction will start playback if autoplay is blocked
-        v.play().catch(() => {});
-      }
+      if (pendingSeek.current !== null && v.duration > 0) { v.currentTime = pendingSeek.current; pendingSeek.current = null; }
+      if (v.paused && !adGateActive) v.play().catch(() => { });
     };
-    const onCanPlayThrough = () => {
-      setIsBuffering(false);
-    };
-    // Debounce waiting to avoid flashing loader on brief buffers
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
-    const onWaiting = () => {
-      if (waitingTimer) clearTimeout(waitingTimer);
-      waitingTimer = setTimeout(() => setIsBuffering(true), 500);
-    };
-    const onPlaying = () => {
-      if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
-      setIsBuffering(false);
-    };
-    const onSeeked = () => {
-      // Only clear buffering if video has enough data to play
-      if (v.readyState >= 3) {
-        if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
-        setIsBuffering(false);
-      }
-    };
-    // Stalled: video stopped downloading - try to recover
-    let stalledTimer: ReturnType<typeof setTimeout> | null = null;
-    const onStalled = () => {
-      stalledTimer = setTimeout(() => {
-        // Only reload if video truly hasn't loaded anything at all (readyState 0 = HAVE_NOTHING)
-        if (v.currentTime === 0 && v.readyState <= 1 && v.networkState === 2) {
-          console.log('Video stalled at 0:00 with no data, reloading source...');
-          const savedSrc = v.src;
-          v.src = '';
-          v.src = savedSrc;
-          v.load();
-        }
-      }, 10000); // Wait 10s before considering stalled - prevents premature reloads
-    };
+    const onWaiting = () => { if (waitingTimer) clearTimeout(waitingTimer); waitingTimer = setTimeout(() => setIsBuffering(true), 500); };
+    const onPlaying = () => { if (waitingTimer) clearTimeout(waitingTimer); setIsBuffering(false); };
 
     v.addEventListener("loadedmetadata", onLoaded);
     v.addEventListener("play", onPlay);
@@ -1215,47 +688,31 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     v.addEventListener("ended", onEnded);
     v.addEventListener("error", onError);
     v.addEventListener("canplay", onCanPlay);
-    v.addEventListener("canplaythrough", onCanPlayThrough);
     v.addEventListener("waiting", onWaiting);
     v.addEventListener("playing", onPlaying);
-    v.addEventListener("seeked", onSeeked);
-    v.addEventListener("stalled", onStalled);
-    setIsBuffering(true);
     v.load();
 
     return () => {
       cancelAnimationFrame(rafId.current);
-      if (stalledTimer) clearTimeout(stalledTimer);
       v.removeEventListener("loadedmetadata", onLoaded);
       v.removeEventListener("play", onPlay);
       v.removeEventListener("pause", onPause);
       v.removeEventListener("ended", onEnded);
       v.removeEventListener("error", onError);
       v.removeEventListener("canplay", onCanPlay);
-      v.removeEventListener("canplaythrough", onCanPlayThrough);
       v.removeEventListener("waiting", onWaiting);
       v.removeEventListener("playing", onPlaying);
-      v.removeEventListener("seeked", onSeeked);
-      v.removeEventListener("stalled", onStalled);
-      // Ensure video is fully stopped on unmount (prevents background playback)
       v.pause();
       v.src = '';
       v.load();
-      // Clean up any preload element
-      if (preloadVideoRef.current) {
-        try { preloadVideoRef.current.pause(); preloadVideoRef.current.src = ""; document.body.removeChild(preloadVideoRef.current); } catch {}
-        preloadVideoRef.current = null;
-      }
-      if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, videoServers, activeServerIndex]);
+  }, [currentSrc, adGateActive, availableQualities, cdnEnabled, proxyUrl, proxyApiKey, isEmbedPlayback, onNextEpisode]);
 
+  // Fullscreen events
   useEffect(() => {
     const onFs = () => {
-      const fs = !!document.fullscreenElement;
-      setIsFullscreen(fs);
-      // Unlock orientation when exiting fullscreen externally (e.g. swipe gesture)
-      if (!fs) { try { (screen.orientation as any).unlock?.(); } catch {} }
+      setIsFullscreen(!!document.fullscreenElement);
+      if (!document.fullscreenElement) try { (screen.orientation as any).unlock?.(); } catch { }
     };
     document.addEventListener("fullscreenchange", onFs);
     document.addEventListener("webkitfullscreenchange", onFs);
@@ -1265,176 +722,161 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
   }, []);
 
-  // Pause video when app goes background / tab hidden
+  // Controls timer
+  const clearHideTimer = useCallback(() => { if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null; } }, []);
+  const scheduleHideTimer = useCallback(() => {
+    clearHideTimer();
+    if (adGateActive || showSettings || showQualityPanel || showServerPanel || showDownloadQualityPicker) return;
+    hideTimer.current = setTimeout(() => setShowControls(false), locked ? 1400 : 2600);
+  }, [adGateActive, clearHideTimer, locked, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings]);
+  const resetHideTimer = useCallback(() => { setShowControls(true); scheduleHideTimer(); }, [scheduleHideTimer]);
+
+  useEffect(() => { if (showControls) scheduleHideTimer(); else clearHideTimer(); return clearHideTimer; }, [showControls, scheduleHideTimer, clearHideTimer]);
+
+  // MediaSession
   useEffect(() => {
-    const pausePlayback = () => {
-      const v = videoRef.current;
-      if (!v) return;
-      if (!v.paused) {
-        v.pause();
-        setPlaying(false);
-      }
-    };
+    if ('mediaSession' in navigator) {
+      const artworkSrc = (() => {
+        if (!poster) return `${window.location.origin}/favicon.ico`;
+        try { return poster.startsWith("http") ? poster : new URL(poster, window.location.origin).toString(); } catch { return `${window.location.origin}/favicon.ico`; }
+      })();
+      navigator.mediaSession.metadata = new MediaMetadata({ title, artist: subtitle || 'RS ANIME', album: 'RS ANIME', artwork: [{ src: artworkSrc, sizes: "512x512" }] });
+      navigator.mediaSession.setActionHandler('play', () => togglePlay());
+      navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+      navigator.mediaSession.setActionHandler('seekbackward', () => seek(-10));
+      navigator.mediaSession.setActionHandler('seekforward', () => seek(10));
+      navigator.mediaSession.setActionHandler('stop', stopAndClosePlayer);
+      if (onNextEpisode) navigator.mediaSession.setActionHandler('nexttrack', onNextEpisode);
+    }
+    return () => { if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; } };
+  }, [title, subtitle, poster, onNextEpisode]);
 
-    const onVisibilityChange = () => {
-      if (document.hidden) pausePlayback();
-    };
-
-    window.addEventListener('pagehide', pausePlayback);
-    window.addEventListener('beforeunload', pausePlayback);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    return () => {
-      window.removeEventListener('pagehide', pausePlayback);
-      window.removeEventListener('beforeunload', pausePlayback);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
-  }, []);
+  const stopAndClosePlayer = useCallback(async () => {
+    clearHideTimer();
+    setShowControls(false);
+    setLocked(false);
+    setShowSettings(false);
+    setShowQualityPanel(false);
+    setShowServerPanel(false);
+    try { if (document.fullscreenElement) { try { (screen.orientation as any).unlock?.(); } catch { } await document.exitFullscreen(); } } catch { }
+    if (videoRef.current) { videoRef.current.pause(); videoRef.current.src = ""; videoRef.current.load(); }
+    if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
+    onClose();
+  }, [clearHideTimer, onClose]);
 
   const togglePlay = useCallback(() => {
+    if (isEmbedPlayback) { sendEmbedCmd(playing ? "pause" : "play"); setPlaying(!playing); resetHideTimer(); return; }
     const v = videoRef.current;
-    if (!v) return;
-    if (v.paused) v.play(); else v.pause();
-    resetHideTimer();
-  }, [resetHideTimer]);
-
-  const MAX_VOL = 100;
-  const applyPlayerVolume = useCallback((nextBoost: number, nextMuted = muted) => {
-    const clampedBoost = Math.max(0, Math.min(MAX_VOL, nextBoost));
-    const effectiveMuted = nextMuted || clampedBoost <= 0;
-    setBoostedVolume(clampedBoost);
-    setMuted(effectiveMuted);
-    setVolume(Math.min(1, clampedBoost / 100));
-    const v = videoRef.current;
-    if (v) {
-      v.muted = effectiveMuted;
-      v.volume = effectiveMuted ? 0 : Math.min(1, clampedBoost / 100);
-    }
-  }, [muted]);
-
-  const getSafeSeekTime = useCallback((v: HTMLVideoElement, target: number) => {
-    if (!Number.isFinite(v.duration) || v.duration <= 0) return 0;
-
-    let clamped = Math.min(Math.max(target, 0), v.duration);
-
-    // For proxied streams, seek only within seekable range to prevent reset-to-zero
-    if (v.seekable && v.seekable.length > 0) {
-      const start = v.seekable.start(0);
-      const end = v.seekable.end(v.seekable.length - 1);
-      clamped = Math.min(Math.max(clamped, start), end);
-    }
-
-    return clamped;
-  }, []);
+    if (v) { if (v.paused) v.play(); else v.pause(); resetHideTimer(); }
+  }, [isEmbedPlayback, playing, resetHideTimer, sendEmbedCmd]);
 
   const seek = useCallback((seconds: number) => {
-    const v = videoRef.current;
-    if (!v) return;
-
-    const nextTime = getSafeSeekTime(v, v.currentTime + seconds);
-    v.currentTime = nextTime;
-
+    if (isEmbedPlayback) {
+      const total = embedTimeRef.current.duration || duration || 0;
+      const nextTime = Math.min(Math.max((embedTimeRef.current.currentTime || currentTime) + seconds, 0), total);
+      embedTimeRef.current.currentTime = nextTime;
+      sendEmbedCmd("seek", { time: nextTime });
+      syncUiProgress(nextTime, total);
+    } else {
+      const v = videoRef.current;
+      if (v) v.currentTime = Math.min(Math.max(v.currentTime + seconds, 0), v.duration);
+    }
     setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
     setTimeout(() => setSkipIndicator(null), 600);
     resetHideTimer();
-  }, [getSafeSeekTime, resetHideTimer]);
+  }, [currentTime, duration, isEmbedPlayback, resetHideTimer, sendEmbedCmd, syncUiProgress]);
 
   const toggleFullscreen = useCallback(async () => {
     const el = videoContainerRef.current;
     if (!el) return;
     try {
       if (document.fullscreenElement) {
-        // Unlock orientation before exiting fullscreen
-        try { (screen.orientation as any).unlock?.(); } catch {}
+        try { (screen.orientation as any).unlock?.(); } catch { }
         await document.exitFullscreen();
       } else {
         if (el.requestFullscreen) await el.requestFullscreen();
         else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
-        // Lock to landscape after entering fullscreen
-        try { await (screen.orientation as any).lock?.('landscape'); } catch {}
+        try { await (screen.orientation as any).lock?.('landscape'); } catch { }
       }
     } catch (e) { console.log('Fullscreen not supported'); }
   }, []);
 
   const setSpeed = useCallback((rate: number) => {
-    if (videoRef.current) videoRef.current.playbackRate = rate;
+    if (isEmbedPlayback) sendEmbedCmd("rate", { rate });
+    else if (videoRef.current) videoRef.current.playbackRate = rate;
     setPlaybackRate(rate);
     setShowSettings(false);
-  }, []);
+  }, [isEmbedPlayback, sendEmbedCmd]);
 
   const switchQuality = useCallback((option: QualityOption) => {
-    // Block 4K for non-premium users
-    if (is4KLabel(option.label) && !isPremium) return;
     if (option.label === currentQuality) { setShowSettings(false); return; }
-
-    sourceBaseRef.current = option.src;
-    const finalOptionSrc = manualServerSelected ? applyServerDomain(option.src, activeServerIndex) : option.src;
-    activeSourceBaseRef.current = finalOptionSrc;
-    const newSrc = resolvePlaybackSrc(finalOptionSrc);
-
-    if (newSrc === currentSrc) {
-      setCurrentQuality(option.label);
-      setShowSettings(false);
-      return;
-    }
-    const v = videoRef.current;
-    pendingSeek.current = v?.currentTime || 0;
+    const savedTime = isEmbedPlayback ? (embedTimeRef.current.currentTime || currentTime || 0) : (videoRef.current?.currentTime || 0);
+    setActiveRawSrc(option.src);
+    const newSrc = resolvePlaybackSrc(option.src);
+    pendingSeek.current = savedTime;
     setIsBuffering(true);
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);
     setShowSettings(false);
-
-  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
+  }, [currentQuality, currentTime, isEmbedPlayback, resolvePlaybackSrc]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const v = videoRef.current;
-    if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    v.currentTime = getSafeSeekTime(v, pct * v.duration);
+    if (isEmbedPlayback) {
+      const total = embedTimeRef.current.duration || duration || 0;
+      const target = pct * total;
+      embedTimeRef.current.currentTime = target;
+      sendEmbedCmd("seek", { time: target });
+      syncUiProgress(target, total);
+    } else {
+      const v = videoRef.current;
+      if (v) v.currentTime = pct * v.duration;
+    }
     resetHideTimer();
-  }, [getSafeSeekTime, resetHideTimer]);
-
-  // Touch drag seeking on progress bar
-  const progressBarRef = useRef<HTMLDivElement>(null);
-  const isSeeking = useRef(false);
+  }, [duration, isEmbedPlayback, resetHideTimer, sendEmbedCmd, syncUiProgress]);
 
   const handleProgressTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     isSeeking.current = true;
-    const v = videoRef.current;
-    if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
-    v.currentTime = getSafeSeekTime(v, pct * v.duration);
+    if (isEmbedPlayback) {
+      const total = embedTimeRef.current.duration || duration || 0;
+      const target = pct * total;
+      embedTimeRef.current.currentTime = target;
+      sendEmbedCmd("seek", { time: target });
+      syncUiProgress(target, total);
+    } else {
+      const v = videoRef.current;
+      if (v) v.currentTime = pct * v.duration;
+    }
     resetHideTimer();
-  }, [getSafeSeekTime, resetHideTimer]);
+  }, [duration, isEmbedPlayback, resetHideTimer, sendEmbedCmd, syncUiProgress]);
 
   const handleProgressTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (!isSeeking.current) return;
-    const v = videoRef.current;
-    if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
-    const target = getSafeSeekTime(v, pct * v.duration);
-    v.currentTime = target;
-
-    // Update progress bar immediately
-    if (progressRef.current && v.duration > 0) {
-      progressRef.current.style.width = `${(target / v.duration) * 100}%`;
+    if (isEmbedPlayback) {
+      const total = embedTimeRef.current.duration || duration || 0;
+      const target = pct * total;
+      embedTimeRef.current.currentTime = target;
+      sendEmbedCmd("seek", { time: target });
+      syncUiProgress(target, total);
+    } else {
+      const v = videoRef.current;
+      if (v && v.duration > 0) {
+        const target = pct * v.duration;
+        v.currentTime = target;
+        if (progressRef.current) progressRef.current.style.width = `${(target / v.duration) * 100}%`;
+        if (timeDisplayRef.current) timeDisplayRef.current.textContent = `${formatTime(target)} / ${formatTime(v.duration)}`;
+      }
     }
-    if (timeDisplayRef.current && v.duration > 0) {
-      timeDisplayRef.current.textContent = `${formatTime(target)} / ${formatTime(v.duration)}`;
-    }
-  }, [getSafeSeekTime]);
+  }, [duration, isEmbedPlayback, sendEmbedCmd, syncUiProgress]);
 
-  const handleProgressTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    isSeeking.current = false;
-  }, []);
-
-  const lastTap = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
+  const handleProgressTouchEnd = useCallback(() => { isSeeking.current = false; }, []);
 
   const handleVideoClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (locked) return;
@@ -1442,31 +884,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const clientX = "touches" in e ? e.changedTouches[0].clientX : e.clientX;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const relX = (clientX - rect.left) / rect.width;
-
     if (now - lastTap.current.time < 250) {
-      // Double tap — cancel single tap
-      // Double tap detected
       if (relX < 0.33) seek(-10);
       else if (relX > 0.66) seek(10);
-      else {
-        togglePlay();
-        setSkipIndicator({ side: "center", text: playing ? "⏸" : "▶" });
-        setTimeout(() => setSkipIndicator(null), 600);
-      }
+      else { togglePlay(); setSkipIndicator({ side: "center", text: playing ? "⏸" : "▶" }); setTimeout(() => setSkipIndicator(null), 600); }
       lastTap.current = { time: 0, x: 0 };
     } else {
       lastTap.current = { time: now, x: clientX };
-      // Show controls INSTANTLY on single tap — no 300ms wait
       toggleControls();
     }
   }, [locked, seek, togglePlay, playing, toggleControls]);
 
+  const toggleControls = useCallback(() => {
+    setShowControls((prev) => { const next = !prev; if (!next) clearHideTimer(); else setTimeout(() => scheduleHideTimer(), 0); return next; });
+  }, [clearHideTimer, scheduleHideTimer]);
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const t = e.touches[0];
-    setSwipeState({ startX: t.clientX, startY: t.clientY, type: null });
-  }, []);
-
+  const handleTouchStart = useCallback((e: React.TouchEvent) => { const t = e.touches[0]; setSwipeState({ startX: t.clientX, startY: t.clientY, type: null }); }, []);
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!swipeState || locked) return;
     const t = e.touches[0];
@@ -1477,51 +910,128 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setSwipeState({ ...swipeState, type: relX > 0.5 ? "volume" : "brightness" });
     }
     if (swipeState.type === "volume") {
-      const newBoosted = Math.min(MAX_VOL, Math.max(0, boostedVolume - dy * 0.8));
-      applyPlayerVolume(newBoosted, false);
+      const newBoosted = Math.min(100, Math.max(0, boostedVolume - dy * 0.8));
+      const effectiveMuted = newBoosted <= 0;
+      setBoostedVolume(newBoosted);
+      setMuted(effectiveMuted);
+      if (isEmbedPlayback) {
+        sendEmbedCmd("mute", { muted: effectiveMuted });
+        sendEmbedCmd("volume", { volume: effectiveMuted ? 0 : Math.min(1, newBoosted / 100) });
+      } else if (videoRef.current) {
+        videoRef.current.muted = effectiveMuted;
+        videoRef.current.volume = effectiveMuted ? 0 : Math.min(1, newBoosted / 100);
+      }
       setSwipeState({ ...swipeState, startY: t.clientY });
     } else if (swipeState.type === "brightness") {
-      const newBr = Math.min(1.5, Math.max(0.3, brightness - dy * 0.003));
-      setBrightness(newBr);
+      setBrightness(Math.min(1.5, Math.max(0.3, brightness - dy * 0.003)));
       setSwipeState({ ...swipeState, startY: t.clientY });
     }
-  }, [swipeState, locked, brightness, boostedVolume, muted, applyPlayerVolume]);
+  }, [swipeState, locked, brightness, boostedVolume, isEmbedPlayback, sendEmbedCmd]);
 
   const handleTouchEnd = useCallback(() => setSwipeState(null), []);
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  // Auto next episode overlay
+  useEffect(() => {
+    if (!onNextEpisode || duration <= 0 || currentTime <= 0) return;
+    if (nextEpCancelledRef.current) return;
+    const remaining = duration - currentTime;
+    const inLast60 = remaining <= 60 && remaining > 0;
+    if (inLast60 && !showNextEpOverlay) { setShowNextEpOverlay(true); setNextEpCountdown(Math.ceil(remaining)); }
+    else if (inLast60 && showNextEpOverlay) setNextEpCountdown(Math.ceil(remaining));
+    else if (!inLast60 && showNextEpOverlay) { setShowNextEpOverlay(false); setNextEpCountdown(0); }
+  }, [currentTime, duration, onNextEpisode, showNextEpOverlay]);
 
+  useEffect(() => { setShowNextEpOverlay(false); setNextEpCountdown(0); nextEpCancelledRef.current = false; }, [src, currentSrc]);
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !isServerSwitching;
+
+  // Download functions
+  const normalizeKeyPart = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const createUrlHash = (value: string) => { let hash = 0; for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0; return hash.toString(36); };
+  const createDownloadId = (videoTitle: string, videoSubtitle: string | undefined, quality: string, url: string) => {
+    const base = [videoTitle, videoSubtitle].filter(Boolean).map((part) => normalizeKeyPart(part as string)).join("__") || "video";
+    return `${base}__${normalizeKeyPart(quality || "Auto")}__${createUrlHash(url)}`;
+  };
+
+  const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
+    const dlId = createDownloadId(title, subtitle, quality, qualitySrc);
+    const proxiedUrl = getPrimaryPlaybackSrc(qualitySrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+    const { downloadManager } = await import("@/lib/downloadManager");
+    downloadManager.startDownload({ id: dlId, url: proxiedUrl, title, subtitle, poster, quality });
+    setShowDownloadQualityPicker(false);
+    const { toast } = await import("sonner");
+    toast.info(`${quality} ডাউনলোড শুরু হয়েছে`);
+  };
+
+  const playOffline = async (episodeData?: any) => {
+    const ep = episodeData || downloadedEpisodes.find(d => d.subtitle === subtitle);
+    if (!ep) return;
+    const { getVideoBlob } = await import("@/lib/downloadStore");
+    const blob = await getVideoBlob(ep.id);
+    if (blob) { setOfflinePlaySrc(URL.createObjectURL(blob)); setOfflinePlayInfo(ep); }
+    else { const { toast } = await import("sonner"); toast.error("ভিডিও ফাইল পাওয়া যায়নি"); }
+  };
+
+  const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
+    const { openExternalBrowser } = await import("@/lib/openExternal");
+    try {
+      const fb = await import("@/lib/firebase");
+      const isMiniMode = service?.mode === "miniapp";
+      let globalMini = false;
+      if (!isMiniMode) {
+        const miniSnap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramMini"));
+        globalMini = miniSnap.val() === true;
+      }
+      if (isMiniMode || globalMini) {
+        const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramMiniBotUsername"));
+        const botUsername = String(botSnap.val() || "RS_ANIME_ACCESS_BOT").replace(/^@/, "").trim();
+        const uid = getLocalUserId();
+        if (botUsername && uid) {
+          const isStandaloneApp = window.matchMedia?.("(display-mode: standalone)")?.matches || (window.navigator as any).standalone === true;
+          const sourceTag = isStandaloneApp ? "app" : "web";
+          const panelTag = window.location.pathname.startsWith("/admin") ? "admin" : "user";
+          window.location.href = `https://t.me/${botUsername}?startapp=u_${uid}_src_${sourceTag}_panel_${panelTag}`;
+          return;
+        }
+      }
+      const snap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramBot"));
+      if (snap.val() === true) {
+        const r = await createTelegramBotUnlockLink();
+        if (r.ok && r.deepLink) { window.location.href = r.deepLink; return; }
+      }
+    } catch { }
+    if (url && url !== "miniapp://telegram") openExternalBrowser(url);
+  }, []);
+
+  // ============================================
+  // RENDER
+  // ============================================
   return (
     <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
-      {/* Close button */}
       {!isFullscreen && (
-          <button onClick={stopAndClosePlayer} className="absolute top-5 right-5 z-[310] w-10 h-10 rounded-full gradient-primary flex items-center justify-center transition-all">
+        <button onClick={stopAndClosePlayer} className="absolute top-5 right-5 z-[310] w-10 h-10 rounded-full gradient-primary flex items-center justify-center transition-all">
           <X className="w-5 h-5" />
         </button>
       )}
 
       <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full p-5'}`}>
         {!isFullscreen && (
-          <div className="text-center mb-2.5">
-            <h1 className="text-2xl font-extrabold text-primary tracking-wider">{branding.playerName}</h1>
-          </div>
+          <>
+            <div className="text-center mb-2.5">
+              <h1 className="text-2xl font-extrabold text-primary tracking-wider">{branding.playerName}</h1>
+            </div>
+            <div className="text-center mb-5">
+              <p className="text-lg font-semibold">{title}</p>
+              {subtitle && <p className="text-sm text-secondary-foreground">{subtitle}</p>}
+            </div>
+          </>
         )}
 
-        {!isFullscreen && (
-          <div className="text-center mb-5">
-            <p className="text-lg font-semibold">{title}</p>
-            {subtitle && <p className="text-sm text-secondary-foreground">{subtitle}</p>}
-          </div>
-        )}
-
-        {/* Video Container - will-change for GPU compositing */}
+        {/* Video Container */}
         <div
           ref={videoContainerRef}
-          className={`relative bg-black overflow-hidden ${
-            isFullscreen 
-              ? "w-screen h-screen rounded-none" 
-              : "w-full rounded-xl aspect-video"
-          }`}
+          className={`relative bg-black overflow-hidden ${isFullscreen ? "w-screen h-screen rounded-none" : "w-full rounded-xl aspect-video"}`}
           style={{ filter: `brightness(${brightness})`, margin: isFullscreen ? 0 : undefined }}
           onContextMenu={(e) => e.preventDefault()}
           onClick={handleVideoClick}
@@ -1529,41 +1039,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          {/* No thumbnail/poster overlay — solid black bg only for fast load */}
-          {/* ===== Server 2 (HuggingFace HTTPS) iframe mode =====
-              When the active server domain is hf.space (or any domain that
-              hosts our branded `req.html`), play the MKV inside that page so
-              the browser doesn't choke on the Matroska container. The iframe
-              is the *visual* surface only — UI/controls stay in this player
-              and drive the embed via postMessage (see useEffect below). */}
-          {currentSrc && /hf\.space|huggingface/i.test(currentSrc) ? (
-            (() => {
-              // Server 2 expects URLs with /watch/ prefix on the path.
-              // Saved links don't have it, so inject /watch/ right after the
-              // host if it's missing. Example:
-              //   https://host.hf.space/9964/file.mkv?hash=xx
-              //   → https://host.hf.space/watch/9964/file.mkv?hash=xx
-              let watchSrc = currentSrc;
-              try {
-                const u = new URL(currentSrc);
-                if (!/^\/watch\//i.test(u.pathname)) {
-                  u.pathname = "/watch" + u.pathname;
-                }
-                watchSrc = u.toString();
-              } catch {}
-              return (
-                <iframe
-                  ref={embedIframeRef}
-                  src={`https://rahat1102-video-hosting-bot.hf.space/req.html?src=${encodeURIComponent(watchSrc)}`}
-                  className="w-full h-full bg-black border-0"
-                  style={{ pointerEvents: "none" }}
-                  allow="autoplay; fullscreen; encrypted-media"
-                  allowFullScreen
-                  referrerPolicy="no-referrer"
-                  title="player"
-                />
-              );
-            })()
+          {/* Hugging Face Embed Mode */}
+          {isEmbedPlayback ? (
+            <iframe
+              ref={embedIframeRef}
+              key={activeRawSrc}
+              src={`/req.html?src=${encodeURIComponent(activeRawSrc)}`}
+              className="w-full h-full bg-black border-0"
+              style={{ pointerEvents: "none" }}
+              allow="autoplay; fullscreen; encrypted-media"
+              allowFullScreen
+              referrerPolicy="no-referrer"
+              title="player"
+            />
           ) : (
             <video
               ref={videoRef}
@@ -1581,7 +1069,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             />
           )}
 
-          {/* Video Error Overlay */}
+          {/* Error Overlay */}
           {videoError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20">
               <div className="w-16 h-16 rounded-full bg-destructive/20 flex items-center justify-center mb-4">
@@ -1589,42 +1077,35 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               </div>
               <p className="text-base font-semibold text-foreground mb-1">Video Unavailable</p>
               <p className="text-xs text-muted-foreground mb-4 text-center px-6">Server is not responding. Try another episode or quality.</p>
-              <button onClick={(e) => { e.stopPropagation(); setVideoError(false); setIsBuffering(true); const v = videoRef.current; if (v) { v.load(); } }} className="px-4 py-2 rounded-lg gradient-primary text-sm font-semibold btn-glow">
+              <button onClick={() => { setVideoError(false); setIsBuffering(true); setShowFixedLoader(true); if (!isEmbedPlayback && videoRef.current) videoRef.current.load(); else sendEmbedCmd("load", { src: activeRawSrc }); }} className="px-4 py-2 rounded-lg gradient-primary text-sm font-semibold btn-glow">
                 Retry
               </button>
             </div>
           )}
 
-          {/* Loading spinner on top of thumbnail */}
+          {/* Loader */}
           {showLoaderOverlay && (
             <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none">
               <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
             </div>
           )}
 
+          {/* Skip Indicator */}
           {skipIndicator && (
-            <div className={`absolute top-1/2 -translate-y-1/2 skip-indicator w-16 h-16 flex items-center justify-center text-foreground text-xl font-bold ${
-              skipIndicator.side === "left" ? "left-[15%]" :
-              skipIndicator.side === "right" ? "right-[15%]" : "left-1/2 -translate-x-1/2"
-            }`}>
-              {skipIndicator.side === "left" ? <Rewind className="w-6 h-6" /> :
-               skipIndicator.side === "right" ? <FastForward className="w-6 h-6" /> :
-               <span className="text-2xl">{skipIndicator.text}</span>}
+            <div className={`absolute top-1/2 -translate-y-1/2 skip-indicator w-16 h-16 flex items-center justify-center text-foreground text-xl font-bold ${skipIndicator.side === "left" ? "left-[15%]" : skipIndicator.side === "right" ? "right-[15%]" : "left-1/2 -translate-x-1/2"}`}>
+              {skipIndicator.side === "left" ? <Rewind className="w-6 h-6" /> : skipIndicator.side === "right" ? <FastForward className="w-6 h-6" /> : <span className="text-2xl">{skipIndicator.text}</span>}
               {skipIndicator.side !== "center" && <span className="text-xs mt-1 absolute -bottom-5">{skipIndicator.text}</span>}
             </div>
           )}
 
-          {/* Auto Next Episode Overlay */}
+          {/* Next Episode Overlay */}
           {showNextEpOverlay && onNextEpisode && !videoError && (
             <div className="absolute bottom-20 right-3 z-30 animate-in slide-in-from-right-5 duration-500" onClick={(e) => e.stopPropagation()}>
-              <div className="player-glass rounded-xl p-3 pr-4 flex items-center gap-3 shadow-lg border border-primary/30" style={{ boxShadow: "0 0 20px hsla(176, 65%, 48%, 0.2)" }}>
+              <div className="player-glass rounded-xl p-3 pr-4 flex items-center gap-3 shadow-lg border border-primary/30">
                 <div className="relative w-10 h-10 flex items-center justify-center">
-                  {/* Circular countdown */}
                   <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
                     <circle cx="18" cy="18" r="16" fill="none" stroke="hsla(176,65%,48%,0.15)" strokeWidth="2" />
-                    <circle cx="18" cy="18" r="16" fill="none" stroke="hsl(176,65%,48%)" strokeWidth="2.5"
-                      strokeDasharray={`${(nextEpCountdown / 60) * 100} 100`}
-                      strokeLinecap="round" className="transition-all duration-1000" />
+                    <circle cx="18" cy="18" r="16" fill="none" stroke="hsl(176,65%,48%)" strokeWidth="2.5" strokeDasharray={`${(nextEpCountdown / 60) * 100} 100`} strokeLinecap="round" className="transition-all duration-1000" />
                   </svg>
                   <span className="absolute text-[10px] font-bold text-primary">{nextEpCountdown}s</span>
                 </div>
@@ -1633,23 +1114,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   <span className="text-xs font-semibold text-foreground">Next Episode</span>
                 </div>
                 <div className="flex gap-1.5 ml-1">
-                  <button onClick={() => { nextEpCancelledRef.current = true; setShowNextEpOverlay(false); }} className="text-[9px] text-muted-foreground hover:text-foreground px-2 py-1 rounded bg-foreground/10">
-                    Cancel
-                  </button>
-                  <button onClick={() => onNextEpisode()} className="text-[10px] font-bold px-3 py-1 rounded-lg gradient-primary btn-glow flex items-center gap-1">
-                    Play <ChevronRight className="w-3 h-3" />
-                  </button>
+                  <button onClick={() => { nextEpCancelledRef.current = true; setShowNextEpOverlay(false); }} className="text-[9px] text-muted-foreground hover:text-foreground px-2 py-1 rounded bg-foreground/10">Cancel</button>
+                  <button onClick={() => onNextEpisode()} className="text-[10px] font-bold px-3 py-1 rounded-lg gradient-primary btn-glow flex items-center gap-1">Play <ChevronRight className="w-3 h-3" /></button>
                 </div>
               </div>
             </div>
           )}
 
+          {/* Quality Fail Message */}
           {qualityFailMsg && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 player-glass px-4 py-2.5 rounded-xl text-center max-w-[85%] animate-in fade-in slide-in-from-top-2 duration-300">
               <p className="text-xs font-semibold text-accent">⚠ {qualityFailMsg}</p>
             </div>
           )}
 
+          {/* Swipe Indicator */}
           {swipeState?.type && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 player-glass px-6 py-3 rounded-xl text-center">
               {swipeState.type === "volume" ? (
@@ -1666,7 +1145,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
-          {/* Controls Overlay - always dark bg for visibility in all themes */}
+          {/* Controls Overlay */}
           {showControls && !locked && (
             <div className="absolute inset-0 flex flex-col justify-between text-white" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}>
               {/* Top controls */}
@@ -1688,27 +1167,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           <button onClick={() => {
                             setShowServerPanel(false);
                             setManualServerSelected(false);
-                            activeSourceBaseRef.current = sourceBaseRef.current;
-                            setCurrentSrc(resolvePlaybackSrc(sourceBaseRef.current));
-                          }}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
-                              !manualServerSelected ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                            }`}>
-                            <span>Default</span>
-                            {!manualServerSelected && <Check className="w-3 h-3" />}
+                            setActiveRawSrc(src);
+                            setCurrentSrc(resolvePlaybackSrc(src));
+                          }} className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${!manualServerSelected ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}>
+                            <span>Default</span> {!manualServerSelected && <Check className="w-3 h-3" />}
                           </button>
                         )}
                         {videoServers.map((srv, idx) => {
                           const isLocked = srv.locked && !isPremium;
                           return (
-                            <button key={idx} onClick={() => { if (!isLocked) switchServer(idx); }}
-                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
-                                activeServerIndex === idx ? "gradient-primary font-bold text-white" : isLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-foreground/10"
-                              }`}>
-                              <span className="flex items-center gap-1.5">
-                                {srv.locked && <Lock className="w-3 h-3 text-accent" />}
-                                {srv.name || `Server ${idx + 1}`}
-                              </span>
+                            <button key={idx} onClick={() => { if (!isLocked) switchServer(idx); }} className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${activeServerIndex === idx ? "gradient-primary font-bold text-white" : isLocked ? "opacity-50 cursor-not-allowed" : "hover:bg-foreground/10"}`}>
+                              <span className="flex items-center gap-1.5">{srv.locked && <Lock className="w-3 h-3 text-accent" />}{srv.name || `Server ${idx + 1}`}</span>
                               {isLocked && <span className="text-[8px] text-accent font-medium">Premium</span>}
                               {!isLocked && activeServerIndex === idx && <Check className="w-3 h-3" />}
                             </button>
@@ -1738,21 +1207,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
               {/* Bottom controls */}
               <div className="px-3 pb-3">
-                {/* Progress bar - GPU accelerated with will-change */}
-                <div
-                  ref={progressBarRef}
-                  className="w-full h-6 flex items-center cursor-pointer mb-2 relative touch-none"
-                  onClick={(e) => { e.stopPropagation(); handleProgressClick(e); }}
-                  onTouchStart={handleProgressTouchStart}
-                  onTouchMove={handleProgressTouchMove}
-                  onTouchEnd={handleProgressTouchEnd}
-                >
+                <div ref={progressBarRef} className="w-full h-6 flex items-center cursor-pointer mb-2 relative touch-none" onClick={(e) => { e.stopPropagation(); handleProgressClick(e); }} onTouchStart={handleProgressTouchStart} onTouchMove={handleProgressTouchMove} onTouchEnd={handleProgressTouchEnd}>
                   <div className="w-full h-1.5 bg-foreground/20 rounded-full relative">
-                    <div
-                      ref={progressRef}
-                      className="h-full gradient-primary rounded-full relative"
-                      style={{ width: `${progress}%` }}
-                    >
+                    <div ref={progressRef} className="h-full gradient-primary rounded-full relative" style={{ width: `${progress}%` }}>
                       <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary shadow-[0_0_10px_hsla(355,85%,55%,0.6)]" />
                     </div>
                   </div>
@@ -1760,10 +1217,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <span ref={timeDisplayRef} className="text-[11px] font-medium">{formatTime(currentTime)} / {formatTime(duration)}</span>
-                    <button onClick={(e) => {
-                      e.stopPropagation();
-                      applyPlayerVolume(boostedVolume, !muted);
-                    }} className="w-6 h-6 flex items-center justify-center">
+                    <button onClick={(e) => { e.stopPropagation(); if (isEmbedPlayback) { sendEmbedCmd("mute", { muted: !muted }); setMuted(!muted); } else { setMuted(!muted); } }} className="w-6 h-6 flex items-center justify-center">
                       {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
                   </div>
@@ -1771,69 +1225,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     <span className="text-[10px] bg-foreground/20 px-2 py-0.5 rounded">{playbackRate}x</span>
                     {availableQualities.length > 1 && (
                       <div className="relative">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); }}
-                          className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all ${
-                            currentQuality !== "Auto" ? "gradient-primary text-white" : "bg-foreground/20"
-                          }`}
-                        >
+                        <button onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); }} className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all ${currentQuality !== "Auto" ? "gradient-primary text-white" : "bg-foreground/20"}`}>
                           {currentQuality}
                         </button>
                         {showQualityPanel && (
                           <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[120px] shadow-lg" onClick={(e) => e.stopPropagation()}>
                             <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Quality</p>
-                            {availableQualities.map((opt) => {
-                              const is4K = is4KLabel(opt.label);
-                              const locked4K = is4K && !isPremium;
-                              return (
-                                <button key={opt.label} onClick={() => { if (!locked4K) { switchQuality(opt); setShowQualityPanel(false); } }}
-                                  className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
-                                    locked4K ? "opacity-50 cursor-not-allowed" :
-                                    currentQuality === opt.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                                  }`}>
-                                  <span className="flex items-center gap-1.5">
-                                    {opt.label}
-                                    {locked4K && <Lock className="w-3 h-3 text-accent" />}
-                                  </span>
-                                  {locked4K && <span className="text-[8px] text-accent font-medium">Premium</span>}
-                                  {!locked4K && currentQuality === opt.label && <Check className="w-3 h-3" />}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {/* Audio track button */}
-                    {audioTrackOptions.length > 0 && (
-                      <div className="relative">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); }}
-                          className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
-                            currentAudioTrack !== "Default" ? "gradient-primary text-white" : "bg-foreground/20"
-                          }`}
-                        >
-                          🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}
-                        </button>
-                        {showAudioPanel && (
-                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
-                            <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
-                            <button onClick={resetToDefaultAudio}
-                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
-                                currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                              }`}>
-                              <span>Default</span>
-                              {currentAudioTrack === "Default" && <Check className="w-3 h-3" />}
-                            </button>
-                            {audioTrackOptions.map((track, idx) => (
-                              <button key={idx} onClick={() => switchAudioTrack(track)}
-                                className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
-                                  currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                                }`}>
-                                <span className="flex items-center gap-1.5">
-                                  🎧 {track.label}
-                                </span>
-                                {currentAudioTrack === track.label && <Check className="w-3 h-3" />}
+                            {availableQualities.map((opt) => (
+                              <button key={opt.label} onClick={() => { switchQuality(opt); setShowQualityPanel(false); }} className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${currentQuality === opt.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}>
+                                <span>{opt.label}</span>
+                                {currentQuality === opt.label && <Check className="w-3 h-3" />}
                               </button>
                             ))}
                           </div>
@@ -1866,7 +1267,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
           {locked && !showControls && (
-            <div className="absolute inset-0" onClick={(e) => { e.stopPropagation(); setShowControls(true); scheduleHideTimer(); }} />
+            <div className="absolute inset-0" onClick={() => { setShowControls(true); scheduleHideTimer(); }} />
           )}
 
           {/* Settings panel */}
@@ -1876,90 +1277,31 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 <X className="w-3.5 h-3.5" />
               </button>
               <div className="flex gap-1.5 mb-3 pr-7">
-                <button onClick={() => setSettingsTab("speed")} className={`text-[11px] px-3 py-1.5 rounded-full font-medium transition-all ${settingsTab === "speed" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
-                  Speed
-                </button>
-                <button onClick={() => setSettingsTab("quality")} className={`text-[11px] px-3 py-1.5 rounded-full font-medium transition-all ${settingsTab === "quality" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
-                  Quality
-                </button>
-                {audioTrackOptions.length > 0 && (
-                  <button onClick={() => setSettingsTab("audio")} className={`text-[11px] px-3 py-1.5 rounded-full font-medium transition-all ${settingsTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>
-                    🎧 Audio
-                  </button>
-                )}
+                <button onClick={() => setSettingsTab("speed")} className={`text-[11px] px-3 py-1.5 rounded-full font-medium transition-all ${settingsTab === "speed" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>Speed</button>
+                <button onClick={() => setSettingsTab("quality")} className={`text-[11px] px-3 py-1.5 rounded-full font-medium transition-all ${settingsTab === "quality" ? "gradient-primary text-white" : "bg-foreground/10 hover:bg-foreground/20"}`}>Quality</button>
               </div>
-
               {settingsTab === "speed" && (
                 <div className="space-y-0.5">
                   <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider font-medium">Playback Speed</p>
                   {[0.5, 0.75, 1, 1.25, 1.5, 2].map((r) => (
-                    <button key={r} onClick={() => setSpeed(r)}
-                      className={`block w-full text-left px-3 py-2 rounded-lg text-xs transition-all ${playbackRate === r ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}>
-                      {r}x {r === 1 && "(Normal)"}
-                    </button>
+                    <button key={r} onClick={() => setSpeed(r)} className={`block w-full text-left px-3 py-2 rounded-lg text-xs transition-all ${playbackRate === r ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}>{r}x {r === 1 && "(Normal)"}</button>
                   ))}
                 </div>
               )}
-
               {settingsTab === "quality" && (
                 <div className="space-y-0.5">
                   <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider font-medium">Video Quality</p>
-                  {availableQualities.map((opt) => {
-                    const is4K = is4KLabel(opt.label);
-                    const locked4K = is4K && !isPremium;
-                    return (
-                      <button key={opt.label} onClick={() => { if (!locked4K) switchQuality(opt); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
-                          locked4K ? "opacity-50 cursor-not-allowed" :
-                          currentQuality === opt.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                        }`}>
-                        <span className="flex items-center gap-1.5">
-                          {opt.label}
-                          {locked4K && <Lock className="w-3 h-3 text-accent" />}
-                        </span>
-                        {locked4K && <span className="text-[8px] text-accent font-medium">Premium</span>}
-                        {!locked4K && currentQuality === opt.label && <Check className="w-3.5 h-3.5" />}
-                      </button>
-                    );
-                  })}
-                  {availableQualities.length <= 1 && (
-                    <p className="text-[10px] text-muted-foreground/60 text-center py-2">No additional qualities available</p>
-                  )}
-                </div>
-              )}
-
-              {settingsTab === "audio" && (
-                <div className="space-y-0.5">
-                  <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider font-medium">Audio Language</p>
-                  <button onClick={resetToDefaultAudio}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
-                      currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                    }`}>
-                    <span>Default</span>
-                    {currentAudioTrack === "Default" && <Check className="w-3.5 h-3.5" />}
-                  </button>
-                  {audioTrackOptions.map((track, idx) => {
-                    const qualityCount = [track.src480, track.src720, track.src1080, track.src4k].filter(Boolean).length;
-                    return (
-                    <button key={idx} onClick={() => switchAudioTrack(track)}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
-                        currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                      }`}>
-                      <span className="flex items-center gap-1.5">
-                        🎧 {track.label}
-                        {qualityCount > 0 && <span className="text-[9px] opacity-60 ml-1">({qualityCount + 1} qualities)</span>}
-                      </span>
-                      {currentAudioTrack === track.label && <Check className="w-3.5 h-3.5" />}
+                  {availableQualities.map((opt) => (
+                    <button key={opt.label} onClick={() => switchQuality(opt)} className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${currentQuality === opt.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}>
+                      <span>{opt.label}</span>
+                      {currentQuality === opt.label && <Check className="w-3.5 h-3.5" />}
                     </button>
-                    );
-                  })}
+                  ))}
                 </div>
               )}
             </div>
           )}
         </div>
-
-        {/* Device limit is now enforced at login time - no overlay needed */}
 
         {/* Ad Gate Overlay */}
         {adGateActive && !deviceBlocked && !unlockBlocked && (
@@ -1975,43 +1317,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               ) : (
                 <div className="space-y-2">
                   {adLinks.map((link, i) => (
-                    <button
-                      key={link.service.id || i}
-                      onClick={() => handleOpenAdLink(link.shortUrl, link.service)}
-                      className="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all hover:scale-105 text-white"
-                      style={{ background: link.service.color || (i === 0 ? "linear-gradient(135deg, #6366f1, #8b5cf6)" : "linear-gradient(135deg, #f59e0b, #ef4444)") }}
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      {link.service.icon || "🔓"} {link.service.name || `Unlock ${i + 1}`}
-                      {link.service.mode === "miniapp" ? (
-                        <span className="text-[10px] opacity-80 ml-1">(Telegram)</span>
-                      ) : link.service.durationHours ? (
-                        <span className="text-[10px] opacity-80 ml-1">({link.service.durationHours}h access)</span>
-                      ) : null}
+                    <button key={link.service.id || i} onClick={() => handleOpenAdLink(link.shortUrl, link.service)} className="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all hover:scale-105 text-white" style={{ background: link.service.color || (i === 0 ? "linear-gradient(135deg, #6366f1, #8b5cf6)" : "linear-gradient(135deg, #f59e0b, #ef4444)") }}>
+                      <ExternalLink className="w-4 h-4" /> {link.service.icon || "🔓"} {link.service.name || `Unlock ${i + 1}`}
+                      {link.service.mode === "miniapp" ? <span className="text-[10px] opacity-80 ml-1">(Telegram)</span> : link.service.durationHours ? <span className="text-[10px] opacity-80 ml-1">({link.service.durationHours}h access)</span> : null}
                     </button>
                   ))}
                 </div>
               )}
-              {/* Tutorial Video Buttons */}
               {tutorialVideos.length > 0 ? (
                 <div className="space-y-2">
                   {tutorialVideos.map((vid, idx) => (
-                    <button key={idx}
-                      onClick={() => { setActiveTutorialIdx(idx); setShowTutorialVideo(true); }}
-                      className="w-full py-2.5 rounded-xl bg-secondary text-secondary-foreground font-medium flex items-center justify-center gap-2 transition-all hover:scale-105 text-sm"
-                    >
-                      <Play className="w-3.5 h-3.5" />
-                      {vid.title || `Tutorial ${idx + 1}`}
+                    <button key={idx} onClick={() => { setActiveTutorialIdx(idx); setShowTutorialVideo(true); }} className="w-full py-2.5 rounded-xl bg-secondary text-secondary-foreground font-medium flex items-center justify-center gap-2 transition-all hover:scale-105 text-sm">
+                      <Play className="w-3.5 h-3.5" /> {vid.title || `Tutorial ${idx + 1}`}
                     </button>
                   ))}
                 </div>
               ) : tutorialLink ? (
-                <button
-                  onClick={() => { setActiveTutorialIdx(-1); setShowTutorialVideo(true); }}
-                  className="w-full py-2.5 rounded-xl bg-secondary text-secondary-foreground font-medium flex items-center justify-center gap-2 transition-all hover:scale-105 text-sm"
-                >
-                  <Play className="w-3.5 h-3.5" />
-                  How to open my link
+                <button onClick={() => { setActiveTutorialIdx(-1); setShowTutorialVideo(true); }} className="w-full py-2.5 rounded-xl bg-secondary text-secondary-foreground font-medium flex items-center justify-center gap-2 transition-all hover:scale-105 text-sm">
+                  <Play className="w-3.5 h-3.5" /> How to open my link
                 </button>
               ) : null}
             </div>
@@ -2030,271 +1353,86 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
         {/* Tutorial Video Modal */}
         {showTutorialVideo && (() => {
-          const activeVid = activeTutorialIdx >= 0 && tutorialVideos[activeTutorialIdx]
-            ? tutorialVideos[activeTutorialIdx]
-            : tutorialLink ? { title: "How to open my link", url: tutorialLink } : null;
+          const activeVid = activeTutorialIdx >= 0 && tutorialVideos[activeTutorialIdx] ? tutorialVideos[activeTutorialIdx] : tutorialLink ? { title: "How to open my link", url: tutorialLink } : null;
           if (!activeVid) return null;
           return (
             <div className="fixed inset-0 z-[500] bg-black/95 flex items-center justify-center backdrop-blur-sm" onClick={() => setShowTutorialVideo(false)}>
               <div className="w-full max-w-xs mx-4" onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-3">
                   <h3 className="text-sm font-semibold text-foreground">📖 {activeVid.title}</h3>
-                  <button onClick={() => setShowTutorialVideo(false)} className="w-8 h-8 rounded-full bg-foreground/20 flex items-center justify-center hover:bg-foreground/30 transition-all">
-                    <X className="w-4 h-4" />
-                  </button>
+                  <button onClick={() => setShowTutorialVideo(false)} className="w-8 h-8 rounded-full bg-foreground/20 flex items-center justify-center hover:bg-foreground/30 transition-all"><X className="w-4 h-4" /></button>
                 </div>
                 <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
-                  <video
-                    src={getPrimaryPlaybackSrc(activeVid.url, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined)}
-                    className="w-full h-full"
-                    controls
-                    autoPlay
-                    playsInline
-                    style={{ objectFit: 'contain' }}
-                    crossOrigin={activeVid.url.startsWith("http://") ? "anonymous" : undefined}
-                    controlsList="nodownload noplaybackrate noremoteplayback"
-                    disablePictureInPicture
-                    disableRemotePlayback
-                    onContextMenu={(e) => e.preventDefault()}
-                  />
+                  <video src={getPrimaryPlaybackSrc(activeVid.url, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined)} className="w-full h-full" controls autoPlay playsInline style={{ objectFit: 'contain' }} controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback onContextMenu={(e) => e.preventDefault()} />
                 </div>
               </div>
             </div>
           );
         })()}
 
-        {/* Download Button with Quality Picker + Offline Playback */}
+        {/* Download Section */}
         {!isFullscreen && !adGateActive && !hideDownload && (() => {
-          const normalizeKeyPart = (value: string) =>
-            value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-
-          const createUrlHash = (value: string) => {
-            let hash = 0;
-            for (let i = 0; i < value.length; i++) {
-              hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
-            }
-            return hash.toString(36);
-          };
-
-          const createDownloadId = (videoTitle: string, videoSubtitle: string | undefined, quality: string, url: string) => {
-            const base = [videoTitle, videoSubtitle].filter(Boolean).map((part) => normalizeKeyPart(part as string)).join("__") || "video";
-            const qualityPart = normalizeKeyPart(quality || "Auto") || "auto";
-            return `${base}__${qualityPart}__${createUrlHash(url)}`;
-          };
-
-          const relatedDownloads = Array.from(activeDownloads.values()).filter((item: any) => (
-            item.title === title && (!subtitle || item.subtitle === subtitle)
-          ));
-
-          const dl = relatedDownloads.find((item: any) => item.status === "downloading")
-            ?? relatedDownloads.find((item: any) => item.status === "paused")
-            ?? relatedDownloads.find((item: any) => item.status === "complete");
-
+          const relatedDownloads = Array.from(activeDownloads.values()).filter((item: any) => item.title === title && (!subtitle || item.subtitle === subtitle));
+          const dl = relatedDownloads.find((item: any) => item.status === "downloading") ?? relatedDownloads.find((item: any) => item.status === "paused") ?? relatedDownloads.find((item: any) => item.status === "complete");
           const isDownloading = dl?.status === "downloading";
           const isPaused = dl?.status === "paused";
           const isComplete = dl?.status === "complete";
-
-          // Check if this episode is already saved in IndexedDB
           const savedEpisode = downloadedEpisodes.find(d => d.subtitle === subtitle);
           const isAlreadySaved = !!savedEpisode;
 
-          const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
-            const dlId = createDownloadId(title, subtitle, quality, qualitySrc);
-            const proxiedUrl = getPrimaryPlaybackSrc(qualitySrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-            const { downloadManager } = await import("@/lib/downloadManager");
-            downloadManager.startDownload({
-              id: dlId,
-              url: proxiedUrl,
-              title,
-              subtitle,
-              poster,
-              quality,
-            });
-            setShowDownloadQualityPicker(false);
-            const { toast } = await import("sonner");
-            toast.info(`${quality} ডাউনলোড শুরু হয়েছে`);
-          };
-
-          const playOffline = async (episodeData?: any) => {
-            const ep = episodeData || savedEpisode;
-            if (!ep) return;
-            const { getVideoBlob } = await import("@/lib/downloadStore");
-            const blob = await getVideoBlob(ep.id);
-            if (blob) {
-              const blobUrl = URL.createObjectURL(blob);
-              setOfflinePlaySrc(blobUrl);
-              setOfflinePlayInfo(ep);
-            } else {
-              const { toast } = await import("sonner");
-              toast.error("ভিডিও ফাইল পাওয়া যায়নি");
-            }
-          };
-
           return (
             <div className="mt-5 w-full max-w-md mx-auto space-y-3">
-              {/* Main Download / Play Offline Button */}
               <div className="relative">
                 {isAlreadySaved && !isDownloading && !isPaused ? (
-                  /* Already downloaded - show play offline button */
-                  <button
-                    onClick={() => playOffline()}
-                    className="relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all bg-primary text-primary-foreground hover:scale-[1.02]"
-                  >
+                  <button onClick={() => playOffline()} className="relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all bg-primary text-primary-foreground hover:scale-[1.02]">
                     <Play className="w-4 h-4" /> Play Offline
-                    {savedEpisode?.quality && savedEpisode.quality !== "Auto" && (
-                      <span className="text-[10px] opacity-80">• {savedEpisode.quality}</span>
-                    )}
+                    {savedEpisode?.quality && savedEpisode.quality !== "Auto" && <span className="text-[10px] opacity-80">• {savedEpisode.quality}</span>}
                   </button>
                 ) : (
-                  <button
-                    onClick={async () => {
-                      if (isDownloading || isComplete) return;
-                      if (isPaused && dl) {
-                        const { downloadManager } = await import("@/lib/downloadManager");
-                        downloadManager.resumeDownload(dl.id);
-                        const { toast } = await import("sonner");
-                        toast.info("Download resumed");
-                        return;
-                      }
-                      // Show quality picker if multiple qualities available
-                      if (availableQualities.length > 1) {
-                        setShowDownloadQualityPicker(true);
-                      } else {
-                        // Only one quality - download directly
-                        startDownloadWithQuality(currentQuality, src);
-                      }
-                    }}
-                    disabled={isDownloading || isComplete}
-                    className={`relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all overflow-hidden ${
-                      isComplete
-                        ? "bg-primary text-primary-foreground"
-                        : isDownloading
-                          ? "bg-secondary text-foreground border border-primary/30"
-                          : isPaused
-                            ? "bg-secondary text-foreground border border-accent/30"
-                            : "gradient-primary text-primary-foreground btn-glow hover:scale-[1.02]"
-                    }`}
-                  >
-                    {isDownloading && dl && (
-                      <div
-                        className="absolute inset-0 gradient-primary opacity-80 transition-all duration-300 ease-linear"
-                        style={{ width: `${dl.percent}%` }}
-                      />
-                    )}
+                  <button onClick={async () => {
+                    if (isDownloading || isComplete) return;
+                    if (isPaused && dl) { const { downloadManager } = await import("@/lib/downloadManager"); downloadManager.resumeDownload(dl.id); const { toast } = await import("sonner"); toast.info("Download resumed"); return; }
+                    if (availableQualities.length > 1) setShowDownloadQualityPicker(true);
+                    else startDownloadWithQuality(currentQuality, src);
+                  }} disabled={isDownloading || isComplete} className={`relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all overflow-hidden ${isComplete ? "bg-primary text-primary-foreground" : isDownloading ? "bg-secondary text-foreground border border-primary/30" : isPaused ? "bg-secondary text-foreground border border-accent/30" : "gradient-primary text-primary-foreground btn-glow hover:scale-[1.02]"}`}>
+                    {isDownloading && dl && <div className="absolute inset-0 gradient-primary opacity-80 transition-all duration-300 ease-linear" style={{ width: `${dl.percent}%` }} />}
                     <span className="relative z-10 flex items-center gap-2">
-                      {isComplete ? (
-                        <><Check className="w-4 h-4" /> Downloaded</>
-                      ) : isDownloading && dl ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span className="font-mono">{dl.percent}%</span>
-                          <span className="text-xs opacity-80">
-                            {dl.loadedMB.toFixed(1)}/{dl.totalMB > 0 ? dl.totalMB.toFixed(1) : "??"} MB
-                          </span>
-                          {dl.quality !== "Auto" && <span className="text-[10px] opacity-80">• {dl.quality}</span>}
-                        </>
-                      ) : isPaused && dl ? (
-                        <>
-                          <PlayCircle className="w-4 h-4" />
-                          <span>Resume</span>
-                          <span className="font-mono text-xs opacity-80">{dl.percent}%</span>
-                        </>
-                      ) : (
-                        <><Download className="w-4 h-4" /> Download</>
-                      )}
+                      {isComplete ? <><Check className="w-4 h-4" /> Downloaded</> : isDownloading && dl ? <><Loader2 className="w-4 h-4 animate-spin" /> <span className="font-mono">{dl.percent}%</span> <span className="text-xs opacity-80">{dl.loadedMB.toFixed(1)}/{dl.totalMB > 0 ? dl.totalMB.toFixed(1) : "??"} MB</span> {dl.quality !== "Auto" && <span className="text-[10px] opacity-80">• {dl.quality}</span>}</> : isPaused && dl ? <><PlayCircle className="w-4 h-4" /> <span>Resume</span> <span className="font-mono text-xs opacity-80">{dl.percent}%</span></> : <><Download className="w-4 h-4" /> Download</>}
                     </span>
                   </button>
                 )}
-                {/* Pause & Cancel buttons */}
                 {isDownloading && dl && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex items-center gap-1">
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const { downloadManager } = await import("@/lib/downloadManager");
-                        downloadManager.pauseDownload(dl.id);
-                        const { toast } = await import("sonner");
-                        toast.info("Download paused");
-                      }}
-                      className="w-8 h-8 rounded-full bg-accent/80 hover:bg-accent flex items-center justify-center transition-all"
-                    >
-                      <PauseCircle className="w-4 h-4 text-white" />
-                    </button>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const { downloadManager } = await import("@/lib/downloadManager");
-                        downloadManager.cancelDownload(dl.id);
-                        const { toast } = await import("sonner");
-                        toast.info("Download cancelled");
-                      }}
-                      className="w-8 h-8 rounded-full bg-destructive/80 hover:bg-destructive flex items-center justify-center transition-all"
-                    >
-                      <X className="w-4 h-4 text-white" />
-                    </button>
+                    <button onClick={async () => { const { downloadManager } = await import("@/lib/downloadManager"); downloadManager.pauseDownload(dl.id); }} className="w-8 h-8 rounded-full bg-accent/80 hover:bg-accent flex items-center justify-center transition-all"><PauseCircle className="w-4 h-4 text-white" /></button>
+                    <button onClick={async () => { const { downloadManager } = await import("@/lib/downloadManager"); downloadManager.cancelDownload(dl.id); }} className="w-8 h-8 rounded-full bg-destructive/80 hover:bg-destructive flex items-center justify-center transition-all"><X className="w-4 h-4 text-white" /></button>
                   </div>
                 )}
               </div>
-
-              {/* Quality Picker Dropdown */}
               {showDownloadQualityPicker && (
                 <div className="bg-card border border-border rounded-xl p-3 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-sm font-bold text-foreground">কোয়ালিটি সিলেক্ট করুন</p>
-                    <button onClick={() => setShowDownloadQualityPicker(false)} className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center">
-                      <X className="w-3 h-3" />
-                    </button>
+                    <button onClick={() => setShowDownloadQualityPicker(false)} className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center"><X className="w-3 h-3" /></button>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    {availableQualities.map((opt) => {
-                      const is4K = is4KLabel(opt.label);
-                      const locked4K = is4K && !isPremium;
-                      return (
-                        <button
-                          key={opt.label}
-                          onClick={() => {
-                            if (!locked4K) startDownloadWithQuality(opt.label, opt.src);
-                          }}
-                          disabled={locked4K}
-                          className={`py-2.5 px-3 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                            locked4K
-                              ? "bg-secondary/50 text-muted-foreground opacity-50 cursor-not-allowed"
-                              : "bg-secondary hover:bg-primary hover:text-primary-foreground border border-border hover:border-primary"
-                          }`}
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          {opt.label}
-                          {locked4K && <Lock className="w-3 h-3" />}
-                        </button>
-                      );
-                    })}
+                    {availableQualities.map((opt) => (
+                      <button key={opt.label} onClick={() => startDownloadWithQuality(opt.label, opt.src)} className="py-2.5 px-3 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 bg-secondary hover:bg-primary hover:text-primary-foreground border border-border hover:border-primary">
+                        <Download className="w-3.5 h-3.5" /> {opt.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
-
-              {/* Downloaded Episodes List (inline, right here) */}
               {downloadedEpisodes.length > 0 && (
                 <div className="bg-card border border-border rounded-xl p-3">
-                  <p className="text-xs font-bold text-foreground mb-2 flex items-center gap-1.5">
-                    <Download className="w-3.5 h-3.5 text-primary" /> ডাউনলোড করা ({downloadedEpisodes.length})
-                  </p>
+                  <p className="text-xs font-bold text-foreground mb-2 flex items-center gap-1.5"><Download className="w-3.5 h-3.5 text-primary" /> ডাউনলোড করা ({downloadedEpisodes.length})</p>
                   <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
                     {downloadedEpisodes.map((ep) => (
-                      <button
-                        key={ep.id}
-                        onClick={() => playOffline(ep)}
-                        className={`w-full flex items-center gap-2.5 p-2 rounded-lg transition-all hover:bg-primary/10 ${
-                          ep.subtitle === subtitle ? "bg-primary/15 border border-primary/30" : "bg-secondary/50"
-                        }`}
-                      >
-                        {ep.poster && (
-                          <img src={ep.poster} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" />
-                        )}
+                      <button key={ep.id} onClick={() => playOffline(ep)} className={`w-full flex items-center gap-2.5 p-2 rounded-lg transition-all hover:bg-primary/10 ${ep.subtitle === subtitle ? "bg-primary/15 border border-primary/30" : "bg-secondary/50"}`}>
+                        {ep.poster && <img src={ep.poster} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" />}
                         <div className="flex-1 min-w-0 text-left">
                           <p className="text-[11px] font-semibold text-foreground truncate">{ep.subtitle || ep.title}</p>
-                          <p className="text-[9px] text-muted-foreground">
-                            {ep.quality && ep.quality !== "Auto" ? ep.quality : ""} • {(ep.size / (1024 * 1024)).toFixed(1)} MB
-                          </p>
+                          <p className="text-[9px] text-muted-foreground">{ep.quality && ep.quality !== "Auto" ? ep.quality : ""} • {(ep.size / (1024 * 1024)).toFixed(1)} MB</p>
                         </div>
                         <Play className="w-4 h-4 text-primary flex-shrink-0" />
                       </button>
@@ -2306,43 +1444,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           );
         })()}
 
-        {/* Season Selector + Episode List */}
+        {/* Episode List */}
         {episodeList && episodeList.length > 0 && (
           <div className="mt-4 bg-background rounded-xl p-4">
-            {/* Season selector */}
             {seasons && seasons.length > 1 && onSeasonChange && (
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-xs font-semibold text-muted-foreground">{seasons.length} Seasons</span>
                 <div className="flex flex-wrap gap-1.5 flex-1">
                   {seasons.map((s, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => onSeasonChange(idx)}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                        idx === (currentSeasonIdx ?? 0)
-                          ? 'gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.25)]'
-                          : 'bg-secondary border-border/40 text-muted-foreground hover:border-primary/30'
-                      }`}
-                    >
+                    <button key={idx} onClick={() => onSeasonChange(idx)} className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${idx === (currentSeasonIdx ?? 0) ? 'gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.25)]' : 'bg-secondary border-border/40 text-muted-foreground hover:border-primary/30'}`}>
                       {s.name}
                     </button>
                   ))}
                 </div>
               </div>
             )}
-
-            {/* Horizontal episode scroll */}
             <div className="grid grid-cols-5 gap-2 pb-2">
               {episodeList.map((ep) => (
-                <button
-                  key={ep.number}
-                  onClick={ep.onClick}
-                  className={`w-full h-12 rounded-xl flex items-center justify-center transition-all border text-center ${
-                    ep.active
-                      ? "gradient-primary border-primary/40 text-primary-foreground shadow-[0_0_12px_hsla(170,75%,45%,0.3)]"
-                      : "bg-secondary/70 border-border/40 hover:border-primary/30 text-foreground"
-                  }`}
-                >
+                <button key={ep.number} onClick={() => { if (ep.active) return; setVideoError(false); setIsBuffering(true); setShowFixedLoader(true); setIsServerSwitching(true); setPlaying(false); pendingSeek.current = null; embedTimeRef.current = { currentTime: 0, duration: 0 }; ep.onClick(); }} className={`w-full h-12 rounded-xl flex items-center justify-center transition-all border text-center ${ep.active ? "gradient-primary border-primary/40 text-primary-foreground shadow-[0_0_12px_hsla(170,75%,45%,0.3)]" : "bg-secondary/70 border-border/40 hover:border-primary/30 text-foreground"}`}>
                   <span className="text-sm font-bold">{ep.number}</span>
                 </button>
               ))}
@@ -2353,31 +1472,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         {/* Suggested Videos */}
         {suggestedAnime && suggestedAnime.length > 0 && onSuggestedClick && (
           <div className="mt-4 bg-background rounded-xl p-4">
-            <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5 text-foreground">
-              <Play className="w-3.5 h-3.5 text-primary" /> Suggested for you
-            </h3>
+            <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5 text-foreground"><Play className="w-3.5 h-3.5 text-primary" /> Suggested for you</h3>
             <div className="grid grid-cols-3 gap-2.5">
               {suggestedAnime.map((anime) => (
-                <div
-                  key={anime.id}
-                  onClick={() => onSuggestedClick(anime)}
-                  className="w-full cursor-pointer group"
-                >
+                <div key={anime.id} onClick={() => onSuggestedClick(anime)} className="w-full cursor-pointer group">
                   <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card mb-1.5">
                     <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.2) 40%, transparent 70%)" }} />
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="w-8 h-8 rounded-full bg-primary/80 flex items-center justify-center">
-                        <Play className="w-4 h-4 text-primary-foreground" fill="currentColor" />
-                      </div>
-                    </div>
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><div className="w-8 h-8 rounded-full bg-primary/80 flex items-center justify-center"><Play className="w-4 h-4 text-primary-foreground" fill="currentColor" /></div></div>
                     <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5 z-10">
                       {anime.year && <span className="text-[8px] font-bold bg-black/60 px-1.5 py-0.5 rounded text-white">{anime.year}</span>}
                       <span className={`px-1 py-0.5 rounded text-[7px] font-black tracking-wider ${anime.source === "animesalt" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{anime.source === "animesalt" ? "AN" : "RS"}</span>
                     </div>
-                    <div className="absolute bottom-0 left-0 right-0 p-1.5">
-                      <p className="text-[10px] font-semibold leading-tight line-clamp-2 text-white">{anime.title}</p>
-                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 p-1.5"><p className="text-[10px] font-semibold leading-tight line-clamp-2 text-white">{anime.title}</p></div>
                   </div>
                 </div>
               ))}
@@ -2390,53 +1497,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       {offlinePlaySrc && offlinePlayInfo && (
         <div className="fixed inset-0 z-[500] bg-black flex flex-col">
           <div className="flex items-center justify-between px-3 py-2 bg-card border-b border-border/30">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground truncate">{offlinePlayInfo.title}</p>
-              <p className="text-xs text-muted-foreground truncate">{offlinePlayInfo.subtitle} {offlinePlayInfo.quality && offlinePlayInfo.quality !== "Auto" ? `• ${offlinePlayInfo.quality}` : ""}</p>
-            </div>
-            <button onClick={() => {
-              if (offlinePlaySrc) URL.revokeObjectURL(offlinePlaySrc);
-              setOfflinePlaySrc(null);
-              setOfflinePlayInfo(null);
-            }} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center hover:bg-destructive/80 transition-all ml-2">
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-foreground truncate">{offlinePlayInfo.title}</p><p className="text-xs text-muted-foreground truncate">{offlinePlayInfo.subtitle} {offlinePlayInfo.quality && offlinePlayInfo.quality !== "Auto" ? `• ${offlinePlayInfo.quality}` : ""}</p></div>
+            <button onClick={() => { if (offlinePlaySrc) URL.revokeObjectURL(offlinePlaySrc); setOfflinePlaySrc(null); setOfflinePlayInfo(null); }} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center hover:bg-destructive/80 transition-all ml-2"><X className="w-5 h-5" /></button>
           </div>
-          <div className="flex-1 bg-black flex items-center justify-center">
-            <video
-              src={offlinePlaySrc}
-              controls
-              autoPlay
-              playsInline
-              className="w-full h-full"
-              style={{ objectFit: "contain" }}
-            />
-          </div>
-          {/* Other downloaded episodes navigation */}
+          <div className="flex-1 bg-black flex items-center justify-center"><video src={offlinePlaySrc} controls autoPlay playsInline className="w-full h-full" style={{ objectFit: "contain" }} /></div>
           {downloadedEpisodes.length > 1 && (
             <div className="bg-card border-t border-border/30 p-3 max-h-[180px] overflow-y-auto">
               <p className="text-xs font-bold text-foreground mb-2">অন্যান্য ডাউনলোড</p>
               <div className="space-y-1">
                 {downloadedEpisodes.filter(ep => ep.id !== offlinePlayInfo.id).map((ep) => (
-                  <button
-                    key={ep.id}
-                    onClick={async () => {
-                      if (offlinePlaySrc) URL.revokeObjectURL(offlinePlaySrc);
-                      const { getVideoBlob } = await import("@/lib/downloadStore");
-                      const blob = await getVideoBlob(ep.id);
-                      if (blob) {
-                        const blobUrl = URL.createObjectURL(blob);
-                        setOfflinePlaySrc(blobUrl);
-                        setOfflinePlayInfo(ep);
-                      }
-                    }}
-                    className="w-full flex items-center gap-2.5 p-2 rounded-lg bg-secondary/50 hover:bg-primary/10 transition-all"
-                  >
+                  <button key={ep.id} onClick={async () => { if (offlinePlaySrc) URL.revokeObjectURL(offlinePlaySrc); const { getVideoBlob } = await import("@/lib/downloadStore"); const blob = await getVideoBlob(ep.id); if (blob) { setOfflinePlaySrc(URL.createObjectURL(blob)); setOfflinePlayInfo(ep); } }} className="w-full flex items-center gap-2.5 p-2 rounded-lg bg-secondary/50 hover:bg-primary/10 transition-all">
                     {ep.poster && <img src={ep.poster} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" />}
-                    <div className="flex-1 min-w-0 text-left">
-                      <p className="text-[11px] font-semibold text-foreground truncate">{ep.subtitle || ep.title}</p>
-                      <p className="text-[9px] text-muted-foreground">{ep.quality} • {(ep.size / (1024 * 1024)).toFixed(1)} MB</p>
-                    </div>
+                    <div className="flex-1 min-w-0 text-left"><p className="text-[11px] font-semibold text-foreground truncate">{ep.subtitle || ep.title}</p><p className="text-[9px] text-muted-foreground">{ep.quality} • {(ep.size / (1024 * 1024)).toFixed(1)} MB</p></div>
                     <Play className="w-4 h-4 text-primary flex-shrink-0" />
                   </button>
                 ))}
