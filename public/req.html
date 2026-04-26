@@ -116,7 +116,14 @@
   var initialSrc = qs.get("src") || qs.get("url") || "";
 
   function loadSrc(url) {
-    if (!url) return;
+    if (!url) {
+      try { v.pause(); } catch (_) {}
+      v.removeAttribute("src");
+      v.load();
+      errBox.classList.remove("show");
+      showLoader(false);
+      return;
+    }
     errBox.classList.remove("show");
     showLoader(true);
     try {

@@ -97,11 +97,30 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
 };
 
+const normalizePathForServer = (pathname: string, targetDomain: string): string => {
+  const cleanDomain = targetDomain.toLowerCase();
+  const isRs01EmbedServer = /(^|\.)hf\.space$/i.test(cleanDomain) || /huggingface/i.test(cleanDomain);
+  const hasWatchPrefix = /^\/watch(?:\/|$)/i.test(pathname);
+
+  if (isRs01EmbedServer) {
+    if (hasWatchPrefix) return pathname;
+    return `/watch${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
+  }
+
+  if (hasWatchPrefix) {
+    const stripped = pathname.replace(/^\/watch(?=\/|$)/i, "");
+    return stripped.startsWith("/") ? stripped : `/${stripped}`;
+  }
+
+  return pathname;
+};
+
 const shouldUseEmbedPlayback = (url: string): boolean => {
   if (!url) return false;
   try {
-    const { hostname } = new URL(url);
-    return /(^|\.)hf\.space$/i.test(hostname) || /huggingface/i.test(hostname);
+    const { hostname, pathname } = new URL(url);
+    const isHfHost = /(^|\.)hf\.space$/i.test(hostname) || /huggingface/i.test(hostname);
+    return isHfHost && /^\/watch(?:\/|$)/i.test(pathname);
   } catch {
     return false;
   }
@@ -351,6 +370,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, [boostedVolume, currentSrc, muted, onNextEpisode, playbackRate, sendEmbedCmd, syncUiProgress]);
+
+  useEffect(() => {
+    return () => {
+      if (embedIframeRef.current?.contentWindow) {
+        try {
+          embedIframeRef.current.contentWindow.postMessage({ target: "rs-embed", cmd: "pause" }, "*");
+          embedIframeRef.current.contentWindow.postMessage({ target: "rs-embed", cmd: "load", src: "" }, "*");
+        } catch {}
+      }
+    };
+  }, [currentSrc, isEmbedPlayback]);
 
   
   // Load CDN + proxy settings from Firebase (skip if noProxy)
@@ -772,10 +802,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!server?.domain) return rawUrl;
     try {
       const url = new URL(rawUrl);
-      return `${server.domain.replace(/\/$/, "")}${url.pathname}${url.search}${url.hash}`;
+      const nextPath = normalizePathForServer(url.pathname, server.domain);
+      return `${server.domain.replace(/\/$/, "")}${nextPath}${url.search}${url.hash}`;
     } catch {
       const match = rawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
-      return `${server.domain.replace(/\/$/, "")}${match ? match[1] : rawUrl}`;
+      const fallbackPath = normalizePathForServer(match ? match[1] : rawUrl, server.domain);
+      return `${server.domain.replace(/\/$/, "")}${fallbackPath}`;
     }
   }, [videoServers]);
 
