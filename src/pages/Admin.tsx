@@ -8071,33 +8071,19 @@ ${tgHashtags}`;
         {/* ==================== VIDEO SERVERS ==================== */}
         {activeSection === "video-servers" && (() => {
           const VideoServersSection = () => {
-            type ServerMode = "firem" | "proxy" | "direct";
-            const [servers, setServers] = useState<{ name: string; domain: string; locked?: boolean; mode?: ServerMode }[]>([]);
+            const [servers, setServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
             const [vsLoading, setVsLoading] = useState(true);
             const [newName, setNewName] = useState("");
             const [newDomain, setNewDomain] = useState("");
-            const [newMode, setNewMode] = useState<ServerMode>("firem");
-
-            const inferMode = (domain: string): ServerMode => {
-              const d = (domain || "").toLowerCase();
-              if (/(^|\.)hf\.space$|huggingface/i.test(d)) return "firem";
-              if (d.startsWith("http://")) return "proxy";
-              return "direct";
-            };
 
             useEffect(() => {
               const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
                 const val = snap.val();
-                const allowed: ServerMode[] = ["firem", "proxy", "direct"];
-                const normalize = (s: any) => {
-                  if (!s || !s.domain) return null;
-                  const mode: ServerMode = allowed.includes(s.mode) ? s.mode : inferMode(s.domain);
-                  return { name: s.name, domain: s.domain, locked: !!s.locked, mode };
-                };
                 if (val && Array.isArray(val)) {
-                  setServers(val.map(normalize).filter(Boolean) as any);
+                  setServers(val.filter((s: any) => s && s.domain));
                 } else if (val && typeof val === "object") {
-                  setServers(Object.values(val).map(normalize).filter(Boolean) as any);
+                  const arr = Object.values(val).filter((s: any) => s && s.domain) as any[];
+                  setServers(arr);
                 } else {
                   setServers([]);
                 }
@@ -8106,34 +8092,22 @@ ${tgHashtags}`;
               return () => unsub();
             }, []);
 
-            const saveServers = async (updated: { name: string; domain: string; locked?: boolean; mode?: ServerMode }[]) => {
+            const saveServers = async (updated: { name: string; domain: string; locked?: boolean }[]) => {
               await set(ref(db, "settings/videoServers"), updated);
               toast.success("✅ Server list saved!");
             };
 
             const addServer = () => {
               if (!newDomain.trim()) { toast.error("Enter domain!"); return; }
-              const updated = [...servers, {
-                name: newName.trim() || `Server ${servers.length + 1}`,
-                domain: newDomain.trim(),
-                locked: false,
-                mode: newMode,
-              }];
+              const updated = [...servers, { name: newName.trim() || `Server ${servers.length + 1}`, domain: newDomain.trim(), locked: false }];
               saveServers(updated);
               setNewName("");
               setNewDomain("");
-              setNewMode("firem");
             };
 
             const toggleLocked = (idx: number) => {
               const updated = [...servers];
               updated[idx] = { ...updated[idx], locked: !updated[idx].locked };
-              saveServers(updated);
-            };
-
-            const changeMode = (idx: number, mode: ServerMode) => {
-              const updated = [...servers];
-              updated[idx] = { ...updated[idx], mode };
               saveServers(updated);
             };
 
@@ -8150,16 +8124,6 @@ ${tgHashtags}`;
               saveServers(updated);
             };
 
-            const modeBadge = (m?: ServerMode) => {
-              const mm = m || "firem";
-              const palette: Record<ServerMode, string> = {
-                firem: "bg-purple-500/20 text-purple-300",
-                proxy: "bg-blue-500/20 text-blue-300",
-                direct: "bg-emerald-500/20 text-emerald-300",
-              };
-              return <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase ${palette[mm]}`}>{mm}</span>;
-            };
-
             return (
               <div>
                 <div className={`${glassCard} p-4 mb-4`}>
@@ -8167,10 +8131,7 @@ ${tgHashtags}`;
                     <Activity size={14} className="text-cyan-400" /> ভিডিও সার্ভার ম্যানেজার
                   </h3>
                   <p className="text-[11px] text-zinc-400 mb-4">
-                    প্রতিটি সার্ভারের জন্য playback mode সিলেক্ট করুন:
-                    <span className="text-purple-300"> Firem</span> = iframe (hf.space),
-                    <span className="text-blue-300"> Proxy</span> = http লিংক প্রক্সি দিয়ে,
-                    <span className="text-emerald-300"> Direct</span> = সরাসরি https ডাউনলোড লিংক।
+                    ভিডিও প্লেয়ারে সার্ভার চেঞ্জ বাটন দেখানোর জন্য কমপক্ষে ২টি সার্ভার যোগ করুন। শুধু ডোমেইন পরিবর্তন হবে, ফাইল পাথ একই থাকবে।
                   </p>
 
                   {vsLoading ? (
@@ -8180,46 +8141,31 @@ ${tgHashtags}`;
                   ) : (
                     <div className="space-y-2 mb-4">
                       {servers.map((srv, idx) => (
-                        <div key={idx} className="p-2.5 bg-zinc-800/40 rounded-xl border border-zinc-700/30 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center flex-shrink-0">
-                              <span className="text-[11px] font-bold text-cyan-300">S{idx + 1}</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <span className="text-[12px] font-medium block truncate flex items-center gap-1.5">
-                                {srv.name}
-                                {modeBadge(srv.mode)}
-                                {srv.locked && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md font-bold">PREMIUM</span>}
-                              </span>
-                              <span className="text-[10px] text-zinc-500 block truncate">{srv.domain}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button onClick={() => toggleLocked(idx)} title={srv.locked ? "Unlock (free)" : "Lock (premium)"}
-                                className={`p-1 rounded ${srv.locked ? "text-amber-400 hover:text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}>
-                                {srv.locked ? <Lock size={13} /> : <Unlock size={13} />}
-                              </button>
-                              <button onClick={() => moveServer(idx, -1)} disabled={idx === 0} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
-                                <ChevronLeft size={12} />
-                              </button>
-                              <button onClick={() => moveServer(idx, 1)} disabled={idx === servers.length - 1} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
-                                <ChevronRight size={12} />
-                              </button>
-                              <button onClick={() => removeServer(idx)} className="text-red-400 hover:text-red-300 p-1">
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
+                        <div key={idx} className="flex items-center gap-2 p-2.5 bg-zinc-800/40 rounded-xl border border-zinc-700/30">
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[11px] font-bold text-cyan-300">S{idx + 1}</span>
                           </div>
-                          <div className="flex items-center gap-2 pl-10">
-                            <span className="text-[10px] text-zinc-500">Mode:</span>
-                            <select
-                              value={srv.mode || inferMode(srv.domain)}
-                              onChange={(e) => changeMode(idx, e.target.value as ServerMode)}
-                              className="flex-1 bg-zinc-900/60 border border-zinc-700/50 rounded-lg text-[11px] px-2 py-1.5 text-zinc-200 focus:outline-none focus:border-cyan-500/50"
-                            >
-                              <option value="firem">Firem (iframe / hf.space)</option>
-                              <option value="proxy">Proxy (http link, force proxy)</option>
-                              <option value="direct">Direct (clean https link, no proxy)</option>
-                            </select>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[12px] font-medium block truncate flex items-center gap-1">
+                              {srv.name}
+                              {srv.locked && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md font-bold">PREMIUM</span>}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 block truncate">{srv.domain}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => toggleLocked(idx)} title={srv.locked ? "Unlock (make free)" : "Lock (premium only)"}
+                              className={`p-1 rounded ${srv.locked ? "text-amber-400 hover:text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}>
+                              {srv.locked ? <Lock size={13} /> : <Unlock size={13} />}
+                            </button>
+                            <button onClick={() => moveServer(idx, -1)} disabled={idx === 0} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
+                              <ChevronLeft size={12} />
+                            </button>
+                            <button onClick={() => moveServer(idx, 1)} disabled={idx === servers.length - 1} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
+                              <ChevronRight size={12} />
+                            </button>
+                            <button onClick={() => removeServer(idx)} className="text-red-400 hover:text-red-300 p-1">
+                              <Trash2 size={13} />
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -8228,26 +8174,8 @@ ${tgHashtags}`;
 
                   <div className="border border-dashed border-zinc-700 rounded-xl p-3 space-y-2">
                     <p className="text-[11px] text-zinc-400 font-medium">➕ নতুন সার্ভার যোগ করুন</p>
-                    <input value={newName} onChange={e => setNewName(e.target.value)} className={inputClass} placeholder="সার্ভারের নাম (যেমন: RS 02)" />
-                    <input
-                      value={newDomain}
-                      onChange={e => {
-                        setNewDomain(e.target.value);
-                        // auto-suggest mode based on domain
-                        if (e.target.value.trim()) setNewMode(inferMode(e.target.value.trim()));
-                      }}
-                      className={inputClass}
-                      placeholder="ডোমেইন (যেমন: http://fi3.bot-hosting.net:22854)"
-                    />
-                    <select
-                      value={newMode}
-                      onChange={(e) => setNewMode(e.target.value as ServerMode)}
-                      className="w-full bg-zinc-900/60 border border-zinc-700/50 rounded-lg text-[12px] px-3 py-2 text-zinc-200 focus:outline-none focus:border-cyan-500/50"
-                    >
-                      <option value="firem">Firem (iframe / hf.space)</option>
-                      <option value="proxy">Proxy (http link, force proxy)</option>
-                      <option value="direct">Direct (clean https link, no proxy)</option>
-                    </select>
+                    <input value={newName} onChange={e => setNewName(e.target.value)} className={inputClass} placeholder="সার্ভারের নাম (যেমন: Server 1)" />
+                    <input value={newDomain} onChange={e => setNewDomain(e.target.value)} className={inputClass} placeholder="ডোমেইন (যেমন: https://example.com)" />
                     <button onClick={addServer} className={`${btnPrimary} w-full py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2`}>
                       <Plus size={14} /> সার্ভার যোগ করুন
                     </button>
@@ -8255,12 +8183,11 @@ ${tgHashtags}`;
                 </div>
 
                 <div className={`${glassCard} p-4`}>
-                  <h4 className="text-xs font-semibold mb-2 text-zinc-300">📖 কোন mode কখন?</h4>
+                  <h4 className="text-xs font-semibold mb-2 text-zinc-300">📖 কিভাবে কাজ করে?</h4>
                   <ul className="text-[11px] text-zinc-400 space-y-1.5 list-disc list-inside">
-                    <li><span className="text-purple-300 font-semibold">Firem</span> — hf.space (RS 01) এর মতো iframe সার্ভার, পাথে অটো `/watch/` যোগ হয়</li>
-                    <li><span className="text-blue-300 font-semibold">Proxy</span> — http:// লিংক বা CORS ব্লকড সার্ভার (RS 02 bot-hosting.net), Supabase stream-proxy দিয়ে চলবে</li>
-                    <li><span className="text-emerald-300 font-semibold">Direct</span> — ক্লিন https ডাউনলোড লিংক (RS PR S1 onrender), কোনো প্রক্সি ছাড়া সরাসরি প্লে</li>
-                    <li>সার্ভার সুইচ করলে শুধু ডোমেইন বদলায়, ফাইল পাথ একই থাকে</li>
+                    <li>কমপক্ষে ২টি সার্ভার থাকলে প্লেয়ারে "Server" বাটন দেখাবে</li>
+                    <li>সার্ভার চেঞ্জ করলে শুধু ডোমেইন বদলাবে, চ্যানেল/ফাইল আইডি একই থাকবে</li>
+                    <li>উদাহরণ: <code className="text-cyan-400">https://s1.example.com</code>/8866/file.mkv → <code className="text-cyan-400">https://s2.example.com</code>/8866/file.mkv</li>
                   </ul>
                 </div>
               </div>
