@@ -463,7 +463,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         localStorage.setItem("rs_display_name", displayName);
         try {
           await update(ref(db, `users/${uid}`), {
-            name: displayName, email: loginEmail, online: true, lastSeen: Date.now(),
+            name: displayName, email: loginEmail, online: true, lastSeen: Date.now(), authProvider: "email",
           });
         } catch (e) {}
         toast.success(`Welcome back, ${displayName}!`);
