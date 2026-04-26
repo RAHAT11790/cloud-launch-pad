@@ -393,3 +393,64 @@ div[style*="z-index: 2147483647"],
     display: none;
   }
 }
+
+/* =============================================================
+   LOW-END MOBILE PERFORMANCE OPTIMIZATIONS
+   Targeted at 1-2GB RAM Android devices @ 60-120Hz scrolling.
+   ============================================================= */
+
+/* GPU-accelerate scroll containers — eliminates main-thread paint jank */
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  transform: translateZ(0);
+}
+
+/* Off-screen content skipping — massive win on long lists */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 280px;
+}
+
+/* Layout containment for cards — paint isolation prevents cascading reflows */
+.anime-card,
+[data-anime-card] {
+  contain: layout style paint;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Reduce blur cost on low-end devices (blur is the #1 mobile FPS killer) */
+@media (max-width: 768px) {
+  .player-glass,
+  .player-touch-button { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .skip-indicator { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+}
+@media (prefers-reduced-transparency: reduce), (update: slow) {
+  .player-glass,
+  .player-touch-button,
+  .skip-indicator { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+}
+
+/* Honor user reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Fullscreen video — promote to its own compositor layer to remove
+   enter/exit lag when toggling fullscreen on Android Chrome */
+video, iframe[title="player"] {
+  transform: translateZ(0);
+  will-change: transform;
+}
+:fullscreen video, :fullscreen iframe { width: 100% !important; height: 100% !important; }
+
+/* Image perf — async decode + lazy paint */
+img { content-visibility: auto; }

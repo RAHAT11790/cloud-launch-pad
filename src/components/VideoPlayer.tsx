@@ -686,18 +686,37 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [src, qualityOptions]);
 
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
+    // hf.space (Firem/iframe) URLs are loaded directly into the iframe — never wrap them
+    // through the CDN/stream-proxy (those are for raw video element playback only).
+    if (/hf\.space|huggingface/i.test(rawUrl)) return rawUrl;
     return getPrimaryPlaybackSrc(rawUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     const server = videoServers[serverIndex];
     if (!server?.domain) return rawUrl;
+    const domainTrim = server.domain.trim().replace(/\/$/, "");
+    // ===== Firem / hf.space mode =====
+    // If the admin-supplied domain ends with `/watch` (or the host is hf.space),
+    // we treat it as the iframe-embed server. The ORIGINAL full upstream URL is
+    // appended verbatim after `/watch/` so the embed can fetch it through its
+    // proxy (e.g. https://xxx.hf.space/watch/http://fi3.bot-hosting.net/.../file.mkv).
+    const isFiremDomain = /\/watch\/?$/i.test(server.domain.trim()) || /hf\.space|huggingface/i.test(domainTrim);
+    if (isFiremDomain) {
+      const base = /\/watch$/i.test(domainTrim) ? domainTrim : `${domainTrim}/watch`;
+      // Don't double-wrap if rawUrl is already pointing at this server
+      try {
+        const u = new URL(rawUrl);
+        if (/hf\.space|huggingface/i.test(u.host)) return rawUrl;
+      } catch {}
+      return `${base}/${rawUrl}`;
+    }
     try {
       const url = new URL(rawUrl);
-      return `${server.domain.replace(/\/$/, "")}${url.pathname}${url.search}${url.hash}`;
+      return `${domainTrim}${url.pathname}${url.search}${url.hash}`;
     } catch {
       const match = rawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
-      return `${server.domain.replace(/\/$/, "")}${match ? match[1] : rawUrl}`;
+      return `${domainTrim}${match ? match[1] : rawUrl}`;
     }
   }, [videoServers]);
 
@@ -1628,28 +1647,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               the embed via postMessage (see useEffect above). */}
           {isEmbedPlayback ? (
             (() => {
-              // Build BOTH the watch URL (path with /watch/ prefix for the
-              // upstream) AND the req.html host. We use the SAME hf.space
-              // origin as the video so cross-origin iframe→video requests
-              // never trip CORS. Falls back to our self-hosted /req.html
-              // only if the URL parsing fails.
-              let watchSrc = currentSrc;
-              let embedHost = "";
-              try {
-                const u = new URL(currentSrc);
-                if (!/^\/watch\//i.test(u.pathname)) {
-                  u.pathname = "/watch" + u.pathname;
-                }
-                watchSrc = u.toString();
-                embedHost = `${u.protocol}//${u.host}`;
-              } catch {}
-              const iframeSrc = embedHost
-                ? `${embedHost}/req.html?src=${encodeURIComponent(watchSrc)}`
-                : `/req.html?src=${encodeURIComponent(watchSrc)}`;
+              // currentSrc is already the fully-built watch URL produced by
+              // applyServerDomain() — e.g.
+              //   https://xxx.hf.space/watch/http://fi3.bot-hosting.net/.../file.mkv
+              // We load it directly as the iframe src. The hf.space backend
+              // serves the player page (or proxies the video) at that path.
               return (
                 <iframe
                   ref={embedIframeRef}
-                  src={iframeSrc}
+                  src={currentSrc}
                   className="absolute inset-0 w-full h-full bg-black border-0 block"
                   allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                   allowFullScreen
