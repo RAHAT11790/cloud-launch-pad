@@ -97,6 +97,16 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
 };
 
+const shouldUseEmbedPlayback = (url: string): boolean => {
+  if (!url) return false;
+  try {
+    const { hostname } = new URL(url);
+    return /(^|\.)hf\.space$/i.test(hostname) || /huggingface/i.test(hostname);
+  } catch {
+    return false;
+  }
+};
+
 interface AudioTrackOption {
   language: string;
   label: string;
@@ -177,6 +187,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
+  const [activeRawSrc, setActiveRawSrc] = useState(src); // active source before proxy/CDN transforms
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
   const sourceBaseRef = useRef(src);
   const [isServerSwitching, setIsServerSwitching] = useState(false);
@@ -184,8 +195,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
   const isEmbedPlayback = useMemo(() => {
-    return !!currentSrc && /hf\.space|huggingface/i.test(currentSrc);
-  }, [currentSrc]);
+    return shouldUseEmbedPlayback(activeRawSrc);
+  }, [activeRawSrc]);
 
   const syncUiProgress = useCallback((nextTime: number, nextDuration: number) => {
     setCurrentTime(nextTime);
@@ -815,6 +826,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
+    setActiveRawSrc(newRawSrc);
     pendingSeek.current = savedTime;
     embedTimeRef.current = {
       currentTime: savedTime,
@@ -897,6 +909,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       const finalAudioUrl = manualServerSelected ? applyServerDomain(audioUrl, activeServerIndex) : audioUrl;
       const proxiedSrc = resolvePlaybackSrc(finalAudioUrl);
       activeSourceBaseRef.current = finalAudioUrl;
+      setActiveRawSrc(finalAudioUrl);
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
     // Restore playback position after source change
@@ -928,6 +941,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     sourceBaseRef.current = defaultRawSrc;
     activeSourceBaseRef.current = defaultRawSrc;
+    setActiveRawSrc(defaultRawSrc);
     setCurrentAudioTrack("Default");
     setShowAudioPanel(false);
 
@@ -945,6 +959,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
       v.addEventListener("loadedmetadata", restoreTime);
       activeSourceBaseRef.current = finalDefaultSrc;
+      setActiveRawSrc(finalDefaultSrc);
       setCurrentSrc(finalResolvedSrc);
     }
 
@@ -954,6 +969,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!playbackRouteReady) return;
     sourceBaseRef.current = src;
     activeSourceBaseRef.current = src;
+    setActiveRawSrc(src);
     const resolvedSrc = resolvePlaybackSrc(src);
     pendingSeek.current = null;
     embedTimeRef.current = { currentTime: 0, duration: 0 };
@@ -1538,6 +1554,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setShowSettings(false);
   }, [isEmbedPlayback, sendEmbedCmd]);
 
+  useEffect(() => {
+    if (!isEmbedPlayback) return;
+    const nextFit = isFullscreen && cropModes[cropIndex] === "contain"
+      ? "cover"
+      : cropModes[cropIndex];
+    sendEmbedCmd("fit", { fit: nextFit });
+  }, [cropIndex, isEmbedPlayback, isFullscreen, sendEmbedCmd]);
+
   const switchQuality = useCallback((option: QualityOption) => {
     // Block 4K for non-premium users
     if (is4KLabel(option.label) && !isPremium) return;
@@ -1546,6 +1570,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     sourceBaseRef.current = option.src;
     const finalOptionSrc = manualServerSelected ? applyServerDomain(option.src, activeServerIndex) : option.src;
     activeSourceBaseRef.current = finalOptionSrc;
+    setActiveRawSrc(finalOptionSrc);
     const newSrc = resolvePlaybackSrc(finalOptionSrc);
 
     if (newSrc === currentSrc) {
@@ -1554,13 +1579,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
     const v = videoRef.current;
-    pendingSeek.current = v?.currentTime || 0;
+    pendingSeek.current = isEmbedPlayback
+      ? (embedTimeRef.current.currentTime || currentTime || 0)
+      : (v?.currentTime || 0);
     setIsBuffering(true);
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);
     setShowSettings(false);
 
-  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
+  }, [currentQuality, currentSrc, currentTime, isEmbedPlayback, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -1747,8 +1774,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           {isEmbedPlayback ? (
             <iframe
               ref={embedIframeRef}
-              key={currentSrc}
-              src={getEmbedReqSrc(currentSrc)}
+              key={activeRawSrc}
+              src={getEmbedReqSrc(activeRawSrc)}
               className="w-full h-full bg-black border-0"
               style={{ pointerEvents: "none" }}
               allow="autoplay; fullscreen; encrypted-media"
@@ -1787,7 +1814,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 setIsBuffering(true);
                 setShowFixedLoader(true);
                 if (isEmbedPlayback) {
-                  sendEmbedCmd("load", { src: getEmbedWatchSrc(currentSrc) });
+                  sendEmbedCmd("load", { src: getEmbedWatchSrc(activeRawSrc) });
                   sendEmbedCmd("play");
                 } else {
                   const v = videoRef.current;
@@ -1895,6 +1922,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             setShowServerPanel(false);
                             setManualServerSelected(false);
                             activeSourceBaseRef.current = sourceBaseRef.current;
+                            setActiveRawSrc(sourceBaseRef.current);
                             setCurrentSrc(resolvePlaybackSrc(sourceBaseRef.current));
                           }}
                             className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
