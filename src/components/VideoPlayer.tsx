@@ -438,6 +438,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [videoError, setVideoError] = useState(false);
   const [qualityFailMsg, setQualityFailMsg] = useState<string | null>(null);
   const failedSrcsRef = useRef<Set<string>>(new Set());
+  // Cumulative retry counter per src (survives effect re-mounts)
+  const retryAttemptsRef = useRef<Map<string, number>>(new Map());
   const [isBuffering, setIsBuffering] = useState(true);
   const [showFixedLoader, setShowFixedLoader] = useState(true);
   const loaderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1278,20 +1280,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         onNextEpisode();
       }
     };
-    let retryCount = 0;
-    const MAX_RETRIES = 3;
+    // Cumulative per-source retry tracking (lives outside this useEffect via ref)
+    // Prevents the "every-second retry" storm caused by retryCount resetting
+    // when the effect re-mounts after setCurrentSrc().
+    const MAX_RETRIES = 2;
     const onError = () => {
-      if (retryCount >= MAX_RETRIES) {
-        console.log('Video failed after retries. URL:', currentSrc);
-        failedSrcsRef.current.add(currentSrc);
+      const errSrc = currentSrc;
+      const prev = retryAttemptsRef.current.get(errSrc) || 0;
+      const next = prev + 1;
+      retryAttemptsRef.current.set(errSrc, next);
+
+      if (next > MAX_RETRIES) {
+        console.log('Video failed after retries. URL:', errSrc);
+        failedSrcsRef.current.add(errSrc);
         const failedQualityLabel = currentQuality;
-        
+
         const sameQualityRouteFallback = buildPlaybackCandidates(
           activeSourceBaseRef.current,
           cdnEnabled,
           proxyUrl || undefined,
           proxyApiKey || undefined
-        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
+        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== errSrc);
 
         if (sameQualityRouteFallback) {
           setQualityFailMsg(`"${failedQualityLabel}" source blocked. Trying fallback route...`);
@@ -1303,7 +1312,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
         const nextOption = availableQualities.find((q) => {
           const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-          return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
+          return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== errSrc;
         });
 
         if (nextOption) {
@@ -1312,7 +1321,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
           const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
           activeSourceBaseRef.current = nextOption.src;
-          if (newFallbackSrc === currentSrc) {
+          if (newFallbackSrc === errSrc) {
             v.currentTime = pendingSeek.current;
             pendingSeek.current = null;
             v.load();
@@ -1325,16 +1334,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           // All quality/route fallbacks exhausted — try next server automatically
           if (videoServers.length > 1) {
             const nextServerIdx = (activeServerIndex + 1) % videoServers.length;
-            // Only auto-failover if we haven't cycled through all servers
             const failoverKey = `__server_failover_${nextServerIdx}`;
             if (!failedSrcsRef.current.has(failoverKey)) {
               failedSrcsRef.current.add(failoverKey);
               const serverName = videoServers[nextServerIdx]?.name || `Server ${nextServerIdx + 1}`;
               setQualityFailMsg(`Server down. Switching to ${serverName}...`);
               setTimeout(() => setQualityFailMsg(null), 3500);
-              // Reset failed srcs for the new server (keep failover keys)
               const failoverKeys = new Set([...failedSrcsRef.current].filter(k => k.startsWith("__server_failover_")));
               failedSrcsRef.current = failoverKeys;
+              retryAttemptsRef.current.clear();
               switchServer(nextServerIdx);
               return;
             }
@@ -1343,28 +1351,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
         return;
       }
-      retryCount++;
-      console.log(`Video error, retry ${retryCount}/${MAX_RETRIES}...`);
-      // Exponential backoff: 500ms, 1000ms, 1500ms
-      const delay = retryCount * 500;
-      setTimeout(() => {
-        if (v) {
-          const savedTime = v.currentTime || lastKnownTime;
-          // For MKV files, try removing the src attribute and re-setting it
-          v.src = currentSrc;
+
+      console.log(`Video error, retry ${next}/${MAX_RETRIES}...`);
+      // Backoff: 800ms, 1600ms — but DO NOT add new {once:true} listeners
+      // (those leak across retries). Just reload the existing element.
+      const delay = next * 800;
+      const savedTime = v?.currentTime || lastKnownTime;
+      window.setTimeout(() => {
+        if (!v) return;
+        // Don't fight ourselves — if a newer src has been set, bail.
+        if (v.src.indexOf(errSrc) === -1 && errSrc.indexOf(v.src) === -1) return;
+        try {
           v.load();
-          v.addEventListener('loadedmetadata', () => {
-            if (savedTime > 0) v.currentTime = savedTime;
-            v.play().catch(() => {});
-          }, { once: true });
-          // Also listen for canplay as fallback for MKV
-          v.addEventListener('canplay', () => {
-            if (savedTime > 0 && Math.abs(v.currentTime - savedTime) > 2) {
-              v.currentTime = savedTime;
-            }
-            v.play().catch(() => {});
-          }, { once: true });
-        }
+          if (savedTime > 0) {
+            const restoreOnce = () => {
+              if (v.duration > 0 && Math.abs(v.currentTime - savedTime) > 1) {
+                try { v.currentTime = savedTime; } catch {}
+              }
+              v.removeEventListener('loadedmetadata', restoreOnce);
+            };
+            v.addEventListener('loadedmetadata', restoreOnce, { once: true });
+          }
+          if (!adGateActive) v.play().catch(() => {});
+        } catch {}
       }, delay);
     };
     const onCanPlay = () => {
