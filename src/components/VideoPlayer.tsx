@@ -53,7 +53,13 @@ const isDirectPlaybackUrl = (url: string): boolean => {
   return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
 };
 
-const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
+const buildPlaybackCandidates = (
+  url: string,
+  cdnEnabled: boolean,
+  proxyUrl?: string,
+  proxyApiKey?: string,
+  mode?: "firem" | "proxy" | "direct",
+): string[] => {
   if (!url) return [];
 
   const candidates: string[] = [];
@@ -65,6 +71,26 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const encoded = encodeURIComponent(url);
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+
+  // === EXPLICIT MODE — admin selected per-server ===
+  if (mode === "direct") {
+    // Pure direct, no proxy ever (e.g. RS PR S1 onrender https links)
+    addCandidate(url);
+    return candidates;
+  }
+
+  if (mode === "proxy") {
+    // Force through Supabase stream-proxy (e.g. RS 02 bot-hosting http link)
+    if (BUILTIN_STREAM_PROXY) {
+      addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
+    }
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+    addCandidate(url); // last-resort
+    return candidates;
+  }
+
+  // === LEGACY HEURISTIC (for entries without explicit mode) ===
   const prefersDirectPlayback = isDirectPlaybackUrl(url);
 
   if (prefersDirectPlayback) {
@@ -77,15 +103,10 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
   if (customProxyCandidate) addCandidate(customProxyCandidate);
 
-  // http:// cannot be loaded directly on https pages (mixed content).
-  // Always fall back to the built-in Supabase stream-proxy so playback works
-  // out-of-the-box on Server 1 (bot-hosting.net) without any admin config.
   if (BUILTIN_STREAM_PROXY) {
     addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
   }
 
-  // If still nothing, fall back to direct (will fail on mixed content but
-  // preserves prior behaviour for unknown schemes).
   if (candidates.length === 0) {
     addCandidate(url);
   }
@@ -93,20 +114,39 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   return candidates;
 };
 
-const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
-  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
+const getPrimaryPlaybackSrc = (
+  url: string,
+  cdnEnabled: boolean,
+  proxyUrl?: string,
+  proxyApiKey?: string,
+  mode?: "firem" | "proxy" | "direct",
+): string => {
+  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey, mode)[0] || url;
 };
 
-const normalizePathForServer = (pathname: string, targetDomain: string): string => {
-  const cleanDomain = targetDomain.toLowerCase();
-  const isRs01EmbedServer = /(^|\.)hf\.space$/i.test(cleanDomain) || /huggingface/i.test(cleanDomain);
+// Per-server playback mode. Admin selects this in Server Manager.
+//   firem  → iframe embed via req.html (hf.space style, needs /watch/ prefix)
+//   proxy  → force route through Supabase stream-proxy (for http:// or geo-blocked)
+//   direct → raw <video src> with no proxy (for clean https:// download links)
+export type ServerMode = "firem" | "proxy" | "direct";
+
+const inferServerMode = (domain: string): ServerMode => {
+  const d = (domain || "").toLowerCase();
+  if (/(^|\.)hf\.space$|huggingface/i.test(d)) return "firem";
+  if (d.startsWith("http://")) return "proxy";
+  return "direct";
+};
+
+const normalizePathForServer = (pathname: string, targetDomain: string, mode?: ServerMode): string => {
+  const effectiveMode = mode || inferServerMode(targetDomain);
   const hasWatchPrefix = /^\/watch(?:\/|$)/i.test(pathname);
 
-  if (isRs01EmbedServer) {
+  if (effectiveMode === "firem") {
     if (hasWatchPrefix) return pathname;
     return `/watch${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
   }
 
+  // proxy + direct want raw paths (no /watch/ prefix)
   if (hasWatchPrefix) {
     const stripped = pathname.replace(/^\/watch(?=\/|$)/i, "");
     return stripped.startsWith("/") ? stripped : `/${stripped}`;
@@ -115,8 +155,12 @@ const normalizePathForServer = (pathname: string, targetDomain: string): string 
   return pathname;
 };
 
-const shouldUseEmbedPlayback = (url: string): boolean => {
+const shouldUseEmbedPlayback = (url: string, mode?: ServerMode): boolean => {
   if (!url) return false;
+  // Explicit per-server mode wins
+  if (mode === "firem") return true;
+  if (mode === "proxy" || mode === "direct") return false;
+  // Fallback heuristic for legacy entries with no mode declared
   try {
     const { hostname, pathname } = new URL(url);
     const isHfHost = /(^|\.)hf\.space$/i.test(hostname) || /huggingface/i.test(hostname);
@@ -217,9 +261,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
+  // Server list declared early so isEmbedPlayback / resolvers can read mode.
+  const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean; mode?: ServerMode }[]>([]);
+  const [activeServerIndex, setActiveServerIndex] = useState(0);
+  const [manualServerSelected, setManualServerSelected] = useState(false);
+  const [showServerPanel, setShowServerPanel] = useState(false);
+  const premiumServerApplied = useRef(false);
+
+  // Active server's playback mode (only when admin actually picked a server).
+  const activeServerMode: ServerMode | undefined = useMemo(() => {
+    if (!manualServerSelected) return undefined; // → fall back to URL heuristic
+    return videoServers[activeServerIndex]?.mode;
+  }, [manualServerSelected, videoServers, activeServerIndex]);
+
   const isEmbedPlayback = useMemo(() => {
-    return shouldUseEmbedPlayback(activeRawSrc);
-  }, [activeRawSrc]);
+    return shouldUseEmbedPlayback(activeRawSrc, activeServerMode);
+  }, [activeRawSrc, activeServerMode]);
 
   const syncUiProgress = useCallback((nextTime: number, nextDuration: number) => {
     // Live DOM updates — smooth, zero React cost
@@ -264,21 +321,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return `/req.html?src=${encodeURIComponent(watchSrc)}`;
   }, [getEmbedWatchSrc]);
 
-  // ===== SERVER CHANGER =====
-  const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
-  const [activeServerIndex, setActiveServerIndex] = useState(0);
-  const [manualServerSelected, setManualServerSelected] = useState(false);
-  const [showServerPanel, setShowServerPanel] = useState(false);
-  const premiumServerApplied = useRef(false);
+  // (videoServers state declared earlier alongside isEmbedPlayback)
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
       const val = snap.val();
-      let servers: { name: string; domain: string; locked?: boolean }[] = [];
+      let servers: { name: string; domain: string; locked?: boolean; mode?: ServerMode }[] = [];
+      const normalize = (s: any) => {
+        if (!s || !s.domain) return null;
+        const allowed: ServerMode[] = ["firem", "proxy", "direct"];
+        const mode: ServerMode = allowed.includes(s.mode) ? s.mode : inferServerMode(s.domain);
+        return { name: s.name, domain: s.domain, locked: !!s.locked, mode };
+      };
       if (val && Array.isArray(val)) {
-        servers = val.filter((s: any) => s && s.domain);
+        servers = val.map(normalize).filter(Boolean) as any;
       } else if (val && typeof val === "object") {
-        servers = Object.values(val).filter((s: any) => s && s.domain) as any[];
+        servers = Object.values(val).map(normalize).filter(Boolean) as any;
       }
       setVideoServers(servers);
     });
@@ -804,20 +862,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return list;
   }, [src, qualityOptions]);
 
-  const resolvePlaybackSrc = useCallback((rawUrl: string) => {
-    return getPrimaryPlaybackSrc(rawUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-  }, [cdnEnabled, proxyUrl, proxyApiKey]);
+  const resolvePlaybackSrc = useCallback((rawUrl: string, modeOverride?: ServerMode) => {
+    return getPrimaryPlaybackSrc(
+      rawUrl,
+      cdnEnabled,
+      proxyUrl || undefined,
+      proxyApiKey || undefined,
+      modeOverride ?? activeServerMode,
+    );
+  }, [cdnEnabled, proxyUrl, proxyApiKey, activeServerMode]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     const server = videoServers[serverIndex];
     if (!server?.domain) return rawUrl;
+    const mode = server.mode || inferServerMode(server.domain);
     try {
       const url = new URL(rawUrl);
-      const nextPath = normalizePathForServer(url.pathname, server.domain);
+      const nextPath = normalizePathForServer(url.pathname, server.domain, mode);
       return `${server.domain.replace(/\/$/, "")}${nextPath}${url.search}${url.hash}`;
     } catch {
       const match = rawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
-      const fallbackPath = normalizePathForServer(match ? match[1] : rawUrl, server.domain);
+      const fallbackPath = normalizePathForServer(match ? match[1] : rawUrl, server.domain, mode);
       return `${server.domain.replace(/\/$/, "")}${fallbackPath}`;
     }
   }, [videoServers]);
@@ -855,8 +920,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const savedTime = isEmbedPlayback
       ? (embedTimeRef.current.currentTime || currentTime || 0)
       : (v?.currentTime || 0);
+    const targetServer = videoServers[serverIndex];
+    const targetMode: ServerMode = targetServer.mode || inferServerMode(targetServer.domain);
     const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
-    const resolved = resolvePlaybackSrc(newRawSrc);
+    const resolved = resolvePlaybackSrc(newRawSrc, targetMode);
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
