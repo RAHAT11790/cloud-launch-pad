@@ -1774,8 +1774,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           {isEmbedPlayback ? (
             <iframe
               ref={embedIframeRef}
-              key={currentSrc}
-              src={getEmbedReqSrc(currentSrc)}
+              key={activeRawSrc}
+              src={getEmbedReqSrc(activeRawSrc)}
               className="w-full h-full bg-black border-0"
               style={{ pointerEvents: "none" }}
               allow="autoplay; fullscreen; encrypted-media"
@@ -1814,7 +1814,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 setIsBuffering(true);
                 setShowFixedLoader(true);
                 if (isEmbedPlayback) {
-                  sendEmbedCmd("load", { src: getEmbedWatchSrc(currentSrc) });
+                  sendEmbedCmd("load", { src: getEmbedWatchSrc(activeRawSrc) });
                   sendEmbedCmd("play");
                 } else {
                   const v = videoRef.current;
