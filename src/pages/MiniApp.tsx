@@ -42,7 +42,7 @@ const STR: Record<Lang, Record<string, string>> = {
     subtitle: "Watch 5 short ads to unlock everything",
     chooseAd: "Choose your ad type",
     rewarded: "Rewarded Ad",
-    rewardedDesc: "Watch the ad for 10 seconds, then tap Continue",
+    rewardedDesc: "Keep the ad open for at least 10 seconds, then close and return",
     inApp: "In-App Ad",
     inAppDesc: "Quick ads play automatically",
     progress: "Progress",
@@ -60,7 +60,7 @@ const STR: Record<Lang, Record<string, string>> = {
     notCounted: "Ad closed too early or skipped. Not counted.",
     counted: "✅ Ad counted!",
     continueAd: "Continue",
-    continueReady: "10 seconds completed. Tap Continue to count this ad.",
+    continueReady: "10 seconds completed. Close the ad and return to count it.",
     realOnly: "Only real Rewarded ads can unlock access.",
     adUnavailable: "Monetag did not return a real ad, so nothing was counted.",
     rewardReady: "Rewarded ad is ready",
@@ -93,7 +93,7 @@ const STR: Record<Lang, Record<string, string>> = {
     subtitle: "৫টি ছোট অ্যাড দেখলেই সবকিছু আনলক",
     chooseAd: "অ্যাডের ধরন বেছে নিন",
     rewarded: "Rewarded Ad",
-    rewardedDesc: "অ্যাড ১০ সেকেন্ড দেখার পর Continue বাটনে ট্যাপ করতে হবে",
+    rewardedDesc: "অ্যাড অন্তত ১০ সেকেন্ড খোলা রাখুন, তারপর বন্ধ করে ফিরে আসুন",
     inApp: "In-App Ad",
     inAppDesc: "অটোমেটিক ছোট অ্যাড চলবে",
     progress: "অগ্রগতি",
@@ -110,7 +110,7 @@ const STR: Record<Lang, Record<string, string>> = {
     notCounted: "অ্যাড আগেই বন্ধ করেছেন বা স্কিপ করেছেন। গণনা হয়নি।",
     counted: "✅ অ্যাড গণনা হয়েছে!",
     continueAd: "Continue",
-    continueReady: "১০ সেকেন্ড সম্পন্ন হয়েছে। এই অ্যাড কাউন্ট করতে Continue চাপুন।",
+    continueReady: "১০ সেকেন্ড সম্পন্ন হয়েছে। অ্যাড বন্ধ করে ফিরে এলে এটি কাউন্ট হবে।",
     realOnly: "আনলকের জন্য শুধু রিয়াল Rewarded Ad ব্যবহার করা যাবে।",
     adUnavailable:
       "Monetag কোনো রিয়াল অ্যাড দেয়নি, তাই কিছু কাউন্ট হয়নি।",
@@ -681,30 +681,6 @@ export default function MiniApp() {
     return () => window.clearTimeout(timer);
   }, [adCountdownActive]);
 
-  useEffect(() => {
-    if (!adCountdownActive) return;
-
-    const failActiveAd = () => {
-      const elapsed = Date.now() - adStartAtRef.current;
-      if (elapsed < 10000 || !adContinueReady || !pendingAdCompletion) {
-        setAdCountdownActive(false);
-        setAdContinueReady(false);
-        setPendingAdCompletion(false);
-        setAdRunning(false);
-        setError(t.notCounted);
-        setInfo("");
-      }
-    };
-
-    window.addEventListener("pagehide", failActiveAd);
-    document.addEventListener("visibilitychange", failActiveAd);
-
-    return () => {
-      window.removeEventListener("pagehide", failActiveAd);
-      document.removeEventListener("visibilitychange", failActiveAd);
-    };
-  }, [adContinueReady, adCountdownActive, pendingAdCompletion, t.notCounted]);
-
   const handleWatchAd = async () => {
     if (adRunning) return;
     if (!adType) return;
@@ -761,7 +737,8 @@ export default function MiniApp() {
       await showFn({ ymid: trackingId, requestVar: MONETAG_REQUEST_VAR });
       preloadedTrackingIdRef.current = "";
 
-      if (!adContinueReady || Date.now() - adStartAtRef.current < 10000) {
+      const elapsed = Date.now() - adStartAtRef.current;
+      if (elapsed < 10000) {
         setError(t.notCounted);
         setInfo("");
         setAdCountdownActive(false);
@@ -769,8 +746,13 @@ export default function MiniApp() {
         setPendingAdCompletion(false);
         setAdRunning(false);
       } else {
-        setInfo(t.continueReady);
-        setPendingAdCompletion(true);
+        setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
+        setRewardReady(false);
+        setInfo(t.counted);
+        setPendingAdCompletion(false);
+        setAdCountdownActive(false);
+        setAdContinueReady(false);
+        preloadRewardedAd().catch(() => {});
         setAdRunning(false);
       }
     } catch (e) {
