@@ -23,6 +23,7 @@ const App = () => (
         <Sonner />
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/app" element={<Index />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/unlock" element={<Unlock />} />
           <Route path="/mini" element={<MiniApp />} />
