@@ -2514,22 +2514,38 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [bkashSmsFeed, setBkashSmsFeed] = useState<any[]>([]);
   useEffect(() => {
     if (activeSection !== "bkash-payments" && activeSection !== "dashboard") return;
+
+    // Instant render from sessionStorage cache (avoids 'loading forever' feel)
+    try {
+      const cs = sessionStorage.getItem("admin_bkashSettings_cache");
+      if (cs) { setBkashSettings(JSON.parse(cs)); setBkashSettingsLoaded(true); }
+      const cp = sessionStorage.getItem("admin_bkashPayments_cache");
+      if (cp) setBkashPaymentRequests(JSON.parse(cp));
+      const cf = sessionStorage.getItem("admin_bkashSmsFeed_cache");
+      if (cf) setBkashSmsFeed(JSON.parse(cf));
+    } catch {}
+
     const unsubs: (() => void)[] = [];
     unsubs.push(onValue(ref(db, "bkashSettings"), (snap) => {
       const data = snap.val();
       if (data) {
         setBkashSettings(data);
+        try { sessionStorage.setItem("admin_bkashSettings_cache", JSON.stringify(data)); } catch {}
       }
       setBkashSettingsLoaded(true);
     }));
     unsubs.push(onValue(ref(db, "bkashPayments"), (snap) => {
       const data = snap.val() || {};
-      setBkashPaymentRequests(Object.entries(data).map(([id, item]: any) => ({ id, ...item })).sort((a: any, b: any) => (b.submittedAt || 0) - (a.submittedAt || 0)));
+      const list = Object.entries(data).map(([id, item]: any) => ({ id, ...item })).sort((a: any, b: any) => (b.submittedAt || 0) - (a.submittedAt || 0));
+      setBkashPaymentRequests(list);
+      try { sessionStorage.setItem("admin_bkashPayments_cache", JSON.stringify(list.slice(0, 200))); } catch {}
     }));
     unsubs.push(onValue(ref(db, "XNXANIKPAY"), (snap) => {
       const data = snap.val() || {};
-      setBkashSmsFeed(Object.entries(data).map(([txid, item]: any) => ({ txid, ...item }))
-        .sort((a: any, b: any) => (b.receivedAt || b.consumedAt || 0) - (a.receivedAt || a.consumedAt || 0)));
+      const list = Object.entries(data).map(([txid, item]: any) => ({ txid, ...item }))
+        .sort((a: any, b: any) => (b.receivedAt || b.consumedAt || 0) - (a.receivedAt || a.consumedAt || 0));
+      setBkashSmsFeed(list);
+      try { sessionStorage.setItem("admin_bkashSmsFeed_cache", JSON.stringify(list.slice(0, 100))); } catch {}
     }));
     // 🔁 Start GLOBAL auto-matcher while admin panel is open on bkash section
     let stopMatcher: (() => void) | null = null;
