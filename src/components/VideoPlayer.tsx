@@ -207,23 +207,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const getEmbedWatchSrc = useCallback((rawUrl: string) => {
     try {
       const u = new URL(rawUrl);
-      if (!/^\/watch\//i.test(u.pathname)) {
-        u.pathname = `/watch${u.pathname.startsWith("/") ? "" : "/"}${u.pathname}`;
+      if (/hf\.space|huggingface/i.test(u.hostname) && /^\/watch(?:\/|$)/i.test(u.pathname)) {
+        const nextPath = u.pathname.replace(/^\/watch(?=\/|$)/i, "") || "/";
+        u.pathname = nextPath.startsWith("/") ? nextPath : `/${nextPath}`;
       }
       return u.toString();
     } catch {
-      return rawUrl;
+      return rawUrl.replace(/(https?:\/\/[^/]+)\/watch(?=\/|$)/i, "$1");
     }
   }, []);
 
   const getEmbedReqSrc = useCallback((rawUrl: string) => {
     const watchSrc = getEmbedWatchSrc(rawUrl);
-    try {
-      const u = new URL(watchSrc);
-      return `${u.origin}/req.html?src=${encodeURIComponent(watchSrc)}`;
-    } catch {
-      return `https://rahat1102-video-hosting-bot.hf.space/req.html?src=${encodeURIComponent(watchSrc)}`;
+    if (typeof window !== "undefined" && window.location?.origin) {
+      return `${window.location.origin}/req.html?src=${encodeURIComponent(watchSrc)}`;
     }
+    return `/req.html?src=${encodeURIComponent(watchSrc)}`;
   }, [getEmbedWatchSrc]);
 
   // ===== SERVER CHANGER =====
@@ -797,7 +796,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
     if (videoServers[serverIndex].locked && !isPremium) return;
-    if (serverSwitchingRef.current) return;
 
     const v = videoRef.current;
     const savedTime = isEmbedPlayback
@@ -818,11 +816,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
+    embedTimeRef.current = {
+      currentTime: savedTime,
+      duration: embedTimeRef.current.duration || duration || 0,
+    };
     setCurrentSrc(resolved);
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
     }, 160);
-  }, [activeServerIndex, applyServerDomain, currentTime, isEmbedPlayback, isPremium, resolvePlaybackSrc, videoServers]);
+  }, [activeServerIndex, applyServerDomain, currentTime, duration, isEmbedPlayback, isPremium, resolvePlaybackSrc, videoServers]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
@@ -953,9 +955,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     sourceBaseRef.current = src;
     activeSourceBaseRef.current = src;
     const resolvedSrc = resolvePlaybackSrc(src);
+    pendingSeek.current = null;
+    embedTimeRef.current = { currentTime: 0, duration: 0 };
     setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
     setManualServerSelected(false);
+    setPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsBuffering(true);
+    setShowFixedLoader(true);
+    setIsServerSwitching(false);
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
@@ -2530,9 +2540,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             {/* Horizontal episode scroll */}
             <div className="grid grid-cols-5 gap-2 pb-2">
               {episodeList.map((ep) => (
-                <button
-                  key={ep.number}
-                  onClick={ep.onClick}
+              <button
+                key={ep.number}
+                onClick={() => {
+                  if (ep.active) return;
+                  setVideoError(false);
+                  setIsBuffering(true);
+                  setShowFixedLoader(true);
+                  setIsServerSwitching(true);
+                  setPlaying(false);
+                  pendingSeek.current = null;
+                  embedTimeRef.current = { currentTime: 0, duration: 0 };
+                  ep.onClick();
+                }}
                   className={`w-full h-12 rounded-xl flex items-center justify-center transition-all border text-center ${
                     ep.active
                       ? "gradient-primary border-primary/40 text-primary-foreground shadow-[0_0_12px_hsla(170,75%,45%,0.3)]"

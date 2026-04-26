@@ -42,7 +42,7 @@ const STR: Record<Lang, Record<string, string>> = {
     subtitle: "Watch 5 short ads to unlock everything",
     chooseAd: "Choose your ad type",
     rewarded: "Rewarded Ad",
-    rewardedDesc: "Watch the ad, then tap Open in your browser",
+    rewardedDesc: "Watch the ad for 10 seconds, then tap Continue",
     inApp: "In-App Ad",
     inAppDesc: "Quick ads play automatically",
     progress: "Progress",
@@ -59,6 +59,8 @@ const STR: Record<Lang, Record<string, string>> = {
       "Account not detected. Please open from the Telegram bot link.",
     notCounted: "Ad closed too early or skipped. Not counted.",
     counted: "✅ Ad counted!",
+    continueAd: "Continue",
+    continueReady: "10 seconds completed. Tap Continue to count this ad.",
     realOnly: "Only real Rewarded ads can unlock access.",
     adUnavailable: "Monetag did not return a real ad, so nothing was counted.",
     rewardReady: "Rewarded ad is ready",
@@ -78,7 +80,7 @@ const STR: Record<Lang, Record<string, string>> = {
     aboutTitle: "About RS ANIME",
     aboutDesc:
       "Premium anime streaming with HD quality, multi-language audio, and zero buffering on weak networks.",
-    rule1: "Each ad must run for at least 15 seconds",
+    rule1: "Each ad must run for at least 10 seconds",
     rule2: "Closing the ad early will not count",
     rule3: "Complete all 5 ads to unlock 24h access",
     rule4: "Access works automatically on the website",
@@ -91,7 +93,7 @@ const STR: Record<Lang, Record<string, string>> = {
     subtitle: "৫টি ছোট অ্যাড দেখলেই সবকিছু আনলক",
     chooseAd: "অ্যাডের ধরন বেছে নিন",
     rewarded: "Rewarded Ad",
-    rewardedDesc: "অ্যাড দেখার পর Open বাটনে ট্যাপ করে ব্রাউজারে যেতে হবে",
+    rewardedDesc: "অ্যাড ১০ সেকেন্ড দেখার পর Continue বাটনে ট্যাপ করতে হবে",
     inApp: "In-App Ad",
     inAppDesc: "অটোমেটিক ছোট অ্যাড চলবে",
     progress: "অগ্রগতি",
@@ -107,6 +109,8 @@ const STR: Record<Lang, Record<string, string>> = {
     invalidUser: "একাউন্ট পাওয়া যায়নি। টেলিগ্রাম বট লিঙ্ক থেকে খুলুন।",
     notCounted: "অ্যাড আগেই বন্ধ করেছেন বা স্কিপ করেছেন। গণনা হয়নি।",
     counted: "✅ অ্যাড গণনা হয়েছে!",
+    continueAd: "Continue",
+    continueReady: "১০ সেকেন্ড সম্পন্ন হয়েছে। এই অ্যাড কাউন্ট করতে Continue চাপুন।",
     realOnly: "আনলকের জন্য শুধু রিয়াল Rewarded Ad ব্যবহার করা যাবে।",
     adUnavailable:
       "Monetag কোনো রিয়াল অ্যাড দেয়নি, তাই কিছু কাউন্ট হয়নি।",
@@ -127,7 +131,7 @@ const STR: Record<Lang, Record<string, string>> = {
     aboutTitle: "RS ANIME সম্পর্কে",
     aboutDesc:
       "HD কোয়ালিটি, মাল্টি-ল্যাঙ্গুয়েজ অডিও এবং দুর্বল নেটওয়ার্কে জিরো-বাফারিং সহ প্রিমিয়াম এনিমে স্ট্রিমিং।",
-    rule1: "প্রতিটি অ্যাড অন্তত ১৫ সেকেন্ড চলতে হবে",
+    rule1: "প্রতিটি অ্যাড অন্তত ১০ সেকেন্ড চলতে হবে",
     rule2: "অ্যাড আগে বন্ধ করলে গণনা হবে না",
     rule3: "৫টি অ্যাড সম্পন্ন করলেই ২৪ ঘণ্টার অ্যাক্সেস",
     rule4: "ওয়েবসাইটে অ্যাক্সেস স্বয়ংক্রিয়ভাবে কাজ করবে",
@@ -322,11 +326,15 @@ export default function MiniApp() {
   const [copyOk, setCopyOk] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
   const [rewardReady, setRewardReady] = useState(false);
+  const [adCountdownActive, setAdCountdownActive] = useState(false);
+  const [adContinueReady, setAdContinueReady] = useState(false);
+  const [pendingAdCompletion, setPendingAdCompletion] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const preloadedTrackingIdRef = useRef<string>("");
   const autoGrantedRef = useRef(false);
   const preloadAttemptedRef = useRef(false);
+  const adStartAtRef = useRef(0);
 
   // Parse url params
   const params = useMemo(
@@ -661,6 +669,42 @@ export default function MiniApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [views, mode, userId, granted]);
 
+  useEffect(() => {
+    if (!adCountdownActive) return;
+    adStartAtRef.current = Date.now();
+    setAdContinueReady(false);
+
+    const timer = window.setTimeout(() => {
+      setAdContinueReady(true);
+    }, 10000);
+
+    return () => window.clearTimeout(timer);
+  }, [adCountdownActive]);
+
+  useEffect(() => {
+    if (!adCountdownActive) return;
+
+    const failActiveAd = () => {
+      const elapsed = Date.now() - adStartAtRef.current;
+      if (elapsed < 10000 || !adContinueReady || !pendingAdCompletion) {
+        setAdCountdownActive(false);
+        setAdContinueReady(false);
+        setPendingAdCompletion(false);
+        setAdRunning(false);
+        setError(t.notCounted);
+        setInfo("");
+      }
+    };
+
+    window.addEventListener("pagehide", failActiveAd);
+    document.addEventListener("visibilitychange", failActiveAd);
+
+    return () => {
+      window.removeEventListener("pagehide", failActiveAd);
+      document.removeEventListener("visibilitychange", failActiveAd);
+    };
+  }, [adContinueReady, adCountdownActive, pendingAdCompletion, t.notCounted]);
+
   const handleWatchAd = async () => {
     if (adRunning) return;
     if (!adType) return;
@@ -674,6 +718,9 @@ export default function MiniApp() {
     }
 
     setAdRunning(true);
+    setAdCountdownActive(true);
+    setAdContinueReady(false);
+    setPendingAdCompletion(false);
 
     // Step 1: ensure SDK is loaded. This is the only hard requirement.
     let ready = sdkReady;
@@ -684,6 +731,8 @@ export default function MiniApp() {
 
     if (!ready) {
       setAdRunning(false);
+      setAdCountdownActive(false);
+      setPendingAdCompletion(false);
       setRewardReady(false);
       setError(t.adUnavailable);
       return;
@@ -694,6 +743,8 @@ export default function MiniApp() {
 
     if (typeof showFn !== "function") {
       setAdRunning(false);
+      setAdCountdownActive(false);
+      setPendingAdCompletion(false);
       setRewardReady(false);
       setError(t.adUnavailable);
       return;
@@ -709,21 +760,46 @@ export default function MiniApp() {
         buildMonetagTrackingId(userId, views + 1);
       await showFn({ ymid: trackingId, requestVar: MONETAG_REQUEST_VAR });
       preloadedTrackingIdRef.current = "";
-      setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
-      setRewardReady(false);
-      setInfo(t.counted);
-      // Preload the next one in the background (non-blocking)
-      preloadRewardedAd().catch(() => {});
+
+      if (!adContinueReady || Date.now() - adStartAtRef.current < 10000) {
+        setError(t.notCounted);
+        setInfo("");
+        setAdCountdownActive(false);
+        setAdContinueReady(false);
+        setPendingAdCompletion(false);
+        setAdRunning(false);
+      } else {
+        setInfo(t.continueReady);
+        setPendingAdCompletion(true);
+        setAdRunning(false);
+      }
     } catch (e) {
       preloadedTrackingIdRef.current = "";
       setRewardReady(false);
       // Real failure (no-fill / user closed early / network). Do NOT count.
       setError(t.adUnavailable);
+      setPendingAdCompletion(false);
+      setAdCountdownActive(false);
+      setAdContinueReady(false);
       preloadRewardedAd().catch(() => {});
-    } finally {
       setAdRunning(false);
     }
   };
+
+  const handleContinueAfterAd = useCallback(() => {
+    if (!pendingAdCompletion || !adContinueReady) {
+      setError(t.notCounted);
+      return;
+    }
+
+    setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
+    setRewardReady(false);
+    setInfo(t.counted);
+    setPendingAdCompletion(false);
+    setAdCountdownActive(false);
+    setAdContinueReady(false);
+    preloadRewardedAd().catch(() => {});
+  }, [adContinueReady, pendingAdCompletion, preloadRewardedAd, t.counted, t.notCounted]);
 
   const handleGetAccess = async () => {
     if (granting) return;
@@ -1112,23 +1188,32 @@ export default function MiniApp() {
                     Change
                   </button>
                 </div>
-                <button
-                  onClick={handleWatchAd}
-                  disabled={adRunning}
-                  className="relative w-full py-4 rounded-2xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-cyan-400 text-black font-extrabold text-base shadow-xl shadow-fuchsia-500/40 hover:scale-[1.02] active:scale-[0.98] transition disabled:opacity-60 disabled:hover:scale-100 flex items-center justify-center gap-2 overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-                  {adRunning ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" /> {t.watching}
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-5 h-5" fill="black" /> {t.watchAd} (
-                      {views + 1}/{REQUIRED_VIEWS})
-                    </>
-                  )}
-                </button>
+                {pendingAdCompletion ? (
+                  <button
+                    onClick={handleContinueAfterAd}
+                    className="relative w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-400 text-black font-extrabold text-base shadow-xl shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] transition flex items-center justify-center gap-2 overflow-hidden"
+                  >
+                    <CheckCircle2 className="w-5 h-5" /> {t.continueAd}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleWatchAd}
+                    disabled={adRunning}
+                    className="relative w-full py-4 rounded-2xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-cyan-400 text-black font-extrabold text-base shadow-xl shadow-fuchsia-500/40 hover:scale-[1.02] active:scale-[0.98] transition disabled:opacity-60 disabled:hover:scale-100 flex items-center justify-center gap-2 overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+                    {adRunning ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" /> {t.watching}
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-5 h-5" fill="black" /> {t.watchAd} (
+                        {views + 1}/{REQUIRED_VIEWS})
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             )}
 
