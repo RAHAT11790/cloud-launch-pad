@@ -309,7 +309,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [getEmbedWatchSrc]);
 
   // ===== SERVER CHANGER =====
-  const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
+  const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean; mode?: ServerMode }[]>([]);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
   const [showServerPanel, setShowServerPanel] = useState(false);
@@ -318,11 +318,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
       const val = snap.val();
-      let servers: { name: string; domain: string; locked?: boolean }[] = [];
+      let servers: { name: string; domain: string; locked?: boolean; mode?: ServerMode }[] = [];
+      const normalize = (s: any) => {
+        if (!s || !s.domain) return null;
+        const allowed: ServerMode[] = ["firem", "proxy", "direct"];
+        const mode: ServerMode = allowed.includes(s.mode) ? s.mode : inferServerMode(s.domain);
+        return { name: s.name, domain: s.domain, locked: !!s.locked, mode };
+      };
       if (val && Array.isArray(val)) {
-        servers = val.filter((s: any) => s && s.domain);
+        servers = val.map(normalize).filter(Boolean) as any;
       } else if (val && typeof val === "object") {
-        servers = Object.values(val).filter((s: any) => s && s.domain) as any[];
+        servers = Object.values(val).map(normalize).filter(Boolean) as any;
       }
       setVideoServers(servers);
     });
