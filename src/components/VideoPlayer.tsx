@@ -339,6 +339,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [videoError, setVideoError] = useState(false);
   const [qualityFailMsg, setQualityFailMsg] = useState<string | null>(null);
   const failedSrcsRef = useRef<Set<string>>(new Set());
+  // Throttle React state updates from native <video> RAF loop to ~1 Hz
+  const lastNativeSyncRef = useRef(0);
+  // Persistent retry counter (per-src) so we don't retry-storm across re-renders
+  const retryAttemptsRef = useRef<Map<string, number>>(new Map());
   const [isBuffering, setIsBuffering] = useState(true);
   const [showFixedLoader, setShowFixedLoader] = useState(true);
   const loaderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
