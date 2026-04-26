@@ -14,6 +14,7 @@ import { db, ref, onValue, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import { Download, Save, Shield, Power, CheckCircle2 } from "lucide-react";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
+import { Switch } from "@/components/ui/switch";
 
 interface Props {
   glassCard: string;
@@ -25,7 +26,10 @@ export default function ApkDownloadCenter({ glassCard, inputClass, btnPrimary }:
   const [notes, setNotes] = useState("");
   const [userEnabled, setUserEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
-  const { canInstall, isStandalone, promptInstall } = usePwaInstall();
+  const { canInstall, isStandalone, promptInstall } = usePwaInstall({
+    appName: "Admin Panel",
+    installPath: "/admin",
+  });
 
   useEffect(() => {
     const unsubs = [
@@ -91,21 +95,12 @@ export default function ApkDownloadCenter({ glassCard, inputClass, btnPrimary }:
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => toggleUser(!userEnabled)}
-            className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${
-              userEnabled ? "bg-emerald-500" : "bg-zinc-600"
-            }`}
-            aria-pressed={userEnabled}
+          <Switch
+            checked={userEnabled}
+            onCheckedChange={toggleUser}
             aria-label="Toggle user panel download button"
-          >
-            <span
-              className={`absolute top-0.5 w-6 h-6 rounded-full bg-white transition-transform shadow ${
-                userEnabled ? "translate-x-[22px]" : "translate-x-0.5"
-              }`}
-            />
-          </button>
+            className="shrink-0"
+          />
         </div>
       </div>
 
