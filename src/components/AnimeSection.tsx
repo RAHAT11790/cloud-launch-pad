@@ -22,7 +22,7 @@ const AnimeSection = ({ title, items, onCardClick, onViewAll }: AnimeSectionProp
           </button>
         )}
       </div>
-      <div className="flex gap-2.5 overflow-x-auto px-4 pb-3.5 snap-x snap-mandatory no-scrollbar">
+      <div data-no-swipe="true" className="flex gap-2.5 overflow-x-auto px-4 pb-3.5 snap-x snap-mandatory no-scrollbar" style={{ touchAction: "pan-x pan-y" }}>
         {items.map((anime) => (
           <AnimeCard key={anime.id} anime={anime} onClick={onCardClick} />
         ))}

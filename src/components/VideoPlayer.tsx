@@ -696,21 +696,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const server = videoServers[serverIndex];
     if (!server?.domain) return rawUrl;
     const domainTrim = server.domain.trim().replace(/\/$/, "");
-    // ===== Firem / hf.space mode =====
-    // If the admin-supplied domain ends with `/watch` (or the host is hf.space),
-    // we treat it as the iframe-embed server. The ORIGINAL full upstream URL is
-    // appended verbatim after `/watch/` so the embed can fetch it through its
-    // proxy (e.g. https://xxx.hf.space/watch/http://fi3.bot-hosting.net/.../file.mkv).
-    const isFiremDomain = /\/watch\/?$/i.test(server.domain.trim()) || /hf\.space|huggingface/i.test(domainTrim);
-    if (isFiremDomain) {
-      const base = /\/watch$/i.test(domainTrim) ? domainTrim : `${domainTrim}/watch`;
-      // Don't double-wrap if rawUrl is already pointing at this server
+    const isHfDomain = /hf\.space|huggingface/i.test(domainTrim);
+
+    // ===== Firem / hf.space (iframe) mode =====
+    // hf.space hosts a Telegram video bot whose `/watch/<file_id>` route only
+    // accepts a real Telegram file_id — passing an external URL into it returns
+    // `'NoneType' object has no attribute 'file_size'`. So:
+    //   • if the source URL is ALREADY an hf.space watch URL → use it as-is
+    //   • otherwise → don't try to wrap; leave the raw URL untouched so we
+    //     don't generate a broken /watch/ path. (Server switcher will simply
+    //     keep the current playable URL when the chosen server isn't compatible.)
+    if (isHfDomain) {
       try {
         const u = new URL(rawUrl);
         if (/hf\.space|huggingface/i.test(u.host)) return rawUrl;
       } catch {}
-      return `${base}/${rawUrl}`;
+      return rawUrl;
     }
+
+    // Regular host-swap servers (e.g. fi3.bot-hosting.net swap, render mirror)
     try {
       const url = new URL(rawUrl);
       return `${domainTrim}${url.pathname}${url.search}${url.hash}`;
