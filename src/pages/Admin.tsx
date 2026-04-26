@@ -1927,6 +1927,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [webseriesData, setWebseriesData] = useState<any[]>([]);
   const [moviesData, setMoviesData] = useState<any[]>([]);
   const [usersData, setUsersData] = useState<any[]>([]);
+  const [appUsersGlobal, setAppUsersGlobal] = useState<Record<string, any>>({});
   const [notificationsData, setNotificationsData] = useState<any[]>([]);
   const [releasesData, setReleasesData] = useState<any[]>([]);
   const [commentsData, setCommentsData] = useState<any[]>([]);
@@ -2363,6 +2364,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     unsubs.push(onValue(ref(db, "users"), (snap) => {
       const data = snap.val() || {};
       setUsersData(Object.entries(data).map(([id, user]: any) => ({ id, ...user })));
+    }));
+
+    unsubs.push(onValue(ref(db, "appUsers"), (snap) => {
+      setAppUsersGlobal(snap.val() || {});
     }));
 
     unsubs.push(onValue(ref(db, "fcmTokens"), (snap) => {
@@ -3358,6 +3363,31 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const totalCategories = useMemo(() => Object.keys(categoriesData).length, [categoriesData]);
   const onlineUsers = useMemo(() => usersData.filter(u => u.online).length, [usersData]);
   const offlineUsers = useMemo(() => usersData.length - onlineUsers, [usersData.length, onlineUsers]);
+
+  // Strict guest detection — matches the bulk-delete logic so the badge and the action stay in sync.
+  const guestUidSet = useMemo(() => {
+    const registeredUids = new Set<string>();
+    const registeredEmails = new Set<string>();
+    Object.values(appUsersGlobal || {}).forEach((au: any) => {
+      if (!au) return;
+      if (au.id) registeredUids.add(String(au.id));
+      if (au.email) registeredEmails.add(String(au.email).trim().toLowerCase());
+    });
+    const guests = new Set<string>();
+    usersData.forEach((u: any) => {
+      if (!u) return;
+      if (u.email && String(u.email).trim()) return;
+      if (u.googleAuth) return;
+      if (u.authProvider === "email" || u.authProvider === "google") return;
+      if (u.id && registeredUids.has(String(u.id))) return;
+      if (typeof u.id === "string" && u.id.includes(",")) {
+        const guess = u.id.replace(/,/g, ".").toLowerCase();
+        if (registeredEmails.has(guess)) return;
+      }
+      guests.add(String(u.id));
+    });
+    return guests;
+  }, [usersData, appUsersGlobal]);
   const recentContent = useMemo(() => [...webseriesData, ...moviesData].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3), [webseriesData, moviesData]);
   const categoryList = useMemo(() => Object.entries(categoriesData).map(([id, cat]: any) => ({ id, name: cat.name })), [categoriesData]);
   const languageOptions = useMemo(() => ["English", "Hindi", "Tamil", "Telugu", "Korean", "Japanese", "Spanish", "Multi"], []);
@@ -5560,11 +5590,14 @@ ${tgHashtags}`;
                 Removes every account without an email (guest / anonymous). Those users will be force-logged out the next time they open the app and must sign up again with email or Google.
               </p>
               {(() => {
-                const guestList = usersData.filter(u => !u?.email || String(u.email).trim() === "");
+                const guestList = usersData.filter(u => guestUidSet.has(String(u.id)));
                 return (
                   <>
                     <div className="text-xs text-[#D1C4E9] mb-3">
                       Guest accounts found: <span className="text-red-400 font-bold">{guestList.length}</span>
+                      <span className="block text-[10px] text-[#957DAD] mt-1">
+                        Email & Google sign-ins are protected and will never be deleted.
+                      </span>
                     </div>
                     <button
                       onClick={async () => {
@@ -5605,7 +5638,7 @@ ${tgHashtags}`;
                     <p className="text-sm font-semibold">{user.name || "Anonymous"}</p>
                     <p className="text-[11px] text-[#D1C4E9] truncate">{user.email || user.id.substring(0, 20)}...</p>
                   </div>
-                  {!user.email && (
+                  {guestUidSet.has(String(user.id)) && (
                     <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-bold">GUEST</span>
                   )}
                   <div className={`w-2.5 h-2.5 rounded-full ${user.online ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />

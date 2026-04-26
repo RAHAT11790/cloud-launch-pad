@@ -145,13 +145,13 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         });
         try {
           await set(ref(db, `users/${commaKey}`), {
-            id: uid, name: gName, email: gEmail, online: true,
+            id: uid, name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true,
             lastSeen: Date.now(), createdAt: existingData?.createdAt || Date.now(),
           });
           // Also update users/${uid} to fix "Guest User" display
           if (uid !== commaKey) {
             await update(ref(db, `users/${uid}`), {
-              name: gName, email: gEmail, online: true, lastSeen: Date.now(),
+              name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true, lastSeen: Date.now(),
             }).catch(() => {});
           }
         } catch (e) {}
@@ -195,12 +195,12 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       });
       try {
         await set(ref(db, `users/${commaKey}`), {
-          id: uid, name: gName, email: gEmail, online: true,
+          id: uid, name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true,
           lastSeen: Date.now(), createdAt: existingData?.createdAt || Date.now(),
         });
         if (uid !== commaKey) {
           await update(ref(db, `users/${uid}`), {
-            name: gName, email: gEmail, online: true, lastSeen: Date.now(),
+            name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true, lastSeen: Date.now(),
           }).catch(() => {});
         }
       } catch (e) {}
@@ -432,7 +432,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
           id: userId, name: name.trim(), email: email.trim(), password: password, createdAt: Date.now(),
         });
         await set(ref(db, `users/${emailKey}`), {
-          name: name.trim(), email: email.trim(), createdAt: Date.now(), online: true, lastSeen: Date.now(), id: userId,
+          name: name.trim(), email: email.trim(), createdAt: Date.now(), online: true, lastSeen: Date.now(), id: userId, authProvider: "email",
         });
         localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: name.trim(), email: email.trim() }));
         localStorage.setItem("rs_display_name", name.trim());
@@ -463,7 +463,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         localStorage.setItem("rs_display_name", displayName);
         try {
           await update(ref(db, `users/${uid}`), {
-            name: displayName, email: loginEmail, online: true, lastSeen: Date.now(),
+            name: displayName, email: loginEmail, online: true, lastSeen: Date.now(), authProvider: "email",
           });
         } catch (e) {}
         toast.success(`Welcome back, ${displayName}!`);
