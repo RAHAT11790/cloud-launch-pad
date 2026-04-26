@@ -353,6 +353,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => window.removeEventListener("message", onMsg);
   }, [boostedVolume, currentSrc, muted, onNextEpisode, playbackRate, sendEmbedCmd, syncUiProgress]);
 
+  useEffect(() => {
+    return () => {
+      if (embedIframeRef.current?.contentWindow) {
+        try {
+          embedIframeRef.current.contentWindow.postMessage({ target: "rs-embed", cmd: "pause" }, "*");
+          embedIframeRef.current.contentWindow.postMessage({ target: "rs-embed", cmd: "load", src: "" }, "*");
+        } catch {}
+      }
+    };
+  }, [currentSrc, isEmbedPlayback]);
+
   
   // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
