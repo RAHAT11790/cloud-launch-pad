@@ -4,7 +4,7 @@ import type { AnimeItem } from "@/data/animeData";
 import { motion } from "framer-motion";
 import { db, ref, set, remove, onValue, push } from "@/lib/firebase";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
-import { sendPushToUsers } from "@/lib/fcm";
+// FCM removed — in-app notifications only
 import { SITE_URL } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
 
@@ -124,13 +124,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
           read: false,
         });
 
-        sendPushToUsers([targetComment.userId], {
-          title: notifTitle,
-          body: notifMsg,
-          image: anime.poster || undefined,
-          url: `/?anime=${anime.id}`,
-          data: { type: "comment_reply", animeId: anime.id, commentId: commentKey, replyText: text },
-        }).catch((err) => console.warn("Reply push failed:", err));
+        // FCM push removed — in-app notification (above) is enough
       }
     } catch (err) {
       console.error("Reply post failed:", err);
