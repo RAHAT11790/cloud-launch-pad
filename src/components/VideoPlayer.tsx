@@ -97,16 +97,29 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
 };
 
-const normalizePathForServer = (pathname: string, targetDomain: string): string => {
-  const cleanDomain = targetDomain.toLowerCase();
-  const isRs01EmbedServer = /(^|\.)hf\.space$/i.test(cleanDomain) || /huggingface/i.test(cleanDomain);
+// Per-server playback mode. Admin selects this in Server Manager.
+//   firem  → iframe embed via req.html (hf.space style, needs /watch/ prefix)
+//   proxy  → force route through Supabase stream-proxy (for http:// or geo-blocked)
+//   direct → raw <video src> with no proxy (for clean https:// download links)
+export type ServerMode = "firem" | "proxy" | "direct";
+
+const inferServerMode = (domain: string): ServerMode => {
+  const d = (domain || "").toLowerCase();
+  if (/(^|\.)hf\.space$|huggingface/i.test(d)) return "firem";
+  if (d.startsWith("http://")) return "proxy";
+  return "direct";
+};
+
+const normalizePathForServer = (pathname: string, targetDomain: string, mode?: ServerMode): string => {
+  const effectiveMode = mode || inferServerMode(targetDomain);
   const hasWatchPrefix = /^\/watch(?:\/|$)/i.test(pathname);
 
-  if (isRs01EmbedServer) {
+  if (effectiveMode === "firem") {
     if (hasWatchPrefix) return pathname;
     return `/watch${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
   }
 
+  // proxy + direct want raw paths (no /watch/ prefix)
   if (hasWatchPrefix) {
     const stripped = pathname.replace(/^\/watch(?=\/|$)/i, "");
     return stripped.startsWith("/") ? stripped : `/${stripped}`;
@@ -115,8 +128,12 @@ const normalizePathForServer = (pathname: string, targetDomain: string): string 
   return pathname;
 };
 
-const shouldUseEmbedPlayback = (url: string): boolean => {
+const shouldUseEmbedPlayback = (url: string, mode?: ServerMode): boolean => {
   if (!url) return false;
+  // Explicit per-server mode wins
+  if (mode === "firem") return true;
+  if (mode === "proxy" || mode === "direct") return false;
+  // Fallback heuristic for legacy entries with no mode declared
   try {
     const { hostname, pathname } = new URL(url);
     const isHfHost = /(^|\.)hf\.space$/i.test(hostname) || /huggingface/i.test(hostname);
