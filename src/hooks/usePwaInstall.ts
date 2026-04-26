@@ -31,7 +31,7 @@ const shouldSkipInstallWorker = () => {
 
   const host = window.location.hostname;
   const isPreviewHost =
-    host.includes("id-preview--") || host.includes("lovable.app");
+    host.includes("id-preview--") || host.includes("lovableproject.com");
 
   try {
     if (window.self !== window.top) return true;
@@ -54,7 +54,7 @@ const isInIframe = () => {
 const isPreviewHost = () => {
   if (typeof window === "undefined") return false;
   const host = window.location.hostname;
-  return host.includes("id-preview--") || host.includes("lovable.app");
+  return host.includes("id-preview--") || host.includes("lovableproject.com");
 };
 
 const ensureInstallWorker = async () => {
