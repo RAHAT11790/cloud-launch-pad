@@ -404,8 +404,7 @@ div[style*="z-index: 2147483647"],
 .overflow-x-auto,
 .overflow-scroll {
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  transform: translateZ(0);
+  overscroll-behavior: auto;
 }
 
 /* Off-screen content skipping — massive win on long lists */
