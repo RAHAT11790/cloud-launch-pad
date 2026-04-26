@@ -141,6 +141,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Removed preload anime character image - no longer needed
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const embedIframeRef = useRef<HTMLIFrameElement>(null);
+  // Mirror state from iframe embed (Server 2 mode)
+  const embedTimeRef = useRef({ currentTime: 0, duration: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
