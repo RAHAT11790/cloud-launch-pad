@@ -3302,27 +3302,32 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const onlineUsers = useMemo(() => usersData.filter(u => u.online).length, [usersData]);
   const offlineUsers = useMemo(() => usersData.length - onlineUsers, [usersData.length, onlineUsers]);
 
-  // Strict guest detection — matches the bulk-delete logic so the badge and the action stay in sync.
+  // Strict guest detection: a user is REAL only if they exist in `appUsers` (Firebase Auth registered via email or Google).
+  // Anything in `users/` node without a matching `appUsers/{uid}` entry is a guest and can be deleted.
   const guestUidSet = useMemo(() => {
     const registeredUids = new Set<string>();
     const registeredEmails = new Set<string>();
-    Object.values(appUsersGlobal || {}).forEach((au: any) => {
+    Object.entries(appUsersGlobal || {}).forEach(([key, au]: any) => {
+      if (key) registeredUids.add(String(key));
       if (!au) return;
       if (au.id) registeredUids.add(String(au.id));
+      if (au.uid) registeredUids.add(String(au.uid));
       if (au.email) registeredEmails.add(String(au.email).trim().toLowerCase());
     });
     const guests = new Set<string>();
     usersData.forEach((u: any) => {
-      if (!u) return;
-      if (u.email && String(u.email).trim()) return;
-      if (u.googleAuth) return;
-      if (u.authProvider === "email" || u.authProvider === "google") return;
-      if (u.id && registeredUids.has(String(u.id))) return;
-      if (typeof u.id === "string" && u.id.includes(",")) {
-        const guess = u.id.replace(/,/g, ".").toLowerCase();
+      if (!u || !u.id) return;
+      const uid = String(u.id);
+      // REAL user: must be present in appUsers (Firebase Auth registry)
+      if (registeredUids.has(uid)) return;
+      // Email-key fallback: some legacy entries use email-as-key (dots replaced with commas)
+      if (uid.includes(",")) {
+        const guess = uid.replace(/,/g, ".").toLowerCase();
         if (registeredEmails.has(guess)) return;
       }
-      guests.add(String(u.id));
+      // Email field fallback: cross-check by email if present
+      if (u.email && registeredEmails.has(String(u.email).trim().toLowerCase())) return;
+      guests.add(uid);
     });
     return guests;
   }, [usersData, appUsersGlobal]);
