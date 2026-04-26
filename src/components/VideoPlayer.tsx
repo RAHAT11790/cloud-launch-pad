@@ -1069,6 +1069,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return clearHideTimer;
   }, [showControls, scheduleHideTimer, clearHideTimer]);
 
+  // Force controls visible whenever a video error is shown so the server switcher is always reachable
+  useEffect(() => {
+    if (videoError) {
+      setShowControls(true);
+      clearHideTimer();
+    }
+  }, [videoError, clearHideTimer]);
+
   // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
   const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !serverSwitchingRef.current;
 
