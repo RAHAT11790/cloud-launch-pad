@@ -10,11 +10,17 @@
 // =====================================================================
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
+import { SITE_URL } from "@/lib/siteConfig";
 
 type BIPEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
+
+interface UsePwaInstallOptions {
+  appName?: string;
+  installPath?: string;
+}
 
 let cachedPrompt: BIPEvent | null = null;
 const listeners = new Set<(e: BIPEvent | null) => void>();
@@ -34,6 +40,21 @@ const shouldSkipInstallWorker = () => {
   }
 
   return isPreviewHost;
+};
+
+const isInIframe = () => {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+};
+
+const isPreviewHost = () => {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host.includes("id-preview--") || host.includes("lovable.app");
 };
 
 const ensureInstallWorker = async () => {
@@ -65,9 +86,26 @@ if (typeof window !== "undefined") {
   });
 }
 
-export function usePwaInstall() {
+export function usePwaInstall(options: UsePwaInstallOptions = {}) {
+  const { appName = "app", installPath = "/app" } = options;
   const [prompt, setPrompt] = useState<BIPEvent | null>(cachedPrompt);
   const [isStandalone, setIsStandalone] = useState(false);
+
+  const runInstallPrompt = useCallback(async (activePrompt: BIPEvent) => {
+    try {
+      await activePrompt.prompt();
+      const choice = await activePrompt.userChoice;
+      if (choice.outcome === "accepted") {
+        toast.success(`Installing ${appName}…`);
+      }
+      cachedPrompt = null;
+      setPrompt(null);
+      return true;
+    } catch (e: any) {
+      toast.error(`Install failed: ${e?.message || "unknown"}`);
+      return false;
+    }
+  }, [appName]);
 
   useEffect(() => {
     ensureInstallWorker();
@@ -85,26 +123,40 @@ export function usePwaInstall() {
     return () => { listeners.delete(update); };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !prompt || isStandalone) return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("install") !== "1") return;
+
+    const timer = window.setTimeout(async () => {
+      const ok = await runInstallPrompt(prompt);
+      if (ok) {
+        const nextUrl = `${window.location.pathname}${window.location.hash || ""}`;
+        window.history.replaceState({}, "", nextUrl);
+      }
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [prompt, isStandalone, runInstallPrompt]);
+
   const promptInstall = useCallback(async () => {
     if (isStandalone) {
       toast.success("App is already installed");
       return;
     }
     if (prompt) {
-      try {
-        await prompt.prompt();
-        const choice = await prompt.userChoice;
-        if (choice.outcome === "accepted") {
-          toast.success("Installing app…");
-        }
-        cachedPrompt = null;
-        setPrompt(null);
-        return;
-      } catch (e: any) {
-        toast.error(`Install failed: ${e?.message || "unknown"}`);
-        return;
-      }
+      const ok = await runInstallPrompt(prompt);
+      if (ok) return;
     }
+
+    const installUrl = `${SITE_URL}${installPath}?install=1`;
+    if (isInIframe() || isPreviewHost()) {
+      window.open(installUrl, "_blank", "noopener,noreferrer");
+      toast.info(`Opening ${appName} install page in Chrome`);
+      return;
+    }
+
     // Fallback messaging
     const ua = navigator.userAgent || "";
     const isIOS = /iPhone|iPad|iPod/i.test(ua);
