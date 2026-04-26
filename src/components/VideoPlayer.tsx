@@ -862,20 +862,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return list;
   }, [src, qualityOptions]);
 
-  const resolvePlaybackSrc = useCallback((rawUrl: string) => {
-    return getPrimaryPlaybackSrc(rawUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-  }, [cdnEnabled, proxyUrl, proxyApiKey]);
+  const resolvePlaybackSrc = useCallback((rawUrl: string, modeOverride?: ServerMode) => {
+    return getPrimaryPlaybackSrc(
+      rawUrl,
+      cdnEnabled,
+      proxyUrl || undefined,
+      proxyApiKey || undefined,
+      modeOverride ?? activeServerMode,
+    );
+  }, [cdnEnabled, proxyUrl, proxyApiKey, activeServerMode]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     const server = videoServers[serverIndex];
     if (!server?.domain) return rawUrl;
+    const mode = server.mode || inferServerMode(server.domain);
     try {
       const url = new URL(rawUrl);
-      const nextPath = normalizePathForServer(url.pathname, server.domain);
+      const nextPath = normalizePathForServer(url.pathname, server.domain, mode);
       return `${server.domain.replace(/\/$/, "")}${nextPath}${url.search}${url.hash}`;
     } catch {
       const match = rawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
-      const fallbackPath = normalizePathForServer(match ? match[1] : rawUrl, server.domain);
+      const fallbackPath = normalizePathForServer(match ? match[1] : rawUrl, server.domain, mode);
       return `${server.domain.replace(/\/$/, "")}${fallbackPath}`;
     }
   }, [videoServers]);
