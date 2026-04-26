@@ -1038,10 +1038,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const scheduleHideTimer = useCallback(() => {
     clearHideTimer();
     if (adGateActive || showSettings || showAudioPanel || showQualityPanel || showServerPanel || showDownloadQualityPicker) return;
+    // Keep controls visible while a video error is showing — user must reach the server switcher
+    if (videoError) return;
     hideTimer.current = setTimeout(() => {
       setShowControls(false);
     }, locked ? 1400 : 2600);
-  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings]);
+  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings, videoError]);
 
   const resetHideTimer = useCallback(() => {
     setShowControls(true);
