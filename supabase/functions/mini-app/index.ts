@@ -258,6 +258,24 @@ serve(async (req) => {
         source: "telegram-mini-app",
       });
 
+      // Also mirror into freeAccessUsers/{userId} so Admin panel sees Mini App users
+      try {
+        const uSnap = await fbGet(`users/${userId}`);
+        const uName = uSnap?.name || uSnap?.username || `Telegram ${userId}`;
+        const uEmail = uSnap?.email || "";
+        await fbPut(`freeAccessUsers/${userId}`, {
+          userId,
+          name: uName,
+          email: uEmail,
+          unlockedAt: now,
+          expiresAt,
+          prizeHours: hours,
+          prizeMinutes: 0,
+          mode: "miniapp",
+          source: "telegram-mini-app",
+        });
+      } catch (_) {}
+
       await incCounter("miniApp/stats/completes");
       await incCounter(`miniApp/stats/daily/${todayKey}/completes`);
       await fbPut(`miniApp/completions/${userId}/${now}`, {
