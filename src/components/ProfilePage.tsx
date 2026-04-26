@@ -9,6 +9,7 @@ import { TELEGRAM_ADMIN_URL, TELEGRAM_CHANNEL_URL, SITE_NAME } from "@/lib/siteC
 import { useBranding } from "@/hooks/useBranding";
 import AboutPage from "./AboutPage";
 import PrivacyPolicyPage from "./PrivacyPolicyPage";
+import { usePwaInstall } from "@/hooks/usePwaInstall";
 
 const VideoPlayer = lazy(() => import("@/components/VideoPlayer"));
 
@@ -501,10 +502,11 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
     });
     return () => unsub();
   }, []);
+  const { promptInstall: promptUserInstall, isStandalone: userIsInstalled } = usePwaInstall();
   const handleDownloadUserApk = () => {
-    // Route-based install — opens the user panel so Chrome shows the
-    // "Install app / Add to Home screen" prompt for the User Panel manifest.
-    window.location.assign("/?install=1");
+    // Triggers Chrome's native "Add to Home screen / Install app" dialog.
+    // Falls back to instructions on iOS or unsupported browsers.
+    promptUserInstall();
   };
 
   const getUserId = (): string | null => {
