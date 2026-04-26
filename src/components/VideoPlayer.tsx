@@ -261,9 +261,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
+  // Server list declared early so isEmbedPlayback / resolvers can read mode.
+  const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean; mode?: ServerMode }[]>([]);
+  const [activeServerIndex, setActiveServerIndex] = useState(0);
+  const [manualServerSelected, setManualServerSelected] = useState(false);
+  const [showServerPanel, setShowServerPanel] = useState(false);
+  const premiumServerApplied = useRef(false);
+
+  // Active server's playback mode (only when admin actually picked a server).
+  const activeServerMode: ServerMode | undefined = useMemo(() => {
+    if (!manualServerSelected) return undefined; // → fall back to URL heuristic
+    return videoServers[activeServerIndex]?.mode;
+  }, [manualServerSelected, videoServers, activeServerIndex]);
+
   const isEmbedPlayback = useMemo(() => {
-    return shouldUseEmbedPlayback(activeRawSrc);
-  }, [activeRawSrc]);
+    return shouldUseEmbedPlayback(activeRawSrc, activeServerMode);
+  }, [activeRawSrc, activeServerMode]);
 
   const syncUiProgress = useCallback((nextTime: number, nextDuration: number) => {
     // Live DOM updates — smooth, zero React cost
