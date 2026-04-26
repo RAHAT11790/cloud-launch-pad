@@ -2426,24 +2426,73 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     return () => unsub();
   }, [activeSection]);
 
-  // Lazy-load FREE ACCESS USERS data
+  // Lazy-load FREE ACCESS USERS data — merges freeAccessUsers + users/*/freeAccess (Mini App)
   useEffect(() => {
     if (activeSection !== "free-access") return;
-    const unsub = onValue(ref(db, "freeAccessUsers"), (snap) => {
-      const data = snap.val() || {};
+
+    // Instant render from cache
+    try {
+      const cached = sessionStorage.getItem("admin_freeAccessUsers_cache");
+      if (cached) setFreeAccessUsers(JSON.parse(cached));
+    } catch {}
+
+    let faData: Record<string, any> = {};
+    let usersData: Record<string, any> = {};
+    let usersLoaded = false;
+    let faLoaded = false;
+
+    const merge = () => {
+      if (!usersLoaded || !faLoaded) return;
       const now = Date.now();
-      const activeUsers: any[] = [];
-      Object.entries(data).forEach(([id, user]: [string, any]) => {
+      const map: Record<string, any> = {};
+
+      // 1) Direct freeAccessUsers entries (browser unlock + mini-app mirror)
+      Object.entries(faData || {}).forEach(([id, user]: [string, any]) => {
+        if (!user) return;
         if (user.expiresAt > now) {
-          activeUsers.push({ id, ...user });
+          map[id] = { id, ...user };
         } else {
           remove(ref(db, `freeAccessUsers/${id}`)).catch(() => {});
         }
       });
-      activeUsers.sort((a, b) => b.unlockedAt - a.unlockedAt);
-      setFreeAccessUsers(activeUsers);
+
+      // 2) Backfill from users/*/freeAccess (covers older Mini App users)
+      Object.entries(usersData || {}).forEach(([uid, u]: [string, any]) => {
+        const fa = u?.freeAccess;
+        if (!fa || !fa.active || !fa.expiresAt || fa.expiresAt <= now) return;
+        if (map[uid]) return;
+        const isMini = fa.viaToken === "mini-app" || fa.viaToken === "mini-app-fallback" || (typeof fa.source === "string" && fa.source.includes("telegram"));
+        map[uid] = {
+          id: uid,
+          userId: uid,
+          name: u.name || u.username || (isMini ? `Telegram ${uid}` : "Unknown"),
+          email: u.email || "",
+          unlockedAt: fa.grantedAt || now,
+          expiresAt: fa.expiresAt,
+          prizeHours: Math.max(0, Math.floor((fa.expiresAt - (fa.grantedAt || now)) / 3600000)),
+          prizeMinutes: 0,
+          mode: isMini ? "miniapp" : "normal",
+          source: fa.source || fa.viaToken || "",
+        };
+      });
+
+      const list = Object.values(map).sort((a: any, b: any) => b.unlockedAt - a.unlockedAt);
+      setFreeAccessUsers(list);
+      try { sessionStorage.setItem("admin_freeAccessUsers_cache", JSON.stringify(list)); } catch {}
+    };
+
+    const unsub1 = onValue(ref(db, "freeAccessUsers"), (snap) => {
+      faData = snap.val() || {};
+      faLoaded = true;
+      merge();
     });
-    return () => unsub();
+    const unsub2 = onValue(ref(db, "users"), (snap) => {
+      usersData = snap.val() || {};
+      usersLoaded = true;
+      merge();
+    });
+
+    return () => { unsub1(); unsub2(); };
   }, [activeSection]);
 
   // Lazy-load PRIZE POOL data
@@ -2465,22 +2514,38 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [bkashSmsFeed, setBkashSmsFeed] = useState<any[]>([]);
   useEffect(() => {
     if (activeSection !== "bkash-payments" && activeSection !== "dashboard") return;
+
+    // Instant render from sessionStorage cache (avoids 'loading forever' feel)
+    try {
+      const cs = sessionStorage.getItem("admin_bkashSettings_cache");
+      if (cs) { setBkashSettings(JSON.parse(cs)); setBkashSettingsLoaded(true); }
+      const cp = sessionStorage.getItem("admin_bkashPayments_cache");
+      if (cp) setBkashPaymentRequests(JSON.parse(cp));
+      const cf = sessionStorage.getItem("admin_bkashSmsFeed_cache");
+      if (cf) setBkashSmsFeed(JSON.parse(cf));
+    } catch {}
+
     const unsubs: (() => void)[] = [];
     unsubs.push(onValue(ref(db, "bkashSettings"), (snap) => {
       const data = snap.val();
       if (data) {
         setBkashSettings(data);
+        try { sessionStorage.setItem("admin_bkashSettings_cache", JSON.stringify(data)); } catch {}
       }
       setBkashSettingsLoaded(true);
     }));
     unsubs.push(onValue(ref(db, "bkashPayments"), (snap) => {
       const data = snap.val() || {};
-      setBkashPaymentRequests(Object.entries(data).map(([id, item]: any) => ({ id, ...item })).sort((a: any, b: any) => (b.submittedAt || 0) - (a.submittedAt || 0)));
+      const list = Object.entries(data).map(([id, item]: any) => ({ id, ...item })).sort((a: any, b: any) => (b.submittedAt || 0) - (a.submittedAt || 0));
+      setBkashPaymentRequests(list);
+      try { sessionStorage.setItem("admin_bkashPayments_cache", JSON.stringify(list.slice(0, 200))); } catch {}
     }));
     unsubs.push(onValue(ref(db, "XNXANIKPAY"), (snap) => {
       const data = snap.val() || {};
-      setBkashSmsFeed(Object.entries(data).map(([txid, item]: any) => ({ txid, ...item }))
-        .sort((a: any, b: any) => (b.receivedAt || b.consumedAt || 0) - (a.receivedAt || a.consumedAt || 0)));
+      const list = Object.entries(data).map(([txid, item]: any) => ({ txid, ...item }))
+        .sort((a: any, b: any) => (b.receivedAt || b.consumedAt || 0) - (a.receivedAt || a.consumedAt || 0));
+      setBkashSmsFeed(list);
+      try { sessionStorage.setItem("admin_bkashSmsFeed_cache", JSON.stringify(list.slice(0, 100))); } catch {}
     }));
     // 🔁 Start GLOBAL auto-matcher while admin panel is open on bkash section
     let stopMatcher: (() => void) | null = null;
