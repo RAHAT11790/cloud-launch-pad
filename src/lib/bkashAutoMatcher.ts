@@ -178,16 +178,7 @@ export async function autoApprovePayment(
     });
   } catch {}
 
-  // Push notification (best effort)
-  try {
-    const { sendPushToUsers } = await import("@/lib/fcm");
-    await sendPushToUsers([req.userId, req.userEmail].filter(Boolean) as string[], {
-      title: opts.source === "auto-sms" ? "Payment Auto-Verified ⚡" : "Premium Activated 🎉",
-      body: `${req.planName} (৳${req.planPrice}) — ${req.planDays} days.`,
-      url: "/profile",
-      data: { type: "subscription_activated", planName: req.planName, expiresAt: String(expiresAt) },
-    });
-  } catch {}
+  // FCM push removed — in-app notification (above) is enough
 }
 
 /**

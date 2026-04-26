@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, set, remove, get, update, push, query, orderByChild, equalTo } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
-import { registerFCMToken } from "@/lib/fcm";
+// FCM removed
 import { TELEGRAM_ADMIN_URL, TELEGRAM_CHANNEL_URL, SITE_NAME } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
 import { triggerApkDownload } from "@/lib/apkDownload";
@@ -796,15 +796,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
           }));
         }
 
-        if (adminIds.length > 0 || adminTokens.length > 0) {
-          const { sendPushToTargets } = await import("@/lib/fcm");
-          await sendPushToTargets({ userIds: adminIds, tokens: adminTokens }, {
-            title: isEditingExistingRequest ? "Payment Request Updated" : "New Payment Request",
-            body: `${userName} — ৳${selectedPlan.price} (TrxID: ${trxInput.trim()})`,
-            url: "/admin",
-            data: { type: "payment", userId, transactionId: trxInput.trim(), planName: selectedPlan.name },
-          }).catch(() => {});
-        }
+        // FCM push removed — in-app admin notification (above) is enough
 
         if (inboxTargets.length === 0 && adminIds.length === 0 && adminTokens.length === 0) {
           // Fallback: save to notifications/admin key
@@ -862,14 +854,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
           <span className="font-medium">Settings</span>
         </button>
         <div className="space-y-3">
-          <div onClick={() => setActivePanel("notification-settings")} className="glass-card px-4 py-4 rounded-xl cursor-pointer transition-all hover:border-primary flex items-center gap-3">
-            <Bell className="w-5 h-5 text-primary" />
-            <div className="flex-1">
-              <p className="text-sm font-medium">Notifications</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Manage notification preferences</p>
-            </div>
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
-          </div>
+          {/* Notifications settings entry removed — FCM disabled */}
           <div onClick={() => setActivePanel("quality")} className="glass-card px-4 py-4 rounded-xl cursor-pointer transition-all hover:border-primary flex items-center gap-3">
             <Monitor className="w-5 h-5 text-primary" />
             <div className="flex-1">
@@ -967,28 +952,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
     return <PrivacyPolicyPage onBack={() => setActivePanel("settings")} siteName={brandingCfg.siteName} />;
   }
 
-  // Notification Settings
-  if (activePanel === "notification-settings") {
-    return (
-      <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
-        initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
-        transition={{ type: "tween", duration: 0.3 }}>
-        <button onClick={() => setActivePanel("settings")} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">Notifications</span>
-        </button>
-        <div className="space-y-3">
-          <NotificationToggle label="Push Notifications" desc="Show browser popup notifications" defaultOn={true} storageKey="rs_notif_push" />
-          <NotificationToggle label="New Episode Alerts" desc="Get notified for new episodes" defaultOn={true} storageKey="rs_notif_episodes" />
-          <NotificationToggle label="Recommendations" desc="Personalized anime suggestions" defaultOn={true} storageKey="rs_notif_recs" />
-          <NotificationToggle label="App Updates" desc="New features and improvements" defaultOn={false} storageKey="rs_notif_updates" />
-        </div>
-
-        {/* Push Debug Info */}
-        <PushDebugInfo />
-      </motion.div>
-    );
-  }
+  // Notification Settings panel removed — FCM disabled site-wide
 
   // Premium Panel
   if (activePanel === "premium") {
