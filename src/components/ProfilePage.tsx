@@ -491,37 +491,20 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
   const [deviceExceeded, setDeviceExceeded] = useState(false);
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
 
-  // User APK download URL — set by admin in APK DW (settings/branding/userApkUrl)
-  // Visibility is gated by settings/apk/userEnabled (default true)
-  const [userApkUrl, setUserApkUrl] = useState<string>("");
+  // User-side install button visibility — controlled by admin via APK DW.
+  // Path: settings/apk/userEnabled (default true).
   const [userApkEnabled, setUserApkEnabled] = useState<boolean>(true);
-  const [userApkVersion, setUserApkVersion] = useState<string>("");
   useEffect(() => {
-    const unsubs = [
-      onValue(ref(db, "settings/branding/userApkUrl"), (snap) => {
-        setUserApkUrl(String(snap.val() || "").trim());
-      }),
-      onValue(ref(db, "settings/apk/userEnabled"), (snap) => {
-        const v = snap.val();
-        setUserApkEnabled(v === undefined || v === null ? true : !!v);
-      }),
-      onValue(ref(db, "settings/apk/userVersion"), (snap) => {
-        setUserApkVersion(String(snap.val() || "").trim());
-      }),
-    ];
-    return () => { unsubs.forEach((u) => u()); };
+    const unsub = onValue(ref(db, "settings/apk/userEnabled"), (snap) => {
+      const v = snap.val();
+      setUserApkEnabled(v === undefined || v === null ? true : !!v);
+    });
+    return () => unsub();
   }, []);
   const handleDownloadUserApk = () => {
-    if (!userApkUrl) return;
-    // Force download via anchor with download attribute (works in Chrome external browser)
-    const a = document.createElement("a");
-    a.href = userApkUrl;
-    a.download = "";
-    a.rel = "noopener noreferrer";
-    a.target = "_blank";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    // Route-based install — opens the user panel so Chrome shows the
+    // "Install app / Add to Home screen" prompt for the User Panel manifest.
+    window.location.assign("/?install=1");
   };
 
   const getUserId = (): string | null => {
@@ -1608,9 +1591,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
         </a>
         <p className="text-[10px] text-muted-foreground text-center mt-1 mb-2">Get all updates, news & details about {brandingCfg.siteName}</p>
 
-        {/* Download APK — User panel (separate from admin APK).
-            Hidden if URL not set OR admin disabled it via APK DW > User Panel Visibility. */}
-        {userApkUrl && userApkEnabled ? (
+        {/* Download APK — User panel install button.
+            Hidden if admin disabled it via APK DW > User Panel Download Button. */}
+        {userApkEnabled ? (
           <>
             <button
               onClick={handleDownloadUserApk}
@@ -1618,7 +1601,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
               style={{ background: 'linear-gradient(135deg, #16a34a, #22c55e)', color: '#fff' }}
             >
               <Download className="w-4 h-4" />
-              Download App (APK){userApkVersion ? ` • ${userApkVersion}` : ""}
+              Download App
             </button>
             <p className="text-[10px] text-muted-foreground text-center mt-1 mb-3">
               Install {brandingCfg.siteName} as an app on your phone
