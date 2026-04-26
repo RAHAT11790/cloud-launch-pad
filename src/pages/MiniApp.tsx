@@ -664,6 +664,41 @@ export default function MiniApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [views, mode, userId, granted]);
 
+  useEffect(() => {
+    if (!adCountdownActive) return;
+    adStartAtRef.current = Date.now();
+    setAdContinueReady(false);
+
+    const timer = window.setTimeout(() => {
+      setAdContinueReady(true);
+    }, 10000);
+
+    return () => window.clearTimeout(timer);
+  }, [adCountdownActive]);
+
+  useEffect(() => {
+    if (!adCountdownActive) return;
+
+    const failActiveAd = () => {
+      const elapsed = Date.now() - adStartAtRef.current;
+      if (elapsed < 10000 || !adContinueReady) {
+        setAdCountdownActive(false);
+        setAdContinueReady(false);
+        setAdRunning(false);
+        setError(t.notCounted);
+        setInfo("");
+      }
+    };
+
+    window.addEventListener("pagehide", failActiveAd);
+    document.addEventListener("visibilitychange", failActiveAd);
+
+    return () => {
+      window.removeEventListener("pagehide", failActiveAd);
+      document.removeEventListener("visibilitychange", failActiveAd);
+    };
+  }, [adContinueReady, adCountdownActive, t.notCounted]);
+
   const handleWatchAd = async () => {
     if (adRunning) return;
     if (!adType) return;
@@ -677,6 +712,8 @@ export default function MiniApp() {
     }
 
     setAdRunning(true);
+    setAdCountdownActive(true);
+    setAdContinueReady(false);
 
     // Step 1: ensure SDK is loaded. This is the only hard requirement.
     let ready = sdkReady;
@@ -687,6 +724,7 @@ export default function MiniApp() {
 
     if (!ready) {
       setAdRunning(false);
+      setAdCountdownActive(false);
       setRewardReady(false);
       setError(t.adUnavailable);
       return;
@@ -697,6 +735,7 @@ export default function MiniApp() {
 
     if (typeof showFn !== "function") {
       setAdRunning(false);
+      setAdCountdownActive(false);
       setRewardReady(false);
       setError(t.adUnavailable);
       return;
@@ -712,11 +751,17 @@ export default function MiniApp() {
         buildMonetagTrackingId(userId, views + 1);
       await showFn({ ymid: trackingId, requestVar: MONETAG_REQUEST_VAR });
       preloadedTrackingIdRef.current = "";
-      setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
-      setRewardReady(false);
-      setInfo(t.counted);
-      // Preload the next one in the background (non-blocking)
-      preloadRewardedAd().catch(() => {});
+
+      if (!adContinueReady || Date.now() - adStartAtRef.current < 10000) {
+        setError(t.notCounted);
+        setInfo("");
+      } else {
+        setViews((v) => Math.min(REQUIRED_VIEWS, v + 1));
+        setRewardReady(false);
+        setInfo(t.counted);
+        // Preload the next one in the background (non-blocking)
+        preloadRewardedAd().catch(() => {});
+      }
     } catch (e) {
       preloadedTrackingIdRef.current = "";
       setRewardReady(false);
@@ -724,6 +769,8 @@ export default function MiniApp() {
       setError(t.adUnavailable);
       preloadRewardedAd().catch(() => {});
     } finally {
+      setAdCountdownActive(false);
+      setAdContinueReady(false);
       setAdRunning(false);
     }
   };
