@@ -101,8 +101,8 @@ const shouldUseEmbedPlayback = (url: string): boolean => {
   if (!url) return false;
   try {
     const { hostname, pathname } = new URL(url);
-    return (/^|\./.test(".") && (/(:?^|\.)hf\.space$/i.test(hostname) || /huggingface/i.test(hostname)))
-      && /^\/watch(?:\/|$)/i.test(pathname);
+    const isHfHost = /(^|\.)hf\.space$/i.test(hostname) || /huggingface/i.test(hostname);
+    return isHfHost && /^\/watch(?:\/|$)/i.test(pathname);
   } catch {
     return false;
   }
