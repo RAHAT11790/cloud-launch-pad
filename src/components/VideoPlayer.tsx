@@ -1644,28 +1644,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               the embed via postMessage (see useEffect above). */}
           {isEmbedPlayback ? (
             (() => {
-              // Build BOTH the watch URL (path with /watch/ prefix for the
-              // upstream) AND the req.html host. We use the SAME hf.space
-              // origin as the video so cross-origin iframe→video requests
-              // never trip CORS. Falls back to our self-hosted /req.html
-              // only if the URL parsing fails.
-              let watchSrc = currentSrc;
-              let embedHost = "";
-              try {
-                const u = new URL(currentSrc);
-                if (!/^\/watch\//i.test(u.pathname)) {
-                  u.pathname = "/watch" + u.pathname;
-                }
-                watchSrc = u.toString();
-                embedHost = `${u.protocol}//${u.host}`;
-              } catch {}
-              const iframeSrc = embedHost
-                ? `${embedHost}/req.html?src=${encodeURIComponent(watchSrc)}`
-                : `/req.html?src=${encodeURIComponent(watchSrc)}`;
+              // currentSrc is already the fully-built watch URL produced by
+              // applyServerDomain() — e.g.
+              //   https://xxx.hf.space/watch/http://fi3.bot-hosting.net/.../file.mkv
+              // We load it directly as the iframe src. The hf.space backend
+              // serves the player page (or proxies the video) at that path.
               return (
                 <iframe
                   ref={embedIframeRef}
-                  src={iframeSrc}
+                  src={currentSrc}
                   className="absolute inset-0 w-full h-full bg-black border-0 block"
                   allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                   allowFullScreen
