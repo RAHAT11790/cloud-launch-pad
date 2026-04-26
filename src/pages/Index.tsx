@@ -1866,7 +1866,7 @@ const Index = () => {
           {continueWatching.length > 0 && (
             <div className="px-4 mb-5">
               <h3 className="text-base font-bold mb-3 flex items-center category-bar">Continue Watching</h3>
-              <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
+              <div data-no-swipe="true" className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide" style={{ touchAction: "pan-x pan-y" }}>
                 {continueWatching.slice(0, 10).map((item: any) => (
                   <div key={item.id} onClick={() => handleContinueWatching(item)}
                     className="flex-shrink-0 w-[130px] cursor-pointer">
