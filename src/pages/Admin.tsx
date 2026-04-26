@@ -5638,7 +5638,7 @@ ${tgHashtags}`;
                     <p className="text-sm font-semibold">{user.name || "Anonymous"}</p>
                     <p className="text-[11px] text-[#D1C4E9] truncate">{user.email || user.id.substring(0, 20)}...</p>
                   </div>
-                  {!user.email && (
+                  {guestUidSet.has(String(user.id)) && (
                     <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-bold">GUEST</span>
                   )}
                   <div className={`w-2.5 h-2.5 rounded-full ${user.online ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
