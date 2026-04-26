@@ -97,35 +97,6 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
 };
 
-const normalizePathForServer = (pathname: string, targetDomain: string): string => {
-  const cleanDomain = targetDomain.toLowerCase();
-  const isRs01EmbedServer = /(^|\.)hf\.space$/i.test(cleanDomain) || /huggingface/i.test(cleanDomain);
-  const hasWatchPrefix = /^\/watch(?:\/|$)/i.test(pathname);
-
-  if (isRs01EmbedServer) {
-    if (hasWatchPrefix) return pathname;
-    return `/watch${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
-  }
-
-  if (hasWatchPrefix) {
-    const stripped = pathname.replace(/^\/watch(?=\/|$)/i, "");
-    return stripped.startsWith("/") ? stripped : `/${stripped}`;
-  }
-
-  return pathname;
-};
-
-const shouldUseEmbedPlayback = (url: string): boolean => {
-  if (!url) return false;
-  try {
-    const { hostname, pathname } = new URL(url);
-    const isHfHost = /(^|\.)hf\.space$/i.test(hostname) || /huggingface/i.test(hostname);
-    return isHfHost && /^\/watch(?:\/|$)/i.test(pathname);
-  } catch {
-    return false;
-  }
-};
-
 interface AudioTrackOption {
   language: string;
   label: string;
@@ -206,7 +177,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
-  const [activeRawSrc, setActiveRawSrc] = useState(src); // active source before proxy/CDN transforms
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
   const sourceBaseRef = useRef(src);
   const [isServerSwitching, setIsServerSwitching] = useState(false);
@@ -214,8 +184,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
   const isEmbedPlayback = useMemo(() => {
-    return shouldUseEmbedPlayback(activeRawSrc);
-  }, [activeRawSrc]);
+    return !!currentSrc && /hf\.space|huggingface/i.test(currentSrc);
+  }, [currentSrc]);
 
   const syncUiProgress = useCallback((nextTime: number, nextDuration: number) => {
     setCurrentTime(nextTime);
@@ -237,22 +207,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const getEmbedWatchSrc = useCallback((rawUrl: string) => {
     try {
       const u = new URL(rawUrl);
-      if (/hf\.space|huggingface/i.test(u.hostname) && /^\/watch(?:\/|$)/i.test(u.pathname)) {
-        const nextPath = u.pathname.replace(/^\/watch(?=\/|$)/i, "") || "/";
-        u.pathname = nextPath.startsWith("/") ? nextPath : `/${nextPath}`;
+      if (!/^\/watch\//i.test(u.pathname)) {
+        u.pathname = `/watch${u.pathname.startsWith("/") ? "" : "/"}${u.pathname}`;
       }
       return u.toString();
     } catch {
-      return rawUrl.replace(/(https?:\/\/[^/]+)\/watch(?=\/|$)/i, "$1");
+      return rawUrl;
     }
   }, []);
 
   const getEmbedReqSrc = useCallback((rawUrl: string) => {
     const watchSrc = getEmbedWatchSrc(rawUrl);
-    if (typeof window !== "undefined" && window.location?.origin) {
-      return `${window.location.origin}/req.html?src=${encodeURIComponent(watchSrc)}`;
+    try {
+      const u = new URL(watchSrc);
+      return `${u.origin}/req.html?src=${encodeURIComponent(watchSrc)}`;
+    } catch {
+      return `https://rahat1102-video-hosting-bot.hf.space/req.html?src=${encodeURIComponent(watchSrc)}`;
     }
-    return `/req.html?src=${encodeURIComponent(watchSrc)}`;
   }, [getEmbedWatchSrc]);
 
   // ===== SERVER CHANGER =====
@@ -370,17 +341,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, [boostedVolume, currentSrc, muted, onNextEpisode, playbackRate, sendEmbedCmd, syncUiProgress]);
-
-  useEffect(() => {
-    return () => {
-      if (embedIframeRef.current?.contentWindow) {
-        try {
-          embedIframeRef.current.contentWindow.postMessage({ target: "rs-embed", cmd: "pause" }, "*");
-          embedIframeRef.current.contentWindow.postMessage({ target: "rs-embed", cmd: "load", src: "" }, "*");
-        } catch {}
-      }
-    };
-  }, [currentSrc, isEmbedPlayback]);
 
   
   // Load CDN + proxy settings from Firebase (skip if noProxy)
@@ -802,12 +762,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!server?.domain) return rawUrl;
     try {
       const url = new URL(rawUrl);
-      const nextPath = normalizePathForServer(url.pathname, server.domain);
-      return `${server.domain.replace(/\/$/, "")}${nextPath}${url.search}${url.hash}`;
+      return `${server.domain.replace(/\/$/, "")}${url.pathname}${url.search}${url.hash}`;
     } catch {
       const match = rawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
-      const fallbackPath = normalizePathForServer(match ? match[1] : rawUrl, server.domain);
-      return `${server.domain.replace(/\/$/, "")}${fallbackPath}`;
+      return `${server.domain.replace(/\/$/, "")}${match ? match[1] : rawUrl}`;
     }
   }, [videoServers]);
 
@@ -839,6 +797,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
     if (videoServers[serverIndex].locked && !isPremium) return;
+    if (serverSwitchingRef.current) return;
 
     const v = videoRef.current;
     const savedTime = isEmbedPlayback
@@ -858,17 +817,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
-    setActiveRawSrc(newRawSrc);
     pendingSeek.current = savedTime;
-    embedTimeRef.current = {
-      currentTime: savedTime,
-      duration: embedTimeRef.current.duration || duration || 0,
-    };
     setCurrentSrc(resolved);
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
     }, 160);
-  }, [activeServerIndex, applyServerDomain, currentTime, duration, isEmbedPlayback, isPremium, resolvePlaybackSrc, videoServers]);
+  }, [activeServerIndex, applyServerDomain, currentTime, isEmbedPlayback, isPremium, resolvePlaybackSrc, videoServers]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
@@ -941,7 +895,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       const finalAudioUrl = manualServerSelected ? applyServerDomain(audioUrl, activeServerIndex) : audioUrl;
       const proxiedSrc = resolvePlaybackSrc(finalAudioUrl);
       activeSourceBaseRef.current = finalAudioUrl;
-      setActiveRawSrc(finalAudioUrl);
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
     // Restore playback position after source change
@@ -973,7 +926,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     sourceBaseRef.current = defaultRawSrc;
     activeSourceBaseRef.current = defaultRawSrc;
-    setActiveRawSrc(defaultRawSrc);
     setCurrentAudioTrack("Default");
     setShowAudioPanel(false);
 
@@ -991,7 +943,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
       v.addEventListener("loadedmetadata", restoreTime);
       activeSourceBaseRef.current = finalDefaultSrc;
-      setActiveRawSrc(finalDefaultSrc);
       setCurrentSrc(finalResolvedSrc);
     }
 
@@ -1001,19 +952,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!playbackRouteReady) return;
     sourceBaseRef.current = src;
     activeSourceBaseRef.current = src;
-    setActiveRawSrc(src);
     const resolvedSrc = resolvePlaybackSrc(src);
-    pendingSeek.current = null;
-    embedTimeRef.current = { currentTime: 0, duration: 0 };
     setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
     setManualServerSelected(false);
-    setPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
-    setIsBuffering(true);
-    setShowFixedLoader(true);
-    setIsServerSwitching(false);
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
@@ -1586,14 +1528,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setShowSettings(false);
   }, [isEmbedPlayback, sendEmbedCmd]);
 
-  useEffect(() => {
-    if (!isEmbedPlayback) return;
-    const nextFit = isFullscreen && cropModes[cropIndex] === "contain"
-      ? "cover"
-      : cropModes[cropIndex];
-    sendEmbedCmd("fit", { fit: nextFit });
-  }, [cropIndex, isEmbedPlayback, isFullscreen, sendEmbedCmd]);
-
   const switchQuality = useCallback((option: QualityOption) => {
     // Block 4K for non-premium users
     if (is4KLabel(option.label) && !isPremium) return;
@@ -1602,7 +1536,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     sourceBaseRef.current = option.src;
     const finalOptionSrc = manualServerSelected ? applyServerDomain(option.src, activeServerIndex) : option.src;
     activeSourceBaseRef.current = finalOptionSrc;
-    setActiveRawSrc(finalOptionSrc);
     const newSrc = resolvePlaybackSrc(finalOptionSrc);
 
     if (newSrc === currentSrc) {
@@ -1611,15 +1544,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
     const v = videoRef.current;
-    pendingSeek.current = isEmbedPlayback
-      ? (embedTimeRef.current.currentTime || currentTime || 0)
-      : (v?.currentTime || 0);
+    pendingSeek.current = v?.currentTime || 0;
     setIsBuffering(true);
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);
     setShowSettings(false);
 
-  }, [currentQuality, currentSrc, currentTime, isEmbedPlayback, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
+  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -1806,8 +1737,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           {isEmbedPlayback ? (
             <iframe
               ref={embedIframeRef}
-              key={activeRawSrc}
-              src={getEmbedReqSrc(activeRawSrc)}
+              key={currentSrc}
+              src={getEmbedReqSrc(currentSrc)}
               className="w-full h-full bg-black border-0"
               style={{ pointerEvents: "none" }}
               allow="autoplay; fullscreen; encrypted-media"
@@ -1846,7 +1777,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 setIsBuffering(true);
                 setShowFixedLoader(true);
                 if (isEmbedPlayback) {
-                  sendEmbedCmd("load", { src: getEmbedWatchSrc(activeRawSrc) });
+                  sendEmbedCmd("load", { src: getEmbedWatchSrc(currentSrc) });
                   sendEmbedCmd("play");
                 } else {
                   const v = videoRef.current;
@@ -1954,7 +1885,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             setShowServerPanel(false);
                             setManualServerSelected(false);
                             activeSourceBaseRef.current = sourceBaseRef.current;
-                            setActiveRawSrc(sourceBaseRef.current);
                             setCurrentSrc(resolvePlaybackSrc(sourceBaseRef.current));
                           }}
                             className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
@@ -2600,19 +2530,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             {/* Horizontal episode scroll */}
             <div className="grid grid-cols-5 gap-2 pb-2">
               {episodeList.map((ep) => (
-              <button
-                key={ep.number}
-                onClick={() => {
-                  if (ep.active) return;
-                  setVideoError(false);
-                  setIsBuffering(true);
-                  setShowFixedLoader(true);
-                  setIsServerSwitching(true);
-                  setPlaying(false);
-                  pendingSeek.current = null;
-                  embedTimeRef.current = { currentTime: 0, duration: 0 };
-                  ep.onClick();
-                }}
+                <button
+                  key={ep.number}
+                  onClick={ep.onClick}
                   className={`w-full h-12 rounded-xl flex items-center justify-center transition-all border text-center ${
                     ep.active
                       ? "gradient-primary border-primary/40 text-primary-foreground shadow-[0_0_12px_hsla(170,75%,45%,0.3)]"
