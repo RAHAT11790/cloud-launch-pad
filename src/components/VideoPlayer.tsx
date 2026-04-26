@@ -100,8 +100,9 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
 const shouldUseEmbedPlayback = (url: string): boolean => {
   if (!url) return false;
   try {
-    const { hostname } = new URL(url);
-    return /(^|\.)hf\.space$/i.test(hostname) || /huggingface/i.test(hostname);
+    const { hostname, pathname } = new URL(url);
+    return (/^|\./.test(".") && (/(:?^|\.)hf\.space$/i.test(hostname) || /huggingface/i.test(hostname)))
+      && /^\/watch(?:\/|$)/i.test(pathname);
   } catch {
     return false;
   }
