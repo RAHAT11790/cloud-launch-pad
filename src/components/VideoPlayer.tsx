@@ -498,14 +498,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         const botUsername = String(botSnap.val() || "RS_ANIME_ACCESS_BOT").replace(/^@/, "").trim();
         const uid = getLocalUserId();
         if (botUsername && uid) {
-          // Detect entry source: PWA (installed app) vs regular Chrome browser.
-          // Telegram start_param only allows [A-Za-z0-9_-], so we encode as: u_<uid>_src_<app|web>
+          // Detect entry source: installed app vs regular Chrome browser.
+          // We also preserve which panel launched the flow so return routing stays exact.
           const isStandaloneApp =
             window.matchMedia?.("(display-mode: standalone)")?.matches
             || (window.navigator as any).standalone === true;
           const sourceTag = isStandaloneApp ? "app" : "web";
+          const panelTag = window.location.pathname.startsWith("/admin") ? "admin" : "user";
           const safeUid = String(uid).replace(/[^A-Za-z0-9_-]/g, "");
-          window.location.href = `https://t.me/${botUsername}?startapp=u_${safeUid}_src_${sourceTag}`;
+          window.location.href = `https://t.me/${botUsername}?startapp=u_${safeUid}_src_${sourceTag}_panel_${panelTag}`;
           return;
         }
       }

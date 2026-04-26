@@ -15,6 +15,7 @@ import {
   Clock,
 } from "lucide-react";
 import logoImg from "@/assets/logo.png";
+import { openExternalBrowser } from "@/lib/openExternal";
 
 // Monetag SDK zone id
 const MONETAG_ZONE = "10925319";
@@ -339,10 +340,12 @@ export default function MiniApp() {
   const externalPhoto = params.get("p") || params.get("photo") || "";
   const shortId = params.get("s") || "";
 
-  // Parse start_param from website. Format: u_<uid>            (legacy)
-  //                                       u_<uid>_src_app     (came from installed PWA)
-  //                                       u_<uid>_src_web     (came from Chrome browser)
-  const { websiteStartUserId, websiteSource } = useMemo(() => {
+  // Parse start_param from website. Format: u_<uid>                     (legacy)
+  //                                       u_<uid>_src_app              (installed app)
+  //                                       u_<uid>_src_web              (Chrome browser)
+  //                                       u_<uid>_src_app_panel_admin  (admin panel app)
+  //                                       u_<uid>_src_web_panel_user   (user panel browser)
+  const { websiteStartUserId, websiteSource, websitePanel } = useMemo(() => {
     const candidates = [
       params.get("tgWebAppStartParam") || "",
       params.get("startapp") || "",
@@ -356,13 +359,36 @@ export default function MiniApp() {
       if (!value.startsWith("u_")) continue;
       const body = decodeURIComponent(value.slice(2)).trim();
       if (!body) continue;
-      // Try to split optional "_src_app" / "_src_web" suffix
+      const withPanel = body.match(/^(.+?)_src_(app|web)_panel_(admin|user)$/);
+      if (withPanel) {
+        return {
+          websiteStartUserId: withPanel[1],
+          websiteSource: withPanel[2] as "app" | "web",
+          websitePanel: withPanel[3] as "admin" | "user",
+        };
+      }
+
       const m = body.match(/^(.+?)_src_(app|web)$/);
-      if (m) return { websiteStartUserId: m[1], websiteSource: m[2] as "app" | "web" };
-      return { websiteStartUserId: body, websiteSource: "" as "" };
+      if (m) {
+        return {
+          websiteStartUserId: m[1],
+          websiteSource: m[2] as "app" | "web",
+          websitePanel: "user" as "admin" | "user",
+        };
+      }
+
+      return {
+        websiteStartUserId: body,
+        websiteSource: "" as "",
+        websitePanel: "user" as "admin" | "user",
+      };
     }
 
-    return { websiteStartUserId: "", websiteSource: "" as "" };
+    return {
+      websiteStartUserId: "",
+      websiteSource: "" as "",
+      websitePanel: "user" as "admin" | "user",
+    };
   }, [params]);
 
   // Resolve user identity. We track Telegram users separately from website users.
@@ -735,24 +761,6 @@ export default function MiniApp() {
           }, ms);
         };
 
-        // Helper: open URL in external browser (out of Telegram WebView).
-        // Used for "web" source — sends user back to Chrome/Safari.
-        const openExternal = (url: string) => {
-          try {
-            const tg = window.Telegram?.WebApp;
-            if (tg?.openLink) {
-              tg.openLink(url, { try_instant_view: false });
-              return;
-            }
-          } catch {}
-          window.location.href = url;
-        };
-
-        // Helper: open URL targeting the installed PWA / standalone app.
-        // On Android, when the website is installed as a PWA, navigating to its
-        // URL via Telegram's openLink causes the OS to route into the installed
-        // app (Chrome respects the manifest's scope). We additionally attempt
-        // an `intent://` deep link with the site's package as a fallback.
         const openInApp = (url: string) => {
           try {
             const tg = window.Telegram?.WebApp;
@@ -767,27 +775,28 @@ export default function MiniApp() {
         if (mode === "short" && data.dest) {
           setShortDest(data.dest);
           setInfo(t.redirecting);
-          setTimeout(() => openExternal(data.dest), 1200);
+          setTimeout(() => openExternalBrowser(data.dest), 1200);
           closeAfter(1800);
         } else if (mode === "api") {
           const redirectTo = data.redirectUrl || externalRedirect;
           if (redirectTo) {
             setInfo(t.redirecting);
-            setTimeout(() => openExternal(redirectTo), 1200);
+            setTimeout(() => openExternalBrowser(redirectTo), 1200);
             closeAfter(1800);
           }
         } else if (mode === "site") {
           // Build unlock URL (token from backend, fallback to userId-only)
           const origin = SITE_ORIGIN;
+          const returnPath = websitePanel === "admin" ? "/admin" : "/";
           const unlockUrl = data.fallbackToken
-            ? `${origin}/unlock?mini=${encodeURIComponent(data.fallbackToken)}`
-            : `${origin}/?unlocked=1&u=${encodeURIComponent(userId)}`;
+            ? `${origin}/unlock?mini=${encodeURIComponent(data.fallbackToken)}&return=${encodeURIComponent(returnPath)}`
+            : `${origin}${returnPath}?unlocked=1&u=${encodeURIComponent(userId)}`;
           setFallbackUrl(unlockUrl);
 
           if (cameFromWebsite) {
             // Source-aware return: PWA users → installed app, browser users → Chrome
             setInfo(t.closingApp);
-            const sendBack = websiteSource === "app" ? openInApp : openExternal;
+            const sendBack = websiteSource === "app" ? openInApp : openExternalBrowser;
             setTimeout(() => sendBack(unlockUrl), 1200);
             closeAfter(2000);
           }
@@ -956,7 +965,7 @@ export default function MiniApp() {
                       const tg = window.Telegram?.WebApp;
                       if (tg?.openLink) { tg.openLink(fallbackUrl, { try_instant_view: false }); return; }
                     } catch {}
-                    window.open(fallbackUrl, "_blank");
+                    openExternalBrowser(fallbackUrl);
                   }}
                   className="w-full py-2.5 mb-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-400 text-black font-bold text-xs flex items-center justify-center gap-1.5"
                 >
