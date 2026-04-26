@@ -82,8 +82,11 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action || "");
 
+    const todayKey = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+
     if (action === "visit") {
       await incCounter("miniApp/stats/visits");
+      await incCounter(`miniApp/stats/daily/${todayKey}/visits`);
       const src = String(body?.source || "default");
       await incCounter(`miniApp/stats/visitsBySource/${src}`);
       return json({ ok: true });
