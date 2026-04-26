@@ -5549,6 +5549,46 @@ ${tgHashtags}`;
                 </div>
               </div>
             </div>
+            <div className={`${glassCard} p-4 mb-4`}>
+              <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                <Trash2 size={14} className="text-red-400" /> Delete All Guest Users
+              </h3>
+              <p className="text-[11px] text-[#957DAD] mb-3">
+                Removes every account without an email (guest / anonymous). Those users will be force-logged out the next time they open the app and must sign up again with email or Google.
+              </p>
+              {(() => {
+                const guestList = usersData.filter(u => !u?.email || String(u.email).trim() === "");
+                return (
+                  <>
+                    <div className="text-xs text-[#D1C4E9] mb-3">
+                      Guest accounts found: <span className="text-red-400 font-bold">{guestList.length}</span>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (guestList.length === 0) { toast.info("No guest users to delete"); return; }
+                        if (!window.confirm(`Delete ${guestList.length} guest user(s)? They will be auto-logged out.`)) return;
+                        try {
+                          await Promise.all(guestList.map(u =>
+                            update(ref(db), {
+                              [`users/${u.id}`]: null,
+                              [`deletedAccounts/${u.id}`]: { at: Date.now(), reason: "guest-bulk-delete" },
+                            })
+                          ));
+                          toast.success(`✅ Deleted ${guestList.length} guest user(s)`);
+                        } catch (e: any) {
+                          toast.error(`Failed: ${e?.message || "unknown"}`);
+                        }
+                      }}
+                      disabled={guestList.length === 0}
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-red-500 text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <Trash2 size={14} /> Delete All Guest Users ({guestList.length})
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+
             <div className={`${glassCard} p-4`}>
               <h3 className="text-sm font-semibold mb-3.5">All Users</h3>
               {usersData.length === 0 ? (
@@ -5562,6 +5602,9 @@ ${tgHashtags}`;
                     <p className="text-sm font-semibold">{user.name || "Anonymous"}</p>
                     <p className="text-[11px] text-[#D1C4E9] truncate">{user.email || user.id.substring(0, 20)}...</p>
                   </div>
+                  {!user.email && (
+                    <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-bold">GUEST</span>
+                  )}
                   <div className={`w-2.5 h-2.5 rounded-full ${user.online ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
                 </div>
               ))}
