@@ -42,7 +42,7 @@ const STR: Record<Lang, Record<string, string>> = {
     subtitle: "Watch 5 short ads to unlock everything",
     chooseAd: "Choose your ad type",
     rewarded: "Rewarded Ad",
-    rewardedDesc: "Watch the ad, then tap Open in your browser",
+    rewardedDesc: "Watch the ad for 10 seconds, then tap Continue",
     inApp: "In-App Ad",
     inAppDesc: "Quick ads play automatically",
     progress: "Progress",
@@ -78,7 +78,7 @@ const STR: Record<Lang, Record<string, string>> = {
     aboutTitle: "About RS ANIME",
     aboutDesc:
       "Premium anime streaming with HD quality, multi-language audio, and zero buffering on weak networks.",
-    rule1: "Each ad must run for at least 15 seconds",
+    rule1: "Each ad must run for at least 10 seconds",
     rule2: "Closing the ad early will not count",
     rule3: "Complete all 5 ads to unlock 24h access",
     rule4: "Access works automatically on the website",
@@ -91,7 +91,7 @@ const STR: Record<Lang, Record<string, string>> = {
     subtitle: "৫টি ছোট অ্যাড দেখলেই সবকিছু আনলক",
     chooseAd: "অ্যাডের ধরন বেছে নিন",
     rewarded: "Rewarded Ad",
-    rewardedDesc: "অ্যাড দেখার পর Open বাটনে ট্যাপ করে ব্রাউজারে যেতে হবে",
+    rewardedDesc: "অ্যাড ১০ সেকেন্ড দেখার পর Continue বাটনে ট্যাপ করতে হবে",
     inApp: "In-App Ad",
     inAppDesc: "অটোমেটিক ছোট অ্যাড চলবে",
     progress: "অগ্রগতি",
@@ -127,7 +127,7 @@ const STR: Record<Lang, Record<string, string>> = {
     aboutTitle: "RS ANIME সম্পর্কে",
     aboutDesc:
       "HD কোয়ালিটি, মাল্টি-ল্যাঙ্গুয়েজ অডিও এবং দুর্বল নেটওয়ার্কে জিরো-বাফারিং সহ প্রিমিয়াম এনিমে স্ট্রিমিং।",
-    rule1: "প্রতিটি অ্যাড অন্তত ১৫ সেকেন্ড চলতে হবে",
+    rule1: "প্রতিটি অ্যাড অন্তত ১০ সেকেন্ড চলতে হবে",
     rule2: "অ্যাড আগে বন্ধ করলে গণনা হবে না",
     rule3: "৫টি অ্যাড সম্পন্ন করলেই ২৪ ঘণ্টার অ্যাক্সেস",
     rule4: "ওয়েবসাইটে অ্যাক্সেস স্বয়ংক্রিয়ভাবে কাজ করবে",
@@ -322,11 +322,14 @@ export default function MiniApp() {
   const [copyOk, setCopyOk] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
   const [rewardReady, setRewardReady] = useState(false);
+  const [adCountdownActive, setAdCountdownActive] = useState(false);
+  const [adContinueReady, setAdContinueReady] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const preloadedTrackingIdRef = useRef<string>("");
   const autoGrantedRef = useRef(false);
   const preloadAttemptedRef = useRef(false);
+  const adStartAtRef = useRef(0);
 
   // Parse url params
   const params = useMemo(
