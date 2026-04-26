@@ -1771,7 +1771,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               </div>
               <p className="text-base font-semibold text-foreground mb-1">Video Unavailable</p>
               <p className="text-xs text-muted-foreground mb-4 text-center px-6">Server is not responding. Try another episode or quality.</p>
-              <button onClick={(e) => { e.stopPropagation(); setVideoError(false); setIsBuffering(true); const v = videoRef.current; if (v) { v.load(); } }} className="px-4 py-2 rounded-lg gradient-primary text-sm font-semibold btn-glow">
+              <button onClick={(e) => {
+                e.stopPropagation();
+                setVideoError(false);
+                setIsBuffering(true);
+                setShowFixedLoader(true);
+                if (isEmbedPlayback) {
+                  sendEmbedCmd("load", { src: getEmbedWatchSrc(currentSrc) });
+                  sendEmbedCmd("play");
+                } else {
+                  const v = videoRef.current;
+                  if (v) {
+                    v.load();
+                  }
+                }
+              }} className="px-4 py-2 rounded-lg gradient-primary text-sm font-semibold btn-glow">
                 Retry
               </button>
             </div>
