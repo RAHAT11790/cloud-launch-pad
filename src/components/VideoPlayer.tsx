@@ -202,8 +202,44 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => unsub();
   }, []);
 
-  
+  // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
+  // The branded `req.html` page on the embed server posts video events to us
+  // and accepts commands (play/pause/seek/etc). We mirror those events into
+  // a hidden HTMLVideoElement-like surface so the rest of the player UI
+  // (progress bar, time display, server switcher, ad-gate, etc.) keeps
+  // working unchanged.
+  const sendEmbedCmd = useCallback((cmd: string, payload?: Record<string, unknown>) => {
+    const w = embedIframeRef.current?.contentWindow;
+    if (!w) return;
+    try {
+      w.postMessage({ target: "rs-embed", cmd, ...(payload || {}) }, "*");
+    } catch { /* noop */ }
+  }, []);
 
+  useEffect(() => {
+    function onMsg(ev: MessageEvent) {
+      const d = ev.data as { source?: string; type?: string; currentTime?: number; duration?: number } | null;
+      if (!d || d.source !== "rs-embed") return;
+      switch (d.type) {
+        case "ready":
+          // iframe loaded and waiting; nothing to do — src is already in URL
+          break;
+        case "time":
+          embedTimeRef.current = {
+            currentTime: d.currentTime ?? 0,
+            duration: d.duration ?? 0,
+          };
+          break;
+        case "ended":
+          embedTimeRef.current.currentTime = embedTimeRef.current.duration;
+          break;
+      }
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
+  
   // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
     if (noProxy) {
