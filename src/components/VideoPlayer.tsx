@@ -1565,14 +1565,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               );
             })()
           ) : (
-              className="w-full h-full bg-black border-0"
-              style={{ pointerEvents: "none" }}
-              allow="autoplay; fullscreen; encrypted-media"
-              allowFullScreen
-              referrerPolicy="no-referrer"
-              title="player"
-            />
-          ) : (
             <video
               ref={videoRef}
               src={adGateActive ? "" : currentSrc}
