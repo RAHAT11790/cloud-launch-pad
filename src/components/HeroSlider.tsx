@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Play, Info, Star } from "lucide-react";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
-import { motion, AnimatePresence, type PanInfo } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 export interface HeroSlide {
   id: string;
@@ -56,15 +56,6 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     setSlide([idx, dir]);
     resetAutoPlay();
   }, [resetAutoPlay]);
-
-  const handleDragEnd = (_: any, info: PanInfo) => {
-    const { velocity, offset } = info;
-    if (offset.x < -50 || velocity.x < -300) {
-      goTo((current + 1) % slides.length, 1);
-    } else if (offset.x > 50 || velocity.x > 300) {
-      goTo((current - 1 + slides.length) % slides.length, -1);
-    }
-  };
 
   const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     const touch = e.touches[0];
