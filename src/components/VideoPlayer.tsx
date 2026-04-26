@@ -1203,10 +1203,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
         return;
       }
-      retryCount++;
-      console.log(`Video error, retry ${retryCount}/${MAX_RETRIES}...`);
-      // Exponential backoff: 500ms, 1000ms, 1500ms
-      const delay = retryCount * 500;
+      console.log(`Video error, retry ${next}/${MAX_RETRIES}...`);
+      // Exponential backoff: 500ms, 1000ms
+      const delay = next * 500;
       setTimeout(() => {
         if (v) {
           const savedTime = v.currentTime || lastKnownTime;
