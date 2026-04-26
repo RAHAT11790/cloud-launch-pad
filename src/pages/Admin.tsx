@@ -2366,6 +2366,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       setUsersData(Object.entries(data).map(([id, user]: any) => ({ id, ...user })));
     }));
 
+    unsubs.push(onValue(ref(db, "appUsers"), (snap) => {
+      setAppUsersGlobal(snap.val() || {});
+    }));
+
     unsubs.push(onValue(ref(db, "fcmTokens"), (snap) => {
       const data = snap.val() || {};
       let totalTokens = 0;
