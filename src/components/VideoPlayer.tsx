@@ -180,6 +180,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const rafId = useRef<number>(0);
   const progressRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
+  // Throttle React state updates of currentTime/duration to ~1Hz so the
+  // 2700-line player doesn't re-render 60x/sec during playback.
+  // The progress bar + time text update via DOM refs above for smooth visuals.
+  const lastStateSyncRef = useRef(0);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
