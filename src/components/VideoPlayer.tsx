@@ -411,6 +411,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [unlockBlocked, setUnlockBlocked] = useState(false);
 
   useEffect(() => {
+    adGateActiveRef.current = adGateActive;
+  }, [adGateActive]);
+
+  useEffect(() => {
     let unsub: (() => void) | undefined;
     import("@/lib/downloadManager").then(({ downloadManager }) => {
       unsub = downloadManager.subscribe(setActiveDownloads);
@@ -776,15 +780,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
     if (videoServers[serverIndex].locked && !isPremium) return;
     if (serverSwitchingRef.current) return;
-    const v = videoRef.current;
-    if (!v) return;
 
-    const savedTime = v.currentTime || 0;
+    const v = videoRef.current;
+    const savedTime = isEmbedPlayback
+      ? (embedTimeRef.current.currentTime || currentTime || 0)
+      : (v?.currentTime || 0);
     const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
     const resolved = resolvePlaybackSrc(newRawSrc);
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
+    setIsServerSwitching(true);
+    setVideoError(false);
+    setIsBuffering(true);
+    setShowFixedLoader(true);
 
     // Keep last frame visible by NOT clearing src — just swap directly
     setManualServerSelected(true);
@@ -792,8 +801,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
     setCurrentSrc(resolved);
-    serverSwitchingRef.current = false;
-  }, [activeServerIndex, videoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
+    window.setTimeout(() => {
+      serverSwitchingRef.current = false;
+    }, 160);
+  }, [activeServerIndex, applyServerDomain, currentTime, isEmbedPlayback, isPremium, resolvePlaybackSrc, videoServers]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
