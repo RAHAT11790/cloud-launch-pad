@@ -1345,11 +1345,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, []);
 
   const togglePlay = useCallback(() => {
+    if (isEmbedPlayback) {
+      sendEmbedCmd(playing ? "pause" : "play");
+      setPlaying((p) => !p);
+      resetHideTimer();
+      return;
+    }
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) v.play(); else v.pause();
     resetHideTimer();
-  }, [resetHideTimer]);
+  }, [isEmbedPlayback, playing, resetHideTimer, sendEmbedCmd]);
 
   const MAX_VOL = 100;
   const applyPlayerVolume = useCallback((nextBoost: number, nextMuted = muted) => {
@@ -1358,12 +1364,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setBoostedVolume(clampedBoost);
     setMuted(effectiveMuted);
     setVolume(Math.min(1, clampedBoost / 100));
+    if (isEmbedPlayback) {
+      sendEmbedCmd("mute", { muted: effectiveMuted });
+      sendEmbedCmd("volume", { volume: effectiveMuted ? 0 : Math.min(1, clampedBoost / 100) });
+      return;
+    }
     const v = videoRef.current;
     if (v) {
       v.muted = effectiveMuted;
       v.volume = effectiveMuted ? 0 : Math.min(1, clampedBoost / 100);
     }
-  }, [muted]);
+  }, [muted, isEmbedPlayback, sendEmbedCmd]);
 
   const getSafeSeekTime = useCallback((v: HTMLVideoElement, target: number) => {
     if (!Number.isFinite(v.duration) || v.duration <= 0) return 0;
@@ -1381,6 +1392,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, []);
 
   const seek = useCallback((seconds: number) => {
+    if (isEmbedPlayback) {
+      const dur = embedTimeRef.current.duration || 0;
+      const cur = embedTimeRef.current.currentTime || 0;
+      const next = Math.max(0, Math.min(dur || cur + seconds, cur + seconds));
+      sendEmbedCmd("seek", { time: next });
+      embedTimeRef.current.currentTime = next;
+      setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
+      setTimeout(() => setSkipIndicator(null), 600);
+      resetHideTimer();
+      return;
+    }
     const v = videoRef.current;
     if (!v) return;
 
@@ -1390,30 +1412,33 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
     setTimeout(() => setSkipIndicator(null), 600);
     resetHideTimer();
-  }, [getSafeSeekTime, resetHideTimer]);
+  }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd]);
 
   const toggleFullscreen = useCallback(async () => {
     const el = videoContainerRef.current;
     if (!el) return;
     try {
       if (document.fullscreenElement) {
-        // Unlock orientation before exiting fullscreen
         try { (screen.orientation as any).unlock?.(); } catch {}
         await document.exitFullscreen();
       } else {
         if (el.requestFullscreen) await el.requestFullscreen();
         else if ((el as any).webkitRequestFullscreen) (el as any).webkitRequestFullscreen();
-        // Lock to landscape after entering fullscreen
         try { await (screen.orientation as any).lock?.('landscape'); } catch {}
       }
     } catch (e) { console.log('Fullscreen not supported'); }
   }, []);
 
   const setSpeed = useCallback((rate: number) => {
-    if (videoRef.current) videoRef.current.playbackRate = rate;
+    if (isEmbedPlayback) {
+      sendEmbedCmd("rate", { rate });
+    } else if (videoRef.current) {
+      videoRef.current.playbackRate = rate;
+    }
     setPlaybackRate(rate);
     setShowSettings(false);
-  }, []);
+  }, [isEmbedPlayback, sendEmbedCmd]);
+
 
   const switchQuality = useCallback((option: QualityOption) => {
     // Block 4K for non-premium users
