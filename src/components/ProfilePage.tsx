@@ -491,13 +491,25 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
   const [deviceExceeded, setDeviceExceeded] = useState(false);
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
 
-  // User APK download URL — set by admin in Branding settings (settings/branding/userApkUrl)
+  // User APK download URL — set by admin in APK DW (settings/branding/userApkUrl)
+  // Visibility is gated by settings/apk/userEnabled (default true)
   const [userApkUrl, setUserApkUrl] = useState<string>("");
+  const [userApkEnabled, setUserApkEnabled] = useState<boolean>(true);
+  const [userApkVersion, setUserApkVersion] = useState<string>("");
   useEffect(() => {
-    const unsub = onValue(ref(db, "settings/branding/userApkUrl"), (snap) => {
-      setUserApkUrl(String(snap.val() || "").trim());
-    });
-    return () => unsub();
+    const unsubs = [
+      onValue(ref(db, "settings/branding/userApkUrl"), (snap) => {
+        setUserApkUrl(String(snap.val() || "").trim());
+      }),
+      onValue(ref(db, "settings/apk/userEnabled"), (snap) => {
+        const v = snap.val();
+        setUserApkEnabled(v === undefined || v === null ? true : !!v);
+      }),
+      onValue(ref(db, "settings/apk/userVersion"), (snap) => {
+        setUserApkVersion(String(snap.val() || "").trim());
+      }),
+    ];
+    return () => { unsubs.forEach((u) => u()); };
   }, []);
   const handleDownloadUserApk = () => {
     if (!userApkUrl) return;
