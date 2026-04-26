@@ -222,19 +222,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [activeRawSrc]);
 
   const syncUiProgress = useCallback((nextTime: number, nextDuration: number) => {
-    setCurrentTime(nextTime);
-    if (Number.isFinite(nextDuration) && nextDuration >= 0) {
-      setDuration(nextDuration);
-    }
-
+    // Live DOM updates — smooth, zero React cost
     if (progressRef.current && nextDuration > 0) {
       progressRef.current.style.width = `${(nextTime / nextDuration) * 100}%`;
     }
-
     if (timeDisplayRef.current) {
       timeDisplayRef.current.textContent = nextDuration > 0
         ? `${formatTime(nextTime)} / ${formatTime(nextDuration)}`
         : formatTime(nextTime);
+    }
+    // Throttled React state — only ~1x/sec for downstream consumers
+    // (auto-next-episode overlay, save-progress, etc.)
+    const now = performance.now();
+    if (now - lastStateSyncRef.current >= 1000) {
+      lastStateSyncRef.current = now;
+      setCurrentTime(nextTime);
+      if (Number.isFinite(nextDuration) && nextDuration >= 0) {
+        setDuration(nextDuration);
+      }
     }
   }, []);
 
