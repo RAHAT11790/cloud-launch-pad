@@ -145,13 +145,13 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         });
         try {
           await set(ref(db, `users/${commaKey}`), {
-            id: uid, name: gName, email: gEmail, online: true,
+            id: uid, name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true,
             lastSeen: Date.now(), createdAt: existingData?.createdAt || Date.now(),
           });
           // Also update users/${uid} to fix "Guest User" display
           if (uid !== commaKey) {
             await update(ref(db, `users/${uid}`), {
-              name: gName, email: gEmail, online: true, lastSeen: Date.now(),
+              name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true, lastSeen: Date.now(),
             }).catch(() => {});
           }
         } catch (e) {}
