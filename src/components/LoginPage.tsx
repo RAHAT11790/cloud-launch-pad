@@ -432,7 +432,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
           id: userId, name: name.trim(), email: email.trim(), password: password, createdAt: Date.now(),
         });
         await set(ref(db, `users/${emailKey}`), {
-          name: name.trim(), email: email.trim(), createdAt: Date.now(), online: true, lastSeen: Date.now(), id: userId,
+          name: name.trim(), email: email.trim(), createdAt: Date.now(), online: true, lastSeen: Date.now(), id: userId, authProvider: "email",
         });
         localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: name.trim(), email: email.trim() }));
         localStorage.setItem("rs_display_name", name.trim());
