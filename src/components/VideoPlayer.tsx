@@ -1922,6 +1922,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             setShowServerPanel(false);
                             setManualServerSelected(false);
                             activeSourceBaseRef.current = sourceBaseRef.current;
+                            setActiveRawSrc(sourceBaseRef.current);
                             setCurrentSrc(resolvePlaybackSrc(sourceBaseRef.current));
                           }}
                             className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${

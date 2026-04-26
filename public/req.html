@@ -168,6 +168,7 @@
       case "rate":      if (typeof d.rate === "number") v.playbackRate = d.rate; break;
       case "volume":    if (typeof d.volume === "number") v.volume = Math.max(0, Math.min(1, d.volume)); break;
       case "mute":      v.muted = !!d.muted; break;
+      case "fit":       if (typeof d.fit === "string") v.style.objectFit = d.fit; break;
       case "ping":      send("pong"); break;
     }
   });
