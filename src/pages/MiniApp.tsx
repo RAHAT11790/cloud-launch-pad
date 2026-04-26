@@ -1188,23 +1188,32 @@ export default function MiniApp() {
                     Change
                   </button>
                 </div>
-                <button
-                  onClick={handleWatchAd}
-                  disabled={adRunning}
-                  className="relative w-full py-4 rounded-2xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-cyan-400 text-black font-extrabold text-base shadow-xl shadow-fuchsia-500/40 hover:scale-[1.02] active:scale-[0.98] transition disabled:opacity-60 disabled:hover:scale-100 flex items-center justify-center gap-2 overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
-                  {adRunning ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" /> {t.watching}
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-5 h-5" fill="black" /> {t.watchAd} (
-                      {views + 1}/{REQUIRED_VIEWS})
-                    </>
-                  )}
-                </button>
+                {pendingAdCompletion ? (
+                  <button
+                    onClick={handleContinueAfterAd}
+                    className="relative w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-400 text-black font-extrabold text-base shadow-xl shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] transition flex items-center justify-center gap-2 overflow-hidden"
+                  >
+                    <CheckCircle2 className="w-5 h-5" /> {t.continueAd}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleWatchAd}
+                    disabled={adRunning}
+                    className="relative w-full py-4 rounded-2xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-cyan-400 text-black font-extrabold text-base shadow-xl shadow-fuchsia-500/40 hover:scale-[1.02] active:scale-[0.98] transition disabled:opacity-60 disabled:hover:scale-100 flex items-center justify-center gap-2 overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+                    {adRunning ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" /> {t.watching}
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-5 h-5" fill="black" /> {t.watchAd} (
+                        {views + 1}/{REQUIRED_VIEWS})
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             )}
 
