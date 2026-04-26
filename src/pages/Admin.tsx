@@ -2682,6 +2682,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "unlock-duration": "Unlock Duration",
     "email-service": "Email Service",
     "mini-app": "Telegram Mini App",
+    "apk-dw": "APK Download Center",
   };
 
   // ==================== CATEGORIES ====================
