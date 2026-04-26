@@ -18,8 +18,9 @@ import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeR
 import { WeeklyEpTabButton, WeeklyEpManager } from "@/components/admin/WeeklyEpManager";
 // AdminNotificationBell removed
 import MiniAppManager from "@/components/admin/MiniAppManager";
+import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "mini-app";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "mini-app" | "apk-dw";
 
 interface CastMember {
   name: string;
@@ -2682,6 +2683,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "unlock-duration": "Unlock Duration",
     "email-service": "Email Service",
     "mini-app": "Telegram Mini App",
+    "apk-dw": "APK Download Center",
   };
 
   // ==================== CATEGORIES ====================
@@ -4024,6 +4026,7 @@ ${tgHashtags}`;
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
     { section: "email-service", icon: <Mail size={16} />, label: "Email Service" },
     { section: "mini-app", icon: <Sparkles size={16} />, label: "Telegram Mini App" },
+    { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
@@ -5549,6 +5552,46 @@ ${tgHashtags}`;
                 </div>
               </div>
             </div>
+            <div className={`${glassCard} p-4 mb-4`}>
+              <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                <Trash2 size={14} className="text-red-400" /> Delete All Guest Users
+              </h3>
+              <p className="text-[11px] text-[#957DAD] mb-3">
+                Removes every account without an email (guest / anonymous). Those users will be force-logged out the next time they open the app and must sign up again with email or Google.
+              </p>
+              {(() => {
+                const guestList = usersData.filter(u => !u?.email || String(u.email).trim() === "");
+                return (
+                  <>
+                    <div className="text-xs text-[#D1C4E9] mb-3">
+                      Guest accounts found: <span className="text-red-400 font-bold">{guestList.length}</span>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (guestList.length === 0) { toast.info("No guest users to delete"); return; }
+                        if (!window.confirm(`Delete ${guestList.length} guest user(s)? They will be auto-logged out.`)) return;
+                        try {
+                          await Promise.all(guestList.map(u =>
+                            update(ref(db), {
+                              [`users/${u.id}`]: null,
+                              [`deletedAccounts/${u.id}`]: { at: Date.now(), reason: "guest-bulk-delete" },
+                            })
+                          ));
+                          toast.success(`✅ Deleted ${guestList.length} guest user(s)`);
+                        } catch (e: any) {
+                          toast.error(`Failed: ${e?.message || "unknown"}`);
+                        }
+                      }}
+                      disabled={guestList.length === 0}
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-red-500 text-white text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <Trash2 size={14} /> Delete All Guest Users ({guestList.length})
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+
             <div className={`${glassCard} p-4`}>
               <h3 className="text-sm font-semibold mb-3.5">All Users</h3>
               {usersData.length === 0 ? (
@@ -5562,6 +5605,9 @@ ${tgHashtags}`;
                     <p className="text-sm font-semibold">{user.name || "Anonymous"}</p>
                     <p className="text-[11px] text-[#D1C4E9] truncate">{user.email || user.id.substring(0, 20)}...</p>
                   </div>
+                  {!user.email && (
+                    <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-bold">GUEST</span>
+                  )}
                   <div className={`w-2.5 h-2.5 rounded-full ${user.online ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
                 </div>
               ))}
@@ -7243,6 +7289,11 @@ ${tgHashtags}`;
           <MiniAppManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
+        {/* ==================== APK DW (Download Center) ==================== */}
+        {activeSection === "apk-dw" && (
+          <ApkDownloadCenter glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+        )}
+
         {/* ==================== AI CONFIG ==================== */}
         {activeSection === "ai-config" && (
           <AiConfigSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
@@ -8232,7 +8283,7 @@ ${tgHashtags}`;
                 </div>
               </div>
 
-              {/* Currently Watching - Live */}
+              {/* Currently Watching - Live (series only, no user data) */}
               <div className={`${glassCard} p-4 mb-4`}>
                 <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
                   <Activity size={14} className="text-green-500 animate-pulse" /> Currently Watching (Live)
@@ -8240,23 +8291,14 @@ ${tgHashtags}`;
                 {currentViewersList.length === 0 ? (
                   <p className="text-[#957DAD] text-[13px] text-center py-5">No one watching right now</p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {currentViewersList.map(item => (
-                      <div key={item.animeId} className="bg-[#1A1A2E] border border-green-500/20 rounded-xl p-3.5">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[13px] font-semibold truncate flex-1">{item.title}</span>
-                          <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full font-bold ml-2 flex items-center gap-1">
-                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                            {item.viewers.length}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {item.viewers.map(v => (
-                            <span key={v.uid} className="text-[10px] bg-green-500/10 text-green-300 px-2 py-1 rounded-lg">
-                              👤 {v.userName} ({formatTime(v.startedAt)})
-                            </span>
-                          ))}
-                        </div>
+                      <div key={item.animeId} className="bg-[#1A1A2E] border border-green-500/20 rounded-xl p-3 flex items-center justify-between">
+                        <span className="text-[13px] font-semibold truncate flex-1 pr-2">{item.title}</span>
+                        <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 flex-shrink-0">
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                          {item.viewers.length}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -8342,22 +8384,13 @@ ${tgHashtags}`;
                 )}
               </div>
 
-              {/* Today's Active Users */}
+              {/* Today's Active Users — count only (no user identity shown) */}
               <div className={`${glassCard} p-4 mb-4`}>
-                <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                  <Users size={14} className="text-purple-500" /> Today's Active Users ({todayViewers})
+                <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
+                  <Users size={14} className="text-purple-500" /> Today's Active Viewers
                 </h3>
-                {!dailyActiveUsers[today] ? (
-                  <p className="text-[#957DAD] text-[13px] text-center py-5">No active users today</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(dailyActiveUsers[today]).map(([uid, data]: [string, any]) => (
-                      <span key={uid} className="text-[11px] bg-purple-500/10 text-purple-300 px-3 py-1.5 rounded-full border border-purple-500/20">
-                        👤 {data.userName || uid.substring(0, 8)} • {formatTime(data.lastSeen)}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <p className="text-3xl font-extrabold text-purple-400">{todayViewers}</p>
+                <p className="text-[11px] text-[#957DAD] mt-1">Total unique viewers today</p>
               </div>
 
               {/* Full Content Library - All Anime with Views */}

@@ -160,6 +160,23 @@ const Index = () => {
     return () => unsub();
   }, []);
 
+  // Force-logout if account was deleted by admin (guest cleanup, etc.)
+  useEffect(() => {
+    let uid = "";
+    try { uid = JSON.parse(localStorage.getItem("rsanime_user") || "{}").id || ""; } catch {}
+    if (!uid) return;
+    const unsub = onValue(ref(db, `users/${uid}`), (snap) => {
+      if (!snap.exists()) {
+        try {
+          localStorage.removeItem("rsanime_user");
+          localStorage.removeItem("rs_display_name");
+        } catch {}
+        try { window.location.replace("/"); } catch { window.location.href = "/"; }
+      }
+    });
+    return () => unsub();
+  }, [isLoggedIn]);
+
   // Check premium status - re-run when login state changes
   useEffect(() => {
     try {

@@ -134,10 +134,44 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          <StatCard icon={<Eye className="w-4 h-4" />} label="Visits" value={visits} color="from-cyan-500 to-blue-500" />
-          <StatCard icon={<CheckCircle2 className="w-4 h-4" />} label="Done" value={completes} color="from-emerald-500 to-teal-500" />
-          <StatCard icon={<MousePointerClick className="w-4 h-4" />} label="API" value={apiCompletes} color="from-fuchsia-500 to-purple-500" />
+          <StatCard icon={<Eye className="w-4 h-4" />} label="All-time Visits" value={visits} color="from-cyan-500 to-blue-500" />
+          <StatCard icon={<CheckCircle2 className="w-4 h-4" />} label="All-time Done" value={completes} color="from-emerald-500 to-teal-500" />
+          <StatCard icon={<MousePointerClick className="w-4 h-4" />} label="API Done" value={apiCompletes} color="from-fuchsia-500 to-purple-500" />
         </div>
+
+        {/* Daily breakdown */}
+        {(() => {
+          const daily = (stats?.daily || {}) as Record<string, { visits?: number; completes?: number; apiCompletes?: number }>;
+          const days = Object.keys(daily).sort().reverse().slice(0, 7);
+          if (days.length === 0) {
+            return (
+              <p className="text-[11px] text-muted-foreground mt-3 text-center">No daily data yet</p>
+            );
+          }
+          return (
+            <div className="mt-4">
+              <h4 className="text-xs font-semibold mb-2 opacity-80">Last {days.length} day(s)</h4>
+              <div className="space-y-1.5">
+                {days.map((d) => {
+                  const v = Number(daily[d]?.visits || 0);
+                  const c = Number(daily[d]?.completes || 0);
+                  const isToday = d === new Date().toISOString().split("T")[0];
+                  return (
+                    <div key={d} className="flex items-center justify-between text-[11px] bg-muted/40 rounded-lg px-2.5 py-1.5">
+                      <span className={`font-mono ${isToday ? "text-cyan-400 font-bold" : "opacity-80"}`}>
+                        {isToday ? "Today" : d}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-cyan-300">👁 {v}</span>
+                        <span className="text-emerald-300">✅ {c}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Settings */}

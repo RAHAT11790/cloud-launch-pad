@@ -491,13 +491,25 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
   const [deviceExceeded, setDeviceExceeded] = useState(false);
   const [deviceCheckDone, setDeviceCheckDone] = useState(false);
 
-  // User APK download URL — set by admin in Branding settings (settings/branding/userApkUrl)
+  // User APK download URL — set by admin in APK DW (settings/branding/userApkUrl)
+  // Visibility is gated by settings/apk/userEnabled (default true)
   const [userApkUrl, setUserApkUrl] = useState<string>("");
+  const [userApkEnabled, setUserApkEnabled] = useState<boolean>(true);
+  const [userApkVersion, setUserApkVersion] = useState<string>("");
   useEffect(() => {
-    const unsub = onValue(ref(db, "settings/branding/userApkUrl"), (snap) => {
-      setUserApkUrl(String(snap.val() || "").trim());
-    });
-    return () => unsub();
+    const unsubs = [
+      onValue(ref(db, "settings/branding/userApkUrl"), (snap) => {
+        setUserApkUrl(String(snap.val() || "").trim());
+      }),
+      onValue(ref(db, "settings/apk/userEnabled"), (snap) => {
+        const v = snap.val();
+        setUserApkEnabled(v === undefined || v === null ? true : !!v);
+      }),
+      onValue(ref(db, "settings/apk/userVersion"), (snap) => {
+        setUserApkVersion(String(snap.val() || "").trim());
+      }),
+    ];
+    return () => { unsubs.forEach((u) => u()); };
   }, []);
   const handleDownloadUserApk = () => {
     if (!userApkUrl) return;
@@ -1596,8 +1608,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
         </a>
         <p className="text-[10px] text-muted-foreground text-center mt-1 mb-2">Get all updates, news & details about {brandingCfg.siteName}</p>
 
-        {/* Download APK — User panel (separate from admin APK). Hidden if URL not set. */}
-        {userApkUrl ? (
+        {/* Download APK — User panel (separate from admin APK).
+            Hidden if URL not set OR admin disabled it via APK DW > User Panel Visibility. */}
+        {userApkUrl && userApkEnabled ? (
           <>
             <button
               onClick={handleDownloadUserApk}
@@ -1605,7 +1618,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
               style={{ background: 'linear-gradient(135deg, #16a34a, #22c55e)', color: '#fff' }}
             >
               <Download className="w-4 h-4" />
-              Download App (APK)
+              Download App (APK){userApkVersion ? ` • ${userApkVersion}` : ""}
             </button>
             <p className="text-[10px] text-muted-foreground text-center mt-1 mb-3">
               Install {brandingCfg.siteName} as an app on your phone

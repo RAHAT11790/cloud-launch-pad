@@ -82,8 +82,11 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action || "");
 
+    const todayKey = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+
     if (action === "visit") {
       await incCounter("miniApp/stats/visits");
+      await incCounter(`miniApp/stats/daily/${todayKey}/visits`);
       const src = String(body?.source || "default");
       await incCounter(`miniApp/stats/visitsBySource/${src}`);
       return json({ ok: true });
@@ -204,6 +207,8 @@ serve(async (req) => {
           });
         }
         await incCounter("miniApp/stats/apiCompletes");
+        await incCounter(`miniApp/stats/daily/${todayKey}/apiCompletes`);
+        await incCounter(`miniApp/stats/daily/${todayKey}/completes`);
         return json({
           ok: true,
           mode: "short",
@@ -223,6 +228,8 @@ serve(async (req) => {
           lastUsedAt: Date.now(),
         });
         await incCounter("miniApp/stats/apiCompletes");
+        await incCounter(`miniApp/stats/daily/${todayKey}/apiCompletes`);
+        await incCounter(`miniApp/stats/daily/${todayKey}/completes`);
         await fbPut(`miniApp/apiCompletions/${found.id}/${userId}`, {
           completedAt: Date.now(),
           userId,
@@ -252,6 +259,7 @@ serve(async (req) => {
       });
 
       await incCounter("miniApp/stats/completes");
+      await incCounter(`miniApp/stats/daily/${todayKey}/completes`);
       await fbPut(`miniApp/completions/${userId}/${now}`, {
         userId,
         grantedAt: now,
