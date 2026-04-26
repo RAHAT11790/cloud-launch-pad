@@ -8333,22 +8333,13 @@ ${tgHashtags}`;
                 )}
               </div>
 
-              {/* Today's Active Users */}
+              {/* Today's Active Users — count only (no user identity shown) */}
               <div className={`${glassCard} p-4 mb-4`}>
-                <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                  <Users size={14} className="text-purple-500" /> Today's Active Users ({todayViewers})
+                <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
+                  <Users size={14} className="text-purple-500" /> Today's Active Viewers
                 </h3>
-                {!dailyActiveUsers[today] ? (
-                  <p className="text-[#957DAD] text-[13px] text-center py-5">No active users today</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(dailyActiveUsers[today]).map(([uid, data]: [string, any]) => (
-                      <span key={uid} className="text-[11px] bg-purple-500/10 text-purple-300 px-3 py-1.5 rounded-full border border-purple-500/20">
-                        👤 {data.userName || uid.substring(0, 8)} • {formatTime(data.lastSeen)}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <p className="text-3xl font-extrabold text-purple-400">{todayViewers}</p>
+                <p className="text-[11px] text-[#957DAD] mt-1">Total unique viewers today</p>
               </div>
 
               {/* Full Content Library - All Anime with Views */}
