@@ -104,7 +104,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
           </button>
         </div>
 
-        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+        <div data-no-swipe="true" className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide" style={{ touchAction: "pan-x pan-y" }}>
           {activeReleases.slice(0, 10).map((release) => {
             const content = getContent(release.contentId);
             const poster = content?.poster || release.poster || "";
