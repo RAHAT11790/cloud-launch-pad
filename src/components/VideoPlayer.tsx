@@ -321,12 +321,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return `/req.html?src=${encodeURIComponent(watchSrc)}`;
   }, [getEmbedWatchSrc]);
 
-  // ===== SERVER CHANGER =====
-  const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean; mode?: ServerMode }[]>([]);
-  const [activeServerIndex, setActiveServerIndex] = useState(0);
-  const [manualServerSelected, setManualServerSelected] = useState(false);
-  const [showServerPanel, setShowServerPanel] = useState(false);
-  const premiumServerApplied = useRef(false);
+  // (videoServers state declared earlier alongside isEmbedPlayback)
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
