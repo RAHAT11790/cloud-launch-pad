@@ -2373,18 +2373,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       setAppUsersGlobal(snap.val() || {});
     }));
 
-    unsubs.push(onValue(ref(db, "fcmTokens"), (snap) => {
-      const data = snap.val() || {};
-      let totalTokens = 0;
-      Object.values(data).forEach((userTokens: any) => {
-        totalTokens += Object.keys(userTokens || {}).length;
-      });
-      setFcmTokenStats({
-        totalTokens,
-        totalUsers: Object.keys(data).length,
-        lastUpdated: Date.now(),
-      });
-    }));
+    // FCM token stats listener removed
 
     return () => unsubs.forEach(u => u());
   }, [activeSection]);
@@ -3058,8 +3047,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     const savedTitle = notifTitle;
     const savedMessage = notifMessage;
 
-    setPushSending(true);
-    setPushProgress({ phase: "tokens", totalTokens: 0, sent: 0, success: 0, failed: 0, invalidRemoved: 0 });
+    // Push delivery removed — only in-app notifications below
 
     try {
       let contentId = "", contentType = "", contentPoster = "";
@@ -3275,38 +3263,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       toast.success("In-app notification sent to users");
       setReleaseContent(""); setShowSeasonEpisode(false);
       
-      // Send FCM push WITH progress (foreground)
-      const pushPayload = {
-        title: releaseNotifTitle,
-        body: releaseNotifMsg,
-        image: content.poster || undefined,
-        url: contentId ? `/?anime=${contentId}` : "/",
-        data: { url: contentId ? `/?anime=${contentId}` : "/", type: "new_episode", contentId },
-      };
-
-      setPushSending(true);
-      setPushProgress({ phase: "tokens", totalTokens: 0, sent: 0, success: 0, failed: 0, invalidRemoved: 0 });
-
-      try {
-        const targetUserIds = Array.from(new Set(
-          Object.entries(users)
-            .map(([userKey, userData]: any) => String(userData?.id || userKey || "").trim())
-            .filter(Boolean)
-        ));
-        const result = await sendPushToAllUsers(pushPayload, (p) => setPushProgress({ ...p }));
-        console.log("FCM new release result:", result);
-        if ((result?.total || 0) === 0) {
-          const reason = "reason" in result && result.reason ? ` [${result.reason}]` : "";
-          toast.warning(`Push token পাওয়া যায়নি${reason} — শুধু in-app notification গেছে`);
-        } else {
-          toast.success(`Push: ${result?.success || 0} delivered, ${result?.failed || 0} failed`);
-        }
-      } catch (err) {
-        console.warn("FCM push failed:", err);
-        toast.error("Push delivery failed");
-      } finally {
-        setTimeout(() => { setPushSending(false); setPushProgress(null); }, 6000);
-      }
+      // FCM push removed — in-app notifications above are sufficient
     } catch (err: any) { toast.error("Error: " + err.message); }
   };
 
@@ -4170,72 +4127,7 @@ ${tgHashtags}`;
         </div>
       )}
 
-      {/* Push Progress Overlay */}
-      {pushSending && pushProgress && (
-        <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-[380px] z-[6000]">
-          <div className="bg-[#16162A] border border-white/10 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-white flex items-center gap-2">
-                <Send size={14} className="text-indigo-400" />
-                Push Notification Delivery
-              </span>
-              {pushProgress.phase === "done" ? (
-                <span className={`text-xs px-2 py-0.5 rounded-full ${pushProgress.totalTokens > 0 ? "bg-green-500/20 text-green-400" : "bg-yellow-500/20 text-yellow-300"}`}>
-                  {pushProgress.totalTokens > 0 ? "Complete" : "No tokens"}
-                </span>
-              ) : (
-                <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full">
-                  {pushProgress.phase === "tokens" ? "Fetching tokens..." : pushProgress.phase === "cleanup" ? "Cleanup..." : "Sending..."}
-                </span>
-              )}
-            </div>
-            
-            {/* Progress bar */}
-            <div className="w-full h-2 bg-[#0D0D1A] rounded-full overflow-hidden mb-2">
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  pushProgress.phase === "done" ? "bg-green-500" : "bg-indigo-500"
-                }`}
-                style={{ width: `${pushProgress.phase === "done" ? 100 : pushProgress.phase === "sending" && pushProgress.totalTokens > 0 ? Math.min(100, (pushProgress.sent / pushProgress.totalTokens) * 100) : pushProgress.phase === "tokens" ? 0 : 50}%` }}
-              />
-            </div>
-
-            {/* Stats */}
-            <div className="flex items-center justify-between text-xs text-zinc-500 gap-2 flex-wrap">
-              {typeof pushProgress.totalUsers === "number" && pushProgress.totalUsers > 0 && <span>👥 {pushProgress.totalUsers} users</span>}
-              <span>📡 {pushProgress.phase === "done" ? pushProgress.totalTokens : (pushProgress.totalTokens || fcmTokenStats.totalTokens)} tokens</span>
-              {pushProgress.phase === "done" && (
-                <>
-                  <span className="text-green-400">✓ {pushProgress.success} sent</span>
-                  {pushProgress.failed > 0 && <span className="text-red-400">✗ {pushProgress.failed} failed</span>}
-                  {pushProgress.invalidRemoved > 0 && <span className="text-yellow-400">🗑 {pushProgress.invalidRemoved} removed</span>}
-                </>
-              )}
-              {pushProgress.phase === "sending" && (
-                <span className="text-indigo-400">Processing on server...</span>
-              )}
-              {pushProgress.phase === "tokens" && (
-                <span className="text-indigo-400">Loading tokens...</span>
-              )}
-            </div>
-
-            {pushProgress.phase === "done" && pushProgress.failReasons && pushProgress.failed > 0 && (
-              <div className="mt-2 flex items-center gap-3 text-[11px] flex-wrap">
-                {pushProgress.failReasons.invalid > 0 && <span className="text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full">Invalid: {pushProgress.failReasons.invalid}</span>}
-                {pushProgress.failReasons.transient > 0 && <span className="text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded-full">Transient: {pushProgress.failReasons.transient}</span>}
-                {pushProgress.failReasons.other > 0 && <span className="text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">Other: {pushProgress.failReasons.other}</span>}
-              </div>
-            )}
-            {pushProgress.phase === "done" && (
-              <div className={`mt-2 text-xs text-center ${pushProgress.totalTokens > 0 ? "text-green-400/80" : "text-yellow-300"}`}>
-                {pushProgress.totalTokens > 0
-                  ? `Delivery: ${pushProgress.success} sent${pushProgress.failed > 0 ? `, ${pushProgress.failed} failed` : ""}${pushProgress.invalidRemoved > 0 ? `, ${pushProgress.invalidRemoved} invalid removed` : ""}`
-                  : "No active push tokens found"}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Push progress overlay removed — FCM disabled site-wide */}
 
       {showPinSetup && (
         <div className="fixed inset-0 bg-black/80 z-[5000] flex items-center justify-center p-4" onClick={() => setShowPinSetup(false)}>
@@ -6074,16 +5966,7 @@ ${tgHashtags}`;
                             timestamp: Date.now(),
                             read: false,
                           });
-                          // Send FCM push to user
-                          try {
-                            const { sendPushToUsers } = await import("@/lib/fcm");
-                            await sendPushToUsers([req.userId, req.userEmail].filter(Boolean), {
-                              title: "Premium Activated! 🎉",
-                              body: `আপনার ${req.planName} প্ল্যান অ্যাক্টিভেট হয়েছে। ${days} দিন Ad-free উপভোগ করুন!`,
-                              url: "/profile",
-                              data: { type: "subscription_activated", planName: req.planName, expiresAt },
-                            });
-                          } catch (pushErr) { console.warn("User push failed:", pushErr); }
+                          // FCM push removed — in-app notification (above) is enough
                           toast.success(`${req.userName} এর প্রিমিয়াম অ্যাক্টিভেট হয়েছে (${days} দিন)`);
                         }} className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors">
                           <Check size={12} /> Approve
@@ -6098,16 +5981,7 @@ ${tgHashtags}`;
                             timestamp: Date.now(),
                             read: false,
                           });
-                          // Send FCM push to user
-                          try {
-                            const { sendPushToUsers } = await import("@/lib/fcm");
-                            await sendPushToUsers([req.userId, req.userEmail].filter(Boolean), {
-                              title: "Payment Rejected ❌",
-                              body: "আপনার পেমেন্ট রিকোয়েস্ট গ্রহণ হয়নি। সঠিক Transaction ID দিয়ে আবার চেষ্টা করুন।",
-                              url: "/profile",
-                              data: { type: "subscription_rejected" },
-                            });
-                          } catch (pushErr) { console.warn("User push failed:", pushErr); }
+                          // FCM push removed — in-app notification (above) is enough
                           toast.success("রিকোয়েস্ট রিজেক্ট করা হয়েছে");
                         }} className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors">
                           <X size={12} /> Reject
@@ -8814,13 +8688,7 @@ const AdminCommentsSection = ({
           read: false,
         });
 
-        sendPushToUsers([targetComment.userId], {
-          title,
-          body: message,
-          image: targetComment.poster || undefined,
-          url: `/?anime=${animeId}`,
-          data: { type: "admin_reply", animeId, commentId, replyText: text },
-        }).catch((err) => console.warn("Admin reply push failed:", err));
+        // FCM push removed — in-app notification (above) is enough
       }
 
       setReplyText("");
