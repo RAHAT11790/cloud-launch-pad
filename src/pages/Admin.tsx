@@ -3094,32 +3094,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       setNotifTitle("");
       setNotifMessage("");
 
-      if (targetUserIds.length === 0) {
-        setPushSending(false); setPushProgress(null);
-        return;
-      }
-
-      const pushPayload = {
-        title: savedTitle || adminBranding.siteName,
-        body: savedMessage,
-        image: contentPoster || undefined,
-        url: contentId ? `/?anime=${contentId}` : "/",
-        data: { url: contentId ? `/?anime=${contentId}` : "/", type: notifType || "info", contentId },
-      };
-
-      const result = await sendPushToAllUsers(pushPayload, (p) => setPushProgress({ ...p }));
-      console.log("FCM result:", result);
-      if ((result?.total || 0) === 0) {
-        const reason = "reason" in result && result.reason ? ` [${result.reason}]` : "";
-        toast.warning(`Push token পাওয়া যায়নি${reason} — শুধু in-app notification গেছে`);
-      } else {
-        toast.success(`Push: ${result?.success || 0} delivered, ${result?.failed || 0} failed`);
-      }
+      // FCM push removed — only in-app notifications were sent above
     } catch (err: any) {
       console.warn("Notification send failed:", err);
       toast.error("Error: " + err.message);
-    } finally {
-      setTimeout(() => { setPushSending(false); setPushProgress(null); }, 6000);
     }
   };
 
