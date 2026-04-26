@@ -917,6 +917,17 @@ const Index = () => {
     // Cancel any stale in-flight AnimeSalt details requests when switching content
     detailsRequestRef.current += 1;
 
+    // Track click for trending popularity (fire-and-forget)
+    try {
+      import("@/lib/firebase").then(({ runTransaction, ref: fbRef, db: fbDb }) => {
+        runTransaction(fbRef(fbDb, `analytics/totals/clicks/${anime.id}`), (curr: any) => {
+          const base = curr && typeof curr === "object" ? curr : { count: 0 };
+          return { count: (base.count || 0) + 1, title: anime.title || base.title || "", lastClick: Date.now() };
+        }).catch(() => {});
+      });
+    } catch {}
+
+
     // AnimeSalt source
     if (anime.source === "animesalt" && anime.slug) {
       const cachedDetails = detailsCacheRef.current.get(anime.id);
