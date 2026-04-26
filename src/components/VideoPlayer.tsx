@@ -155,6 +155,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const adGateActiveRef = useRef(false);
   const [volume, setVolume] = useState(1);
   const [boostedVolume, setBoostedVolume] = useState(100); // 0-100%
   const [muted, setMuted] = useState(false);
@@ -274,7 +275,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             sendEmbedCmd("seek", { time: pendingSeek.current });
             embedTimeRef.current.currentTime = pendingSeek.current;
           }
-          if (!adGateActive) sendEmbedCmd("play");
+          if (!adGateActiveRef.current) sendEmbedCmd("play");
           break;
         case "meta": {
           const nextDuration = d.duration ?? 0;
@@ -306,7 +307,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             embedTimeRef.current.currentTime = pendingSeek.current;
             pendingSeek.current = null;
           }
-          if (!adGateActive) sendEmbedCmd("play");
+          if (!adGateActiveRef.current) sendEmbedCmd("play");
           break;
         case "playing":
           setPlaying(true);
@@ -339,7 +340,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [adGateActive, boostedVolume, currentSrc, muted, onNextEpisode, playbackRate, sendEmbedCmd, syncUiProgress]);
+  }, [boostedVolume, currentSrc, muted, onNextEpisode, playbackRate, sendEmbedCmd, syncUiProgress]);
 
   
   // Load CDN + proxy settings from Firebase (skip if noProxy)
