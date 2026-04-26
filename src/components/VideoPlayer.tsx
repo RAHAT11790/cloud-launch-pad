@@ -178,8 +178,52 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
   const sourceBaseRef = useRef(src);
+  const [isServerSwitching, setIsServerSwitching] = useState(false);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
+
+  const isEmbedPlayback = useMemo(() => {
+    return !!currentSrc && /hf\.space|huggingface/i.test(currentSrc);
+  }, [currentSrc]);
+
+  const syncUiProgress = useCallback((nextTime: number, nextDuration: number) => {
+    setCurrentTime(nextTime);
+    if (Number.isFinite(nextDuration) && nextDuration >= 0) {
+      setDuration(nextDuration);
+    }
+
+    if (progressRef.current && nextDuration > 0) {
+      progressRef.current.style.width = `${(nextTime / nextDuration) * 100}%`;
+    }
+
+    if (timeDisplayRef.current) {
+      timeDisplayRef.current.textContent = nextDuration > 0
+        ? `${formatTime(nextTime)} / ${formatTime(nextDuration)}`
+        : formatTime(nextTime);
+    }
+  }, []);
+
+  const getEmbedWatchSrc = useCallback((rawUrl: string) => {
+    try {
+      const u = new URL(rawUrl);
+      if (!/^\/watch\//i.test(u.pathname)) {
+        u.pathname = `/watch${u.pathname.startsWith("/") ? "" : "/"}${u.pathname}`;
+      }
+      return u.toString();
+    } catch {
+      return rawUrl;
+    }
+  }, []);
+
+  const getEmbedReqSrc = useCallback((rawUrl: string) => {
+    const watchSrc = getEmbedWatchSrc(rawUrl);
+    try {
+      const u = new URL(watchSrc);
+      return `${u.origin}/req.html?src=${encodeURIComponent(watchSrc)}`;
+    } catch {
+      return `https://rahat1102-video-hosting-bot.hf.space/req.html?src=${encodeURIComponent(watchSrc)}`;
+    }
+  }, [getEmbedWatchSrc]);
 
   // ===== SERVER CHANGER =====
   const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
@@ -218,26 +262,84 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   useEffect(() => {
     function onMsg(ev: MessageEvent) {
-      const d = ev.data as { source?: string; type?: string; currentTime?: number; duration?: number } | null;
+      const d = ev.data as { source?: string; type?: string; currentTime?: number; duration?: number; code?: number } | null;
       if (!d || d.source !== "rs-embed") return;
+
       switch (d.type) {
         case "ready":
-          // iframe loaded and waiting; nothing to do — src is already in URL
+          sendEmbedCmd("mute", { muted });
+          sendEmbedCmd("volume", { volume: muted ? 0 : Math.min(1, boostedVolume / 100) });
+          sendEmbedCmd("rate", { rate: playbackRate });
+          if (pendingSeek.current !== null) {
+            sendEmbedCmd("seek", { time: pendingSeek.current });
+            embedTimeRef.current.currentTime = pendingSeek.current;
+          }
+          if (!adGateActive) sendEmbedCmd("play");
           break;
-        case "time":
+        case "meta": {
+          const nextDuration = d.duration ?? 0;
           embedTimeRef.current = {
-            currentTime: d.currentTime ?? 0,
-            duration: d.duration ?? 0,
+            currentTime: embedTimeRef.current.currentTime,
+            duration: nextDuration,
           };
+          syncUiProgress(embedTimeRef.current.currentTime, nextDuration);
+          setIsServerSwitching(false);
+          break;
+        }
+        case "time": {
+          const nextCurrentTime = d.currentTime ?? 0;
+          const nextDuration = d.duration ?? embedTimeRef.current.duration ?? 0;
+          embedTimeRef.current = {
+            currentTime: nextCurrentTime,
+            duration: nextDuration,
+          };
+          syncUiProgress(nextCurrentTime, nextDuration);
+          break;
+        }
+        case "canplay":
+          setVideoError(false);
+          setIsBuffering(false);
+          setShowFixedLoader(false);
+          setIsServerSwitching(false);
+          if (pendingSeek.current !== null) {
+            sendEmbedCmd("seek", { time: pendingSeek.current });
+            embedTimeRef.current.currentTime = pendingSeek.current;
+            pendingSeek.current = null;
+          }
+          if (!adGateActive) sendEmbedCmd("play");
+          break;
+        case "playing":
+          setPlaying(true);
+          setVideoError(false);
+          setIsBuffering(false);
+          setShowFixedLoader(false);
+          setIsServerSwitching(false);
+          break;
+        case "pause":
+          setPlaying(false);
+          break;
+        case "waiting":
+          setIsBuffering(true);
           break;
         case "ended":
           embedTimeRef.current.currentTime = embedTimeRef.current.duration;
+          syncUiProgress(embedTimeRef.current.duration, embedTimeRef.current.duration);
+          setPlaying(false);
+          if (onNextEpisode) onNextEpisode();
+          break;
+        case "error":
+          console.log("Embed video error. URL:", currentSrc, "Code:", d.code);
+          setPlaying(false);
+          setIsBuffering(false);
+          setShowFixedLoader(false);
+          setIsServerSwitching(false);
+          setVideoError(true);
           break;
       }
     }
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, []);
+  }, [adGateActive, boostedVolume, currentSrc, muted, onNextEpisode, playbackRate, sendEmbedCmd, syncUiProgress]);
 
   
   // Load CDN + proxy settings from Firebase (skip if noProxy)
