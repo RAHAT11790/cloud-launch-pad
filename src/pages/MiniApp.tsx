@@ -59,6 +59,8 @@ const STR: Record<Lang, Record<string, string>> = {
       "Account not detected. Please open from the Telegram bot link.",
     notCounted: "Ad closed too early or skipped. Not counted.",
     counted: "✅ Ad counted!",
+    continueAd: "Continue",
+    continueReady: "10 seconds completed. Tap Continue to count this ad.",
     realOnly: "Only real Rewarded ads can unlock access.",
     adUnavailable: "Monetag did not return a real ad, so nothing was counted.",
     rewardReady: "Rewarded ad is ready",
@@ -107,6 +109,8 @@ const STR: Record<Lang, Record<string, string>> = {
     invalidUser: "একাউন্ট পাওয়া যায়নি। টেলিগ্রাম বট লিঙ্ক থেকে খুলুন।",
     notCounted: "অ্যাড আগেই বন্ধ করেছেন বা স্কিপ করেছেন। গণনা হয়নি।",
     counted: "✅ অ্যাড গণনা হয়েছে!",
+    continueAd: "Continue",
+    continueReady: "১০ সেকেন্ড সম্পন্ন হয়েছে। এই অ্যাড কাউন্ট করতে Continue চাপুন।",
     realOnly: "আনলকের জন্য শুধু রিয়াল Rewarded Ad ব্যবহার করা যাবে।",
     adUnavailable:
       "Monetag কোনো রিয়াল অ্যাড দেয়নি, তাই কিছু কাউন্ট হয়নি।",
