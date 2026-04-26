@@ -686,6 +686,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [src, qualityOptions]);
 
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
+    // hf.space (Firem/iframe) URLs are loaded directly into the iframe — never wrap them
+    // through the CDN/stream-proxy (those are for raw video element playback only).
+    if (/hf\.space|huggingface/i.test(rawUrl)) return rawUrl;
     return getPrimaryPlaybackSrc(rawUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
