@@ -1103,15 +1103,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           const ct = v.currentTime;
           if (ct > 0) lastKnownTime = ct;
           const dur = v.duration;
-          // Direct DOM updates for progress bar - avoids React re-renders
+          // Direct DOM updates for progress bar — 60fps, no React re-render
           if (progressRef.current && dur > 0) {
             progressRef.current.style.width = `${(ct / dur) * 100}%`;
           }
           if (timeDisplayRef.current && dur > 0) {
             timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
           }
-          // Update React state less frequently (every ~500ms) for other consumers
-          setCurrentTime(ct);
+          // Throttle React state to ~1 Hz so the giant component doesn't
+          // re-render every frame. UI buttons stay smooth via DOM refs above.
+          const now = performance.now();
+          if (now - lastNativeSyncRef.current >= 1000) {
+            lastNativeSyncRef.current = now;
+            setCurrentTime(ct);
+            if (Number.isFinite(dur) && dur > 0) setDuration(dur);
+          }
           rafId.current = requestAnimationFrame(tick);
         }
       };
@@ -1129,10 +1135,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         onNextEpisode();
       }
     };
-    let retryCount = 0;
-    const MAX_RETRIES = 3;
+    const MAX_RETRIES = 2;
     const onError = () => {
-      if (retryCount >= MAX_RETRIES) {
+      const errSrc = currentSrc;
+      const prev = retryAttemptsRef.current.get(errSrc) || 0;
+      const next = prev + 1;
+      retryAttemptsRef.current.set(errSrc, next);
+      if (next > MAX_RETRIES) {
         console.log('Video failed after retries. URL:', currentSrc);
         failedSrcsRef.current.add(currentSrc);
         const failedQualityLabel = currentQuality;
