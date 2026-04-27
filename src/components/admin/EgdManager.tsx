@@ -57,7 +57,10 @@ const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 50);
 
 const parseMultipartFiles = (body: string, contentType: string) => {
-  const boundary = contentType.match(/boundary=([^;]+)/i)?.[1]?.replace(/^"|"$/g, "");
+  const boundary =
+    contentType.match(/boundary=([^;]+)/i)?.[1]?.replace(/^"|"$/g, "") ||
+    body.match(/^--([^\r\n-][^\r\n]*)/m)?.[1] ||
+    "";
   if (!boundary || !body.includes(boundary)) return [] as Array<{ filename: string; content: string }>;
 
   return body
