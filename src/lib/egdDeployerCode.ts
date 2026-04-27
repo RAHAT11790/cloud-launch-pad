@@ -127,10 +127,10 @@ async function listSecrets() {
   return mgmt("/projects/" + PROJECT_REF + "/secrets");
 }
 
-async function queryLogs(slug, minutes) {
+async function queryLogs(slug, minutes, startAt, endAt) {
   const safeMinutes = Math.min(Math.max(Number(minutes) || 60, 1), 1440);
-  const end = bodyDate(bodyEnd, new Date());
-  const start = bodyDate(bodyStart, new Date(end.getTime() - safeMinutes * 60 * 1000));
+  const end = endAt ? new Date(endAt) : new Date();
+  const start = startAt ? new Date(startAt) : new Date(end.getTime() - safeMinutes * 60 * 1000);
   const startIso = start.toISOString();
   const endIso = end.toISOString();
   const slugFilter = String(slug || "").trim();
@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "logs") {
-      const r = await queryLogs(body.slug, body.minutes);
+      const r = await queryLogs(body.slug, body.minutes, body.startAt, body.endAt);
       const rows = Array.isArray(r.data?.result) ? r.data.result : [];
       return json({ ok: r.ok, rows, error: r.ok ? undefined : r.data?.error || r.data });
     }
