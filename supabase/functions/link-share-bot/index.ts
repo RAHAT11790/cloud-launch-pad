@@ -1130,6 +1130,19 @@ async function handleUpdate(update: any) {
   const [cmdRaw, ...rest] = text.split(/\s+/);
   const cmd = cmdRaw.split("@")[0].toLowerCase();
   const arg = rest.join(" ").trim();
+  const adminOnly = new Set([
+    "/set_channel",
+    "/short",
+    "/list",
+    "/fsub_add",
+    "/fsub_list",
+    "/broadcast",
+    "/users",
+  ]);
+
+  if (cmd !== "/start" && adminOnly.has(cmd) && !isAdmin(user_id)) {
+    return;
+  }
 
   switch (cmd) {
     case "/start":
