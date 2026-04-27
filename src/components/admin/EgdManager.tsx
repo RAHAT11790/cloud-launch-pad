@@ -457,6 +457,11 @@ export default function EgdManager({
                 <Copy size={11} /> Copy
               </button>
             </div>
+            {sourceHint && (
+              <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200 break-words">
+                {sourceHint}
+              </div>
+            )}
             <textarea
               className={inputClass + " font-mono text-[11px] sm:text-xs leading-relaxed w-full block"}
               style={{ height: 320, resize: "none", overflow: "auto", whiteSpace: "pre" }}
@@ -546,7 +551,7 @@ export default function EgdManager({
           )}
 
           {/* Error log */}
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-3">
             <label className="text-xs text-zinc-400 block mb-1">Error / Deploy log</label>
             <textarea
               readOnly
@@ -554,11 +559,70 @@ export default function EgdManager({
               className={inputClass + " font-mono text-[11px] leading-relaxed w-full block"}
               style={{ height: 120, resize: "none", overflow: "auto" }}
             />
+
+            <div className="rounded-lg border border-zinc-700/60 bg-zinc-950/30 p-3 sm:p-4 space-y-3 min-w-0">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs text-zinc-400">Live log timeline</div>
+                  <div className="text-[11px] text-zinc-500 break-words">
+                    {selected ? `${selected} · recent function and edge logs` : "Select a function to load logs"}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {LOG_WINDOWS.map((item) => (
+                    <button
+                      key={item.minutes}
+                      onClick={() => {
+                        setLogsWindow(item.minutes);
+                        loadLogs(selected, item.minutes);
+                      }}
+                      disabled={!selected}
+                      className={
+                        "rounded-md px-2.5 py-1 text-[11px] border transition " +
+                        (logsWindow === item.minutes
+                          ? "border-amber-400/60 bg-amber-500/10 text-amber-200"
+                          : "border-zinc-700/70 text-zinc-400 hover:text-zinc-200")
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => loadLogs()}
+                    disabled={!selected || loadingLogs}
+                    className={btnSecondary + " inline-flex items-center gap-2 !px-3 !py-1.5 text-[11px]"}
+                  >
+                    {loadingLogs ? <Loader2 className="animate-spin" size={12} /> : <RefreshCw size={12} />}
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              <div className="max-h-[240px] overflow-auto space-y-2 pr-1">
+                {!selected ? (
+                  <div className="text-xs text-zinc-500">Choose a function from below to view timeline logs.</div>
+                ) : logs.length === 0 ? (
+                  <div className="text-xs text-zinc-500">No logs found in this time window.</div>
+                ) : (
+                  logs.map((row, idx) => (
+                    <div key={`${row.timestamp || 't'}-${idx}`} className="rounded-md border border-zinc-800 bg-zinc-950/50 p-2.5">
+                      <div className="flex items-center justify-between gap-2 text-[10px] text-zinc-500">
+                        <span className="uppercase tracking-wide">{row.source || "log"}</span>
+                        <span className="shrink-0">{row.timestamp ? new Date(row.timestamp).toLocaleString() : "—"}</span>
+                      </div>
+                      <div className="mt-1 whitespace-pre-wrap break-words font-mono text-[11px] text-zinc-200">
+                        {row.event_message || "(empty log)"}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
         {/* List card */}
-        <div className={glassCard + " p-4"}>
+        <div className={glassCard + " p-4 min-w-0"}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-bold flex items-center gap-2">
               <Bot size={16} className="text-amber-400" /> Deployed
@@ -572,12 +636,12 @@ export default function EgdManager({
           ) : sortedList.length === 0 ? (
             <p className="text-xs text-zinc-500">No functions deployed yet.</p>
           ) : (
-            <div className="space-y-1.5 max-h-[640px] overflow-auto pr-1">
+            <div className="space-y-2 max-h-[640px] overflow-auto pr-1 min-w-0">
               {sortedList.map((f) => (
                 <div
                   key={f.id || f.slug}
                   className={
-                    "rounded-lg border p-2.5 cursor-pointer transition " +
+                    "rounded-lg border p-3 cursor-pointer transition min-w-0 overflow-hidden " +
                     (selected === f.slug
                       ? "border-amber-400/60 bg-amber-500/10"
                       : "border-zinc-700/50 bg-zinc-900/40 hover:border-zinc-600")
@@ -586,9 +650,9 @@ export default function EgdManager({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="font-medium text-sm truncate">{f.slug}</div>
-                      <div className="text-[10px] text-zinc-500">
-                        v{f.version || "?"} · {f.status || "—"}
+                      <div className="font-medium text-sm break-words leading-tight">{f.slug}</div>
+                      <div className="text-[10px] text-zinc-500 break-words mt-1">
+                        v{f.version || "?"} · {(f.status || "—").toUpperCase()}
                       </div>
                     </div>
                     <button
