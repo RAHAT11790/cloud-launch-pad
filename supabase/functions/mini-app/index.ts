@@ -340,6 +340,7 @@ serve(async (req) => {
           expiresAt,
           label: entry.label || "External",
         });
+        notifyLinkShareBot(userId).catch(() => {});
         return json({
           ok: true,
           mode: "short",
