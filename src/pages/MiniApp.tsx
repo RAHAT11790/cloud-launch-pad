@@ -381,8 +381,16 @@ export default function MiniApp() {
       if (typeof raw !== "string") continue;
       const value = raw.trim();
       if (!value.startsWith("u_")) continue;
-      const body = decodeURIComponent(value.slice(2)).trim();
+      let body = decodeURIComponent(value.slice(2)).trim();
       if (!body) continue;
+      // Link-share-bot format: u_tg_<telegramId>_r_<returnChannel>
+      // Strip the trailing return-channel marker so it doesn't pollute the user id.
+      // Telegram WebApp itself will provide the real profile (name + photo) via initDataUnsafe.user
+      const lsbMatch = body.match(/^tg_(\d+)(?:_r_.*)?$/);
+      if (lsbMatch) {
+        // Skip — let the Telegram WebApp identity branch (initDataUnsafe.user) handle it.
+        continue;
+      }
       const withPanel = body.match(/^(.+?)_src_(app|web)_panel_(admin|user)$/);
       if (withPanel) {
         return {
