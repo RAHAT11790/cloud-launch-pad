@@ -137,19 +137,20 @@ async function queryLogs(slug, minutes) {
   const escapedSlug = slugFilter.replace(/'/g, "\\'").replace(/%/g, "\\%").replace(/_/g, "\\_");
 
   const where = slugFilter
-    ? `where to_json_string(metadata) like '%${escapedSlug}%' escape '\\'`
+    ? "where to_json_string(metadata) like '%" + escapedSlug + "%' escape '\\'"
     : "";
 
-  const sql = `
-select timestamp, event_message, 'function_logs' as source
-from function_logs
-${where}
-union all
-select timestamp, event_message, 'function_edge_logs' as source
-from function_edge_logs
-${where}
-order by timestamp desc
-limit 200`;
+  const sql = [
+    "select timestamp, event_message, 'function_logs' as source",
+    "from function_logs",
+    where,
+    "union all",
+    "select timestamp, event_message, 'function_edge_logs' as source",
+    "from function_edge_logs",
+    where,
+    "order by timestamp desc",
+    "limit 200",
+  ].filter(Boolean).join("\n");
 
   const params = new URLSearchParams({
     iso_timestamp_start: startIso,
