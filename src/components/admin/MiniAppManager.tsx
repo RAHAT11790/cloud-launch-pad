@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { db, ref, set, onValue, push, remove, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import {
-  Sparkles, Eye, MousePointerClick, CheckCircle2, KeyRound, Plus, Trash2, Copy, ExternalLink, Power, Save,
+  Sparkles, Eye, MousePointerClick, CheckCircle2, KeyRound, Plus, Trash2, Copy, Power, Save,
 } from "lucide-react";
 
 interface Props {
