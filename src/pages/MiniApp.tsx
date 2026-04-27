@@ -558,11 +558,15 @@ export default function MiniApp() {
       return;
     }
 
-    // Telegram or external API user — we already have what we need locally.
-    if (identity.source === "telegram" || identity.source === "external") {
+    // External API user with full data already provided.
+    if (
+      identity.source === "external" &&
+      identity.name &&
+      (identity.photoURL || identity.username)
+    ) {
       setProfile({
         id: identity.id,
-        name: identity.name || (identity.source === "telegram" ? "Telegram User" : "User"),
+        name: identity.name || "User",
         photoURL: identity.photoURL || "",
         source: identity.source,
         username: identity.username || "",
@@ -572,7 +576,7 @@ export default function MiniApp() {
       return;
     }
 
-    // Website user — fetch from backend
+    // Telegram users and website users — fetch from backend so saved Telegram profile photo/name is shown.
     setProfileLoading(true);
     fetch(FN_URL, {
       method: "POST",
