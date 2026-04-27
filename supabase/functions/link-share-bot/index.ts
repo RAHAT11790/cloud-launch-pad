@@ -792,7 +792,102 @@ async function handleFsubList(chat_id: number, user_id: number) {
     { reply_markup: { inline_keyboard: buttons } }, 60_000);
 }
 
-// ============== CALLBACKS ==============
+// ============== BROADCAST ==============
+// Usage: reply to ANY message with /broadcast → that message is forwarded
+// (via copyMessage) to every user in linkShareBot/users/*.
+// Live progress is shown by editing a single status message.
+async function handleUsersCount(chat_id: number, user_id: number) {
+  if (!isAdmin(user_id)) {
+    await sendEphemeral(chat_id, stylish("✦ Unauthorized ✦"));
+    return;
+  }
+  const data = await fb("GET", `${NS}/users`).catch(() => null);
+  const total = data ? Object.keys(data).length : 0;
+  await sendEphemeral(
+    chat_id,
+    `${stylish("✦ TOTAL USERS ✦")}\n\n${stylish("›› Count")}: <b>${total}</b>`,
+    {},
+    60_000,
+  );
+}
+
+async function handleBroadcast(chat_id: number, user_id: number, msg: any) {
+  if (!isAdmin(user_id)) {
+    await sendEphemeral(chat_id, stylish("✦ Unauthorized ✦"));
+    return;
+  }
+  const reply = msg.reply_to_message;
+  if (!reply) {
+    await sendEphemeral(
+      chat_id,
+      `${stylish("✦ HOW TO BROADCAST ✦")}\n\n${stylish("›› 1. Send the message to me first")}\n${stylish("›› 2. Reply to it with")} <code>/broadcast</code>`,
+      {},
+      60_000,
+    );
+    return;
+  }
+
+  const usersData = await fb("GET", `${NS}/users`).catch(() => null);
+  const ids: number[] = usersData
+    ? Object.keys(usersData).map((k) => Number(k)).filter((n) => Number.isFinite(n) && n > 0)
+    : [];
+  const total = ids.length;
+
+  if (total === 0) {
+    await sendEphemeral(chat_id, stylish("✦ No users to broadcast to ✦"));
+    return;
+  }
+
+  const status = await sendMessage(
+    chat_id,
+    `${stylish("✦ BROADCAST STARTED ✦")}\n\n${stylish("›› Total")}: <b>${total}</b>\n${stylish("›› Sent")}: 0\n${stylish("›› Failed")}: 0`,
+  );
+  const statusId = status?.result?.message_id;
+
+  let sent = 0;
+  let failed = 0;
+  let lastEdit = Date.now();
+
+  for (let i = 0; i < ids.length; i++) {
+    const target = ids[i];
+    try {
+      const r = await tg("copyMessage", {
+        chat_id: target,
+        from_chat_id: chat_id,
+        message_id: reply.message_id,
+      });
+      if (r?.ok) sent++;
+      else failed++;
+    } catch {
+      failed++;
+    }
+
+    // Live progress edit (throttled to every ~1.5s or end)
+    const now = Date.now();
+    if (statusId && (now - lastEdit > 1500 || i === ids.length - 1)) {
+      lastEdit = now;
+      const pct = Math.floor(((i + 1) / total) * 100);
+      const bar = "▓".repeat(Math.floor(pct / 5)) + "░".repeat(20 - Math.floor(pct / 5));
+      editMessageText(
+        chat_id,
+        statusId,
+        `${stylish("✦ BROADCAST IN PROGRESS ✦")}\n\n<code>${bar}</code> ${pct}%\n\n${stylish("›› Total")}: <b>${total}</b>\n${stylish("›› Sent")}: ✅ <b>${sent}</b>\n${stylish("›› Failed")}: ❌ <b>${failed}</b>\n${stylish("›› Done")}: <b>${i + 1}/${total}</b>`,
+      ).catch(() => {});
+    }
+
+    // Telegram rate-limit safety: ~25 msg/sec
+    if (i % 25 === 24) await new Promise((res) => setTimeout(res, 1000));
+  }
+
+  if (statusId) {
+    editMessageText(
+      chat_id,
+      statusId,
+      `${stylish("✦ BROADCAST COMPLETE ✅")}\n\n${stylish("›› Total")}: <b>${total}</b>\n${stylish("›› Sent")}: ✅ <b>${sent}</b>\n${stylish("›› Failed")}: ❌ <b>${failed}</b>`,
+    ).catch(() => {});
+  }
+}
+
 async function handleCallback(cb: any) {
   const data: string = cb.data || "";
   const user_id: number = cb.from.id;
