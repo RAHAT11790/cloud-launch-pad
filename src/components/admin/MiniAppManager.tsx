@@ -197,7 +197,18 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
             className={inputClass}
           />
           <p className="text-xs text-muted-foreground break-all">
-            Users go to <code className="break-all">https://t.me/{botUsername || "bot"}?startapp=u_USER_ID</code>
+            Users go to <code className="break-all">https://t.me/{botUsername || "bot"}/{appShortName || "app"}?startapp=u_USER_ID</code>
+          </p>
+
+          <label className="text-xs text-muted-foreground mt-2 block">Mini App Short Name (from BotFather → /myapps)</label>
+          <input
+            value={appShortName}
+            onChange={(e) => setAppShortName(e.target.value)}
+            placeholder="app"
+            className={inputClass}
+          />
+          <p className="text-[10px] text-muted-foreground">
+            This is the short name you set when you created the Mini App in @BotFather. It's part of the URL: <code>t.me/{botUsername || "bot"}/<b>{appShortName || "app"}</b></code>
           </p>
         </div>
         <div className="flex flex-wrap gap-2 mt-3">
