@@ -338,7 +338,13 @@ export default function EgdManager({
       if (d?.ok) {
         setLogs(Array.isArray(d.rows) ? d.rows : []);
       } else {
-        appendError("Logs failed: " + JSON.stringify(d?.error || d));
+        const errStr = typeof d?.error === "string" ? d.error : JSON.stringify(d?.error || d);
+        if (d?.status === 404 || /unknown action/i.test(errStr)) {
+          setLogs([]);
+          appendError("Logs unavailable: deployer is outdated. Open Setup → copy fresh code → redeploy egd-deployer in Supabase.");
+        } else {
+          appendError("Logs failed: " + errStr);
+        }
       }
     } catch (e: any) {
       appendError("Logs network: " + (e?.message || String(e)));
