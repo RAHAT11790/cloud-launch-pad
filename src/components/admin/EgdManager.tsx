@@ -292,6 +292,13 @@ export default function EgdManager({
       if (d?.ok) {
         toast.success("Deployed ✔");
         setResultUrl(d.url || "");
+        // Save source backup so reload-after-select shows real code
+        try {
+          await set(ref(db, `egdManager/sources/${slugify(slug)}`), {
+            code,
+            updatedAt: Date.now(),
+          });
+        } catch {}
         await loadList();
       } else {
         const msg = `Stage: ${d?.stage || "?"} | ${typeof d?.error === "string" ? d.error : JSON.stringify(d?.error || d)}`;
