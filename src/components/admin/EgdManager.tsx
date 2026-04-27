@@ -610,6 +610,40 @@ export default function EgdManager({
             <p className="text-[11px] text-zinc-500 mt-1 break-words">
               Names starting with SUPABASE_ / SB_ are reserved and skipped automatically.
             </p>
+
+            <div className="mt-3 rounded-lg border border-zinc-700/60 bg-zinc-950/30 p-3 space-y-2 min-w-0">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <div className="text-xs text-zinc-300">Project secret names</div>
+                  <div className="text-[10px] text-zinc-500 break-words">
+                    Backend secret values stay hidden for security.
+                  </div>
+                </div>
+                <button
+                  onClick={loadProjectSecrets}
+                  disabled={loadingSecrets}
+                  className={btnSecondary + " inline-flex items-center gap-2 !px-3 !py-1.5 text-[11px]"}
+                >
+                  {loadingSecrets ? <Loader2 className="animate-spin" size={12} /> : <RefreshCw size={12} />}
+                  Refresh
+                </button>
+              </div>
+
+              {projectSecrets.length === 0 ? (
+                <div className="text-[11px] text-zinc-500">No project secrets found.</div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {projectSecrets.map((name) => (
+                    <span
+                      key={name}
+                      className="rounded-md border border-zinc-700/70 bg-zinc-900/60 px-2.5 py-1 text-[10px] text-zinc-300 break-all"
+                    >
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Deploy button */}
