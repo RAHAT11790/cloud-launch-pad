@@ -864,6 +864,18 @@ export default function MiniApp() {
           setBotReturnUrl(data.botUrl);
         }
 
+        // Link-share-bot return: redirect user back to the origin bot
+        let lsOriginBot = "";
+        try { lsOriginBot = sessionStorage.getItem("ls_origin_bot") || ""; } catch {}
+        if (lsOriginBot && identity.source === "telegram") {
+          const backUrl = `https://t.me/${lsOriginBot}?start=verified`;
+          setInfo(t.closingApp);
+          setTimeout(() => openInApp(backUrl), 900);
+          closeAfter(1500);
+          try { sessionStorage.removeItem("ls_origin_bot"); } catch {}
+          return;
+        }
+
         if (mode === "short" && data.botUrl) {
           setInfo(t.closingApp);
           setTimeout(() => openInApp(data.botUrl), 900);
