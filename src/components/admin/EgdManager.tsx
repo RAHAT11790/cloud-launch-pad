@@ -289,29 +289,29 @@ export default function EgdManager({
 
       {/* Setup card */}
       {showSetup && (
-        <div className={glassCard + " p-6 space-y-4 border border-amber-500/30"}>
-          <h3 className="font-bold text-amber-300 flex items-center gap-2">
+        <div className={glassCard + " p-4 sm:p-6 space-y-4 border border-amber-500/30"}>
+          <h3 className="font-bold text-amber-300 flex items-center gap-2 text-sm sm:text-base">
             <Settings size={16} /> One-time Deployer Setup
           </h3>
 
-          <ol className="text-xs text-zinc-300 space-y-2 list-decimal list-inside">
+          <ol className="text-xs text-zinc-300 space-y-2 list-decimal list-inside break-words">
             <li>Open your Supabase Dashboard → <b>Edge Functions</b> → <b>Create function</b>.</li>
-            <li>Name it <code className="bg-zinc-800 px-1 rounded">egd-deployer</code> and paste the code below.</li>
+            <li>Name it <code className="bg-zinc-800 px-1 rounded break-all">egd-deployer</code> and paste the code below.</li>
             <li>Go to function <b>Settings</b> → turn <b>Verify JWT = OFF</b>.</li>
-            <li>Add a project secret <code className="bg-zinc-800 px-1 rounded">EGD_SUPABASE_PAT</code> = your Supabase Personal Access Token.</li>
+            <li>Add a project secret <code className="bg-zinc-800 px-1 rounded break-all">EGD_SUPABASE_PAT</code> = your Supabase Personal Access Token.</li>
             <li>Deploy. Copy the function URL and paste it below, then Save.</li>
           </ol>
 
           {/* Deployer code box */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs text-zinc-400">EGD Deployer source code (index.ts)</label>
+          <div className="min-w-0">
+            <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+              <label className="text-xs text-zinc-400">Deployer source (index.ts)</label>
               <div className="flex gap-2">
                 <button
                   onClick={() => copyText(EGD_DEPLOYER_CODE, "Deployer code copied")}
                   className="text-[11px] text-amber-400 hover:text-amber-300 inline-flex items-center gap-1"
                 >
-                  <Copy size={11} /> Copy code
+                  <Copy size={11} /> Copy
                 </button>
                 <button
                   onClick={downloadDeployerCode}
@@ -324,20 +324,20 @@ export default function EgdManager({
             <textarea
               readOnly
               value={EGD_DEPLOYER_CODE}
-              className={inputClass + " font-mono text-[11px] leading-relaxed"}
-              style={{ height: 280, resize: "none", overflow: "auto", whiteSpace: "pre" }}
+              className={inputClass + " font-mono text-[10px] sm:text-[11px] leading-relaxed w-full block"}
+              style={{ height: 220, resize: "none", overflow: "auto", whiteSpace: "pre" }}
               spellCheck={false}
             />
           </div>
 
           {/* URL input */}
-          <div>
+          <div className="min-w-0">
             <label className="text-xs text-zinc-400 mb-1 flex items-center gap-1">
               <LinkIcon size={12} /> Deployer Function URL
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
-                className={inputClass + " flex-1"}
+                className={inputClass + " flex-1 min-w-0"}
                 placeholder="https://xxxx.supabase.co/functions/v1/egd-deployer"
                 value={deployerUrl}
                 onChange={(e) => setDeployerUrl(e.target.value)}
@@ -345,14 +345,14 @@ export default function EgdManager({
               <button
                 onClick={saveDeployerUrl}
                 disabled={savingUrl}
-                className={btnPrimary + " inline-flex items-center gap-2"}
+                className={btnPrimary + " inline-flex items-center justify-center gap-2 shrink-0"}
               >
                 {savingUrl ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
                 Save
               </button>
             </div>
-            <p className="text-[11px] text-zinc-500 mt-1">
-              The URL is stored in Firebase, no API keys needed (deployer has Verify JWT off).
+            <p className="text-[11px] text-zinc-500 mt-1 break-words">
+              URL is stored in Firebase. No API keys needed (deployer runs with Verify JWT off).
             </p>
           </div>
         </div>
