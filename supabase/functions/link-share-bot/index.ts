@@ -1046,6 +1046,12 @@ async function handleUpdate(update: any) {
     case "/fsub_list":
       if (msg.chat.type === "private") await handleFsubList(chat_id, user_id);
       break;
+    case "/broadcast":
+      if (msg.chat.type === "private") await handleBroadcast(chat_id, user_id, msg);
+      break;
+    case "/users":
+      if (msg.chat.type === "private") await handleUsersCount(chat_id, user_id);
+      break;
   }
 }
 
