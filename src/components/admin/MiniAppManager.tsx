@@ -265,9 +265,9 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
 }
 
 function ApiKeyRow({
-  k, fullUrl, miniUrl, copy, toggleKey, deleteKey,
+  k, miniUrl, copy, toggleKey, deleteKey,
 }: {
-  k: ApiKeyEntry; fullUrl: string; miniUrl: string;
+  k: ApiKeyEntry; miniUrl: string;
   copy: (s: string) => void;
   toggleKey: (id: string, enabled: boolean) => void;
   deleteKey: (id: string) => void;
@@ -317,22 +317,15 @@ function ApiKeyRow({
         </button>
       </div>
       <div className="flex items-center gap-2 p-2 rounded bg-background/50 text-xs font-mono break-all">
-        <span className="opacity-60">key:</span> {k.key}
-        <button onClick={() => copy(k.key)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
-          <Copy className="w-3 h-3" />
+        <span className="opacity-60 shrink-0">API key:</span>
+        <span className="flex-1 break-all">{k.key}</span>
+        <button onClick={() => copy(k.key)} className="ml-auto p-1.5 hover:bg-fuchsia-500/20 rounded shrink-0" title="Copy key">
+          <Copy className="w-3.5 h-3.5" />
         </button>
       </div>
-      <div className="flex items-center gap-2 p-2 rounded bg-background/50 text-xs font-mono break-all">
-        <span className="opacity-60">redirect url:</span> {fullUrl}
-        <button onClick={() => copy(fullUrl)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
-          <Copy className="w-3 h-3" />
-        </button>
-      </div>
-      <div className="flex items-center gap-2 text-xs">
-        <ExternalLink className="w-3 h-3 opacity-60" />
-        <span className="opacity-60">default redirect:</span>
-        <span className="truncate">{k.redirectUrl}</span>
-      </div>
+      <p className="text-[10px] text-muted-foreground leading-relaxed">
+        📋 Copy this key and paste it into your bot's <code>RS_API_KEY</code> config. Bot will auto-shorten every link through it.
+      </p>
 
       {/* Inline URL shortener */}
       <div className="pt-2 border-t border-border/40 space-y-1.5">
