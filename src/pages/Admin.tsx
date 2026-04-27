@@ -1933,6 +1933,21 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [usersData, setUsersData] = useState<any[]>([]);
   const [appUsersGlobal, setAppUsersGlobal] = useState<Record<string, any>>({});
   const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [debouncedUserSearch, setDebouncedUserSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedUserSearch(userSearchQuery), 150);
+    return () => clearTimeout(t);
+  }, [userSearchQuery]);
+  const filteredUsersList = useMemo(() => {
+    const q = debouncedUserSearch.trim().toLowerCase();
+    if (!q) return usersData;
+    return usersData.filter(u => {
+      const name = String(u.name || "").toLowerCase();
+      const email = String(u.email || "").toLowerCase();
+      const id = String(u.id || "").toLowerCase();
+      return name.includes(q) || email.includes(q) || id.includes(q);
+    });
+  }, [usersData, debouncedUserSearch]);
   const [notificationsData, setNotificationsData] = useState<any[]>([]);
   const [releasesData, setReleasesData] = useState<any[]>([]);
   const [commentsData, setCommentsData] = useState<any[]>([]);
