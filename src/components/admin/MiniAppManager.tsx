@@ -23,6 +23,15 @@ interface ApiKeyEntry {
   lastUsedAt?: number;
 }
 
+interface ForceChannelConfig {
+  id: string;
+  chatId: string;
+  label: string;
+  url: string;
+  enabled: boolean;
+  order: number;
+}
+
 const randomKey = () =>
   `mini_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`;
 
@@ -35,6 +44,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
   const [newLabel, setNewLabel] = useState("");
   const [newRedirect, setNewRedirect] = useState("");
   const [setupBusy, setSetupBusy] = useState(false);
+  const [forceChannels, setForceChannels] = useState<ForceChannelConfig[]>([]);
 
   useEffect(() => {
     const u1 = onValue(ref(db, "miniApp/stats"), (snap) => setStats(snap.val() || {}));
@@ -55,7 +65,19 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
       const v = String(snap.val() || "").trim();
       setAppShortName(v || "app");
     });
-    return () => { u1(); u2(); u3(); u4(); u5(); };
+    const u6 = onValue(ref(db, "miniApp/forceSubscribe/channels"), (snap) => {
+      const raw = snap.val() || {};
+      const list: ForceChannelConfig[] = Object.entries(raw).map(([id, val]: [string, any]) => ({
+        id,
+        chatId: String(val?.chatId || ""),
+        label: String(val?.label || ""),
+        url: String(val?.url || ""),
+        enabled: val?.enabled !== false,
+        order: Number(val?.order || 0),
+      })).sort((a, b) => a.order - b.order);
+      setForceChannels(list);
+    });
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); };
   }, []);
 
   const saveSettings = async () => {
@@ -114,6 +136,24 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
   const copy = (s: string) => {
     navigator.clipboard.writeText(s);
     toast.success("Copied");
+  };
+
+  const addForceChannel = async () => {
+    await push(ref(db, "miniApp/forceSubscribe/channels"), {
+      chatId: "",
+      label: "",
+      url: "",
+      enabled: true,
+      order: forceChannels.length,
+    });
+  };
+
+  const updateForceChannel = async (id: string, patch: Partial<ForceChannelConfig>) => {
+    await update(ref(db, `miniApp/forceSubscribe/channels/${id}`), patch);
+  };
+
+  const deleteForceChannel = async (id: string) => {
+    await remove(ref(db, `miniApp/forceSubscribe/channels/${id}`));
   };
 
   const miniUrl = `${window.location.origin}/mini`;
@@ -222,6 +262,37 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
       </div>
 
       {/* === Dedicated Access Bot (RS_ANIME_ACCESS_BOT) === */}
+      <div className={cardCls}>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div>
+            <h3 className="font-semibold text-sm">Force Subscribe Channels</h3>
+            <p className="text-[11px] text-muted-foreground">Only missing channels will show in the bot. If all are joined, the force-subscribe message will not appear.</p>
+          </div>
+          <button onClick={addForceChannel} className={`${btnPrimary} px-3 py-2 text-xs flex items-center gap-1.5`}>
+            <Plus className="w-3.5 h-3.5" /> Add Channel
+          </button>
+        </div>
+        <div className="space-y-2">
+          {forceChannels.length === 0 && <p className="text-xs text-muted-foreground">No force-subscribe channels configured.</p>}
+          {forceChannels.map((channel, index) => (
+            <div key={channel.id} className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold">Channel {index + 1}</span>
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] text-muted-foreground flex items-center gap-1">
+                    <input type="checkbox" checked={channel.enabled} onChange={(e) => updateForceChannel(channel.id, { enabled: e.target.checked })} /> Enabled
+                  </label>
+                  <button onClick={() => deleteForceChannel(channel.id)} className="p-1.5 hover:bg-muted rounded text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+              </div>
+              <input value={channel.label} onChange={(e) => updateForceChannel(channel.id, { label: e.target.value })} placeholder="Button label" className={inputClass} />
+              <input value={channel.chatId} onChange={(e) => updateForceChannel(channel.id, { chatId: e.target.value })} placeholder="Chat ID or @channelusername" className={inputClass} />
+              <input value={channel.url} onChange={(e) => updateForceChannel(channel.id, { url: e.target.value })} placeholder="https://t.me/..." className={inputClass} />
+            </div>
+          ))}
+        </div>
+      </div>
+
       <AccessBotSection glassCard={cardCls} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
       {/* Mini App URL */}

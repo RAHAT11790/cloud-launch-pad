@@ -321,6 +321,7 @@ export default function MiniApp() {
   const [error, setError] = useState<string>("");
   const [info, setInfo] = useState<string>("");
   const [fallbackUrl, setFallbackUrl] = useState<string>("");
+  const [botReturnUrl, setBotReturnUrl] = useState<string>("");
   const [shortDest, setShortDest] = useState<string>("");
   const [shortLabel, setShortLabel] = useState<string>("");
   const [copyOk, setCopyOk] = useState(false);
@@ -557,11 +558,15 @@ export default function MiniApp() {
       return;
     }
 
-    // Telegram or external API user — we already have what we need locally.
-    if (identity.source === "telegram" || identity.source === "external") {
+    // External API user with full data already provided.
+    if (
+      identity.source === "external" &&
+      identity.name &&
+      (identity.photoURL || identity.username)
+    ) {
       setProfile({
         id: identity.id,
-        name: identity.name || (identity.source === "telegram" ? "Telegram User" : "User"),
+        name: identity.name || "User",
         photoURL: identity.photoURL || "",
         source: identity.source,
         username: identity.username || "",
@@ -571,7 +576,7 @@ export default function MiniApp() {
       return;
     }
 
-    // Website user — fetch from backend
+    // Telegram users and website users — fetch from backend so saved Telegram profile photo/name is shown.
     setProfileLoading(true);
     fetch(FN_URL, {
       method: "POST",
@@ -668,12 +673,12 @@ export default function MiniApp() {
     });
   }, [adType, preloadRewardedAd, views]);
 
-  // AUTO-GRANT: when 5 ads done in site mode, auto-call grant so user is unlocked
-  // even if they close Telegram without tapping the button.
+  // AUTO-GRANT: when 5 ads done, grant immediately and close back to bot/site.
   useEffect(() => {
     if (
       views >= REQUIRED_VIEWS &&
-      mode === "site" &&
+      (mode === "site" || mode === "short" || mode === "api") &&
+      (mode === "short" || userId) &&
       userId &&
       !granted &&
       !autoGrantedRef.current
@@ -845,17 +850,25 @@ export default function MiniApp() {
           window.location.href = url;
         };
 
-        if (mode === "short" && data.dest) {
+        if (data.botUrl) {
+          setBotReturnUrl(data.botUrl);
+        }
+
+        if (mode === "short" && data.botUrl) {
+          setInfo(t.closingApp);
+          setTimeout(() => openInApp(data.botUrl), 900);
+          closeAfter(1500);
+        } else if (mode === "short" && data.dest) {
           setShortDest(data.dest);
           setInfo(t.redirecting);
           setTimeout(() => openExternalBrowser(data.dest), 1200);
           closeAfter(1800);
         } else if (mode === "api") {
-          const redirectTo = data.redirectUrl || externalRedirect;
+          const redirectTo = data.botUrl || data.redirectUrl || externalRedirect;
           if (redirectTo) {
-            setInfo(t.redirecting);
-            setTimeout(() => openExternalBrowser(redirectTo), 1200);
-            closeAfter(1800);
+            setInfo(t.closingApp);
+            setTimeout(() => openInApp(redirectTo), 900);
+            closeAfter(1500);
           }
         } else if (mode === "site") {
           // Build unlock URL (token from backend, fallback to userId-only)
@@ -872,8 +885,11 @@ export default function MiniApp() {
             const sendBack = websiteSource === "app" ? openInApp : openExternalBrowser;
             setTimeout(() => sendBack(unlockUrl), 1200);
             closeAfter(2000);
+          } else if (data.botUrl) {
+            setInfo(t.closingApp);
+            setTimeout(() => openInApp(data.botUrl), 900);
+            closeAfter(1500);
           }
-          // else: organic Telegram user → just show the unlock link card with note
         }
       }
     } catch {
@@ -1013,7 +1029,7 @@ export default function MiniApp() {
             <p className="text-white/70 text-sm mb-5">{t.grantedDesc}</p>
             {info && <p className="text-cyan-300 text-xs mb-3">{info}</p>}
 
-            {mode === "short" && shortDest && (
+            {mode === "short" && shortDest && !botReturnUrl && (
               <a
                 href={shortDest}
                 className="block w-full py-3 mb-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-400 text-black font-bold shadow-lg hover:scale-[1.02] active:scale-[0.98] transition"
@@ -1023,7 +1039,7 @@ export default function MiniApp() {
               </a>
             )}
 
-            {mode === "site" && fallbackUrl && (
+            {mode === "site" && fallbackUrl && !botReturnUrl && cameFromWebsite && (
               <div className="text-left rounded-xl bg-white/5 border border-white/15 p-3 mb-4">
                 <div className="text-xs font-semibold text-amber-300 mb-1 flex items-center gap-1">
                   <AlertTriangle className="w-3.5 h-3.5" />
@@ -1062,12 +1078,14 @@ export default function MiniApp() {
               </div>
             )}
 
-            <button
-              onClick={closeMini}
-              className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold border border-white/10 transition"
-            >
-              {t.backToBot}
-            </button>
+            {!botReturnUrl && (
+              <button
+                onClick={closeMini}
+                className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold border border-white/10 transition"
+              >
+                {t.backToBot}
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -1214,20 +1232,11 @@ export default function MiniApp() {
               </div>
             )}
 
-            {/* Get access */}
             {views >= REQUIRED_VIEWS && (
-              <button
-                onClick={handleGetAccess}
-                disabled={granting}
-                className="w-full py-4 mb-5 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-400 text-black font-extrabold text-base shadow-xl shadow-emerald-500/50 hover:scale-[1.02] active:scale-[0.98] transition disabled:opacity-60 flex items-center justify-center gap-2"
-              >
-                {granting ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="w-5 h-5" />
-                )}
-                {t.getAccess}
-              </button>
+              <div className="w-full py-4 mb-5 rounded-2xl bg-gradient-to-r from-emerald-500/15 to-cyan-400/15 border border-emerald-400/30 text-white font-bold text-sm flex items-center justify-center gap-2">
+                <Loader2 className={`w-4 h-4 ${granting ? "animate-spin" : ""}`} />
+                {granting ? t.closingApp : t.redirecting}
+              </div>
             )}
 
             {/* Notices */}
