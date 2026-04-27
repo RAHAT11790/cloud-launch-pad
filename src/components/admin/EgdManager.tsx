@@ -28,6 +28,14 @@ type FnRow = {
 };
 
 type SecretRow = { name: string; value: string };
+type LogRow = { timestamp?: string; event_message?: string; source?: string };
+
+const LOG_WINDOWS = [
+  { label: "15m", minutes: 15 },
+  { label: "1h", minutes: 60 },
+  { label: "6h", minutes: 360 },
+  { label: "24h", minutes: 1440 },
+];
 
 const STARTER = `// New Edge Function
 const cors = {
@@ -47,6 +55,57 @@ Deno.serve(async (req) => {
 
 const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 50);
+
+const parseMultipartFiles = (body: string, contentType: string) => {
+  const boundary =
+    contentType.match(/boundary=([^;]+)/i)?.[1]?.replace(/^"|"$/g, "") ||
+    body.match(/^--([^\r\n-][^\r\n]*)/m)?.[1] ||
+    "";
+  if (!boundary || !body.includes(boundary)) return [] as Array<{ filename: string; content: string }>;
+
+  return body
+    .split(`--${boundary}`)
+    .map((part) => part.trim())
+    .filter((part) => part && part !== "--")
+    .map((part) => {
+      const [rawHeaders, ...rest] = part.split(/\r?\n\r?\n/);
+      const content = rest.join("\n\n").replace(/\r?\n--$/, "").trim();
+      const filename = rawHeaders.match(/filename="([^"]+)"/i)?.[1] || "";
+      return { filename, content };
+    })
+    .filter((file) => file.filename && file.content);
+};
+
+const normalizeFunctionBody = (body: string, contentType = "") => {
+  const files = parseMultipartFiles(body, contentType);
+  if (files.length > 0) {
+    const preferred =
+      files.find((file) => /(^|\/)index\.(ts|tsx|js|jsx)$/i.test(file.filename)) ||
+      files[0];
+
+    return {
+      mode: "source" as const,
+      code: preferred.content,
+      note: files.length > 1 ? `${files.length} files found · showing ${preferred.filename}` : `Showing ${preferred.filename}`,
+    };
+  }
+
+  const looksBinary = body.startsWith("ESZIP") || /[\x00-\x08\x0E-\x1F]/.test(body.slice(0, 200));
+  if (looksBinary) {
+    return {
+      mode: "bundle" as const,
+      code:
+        `// ⚠️ This function was deployed as a compiled bundle (ESZIP).\n` +
+        `// Source code cannot be recovered from the deployed bundle.\n` +
+        `//\n` +
+        `// Paste fresh source here, then click Deploy to replace it.\n\n` +
+        STARTER,
+      note: "Compiled bundle — paste fresh source to replace",
+    };
+  }
+
+  return { mode: "source" as const, code: body || "// (empty body)", note: "" };
+};
 
 export default function EgdManager({
   glassCard, inputClass, btnPrimary, btnSecondary,
@@ -68,6 +127,12 @@ export default function EgdManager({
   const [deleting, setDeleting] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState("");
   const [errorLog, setErrorLog] = useState("");
+  const [logs, setLogs] = useState<LogRow[]>([]);
+  const [logsWindow, setLogsWindow] = useState(60);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [sourceHint, setSourceHint] = useState("");
+  const [logStartAt, setLogStartAt] = useState("");
+  const [logEndAt, setLogEndAt] = useState("");
 
   // ---------- Load deployer URL ----------
   useEffect(() => {
@@ -152,30 +217,19 @@ export default function EgdManager({
 
   const loadFn = async (s: string) => {
     setSelected(s);
+    setSourceHint("");
     try {
       const d = await callDeployer("get", { slug: s });
       if (d?.ok && d.fn) {
         setSlug(d.fn.slug || s);
         const body: string = d.fn.body || "";
-        // Detect binary / ESZIP bundle (non-text content) and show friendly message
-        const looksBinary =
-          body.startsWith("ESZIP") ||
-          /[\x00-\x08\x0E-\x1F]/.test(body.slice(0, 200));
-        if (looksBinary) {
-          setCode(
-            `// ⚠️ This function was deployed as a compiled bundle (ESZIP).\n` +
-            `// Source code cannot be recovered from the deployed bundle.\n` +
-            `//\n` +
-            `// To update "${s}", paste your new source code here and click Deploy.\n` +
-            `// (The old bundle will be replaced with this fresh source.)\n\n` +
-            STARTER,
-          );
-          toast.info("Compiled bundle — paste fresh source to replace");
-        } else {
-          setCode(body || "// (empty body)");
-        }
+        const normalized = normalizeFunctionBody(body, d.fn.contentType || "");
+        setCode(normalized.code);
+        setSourceHint(normalized.note);
+        if (normalized.mode === "bundle") toast.info(normalized.note);
         const ref = savedDeployerUrl.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1];
         if (ref) setResultUrl(`https://${ref}.supabase.co/functions/v1/${s}`);
+        loadLogs(s, logsWindow);
       } else {
         appendError("Get failed: " + JSON.stringify(d?.error || d));
       }
@@ -234,6 +288,24 @@ export default function EgdManager({
   const newDraft = () => {
     setSelected(""); setSlug(""); setCode(STARTER);
     setSecrets([{ name: "", value: "" }]); setResultUrl(""); setErrorLog("");
+    setLogs([]); setSourceHint("");
+  };
+
+  const loadLogs = async (targetSlug = selected, minutes = logsWindow, startAt = logStartAt, endAt = logEndAt) => {
+    if (!savedDeployerUrl) return;
+    setLoadingLogs(true);
+    try {
+      const d = await callDeployer("logs", { slug: targetSlug, minutes, startAt, endAt });
+      if (d?.ok) {
+        setLogs(Array.isArray(d.rows) ? d.rows : []);
+      } else {
+        appendError("Logs failed: " + JSON.stringify(d?.error || d));
+      }
+    } catch (e: any) {
+      appendError("Logs network: " + (e?.message || String(e)));
+    } finally {
+      setLoadingLogs(false);
+    }
   };
 
   const sortedList = useMemo(
@@ -390,6 +462,11 @@ export default function EgdManager({
                 <Copy size={11} /> Copy
               </button>
             </div>
+            {sourceHint && (
+              <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200 break-words">
+                {sourceHint}
+              </div>
+            )}
             <textarea
               className={inputClass + " font-mono text-[11px] sm:text-xs leading-relaxed w-full block"}
               style={{ height: 320, resize: "none", overflow: "auto", whiteSpace: "pre" }}
@@ -479,7 +556,7 @@ export default function EgdManager({
           )}
 
           {/* Error log */}
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-3">
             <label className="text-xs text-zinc-400 block mb-1">Error / Deploy log</label>
             <textarea
               readOnly
@@ -487,11 +564,88 @@ export default function EgdManager({
               className={inputClass + " font-mono text-[11px] leading-relaxed w-full block"}
               style={{ height: 120, resize: "none", overflow: "auto" }}
             />
+
+            <div className="rounded-lg border border-zinc-700/60 bg-zinc-950/30 p-3 sm:p-4 space-y-3 min-w-0">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs text-zinc-400">Live log timeline</div>
+                  <div className="text-[11px] text-zinc-500 break-words">
+                    {selected ? `${selected} · recent function and edge logs` : "Project-wide recent function and edge logs"}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {LOG_WINDOWS.map((item) => (
+                    <button
+                      key={item.minutes}
+                      onClick={() => {
+                        setLogsWindow(item.minutes);
+                        loadLogs(selected, item.minutes);
+                      }}
+                      className={
+                        "rounded-md px-2.5 py-1 text-[11px] border transition " +
+                        (logsWindow === item.minutes
+                          ? "border-amber-400/60 bg-amber-500/10 text-amber-200"
+                          : "border-zinc-700/70 text-zinc-400 hover:text-zinc-200")
+                      }
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => loadLogs()}
+                    disabled={loadingLogs}
+                    className={btnSecondary + " inline-flex items-center gap-2 !px-3 !py-1.5 text-[11px]"}
+                  >
+                    {loadingLogs ? <Loader2 className="animate-spin" size={12} /> : <RefreshCw size={12} />}
+                    Refresh
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-zinc-500 mb-1 block">Start</label>
+                  <input
+                    type="datetime-local"
+                    className={inputClass + " w-full text-[11px]"}
+                    value={logStartAt}
+                    onChange={(e) => setLogStartAt(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-zinc-500 mb-1 block">End</label>
+                  <input
+                    type="datetime-local"
+                    className={inputClass + " w-full text-[11px]"}
+                    value={logEndAt}
+                    onChange={(e) => setLogEndAt(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="max-h-[240px] overflow-auto space-y-2 pr-1">
+                {logs.length === 0 ? (
+                  <div className="text-xs text-zinc-500">No logs found in this time window.</div>
+                ) : (
+                  logs.map((row, idx) => (
+                    <div key={`${row.timestamp || 't'}-${idx}`} className="rounded-md border border-zinc-800 bg-zinc-950/50 p-2.5">
+                      <div className="flex items-center justify-between gap-2 text-[10px] text-zinc-500">
+                        <span className="uppercase tracking-wide">{row.source || "log"}</span>
+                        <span className="shrink-0">{row.timestamp ? new Date(row.timestamp).toLocaleString() : "—"}</span>
+                      </div>
+                      <div className="mt-1 whitespace-pre-wrap break-words font-mono text-[11px] text-zinc-200">
+                        {row.event_message || "(empty log)"}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
         {/* List card */}
-        <div className={glassCard + " p-4"}>
+        <div className={glassCard + " p-4 min-w-0"}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-bold flex items-center gap-2">
               <Bot size={16} className="text-amber-400" /> Deployed
@@ -505,12 +659,12 @@ export default function EgdManager({
           ) : sortedList.length === 0 ? (
             <p className="text-xs text-zinc-500">No functions deployed yet.</p>
           ) : (
-            <div className="space-y-1.5 max-h-[640px] overflow-auto pr-1">
+            <div className="space-y-2 max-h-[640px] overflow-auto pr-1 min-w-0">
               {sortedList.map((f) => (
                 <div
                   key={f.id || f.slug}
                   className={
-                    "rounded-lg border p-2.5 cursor-pointer transition " +
+                    "rounded-lg border p-3 cursor-pointer transition min-w-0 overflow-hidden " +
                     (selected === f.slug
                       ? "border-amber-400/60 bg-amber-500/10"
                       : "border-zinc-700/50 bg-zinc-900/40 hover:border-zinc-600")
@@ -519,9 +673,9 @@ export default function EgdManager({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="font-medium text-sm truncate">{f.slug}</div>
-                      <div className="text-[10px] text-zinc-500">
-                        v{f.version || "?"} · {f.status || "—"}
+                      <div className="font-medium text-sm break-words leading-tight">{f.slug}</div>
+                      <div className="text-[10px] text-zinc-500 break-words mt-1">
+                        v{f.version || "?"} · {(f.status || "—").toUpperCase()}
                       </div>
                     </div>
                     <button

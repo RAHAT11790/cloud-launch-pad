@@ -74,7 +74,15 @@ async function getFunction(slug) {
     headers: { Authorization: "Bearer " + PAT },
   });
   const body = await bodyR.text();
-  return { ok: true, status: 200, data: { ...meta.data, body } };
+  return {
+    ok: true,
+    status: 200,
+    data: {
+      ...meta.data,
+      body,
+      contentType: bodyR.headers.get("content-type") || "",
+    },
+  };
 }
 
 async function deployFunction(slug, code) {
@@ -119,6 +127,42 @@ async function listSecrets() {
   return mgmt("/projects/" + PROJECT_REF + "/secrets");
 }
 
+async function queryLogs(slug, minutes, startAt, endAt) {
+  const safeMinutes = Math.min(Math.max(Number(minutes) || 60, 1), 1440);
+  const endCandidate = endAt ? new Date(endAt) : new Date();
+  const end = Number.isNaN(endCandidate.getTime()) ? new Date() : endCandidate;
+  const startCandidate = startAt ? new Date(startAt) : new Date(end.getTime() - safeMinutes * 60 * 1000);
+  const start = Number.isNaN(startCandidate.getTime()) ? new Date(end.getTime() - safeMinutes * 60 * 1000) : startCandidate;
+  const startIso = start.toISOString();
+  const endIso = end.toISOString();
+  const slugFilter = String(slug || "").trim();
+  const escapedSlug = slugFilter.replace(/'/g, "\\'").replace(/%/g, "\\%").replace(/_/g, "\\_");
+
+  const where = slugFilter
+    ? "where to_json_string(metadata) like '%" + escapedSlug + "%' escape '\\'"
+    : "";
+
+  const sql = [
+    "select timestamp, event_message, 'function_logs' as source",
+    "from function_logs",
+    where,
+    "union all",
+    "select timestamp, event_message, 'function_edge_logs' as source",
+    "from function_edge_logs",
+    where,
+    "order by timestamp desc",
+    "limit 200",
+  ].filter(Boolean).join("\n");
+
+  const params = new URLSearchParams({
+    iso_timestamp_start: startIso,
+    iso_timestamp_end: endIso,
+    sql,
+  });
+
+  return mgmt("/projects/" + PROJECT_REF + "/analytics/endpoints/logs.all?" + params.toString());
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -151,6 +195,12 @@ Deno.serve(async (req) => {
       const r = await listSecrets();
       const names = Array.isArray(r.data) ? r.data.map((s) => s.name) : [];
       return json({ ok: r.ok, names, error: r.ok ? undefined : r.data });
+    }
+
+    if (action === "logs") {
+      const r = await queryLogs(body.slug, body.minutes, body.startAt, body.endAt);
+      const rows = Array.isArray(r.data?.result) ? r.data.result : [];
+      return json({ ok: r.ok, rows, error: r.ok ? undefined : r.data?.error || r.data });
     }
 
     if (action === "deploy") {
