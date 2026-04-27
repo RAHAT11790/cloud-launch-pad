@@ -383,11 +383,13 @@ export default function MiniApp() {
       if (!value.startsWith("u_")) continue;
       let body = decodeURIComponent(value.slice(2)).trim();
       if (!body) continue;
-      // Link-share-bot format: u_tg_<telegramId>_r_<returnChannel>
-      // Strip the trailing return-channel marker so it doesn't pollute the user id.
-      // Telegram WebApp itself will provide the real profile (name + photo) via initDataUnsafe.user
-      const lsbMatch = body.match(/^tg_(\d+)(?:_r_.*)?$/);
+      // Link-share-bot format: u_tg_<telegramId>_r_<returnChannel>_b_<botUsername>
+      // Capture origin bot username so we can redirect the user back after verify.
+      const lsbMatch = body.match(/^tg_(\d+)(?:_r_[^_]*)?(?:_b_([A-Za-z0-9_]+))?$/);
       if (lsbMatch) {
+        if (lsbMatch[2]) {
+          try { sessionStorage.setItem("ls_origin_bot", lsbMatch[2]); } catch {}
+        }
         // Skip — let the Telegram WebApp identity branch (initDataUnsafe.user) handle it.
         continue;
       }
@@ -860,6 +862,18 @@ export default function MiniApp() {
 
         if (data.botUrl) {
           setBotReturnUrl(data.botUrl);
+        }
+
+        // Link-share-bot return: redirect user back to the origin bot
+        let lsOriginBot = "";
+        try { lsOriginBot = sessionStorage.getItem("ls_origin_bot") || ""; } catch {}
+        if (lsOriginBot && identity.source === "telegram") {
+          const backUrl = `https://t.me/${lsOriginBot}?start=verified`;
+          setInfo(t.closingApp);
+          setTimeout(() => openInApp(backUrl), 900);
+          closeAfter(1500);
+          try { sessionStorage.removeItem("ls_origin_bot"); } catch {}
+          return;
         }
 
         if (mode === "short" && data.botUrl) {

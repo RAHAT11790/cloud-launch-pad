@@ -351,8 +351,10 @@ async function verifyUserWithBackend(user_id: number): Promise<boolean> {
 }
 
 // Verify keyboard — single button (auto-verify, no manual continue)
-function verifyKeyboard(user_id: number, returnPayload = "") {
-  const url = `https://t.me/${RS_MINI_BOT}/${RS_MINI_APP_NAME}?startapp=u_tg_${user_id}_r_${returnPayload}`;
+// Embeds origin bot username so mini-app redirects back here after success.
+async function verifyKeyboard(user_id: number, returnPayload = "") {
+  const u = await botUsername();
+  const url = `https://t.me/${RS_MINI_BOT}/${RS_MINI_APP_NAME}?startapp=u_tg_${user_id}_r_${returnPayload}_b_${u}`;
   return {
     inline_keyboard: [
       [{ text: "🎁 ᴠᴇʀɪғʏ ᴀᴄᴄᴇꜱꜱ (24ʜ)", url }],
@@ -375,7 +377,8 @@ ${stylish("›› 2. Watch 5 short ads in Mini App")}
 ${stylish("›› 3. Auto-return — done!")}
 
 ✦━━━━━━━━━━━━━━━━━━━✦`;
-  const r = await sendPhoto(chat_id, RS_VERIFY_IMG, caption, { reply_markup: verifyKeyboard(user_id, returnPayload) });
+  const kb = await verifyKeyboard(user_id, returnPayload);
+  const r = await sendPhoto(chat_id, RS_VERIFY_IMG, caption, { reply_markup: kb });
   // WORKFLOW message: do NOT schedule auto-delete — flow deletes it on success.
   const mid = r?.result?.message_id;
   if (mid) {
@@ -789,7 +792,102 @@ async function handleFsubList(chat_id: number, user_id: number) {
     { reply_markup: { inline_keyboard: buttons } }, 60_000);
 }
 
-// ============== CALLBACKS ==============
+// ============== BROADCAST ==============
+// Usage: reply to ANY message with /broadcast → that message is forwarded
+// (via copyMessage) to every user in linkShareBot/users/*.
+// Live progress is shown by editing a single status message.
+async function handleUsersCount(chat_id: number, user_id: number) {
+  if (!isAdmin(user_id)) {
+    await sendEphemeral(chat_id, stylish("✦ Unauthorized ✦"));
+    return;
+  }
+  const data = await fb("GET", `${NS}/users`).catch(() => null);
+  const total = data ? Object.keys(data).length : 0;
+  await sendEphemeral(
+    chat_id,
+    `${stylish("✦ TOTAL USERS ✦")}\n\n${stylish("›› Count")}: <b>${total}</b>`,
+    {},
+    60_000,
+  );
+}
+
+async function handleBroadcast(chat_id: number, user_id: number, msg: any) {
+  if (!isAdmin(user_id)) {
+    await sendEphemeral(chat_id, stylish("✦ Unauthorized ✦"));
+    return;
+  }
+  const reply = msg.reply_to_message;
+  if (!reply) {
+    await sendEphemeral(
+      chat_id,
+      `${stylish("✦ HOW TO BROADCAST ✦")}\n\n${stylish("›› 1. Send the message to me first")}\n${stylish("›› 2. Reply to it with")} <code>/broadcast</code>`,
+      {},
+      60_000,
+    );
+    return;
+  }
+
+  const usersData = await fb("GET", `${NS}/users`).catch(() => null);
+  const ids: number[] = usersData
+    ? Object.keys(usersData).map((k) => Number(k)).filter((n) => Number.isFinite(n) && n > 0)
+    : [];
+  const total = ids.length;
+
+  if (total === 0) {
+    await sendEphemeral(chat_id, stylish("✦ No users to broadcast to ✦"));
+    return;
+  }
+
+  const status = await sendMessage(
+    chat_id,
+    `${stylish("✦ BROADCAST STARTED ✦")}\n\n${stylish("›› Total")}: <b>${total}</b>\n${stylish("›› Sent")}: 0\n${stylish("›› Failed")}: 0`,
+  );
+  const statusId = status?.result?.message_id;
+
+  let sent = 0;
+  let failed = 0;
+  let lastEdit = Date.now();
+
+  for (let i = 0; i < ids.length; i++) {
+    const target = ids[i];
+    try {
+      const r = await tg("copyMessage", {
+        chat_id: target,
+        from_chat_id: chat_id,
+        message_id: reply.message_id,
+      });
+      if (r?.ok) sent++;
+      else failed++;
+    } catch {
+      failed++;
+    }
+
+    // Live progress edit (throttled to every ~1.5s or end)
+    const now = Date.now();
+    if (statusId && (now - lastEdit > 1500 || i === ids.length - 1)) {
+      lastEdit = now;
+      const pct = Math.floor(((i + 1) / total) * 100);
+      const bar = "▓".repeat(Math.floor(pct / 5)) + "░".repeat(20 - Math.floor(pct / 5));
+      editMessageText(
+        chat_id,
+        statusId,
+        `${stylish("✦ BROADCAST IN PROGRESS ✦")}\n\n<code>${bar}</code> ${pct}%\n\n${stylish("›› Total")}: <b>${total}</b>\n${stylish("›› Sent")}: ✅ <b>${sent}</b>\n${stylish("›› Failed")}: ❌ <b>${failed}</b>\n${stylish("›› Done")}: <b>${i + 1}/${total}</b>`,
+      ).catch(() => {});
+    }
+
+    // Telegram rate-limit safety: ~25 msg/sec
+    if (i % 25 === 24) await new Promise((res) => setTimeout(res, 1000));
+  }
+
+  if (statusId) {
+    editMessageText(
+      chat_id,
+      statusId,
+      `${stylish("✦ BROADCAST COMPLETE ✅")}\n\n${stylish("›› Total")}: <b>${total}</b>\n${stylish("›› Sent")}: ✅ <b>${sent}</b>\n${stylish("›› Failed")}: ❌ <b>${failed}</b>`,
+    ).catch(() => {});
+  }
+}
+
 async function handleCallback(cb: any) {
   const data: string = cb.data || "";
   const user_id: number = cb.from.id;
@@ -1009,10 +1107,8 @@ async function handleUpdate(update: any) {
   const from = msg.from;
   if (!user_id) return;
 
-  // Auto-delete user's command echo (display only)
-  if (msg.text?.startsWith("/")) {
-    scheduleDelete(chat_id, msg.message_id);
-  }
+  // NOTE: Never auto-delete user-sent commands; only bot-generated messages
+  // are auto-cleaned via scheduleDelete inside handlers.
 
   if (msg.forward_from_chat && msg.chat.type === "private") {
     await handleForward(chat_id, user_id, msg);
@@ -1044,6 +1140,12 @@ async function handleUpdate(update: any) {
       break;
     case "/fsub_list":
       if (msg.chat.type === "private") await handleFsubList(chat_id, user_id);
+      break;
+    case "/broadcast":
+      if (msg.chat.type === "private") await handleBroadcast(chat_id, user_id, msg);
+      break;
+    case "/users":
+      if (msg.chat.type === "private") await handleUsersCount(chat_id, user_id);
       break;
   }
 }
