@@ -292,7 +292,7 @@ export default function EgdManager({
   };
 
   const loadLogs = async (targetSlug = selected, minutes = logsWindow, startAt = logStartAt, endAt = logEndAt) => {
-    if (!savedDeployerUrl || !targetSlug) return;
+    if (!savedDeployerUrl) return;
     setLoadingLogs(true);
     try {
       const d = await callDeployer("logs", { slug: targetSlug, minutes, startAt, endAt });
@@ -570,7 +570,7 @@ export default function EgdManager({
                 <div>
                   <div className="text-xs text-zinc-400">Live log timeline</div>
                   <div className="text-[11px] text-zinc-500 break-words">
-                    {selected ? `${selected} · recent function and edge logs` : "Select a function to load logs"}
+                    {selected ? `${selected} · recent function and edge logs` : "Project-wide recent function and edge logs"}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -581,7 +581,6 @@ export default function EgdManager({
                         setLogsWindow(item.minutes);
                         loadLogs(selected, item.minutes);
                       }}
-                      disabled={!selected}
                       className={
                         "rounded-md px-2.5 py-1 text-[11px] border transition " +
                         (logsWindow === item.minutes
@@ -594,7 +593,7 @@ export default function EgdManager({
                   ))}
                   <button
                     onClick={() => loadLogs()}
-                    disabled={!selected || loadingLogs}
+                    disabled={loadingLogs}
                     className={btnSecondary + " inline-flex items-center gap-2 !px-3 !py-1.5 text-[11px]"}
                   >
                     {loadingLogs ? <Loader2 className="animate-spin" size={12} /> : <RefreshCw size={12} />}
@@ -603,10 +602,29 @@ export default function EgdManager({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-zinc-500 mb-1 block">Start</label>
+                  <input
+                    type="datetime-local"
+                    className={inputClass + " w-full text-[11px]"}
+                    value={logStartAt}
+                    onChange={(e) => setLogStartAt(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-zinc-500 mb-1 block">End</label>
+                  <input
+                    type="datetime-local"
+                    className={inputClass + " w-full text-[11px]"}
+                    value={logEndAt}
+                    onChange={(e) => setLogEndAt(e.target.value)}
+                  />
+                </div>
+              </div>
+
               <div className="max-h-[240px] overflow-auto space-y-2 pr-1">
-                {!selected ? (
-                  <div className="text-xs text-zinc-500">Choose a function from below to view timeline logs.</div>
-                ) : logs.length === 0 ? (
+                {logs.length === 0 ? (
                   <div className="text-xs text-zinc-500">No logs found in this time window.</div>
                 ) : (
                   logs.map((row, idx) => (
