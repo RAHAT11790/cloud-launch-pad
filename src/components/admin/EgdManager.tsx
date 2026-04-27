@@ -244,44 +244,45 @@ export default function EgdManager({
   const isConfigured = !!savedDeployerUrl;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className={glassCard + " p-6"}>
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              <Rocket className="text-amber-400" /> EGD MANAGER
+      <div className={glassCard + " p-4 sm:p-6"}>
+        <div className="flex items-start sm:items-center justify-between flex-wrap gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+              <Rocket className="text-amber-400 shrink-0" size={22} />
+              <span className="truncate">EGD MANAGER</span>
             </h2>
-            <p className="text-sm text-zinc-400 mt-1">
+            <p className="text-xs sm:text-sm text-zinc-400 mt-1">
               Deploy edge functions to your own Supabase project, directly from this admin panel.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => setShowSetup((v) => !v)}
-              className={btnSecondary + " inline-flex items-center gap-2"}
+              className={btnSecondary + " inline-flex items-center gap-2 text-xs sm:text-sm px-3 py-2"}
             >
               <Settings size={14} /> Setup
             </button>
-            <button onClick={newDraft} className={btnSecondary + " inline-flex items-center gap-2"}>
+            <button onClick={newDraft} className={btnSecondary + " inline-flex items-center gap-2 text-xs sm:text-sm px-3 py-2"}>
               <Plus size={14} /> New
             </button>
           </div>
         </div>
 
         {/* Status badge */}
-        <div className="mt-3 flex items-center gap-2 text-xs">
+        <div className="mt-3 flex items-center gap-2 text-xs flex-wrap">
           {isConfigured ? (
             <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-500/15 text-emerald-300">
               <CheckCircle2 size={12} /> Deployer configured
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/15 text-amber-300">
-              <AlertCircle size={12} /> Deployer not configured — open Setup first
+              <AlertCircle size={12} /> Not configured — open Setup
             </span>
           )}
           {isConfigured && (
-            <code className="text-[10px] text-zinc-500 truncate max-w-[60%]">{savedDeployerUrl}</code>
+            <code className="text-[10px] text-zinc-500 truncate max-w-full block">{savedDeployerUrl}</code>
           )}
         </div>
       </div>
