@@ -2,6 +2,3 @@ project_id = "kqxpzqegtvaiwgdusrin"
 
 [functions.stream-proxy]
 verify_jwt = false
-
-[functions.egd-deployer]
-verify_jwt = false
