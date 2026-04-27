@@ -5537,24 +5537,77 @@ ${tgHashtags}`;
             </div>
 
             <div className={`${glassCard} p-4`}>
-              <h3 className="text-sm font-semibold mb-3.5">All Users</h3>
-              {usersData.length === 0 ? (
-                <p className="text-[#957DAD] text-[13px] text-center py-5">No users found</p>
-              ) : usersData.map(user => (
-                <div key={user.id} className="bg-[#1A1A2E] rounded-xl p-3.5 flex items-center gap-3 mb-2.5 border border-white/5">
-                  <div className="w-[45px] h-[45px] rounded-full bg-gradient-to-br from-purple-500 to-purple-800 flex items-center justify-center font-bold text-lg">
-                    {(user.name || user.email || "U")[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold">{user.name || "Anonymous"}</p>
-                    <p className="text-[11px] text-[#D1C4E9] truncate">{user.email || user.id.substring(0, 20)}...</p>
-                  </div>
-                  {guestUidSet.has(String(user.id)) && (
-                    <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-bold">GUEST</span>
-                  )}
-                  <div className={`w-2.5 h-2.5 rounded-full ${user.online ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
-                </div>
-              ))}
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-sm font-semibold">All Users ({usersData.length})</h3>
+              </div>
+              <div className="relative mb-3">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-500" />
+                <input
+                  value={userSearchQuery}
+                  onChange={e => setUserSearchQuery(e.target.value)}
+                  className={`${inputClass} pl-9`}
+                  placeholder="🔍 Search by name, email or UID..."
+                />
+              </div>
+              {(() => {
+                const q = userSearchQuery.trim().toLowerCase();
+                const filtered = q
+                  ? usersData.filter(u => {
+                      const name = String(u.name || "").toLowerCase();
+                      const email = String(u.email || "").toLowerCase();
+                      const id = String(u.id || "").toLowerCase();
+                      return name.includes(q) || email.includes(q) || id.includes(q);
+                    })
+                  : usersData;
+                if (usersData.length === 0) {
+                  return <p className="text-[#957DAD] text-[13px] text-center py-5">No users found</p>;
+                }
+                if (filtered.length === 0) {
+                  return <p className="text-[#957DAD] text-[13px] text-center py-5">No matching users</p>;
+                }
+                return (
+                  <>
+                    {q && (
+                      <p className="text-[11px] text-[#957DAD] mb-2">Showing {filtered.length} of {usersData.length}</p>
+                    )}
+                    {filtered.map(user => (
+                      <div key={user.id} className="bg-[#1A1A2E] rounded-xl p-3.5 flex items-center gap-3 mb-2.5 border border-white/5">
+                        <div className="w-[45px] h-[45px] rounded-full bg-gradient-to-br from-purple-500 to-purple-800 flex items-center justify-center font-bold text-lg flex-shrink-0">
+                          {(user.name || user.email || "U")[0].toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{user.name || "Anonymous"}</p>
+                          <p className="text-[11px] text-[#D1C4E9] truncate">{user.email || user.id}</p>
+                          <p className="text-[9px] text-[#957DAD] truncate font-mono">{user.id}</p>
+                        </div>
+                        {guestUidSet.has(String(user.id)) && (
+                          <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-bold flex-shrink-0">GUEST</span>
+                        )}
+                        <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${user.online ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
+                        <button
+                          onClick={async () => {
+                            const label = user.email || user.name || user.id;
+                            if (!window.confirm(`Delete user "${label}"?\n\nThis will remove them from the database and they will be auto-logged out. This action cannot be undone.`)) return;
+                            try {
+                              await update(ref(db), {
+                                [`users/${user.id}`]: null,
+                                [`deletedAccounts/${user.id}`]: { at: Date.now(), reason: "admin-manual-delete", email: user.email || null, name: user.name || null },
+                              });
+                              toast.success(`✅ Deleted user: ${label}`);
+                            } catch (e: any) {
+                              toast.error(`Failed: ${e?.message || "unknown"}`);
+                            }
+                          }}
+                          className="flex-shrink-0 w-8 h-8 rounded-lg bg-red-500/15 hover:bg-red-500/30 text-red-400 flex items-center justify-center transition-colors"
+                          title="Delete user"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
