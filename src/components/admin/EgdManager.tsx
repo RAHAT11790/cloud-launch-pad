@@ -131,6 +131,8 @@ export default function EgdManager({
   const [logsWindow, setLogsWindow] = useState(60);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [sourceHint, setSourceHint] = useState("");
+  const [logStartAt, setLogStartAt] = useState("");
+  const [logEndAt, setLogEndAt] = useState("");
 
   // ---------- Load deployer URL ----------
   useEffect(() => {
@@ -289,11 +291,11 @@ export default function EgdManager({
     setLogs([]); setSourceHint("");
   };
 
-  const loadLogs = async (targetSlug = selected, minutes = logsWindow) => {
+  const loadLogs = async (targetSlug = selected, minutes = logsWindow, startAt = logStartAt, endAt = logEndAt) => {
     if (!savedDeployerUrl || !targetSlug) return;
     setLoadingLogs(true);
     try {
-      const d = await callDeployer("logs", { slug: targetSlug, minutes });
+      const d = await callDeployer("logs", { slug: targetSlug, minutes, startAt, endAt });
       if (d?.ok) {
         setLogs(Array.isArray(d.rows) ? d.rows : []);
       } else {
