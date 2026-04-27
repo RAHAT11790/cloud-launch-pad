@@ -218,24 +218,56 @@ export default function EgdManager({
   const loadFn = async (s: string) => {
     setSelected(s);
     setSourceHint("");
+    setSlug(s);
+    const supaRef = savedDeployerUrl.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1];
+    if (supaRef) setResultUrl(`https://${supaRef}.supabase.co/functions/v1/${s}`);
+
+    // 1) Try Firebase backup first (saved on every deploy from this UI)
+    let backupCode = "";
+    try {
+      const snap = await new Promise<any>((resolve) => {
+        const r = ref(db, `egdManager/sources/${s}`);
+        const unsub = onValue(r, (sn) => { unsub(); resolve(sn); }, { onlyOnce: true } as any);
+      });
+      backupCode = (snap?.val()?.code as string) || "";
+    } catch {}
+
+    if (backupCode) {
+      setCode(backupCode);
+      setSourceHint("Loaded from local backup (saved when last deployed via this UI)");
+    }
+
+    // 2) Try the deployer's get endpoint (older deployers may not return body cleanly)
     try {
       const d = await callDeployer("get", { slug: s });
       if (d?.ok && d.fn) {
         setSlug(d.fn.slug || s);
         const body: string = d.fn.body || "";
-        const normalized = normalizeFunctionBody(body, d.fn.contentType || "");
-        setCode(normalized.code);
-        setSourceHint(normalized.note);
-        if (normalized.mode === "bundle") toast.info(normalized.note);
-        const ref = savedDeployerUrl.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1];
-        if (ref) setResultUrl(`https://${ref}.supabase.co/functions/v1/${s}`);
-        loadLogs(s, logsWindow);
-      } else {
+        if (body) {
+          const normalized = normalizeFunctionBody(body, d.fn.contentType || "");
+          // Prefer recovered source over bundle placeholder
+          if (normalized.mode === "source" && !backupCode) {
+            setCode(normalized.code);
+            setSourceHint(normalized.note);
+          } else if (normalized.mode === "bundle" && !backupCode) {
+            setCode(normalized.code);
+            setSourceHint(normalized.note + " · Redeploy via this UI to enable backup recovery.");
+            toast.info(normalized.note);
+          }
+        } else if (!backupCode) {
+          setCode(STARTER);
+          setSourceHint("No source returned. Paste fresh code and redeploy.");
+        }
+      } else if (!backupCode) {
         appendError("Get failed: " + JSON.stringify(d?.error || d));
+        setCode(STARTER);
+        setSourceHint("Could not fetch source from deployer. Your deployer may be outdated — redeploy it from Setup.");
       }
     } catch (e: any) {
       appendError("Network: " + (e?.message || String(e)));
     }
+
+    loadLogs(s, logsWindow);
   };
 
   const addSecretRow = () => setSecrets((p) => [...p, { name: "", value: "" }]);
