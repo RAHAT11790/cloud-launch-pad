@@ -28,6 +28,14 @@ type FnRow = {
 };
 
 type SecretRow = { name: string; value: string };
+type LogRow = { timestamp?: string; event_message?: string; source?: string };
+
+const LOG_WINDOWS = [
+  { label: "15m", minutes: 15 },
+  { label: "1h", minutes: 60 },
+  { label: "6h", minutes: 360 },
+  { label: "24h", minutes: 1440 },
+];
 
 const STARTER = `// New Edge Function
 const cors = {
@@ -47,6 +55,54 @@ Deno.serve(async (req) => {
 
 const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 50);
+
+const parseMultipartFiles = (body: string, contentType: string) => {
+  const boundary = contentType.match(/boundary=([^;]+)/i)?.[1]?.replace(/^"|"$/g, "");
+  if (!boundary || !body.includes(boundary)) return [] as Array<{ filename: string; content: string }>;
+
+  return body
+    .split(`--${boundary}`)
+    .map((part) => part.trim())
+    .filter((part) => part && part !== "--")
+    .map((part) => {
+      const [rawHeaders, ...rest] = part.split(/\r?\n\r?\n/);
+      const content = rest.join("\n\n").replace(/\r?\n--$/, "").trim();
+      const filename = rawHeaders.match(/filename="([^"]+)"/i)?.[1] || "";
+      return { filename, content };
+    })
+    .filter((file) => file.filename && file.content);
+};
+
+const normalizeFunctionBody = (body: string, contentType = "") => {
+  const files = parseMultipartFiles(body, contentType);
+  if (files.length > 0) {
+    const preferred =
+      files.find((file) => /(^|\/)index\.(ts|tsx|js|jsx)$/i.test(file.filename)) ||
+      files[0];
+
+    return {
+      mode: "source" as const,
+      code: preferred.content,
+      note: files.length > 1 ? `${files.length} files found · showing ${preferred.filename}` : `Showing ${preferred.filename}`,
+    };
+  }
+
+  const looksBinary = body.startsWith("ESZIP") || /[\x00-\x08\x0E-\x1F]/.test(body.slice(0, 200));
+  if (looksBinary) {
+    return {
+      mode: "bundle" as const,
+      code:
+        `// ⚠️ This function was deployed as a compiled bundle (ESZIP).\n` +
+        `// Source code cannot be recovered from the deployed bundle.\n` +
+        `//\n` +
+        `// Paste fresh source here, then click Deploy to replace it.\n\n` +
+        STARTER,
+      note: "Compiled bundle — paste fresh source to replace",
+    };
+  }
+
+  return { mode: "source" as const, code: body || "// (empty body)", note: "" };
+};
 
 export default function EgdManager({
   glassCard, inputClass, btnPrimary, btnSecondary,
