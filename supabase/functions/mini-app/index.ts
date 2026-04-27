@@ -342,9 +342,6 @@ serve(async (req) => {
         consumed: true,
         consumedAt: now,
       });
-        consumed: true,
-        consumedAt: now,
-      });
 
       return json({ ok: true, userId, expiresAt });
     }
