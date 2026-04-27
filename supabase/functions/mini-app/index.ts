@@ -157,6 +157,29 @@ async function sendTelegramUnlockMessage(userId: string, options: { dest?: strin
   };
 }
 
+// Notify the Link Share Bot so it can push welcome auto (no /start needed).
+async function notifyLinkShareBot(userId: string) {
+  if (!/^tg_\d+$/.test(userId)) return;
+  const tg_id = Number(userId.replace("tg_", ""));
+  const url =
+    Deno.env.get("LINK_SHARE_BOT_NOTIFY_URL") ||
+    "https://kqxpzqegtvaiwgdusrin.supabase.co/functions/v1/link-share-bot/notify";
+  const secret =
+    Deno.env.get("LINK_SHARE_NOTIFY_SECRET") ||
+    Deno.env.get("RS_API_KEY") ||
+    "";
+  if (!secret) return;
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-notify-secret": secret },
+      body: JSON.stringify({ user_id: tg_id, secret }),
+    });
+  } catch (e) {
+    console.error("[notifyLinkShareBot]", e);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
