@@ -129,8 +129,8 @@ async function listSecrets() {
 
 async function queryLogs(slug, minutes) {
   const safeMinutes = Math.min(Math.max(Number(minutes) || 60, 1), 1440);
-  const end = new Date();
-  const start = new Date(end.getTime() - safeMinutes * 60 * 1000);
+  const end = bodyDate(bodyEnd, new Date());
+  const start = bodyDate(bodyStart, new Date(end.getTime() - safeMinutes * 60 * 1000));
   const startIso = start.toISOString();
   const endIso = end.toISOString();
   const slugFilter = String(slug || "").trim();
