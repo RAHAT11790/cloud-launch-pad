@@ -282,16 +282,23 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
 }
 
 function ApiKeyRow({
-  k, miniUrl, copy, toggleKey, deleteKey,
+  k, miniUrl, botUsername, appShortName, copy, toggleKey, deleteKey,
 }: {
-  k: ApiKeyEntry; miniUrl: string;
+  k: ApiKeyEntry; miniUrl: string; botUsername: string; appShortName: string;
   copy: (s: string) => void;
   toggleKey: (id: string, enabled: boolean) => void;
   deleteKey: (id: string) => void;
 }) {
   const [shortenInput, setShortenInput] = useState("");
   const [shortenResult, setShortenResult] = useState("");
+  const [shortenTgLink, setShortenTgLink] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const buildTgLink = (shortId: string) => {
+    const u = (botUsername || "bot").replace(/^@/, "");
+    const a = (appShortName || "app").replace(/^\//, "");
+    return `https://t.me/${u}/${a}?startapp=s_${shortId}`;
+  };
 
   const doShorten = async () => {
     if (!shortenInput.trim()) { toast.error("URL required"); return; }
@@ -307,8 +314,8 @@ function ApiKeyRow({
       );
       const data = await r.json();
       if (data?.ok && data.shortId) {
-        const s = `${miniUrl}?s=${data.shortId}`;
-        setShortenResult(s);
+        setShortenResult(`${miniUrl}?s=${data.shortId}`);
+        setShortenTgLink(buildTgLink(data.shortId));
         toast.success("Shortened!");
       } else {
         toast.error(data?.error || "Failed");
