@@ -5565,27 +5565,24 @@ ${tgHashtags}`;
                 />
               </div>
               {(() => {
-                const q = userSearchQuery.trim().toLowerCase();
-                const filtered = q
-                  ? usersData.filter(u => {
-                      const name = String(u.name || "").toLowerCase();
-                      const email = String(u.email || "").toLowerCase();
-                      const id = String(u.id || "").toLowerCase();
-                      return name.includes(q) || email.includes(q) || id.includes(q);
-                    })
-                  : usersData;
+                const q = debouncedUserSearch.trim();
+                const filtered = filteredUsersList;
                 if (usersData.length === 0) {
                   return <p className="text-[#957DAD] text-[13px] text-center py-5">No users found</p>;
                 }
                 if (filtered.length === 0) {
-                  return <p className="text-[#957DAD] text-[13px] text-center py-5">No matching users</p>;
+                  return <p className="text-[#957DAD] text-[13px] text-center py-5">No matching users for "{q}"</p>;
                 }
+                // Cap rendering when not searching to avoid lag with hundreds of users
+                const displayList = q ? filtered : filtered.slice(0, 100);
                 return (
                   <>
-                    {q && (
-                      <p className="text-[11px] text-[#957DAD] mb-2">Showing {filtered.length} of {usersData.length}</p>
-                    )}
-                    {filtered.map(user => (
+                    <p className="text-[11px] text-[#957DAD] mb-2">
+                      {q
+                        ? `Showing ${filtered.length} match${filtered.length === 1 ? "" : "es"} for "${q}"`
+                        : `Showing first ${displayList.length} of ${usersData.length} (search to find more)`}
+                    </p>
+                    {displayList.map(user => (
                       <div key={user.id} className="bg-[#1A1A2E] rounded-xl p-3.5 flex items-center gap-3 mb-2.5 border border-white/5">
                         <div className="w-[45px] h-[45px] rounded-full bg-gradient-to-br from-purple-500 to-purple-800 flex items-center justify-center font-bold text-lg flex-shrink-0">
                           {(user.name || user.email || "U")[0].toUpperCase()}
