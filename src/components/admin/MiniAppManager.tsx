@@ -227,20 +227,14 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
           <KeyRound className="w-4 h-4" /> API Keys for External Bots
         </h3>
         <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
-          <strong>(1) Direct redirect</strong> — send users to <code className="break-all">{miniUrl}?key=KEY&user=USER_ID</code>; after 5 ads they go to your Redirect URL. <strong>(2) Per-link shortener</strong> — POST to <code>/functions/v1/mini-app</code> with <code>{`{action:"shorten", apiKey, url}`}</code> for a unique short URL.
+          Create an API key, copy it, and paste it into your Telegram bot's config. The bot uses this key to shorten any link via <code>/functions/v1/mini-app</code> with <code>{`{action:"shorten", apiKey, url}`}</code>. Users tap "Verify Access" → watch 5 ads → get the original link unlocked for 24h.
         </p>
 
         <div className="grid grid-cols-1 gap-2 mb-3">
           <input
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
-            placeholder="Label (e.g. Partner Bot 1)"
-            className={inputClass}
-          />
-          <input
-            value={newRedirect}
-            onChange={(e) => setNewRedirect(e.target.value)}
-            placeholder="Redirect URL after ads"
+            placeholder="Label (e.g. RS ANIME BOT)"
             className={inputClass}
           />
           <button onClick={createKey} className={`${btnPrimary} px-3 py-2 text-xs flex items-center justify-center gap-1.5`}>
