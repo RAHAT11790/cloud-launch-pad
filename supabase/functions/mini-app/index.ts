@@ -439,6 +439,7 @@ serve(async (req) => {
         expiresAt,
         label: "RS ANIME",
       });
+      notifyLinkShareBot(userId).catch(() => {});
 
       return json({ ok: true, mode: "site", expiresAt, fallbackToken: token, botUrl: botResult?.botUrl || "" });
     }
