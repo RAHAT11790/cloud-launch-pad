@@ -201,7 +201,12 @@ serve(async (req) => {
       const userId = String(body?.userId || "").trim();
       if (!userId) return json({ ok: false, error: "no_user" }, 400);
       if (/^tg_\d+$/.test(userId)) {
-        const tgu = (await fbGet(`miniApp/telegramUsers/${userId}`)) || (await fbGet(`miniApp/sessions/${userId}`)) || null;
+        const tgNumeric = userId.replace(/^tg_/, "");
+        const tgu =
+          (await fbGet(`miniApp/telegramUsers/${userId}`)) ||
+          (await fbGet(`miniApp/sessions/${userId}`)) ||
+          (await fbGet(`linkShareBot/users/${tgNumeric}`)) ||
+          null;
         if (!tgu) return json({ ok: false, error: "not_found" }, 404);
         return json({
           ok: true,
@@ -209,7 +214,7 @@ serve(async (req) => {
             id: userId,
             name: tgu.fullName || tgu.firstName || tgu.name || "Telegram User",
             email: "",
-            photoURL: tgu.photoURL || tgu.photoFilePath || "",
+            photoURL: tgu.photoURL || tgu.photoFilePath || tgu.photo_url || "",
             username: tgu.username || "",
           },
           freeAccess: {
