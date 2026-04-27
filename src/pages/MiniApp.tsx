@@ -383,11 +383,13 @@ export default function MiniApp() {
       if (!value.startsWith("u_")) continue;
       let body = decodeURIComponent(value.slice(2)).trim();
       if (!body) continue;
-      // Link-share-bot format: u_tg_<telegramId>_r_<returnChannel>
-      // Strip the trailing return-channel marker so it doesn't pollute the user id.
-      // Telegram WebApp itself will provide the real profile (name + photo) via initDataUnsafe.user
-      const lsbMatch = body.match(/^tg_(\d+)(?:_r_.*)?$/);
+      // Link-share-bot format: u_tg_<telegramId>_r_<returnChannel>_b_<botUsername>
+      // Capture origin bot username so we can redirect the user back after verify.
+      const lsbMatch = body.match(/^tg_(\d+)(?:_r_[^_]*)?(?:_b_([A-Za-z0-9_]+))?$/);
       if (lsbMatch) {
+        if (lsbMatch[2]) {
+          try { sessionStorage.setItem("ls_origin_bot", lsbMatch[2]); } catch {}
+        }
         // Skip — let the Telegram WebApp identity branch (initDataUnsafe.user) handle it.
         continue;
       }
