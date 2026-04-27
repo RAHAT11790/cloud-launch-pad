@@ -247,8 +247,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
             <p className="text-sm text-muted-foreground text-center py-6">No API keys yet</p>
           )}
           {apiKeys.map((k) => {
-            const fullUrl = `${miniUrl}?key=${k.key}&user=USER_ID`;
-            return <ApiKeyRow key={k.id} k={k} fullUrl={fullUrl} miniUrl={miniUrl} copy={copy} toggleKey={toggleKey} deleteKey={deleteKey} />;
+            return <ApiKeyRow key={k.id} k={k} miniUrl={miniUrl} copy={copy} toggleKey={toggleKey} deleteKey={deleteKey} />;
           })}
         </div>
       </div>
