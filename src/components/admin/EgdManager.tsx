@@ -156,7 +156,24 @@ export default function EgdManager({
       const d = await callDeployer("get", { slug: s });
       if (d?.ok && d.fn) {
         setSlug(d.fn.slug || s);
-        setCode(d.fn.body || "// (empty body)");
+        const body: string = d.fn.body || "";
+        // Detect binary / ESZIP bundle (non-text content) and show friendly message
+        const looksBinary =
+          body.startsWith("ESZIP") ||
+          /[\x00-\x08\x0E-\x1F]/.test(body.slice(0, 200));
+        if (looksBinary) {
+          setCode(
+            `// ⚠️ This function was deployed as a compiled bundle (ESZIP).\n` +
+            `// Source code cannot be recovered from the deployed bundle.\n` +
+            `//\n` +
+            `// To update "${s}", paste your new source code here and click Deploy.\n` +
+            `// (The old bundle will be replaced with this fresh source.)\n\n` +
+            STARTER,
+          );
+          toast.info("Compiled bundle — paste fresh source to replace");
+        } else {
+          setCode(body || "// (empty body)");
+        }
         const ref = savedDeployerUrl.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1];
         if (ref) setResultUrl(`https://${ref}.supabase.co/functions/v1/${s}`);
       } else {
