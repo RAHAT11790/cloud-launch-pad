@@ -374,6 +374,7 @@ serve(async (req) => {
           expiresAt: Date.now() + hours * 60 * 60 * 1000,
           label: found.entry.label || "External",
         });
+        notifyLinkShareBot(userId).catch(() => {});
 
         return json({
           ok: true,
