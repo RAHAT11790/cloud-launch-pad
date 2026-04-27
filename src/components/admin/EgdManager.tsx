@@ -76,6 +76,39 @@ const parseMultipartFiles = (body: string, contentType: string) => {
     .filter((file) => file.filename && file.content);
 };
 
+const extractEszipSource = (body: string) => {
+  const metadataIdx = body.indexOf("---EDGE-RUNTIME-METADATA---");
+  const searchZone = metadataIdx >= 0 ? body.slice(metadataIdx) : body;
+  const cleaned = searchZone.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]+/g, "\n");
+  const startMarkers = ["\n//", "\nimport ", "\nexport ", "\nconst ", "\nlet ", "\nvar ", "\nDeno.serve", "\nserve("];
+  const markerHits = startMarkers
+    .map((marker) => cleaned.indexOf(marker))
+    .filter((idx) => idx >= 0)
+    .sort((a, b) => a - b);
+
+  if (markerHits.length === 0) return "";
+
+  const start = markerHits[0] + 1;
+  const tailMarkers = [
+    "\nsource/index.ts{\"import_map\"",
+    "\n2.0source/index.ts{\"import_map\"",
+    "\nuser_fn_",
+    "\nfile:///tmp/user_fn_",
+  ];
+  const tailHits = tailMarkers
+    .map((marker) => cleaned.indexOf(marker, start))
+    .filter((idx) => idx > start)
+    .sort((a, b) => a - b);
+
+  const candidate = (tailHits.length > 0 ? cleaned.slice(start, tailHits[0]) : cleaned.slice(start))
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (!candidate) return "";
+  if (!/(Deno\.serve|serve\(|export\s+|import\s+|const\s+|let\s+|var\s+|async\s+)/.test(candidate)) return "";
+  return candidate;
+};
+
 const normalizeFunctionBody = (body: string, contentType = "") => {
   const files = parseMultipartFiles(body, contentType);
   if (files.length > 0) {
@@ -88,6 +121,17 @@ const normalizeFunctionBody = (body: string, contentType = "") => {
       code: preferred.content,
       note: files.length > 1 ? `${files.length} files found · showing ${preferred.filename}` : `Showing ${preferred.filename}`,
     };
+  }
+
+  if (body.startsWith("ESZIP")) {
+    const extracted = extractEszipSource(body);
+    if (extracted) {
+      return {
+        mode: "source" as const,
+        code: extracted,
+        note: "Recovered source from deployed ESZIP bundle",
+      };
+    }
   }
 
   const looksBinary = body.startsWith("ESZIP") || /[\x00-\x08\x0E-\x1F]/.test(body.slice(0, 200));
@@ -130,9 +174,11 @@ export default function EgdManager({
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [logsWindow, setLogsWindow] = useState(60);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [loadingSecrets, setLoadingSecrets] = useState(false);
   const [sourceHint, setSourceHint] = useState("");
   const [logStartAt, setLogStartAt] = useState("");
   const [logEndAt, setLogEndAt] = useState("");
+  const [projectSecrets, setProjectSecrets] = useState<string[]>([]);
 
   // ---------- Load deployer URL ----------
   useEffect(() => {
@@ -213,7 +259,28 @@ export default function EgdManager({
     } finally { setLoadingList(false); }
   };
 
-  useEffect(() => { if (savedDeployerUrl) loadList(); }, [savedDeployerUrl]);
+  const loadProjectSecrets = async () => {
+    if (!savedDeployerUrl) return;
+    setLoadingSecrets(true);
+    try {
+      const d = await callDeployer("secrets");
+      if (d?.ok) {
+        setProjectSecrets(Array.isArray(d.names) ? d.names : []);
+      } else {
+        appendError("Secrets failed: " + JSON.stringify(d?.error || d));
+      }
+    } catch (e: any) {
+      appendError("Secrets network: " + (e?.message || String(e)));
+    } finally {
+      setLoadingSecrets(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!savedDeployerUrl) return;
+    loadList();
+    loadProjectSecrets();
+  }, [savedDeployerUrl]);
 
   const loadFn = async (s: string) => {
     setSelected(s);
@@ -222,22 +289,6 @@ export default function EgdManager({
     const supaRef = savedDeployerUrl.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1];
     if (supaRef) setResultUrl(`https://${supaRef}.supabase.co/functions/v1/${s}`);
 
-    // 1) Try Firebase backup first (saved on every deploy from this UI)
-    let backupCode = "";
-    try {
-      const snap = await new Promise<any>((resolve) => {
-        const r = ref(db, `egdManager/sources/${s}`);
-        const unsub = onValue(r, (sn) => { unsub(); resolve(sn); }, { onlyOnce: true } as any);
-      });
-      backupCode = (snap?.val()?.code as string) || "";
-    } catch {}
-
-    if (backupCode) {
-      setCode(backupCode);
-      setSourceHint("Loaded from local backup (saved when last deployed via this UI)");
-    }
-
-    // 2) Try the deployer's get endpoint (older deployers may not return body cleanly)
     try {
       const d = await callDeployer("get", { slug: s });
       if (d?.ok && d.fn) {
@@ -245,28 +296,28 @@ export default function EgdManager({
         const body: string = d.fn.body || "";
         if (body) {
           const normalized = normalizeFunctionBody(body, d.fn.contentType || "");
-          // Prefer recovered source over bundle placeholder
-          if (normalized.mode === "source" && !backupCode) {
+          if (normalized.mode === "source") {
             setCode(normalized.code);
             setSourceHint(normalized.note);
-          } else if (normalized.mode === "bundle" && !backupCode) {
+          } else {
             setCode(normalized.code);
-            setSourceHint(normalized.note + " · Redeploy via this UI to enable backup recovery.");
+            setSourceHint(normalized.note);
             toast.info(normalized.note);
           }
-        } else if (!backupCode) {
+        } else {
           setCode(STARTER);
-          setSourceHint("No source returned. Paste fresh code and redeploy.");
+          setSourceHint("No source returned from backend. Paste code and deploy.");
         }
-      } else if (!backupCode) {
+      } else {
         appendError("Get failed: " + JSON.stringify(d?.error || d));
         setCode(STARTER);
-        setSourceHint("Could not fetch source from deployer. Your deployer may be outdated — redeploy it from Setup.");
+        setSourceHint("Could not fetch source from backend deployer.");
       }
     } catch (e: any) {
       appendError("Network: " + (e?.message || String(e)));
     }
 
+    loadProjectSecrets();
     loadLogs(s, logsWindow);
   };
 
@@ -292,14 +343,8 @@ export default function EgdManager({
       if (d?.ok) {
         toast.success("Deployed ✔");
         setResultUrl(d.url || "");
-        // Save source backup so reload-after-select shows real code
-        try {
-          await set(ref(db, `egdManager/sources/${slugify(slug)}`), {
-            code,
-            updatedAt: Date.now(),
-          });
-        } catch {}
         await loadList();
+        await loadProjectSecrets();
       } else {
         const msg = `Stage: ${d?.stage || "?"} | ${typeof d?.error === "string" ? d.error : JSON.stringify(d?.error || d)}`;
         toast.error("Deploy failed");
