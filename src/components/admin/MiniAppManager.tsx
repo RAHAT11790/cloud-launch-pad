@@ -82,19 +82,18 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
 
   const createKey = async () => {
     if (!newLabel.trim()) { toast.error("Label required"); return; }
-    if (!newRedirect.trim()) { toast.error("Redirect URL required"); return; }
     const key = randomKey();
     const r = await push(ref(db, "miniApp/apiKeys"), {
       key,
       label: newLabel.trim(),
-      redirectUrl: newRedirect.trim(),
+      redirectUrl: "",
       enabled: true,
       createdAt: Date.now(),
       uses: 0,
     });
     if (r.key) {
-      toast.success("API key created");
-      setNewLabel(""); setNewRedirect("");
+      toast.success("API key created — copy & paste in your bot");
+      setNewLabel("");
     }
   };
 
