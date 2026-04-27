@@ -371,16 +371,30 @@ function ApiKeyRow({
             {busy ? "…" : "Shorten"}
           </button>
         </div>
+        {shortenTgLink && (
+          <div className="space-y-1">
+            <div className="text-[10px] font-semibold text-emerald-400">✅ Telegram Mini App link (use this in your bot button):</div>
+            <div className="flex items-center gap-2 p-2 rounded bg-emerald-500/10 border border-emerald-500/30 text-[11px] font-mono break-all">
+              <span className="flex-1 break-all">{shortenTgLink}</span>
+              <button onClick={() => copy(shortenTgLink)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
+                <Copy className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        )}
         {shortenResult && (
-          <div className="flex items-center gap-2 p-2 rounded bg-background/50 text-[11px] font-mono break-all">
-            {shortenResult}
-            <button onClick={() => copy(shortenResult)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
-              <Copy className="w-3 h-3" />
-            </button>
+          <div className="space-y-1">
+            <div className="text-[10px] text-muted-foreground">Web fallback (opens in browser):</div>
+            <div className="flex items-center gap-2 p-2 rounded bg-background/50 text-[11px] font-mono break-all">
+              <span className="flex-1 break-all">{shortenResult}</span>
+              <button onClick={() => copy(shortenResult)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
+                <Copy className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         )}
         <p className="text-[10px] text-muted-foreground">
-          Users opening this short URL must watch 5 ads, then are redirected to the original link.
+          📱 Use the green Telegram link in your bot's "Verify Access" button — it opens the Mini App directly inside Telegram (no browser).
         </p>
       </div>
     </div>
