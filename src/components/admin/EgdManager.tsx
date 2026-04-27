@@ -361,27 +361,27 @@ export default function EgdManager({
       {/* Editor + List */}
       <div className="grid lg:grid-cols-[1fr_320px] gap-4">
         {/* Editor card */}
-        <div className={glassCard + " p-6 space-y-4"}>
+        <div className={glassCard + " p-4 sm:p-6 space-y-4 min-w-0"}>
           {/* Name */}
-          <div>
+          <div className="min-w-0">
             <label className="text-xs text-zinc-400 mb-1 flex items-center gap-1">
               <FileCode2 size={12} /> Function Name (slug)
             </label>
             <input
-              className={inputClass}
+              className={inputClass + " w-full"}
               placeholder="my-bot"
               value={slug}
               onChange={(e) => setSlug(slugify(e.target.value))}
               disabled={!!selected}
             />
-            <p className="text-[11px] text-zinc-500 mt-1">
+            <p className="text-[11px] text-zinc-500 mt-1 break-words">
               lowercase, numbers, _ and - only. Cannot rename after deploy.
             </p>
           </div>
 
           {/* Code box */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
+          <div className="min-w-0">
+            <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
               <label className="text-xs text-zinc-400">Edge Function Code (index.ts)</label>
               <button
                 onClick={() => copyText(code)}
@@ -391,8 +391,8 @@ export default function EgdManager({
               </button>
             </div>
             <textarea
-              className={inputClass + " font-mono text-xs leading-relaxed"}
-              style={{ height: 360, resize: "none", overflow: "auto", whiteSpace: "pre" }}
+              className={inputClass + " font-mono text-[11px] sm:text-xs leading-relaxed w-full block"}
+              style={{ height: 320, resize: "none", overflow: "auto", whiteSpace: "pre" }}
               spellCheck={false}
               value={code}
               onChange={(e) => setCode(e.target.value)}
@@ -400,10 +400,10 @@ export default function EgdManager({
           </div>
 
           {/* Secrets */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
+          <div className="min-w-0">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <label className="text-xs text-zinc-400 flex items-center gap-1">
-                <KeyRound size={12} /> Secrets (project-wide env vars)
+                <KeyRound size={12} /> Secrets (env vars)
               </label>
               <button
                 onClick={addSecretRow}
@@ -414,31 +414,33 @@ export default function EgdManager({
             </div>
             <div className="space-y-2">
               {secrets.map((s, i) => (
-                <div key={i} className="flex gap-2">
+                <div key={i} className="flex flex-col sm:flex-row gap-2">
                   <input
-                    className={inputClass + " flex-1"}
+                    className={inputClass + " flex-1 min-w-0"}
                     placeholder="SECRET_NAME"
                     value={s.name}
                     onChange={(e) => updateSecret(i, "name", e.target.value)}
                   />
-                  <input
-                    className={inputClass + " flex-1"}
-                    placeholder="value"
-                    type="password"
-                    value={s.value}
-                    onChange={(e) => updateSecret(i, "value", e.target.value)}
-                  />
-                  <button
-                    onClick={() => removeSecretRow(i)}
-                    className="px-2 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25"
-                    title="Remove"
-                  >
-                    <X size={14} />
-                  </button>
+                  <div className="flex gap-2">
+                    <input
+                      className={inputClass + " flex-1 min-w-0"}
+                      placeholder="value"
+                      type="password"
+                      value={s.value}
+                      onChange={(e) => updateSecret(i, "value", e.target.value)}
+                    />
+                    <button
+                      onClick={() => removeSecretRow(i)}
+                      className="px-3 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 shrink-0"
+                      title="Remove"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-zinc-500 mt-1">
+            <p className="text-[11px] text-zinc-500 mt-1 break-words">
               Names starting with SUPABASE_ / SB_ are reserved and skipped automatically.
             </p>
           </div>
@@ -454,20 +456,22 @@ export default function EgdManager({
               {deploying ? "Deploying..." : "Deploy"}
             </button>
             {selected && (
-              <span className="text-xs text-zinc-500">Editing: <span className="text-amber-300">{selected}</span></span>
+              <span className="text-xs text-zinc-500 truncate max-w-full">
+                Editing: <span className="text-amber-300">{selected}</span>
+              </span>
             )}
           </div>
 
           {/* Result URL */}
           {resultUrl && (
-            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 min-w-0">
               <div className="text-xs text-emerald-300 mb-1">✔ Live URL</div>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 truncate text-sm text-emerald-200">{resultUrl}</code>
-                <button onClick={() => copyText(resultUrl)} className="text-emerald-300 hover:text-white" title="Copy">
+              <div className="flex items-center gap-2 min-w-0">
+                <code className="flex-1 truncate text-xs sm:text-sm text-emerald-200 min-w-0">{resultUrl}</code>
+                <button onClick={() => copyText(resultUrl)} className="text-emerald-300 hover:text-white shrink-0" title="Copy">
                   <Copy size={14} />
                 </button>
-                <a href={resultUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-300 hover:text-white">
+                <a href={resultUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-300 hover:text-white shrink-0">
                   <ExternalLink size={14} />
                 </a>
               </div>
@@ -475,12 +479,12 @@ export default function EgdManager({
           )}
 
           {/* Error log */}
-          <div>
+          <div className="min-w-0">
             <label className="text-xs text-zinc-400 block mb-1">Error / Deploy log</label>
             <textarea
               readOnly
               value={errorLog || "— no errors —"}
-              className={inputClass + " font-mono text-[11px] leading-relaxed"}
+              className={inputClass + " font-mono text-[11px] leading-relaxed w-full block"}
               style={{ height: 120, resize: "none", overflow: "auto" }}
             />
           </div>
