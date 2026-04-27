@@ -277,11 +277,13 @@ async function saveUserProfile(user_id: number, from: any) {
   try {
     const name = [from?.first_name, from?.last_name].filter(Boolean).join(" ") || from?.username || `User ${user_id}`;
     let photo_url: string | null = null;
+    let photo_file_id: string | null = null;
     try {
       const pp = await getUserProfilePhotos(user_id);
       const photos = pp?.result?.photos;
       if (photos && photos.length > 0 && photos[0].length > 0) {
         const file_id = photos[0][photos[0].length - 1].file_id;
+        photo_file_id = file_id;
         const f = await tg("getFile", { file_id });
         if (f?.result?.file_path) {
           photo_url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${f.result.file_path}`;
@@ -292,14 +294,15 @@ async function saveUserProfile(user_id: number, from: any) {
       user_id,
       name,
       username: from?.username || null,
+      photo_file_id,
       photo_url,
       first_seen: Date.now(),
       last_seen: Date.now(),
     });
-    return { name, photo_url };
+    return { name, photo_url, photo_file_id };
   } catch (e) {
     console.error("[saveUserProfile]", e);
-    return { name: from?.first_name || "User", photo_url: null };
+    return { name: from?.first_name || "User", photo_url: null, photo_file_id: null };
   }
 }
 
@@ -312,9 +315,9 @@ async function touchUser(user_id: number) {
 async function getUserProfileCached(user_id: number) {
   try {
     const u = await fb("GET", `${NS}/users/${user_id}`);
-    if (u) return { name: u.name || `User ${user_id}`, photo_url: u.photo_url || null };
+    if (u) return { name: u.name || `User ${user_id}`, photo_url: u.photo_url || null, photo_file_id: u.photo_file_id || null };
   } catch {}
-  return { name: `User ${user_id}`, photo_url: null };
+  return { name: `User ${user_id}`, photo_url: null, photo_file_id: null };
 }
 
 // ============== RS ANIME ==============
@@ -528,11 +531,17 @@ ${stylish("›› Come back after 24h to renew")}
 ${stylish("✦ ENJOY YOUR ANIME ✦")}
 ✦━━━━━━━━━━━━━━━━━━━✦`;
 
-  let res: any;
-  if (profile.photo_url) {
-    res = await sendPhoto(chat_id, profile.photo_url, caption);
-  } else {
-    res = await sendPhoto(chat_id, RS_VERIFY_IMG, caption);
+  let res: any = null;
+  for (const media of [profile.photo_file_id, profile.photo_url, RS_VERIFY_IMG]) {
+    if (!media) continue;
+    const attempt = await sendPhoto(chat_id, media, caption);
+    if (attempt?.ok && attempt?.result?.message_id) {
+      res = attempt;
+      break;
+    }
+  }
+  if (!res?.result?.message_id) {
+    res = await sendMessage(chat_id, caption);
   }
   // Welcome card = display only → 30s auto-clean
   scheduleDelete(chat_id, res?.result?.message_id);
