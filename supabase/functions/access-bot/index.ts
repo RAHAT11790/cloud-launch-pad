@@ -307,14 +307,34 @@ async function sendEntryMessage(
 
 async function sendStart(botToken: string, chatId: number | string, firstName: string) {
   const { botUsername, appShortName } = await getBotSettings();
-  const text = `🎬 <b>Welcome to ${SITE_NAME} Access, ${escapeHtml(firstName || "Friend")}!</b>\n\n24h access পেতে নিচের button চাপুন।\nForce subscribe থাকলে আগে required channel join করতে হবে।`;
+  const miniUrl = buildMiniDeepLink(botUsername, appShortName);
+  const text = [
+    `🎬 <b>Welcome to ${SITE_NAME} Access, ${escapeHtml(firstName || "Friend")}!</b>`,
+    "",
+    "Get 24-hour FREE access inside the Mini App and unlock the full RS ANIME library.",
+    "",
+    "✅ HD & Full HD streaming",
+    "✅ Hindi dubbed + subbed anime",
+    "✅ Movies, series & live TV",
+    "✅ Smooth playback on weak networks",
+    "",
+    "Tap <b>Open Mini App</b> below to continue.",
+  ].join("\n");
 
   return await sendPhotoOrText(botToken, {
     chat_id: chatId,
     photo: HERO_IMAGE,
     caption: text,
     parse_mode: "HTML",
-    reply_markup: buildVerifyKeyboard(buildMiniDeepLink(botUsername, appShortName)),
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "🎁 Open Mini App", url: miniUrl }],
+        [
+          { text: "🌐 Visit Website", url: SITE_URL },
+          { text: "📢 Join Channel", url: "https://t.me/cartoonfunny03" },
+        ],
+      ],
+    },
   });
 }
 
@@ -370,12 +390,8 @@ serve(async (req) => {
         const firstName = message.from?.first_name || "Friend";
 
         if (text === "/start" || text.startsWith("/start ")) {
-          const profile = await syncTelegramProfile(botToken, message.from, chatId, startParam);
-          if (profile && startParam) {
-            await sendEntryMessage(botToken, chatId, profile, startParam);
-          } else {
-            await sendStart(botToken, chatId, firstName);
-          }
+          await syncTelegramProfile(botToken, message.from, chatId, startParam);
+          await sendStart(botToken, chatId, firstName);
         } else if (text === "/help") {
           await tgCall(botToken, "sendMessage", {
             chat_id: chatId,
