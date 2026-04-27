@@ -75,6 +75,88 @@ async function findApiKey(key: string): Promise<{ id: string; entry: any } | nul
   return null;
 }
 
+async function sendTelegramUnlockMessage(userId: string, options: { dest?: string; expiresAt?: number; label?: string }) {
+  if (!/^tg_\d+$/.test(userId)) return null;
+
+  const session = (await fbGet(`miniApp/sessions/${userId}`)) || {};
+  const profile = (await fbGet(`miniApp/telegramUsers/${userId}`)) || {};
+  const chatId = session?.chatId || profile?.chatId;
+  const botUsername = String(
+    session?.botUsername ||
+      (await fbGet("settings/telegramMiniBotUsername")) ||
+      "RS_ANIME_ACCESS_BOT",
+  ).replace(/^@/, "");
+  const token = Deno.env.get("RS_ACCESS_BOT_TOKEN") || Deno.env.get("TELEGRAM_BOT_TOKEN");
+
+  if (!token || !chatId) {
+    return { botUrl: botUsername ? `https://t.me/${botUsername}` : "" };
+  }
+
+  const firstName = String(profile?.firstName || session?.firstName || "Friend");
+  const fullName = String(profile?.fullName || session?.fullName || firstName || "Friend");
+  const username = String(profile?.username || session?.username || "");
+  const photo = String(profile?.photoFileId || session?.photoFileId || "").trim();
+  const expiresAt = Number(options.expiresAt || Date.now() + 24 * 60 * 60 * 1000);
+  const expiresText = new Date(expiresAt).toLocaleString("en-US", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const caption = [
+    `🎉 <b>Welcome ${fullName.replace(/[<>]/g, "")}</b>`,
+    "",
+    "✅ <b>24 Hours Access Unlocked</b>",
+    `🕒 Valid until: <b>${expiresText}</b>`,
+    username ? `👤 Username: @${username.replace(/[<>]/g, "")}` : `🆔 User: <b>${userId}</b>`,
+    options.label ? `🔓 Source: <b>${String(options.label).replace(/[<>]/g, "")}</b>` : "",
+    options.dest ? "\nTap the button below to open your unlocked link." : "\nআপনার access verify হয়ে গেছে। এখন bot থেকেই continue করতে পারবেন।",
+  ].filter(Boolean).join("\n");
+
+  const reply_markup = options.dest
+    ? { inline_keyboard: [[{ text: "🔓 Open Link", url: options.dest }]] }
+    : undefined;
+
+  const endpoint = photo ? "sendPhoto" : "sendMessage";
+  const payload: Record<string, unknown> = photo
+    ? {
+        chat_id: chatId,
+        photo,
+        caption,
+        parse_mode: "HTML",
+        reply_markup,
+      }
+    : {
+        chat_id: chatId,
+        text: caption,
+        parse_mode: "HTML",
+        reply_markup,
+      };
+
+  const res = await fetch(`https://api.telegram.org/bot${token}/${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  const messageId = data?.result?.message_id;
+
+  if (messageId) {
+    setTimeout(() => {
+      fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+      }).catch(() => {});
+    }, 30_000);
+  }
+
+  return {
+    botUrl: botUsername ? `https://t.me/${botUsername}` : "",
+    sent: !!messageId,
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
@@ -95,6 +177,24 @@ serve(async (req) => {
     if (action === "user-info") {
       const userId = String(body?.userId || "").trim();
       if (!userId) return json({ ok: false, error: "no_user" }, 400);
+      if (/^tg_\d+$/.test(userId)) {
+        const tgu = (await fbGet(`miniApp/telegramUsers/${userId}`)) || (await fbGet(`miniApp/sessions/${userId}`)) || null;
+        if (!tgu) return json({ ok: false, error: "not_found" }, 404);
+        return json({
+          ok: true,
+          user: {
+            id: userId,
+            name: tgu.fullName || tgu.firstName || tgu.name || "Telegram User",
+            email: "",
+            photoURL: tgu.photoURL || tgu.photoFilePath || "",
+            username: tgu.username || "",
+          },
+          freeAccess: {
+            active: false,
+            expiresAt: 0,
+          },
+        });
+      }
       const u = await fbGet(`users/${userId}`);
       if (!u) return json({ ok: false, error: "not_found" }, 404);
       const fa = u.freeAccess || {};
@@ -195,6 +295,9 @@ serve(async (req) => {
       if (source === "short" && shortId) {
         const entry = await fbGet(`miniApp/shortLinks/${shortId}`);
         if (!entry) return json({ ok: false, error: "not_found" }, 404);
+        const hoursSnap = await fbGet("settings/unlockDurationHours");
+        const hours = typeof hoursSnap === "number" && hoursSnap > 0 ? hoursSnap : 24;
+        const expiresAt = Date.now() + hours * 60 * 60 * 1000;
         await fbPatch(`miniApp/shortLinks/${shortId}`, {
           completes: (entry.completes || 0) + 1,
           lastUsedAt: Date.now(),
@@ -209,11 +312,17 @@ serve(async (req) => {
         await incCounter("miniApp/stats/apiCompletes");
         await incCounter(`miniApp/stats/daily/${todayKey}/apiCompletes`);
         await incCounter(`miniApp/stats/daily/${todayKey}/completes`);
+        const botResult = await sendTelegramUnlockMessage(userId, {
+          dest: entry.dest,
+          expiresAt,
+          label: entry.label || "External",
+        });
         return json({
           ok: true,
           mode: "short",
           dest: entry.dest,
           label: entry.label || "External",
+          botUrl: botResult?.botUrl || "",
         });
       }
 
@@ -234,12 +343,20 @@ serve(async (req) => {
           completedAt: Date.now(),
           userId,
         });
+        const hoursSnap = await fbGet("settings/unlockDurationHours");
+        const hours = typeof hoursSnap === "number" && hoursSnap > 0 ? hoursSnap : 24;
+        const botResult = await sendTelegramUnlockMessage(userId, {
+          dest: found.entry.redirectUrl || "",
+          expiresAt: Date.now() + hours * 60 * 60 * 1000,
+          label: found.entry.label || "External",
+        });
 
         return json({
           ok: true,
           mode: "api",
           redirectUrl: found.entry.redirectUrl || "",
           label: found.entry.label || "External",
+          botUrl: botResult?.botUrl || "",
         });
       }
 
@@ -293,7 +410,12 @@ serve(async (req) => {
         consumed: false,
       });
 
-      return json({ ok: true, mode: "site", expiresAt, fallbackToken: token });
+      const botResult = await sendTelegramUnlockMessage(userId, {
+        expiresAt,
+        label: "RS ANIME",
+      });
+
+      return json({ ok: true, mode: "site", expiresAt, fallbackToken: token, botUrl: botResult?.botUrl || "" });
     }
 
     if (action === "consume-fallback-token") {
