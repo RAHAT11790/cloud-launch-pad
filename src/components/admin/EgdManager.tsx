@@ -124,6 +124,10 @@ export default function EgdManager({
   const [deleting, setDeleting] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState("");
   const [errorLog, setErrorLog] = useState("");
+  const [logs, setLogs] = useState<LogRow[]>([]);
+  const [logsWindow, setLogsWindow] = useState(60);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [sourceHint, setSourceHint] = useState("");
 
   // ---------- Load deployer URL ----------
   useEffect(() => {
@@ -208,30 +212,19 @@ export default function EgdManager({
 
   const loadFn = async (s: string) => {
     setSelected(s);
+    setSourceHint("");
     try {
       const d = await callDeployer("get", { slug: s });
       if (d?.ok && d.fn) {
         setSlug(d.fn.slug || s);
         const body: string = d.fn.body || "";
-        // Detect binary / ESZIP bundle (non-text content) and show friendly message
-        const looksBinary =
-          body.startsWith("ESZIP") ||
-          /[\x00-\x08\x0E-\x1F]/.test(body.slice(0, 200));
-        if (looksBinary) {
-          setCode(
-            `// ⚠️ This function was deployed as a compiled bundle (ESZIP).\n` +
-            `// Source code cannot be recovered from the deployed bundle.\n` +
-            `//\n` +
-            `// To update "${s}", paste your new source code here and click Deploy.\n` +
-            `// (The old bundle will be replaced with this fresh source.)\n\n` +
-            STARTER,
-          );
-          toast.info("Compiled bundle — paste fresh source to replace");
-        } else {
-          setCode(body || "// (empty body)");
-        }
+        const normalized = normalizeFunctionBody(body, d.fn.contentType || "");
+        setCode(normalized.code);
+        setSourceHint(normalized.note);
+        if (normalized.mode === "bundle") toast.info(normalized.note);
         const ref = savedDeployerUrl.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1];
         if (ref) setResultUrl(`https://${ref}.supabase.co/functions/v1/${s}`);
+        loadLogs(s, logsWindow);
       } else {
         appendError("Get failed: " + JSON.stringify(d?.error || d));
       }
@@ -290,6 +283,24 @@ export default function EgdManager({
   const newDraft = () => {
     setSelected(""); setSlug(""); setCode(STARTER);
     setSecrets([{ name: "", value: "" }]); setResultUrl(""); setErrorLog("");
+    setLogs([]); setSourceHint("");
+  };
+
+  const loadLogs = async (targetSlug = selected, minutes = logsWindow) => {
+    if (!savedDeployerUrl || !targetSlug) return;
+    setLoadingLogs(true);
+    try {
+      const d = await callDeployer("logs", { slug: targetSlug, minutes });
+      if (d?.ok) {
+        setLogs(Array.isArray(d.rows) ? d.rows : []);
+      } else {
+        appendError("Logs failed: " + JSON.stringify(d?.error || d));
+      }
+    } catch (e: any) {
+      appendError("Logs network: " + (e?.message || String(e)));
+    } finally {
+      setLoadingLogs(false);
+    }
   };
 
   const sortedList = useMemo(
