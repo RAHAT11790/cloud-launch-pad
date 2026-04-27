@@ -286,6 +286,7 @@ export default function EgdManager({
     setSelected(s);
     setSourceHint("");
     setSlug(s);
+    setSecrets([{ name: "", value: "" }]);
     const supaRef = savedDeployerUrl.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1];
     if (supaRef) setResultUrl(`https://${supaRef}.supabase.co/functions/v1/${s}`);
 
