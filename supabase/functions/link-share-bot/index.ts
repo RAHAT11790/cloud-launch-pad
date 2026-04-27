@@ -377,7 +377,8 @@ ${stylish("›› 2. Watch 5 short ads in Mini App")}
 ${stylish("›› 3. Auto-return — done!")}
 
 ✦━━━━━━━━━━━━━━━━━━━✦`;
-  const r = await sendPhoto(chat_id, RS_VERIFY_IMG, caption, { reply_markup: verifyKeyboard(user_id, returnPayload) });
+  const kb = await verifyKeyboard(user_id, returnPayload);
+  const r = await sendPhoto(chat_id, RS_VERIFY_IMG, caption, { reply_markup: kb });
   // WORKFLOW message: do NOT schedule auto-delete — flow deletes it on success.
   const mid = r?.result?.message_id;
   if (mid) {
