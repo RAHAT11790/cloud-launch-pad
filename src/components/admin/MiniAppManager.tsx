@@ -31,6 +31,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
   const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([]);
   const [enabled, setEnabled] = useState(false);
   const [botUsername, setBotUsername] = useState("RS_ANIME_ACCESS_BOT");
+  const [appShortName, setAppShortName] = useState("app");
   const [newLabel, setNewLabel] = useState("");
   const [newRedirect, setNewRedirect] = useState("");
   const [setupBusy, setSetupBusy] = useState(false);
@@ -50,12 +51,17 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
       const v = String(snap.val() || "").trim();
       setBotUsername(v || "RS_ANIME_ACCESS_BOT");
     });
-    return () => { u1(); u2(); u3(); u4(); };
+    const u5 = onValue(ref(db, "settings/telegramMiniAppShortName"), (snap) => {
+      const v = String(snap.val() || "").trim();
+      setAppShortName(v || "app");
+    });
+    return () => { u1(); u2(); u3(); u4(); u5(); };
   }, []);
 
   const saveSettings = async () => {
     await set(ref(db, "settings/unlockViaTelegramMini"), enabled);
     await set(ref(db, "settings/telegramMiniBotUsername"), botUsername.trim().replace(/^@/, ""));
+    await set(ref(db, "settings/telegramMiniAppShortName"), appShortName.trim().replace(/^\//, ""));
     toast.success("Settings saved");
   };
 
