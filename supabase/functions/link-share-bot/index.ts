@@ -351,8 +351,10 @@ async function verifyUserWithBackend(user_id: number): Promise<boolean> {
 }
 
 // Verify keyboard — single button (auto-verify, no manual continue)
-function verifyKeyboard(user_id: number, returnPayload = "") {
-  const url = `https://t.me/${RS_MINI_BOT}/${RS_MINI_APP_NAME}?startapp=u_tg_${user_id}_r_${returnPayload}`;
+// Embeds origin bot username so mini-app redirects back here after success.
+async function verifyKeyboard(user_id: number, returnPayload = "") {
+  const u = await botUsername();
+  const url = `https://t.me/${RS_MINI_BOT}/${RS_MINI_APP_NAME}?startapp=u_tg_${user_id}_r_${returnPayload}_b_${u}`;
   return {
     inline_keyboard: [
       [{ text: "🎁 ᴠᴇʀɪғʏ ᴀᴄᴄᴇꜱꜱ (24ʜ)", url }],
