@@ -346,7 +346,22 @@ export default function MiniApp() {
   const externalRedirect = params.get("redirect") || "";
   const externalName = params.get("n") || params.get("name") || "";
   const externalPhoto = params.get("p") || params.get("photo") || "";
-  const shortId = params.get("s") || "";
+  // Short ID can come from ?s=... (web) OR from Telegram startapp/start_param as "s_<id>"
+  const shortId = useMemo(() => {
+    const direct = params.get("s") || "";
+    if (direct) return direct;
+    const candidates = [
+      params.get("tgWebAppStartParam") || "",
+      params.get("startapp") || "",
+      params.get("start_param") || "",
+      window.Telegram?.WebApp?.initDataUnsafe?.start_param || "",
+    ];
+    for (const raw of candidates) {
+      const v = String(raw || "").trim();
+      if (v.startsWith("s_")) return v.slice(2);
+    }
+    return "";
+  }, [params]);
 
   // Parse start_param from website. Format: u_<uid>                     (legacy)
   //                                       u_<uid>_src_app              (installed app)
