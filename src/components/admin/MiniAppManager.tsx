@@ -31,6 +31,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
   const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([]);
   const [enabled, setEnabled] = useState(false);
   const [botUsername, setBotUsername] = useState("RS_ANIME_ACCESS_BOT");
+  const [appShortName, setAppShortName] = useState("app");
   const [newLabel, setNewLabel] = useState("");
   const [newRedirect, setNewRedirect] = useState("");
   const [setupBusy, setSetupBusy] = useState(false);
@@ -50,12 +51,17 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
       const v = String(snap.val() || "").trim();
       setBotUsername(v || "RS_ANIME_ACCESS_BOT");
     });
-    return () => { u1(); u2(); u3(); u4(); };
+    const u5 = onValue(ref(db, "settings/telegramMiniAppShortName"), (snap) => {
+      const v = String(snap.val() || "").trim();
+      setAppShortName(v || "app");
+    });
+    return () => { u1(); u2(); u3(); u4(); u5(); };
   }, []);
 
   const saveSettings = async () => {
     await set(ref(db, "settings/unlockViaTelegramMini"), enabled);
     await set(ref(db, "settings/telegramMiniBotUsername"), botUsername.trim().replace(/^@/, ""));
+    await set(ref(db, "settings/telegramMiniAppShortName"), appShortName.trim().replace(/^\//, ""));
     toast.success("Settings saved");
   };
 
@@ -191,7 +197,18 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
             className={inputClass}
           />
           <p className="text-xs text-muted-foreground break-all">
-            Users go to <code className="break-all">https://t.me/{botUsername || "bot"}?startapp=u_USER_ID</code>
+            Users go to <code className="break-all">https://t.me/{botUsername || "bot"}/{appShortName || "app"}?startapp=u_USER_ID</code>
+          </p>
+
+          <label className="text-xs text-muted-foreground mt-2 block">Mini App Short Name (from BotFather → /myapps)</label>
+          <input
+            value={appShortName}
+            onChange={(e) => setAppShortName(e.target.value)}
+            placeholder="app"
+            className={inputClass}
+          />
+          <p className="text-[10px] text-muted-foreground">
+            This is the short name you set when you created the Mini App in @BotFather. It's part of the URL: <code>t.me/{botUsername || "bot"}/<b>{appShortName || "app"}</b></code>
           </p>
         </div>
         <div className="flex flex-wrap gap-2 mt-3">
@@ -247,7 +264,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
             <p className="text-sm text-muted-foreground text-center py-6">No API keys yet</p>
           )}
           {apiKeys.map((k) => {
-            return <ApiKeyRow key={k.id} k={k} miniUrl={miniUrl} copy={copy} toggleKey={toggleKey} deleteKey={deleteKey} />;
+            return <ApiKeyRow key={k.id} k={k} miniUrl={miniUrl} botUsername={botUsername} appShortName={appShortName} copy={copy} toggleKey={toggleKey} deleteKey={deleteKey} />;
           })}
         </div>
       </div>
@@ -265,16 +282,23 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
 }
 
 function ApiKeyRow({
-  k, miniUrl, copy, toggleKey, deleteKey,
+  k, miniUrl, botUsername, appShortName, copy, toggleKey, deleteKey,
 }: {
-  k: ApiKeyEntry; miniUrl: string;
+  k: ApiKeyEntry; miniUrl: string; botUsername: string; appShortName: string;
   copy: (s: string) => void;
   toggleKey: (id: string, enabled: boolean) => void;
   deleteKey: (id: string) => void;
 }) {
   const [shortenInput, setShortenInput] = useState("");
   const [shortenResult, setShortenResult] = useState("");
+  const [shortenTgLink, setShortenTgLink] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const buildTgLink = (shortId: string) => {
+    const u = (botUsername || "bot").replace(/^@/, "");
+    const a = (appShortName || "app").replace(/^\//, "");
+    return `https://t.me/${u}/${a}?startapp=s_${shortId}`;
+  };
 
   const doShorten = async () => {
     if (!shortenInput.trim()) { toast.error("URL required"); return; }
@@ -290,8 +314,8 @@ function ApiKeyRow({
       );
       const data = await r.json();
       if (data?.ok && data.shortId) {
-        const s = `${miniUrl}?s=${data.shortId}`;
-        setShortenResult(s);
+        setShortenResult(`${miniUrl}?s=${data.shortId}`);
+        setShortenTgLink(buildTgLink(data.shortId));
         toast.success("Shortened!");
       } else {
         toast.error(data?.error || "Failed");
@@ -347,16 +371,30 @@ function ApiKeyRow({
             {busy ? "…" : "Shorten"}
           </button>
         </div>
+        {shortenTgLink && (
+          <div className="space-y-1">
+            <div className="text-[10px] font-semibold text-emerald-400">✅ Telegram Mini App link (use this in your bot button):</div>
+            <div className="flex items-center gap-2 p-2 rounded bg-emerald-500/10 border border-emerald-500/30 text-[11px] font-mono break-all">
+              <span className="flex-1 break-all">{shortenTgLink}</span>
+              <button onClick={() => copy(shortenTgLink)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
+                <Copy className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        )}
         {shortenResult && (
-          <div className="flex items-center gap-2 p-2 rounded bg-background/50 text-[11px] font-mono break-all">
-            {shortenResult}
-            <button onClick={() => copy(shortenResult)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
-              <Copy className="w-3 h-3" />
-            </button>
+          <div className="space-y-1">
+            <div className="text-[10px] text-muted-foreground">Web fallback (opens in browser):</div>
+            <div className="flex items-center gap-2 p-2 rounded bg-background/50 text-[11px] font-mono break-all">
+              <span className="flex-1 break-all">{shortenResult}</span>
+              <button onClick={() => copy(shortenResult)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
+                <Copy className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         )}
         <p className="text-[10px] text-muted-foreground">
-          Users opening this short URL must watch 5 ads, then are redirected to the original link.
+          📱 Use the green Telegram link in your bot's "Verify Access" button — it opens the Mini App directly inside Telegram (no browser).
         </p>
       </div>
     </div>
