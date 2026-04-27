@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { db, ref, set, onValue, push, remove, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import {
-  Sparkles, Eye, MousePointerClick, CheckCircle2, KeyRound, Plus, Trash2, Copy, ExternalLink, Power, Save,
+  Sparkles, Eye, MousePointerClick, CheckCircle2, KeyRound, Plus, Trash2, Copy, Power, Save,
 } from "lucide-react";
 
 interface Props {
@@ -82,19 +82,18 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
 
   const createKey = async () => {
     if (!newLabel.trim()) { toast.error("Label required"); return; }
-    if (!newRedirect.trim()) { toast.error("Redirect URL required"); return; }
     const key = randomKey();
     const r = await push(ref(db, "miniApp/apiKeys"), {
       key,
       label: newLabel.trim(),
-      redirectUrl: newRedirect.trim(),
+      redirectUrl: "",
       enabled: true,
       createdAt: Date.now(),
       uses: 0,
     });
     if (r.key) {
-      toast.success("API key created");
-      setNewLabel(""); setNewRedirect("");
+      toast.success("API key created — copy & paste in your bot");
+      setNewLabel("");
     }
   };
 
@@ -228,20 +227,14 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
           <KeyRound className="w-4 h-4" /> API Keys for External Bots
         </h3>
         <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
-          <strong>(1) Direct redirect</strong> — send users to <code className="break-all">{miniUrl}?key=KEY&user=USER_ID</code>; after 5 ads they go to your Redirect URL. <strong>(2) Per-link shortener</strong> — POST to <code>/functions/v1/mini-app</code> with <code>{`{action:"shorten", apiKey, url}`}</code> for a unique short URL.
+          Create an API key, copy it, and paste it into your Telegram bot's config. The bot uses this key to shorten any link via <code>/functions/v1/mini-app</code> with <code>{`{action:"shorten", apiKey, url}`}</code>. Users tap "Verify Access" → watch 5 ads → get the original link unlocked for 24h.
         </p>
 
         <div className="grid grid-cols-1 gap-2 mb-3">
           <input
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
-            placeholder="Label (e.g. Partner Bot 1)"
-            className={inputClass}
-          />
-          <input
-            value={newRedirect}
-            onChange={(e) => setNewRedirect(e.target.value)}
-            placeholder="Redirect URL after ads"
+            placeholder="Label (e.g. RS ANIME BOT)"
             className={inputClass}
           />
           <button onClick={createKey} className={`${btnPrimary} px-3 py-2 text-xs flex items-center justify-center gap-1.5`}>
@@ -254,8 +247,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
             <p className="text-sm text-muted-foreground text-center py-6">No API keys yet</p>
           )}
           {apiKeys.map((k) => {
-            const fullUrl = `${miniUrl}?key=${k.key}&user=USER_ID`;
-            return <ApiKeyRow key={k.id} k={k} fullUrl={fullUrl} miniUrl={miniUrl} copy={copy} toggleKey={toggleKey} deleteKey={deleteKey} />;
+            return <ApiKeyRow key={k.id} k={k} miniUrl={miniUrl} copy={copy} toggleKey={toggleKey} deleteKey={deleteKey} />;
           })}
         </div>
       </div>
@@ -273,9 +265,9 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
 }
 
 function ApiKeyRow({
-  k, fullUrl, miniUrl, copy, toggleKey, deleteKey,
+  k, miniUrl, copy, toggleKey, deleteKey,
 }: {
-  k: ApiKeyEntry; fullUrl: string; miniUrl: string;
+  k: ApiKeyEntry; miniUrl: string;
   copy: (s: string) => void;
   toggleKey: (id: string, enabled: boolean) => void;
   deleteKey: (id: string) => void;
@@ -325,22 +317,15 @@ function ApiKeyRow({
         </button>
       </div>
       <div className="flex items-center gap-2 p-2 rounded bg-background/50 text-xs font-mono break-all">
-        <span className="opacity-60">key:</span> {k.key}
-        <button onClick={() => copy(k.key)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
-          <Copy className="w-3 h-3" />
+        <span className="opacity-60 shrink-0">API key:</span>
+        <span className="flex-1 break-all">{k.key}</span>
+        <button onClick={() => copy(k.key)} className="ml-auto p-1.5 hover:bg-fuchsia-500/20 rounded shrink-0" title="Copy key">
+          <Copy className="w-3.5 h-3.5" />
         </button>
       </div>
-      <div className="flex items-center gap-2 p-2 rounded bg-background/50 text-xs font-mono break-all">
-        <span className="opacity-60">redirect url:</span> {fullUrl}
-        <button onClick={() => copy(fullUrl)} className="ml-auto p-1 hover:bg-muted rounded shrink-0">
-          <Copy className="w-3 h-3" />
-        </button>
-      </div>
-      <div className="flex items-center gap-2 text-xs">
-        <ExternalLink className="w-3 h-3 opacity-60" />
-        <span className="opacity-60">default redirect:</span>
-        <span className="truncate">{k.redirectUrl}</span>
-      </div>
+      <p className="text-[10px] text-muted-foreground leading-relaxed">
+        📋 Copy this key and paste it into your bot's <code>RS_API_KEY</code> config. Bot will auto-shorten every link through it.
+      </p>
 
       {/* Inline URL shortener */}
       <div className="pt-2 border-t border-border/40 space-y-1.5">
