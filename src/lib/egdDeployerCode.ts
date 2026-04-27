@@ -129,8 +129,10 @@ async function listSecrets() {
 
 async function queryLogs(slug, minutes, startAt, endAt) {
   const safeMinutes = Math.min(Math.max(Number(minutes) || 60, 1), 1440);
-  const end = endAt ? new Date(endAt) : new Date();
-  const start = startAt ? new Date(startAt) : new Date(end.getTime() - safeMinutes * 60 * 1000);
+  const endCandidate = endAt ? new Date(endAt) : new Date();
+  const end = Number.isNaN(endCandidate.getTime()) ? new Date() : endCandidate;
+  const startCandidate = startAt ? new Date(startAt) : new Date(end.getTime() - safeMinutes * 60 * 1000);
+  const start = Number.isNaN(startCandidate.getTime()) ? new Date(end.getTime() - safeMinutes * 60 * 1000) : startCandidate;
   const startIso = start.toISOString();
   const endIso = end.toISOString();
   const slugFilter = String(slug || "").trim();
