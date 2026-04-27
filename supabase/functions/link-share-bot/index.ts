@@ -1012,10 +1012,8 @@ async function handleUpdate(update: any) {
   const from = msg.from;
   if (!user_id) return;
 
-  // Auto-delete user's command echo (display only)
-  if (msg.text?.startsWith("/")) {
-    scheduleDelete(chat_id, msg.message_id);
-  }
+  // NOTE: Never auto-delete user-sent commands; only bot-generated messages
+  // are auto-cleaned via scheduleDelete inside handlers.
 
   if (msg.forward_from_chat && msg.chat.type === "private") {
     await handleForward(chat_id, user_id, msg);
