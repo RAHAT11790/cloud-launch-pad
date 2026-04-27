@@ -1,5 +1,5 @@
 // RS Link Share Bot — Telegram webhook edge function
-// Pure HTTP (no Pyrogram). Firebase Realtime DB for storage. RS Anime 24h verify gate.
+// Pure HTTP. Firebase Realtime DB for storage. RS Anime 24h verify gate.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +14,6 @@ const FIREBASE_DB_URL =
   Deno.env.get("FIREBASE_DB_URL") || "https://rs-anime-default-rtdb.firebaseio.com";
 const FIREBASE_SA_JSON = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_KEY") || "";
 
-// RS Anime verify gate
 const RS_API_KEY = Deno.env.get("RS_API_KEY") || "";
 const RS_MINI_BOT = Deno.env.get("RS_MINI_BOT") || "RS_ANIME_ACCESS_BOT";
 const RS_MINI_APP_NAME = Deno.env.get("RS_MINI_APP_NAME") || "app";
@@ -22,10 +21,8 @@ const RS_BACKEND_URL =
   Deno.env.get("RS_BACKEND_URL") ||
   "https://kqxpzqegtvaiwgdusrin.supabase.co/functions/v1/mini-app";
 
-// Storage namespace under Firebase
 const NS = "linkShareBot";
 
-// Images
 const START_IMG = "https://i.ibb.co.com/670dG09j/IMG-20251015-191633.jpg";
 const CHANNEL_BTN_IMG = "https://i.ibb.co.com/PsNMKqnT/IMG-20260417-065611-339.jpg";
 const ABOUT_BTN_IMG = "https://i.ibb.co.com/60jQqGff/IMG-20260417-065628-002.jpg";
@@ -86,6 +83,9 @@ const getChat = (chat_id: number | string) => tg("getChat", { chat_id });
 const approveChatJoinRequest = (chat_id: number, user_id: number) =>
   tg("approveChatJoinRequest", { chat_id, user_id });
 
+const getUserProfilePhotos = (user_id: number) =>
+  tg("getUserProfilePhotos", { user_id, limit: 1 });
+
 async function createJoinRequestInvite(chat_id: number): Promise<string | null> {
   const expire = Math.floor(Date.now() / 1000) + 30;
   const r = await tg("createChatInviteLink", {
@@ -101,11 +101,19 @@ async function getMe(): Promise<{ username?: string }> {
   return r?.result || {};
 }
 
+// ============== AUTO-CLEANER (30s after action) ==============
+function scheduleDelete(chat_id: number, message_id: number, delayMs = 30_000) {
+  if (!message_id) return;
+  setTimeout(() => {
+    deleteMessage(chat_id, message_id).catch(() => {});
+  }, delayMs);
+}
+
 // ============== FIREBASE (Service Account → OAuth2) ==============
 let _accessToken: { token: string; exp: number } | null = null;
 
 function b64url(bytes: Uint8Array): string {
-  let s = btoa(String.fromCharCode(...bytes));
+  const s = btoa(String.fromCharCode(...bytes));
   return s.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
@@ -138,11 +146,8 @@ async function getFirebaseToken(): Promise<string> {
   const signingInput = `${headerB64}.${claimB64}`;
   const keyDer = pemToDer(sa.private_key);
   const cryptoKey = await crypto.subtle.importKey(
-    "pkcs8",
-    keyDer,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"],
+    "pkcs8", keyDer, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false, ["sign"],
   );
   const sig = new Uint8Array(
     await crypto.subtle.sign("RSASSA-PKCS1-v1_5", cryptoKey, enc.encode(signingInput)),
@@ -178,7 +183,7 @@ async function fb(method: "GET" | "PUT" | "PATCH" | "DELETE" | "POST", path: str
   return await r.json();
 }
 
-// ============== FIREBASE HELPERS ==============
+// ============== TYPES & HELPERS ==============
 type Channel = {
   channel_id: number;
   channel_title: string;
@@ -212,24 +217,19 @@ async function listFsub(): Promise<FsubChannel[]> {
   if (!data) return [];
   return Object.values(data) as FsubChannel[];
 }
-async function getFsubByUsername(username: string): Promise<FsubChannel | null> {
-  const all = await listFsub();
-  return all.find((c) => (c.channel_username || "").toLowerCase() === username.toLowerCase()) || null;
-}
 async function saveFsub(ch: FsubChannel) {
   const key = String(ch.channel_id).replace("-", "n");
   await fb("PUT", `${NS}/fsub/${key}`, ch);
 }
-async function deleteFsubByUsername(username: string): Promise<boolean> {
-  const all = await listFsub();
-  const found = all.find((c) => (c.channel_username || "").toLowerCase() === username.toLowerCase());
-  if (!found) return false;
-  const key = String(found.channel_id).replace("-", "n");
+async function deleteFsubById(channel_id: number): Promise<boolean> {
+  const key = String(channel_id).replace("-", "n");
+  const existing = await fb("GET", `${NS}/fsub/${key}`);
+  if (!existing) return false;
   await fb("DELETE", `${NS}/fsub/${key}`);
   return true;
 }
 
-// 24h verify cache
+// 24h verify cache — persistent per user
 async function isUserVerified(user_id: number): Promise<boolean> {
   const data = await fb("GET", `${NS}/verify/${user_id}`);
   if (!data?.expires_at) return false;
@@ -241,6 +241,43 @@ async function markUserVerified(user_id: number, hours = 24) {
     verified_at: Date.now(),
     expires_at: Date.now() + hours * 3600 * 1000,
   });
+}
+
+// Save user profile (name + photo) for tracking
+async function saveUserProfile(user_id: number, from: any) {
+  try {
+    const name = [from.first_name, from.last_name].filter(Boolean).join(" ") || from.username || `User ${user_id}`;
+    let photo_url: string | null = null;
+    try {
+      const pp = await getUserProfilePhotos(user_id);
+      const photos = pp?.result?.photos;
+      if (photos && photos.length > 0 && photos[0].length > 0) {
+        const file_id = photos[0][photos[0].length - 1].file_id;
+        const f = await tg("getFile", { file_id });
+        if (f?.result?.file_path) {
+          photo_url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${f.result.file_path}`;
+        }
+      }
+    } catch {}
+    await fb("PUT", `${NS}/users/${user_id}`, {
+      user_id,
+      name,
+      username: from.username || null,
+      photo_url,
+      first_seen: Date.now(),
+      last_seen: Date.now(),
+    });
+    return { name, photo_url };
+  } catch (e) {
+    console.error("[saveUserProfile]", e);
+    return { name: from.first_name || "User", photo_url: null };
+  }
+}
+
+async function touchUser(user_id: number) {
+  try {
+    await fb("PATCH", `${NS}/users/${user_id}`, { last_seen: Date.now() });
+  } catch {}
 }
 
 // ============== RS ANIME ==============
@@ -276,13 +313,12 @@ async function verifyUserWithBackend(user_id: number): Promise<boolean> {
   }
 }
 
+// Verify keyboard — single button (auto-verify, no manual continue)
 function verifyKeyboard(user_id: number, returnPayload = "") {
-  const url = `https://t.me/${RS_MINI_BOT}/${RS_MINI_APP_NAME}?startapp=u_tg_${user_id}`;
-  const cb = `verify_check_${returnPayload}`;
+  const url = `https://t.me/${RS_MINI_BOT}/${RS_MINI_APP_NAME}?startapp=u_tg_${user_id}_r_${returnPayload}`;
   return {
     inline_keyboard: [
       [{ text: "🎁 ᴠᴇʀɪғʏ ᴀᴄᴄᴇꜱꜱ (24ʜ)", url }],
-      [{ text: "✅ ɪ'ᴍ ᴠᴇʀɪғɪᴇᴅ — ᴄᴏɴᴛɪɴᴜᴇ", callback_data: cb }],
     ],
   };
 }
@@ -298,12 +334,20 @@ ${stylish("›› Open any link instantly")}
 
 ${stylish("✦ HOW TO VERIFY ✦")}
 ${stylish("›› 1. Tap VERIFY ACCESS button")}
-${stylish("›› 2. Watch 5 short ads")}
-${stylish("›› 3. Tap GET ACCESS")}
-${stylish("›› 4. Return here & continue")}
+${stylish("›› 2. Watch 5 short ads in Mini App")}
+${stylish("›› 3. Auto-return — done!")}
 
 ✦━━━━━━━━━━━━━━━━━━━✦`;
-  await sendPhoto(chat_id, RS_VERIFY_IMG, caption, { reply_markup: verifyKeyboard(user_id, returnPayload) });
+  const r = await sendPhoto(chat_id, RS_VERIFY_IMG, caption, { reply_markup: verifyKeyboard(user_id, returnPayload) });
+  // Save the verify-gate message id so we can delete it once user is verified
+  const mid = r?.result?.message_id;
+  if (mid) {
+    try {
+      await fb("PUT", `${NS}/pendingVerify/${user_id}`, {
+        chat_id, message_id: mid, return_payload: returnPayload, created_at: Date.now(),
+      });
+    } catch {}
+  }
 }
 
 // ============== FORCE SUBSCRIBE ==============
@@ -330,7 +374,10 @@ function fsubMarkup(notJoined: FsubChannel[], retryCb: string) {
   notJoined.forEach((ch, i) => {
     let name = ch.channel_title || ch.channel_username || "Channel";
     if (name.length > 12) name = name.slice(0, 10) + "..";
-    row.push({ text: name, url: `https://t.me/${ch.channel_username}` });
+    const url = ch.channel_username
+      ? `https://t.me/${ch.channel_username}`
+      : `https://t.me/c/${String(ch.channel_id).replace("-100", "")}`;
+    row.push({ text: name, url });
     if (row.length === 2 || i === notJoined.length - 1) {
       rows.push(row);
       row = [];
@@ -370,27 +417,30 @@ async function permanentLink(channel_id: number): Promise<string> {
 async function deliverChannelLink(chat_id: number, user_id: number, channel_id: number) {
   const notJoined = await checkFsub(user_id);
   if (notJoined.length > 0) {
-    await sendPhoto(
+    const r = await sendPhoto(
       chat_id,
       START_IMG,
-      `${stylish("✦ FORCE SUBSCRIBE REQUIRED ✦")}\n\n${stylish("›› Join all channels to access link")}`,
-      { reply_markup: fsubMarkup(notJoined, `channel_${channel_id}`) },
+      `${stylish("✦ FORCE SUBSCRIBE REQUIRED ✦")}\n\n${stylish("›› Join all channels then press TRY AGAIN")}`,
+      { reply_markup: fsubMarkup(notJoined, `fsub_retry_${channel_id}`) },
     );
+    // NOTE: do NOT auto-delete fsub message — only delete after user successfully passes
     return;
   }
 
   const ch = await getChannel(channel_id);
   if (!ch) {
-    await sendMessage(chat_id, stylish("✦ Channel not found in database ✦"));
+    const r = await sendMessage(chat_id, stylish("✦ Channel not found in database ✦"));
+    scheduleDelete(chat_id, r?.result?.message_id);
     return;
   }
 
   const join = await createJoinRequestInvite(channel_id);
   if (!join) {
-    await sendMessage(chat_id, stylish("✦ Failed to create link. Please try again. ✦"));
+    const r = await sendMessage(chat_id, stylish("✦ Failed to create link. Please try again. ✦"));
+    scheduleDelete(chat_id, r?.result?.message_id);
     return;
   }
-  await sendPhoto(
+  const photoRes = await sendPhoto(
     chat_id,
     LINK_SHARE_IMG,
     `✦━━━━━━━━━━━━━━━━━━━✦
@@ -398,11 +448,11 @@ async function deliverChannelLink(chat_id: number, user_id: number, channel_id: 
 ✦━━━━━━━━━━━━━━━━━━━✦
 ${stylish("›› Click button & press REQUEST")}
 ${stylish("›› Auto approved in 1 second")}`,
-    {
-      reply_markup: { inline_keyboard: [[{ text: "🔗 REQUEST TO JOIN", url: join }]] },
-    },
+    { reply_markup: { inline_keyboard: [[{ text: "🔗 REQUEST TO JOIN", url: join }]] } },
   );
-  await sendMessage(
+  scheduleDelete(chat_id, photoRes?.result?.message_id);
+
+  const noticeRes = await sendMessage(
     chat_id,
     `✦━━━━━━━━━━━━━━━━━━━✦
     ⚠️ ${stylish("NOTICE")} ⚠️
@@ -410,25 +460,112 @@ ${stylish("›› Auto approved in 1 second")}`,
 ${stylish("›› Link expires in 30 seconds")}
 ${stylish("›› Click post link for new one")}`,
   );
+  scheduleDelete(chat_id, noticeRes?.result?.message_id);
+}
+
+// ============== VERIFY SUCCESS WELCOME ==============
+async function sendVerifySuccess(chat_id: number, user_id: number, from: any) {
+  const profile = await saveUserProfile(user_id, from);
+  const displayName = profile.name;
+  const expireTs = Math.floor((Date.now() + 24 * 3600 * 1000) / 1000);
+  const expireDate = new Date(expireTs * 1000).toUTCString();
+
+  const caption = `✦━━━━━━━━━━━━━━━━━━━✦
+     🎉 ${stylish("VERIFICATION SUCCESS")} 🎉
+✦━━━━━━━━━━━━━━━━━━━✦
+
+${stylish("›› Welcome")}, <b>${displayName}</b>!
+
+${stylish("✦ STATUS")}: ✅ <b>${stylish("VERIFIED")}</b>
+${stylish("✦ ACCESS")}: 🎁 <b>${stylish("24 HOURS FULL")}</b>
+${stylish("✦ EXPIRES")}: ⏰ <code>${expireDate}</code>
+
+${stylish("›› All anime links unlocked")}
+${stylish("›› Open any post link instantly")}
+${stylish("›› Come back after 24h to renew")}
+
+✦━━━━━━━━━━━━━━━━━━━✦
+${stylish("✦ ENJOY YOUR ANIME ✦")}
+✦━━━━━━━━━━━━━━━━━━━✦`;
+
+  let res: any;
+  if (profile.photo_url) {
+    res = await sendPhoto(chat_id, profile.photo_url, caption);
+  } else {
+    res = await sendPhoto(chat_id, RS_VERIFY_IMG, caption);
+  }
+  // Welcome message also auto-deletes after 30s
+  scheduleDelete(chat_id, res?.result?.message_id);
 }
 
 // ============== UPDATE HANDLERS ==============
 const isAdmin = (uid: number) => uid === ADMIN_ID;
 
-async function handleStart(chat_id: number, user_id: number, arg?: string) {
+// Try to detect verification — used on /start re-entry
+async function tryAutoVerifyOnReturn(chat_id: number, user_id: number, from: any): Promise<boolean> {
+  // Check pending verify record
+  let pending: any = null;
+  try { pending = await fb("GET", `${NS}/pendingVerify/${user_id}`); } catch {}
+
+  // Check if backend says they're verified
+  let verified = await isUserVerified(user_id);
+  if (!verified) {
+    if (await verifyUserWithBackend(user_id)) {
+      await markUserVerified(user_id, 24);
+      verified = true;
+    }
+  }
+  if (!verified) return false;
+
+  // Delete the old verify-gate message if present
+  if (pending?.message_id && pending?.chat_id) {
+    try { await deleteMessage(pending.chat_id, pending.message_id); } catch {}
+    try { await fb("DELETE", `${NS}/pendingVerify/${user_id}`); } catch {}
+  }
+
+  // Show beautiful welcome with profile pic
+  await sendVerifySuccess(chat_id, user_id, from);
+
+  // If user came from a channel link, deliver the link too
+  const payload = pending?.return_payload;
+  if (payload && /^-?\d+$/.test(payload)) {
+    await deliverChannelLink(chat_id, user_id, Number(payload));
+  }
+  return true;
+}
+
+async function handleStart(chat_id: number, user_id: number, from: any, arg?: string) {
+  await touchUser(user_id);
+
+  // Re-entry after verify — check if we should auto-show success
+  if (!arg || arg === "verified" || arg === "back") {
+    const ok = await tryAutoVerifyOnReturn(chat_id, user_id, from);
+    if (ok) return;
+  }
+
   if (arg && arg.startsWith("channel_")) {
     const cid = Number(arg.replace("channel_", ""));
     if (!Number.isFinite(cid)) {
-      await sendMessage(chat_id, stylish("✦ Invalid channel ✦"));
+      const r = await sendMessage(chat_id, stylish("✦ Invalid channel ✦"));
+      scheduleDelete(chat_id, r?.result?.message_id);
       return;
     }
     if (!(await isUserVerified(user_id))) {
-      await sendVerifyGate(chat_id, user_id, String(cid));
-      return;
+      // Backend re-check
+      if (await verifyUserWithBackend(user_id)) {
+        await markUserVerified(user_id, 24);
+      } else {
+        await sendVerifyGate(chat_id, user_id, String(cid));
+        return;
+      }
     }
     await deliverChannelLink(chat_id, user_id, cid);
     return;
   }
+
+  // Default start — save profile
+  await saveUserProfile(user_id, from);
+
   const caption = `✦━━━━━━━━━━━━━━━━━━━✦
 ${stylish("✦ RS LINK SHARE BOT ✦")}
 ✦━━━━━━━━━━━━━━━━━━━✦
@@ -439,15 +576,19 @@ ${stylish("›› Auto approve requests")}
 ${stylish("›› Powered by")}: <a href="https://t.me/CARTOONFUNNY03">𓆩𝐀𝐍𝐈𝐌𝐄 𝐈𝐍 𝐇𝐈𝐍𝐃𝐈𓆪</a>
 ${stylish("✦ MADE WITH ❤️ BY")}: <a href="https://t.me/rs_woner">𝐑𝐒 𝐖𝐎𝐍𝐄𝐑</a>
 ✦━━━━━━━━━━━━━━━━━━━✦`;
-  await sendPhoto(chat_id, START_IMG, caption, { reply_markup: mainMenu() });
+  const r = await sendPhoto(chat_id, START_IMG, caption, { reply_markup: mainMenu() });
+  scheduleDelete(chat_id, r?.result?.message_id);
 }
 
 async function handleSetChannel(chat_id: number, user_id: number) {
   if (!isAdmin(user_id)) {
-    await sendMessage(chat_id, stylish("✦ Unauthorized ✦"));
+    const r = await sendMessage(chat_id, stylish("✦ Unauthorized ✦"));
+    scheduleDelete(chat_id, r?.result?.message_id);
     return;
   }
-  await sendMessage(
+  // Mark admin's next forward as "channel set"
+  await fb("PUT", `${NS}/adminState/${user_id}`, { mode: "set_channel", at: Date.now() });
+  const r = await sendMessage(
     chat_id,
     `${stylish("✦ ADD CHANNEL ✦")}
 
@@ -456,20 +597,67 @@ ${stylish("›› 2. Enable \"Invite Links\" permission")}
 ${stylish("›› 3. Enable \"Approve Requests\" permission")}
 ${stylish("›› 4. Forward a post from channel here")}`,
   );
+  scheduleDelete(chat_id, r?.result?.message_id);
+}
+
+async function handleFsubAddCmd(chat_id: number, user_id: number) {
+  if (!isAdmin(user_id)) {
+    const r = await sendMessage(chat_id, stylish("✦ Unauthorized ✦"));
+    scheduleDelete(chat_id, r?.result?.message_id);
+    return;
+  }
+  await fb("PUT", `${NS}/adminState/${user_id}`, { mode: "fsub_add", at: Date.now() });
+  const r = await sendMessage(
+    chat_id,
+    `${stylish("✦ ADD FORCE-SUB CHANNEL ✦")}
+
+${stylish("›› Forward a post from the channel")}
+${stylish("›› Bot must be a member of that channel")}
+${stylish("›› Forward-mode required (works for private too)")}`,
+  );
+  scheduleDelete(chat_id, r?.result?.message_id);
 }
 
 async function handleForward(chat_id: number, user_id: number, msg: any) {
   if (!isAdmin(user_id)) return;
   const fwd = msg.forward_from_chat;
   if (!fwd) {
-    await sendMessage(chat_id, stylish("✦ Forward from channel only ✦"));
+    const r = await sendMessage(chat_id, stylish("✦ Forward from channel only ✦"));
+    scheduleDelete(chat_id, r?.result?.message_id);
     return;
   }
+
+  // Read admin state to know if this is set_channel or fsub_add
+  let state: any = null;
+  try { state = await fb("GET", `${NS}/adminState/${user_id}`); } catch {}
+  const mode = state?.mode || "set_channel";
+
   const channel_id = fwd.id;
   const channel_title = fwd.title;
   const channel_username = fwd.username || null;
+
+  if (mode === "fsub_add") {
+    try {
+      await saveFsub({
+        channel_id, channel_title, channel_username,
+        added_by: user_id, added_at: Date.now(),
+      });
+      await fb("DELETE", `${NS}/adminState/${user_id}`).catch(() => {});
+      const r = await sendMessage(chat_id,
+        `${stylish("✦ FSUB CHANNEL ADDED ✅")}\n\n${stylish("›› Name")}: ${channel_title}\n${stylish("›› ID")}: <code>${channel_id}</code>${channel_username ? `\n${stylish("›› Username")}: @${channel_username}` : ""}`);
+      scheduleDelete(chat_id, r?.result?.message_id);
+    } catch (e) {
+      const r = await sendMessage(chat_id,
+        `${stylish("✦ FAILED ✦")}\n\n${stylish("Error")}: ${String(e).slice(0, 150)}`);
+      scheduleDelete(chat_id, r?.result?.message_id);
+    }
+    return;
+  }
+
+  // Default: set_channel
   if (await getChannel(channel_id)) {
-    await sendMessage(chat_id, stylish("✦ Channel already added! ✦"));
+    const r = await sendMessage(chat_id, stylish("✦ Channel already added! ✦"));
+    scheduleDelete(chat_id, r?.result?.message_id);
     return;
   }
   try {
@@ -478,9 +666,9 @@ async function handleForward(chat_id: number, user_id: number, msg: any) {
       channel_id, channel_title, channel_username,
       added_by: user_id, added_at: Date.now(),
     });
+    await fb("DELETE", `${NS}/adminState/${user_id}`).catch(() => {});
     const perm = await permanentLink(channel_id);
-    const short = await shortenViaRs(perm);
-    await sendMessage(
+    const r = await sendMessage(
       chat_id,
       `${stylish("✦ CHANNEL ADDED ✅")}
 
@@ -488,46 +676,51 @@ ${stylish("›› Name")}: ${channel_title}
 ${stylish("›› ID")}: <code>${channel_id}</code>
 
 ${stylish("✦ Permanent Link")}:
-${perm}
-
-${stylish("✦ RS Short Link")} (verify-gated):
-${short}`,
+${perm}`,
     );
+    scheduleDelete(chat_id, r?.result?.message_id);
   } catch (e) {
-    await sendMessage(
+    const r = await sendMessage(
       chat_id,
       `${stylish("✦ FAILED TO ADD CHANNEL ✦")}\n\n${stylish("Error")}: ${String(e).slice(0, 150)}`,
     );
+    scheduleDelete(chat_id, r?.result?.message_id);
   }
 }
 
 async function handleShort(chat_id: number, user_id: number, text: string) {
   if (!isAdmin(user_id)) {
-    await sendMessage(chat_id, stylish("✦ Unauthorized ✦"));
+    const r = await sendMessage(chat_id, stylish("✦ Unauthorized ✦"));
+    scheduleDelete(chat_id, r?.result?.message_id);
     return;
   }
   const parts = text.split(/\s+/);
   if (parts.length < 2) {
-    await sendMessage(chat_id, `${stylish("✦ Usage")}: /short https://example.com/...`);
+    const r = await sendMessage(chat_id, `${stylish("✦ Usage")}: /short https://example.com/...`);
+    scheduleDelete(chat_id, r?.result?.message_id);
     return;
   }
   const url = parts[1].trim();
   if (!/^https?:\/\//.test(url)) {
-    await sendMessage(chat_id, stylish("✦ Invalid URL ✦"));
+    const r = await sendMessage(chat_id, stylish("✦ Invalid URL ✦"));
+    scheduleDelete(chat_id, r?.result?.message_id);
     return;
   }
   const short = await shortenViaRs(url);
-  await sendMessage(chat_id, `${stylish("✦ SHORT LINK ✦")}\n\n${short}`);
+  const r = await sendMessage(chat_id, `${stylish("✦ SHORT LINK ✦")}\n\n${short}`);
+  scheduleDelete(chat_id, r?.result?.message_id);
 }
 
 async function handleList(chat_id: number, user_id: number) {
   if (!isAdmin(user_id)) {
-    await sendMessage(chat_id, stylish("✦ Unauthorized ✦"));
+    const r = await sendMessage(chat_id, stylish("✦ Unauthorized ✦"));
+    scheduleDelete(chat_id, r?.result?.message_id);
     return;
   }
   const all = await listChannels();
   if (all.length === 0) {
-    await sendMessage(chat_id, stylish("✦ No channels added ✦"));
+    const r = await sendMessage(chat_id, stylish("✦ No channels added ✦"));
+    scheduleDelete(chat_id, r?.result?.message_id);
     return;
   }
   const buttons = all.map((ch) => {
@@ -535,73 +728,33 @@ async function handleList(chat_id: number, user_id: number) {
     return [{ text: `📺 ${name}`, callback_data: `channel_detail_${ch.channel_id}` }];
   });
   buttons.push([{ text: "❌ CLOSE", callback_data: "close" }]);
-  await sendMessage(chat_id, `${stylish("✦ YOUR CHANNELS ✦")}\n\n${stylish("›› Click for details")}`, {
+  const r = await sendMessage(chat_id, `${stylish("✦ YOUR CHANNELS ✦")}\n\n${stylish("›› Click for details")}`, {
     reply_markup: { inline_keyboard: buttons },
   });
-}
-
-async function handleFsubAdd(chat_id: number, user_id: number, text: string) {
-  if (!isAdmin(user_id)) {
-    await sendMessage(chat_id, stylish("✦ Unauthorized ✦"));
-    return;
-  }
-  const parts = text.split(/\s+/);
-  if (parts.length !== 2) {
-    await sendMessage(chat_id, `${stylish("✦ Usage")}: /fsub_add @username`);
-    return;
-  }
-  const username = parts[1].replace("@", "");
-  try {
-    const r = await getChat(`@${username}`);
-    const chat = r?.result;
-    if (!chat) throw new Error("Chat not found");
-    if (await getFsubByUsername(username)) {
-      await sendMessage(chat_id, stylish("✦ Already in list ✦"));
-      return;
-    }
-    await saveFsub({
-      channel_id: chat.id,
-      channel_username: username,
-      channel_title: chat.title,
-      added_by: user_id,
-      added_at: Date.now(),
-    });
-    await sendMessage(chat_id, `${stylish("✦ Added ✅")}: ${chat.title}`);
-  } catch (e) {
-    await sendMessage(chat_id, `${stylish("✦ Error")}: ${String(e).slice(0, 150)}`);
-  }
+  scheduleDelete(chat_id, r?.result?.message_id);
 }
 
 async function handleFsubList(chat_id: number, user_id: number) {
   if (!isAdmin(user_id)) {
-    await sendMessage(chat_id, stylish("✦ Unauthorized ✦"));
+    const r = await sendMessage(chat_id, stylish("✦ Unauthorized ✦"));
+    scheduleDelete(chat_id, r?.result?.message_id);
     return;
   }
   const all = await listFsub();
   if (all.length === 0) {
-    await sendMessage(chat_id, stylish("✦ No FSUB channels ✦"));
+    const r = await sendMessage(chat_id, stylish("✦ No FSUB channels ✦"));
+    scheduleDelete(chat_id, r?.result?.message_id);
     return;
   }
-  let text = `${stylish("✦ FORCE SUBSCRIBE CHANNELS ✦")}\n\n`;
-  all.forEach((ch, i) => {
-    text += `${stylish("››")} ${i + 1}. ${ch.channel_title}\n   @${ch.channel_username}\n\n`;
+  const buttons = all.map((ch) => {
+    const name = ch.channel_title.length > 18 ? ch.channel_title.slice(0, 18) + ".." : ch.channel_title;
+    return [{ text: `🔔 ${name}`, callback_data: `fsub_remove_${ch.channel_id}` }];
   });
-  await sendMessage(chat_id, text);
-}
-
-async function handleFsubRemove(chat_id: number, user_id: number, text: string) {
-  if (!isAdmin(user_id)) {
-    await sendMessage(chat_id, stylish("✦ Unauthorized ✦"));
-    return;
-  }
-  const parts = text.split(/\s+/);
-  if (parts.length !== 2) {
-    await sendMessage(chat_id, `${stylish("✦ Usage")}: /fsub_remove @username`);
-    return;
-  }
-  const username = parts[1].replace("@", "");
-  const ok = await deleteFsubByUsername(username);
-  await sendMessage(chat_id, stylish(ok ? "✦ Removed successfully ✅" : "✦ Not found ✦"));
+  buttons.push([{ text: "❌ CLOSE", callback_data: "close" }]);
+  const r = await sendMessage(chat_id,
+    `${stylish("✦ FORCE SUBSCRIBE CHANNELS ✦")}\n\n${stylish("›› Tap to remove")}`,
+    { reply_markup: { inline_keyboard: buttons } });
+  scheduleDelete(chat_id, r?.result?.message_id);
 }
 
 // ============== CALLBACKS ==============
@@ -610,33 +763,9 @@ async function handleCallback(cb: any) {
   const user_id: number = cb.from.id;
   const chat_id: number = cb.message?.chat?.id;
   const message_id: number = cb.message?.message_id;
+  const from = cb.from;
 
   try {
-    // 24h verify check
-    if (data.startsWith("verify_check_")) {
-      const payload = data.replace("verify_check_", "");
-      let verified = await isUserVerified(user_id);
-      if (!verified) {
-        if (await verifyUserWithBackend(user_id)) {
-          await markUserVerified(user_id, 24);
-          verified = true;
-        }
-      }
-      if (!verified) {
-        await answerCallback(cb.id, "❌ Not verified yet! Open Mini App, watch 5 ads, then come back.", true);
-        return;
-      }
-      await answerCallback(cb.id, "✅ Verified! Sending your link…");
-      try { await deleteMessage(chat_id, message_id); } catch {}
-      if (payload && /^-?\d+$/.test(payload)) {
-        await deliverChannelLink(chat_id, user_id, Number(payload));
-      } else {
-        await sendMessage(chat_id,
-          `${stylish("✅ You are verified for 24 hours!")}\n\n${stylish("Now click any channel link again.")}`);
-      }
-      return;
-    }
-
     if (data === "about") {
       await editMessageMedia(chat_id, message_id, {
         type: "photo", media: ABOUT_BTN_IMG, parse_mode: "HTML",
@@ -644,7 +773,7 @@ async function handleCallback(cb: any) {
 ${stylish("✦ ABOUT RS LINK SHARE BOT ✦")}
 ✦━━━━━━━━━━━━━━━━━━━✦
 ${stylish("›› Bot Name")}: ${stylish("RS Link Share Bot")}
-${stylish("›› Version")}: ${stylish("2.0")}
+${stylish("›› Version")}: ${stylish("3.0")}
 ${stylish("›› Runtime")}: ${stylish("Deno / Edge")}
 ${stylish("›› Database")}: ${stylish("Firebase")}
 ✦━━━━━━━━━━━━━━━━━━━✦
@@ -653,6 +782,7 @@ ${stylish("✦ FEATURES ✦")}
 ${stylish("›› 30 sec temporary links")}
 ${stylish("›› Auto approve requests")}
 ${stylish("›› 24h verify gate (RS ANIME)")}
+${stylish("›› Auto cleanup after action")}
 
 ${stylish("✦ POWERED BY")}: <a href="https://t.me/CARTOONFUNNY03">𓆩𝐀𝐍𝐈𝐌𝐄 𝐈𝐍 𝐇𝐈𝐍𝐃𝐈𓆪</a>
 ${stylish("✦ MADE WITH ❤️ BY")}: <a href="https://t.me/rs_woner">𝐑𝐒 𝐖𝐎𝐍𝐄𝐑</a>
@@ -761,6 +891,26 @@ ${perm}`,
       return;
     }
 
+    if (data.startsWith("fsub_remove_")) {
+      const cid = Number(data.replace("fsub_remove_", ""));
+      const ok = await deleteFsubById(cid);
+      await answerCallback(cb.id, ok ? "✅ Removed!" : "Not found", true);
+      const all = await listFsub();
+      if (all.length > 0) {
+        const buttons = all.map((ch) => {
+          const name = ch.channel_title.length > 18 ? ch.channel_title.slice(0, 18) + ".." : ch.channel_title;
+          return [{ text: `🔔 ${name}`, callback_data: `fsub_remove_${ch.channel_id}` }];
+        });
+        buttons.push([{ text: "❌ CLOSE", callback_data: "close" }]);
+        await editMessageText(chat_id, message_id,
+          `${stylish("✦ FORCE SUBSCRIBE CHANNELS ✦")}\n\n${stylish("›› Tap to remove")}`,
+          { reply_markup: { inline_keyboard: buttons } });
+      } else {
+        await editMessageText(chat_id, message_id, stylish("✦ No FSUB channels left ✦"));
+      }
+      return;
+    }
+
     if (data === "back_to_list") {
       const all = await listChannels();
       if (all.length === 0) {
@@ -780,21 +930,22 @@ ${perm}`,
       return;
     }
 
-    // TRY AGAIN — fsub re-check
-    if (data.startsWith("channel_")) {
-      const cid = Number(data.replace("channel_", ""));
+    // FSUB TRY AGAIN
+    if (data.startsWith("fsub_retry_")) {
+      const cid = Number(data.replace("fsub_retry_", ""));
       const notJoined = await checkFsub(user_id);
       if (notJoined.length > 0) {
         await editMessageMedia(chat_id, message_id, {
           type: "photo", media: START_IMG, parse_mode: "HTML",
-          caption: `${stylish("✦ FORCE SUBSCRIBE REQUIRED ✦")}\n\n${stylish("›› Join all channels to access link")}`,
-        }, fsubMarkup(notJoined, `channel_${cid}`));
-        await answerCallback(cb.id);
+          caption: `${stylish("✦ FORCE SUBSCRIBE REQUIRED ✦")}\n\n${stylish("›› Still not joined all channels")}`,
+        }, fsubMarkup(notJoined, `fsub_retry_${cid}`));
+        await answerCallback(cb.id, "Still missing channels!", true);
         return;
       }
+      // Joined all → delete fsub message and deliver link
+      await answerCallback(cb.id, "✅ All joined!");
       try { await deleteMessage(chat_id, message_id); } catch {}
       await deliverChannelLink(chat_id, user_id, cid);
-      await answerCallback(cb.id);
       return;
     }
 
@@ -826,7 +977,13 @@ async function handleUpdate(update: any) {
   if (!msg) return;
   const chat_id = msg.chat.id;
   const user_id = msg.from?.id;
+  const from = msg.from;
   if (!user_id) return;
+
+  // Auto-delete user's command message after 30s
+  if (msg.text?.startsWith("/")) {
+    scheduleDelete(chat_id, msg.message_id);
+  }
 
   // Forward handler (admin private only)
   if (msg.forward_from_chat && msg.chat.type === "private") {
@@ -843,7 +1000,7 @@ async function handleUpdate(update: any) {
 
   switch (cmd) {
     case "/start":
-      await handleStart(chat_id, user_id, arg || undefined);
+      await handleStart(chat_id, user_id, from, arg || undefined);
       break;
     case "/set_channel":
       if (msg.chat.type === "private") await handleSetChannel(chat_id, user_id);
@@ -855,13 +1012,10 @@ async function handleUpdate(update: any) {
       if (msg.chat.type === "private") await handleList(chat_id, user_id);
       break;
     case "/fsub_add":
-      if (msg.chat.type === "private") await handleFsubAdd(chat_id, user_id, text);
+      if (msg.chat.type === "private") await handleFsubAddCmd(chat_id, user_id);
       break;
     case "/fsub_list":
       if (msg.chat.type === "private") await handleFsubList(chat_id, user_id);
-      break;
-    case "/fsub_remove":
-      if (msg.chat.type === "private") await handleFsubRemove(chat_id, user_id, text);
       break;
   }
 }
@@ -872,7 +1026,6 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
 
-  // Setup helpers (admin-only via secret query param matching admin id)
   if (url.searchParams.get("setWebhook")) {
     const target = url.searchParams.get("setWebhook")!;
     const r = await tg("setWebhook", { url: target, allowed_updates: ["message", "callback_query", "chat_join_request"] });
@@ -891,7 +1044,6 @@ Deno.serve(async (req) => {
 
   try {
     const update = await req.json();
-    // Acknowledge fast; process async
     handleUpdate(update).catch((e) => console.error("[update]", e));
     return new Response("ok", { headers: corsHeaders });
   } catch (e) {
