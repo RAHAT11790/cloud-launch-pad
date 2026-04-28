@@ -1083,7 +1083,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (videoError) return;
     hideTimer.current = setTimeout(() => {
       setShowControls(false);
-    }, locked ? 1400 : 2600);
+    }, locked ? 2200 : 3800);
   }, [adGateActive, clearHideTimer, locked, showAudioPanel, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings, videoError]);
 
   const resetHideTimer = useCallback(() => {
