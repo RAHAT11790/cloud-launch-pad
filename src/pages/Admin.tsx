@@ -2388,7 +2388,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       setAppUsersGlobal(snap.val() || {});
     }));
 
-    // FCM token stats listener removed
+    unsubs.push(onValue(ref(db, "fcmTokens"), (snap) => {
+      const data = snap.val() || {};
+      const totalUsers = Object.keys(data).length;
+      let totalTokens = 0;
+      Object.values(data).forEach((entries: any) => {
+        totalTokens += Object.keys(entries || {}).length;
+      });
+      setFcmTokenStats({ totalTokens, totalUsers, lastUpdated: Date.now() });
+    }));
 
     return () => unsubs.forEach(u => u());
   }, [activeSection]);
@@ -4085,6 +4093,7 @@ ${tgHashtags}`;
     { section: "webseries", icon: <Film size={16} />, label: "Web Series" },
     { section: "movies", icon: <Video size={16} />, label: "Movies" },
     { section: "users", icon: <Users size={16} />, label: "Users" },
+    { section: "notifications", icon: <Bell size={16} />, label: "Notifications", group: "Sharing" },
     { section: "comments", icon: <MessageCircle size={16} />, label: "Comments", group: "New Features" },
     { section: "live-support", icon: <MessageCircle size={16} />, label: "Live Support" },
     { section: "new-releases", icon: <Zap size={16} />, label: "New Releases" },
