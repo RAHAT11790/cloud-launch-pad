@@ -18,6 +18,14 @@ interface QualityOption {
   src: string;
 }
 
+interface VideoServerOption {
+  name: string;
+  domain: string;
+  locked?: boolean;
+}
+
+const PROXY_SERVER_LIMIT = 3;
+
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
@@ -53,6 +61,29 @@ const isDirectPlaybackUrl = (url: string): boolean => {
   return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
 };
 
+const isBypassSource = (url: string): boolean => {
+  const normalized = String(url || "").trim().toLowerCase();
+  return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
+};
+
+const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
+  try {
+    const parsed = new URL(rawUrl);
+    const hostname = parsed.hostname.toLowerCase();
+    const canMirror = hostname.includes("bot-hosting.net") || /sttv|sttvs/.test(hostname);
+    if (!canMirror) return [];
+
+    const port = parsed.port ? `:${parsed.port}` : "";
+    const protocol = parsed.protocol || "http:";
+    return Array.from({ length: PROXY_SERVER_LIMIT }, (_, index) => ({
+      name: `Server ${index + 1}`,
+      domain: `${protocol}//fi${index + 1}.bot-hosting.net${port}`,
+    }));
+  } catch {
+    return [];
+  }
+};
+
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
   if (!url) return [];
 
@@ -67,25 +98,21 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
   const prefersDirectPlayback = isDirectPlaybackUrl(url);
 
-  if (prefersDirectPlayback) {
+  if (isBypassSource(url)) {
     addCandidate(url);
-    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
-    if (customProxyCandidate) addCandidate(customProxyCandidate);
     return candidates;
   }
 
-  if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
   if (customProxyCandidate) addCandidate(customProxyCandidate);
-
-  // http:// cannot be loaded directly on https pages (mixed content).
-  // Always fall back to the built-in Supabase stream-proxy so playback works
-  // out-of-the-box on Server 1 (bot-hosting.net) without any admin config.
   if (BUILTIN_STREAM_PROXY) {
     addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
   }
+  if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
 
-  // If still nothing, fall back to direct (will fail on mixed content but
-  // preserves prior behaviour for unknown schemes).
+  if (prefersDirectPlayback && candidates.length === 0) {
+    addCandidate(url);
+  }
+
   if (candidates.length === 0) {
     addCandidate(url);
   }
@@ -188,7 +215,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
   // ===== SERVER CHANGER =====
-  const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
+  const [videoServers, setVideoServers] = useState<VideoServerOption[]>([]);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
   const [showServerPanel, setShowServerPanel] = useState(false);
@@ -197,16 +224,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
       const val = snap.val();
-      let servers: { name: string; domain: string; locked?: boolean }[] = [];
+      let servers: VideoServerOption[] = [];
       if (val && Array.isArray(val)) {
         servers = val.filter((s: any) => s && s.domain);
       } else if (val && typeof val === "object") {
         servers = Object.values(val).filter((s: any) => s && s.domain) as any[];
       }
-      setVideoServers(servers);
+      setVideoServers(servers.slice(0, PROXY_SERVER_LIMIT));
     });
     return () => unsub();
   }, []);
+
+  const effectiveVideoServers = useMemo(() => {
+    if (noServerSwitch) return [];
+    if (videoServers.length > 0) return videoServers.slice(0, PROXY_SERVER_LIMIT);
+    return buildFallbackServers(src).slice(0, PROXY_SERVER_LIMIT);
+  }, [noServerSwitch, src, videoServers]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
   // The branded `req.html` page on the embed server posts video events to us
@@ -540,17 +573,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => unsub();
   }, []);
 
-  // Auto-switch to premium server for premium users
-  useEffect(() => {
-    if (isPremium && videoServers.length > 0 && !premiumServerApplied.current) {
-      const premIdx = videoServers.findIndex(s => s.locked);
-      if (premIdx >= 0 && premIdx !== activeServerIndex) {
-        premiumServerApplied.current = true;
-        setTimeout(() => switchServer(premIdx), 300);
-      }
-    }
-  }, [isPremium, videoServers]);
-
   // Ad gate - only run after premium AND freeAccess data have loaded
   useEffect(() => {
     if (isPremium === null) return; // still loading premium status
@@ -704,7 +726,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
-    const server = videoServers[serverIndex];
+    const server = effectiveVideoServers[serverIndex];
     if (!server?.domain) return rawUrl;
     const domainTrim = server.domain.trim().replace(/\/$/, "");
     const isHfDomain = /hf\.space|huggingface/i.test(domainTrim);
@@ -718,7 +740,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       const match = rawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
       return `${domainTrim}${match ? match[1] : rawUrl}`;
     }
-  }, [videoServers]);
+  }, [effectiveVideoServers]);
 
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
@@ -754,8 +776,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [episodeList, nextEpisodeSrc, src, resolvePlaybackSrc]);
 
   const switchServer = useCallback((serverIndex: number) => {
-    if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
-    if (videoServers[serverIndex].locked && !isPremium) return;
+    if (serverIndex === activeServerIndex || !effectiveVideoServers[serverIndex]) return;
+    if (effectiveVideoServers[serverIndex].locked && !isPremium) return;
     if (serverSwitchingRef.current) return;
     const v = videoRef.current;
     if (!v) return;
@@ -766,6 +788,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
+    setVideoError(false);
+    setQualityFailMsg(null);
+    setIsBuffering(true);
+    setShowFixedLoader(true);
+    setSwitchingEpisode(true);
 
     // Keep last frame visible by NOT clearing src — just swap directly
     setManualServerSelected(true);
@@ -773,8 +800,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
     setCurrentSrc(resolved);
-    serverSwitchingRef.current = false;
-  }, [activeServerIndex, videoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
+    window.setTimeout(() => {
+      serverSwitchingRef.current = false;
+      setSwitchingEpisode(false);
+    }, 900);
+  }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
+
+  // Auto-switch to premium server for premium users
+  useEffect(() => {
+    if (isPremium && effectiveVideoServers.length > 0 && !premiumServerApplied.current) {
+      const premIdx = effectiveVideoServers.findIndex(s => s.locked);
+      if (premIdx >= 0 && premIdx !== activeServerIndex) {
+        premiumServerApplied.current = true;
+        setTimeout(() => switchServer(premIdx), 300);
+      }
+    }
+  }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
@@ -902,6 +943,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   useEffect(() => {
     if (!playbackRouteReady) return;
+    const v = videoRef.current;
+    if (v) {
+      try { v.pause(); } catch {}
+      try { v.removeAttribute("src"); } catch {}
+      v.src = "";
+      try { v.load(); } catch {}
+    }
     instantSwitchRef.current = true;
     setSwitchingEpisode(true);
     sourceBaseRef.current = src;
@@ -913,6 +961,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
+    pendingSeek.current = 0;
     const t = setTimeout(() => {
       instantSwitchRef.current = false;
       setSwitchingEpisode(false);
@@ -1232,13 +1281,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         } else {
           // ===== AUTO SERVER FAILOVER =====
           // All quality/route fallbacks exhausted — try next server automatically
-          if (videoServers.length > 1) {
-            const nextServerIdx = (activeServerIndex + 1) % videoServers.length;
+          if (effectiveVideoServers.length > 1) {
+            const nextServerIdx = (activeServerIndex + 1) % effectiveVideoServers.length;
             // Only auto-failover if we haven't cycled through all servers
             const failoverKey = `__server_failover_${nextServerIdx}`;
             if (!failedSrcsRef.current.has(failoverKey)) {
               failedSrcsRef.current.add(failoverKey);
-              const serverName = videoServers[nextServerIdx]?.name || `Server ${nextServerIdx + 1}`;
+              const serverName = effectiveVideoServers[nextServerIdx]?.name || `Server ${nextServerIdx + 1}`;
               setQualityFailMsg(`Server down. Switching to ${serverName}...`);
               setTimeout(() => setQualityFailMsg(null), 3500);
               // Reset failed srcs for the new server (keep failover keys)
@@ -1362,7 +1411,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       }
       if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, videoServers, activeServerIndex]);
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex]);
 
   useEffect(() => {
     const onFs = () => {
@@ -1809,11 +1858,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   <Crop className="w-3.5 h-3.5" />
                   <span className="text-[10px] font-medium">{cropLabels[cropIndex]}</span>
                 </button>
-                {videoServers.length > 1 && !noServerSwitch && (
+                {effectiveVideoServers.length > 1 && !noServerSwitch && (
                   <div className="relative">
                     <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
-                      <span className="text-[10px] font-medium">{manualServerSelected ? (videoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
+                      <span className="text-[10px] font-medium">{manualServerSelected ? (effectiveVideoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
                     </button>
                     {showServerPanel && (
                       <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
@@ -1832,7 +1881,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             {!manualServerSelected && <Check className="w-3 h-3" />}
                           </button>
                         )}
-                        {videoServers.map((srv, idx) => {
+                        {effectiveVideoServers.map((srv, idx) => {
                           const isLocked = srv.locked && !isPremium;
                           return (
                             <button key={idx} onClick={() => { if (!isLocked) switchServer(idx); }}
@@ -2198,6 +2247,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         })()}
 
         {/* Download Button with Quality Picker + Offline Playback */}
+        {!isFullscreen && !adGateActive && !hideDownload && currentSrc && (
+          <div className="mt-3 w-full max-w-md mx-auto">
+            <div className="rounded-lg border border-border/60 bg-card/40 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Proxy Link</p>
+              <p className="mt-1 break-all text-[11px] leading-5 text-foreground/80">{currentSrc}</p>
+            </div>
+          </div>
+        )}
+
         {!isFullscreen && !adGateActive && !hideDownload && (() => {
           const normalizeKeyPart = (value: string) =>
             value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");

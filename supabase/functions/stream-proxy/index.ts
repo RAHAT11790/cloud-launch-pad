@@ -8,9 +8,9 @@
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-  "Access-Control-Allow-Headers": "range, content-type, authorization, apikey, x-client-info",
+  "Access-Control-Allow-Headers": "range, content-type, authorization, apikey, x-client-info, accept, accept-encoding, accept-language, cache-control, pragma, referer, origin",
   "Access-Control-Expose-Headers":
-    "content-length, content-range, accept-ranges, content-type, etag, last-modified",
+    "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control, content-disposition",
 };
 
 // Allowlist — only these origins/hosts can be proxied (security).
@@ -75,6 +75,14 @@ Deno.serve(async (req) => {
   };
   const range = req.headers.get("range");
   if (range) fwdHeaders["Range"] = range;
+  const accept = req.headers.get("accept");
+  if (accept) fwdHeaders["Accept"] = accept;
+  const acceptLanguage = req.headers.get("accept-language");
+  if (acceptLanguage) fwdHeaders["Accept-Language"] = acceptLanguage;
+  const cacheControl = req.headers.get("cache-control");
+  if (cacheControl) fwdHeaders["Cache-Control"] = cacheControl;
+  const pragma = req.headers.get("pragma");
+  if (pragma) fwdHeaders["Pragma"] = pragma;
   const ifRange = req.headers.get("if-range");
   if (ifRange) fwdHeaders["If-Range"] = ifRange;
   const referer = req.headers.get("referer");
@@ -106,6 +114,7 @@ Deno.serve(async (req) => {
     "etag",
     "last-modified",
     "cache-control",
+    "content-disposition",
   ];
   for (const h of passthrough) {
     const v = upstream.headers.get(h);
