@@ -1572,8 +1572,16 @@ const Index = () => {
     });
     
     scored.sort((a, b) => b.score - a.score || Math.random() - 0.5);
-    return scored.filter(s => s.score > 0).slice(0, 20).map(s => s.anime);
+    return scored.filter(s => s.score > 0).slice(0, 8).map(s => s.anime);
   }, [playerState?.anime, saltPlayerState?.anime, allAnime]);
+
+  useEffect(() => {
+    if (!showProfile) return;
+    const idle = window.setTimeout(() => {
+      import("@/components/ProfilePage");
+    }, 60);
+    return () => window.clearTimeout(idle);
+  }, [showProfile]);
 
   // ===== SWIPE NAVIGATION — ALL PAGES ALWAYS RENDERED (ZERO FLASH) =====
   const [visualPage, setVisualPage] = useState<MainPage>(activePage);
@@ -1933,7 +1941,7 @@ const Index = () => {
 
       <AnimatePresence>
         {showProfile && (
-          <Suspense fallback={null}>
+          <Suspense fallback={<div className="fixed inset-0 z-[200] bg-background/95 flex items-center justify-center"><div className="w-7 h-7 rounded-full border-2 border-primary/25 border-t-primary animate-spin" /></div>}>
             <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
           </Suspense>
         )}
@@ -2020,7 +2028,7 @@ const Index = () => {
           seasons={playerState.anime.seasons}
           currentSeasonIdx={playerState.seasonIdx}
           onSeasonChange={handleVideoPlayerSeasonChange}
-          suggestedAnime={suggestedAnime}
+          suggestedAnime={[]}
           onSuggestedClick={(anime) => { setPlayerState(null); handleCardClick(anime); }}
           nextEpisodeSrc={playerState.nextEpisodeSrc}
         />
@@ -2072,7 +2080,7 @@ const Index = () => {
           getCleanEmbedUrl={getCleanEmbedUrl}
           animeSaltApi={animeSaltApi}
           addToWatchHistory={addToWatchHistory}
-          suggestedAnime={suggestedAnime}
+          suggestedAnime={[]}
           onSuggestedClick={(anime) => { setSaltPlayerState(null); handleCardClick(anime); }}
         />
       )}
