@@ -3,10 +3,7 @@ import { db, ref, onValue, push, set, remove, update, get, auth, googleProvider,
 import { supabase } from "@/integrations/supabase/client";
 import { animeSaltApi } from '@/lib/animeSaltApi';
 import { useBranding } from "@/hooks/useBranding";
-// FCM removed — notifications now go via Telegram posts only. Stubs preserved so legacy callers no-op silently.
 type PushProgress = { phase: string; totalTokens?: number; totalUsers?: number; sent: number; success: number; failed: number; invalidRemoved: number; failReasons?: Record<string, number> };
-const sendPushToUsers = async (..._args: any[]) => ({ total: 0, success: 0, failed: 0 });
-const sendPushToAllUsers = async (..._args: any[]) => ({ total: 0, success: 0, failed: 0 });
 import { toast } from "sonner";
 import {
   LayoutDashboard, FolderOpen, Film, Video, Users, Bell, Zap, PlusCircle, CloudDownload,
@@ -18,6 +15,7 @@ import {
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl, callEdgeFunction } from "@/lib/edgeFunctionRouter";
+import { sendWebPush } from "@/lib/pushNotifications";
 import { WeeklyEpTabButton, WeeklyEpManager } from "@/components/admin/WeeklyEpManager";
 // AdminNotificationBell removed
 import MiniAppManager from "@/components/admin/MiniAppManager";
