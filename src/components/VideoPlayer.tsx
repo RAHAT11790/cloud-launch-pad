@@ -1250,8 +1250,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (next > MAX_RETRIES) {
         console.log('Video failed after retries. URL:', currentSrc);
         failedSrcsRef.current.add(currentSrc);
-        const failedQualityLabel = currentQuality;
-        
         const sameQualityRouteFallback = buildPlaybackCandidates(
           activeSourceBaseRef.current,
           cdnEnabled,
@@ -1526,8 +1524,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd]);
 
   const toggleFullscreen = useCallback(async () => {
-    const videoEl = videoRef.current;
-    const el = videoEl || videoContainerRef.current;
+    const el = videoContainerRef.current || containerRef.current || videoRef.current;
     if (!el) return;
     try {
       if (document.fullscreenElement) {
