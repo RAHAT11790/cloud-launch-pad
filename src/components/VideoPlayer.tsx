@@ -179,6 +179,7 @@ const formatTime = (t: number) => {
 
 const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc }: VideoPlayerProps) => {
   const branding = useBranding();
+  const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl || logoImg;
   // Removed preload anime character image - no longer needed
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -384,7 +385,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
   const [videoError, setVideoError] = useState(false);
-  const [qualityFailMsg, setQualityFailMsg] = useState<string | null>(null);
   const failedSrcsRef = useRef<Set<string>>(new Set());
   // Throttle React state updates from native <video> RAF loop to ~1 Hz
   const lastNativeSyncRef = useRef(0);
@@ -797,7 +797,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
     setVideoError(false);
-    setQualityFailMsg(null);
     setIsBuffering(true);
     setShowFixedLoader(true);
     setSwitchingEpisode(true);
@@ -964,7 +963,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentQuality("Auto");
     setManualServerSelected(false);
     setVideoError(false);
-    setQualityFailMsg(null);
     failedSrcsRef.current.clear();
     pendingSeek.current = 0;
     const t = setTimeout(() => {
@@ -974,7 +972,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
-  // 5-second max loader: disappears when video loads OR after 5s, whichever comes first
+  // Short loader window: only show on true cold-starts, never linger during smooth playback
   useEffect(() => {
     if (loaderTimeoutRef.current) {
       clearTimeout(loaderTimeoutRef.current);
@@ -991,13 +989,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
 
+    if (!isBuffering) {
+      setShowFixedLoader(false);
+      return;
+    }
+
     setShowFixedLoader(true);
 
     // Auto-hide quickly so fullscreen/switching doesn't sit under a black veil
     loaderTimeoutRef.current = setTimeout(() => {
       setShowFixedLoader(false);
       loaderTimeoutRef.current = null;
-    }, 260);
+    }, 900);
 
     // Also hide immediately when video fires canplay/playing
     const v = videoRef.current;
@@ -1019,7 +1022,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         loaderTimeoutRef.current = null;
       }
     };
-  }, [currentSrc]);
+  }, [currentSrc, isBuffering, switchingEpisode]);
 
   // Simple volume sync - no AudioContext needed
   useEffect(() => {
@@ -1247,8 +1250,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (next > MAX_RETRIES) {
         console.log('Video failed after retries. URL:', currentSrc);
         failedSrcsRef.current.add(currentSrc);
-        const failedQualityLabel = currentQuality;
-        
         const sameQualityRouteFallback = buildPlaybackCandidates(
           activeSourceBaseRef.current,
           cdnEnabled,
@@ -1257,8 +1258,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
 
         if (sameQualityRouteFallback) {
-          setQualityFailMsg(`"${failedQualityLabel}" source blocked. Trying fallback route...`);
-          setTimeout(() => setQualityFailMsg(null), 3500);
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
           setCurrentSrc(sameQualityRouteFallback);
           return;
@@ -1270,8 +1269,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         });
 
         if (nextOption) {
-          setQualityFailMsg(`"${failedQualityLabel}" quality not available. Switching to "${nextOption.label}"...`);
-          setTimeout(() => setQualityFailMsg(null), 4000);
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
           const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
           activeSourceBaseRef.current = nextOption.src;
@@ -1292,9 +1289,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             const failoverKey = `__server_failover_${nextServerIdx}`;
             if (!failedSrcsRef.current.has(failoverKey)) {
               failedSrcsRef.current.add(failoverKey);
-              const serverName = effectiveVideoServers[nextServerIdx]?.name || `Server ${nextServerIdx + 1}`;
-              setQualityFailMsg(`Server down. Switching to ${serverName}...`);
-              setTimeout(() => setQualityFailMsg(null), 3500);
               // Reset failed srcs for the new server (keep failover keys)
               const failoverKeys = new Set([...failedSrcsRef.current].filter(k => k.startsWith("__server_failover_")));
               failedSrcsRef.current = failoverKeys;
@@ -1349,7 +1343,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
       if (waitingTimer) clearTimeout(waitingTimer);
-      waitingTimer = setTimeout(() => setIsBuffering(true), 900);
+      waitingTimer = setTimeout(() => setIsBuffering(true), 1400);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
@@ -1530,8 +1524,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd]);
 
   const toggleFullscreen = useCallback(async () => {
-    const videoEl = videoRef.current;
-    const el = videoEl || videoContainerRef.current;
+    const el = videoContainerRef.current || containerRef.current || videoRef.current;
     if (!el) return;
     try {
       if (document.fullscreenElement) {
@@ -1788,7 +1781,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           {/* Loading spinner on top of thumbnail */}
           {showLoaderOverlay && (
             <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none">
-              <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+              <div className="player-loader-shell">
+                <div className="player-loader-ring" />
+                <img
+                  src={playerLoaderLogo}
+                  alt="Player loader"
+                  className="player-loader-logo"
+                  loading="eager"
+                  decoding="async"
+                />
+              </div>
             </div>
           )}
 
@@ -1834,12 +1836,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
-          {qualityFailMsg && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 player-glass px-4 py-2.5 rounded-xl text-center max-w-[85%] animate-in fade-in slide-in-from-top-2 duration-300">
-              <p className="text-xs font-semibold text-accent">⚠ {qualityFailMsg}</p>
-            </div>
-          )}
-
           {swipeState?.type && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 player-glass px-6 py-3 rounded-xl text-center">
               {swipeState.type === "volume" ? (
@@ -1861,13 +1857,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             <div className="absolute inset-0 flex flex-col justify-between text-white" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}>
               {/* Top controls */}
               <div className="flex justify-end gap-2 p-3">
-                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1">
+                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95">
                   <Crop className="w-3.5 h-3.5" />
                   <span className="text-[10px] font-medium">{cropLabels[cropIndex]}</span>
                 </button>
                 {effectiveVideoServers.length > 1 && !noServerSwitch && (
                   <div className="relative">
-                    <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
+                    <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
                       <span className="text-[10px] font-medium">{manualServerSelected ? (effectiveVideoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
                     </button>
@@ -1908,20 +1904,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     )}
                   </div>
                 )}
-                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-glass w-8 h-8 rounded-full flex items-center justify-center">
+                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <Lock className="w-3.5 h-3.5" />
                 </button>
               </div>
 
               {/* Center play */}
               <div className="flex items-center justify-center gap-8">
-                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="w-10 h-10 rounded-full bg-foreground/20 flex items-center justify-center backdrop-blur">
+                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <SkipBack className="w-5 h-5" />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="w-14 h-14 rounded-full gradient-primary flex items-center justify-center">
+                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary w-14 h-14 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   {playing ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="w-10 h-10 rounded-full bg-foreground/20 flex items-center justify-center backdrop-blur">
+                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <SkipForward className="w-5 h-5" />
                 </button>
               </div>
@@ -1958,13 +1954,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     </button>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] bg-foreground/20 px-2 py-0.5 rounded">{playbackRate}x</span>
+                    <span className="player-control-chip text-[10px] px-2 py-0.5 rounded">{playbackRate}x</span>
                     {availableQualities.length > 1 && (
                       <div className="relative">
                         <button
                           onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); }}
                           className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all ${
-                            currentQuality !== "Auto" ? "gradient-primary text-white" : "bg-foreground/20"
+                            currentQuality !== "Auto" ? "gradient-primary text-white" : "player-control-chip"
                           }`}
                         >
                           {currentQuality}
@@ -2000,7 +1996,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         <button
                           onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); }}
                           className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
-                            currentAudioTrack !== "Default" ? "gradient-primary text-white" : "bg-foreground/20"
+                            currentAudioTrack !== "Default" ? "gradient-primary text-white" : "player-control-chip"
                           }`}
                         >
                           🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}
@@ -2031,14 +2027,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       </div>
                     )}
                     {onNextEpisode && (
-                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="text-[10px] bg-primary/30 px-2 py-0.5 rounded flex items-center gap-1">
+                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip text-[10px] px-2 py-0.5 rounded flex items-center gap-1 transition-transform duration-150 active:scale-95">
                         Next <ChevronRight className="w-3 h-3" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); }} className="player-glass w-7 h-7 rounded-full flex items-center justify-center">
+                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                       <Settings className="w-3 h-3" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-glass w-7 h-7 rounded-full flex items-center justify-center">
+                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                       {isFullscreen ? <Minimize className="w-3 h-3" /> : <Maximize className="w-3 h-3" />}
                     </button>
                   </div>
@@ -2050,7 +2046,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           {/* Locked indicator */}
           {locked && showControls && (
             <div className="absolute top-3 right-3 z-20" onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => { setLocked(false); setShowControls(true); scheduleHideTimer(); }} className="player-glass w-10 h-10 rounded-full flex items-center justify-center">
+              <button onClick={() => { setLocked(false); setShowControls(true); scheduleHideTimer(); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                 <Unlock className="w-4 h-4 text-primary" />
               </button>
             </div>
