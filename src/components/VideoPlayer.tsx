@@ -1780,16 +1780,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           {/* Loading spinner on top of thumbnail */}
           {showLoaderOverlay && (
-            <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none bg-black/10">
               <div className="player-loader-shell">
-                <div className="player-loader-ring" />
-                <img
-                  src={playerLoaderLogo}
-                  alt="Player loader"
-                  className="player-loader-logo"
-                  loading="eager"
-                  decoding="async"
-                />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
               </div>
             </div>
           )}
