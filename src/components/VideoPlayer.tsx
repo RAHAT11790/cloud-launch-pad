@@ -18,6 +18,14 @@ interface QualityOption {
   src: string;
 }
 
+interface VideoServerOption {
+  name: string;
+  domain: string;
+  locked?: boolean;
+}
+
+const PROXY_SERVER_LIMIT = 3;
+
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
@@ -53,6 +61,34 @@ const isDirectPlaybackUrl = (url: string): boolean => {
   return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
 };
 
+const isBypassSource = (url: string): boolean => {
+  const normalized = String(url || "").trim().toLowerCase();
+  return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
+};
+
+const isProxyCandidateUrl = (url: string): boolean => {
+  const normalized = String(url || "").trim().toLowerCase();
+  return normalized.startsWith("http://") || normalized.startsWith("https://");
+};
+
+const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
+  try {
+    const parsed = new URL(rawUrl);
+    const hostname = parsed.hostname.toLowerCase();
+    const canMirror = hostname.includes("bot-hosting.net") || /sttv|sttvs/.test(hostname);
+    if (!canMirror) return [];
+
+    const port = parsed.port ? `:${parsed.port}` : "";
+    const protocol = parsed.protocol || "http:";
+    return Array.from({ length: PROXY_SERVER_LIMIT }, (_, index) => ({
+      name: `Server ${index + 1}`,
+      domain: `${protocol}//fi${index + 1}.bot-hosting.net${port}`,
+    }));
+  } catch {
+    return [];
+  }
+};
+
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
   if (!url) return [];
 
@@ -67,25 +103,21 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
   const prefersDirectPlayback = isDirectPlaybackUrl(url);
 
-  if (prefersDirectPlayback) {
+  if (isBypassSource(url)) {
     addCandidate(url);
-    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
-    if (customProxyCandidate) addCandidate(customProxyCandidate);
     return candidates;
   }
 
-  if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
   if (customProxyCandidate) addCandidate(customProxyCandidate);
-
-  // http:// cannot be loaded directly on https pages (mixed content).
-  // Always fall back to the built-in Supabase stream-proxy so playback works
-  // out-of-the-box on Server 1 (bot-hosting.net) without any admin config.
   if (BUILTIN_STREAM_PROXY) {
     addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
   }
+  if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
 
-  // If still nothing, fall back to direct (will fail on mixed content but
-  // preserves prior behaviour for unknown schemes).
+  if (prefersDirectPlayback && candidates.length === 0) {
+    addCandidate(url);
+  }
+
   if (candidates.length === 0) {
     addCandidate(url);
   }
