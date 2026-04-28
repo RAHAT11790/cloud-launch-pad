@@ -691,10 +691,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [src, qualityOptions]);
 
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
-    // hf.space (Firem/iframe) URLs are loaded directly into the iframe — never wrap them
-    // through the CDN/stream-proxy (those are for raw video element playback only).
-    if (/hf\.space|huggingface/i.test(rawUrl)) return rawUrl;
-    return getPrimaryPlaybackSrc(rawUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+    const trimmed = String(rawUrl || "").trim();
+    if (!trimmed) return "";
+    // Old iframe server flow is disabled for episode/video switching speed.
+    // Everything non-direct is routed through the fast stream proxy path instead.
+    if (shouldForceDirectProxy(trimmed) && BUILTIN_STREAM_PROXY) {
+      return buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, trimmed);
+    }
+    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
@@ -702,22 +706,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!server?.domain) return rawUrl;
     const domainTrim = server.domain.trim().replace(/\/$/, "");
     const isHfDomain = /hf\.space|huggingface/i.test(domainTrim);
-
-    // ===== Firem / hf.space (iframe) mode =====
-    // hf.space hosts a Telegram video bot whose `/watch/<file_id>` route only
-    // accepts a real Telegram file_id — passing an external URL into it returns
-    // `'NoneType' object has no attribute 'file_size'`. So:
-    //   • if the source URL is ALREADY an hf.space watch URL → use it as-is
-    //   • otherwise → don't try to wrap; leave the raw URL untouched so we
-    //     don't generate a broken /watch/ path. (Server switcher will simply
-    //     keep the current playable URL when the chosen server isn't compatible.)
-    if (isHfDomain) {
-      try {
-        const u = new URL(rawUrl);
-        if (/hf\.space|huggingface/i.test(u.host)) return rawUrl;
-      } catch {}
-      return rawUrl;
-    }
+    if (isHfDomain) return rawUrl;
 
     // Regular host-swap servers (e.g. fi3.bot-hosting.net swap, render mirror)
     try {
@@ -729,9 +718,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, [videoServers]);
 
-  const preloadVideoRef = useRef<HTMLVideoElement | null>(null);
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
+  const instantSwitchRef = useRef(false);
 
   // Preload next episode for instant switching
   useEffect(() => {
@@ -740,19 +729,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (activeIdx < 0 || activeIdx >= episodeList.length - 1) return;
     // Find the next episode's src from qualityOptions or main src
     // We preload via <link rel="preload"> which is lightweight
-    const nextSrc = src; // Will be resolved when episode actually switches
+    const nextEpisode = episodeList[activeIdx + 1];
+    if (!nextEpisode) return;
+    const nextSrc = resolvePlaybackSrc(String((nextEpisode as any).src || src));
+    if (!nextSrc) return;
     // Clean up old preload
     if (preloadLinkRef.current) {
       try { document.head.removeChild(preloadLinkRef.current); } catch {}
       preloadLinkRef.current = null;
     }
+    const link = document.createElement("link");
+    link.rel = "preload";
+    link.as = "fetch";
+    link.href = nextSrc;
+    link.crossOrigin = "anonymous";
+    preloadLinkRef.current = link;
+    document.head.appendChild(link);
     return () => {
       if (preloadLinkRef.current) {
         try { document.head.removeChild(preloadLinkRef.current); } catch {}
         preloadLinkRef.current = null;
       }
     };
-  }, [episodeList, src]);
+  }, [episodeList, src, resolvePlaybackSrc]);
 
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
