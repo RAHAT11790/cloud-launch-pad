@@ -972,7 +972,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
-  // 5-second max loader: disappears when video loads OR after 5s, whichever comes first
+  // Short loader window: only show on true cold-starts, never linger during smooth playback
   useEffect(() => {
     if (loaderTimeoutRef.current) {
       clearTimeout(loaderTimeoutRef.current);
@@ -989,13 +989,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
 
+    if (!isBuffering) {
+      setShowFixedLoader(false);
+      return;
+    }
+
     setShowFixedLoader(true);
 
     // Auto-hide quickly so fullscreen/switching doesn't sit under a black veil
     loaderTimeoutRef.current = setTimeout(() => {
       setShowFixedLoader(false);
       loaderTimeoutRef.current = null;
-    }, 260);
+    }, 900);
 
     // Also hide immediately when video fires canplay/playing
     const v = videoRef.current;
@@ -1017,7 +1022,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         loaderTimeoutRef.current = null;
       }
     };
-  }, [currentSrc]);
+  }, [currentSrc, isBuffering, switchingEpisode]);
 
   // Simple volume sync - no AudioContext needed
   useEffect(() => {
@@ -1340,7 +1345,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
       if (waitingTimer) clearTimeout(waitingTimer);
-      waitingTimer = setTimeout(() => setIsBuffering(true), 900);
+      waitingTimer = setTimeout(() => setIsBuffering(true), 1400);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
