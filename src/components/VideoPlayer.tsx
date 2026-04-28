@@ -179,6 +179,7 @@ const formatTime = (t: number) => {
 
 const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc }: VideoPlayerProps) => {
   const branding = useBranding();
+  const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl || logoImg;
   // Removed preload anime character image - no longer needed
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -384,7 +385,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
   const [videoError, setVideoError] = useState(false);
-  const [qualityFailMsg, setQualityFailMsg] = useState<string | null>(null);
   const failedSrcsRef = useRef<Set<string>>(new Set());
   // Throttle React state updates from native <video> RAF loop to ~1 Hz
   const lastNativeSyncRef = useRef(0);
@@ -797,7 +797,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
     setVideoError(false);
-    setQualityFailMsg(null);
     setIsBuffering(true);
     setShowFixedLoader(true);
     setSwitchingEpisode(true);
@@ -964,7 +963,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentQuality("Auto");
     setManualServerSelected(false);
     setVideoError(false);
-    setQualityFailMsg(null);
     failedSrcsRef.current.clear();
     pendingSeek.current = 0;
     const t = setTimeout(() => {
