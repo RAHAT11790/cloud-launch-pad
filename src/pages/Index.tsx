@@ -9,6 +9,15 @@ import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
 const getEpisodeSrc = (ep: Episode): string => {
   return ep.link || ep.link480 || ep.link720 || ep.link1080 || ep.link4k || "";
 };
+
+const getEpisodeQualityOptions = (ep: Episode): { label: string; src: string }[] => {
+  const qualityOptions: { label: string; src: string }[] = [];
+  if (ep.link480) qualityOptions.push({ label: "480p", src: ep.link480 });
+  if (ep.link720) qualityOptions.push({ label: "720p", src: ep.link720 });
+  if (ep.link1080) qualityOptions.push({ label: "1080p", src: ep.link1080 });
+  if (ep.link4k) qualityOptions.push({ label: "4K", src: ep.link4k });
+  return qualityOptions;
+};
 import { AnimatePresence, motion } from "framer-motion";
 import SaltPlayer from "@/components/SaltPlayer";
 import { X } from "lucide-react";
