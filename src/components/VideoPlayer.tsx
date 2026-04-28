@@ -1303,11 +1303,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const onCanPlayThrough = () => {
       setIsBuffering(false);
     };
-    // Debounce waiting to avoid flashing loader on brief buffers
+    // Debounce waiting briefly to avoid flashing on tiny buffer hiccups
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
       if (waitingTimer) clearTimeout(waitingTimer);
-      waitingTimer = setTimeout(() => setIsBuffering(true), 1400);
+      waitingTimer = setTimeout(() => setIsBuffering(true), 600);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
