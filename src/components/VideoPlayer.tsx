@@ -954,9 +954,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const v = videoRef.current;
     if (v) {
       try { v.pause(); } catch {}
-      try { v.removeAttribute("src"); } catch {}
-      v.src = "";
-      try { v.load(); } catch {}
     }
     instantSwitchRef.current = true;
     setSwitchingEpisode(true);
@@ -973,7 +970,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const t = setTimeout(() => {
       instantSwitchRef.current = false;
       setSwitchingEpisode(false);
-    }, 1200);
+    }, 450);
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
@@ -996,11 +993,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     setShowFixedLoader(true);
 
-    // Auto-hide after 5 seconds regardless
+    // Auto-hide quickly so fullscreen/switching doesn't sit under a black veil
     loaderTimeoutRef.current = setTimeout(() => {
       setShowFixedLoader(false);
       loaderTimeoutRef.current = null;
-    }, 800);
+    }, 260);
 
     // Also hide immediately when video fires canplay/playing
     const v = videoRef.current;
@@ -1352,7 +1349,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
       if (waitingTimer) clearTimeout(waitingTimer);
-      waitingTimer = setTimeout(() => setIsBuffering(true), 500);
+      waitingTimer = setTimeout(() => setIsBuffering(true), 900);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
@@ -1377,7 +1374,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           v.src = savedSrc;
           v.load();
         }
-      }, 10000); // Wait 10s before considering stalled - prevents premature reloads
+      }, 15000); // Wait longer so aggressive reload doesn't kill otherwise-fast servers
     };
 
     v.addEventListener("loadedmetadata", onLoaded);
