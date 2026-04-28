@@ -6,6 +6,7 @@
 // ডাইনামিকভাবে নতুন ফাংশন যোগ করা যায়
 
 import { db, ref, get } from "@/lib/firebase";
+import { SUPABASE_URL } from "@/lib/siteConfig";
 
 // ---- Default built-in Cloudflare Worker endpoints ----
 export const DEFAULT_CF_FUNCTIONS = [
@@ -78,6 +79,9 @@ export function buildFunctionUrl(endpoint: string, config: EdgeRouterConfig): st
 
   if (config.cloudflareBaseUrl) {
     return `${config.cloudflareBaseUrl.replace(/\/$/, "")}/${endpoint}`;
+  }
+  if (SUPABASE_URL) {
+    return `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/${endpoint}`;
   }
   console.warn(`[EdgeRouter] No base URL — "${endpoint}" disabled`);
   return "";
