@@ -350,6 +350,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const retryAttemptsRef = useRef<Map<string, number>>(new Map());
   const [isBuffering, setIsBuffering] = useState(true);
   const [showFixedLoader, setShowFixedLoader] = useState(true);
+  const [switchingEpisode, setSwitchingEpisode] = useState(false);
   const loaderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [tutorialLink, setTutorialLink] = useState<string | null>(null);
@@ -902,6 +903,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   useEffect(() => {
     if (!playbackRouteReady) return;
+    instantSwitchRef.current = true;
+    setSwitchingEpisode(true);
     sourceBaseRef.current = src;
     activeSourceBaseRef.current = src;
     const resolvedSrc = resolvePlaybackSrc(src);
@@ -911,6 +914,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
+    const t = setTimeout(() => {
+      instantSwitchRef.current = false;
+      setSwitchingEpisode(false);
+    }, 1200);
+    return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
   // 5-second max loader: disappears when video loads OR after 5s, whichever comes first
@@ -921,6 +929,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
 
     if (!currentSrc) {
+      setShowFixedLoader(false);
+      return;
+    }
+
+    if (switchingEpisode) {
       setShowFixedLoader(false);
       return;
     }
