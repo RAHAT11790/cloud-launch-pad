@@ -1344,9 +1344,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.src = '';
       v.load();
       // Clean up any preload element
-      if (preloadVideoRef.current) {
-        try { preloadVideoRef.current.pause(); preloadVideoRef.current.src = ""; document.body.removeChild(preloadVideoRef.current); } catch {}
-        preloadVideoRef.current = null;
+      if (preloadLinkRef.current) {
+        try { document.head.removeChild(preloadLinkRef.current); } catch {}
+        preloadLinkRef.current = null;
       }
       if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };
