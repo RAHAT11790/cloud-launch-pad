@@ -1998,6 +1998,7 @@ const Index = () => {
           onSeasonChange={handleVideoPlayerSeasonChange}
           suggestedAnime={suggestedAnime}
           onSuggestedClick={(anime) => { setPlayerState(null); handleCardClick(anime); }}
+          nextEpisodeSrc={playerState.nextEpisodeSrc}
         />
       )}
 
