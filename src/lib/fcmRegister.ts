@@ -19,7 +19,7 @@ import {
   isSupported,
   type Messaging,
 } from "firebase/messaging";
-import { db, ref, set, get, update } from "@/lib/firebase";
+import { db, ref, set, get, update, remove } from "@/lib/firebase";
 import { FIREBASE_VAPID_KEY, SITE_ICON_URL } from "@/lib/siteConfig";
 
 const firebaseConfig = {
@@ -36,10 +36,12 @@ const TOKEN_KEY_LS = "rs_fcm_token";
 const TOKEN_UID_LS = "rs_fcm_uid";
 const TOKEN_TIME_LS = "rs_fcm_saved_at";
 const REFRESH_INTERVAL = 1000 * 60 * 60 * 24 * 7; // 7 days
+const HEARTBEAT_INTERVAL = 1000 * 60 * 30; // 30 minutes
 
 let messagingInstance: Messaging | null = null;
 let foregroundUnsub: (() => void) | null = null;
 let registeredForUid: string | null = null;
+let heartbeatTimer: number | null = null;
 
 function safeKeyFromToken(token: string): string {
   // Firebase RTDB keys cannot contain . # $ [ ] /
@@ -103,6 +105,30 @@ async function saveTokenToDb(uid: string, token: string) {
   }
 }
 
+async function refreshTokenPresence(uid: string, token: string) {
+  const tokenKey = safeKeyFromToken(token);
+  const tokenRef = ref(db, `fcmTokens/${uid}/${tokenKey}`);
+  try {
+    const existing = await get(tokenRef);
+    if (!existing.exists()) {
+      await saveTokenToDb(uid, token);
+      return;
+    }
+    await update(tokenRef, { token, lastSeenAt: Date.now() });
+    localStorage.setItem(TOKEN_TIME_LS, String(Date.now()));
+  } catch (err) {
+    console.warn("[FCM] token heartbeat failed:", err);
+  }
+}
+
+function startTokenHeartbeat(uid: string, token: string) {
+  if (typeof window === "undefined") return;
+  if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+  heartbeatTimer = window.setInterval(() => {
+    refreshTokenPresence(uid, token).catch(() => {});
+  }, HEARTBEAT_INTERVAL);
+}
+
 /**
  * Register the current browser for push notifications and save the token
  * under the given user ID. Safe to call multiple times — uses cache to avoid
@@ -113,8 +139,11 @@ export async function registerFcmForUser(uid: string): Promise<string | null> {
   if (registeredForUid === uid) {
     // Refresh lastSeenAt periodically, even if cached
     const last = Number(localStorage.getItem(TOKEN_TIME_LS) || 0);
-    if (Date.now() - last < REFRESH_INTERVAL) {
-      return localStorage.getItem(TOKEN_KEY_LS);
+    const cachedToken = localStorage.getItem(TOKEN_KEY_LS);
+    if (cachedToken && Date.now() - last < REFRESH_INTERVAL) {
+      await refreshTokenPresence(uid, cachedToken);
+      startTokenHeartbeat(uid, cachedToken);
+      return cachedToken;
     }
   }
 
@@ -151,8 +180,19 @@ export async function registerFcmForUser(uid: string): Promise<string | null> {
   }
 
   if (!token) return null;
+  const prevUid = localStorage.getItem(TOKEN_UID_LS);
+  const prevToken = localStorage.getItem(TOKEN_KEY_LS);
+  if (prevUid && prevToken && (prevUid !== uid || prevToken !== token)) {
+    const prevKey = safeKeyFromToken(prevToken);
+    try {
+      await remove(ref(db, `fcmTokens/${prevUid}/${prevKey}`));
+    } catch (err) {
+      console.warn("[FCM] previous token cleanup failed:", err);
+    }
+  }
   await saveTokenToDb(uid, token);
   registeredForUid = uid;
+  startTokenHeartbeat(uid, token);
 
   // Set up foreground listener once
   if (!foregroundUnsub) {
@@ -217,6 +257,10 @@ export async function unregisterFcmForCurrentDevice(): Promise<void> {
   } catch (err) {
     console.warn("[FCM] unregister failed:", err);
   } finally {
+    if (typeof window !== "undefined" && heartbeatTimer) {
+      window.clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
     localStorage.removeItem(TOKEN_KEY_LS);
     localStorage.removeItem(TOKEN_UID_LS);
     localStorage.removeItem(TOKEN_TIME_LS);
