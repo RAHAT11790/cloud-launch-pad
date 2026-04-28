@@ -45,7 +45,7 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
 import { db, ref, set, onValue, get } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
-import { registerFcmForUser } from "@/lib/fcmRegister";
+// FCM removed — push notifications no longer used
 import { createUnlockLinkForCurrentUser } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 // Shortener gate is always-on now (Monetag system removed)
@@ -529,30 +529,7 @@ const Index = () => {
       return () => unsub();
     } catch {}
   }, [isLoggedIn]);
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    try {
-      const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-      const uid = String(u?.id || "").trim();
-      if (!uid || !u?.email) return;
-      registerFcmForUser(uid).catch((err) => {
-        console.warn("[Index] FCM register failed:", err);
-      });
-    } catch {}
-  }, [isLoggedIn]);
-
-  useEffect(() => {
-    const unsub = onValue(ref(db, "settings/forceNotifPrompt"), (snap) => {
-      if (snap.val() !== true) return;
-      try {
-        const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-        const uid = String(u?.id || "").trim();
-        if (!uid || !u?.email) return;
-        registerFcmForUser(uid).catch(() => {});
-      } catch {}
-    });
-    return () => unsub();
-  }, []);
+  // FCM token registration & forceNotifPrompt removed — push notifications fully disabled
   // Back button handler
   const getCurrentLayer = useCallback(() => {
     if (playerState) return "player";
