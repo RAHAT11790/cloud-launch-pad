@@ -1,7 +1,8 @@
-// Ultra-fast HTTP→HTTPS streaming proxy for video playback.
+// Ultra-fast streaming proxy for video playback.
 // - Forwards Range requests (critical for seeking & fast start)
 // - Streams chunks with zero buffering
 // - Preserves status codes (206 Partial Content, etc.)
+// - Works for both HTTP and HTTPS upstreams
 // - Tight CORS for browser <video> element
 
 const corsHeaders: Record<string, string> = {
@@ -70,11 +71,16 @@ Deno.serve(async (req) => {
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     Accept: "*/*",
+    Connection: "keep-alive",
   };
   const range = req.headers.get("range");
   if (range) fwdHeaders["Range"] = range;
   const ifRange = req.headers.get("if-range");
   if (ifRange) fwdHeaders["If-Range"] = ifRange;
+  const referer = req.headers.get("referer");
+  if (referer) fwdHeaders["Referer"] = referer;
+  const origin = req.headers.get("origin");
+  if (origin) fwdHeaders["Origin"] = origin;
 
   let upstream: Response;
   try {
