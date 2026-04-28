@@ -972,56 +972,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
-  // Short loader window: only show on true cold-starts, never linger during smooth playback
+  // Loader follows real buffering state — show whenever video isn't playable, hide as soon as it can play.
   useEffect(() => {
     if (loaderTimeoutRef.current) {
       clearTimeout(loaderTimeoutRef.current);
       loaderTimeoutRef.current = null;
     }
 
-    if (!currentSrc) {
+    if (!currentSrc || switchingEpisode) {
       setShowFixedLoader(false);
       return;
     }
 
-    if (switchingEpisode) {
-      setShowFixedLoader(false);
-      return;
-    }
-
-    if (!isBuffering) {
-      setShowFixedLoader(false);
-      return;
-    }
-
-    setShowFixedLoader(true);
-
-    // Auto-hide quickly so fullscreen/switching doesn't sit under a black veil
-    loaderTimeoutRef.current = setTimeout(() => {
-      setShowFixedLoader(false);
-      loaderTimeoutRef.current = null;
-    }, 900);
-
-    // Also hide immediately when video fires canplay/playing
-    const v = videoRef.current;
-    if (v) {
-      const hideLoader = () => {
-        setShowFixedLoader(false);
-        if (loaderTimeoutRef.current) {
-          clearTimeout(loaderTimeoutRef.current);
-          loaderTimeoutRef.current = null;
-        }
-      };
-      v.addEventListener("canplay", hideLoader, { once: true });
-      v.addEventListener("playing", hideLoader, { once: true });
-    }
-
-    return () => {
-      if (loaderTimeoutRef.current) {
-        clearTimeout(loaderTimeoutRef.current);
-        loaderTimeoutRef.current = null;
-      }
-    };
+    // Strict mapping: loader visibility == buffering state.
+    setShowFixedLoader(isBuffering);
   }, [currentSrc, isBuffering, switchingEpisode]);
 
   // Simple volume sync - no AudioContext needed
