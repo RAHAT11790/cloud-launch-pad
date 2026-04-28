@@ -6,7 +6,8 @@ import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
 
 // Helper: get best available src from episode (fallback if default link is empty)
-const getEpisodeSrc = (ep: Episode): string => {
+const getEpisodeSrc = (ep?: Episode | null): string => {
+  if (!ep) return "";
   return ep.link || ep.link480 || ep.link720 || ep.link1080 || ep.link4k || "";
 };
 
