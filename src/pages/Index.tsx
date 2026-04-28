@@ -1491,11 +1491,7 @@ const Index = () => {
     onClick: () => {
       const season = playerState!.anime.seasons![playerState!.seasonIdx ?? 0];
       const clickedEp = season.episodes[i];
-      const qOpts: { label: string; src: string }[] = [];
-      if (clickedEp.link480) qOpts.push({ label: "480p", src: clickedEp.link480 });
-      if (clickedEp.link720) qOpts.push({ label: "720p", src: clickedEp.link720 });
-      if (clickedEp.link1080) qOpts.push({ label: "1080p", src: clickedEp.link1080 });
-      if (clickedEp.link4k) qOpts.push({ label: "4K", src: clickedEp.link4k });
+      const qOpts = getEpisodeQualityOptions(clickedEp);
       addToWatchHistory(playerState!.anime, playerState!.seasonIdx, i);
       setPlayerState({
         ...playerState!,
@@ -1503,6 +1499,7 @@ const Index = () => {
         subtitle: `${season.name} - Episode ${clickedEp.episodeNumber}`,
         epIdx: i,
         qualityOptions: qOpts.length > 0 ? qOpts : undefined,
+        nextEpisodeSrc: i < season.episodes.length - 1 ? getEpisodeSrc(season.episodes[i + 1]) : undefined,
       });
     },
   }));
@@ -1981,11 +1978,7 @@ const Index = () => {
                   const season = playerState.anime.seasons![playerState.seasonIdx!];
                   const nextIdx = (playerState.epIdx! + 1) % season.episodes.length;
                   const nextEp = season.episodes[nextIdx];
-                  const qOpts: { label: string; src: string }[] = [];
-                  if (nextEp.link480) qOpts.push({ label: "480p", src: nextEp.link480 });
-                  if (nextEp.link720) qOpts.push({ label: "720p", src: nextEp.link720 });
-                  if (nextEp.link1080) qOpts.push({ label: "1080p", src: nextEp.link1080 });
-                  if (nextEp.link4k) qOpts.push({ label: "4K", src: nextEp.link4k });
+                  const qOpts = getEpisodeQualityOptions(nextEp);
                   addToWatchHistory(playerState.anime, playerState.seasonIdx, nextIdx);
                   setPlayerState({
                     ...playerState,
@@ -1993,6 +1986,7 @@ const Index = () => {
                     subtitle: `${season.name} - Episode ${nextEp.episodeNumber}`,
                     epIdx: nextIdx,
                     qualityOptions: qOpts.length > 0 ? qOpts : undefined,
+                    nextEpisodeSrc: nextIdx < season.episodes.length - 1 ? getEpisodeSrc(season.episodes[nextIdx + 1]) : undefined,
                   });
                 }
               : undefined
