@@ -3136,8 +3136,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     const savedTitle = notifTitle;
     const savedMessage = notifMessage;
 
-    // Push delivery removed — only in-app notifications below
-
     try {
       let contentId = "", contentType = "", contentPoster = "";
       if (notifContent) {
@@ -3183,34 +3181,29 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       setNotifTitle("");
       setNotifMessage("");
 
-      // ---- FCM push delivery (web browsers) ----
+      setPushSending(true);
+      setPushProgress({ phase: "Sending push...", totalUsers: targetUserIds.length, sent: 0, success: 0, failed: 0, invalidRemoved: 0 });
       try {
-        const dataPayload: Record<string, string> = { type: notifType };
-        if (contentId) {
-          dataPayload.key = contentId;
-          dataPayload.contentId = contentId;
-          dataPayload.contentType = contentType;
-          // Deep link so click on the system notification opens the anime page
-          dataPayload.url = `/?anime=${encodeURIComponent(contentId)}`;
-        }
-        const pushBody: Record<string, any> = {
+        const pushRes = await sendWebPush({
           title: savedTitle,
           body: savedMessage,
-          data: dataPayload,
-        };
-        if (contentPoster) {
-          pushBody.image = contentPoster;
-          pushBody.imageUrl = contentPoster;
-        }
-        if (notifTarget !== "all") {
-          // Restrict to selected user IDs (online subset)
-          pushBody.userIds = targetUserIds;
-        }
-        const pushRes = await callEdgeFunction("send-fcm", pushBody).catch((e) => {
-          console.warn("[FCM] send-fcm call failed:", e);
-          return null;
+          type: notifType,
+          contentId,
+          contentType,
+          image: contentPoster,
+          userIds: notifTarget !== "all" ? targetUserIds : undefined,
         });
         if (pushRes?.ok) {
+          setPushProgress({
+            phase: "Completed",
+            totalTokens: pushRes.totalTokens || 0,
+            totalUsers: targetUserIds.length,
+            sent: pushRes.totalTokens || 0,
+            success: pushRes.success || 0,
+            failed: pushRes.failed || 0,
+            invalidRemoved: pushRes.invalidRemoved || 0,
+            failReasons: pushRes.failReasons || {},
+          });
           toast.success(
             `Push sent: ${pushRes.success}/${pushRes.totalTokens} delivered` +
               (pushRes.invalidRemoved ? ` (cleaned ${pushRes.invalidRemoved} stale)` : "")
@@ -3219,7 +3212,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
           toast.error(`Push error: ${pushRes.error}`);
         }
       } catch (pushErr: any) {
+        setPushProgress({ phase: "Failed", totalUsers: targetUserIds.length, sent: 0, success: 0, failed: 0, invalidRemoved: 0, failReasons: { error: 1 } });
         console.warn("FCM push delivery skipped:", pushErr);
+      } finally {
+        setPushSending(false);
       }
     } catch (err: any) {
       console.warn("Notification send failed:", err);
@@ -3366,8 +3362,36 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       }
       toast.success("In-app notification sent to users");
       setReleaseContent(""); setShowSeasonEpisode(false);
-      
-      // FCM push removed — in-app notifications above are sufficient
+      setPushSending(true);
+      setPushProgress({ phase: "Sending release push...", totalUsers: seenUserIds.size, sent: 0, success: 0, failed: 0, invalidRemoved: 0 });
+      try {
+        const pushRes = await sendWebPush({
+          title: releaseNotifTitle,
+          body: releaseNotifMsg,
+          type: "new_episode",
+          contentId,
+          contentType,
+          image: content.poster || "",
+        });
+        if (pushRes?.ok) {
+          setPushProgress({
+            phase: "Completed",
+            totalTokens: pushRes.totalTokens || 0,
+            totalUsers: seenUserIds.size,
+            sent: pushRes.totalTokens || 0,
+            success: pushRes.success || 0,
+            failed: pushRes.failed || 0,
+            invalidRemoved: pushRes.invalidRemoved || 0,
+            failReasons: pushRes.failReasons || {},
+          });
+          toast.success(`Release push: ${pushRes.success}/${pushRes.totalTokens}`);
+        }
+      } catch (pushErr: any) {
+        setPushProgress({ phase: "Failed", totalUsers: seenUserIds.size, sent: 0, success: 0, failed: 0, invalidRemoved: 0, failReasons: { error: 1 } });
+        console.warn("Release push failed:", pushErr);
+      } finally {
+        setPushSending(false);
+      }
     } catch (err: any) { toast.error("Error: " + err.message); }
   };
 
