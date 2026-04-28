@@ -30,6 +30,7 @@ const FIREBASE_SA_JSON = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_KEY") || "";
 const RS_API_KEY = Deno.env.get("RS_API_KEY") || "";
 const RS_MINI_BOT = Deno.env.get("RS_MINI_BOT") || "RS_ANIME_ACCESS_BOT";
 const RS_MINI_APP_NAME = Deno.env.get("RS_MINI_APP_NAME") || "app";
+const RS_RETURN_BOT = (Deno.env.get("RS_RETURN_BOT") || "RS_ANIME_FIND_BOT").replace(/^@/, "");
 const RS_BACKEND_URL =
   Deno.env.get("RS_BACKEND_URL") ||
   "https://kqxpzqegtvaiwgdusrin.supabase.co/functions/v1/mini-app";
@@ -356,8 +357,7 @@ async function verifyUserWithBackend(user_id: number): Promise<boolean> {
 // Verify keyboard — single button (auto-verify, no manual continue)
 // Embeds origin bot username so mini-app redirects back here after success.
 async function verifyKeyboard(user_id: number, returnPayload = "") {
-  const u = await botUsername();
-  const url = `https://t.me/${RS_MINI_BOT}/${RS_MINI_APP_NAME}?startapp=u_tg_${user_id}_r_${returnPayload}_b_${u}`;
+  const url = `https://t.me/${RS_MINI_BOT}/${RS_MINI_APP_NAME}?startapp=u_tg_${user_id}_r_${returnPayload}_b_${RS_RETURN_BOT}`;
   return {
     inline_keyboard: [
       [{ text: "🎁 ᴠᴇʀɪғʏ ᴀᴄᴄᴇꜱꜱ (24ʜ)", url }],
