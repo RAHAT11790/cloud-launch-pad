@@ -97,6 +97,11 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
 };
 
+const shouldForceDirectProxy = (url: string): boolean => {
+  const value = String(url || "").trim().toLowerCase();
+  return value.startsWith("http://") || /sttv|sttvs/.test(value) || /bot-hosting\.net/.test(value);
+};
+
 interface AudioTrackOption {
   language: string;
   label: string;
@@ -128,6 +133,7 @@ interface VideoPlayerProps {
   onSeasonChange?: (idx: number) => void;
   suggestedAnime?: AnimeItem[];
   onSuggestedClick?: (anime: AnimeItem) => void;
+  nextEpisodeSrc?: string;
 }
 
 const formatTime = (t: number) => {
@@ -136,7 +142,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc }: VideoPlayerProps) => {
   const branding = useBranding();
   // Removed preload anime character image - no longer needed
 
@@ -345,6 +351,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const retryAttemptsRef = useRef<Map<string, number>>(new Map());
   const [isBuffering, setIsBuffering] = useState(true);
   const [showFixedLoader, setShowFixedLoader] = useState(true);
+  const [switchingEpisode, setSwitchingEpisode] = useState(false);
   const loaderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [tutorialLink, setTutorialLink] = useState<string | null>(null);
@@ -686,10 +693,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [src, qualityOptions]);
 
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
-    // hf.space (Firem/iframe) URLs are loaded directly into the iframe — never wrap them
-    // through the CDN/stream-proxy (those are for raw video element playback only).
-    if (/hf\.space|huggingface/i.test(rawUrl)) return rawUrl;
-    return getPrimaryPlaybackSrc(rawUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+    const trimmed = String(rawUrl || "").trim();
+    if (!trimmed) return "";
+    // Old iframe server flow is disabled for episode/video switching speed.
+    // Everything non-direct is routed through the fast stream proxy path instead.
+    if (shouldForceDirectProxy(trimmed) && BUILTIN_STREAM_PROXY) {
+      return buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, trimmed);
+    }
+    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
@@ -697,22 +708,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!server?.domain) return rawUrl;
     const domainTrim = server.domain.trim().replace(/\/$/, "");
     const isHfDomain = /hf\.space|huggingface/i.test(domainTrim);
-
-    // ===== Firem / hf.space (iframe) mode =====
-    // hf.space hosts a Telegram video bot whose `/watch/<file_id>` route only
-    // accepts a real Telegram file_id — passing an external URL into it returns
-    // `'NoneType' object has no attribute 'file_size'`. So:
-    //   • if the source URL is ALREADY an hf.space watch URL → use it as-is
-    //   • otherwise → don't try to wrap; leave the raw URL untouched so we
-    //     don't generate a broken /watch/ path. (Server switcher will simply
-    //     keep the current playable URL when the chosen server isn't compatible.)
-    if (isHfDomain) {
-      try {
-        const u = new URL(rawUrl);
-        if (/hf\.space|huggingface/i.test(u.host)) return rawUrl;
-      } catch {}
-      return rawUrl;
-    }
+    if (isHfDomain) return rawUrl;
 
     // Regular host-swap servers (e.g. fi3.bot-hosting.net swap, render mirror)
     try {
@@ -724,9 +720,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, [videoServers]);
 
-  const preloadVideoRef = useRef<HTMLVideoElement | null>(null);
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
+  const instantSwitchRef = useRef(false);
 
   // Preload next episode for instant switching
   useEffect(() => {
@@ -735,19 +731,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (activeIdx < 0 || activeIdx >= episodeList.length - 1) return;
     // Find the next episode's src from qualityOptions or main src
     // We preload via <link rel="preload"> which is lightweight
-    const nextSrc = src; // Will be resolved when episode actually switches
+    const nextSrc = resolvePlaybackSrc(nextEpisodeSrc || "");
+    if (!nextSrc) return;
     // Clean up old preload
     if (preloadLinkRef.current) {
       try { document.head.removeChild(preloadLinkRef.current); } catch {}
       preloadLinkRef.current = null;
     }
+    const link = document.createElement("link");
+    link.rel = "preload";
+    link.as = "fetch";
+    link.href = nextSrc;
+    link.crossOrigin = "anonymous";
+    preloadLinkRef.current = link;
+    document.head.appendChild(link);
     return () => {
       if (preloadLinkRef.current) {
         try { document.head.removeChild(preloadLinkRef.current); } catch {}
         preloadLinkRef.current = null;
       }
     };
-  }, [episodeList, src]);
+  }, [episodeList, nextEpisodeSrc, src, resolvePlaybackSrc]);
 
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
@@ -898,6 +902,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   useEffect(() => {
     if (!playbackRouteReady) return;
+    instantSwitchRef.current = true;
+    setSwitchingEpisode(true);
     sourceBaseRef.current = src;
     activeSourceBaseRef.current = src;
     const resolvedSrc = resolvePlaybackSrc(src);
@@ -907,6 +913,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
+    const t = setTimeout(() => {
+      instantSwitchRef.current = false;
+      setSwitchingEpisode(false);
+    }, 1200);
+    return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
   // 5-second max loader: disappears when video loads OR after 5s, whichever comes first
@@ -917,6 +928,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
 
     if (!currentSrc) {
+      setShowFixedLoader(false);
+      return;
+    }
+
+    if (switchingEpisode) {
       setShowFixedLoader(false);
       return;
     }
@@ -1082,7 +1098,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [videoError, clearHideTimer]);
 
   // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
-  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !serverSwitchingRef.current;
+  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !serverSwitchingRef.current && !switchingEpisode;
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
@@ -1340,9 +1356,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.src = '';
       v.load();
       // Clean up any preload element
-      if (preloadVideoRef.current) {
-        try { preloadVideoRef.current.pause(); preloadVideoRef.current.src = ""; document.body.removeChild(preloadVideoRef.current); } catch {}
-        preloadVideoRef.current = null;
+      if (preloadLinkRef.current) {
+        try { document.head.removeChild(preloadLinkRef.current); } catch {}
+        preloadLinkRef.current = null;
       }
       if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };

@@ -6,8 +6,18 @@ import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
 
 // Helper: get best available src from episode (fallback if default link is empty)
-const getEpisodeSrc = (ep: Episode): string => {
+const getEpisodeSrc = (ep?: Episode | null): string => {
+  if (!ep) return "";
   return ep.link || ep.link480 || ep.link720 || ep.link1080 || ep.link4k || "";
+};
+
+const getEpisodeQualityOptions = (ep: Episode): { label: string; src: string }[] => {
+  const qualityOptions: { label: string; src: string }[] = [];
+  if (ep.link480) qualityOptions.push({ label: "480p", src: ep.link480 });
+  if (ep.link720) qualityOptions.push({ label: "720p", src: ep.link720 });
+  if (ep.link1080) qualityOptions.push({ label: "1080p", src: ep.link1080 });
+  if (ep.link4k) qualityOptions.push({ label: "4K", src: ep.link4k });
+  return qualityOptions;
 };
 import { AnimatePresence, motion } from "framer-motion";
 import SaltPlayer from "@/components/SaltPlayer";
@@ -369,6 +379,7 @@ const Index = () => {
     epIdx?: number;
     qualityOptions?: { label: string; src: string }[];
     audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
+    nextEpisodeSrc?: string;
   } | null>(() => {
     try {
       const saved = sessionStorage.getItem("rs_playerState");
@@ -1190,7 +1201,20 @@ const Index = () => {
 
     if (src) {
       addToWatchHistory(anime, seasonIdx, epIdx);
-      setPlayerState({ src, title: anime.title, subtitle, anime, seasonIdx, epIdx, qualityOptions, audioTracks });
+      setPlayerState({
+        src,
+        title: anime.title,
+        subtitle,
+        anime,
+        seasonIdx,
+        epIdx,
+        qualityOptions,
+        audioTracks,
+        nextEpisodeSrc:
+          anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined
+            ? getEpisodeSrc(anime.seasons[seasonIdx]?.episodes?.[epIdx + 1] as Episode)
+            : undefined,
+      });
       setSelectedAnime(null);
     }
   };
@@ -1416,7 +1440,16 @@ const Index = () => {
       }
       if (src) {
         addToWatchHistory(anime, sIdx, eIdx, true);
-        setPlayerState({ src, title: anime.title, subtitle, anime, seasonIdx: sIdx, epIdx: eIdx, qualityOptions: qualityOptions.length > 0 ? qualityOptions : undefined });
+        setPlayerState({
+          src,
+          title: anime.title,
+          subtitle,
+          anime,
+          seasonIdx: sIdx,
+          epIdx: eIdx,
+          qualityOptions: qualityOptions.length > 0 ? qualityOptions : undefined,
+          nextEpisodeSrc: getEpisodeSrc(anime.seasons?.[sIdx]?.episodes?.[eIdx + 1] as Episode),
+        });
         setSelectedAnime(null);
       }
     } else {
@@ -1482,11 +1515,7 @@ const Index = () => {
     onClick: () => {
       const season = playerState!.anime.seasons![playerState!.seasonIdx ?? 0];
       const clickedEp = season.episodes[i];
-      const qOpts: { label: string; src: string }[] = [];
-      if (clickedEp.link480) qOpts.push({ label: "480p", src: clickedEp.link480 });
-      if (clickedEp.link720) qOpts.push({ label: "720p", src: clickedEp.link720 });
-      if (clickedEp.link1080) qOpts.push({ label: "1080p", src: clickedEp.link1080 });
-      if (clickedEp.link4k) qOpts.push({ label: "4K", src: clickedEp.link4k });
+      const qOpts = getEpisodeQualityOptions(clickedEp);
       addToWatchHistory(playerState!.anime, playerState!.seasonIdx, i);
       setPlayerState({
         ...playerState!,
@@ -1494,6 +1523,7 @@ const Index = () => {
         subtitle: `${season.name} - Episode ${clickedEp.episodeNumber}`,
         epIdx: i,
         qualityOptions: qOpts.length > 0 ? qOpts : undefined,
+        nextEpisodeSrc: i < season.episodes.length - 1 ? getEpisodeSrc(season.episodes[i + 1]) : undefined,
       });
     },
   }));
@@ -1516,6 +1546,7 @@ const Index = () => {
       seasonIdx: newSeasonIdx,
       epIdx: 0,
       qualityOptions: qOpts.length > 0 ? qOpts : undefined,
+      nextEpisodeSrc: getEpisodeSrc(season.episodes[1] as Episode),
     });
   }, [playerState]);
 
@@ -1972,11 +2003,7 @@ const Index = () => {
                   const season = playerState.anime.seasons![playerState.seasonIdx!];
                   const nextIdx = (playerState.epIdx! + 1) % season.episodes.length;
                   const nextEp = season.episodes[nextIdx];
-                  const qOpts: { label: string; src: string }[] = [];
-                  if (nextEp.link480) qOpts.push({ label: "480p", src: nextEp.link480 });
-                  if (nextEp.link720) qOpts.push({ label: "720p", src: nextEp.link720 });
-                  if (nextEp.link1080) qOpts.push({ label: "1080p", src: nextEp.link1080 });
-                  if (nextEp.link4k) qOpts.push({ label: "4K", src: nextEp.link4k });
+                  const qOpts = getEpisodeQualityOptions(nextEp);
                   addToWatchHistory(playerState.anime, playerState.seasonIdx, nextIdx);
                   setPlayerState({
                     ...playerState,
@@ -1984,6 +2011,7 @@ const Index = () => {
                     subtitle: `${season.name} - Episode ${nextEp.episodeNumber}`,
                     epIdx: nextIdx,
                     qualityOptions: qOpts.length > 0 ? qOpts : undefined,
+                    nextEpisodeSrc: nextIdx < season.episodes.length - 1 ? getEpisodeSrc(season.episodes[nextIdx + 1]) : undefined,
                   });
                 }
               : undefined
@@ -1994,6 +2022,7 @@ const Index = () => {
           onSeasonChange={handleVideoPlayerSeasonChange}
           suggestedAnime={suggestedAnime}
           onSuggestedClick={(anime) => { setPlayerState(null); handleCardClick(anime); }}
+          nextEpisodeSrc={playerState.nextEpisodeSrc}
         />
       )}
 

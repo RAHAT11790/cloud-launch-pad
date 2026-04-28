@@ -387,9 +387,8 @@ export default function MiniApp() {
       // Capture origin bot username so we can redirect the user back after verify.
       const lsbMatch = body.match(/^tg_(\d+)(?:_r_[^_]*)?(?:_b_([A-Za-z0-9_]+))?$/);
       if (lsbMatch) {
-        if (lsbMatch[2]) {
-          try { sessionStorage.setItem("ls_origin_bot", lsbMatch[2]); } catch {}
-        }
+        const originBot = (lsbMatch[2] || "RS_ANIME_FIND_BOT").replace(/^@/, "");
+        try { sessionStorage.setItem("ls_origin_bot", originBot); } catch {}
         // Skip — let the Telegram WebApp identity branch (initDataUnsafe.user) handle it.
         continue;
       }
@@ -865,8 +864,8 @@ export default function MiniApp() {
         }
 
         // Link-share-bot return: redirect user back to the origin bot
-        let lsOriginBot = "";
-        try { lsOriginBot = sessionStorage.getItem("ls_origin_bot") || ""; } catch {}
+        let lsOriginBot = "RS_ANIME_FIND_BOT";
+        try { lsOriginBot = sessionStorage.getItem("ls_origin_bot") || "RS_ANIME_FIND_BOT"; } catch {}
         if (lsOriginBot && identity.source === "telegram") {
           const backUrl = `https://t.me/${lsOriginBot}?start=verified`;
           setInfo(t.closingApp);
