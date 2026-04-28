@@ -259,6 +259,50 @@ div[style*="z-index: 2147483647"],
     box-shadow: var(--neu-shadow-sm);
   }
 
+  .player-loader-shell {
+    position: relative;
+    width: 84px;
+    height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .player-loader-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: conic-gradient(
+      from 0deg,
+      hsl(var(--primary)),
+      hsl(var(--accent)),
+      hsl(var(--primary)),
+      hsl(var(--accent))
+    );
+    animation: rgbSpin 1.15s linear infinite;
+    box-shadow: 0 0 22px hsl(var(--primary) / 0.35);
+  }
+
+  .player-loader-ring::after {
+    content: "";
+    position: absolute;
+    inset: 5px;
+    border-radius: 9999px;
+    background: hsl(var(--background) / 0.92);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  .player-loader-logo {
+    position: relative;
+    z-index: 1;
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    border-radius: 9999px;
+    animation: logoPulse 1.6s ease-in-out infinite;
+    filter: drop-shadow(0 0 10px hsl(var(--primary) / 0.25));
+  }
+
   .skip-indicator {
     background: hsl(var(--card) / 0.78);
     backdrop-filter: blur(10px);
@@ -425,7 +469,7 @@ div[style*="z-index: 2147483647"],
 /* Reduce blur cost on low-end devices (blur is the #1 mobile FPS killer) */
 @media (max-width: 768px) {
   .player-glass,
-  .player-touch-button { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .player-touch-button { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
   .skip-indicator { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 }
 @media (prefers-reduced-transparency: reduce), (update: slow) {
