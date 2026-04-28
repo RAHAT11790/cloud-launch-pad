@@ -1200,7 +1200,20 @@ const Index = () => {
 
     if (src) {
       addToWatchHistory(anime, seasonIdx, epIdx);
-      setPlayerState({ src, title: anime.title, subtitle, anime, seasonIdx, epIdx, qualityOptions, audioTracks });
+      setPlayerState({
+        src,
+        title: anime.title,
+        subtitle,
+        anime,
+        seasonIdx,
+        epIdx,
+        qualityOptions,
+        audioTracks,
+        nextEpisodeSrc:
+          anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined
+            ? getEpisodeSrc(anime.seasons[seasonIdx]?.episodes?.[epIdx + 1] as Episode)
+            : undefined,
+      });
       setSelectedAnime(null);
     }
   };
@@ -1426,7 +1439,16 @@ const Index = () => {
       }
       if (src) {
         addToWatchHistory(anime, sIdx, eIdx, true);
-        setPlayerState({ src, title: anime.title, subtitle, anime, seasonIdx: sIdx, epIdx: eIdx, qualityOptions: qualityOptions.length > 0 ? qualityOptions : undefined });
+        setPlayerState({
+          src,
+          title: anime.title,
+          subtitle,
+          anime,
+          seasonIdx: sIdx,
+          epIdx: eIdx,
+          qualityOptions: qualityOptions.length > 0 ? qualityOptions : undefined,
+          nextEpisodeSrc: getEpisodeSrc(anime.seasons?.[sIdx]?.episodes?.[eIdx + 1] as Episode),
+        });
         setSelectedAnime(null);
       }
     } else {
@@ -1523,6 +1545,7 @@ const Index = () => {
       seasonIdx: newSeasonIdx,
       epIdx: 0,
       qualityOptions: qOpts.length > 0 ? qOpts : undefined,
+      nextEpisodeSrc: getEpisodeSrc(season.episodes[1] as Episode),
     });
   }, [playerState]);
 
