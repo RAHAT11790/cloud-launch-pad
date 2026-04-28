@@ -578,17 +578,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => unsub();
   }, []);
 
-  // Auto-switch to premium server for premium users
-  useEffect(() => {
-    if (isPremium && effectiveVideoServers.length > 0 && !premiumServerApplied.current) {
-      const premIdx = effectiveVideoServers.findIndex(s => s.locked);
-      if (premIdx >= 0 && premIdx !== activeServerIndex) {
-        premiumServerApplied.current = true;
-        setTimeout(() => switchServer(premIdx), 300);
-      }
-    }
-  }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer]);
-
   // Ad gate - only run after premium AND freeAccess data have loaded
   useEffect(() => {
     if (isPremium === null) return; // still loading premium status
@@ -821,6 +810,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setSwitchingEpisode(false);
     }, 900);
   }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
+
+  // Auto-switch to premium server for premium users
+  useEffect(() => {
+    if (isPremium && effectiveVideoServers.length > 0 && !premiumServerApplied.current) {
+      const premIdx = effectiveVideoServers.findIndex(s => s.locked);
+      if (premIdx >= 0 && premIdx !== activeServerIndex) {
+        premiumServerApplied.current = true;
+        setTimeout(() => switchServer(premIdx), 300);
+      }
+    }
+  }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
