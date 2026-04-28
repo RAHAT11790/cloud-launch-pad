@@ -1530,7 +1530,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd]);
 
   const toggleFullscreen = useCallback(async () => {
-    const el = videoContainerRef.current;
+    const videoEl = videoRef.current;
+    const el = videoEl || videoContainerRef.current;
     if (!el) return;
     try {
       if (document.fullscreenElement) {
@@ -1683,6 +1684,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const handleTouchEnd = useCallback(() => setSwipeState(null), []);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const lightweightMode = !isFullscreen;
 
   return (
     <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
@@ -2252,15 +2254,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         })()}
 
         {/* Download Button with Quality Picker + Offline Playback */}
-        {!isFullscreen && !adGateActive && !hideDownload && currentSrc && (
-          <div className="mt-3 w-full max-w-md mx-auto">
-            <div className="rounded-lg border border-border/60 bg-card/40 px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Proxy Link</p>
-              <p className="mt-1 break-all text-[11px] leading-5 text-foreground/80">{currentSrc}</p>
-            </div>
-          </div>
-        )}
-
         {!isFullscreen && !adGateActive && !hideDownload && (() => {
           const normalizeKeyPart = (value: string) =>
             value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -2548,7 +2541,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         )}
 
         {/* Suggested Videos */}
-        {suggestedAnime && suggestedAnime.length > 0 && onSuggestedClick && (
+        {lightweightMode && suggestedAnime && suggestedAnime.length > 0 && onSuggestedClick && (
           <div className="mt-4 bg-background rounded-xl p-4">
             <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5 text-foreground">
               <Play className="w-3.5 h-3.5 text-primary" /> Suggested for you
