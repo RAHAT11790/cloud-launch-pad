@@ -2252,6 +2252,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         })()}
 
         {/* Download Button with Quality Picker + Offline Playback */}
+        {!isFullscreen && !adGateActive && !hideDownload && currentSrc && (
+          <div className="mt-3 w-full max-w-md mx-auto">
+            <div className="rounded-lg border border-border/60 bg-card/40 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Proxy Link</p>
+              <p className="mt-1 break-all text-[11px] leading-5 text-foreground/80">{currentSrc}</p>
+            </div>
+          </div>
+        )}
+
         {!isFullscreen && !adGateActive && !hideDownload && (() => {
           const normalizeKeyPart = (value: string) =>
             value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
