@@ -61,6 +61,10 @@ const isDirectPlaybackUrl = (url: string): boolean => {
   return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
 };
 
+const isInsecureHttpSource = (url: string): boolean => {
+  return String(url || "").trim().toLowerCase().startsWith("http://");
+};
+
 const isBypassSource = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
@@ -97,19 +101,23 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
   const prefersDirectPlayback = isDirectPlaybackUrl(url);
+  const mustUseProxy = isInsecureHttpSource(url);
 
   if (isBypassSource(url)) {
     addCandidate(url);
     return candidates;
   }
 
-  if (customProxyCandidate) addCandidate(customProxyCandidate);
-  if (BUILTIN_STREAM_PROXY) {
-    addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
+  if (prefersDirectPlayback && !mustUseProxy) {
+    addCandidate(url);
+    return candidates;
   }
-  if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
 
-  if (prefersDirectPlayback && candidates.length === 0) {
+  if (mustUseProxy) {
+    if (BUILTIN_STREAM_PROXY) addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+  } else {
     addCandidate(url);
   }
 
@@ -126,7 +134,7 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
 
 const shouldForceDirectProxy = (url: string): boolean => {
   const value = String(url || "").trim().toLowerCase();
-  return value.startsWith("http://") || /sttv|sttvs/.test(value) || /bot-hosting\.net/.test(value);
+  return value.startsWith("http://");
 };
 
 interface AudioTrackOption {
