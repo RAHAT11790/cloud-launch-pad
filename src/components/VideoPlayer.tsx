@@ -1820,9 +1820,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
-          {/* Controls Overlay - always dark bg for visibility in all themes */}
-          {showControls && !locked && (
-            <div className="absolute inset-0 flex flex-col justify-between text-white" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}>
+          {/* Controls Overlay - smooth fade in/out */}
+          {!locked && (
+            <div
+              className={`absolute inset-0 flex flex-col justify-between text-white transition-opacity duration-300 ease-out ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+              style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}
+            >
               {/* Top controls */}
               <div className="flex justify-end gap-2 p-3">
                 <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95">
