@@ -1035,6 +1035,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     onClose();
   }, [clearHideTimer, onClose]);
 
+  // Auto-close when user leaves the page/app — pause when tab hidden, fully close on pagehide.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        const v = videoRef.current;
+        if (v) { try { v.pause(); } catch {} }
+      }
+    };
+    const onPageHide = () => {
+      const v = videoRef.current;
+      if (v) {
+        try { v.pause(); } catch {}
+        try { v.removeAttribute("src"); v.src = ""; v.load(); } catch {}
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, []);
+
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
     if ('mediaSession' in navigator) {
