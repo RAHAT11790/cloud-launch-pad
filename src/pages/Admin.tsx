@@ -5692,7 +5692,91 @@ ${tgHashtags}`;
           </div>
         )}
 
-        {/* NOTIFICATIONS section fully removed — Telegram posts handle release announcements now */}
+        {activeSection === "notifications" && (
+          <div>
+            <div className={`${glassCard} p-4 mb-4`}>
+              <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
+                <Bell size={14} className="text-yellow-400" /> Website Notifications
+              </h3>
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="bg-[#141422] border border-white/6 rounded-lg p-3">
+                  <p className="text-[10px] text-zinc-400">Users with token</p>
+                  <p className="text-lg font-bold text-green-400">{fcmTokenStats.totalUsers}</p>
+                </div>
+                <div className="bg-[#141422] border border-white/6 rounded-lg p-3">
+                  <p className="text-[10px] text-zinc-400">Total tokens</p>
+                  <p className="text-lg font-bold text-sky-400">{fcmTokenStats.totalTokens}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <select value={notifTarget} onChange={e => setNotifTarget(e.target.value)} className={selectClass}>
+                  <option value="all">All Users</option>
+                  <option value="online">Online Users</option>
+                </select>
+                <select value={notifType} onChange={e => setNotifType(e.target.value)} className={selectClass}>
+                  <option value="info">Info</option>
+                  <option value="new_episode">New Episode</option>
+                  <option value="success">Success</option>
+                  <option value="alert">Alert</option>
+                </select>
+              </div>
+              <div className="mb-3">
+                <select value={notifContent} onChange={e => setNotifContent(e.target.value)} className={selectClass}>
+                  <option value="">Open home on click</option>
+                  {contentOptions.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-3">
+                <input value={notifTitle} onChange={e => setNotifTitle(e.target.value)} className={inputClass} placeholder="Notification title" />
+                <textarea value={notifMessage} onChange={e => setNotifMessage(e.target.value)} className={`${inputClass} min-h-[110px] resize-y`} placeholder="Notification message" />
+                <button onClick={sendNotification} disabled={pushSending} className={`${btnPrimary} w-full py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-60`}>
+                  {pushSending ? <Loader2 size={16} className="animate-spin" /> : <Bell size={16} />}
+                  {pushSending ? "Sending..." : "Send Notification"}
+                </button>
+              </div>
+              {pushProgress && (
+                <div className="mt-4 bg-[#141422] border border-white/6 rounded-lg p-3">
+                  <div className="flex items-center justify-between text-[11px] mb-2">
+                    <span className="text-zinc-300">{pushProgress.phase}</span>
+                    <span className="text-zinc-400">{pushProgress.success}/{pushProgress.totalTokens || 0}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-white/8 overflow-hidden mb-2">
+                    <div className="h-full bg-indigo-500 transition-all" style={{ width: `${pushProgress.totalTokens ? Math.min(100, Math.round((pushProgress.success / pushProgress.totalTokens) * 100)) : 0}%` }} />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[10px]">
+                    <div className="text-green-400">Success: {pushProgress.success}</div>
+                    <div className="text-red-400">Failed: {pushProgress.failed}</div>
+                    <div className="text-yellow-400">Cleaned: {pushProgress.invalidRemoved}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className={`${glassCard} p-4`}>
+              <h3 className="text-sm font-semibold mb-3.5">Recent Notification Log</h3>
+              <div className="space-y-2 max-h-[420px] overflow-y-auto">
+                {notificationsData.length === 0 ? (
+                  <p className="text-[12px] text-zinc-500 text-center py-4">No notifications yet</p>
+                ) : notificationsData.slice(0, 40).map((notif) => (
+                  <div key={`${notif.userId}-${notif.id}-${notif.timestamp}`} className="bg-[#141422] border border-white/6 rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-semibold truncate">{notif.title}</p>
+                        <p className="text-[11px] text-zinc-400 line-clamp-2">{notif.message}</p>
+                        <p className="text-[10px] text-indigo-300 mt-1">{notif.userId} • {formatTime(notif.timestamp)}</p>
+                      </div>
+                      <button onClick={() => deleteNotification(notif.title, notif.message, notif.timestamp)} className="text-zinc-400 hover:text-red-400 transition-colors">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ==================== NEW RELEASES ==================== */}
         {activeSection === "new-releases" && (
@@ -7019,7 +7103,15 @@ ${tgHashtags}`;
         {/* ==================== SETTINGS ==================== */}
         {activeSection === "settings" && (
           <div>
-            {/* Admin notification & FCM token settings removed — Telegram-only delivery */}
+            <div className={`${glassCard} p-4 mb-4`}>
+              <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
+                <Bell size={14} className="text-yellow-400" /> Web Push Settings
+              </h3>
+              <div className="space-y-4">
+                <ForceNotifToggle glassCard={glassCard} />
+                <FcmProviderSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+              </div>
+            </div>
 
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
@@ -7120,9 +7212,6 @@ ${tgHashtags}`;
                 </button>
               </div>
             </div>
-
-            {/* Force notification re-prompt removed — FCM disabled site-wide */}
-
 
             {/* Proxy Server Selector */}
             <div className={`${glassCard} p-4 mb-4`}>
