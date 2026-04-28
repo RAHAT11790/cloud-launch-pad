@@ -972,56 +972,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
-  // Short loader window: only show on true cold-starts, never linger during smooth playback
+  // Loader follows real buffering state — show whenever video isn't playable, hide as soon as it can play.
   useEffect(() => {
     if (loaderTimeoutRef.current) {
       clearTimeout(loaderTimeoutRef.current);
       loaderTimeoutRef.current = null;
     }
 
-    if (!currentSrc) {
+    if (!currentSrc || switchingEpisode) {
       setShowFixedLoader(false);
       return;
     }
 
-    if (switchingEpisode) {
-      setShowFixedLoader(false);
-      return;
-    }
-
-    if (!isBuffering) {
-      setShowFixedLoader(false);
-      return;
-    }
-
-    setShowFixedLoader(true);
-
-    // Auto-hide quickly so fullscreen/switching doesn't sit under a black veil
-    loaderTimeoutRef.current = setTimeout(() => {
-      setShowFixedLoader(false);
-      loaderTimeoutRef.current = null;
-    }, 900);
-
-    // Also hide immediately when video fires canplay/playing
-    const v = videoRef.current;
-    if (v) {
-      const hideLoader = () => {
-        setShowFixedLoader(false);
-        if (loaderTimeoutRef.current) {
-          clearTimeout(loaderTimeoutRef.current);
-          loaderTimeoutRef.current = null;
-        }
-      };
-      v.addEventListener("canplay", hideLoader, { once: true });
-      v.addEventListener("playing", hideLoader, { once: true });
-    }
-
-    return () => {
-      if (loaderTimeoutRef.current) {
-        clearTimeout(loaderTimeoutRef.current);
-        loaderTimeoutRef.current = null;
-      }
-    };
+    // Strict mapping: loader visibility == buffering state.
+    setShowFixedLoader(isBuffering);
   }, [currentSrc, isBuffering, switchingEpisode]);
 
   // Simple volume sync - no AudioContext needed
@@ -1071,6 +1035,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     onClose();
   }, [clearHideTimer, onClose]);
 
+  // Auto-close when user leaves the page/app — pause when tab hidden, fully close on pagehide.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        const v = videoRef.current;
+        if (v) { try { v.pause(); } catch {} }
+      }
+    };
+    const onPageHide = () => {
+      const v = videoRef.current;
+      if (v) {
+        try { v.pause(); } catch {}
+        try { v.removeAttribute("src"); v.src = ""; v.load(); } catch {}
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, []);
+
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
     if ('mediaSession' in navigator) {
@@ -1119,7 +1106,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (videoError) return;
     hideTimer.current = setTimeout(() => {
       setShowControls(false);
-    }, locked ? 1400 : 2600);
+    }, locked ? 2200 : 3800);
   }, [adGateActive, clearHideTimer, locked, showAudioPanel, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings, videoError]);
 
   const resetHideTimer = useCallback(() => {
@@ -1339,11 +1326,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const onCanPlayThrough = () => {
       setIsBuffering(false);
     };
-    // Debounce waiting to avoid flashing loader on brief buffers
+    // Debounce waiting briefly to avoid flashing on tiny buffer hiccups
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
       if (waitingTimer) clearTimeout(waitingTimer);
-      waitingTimer = setTimeout(() => setIsBuffering(true), 1400);
+      waitingTimer = setTimeout(() => setIsBuffering(true), 600);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
@@ -1399,18 +1386,31 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.removeEventListener("playing", onPlaying);
       v.removeEventListener("seeked", onSeeked);
       v.removeEventListener("stalled", onStalled);
-      // Ensure video is fully stopped on unmount (prevents background playback)
-      v.pause();
-      v.src = '';
-      v.load();
-      // Clean up any preload element
+      // NOTE: do NOT clear v.src here. This cleanup runs on every currentSrc change
+      // (server / quality / audio switch). Wiping src would discard the freshly-set
+      // source React just rendered and force a restart from 0:00. Real teardown
+      // happens in the unmount-only effect below.
+    };
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex]);
+
+  // Unmount-only teardown: stop background playback when the player is removed.
+  useEffect(() => {
+    return () => {
+      const v = videoRef.current;
+      if (v) {
+        try { v.pause(); } catch {}
+        try { v.removeAttribute("src"); v.src = ""; v.load(); } catch {}
+      }
       if (preloadLinkRef.current) {
         try { document.head.removeChild(preloadLinkRef.current); } catch {}
         preloadLinkRef.current = null;
       }
-      if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+      }
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex]);
+  }, []);
 
   useEffect(() => {
     const onFs = () => {
@@ -1780,16 +1780,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           {/* Loading spinner on top of thumbnail */}
           {showLoaderOverlay && (
-            <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none bg-black/10">
               <div className="player-loader-shell">
-                <div className="player-loader-ring" />
-                <img
-                  src={playerLoaderLogo}
-                  alt="Player loader"
-                  className="player-loader-logo"
-                  loading="eager"
-                  decoding="async"
-                />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
+                <span className="player-loader-petal" />
               </div>
             </div>
           )}
@@ -1852,9 +1856,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
-          {/* Controls Overlay - always dark bg for visibility in all themes */}
-          {showControls && !locked && (
-            <div className="absolute inset-0 flex flex-col justify-between text-white" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}>
+          {/* Controls Overlay - smooth fade in/out */}
+          {!locked && (
+            <div
+              className={`absolute inset-0 flex flex-col justify-between text-white transition-opacity duration-300 ease-out ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+              style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}
+            >
               {/* Top controls */}
               <div className="flex justify-end gap-2 p-3">
                 <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95">
