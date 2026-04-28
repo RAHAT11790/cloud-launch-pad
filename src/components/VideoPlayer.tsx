@@ -948,6 +948,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   useEffect(() => {
     if (!playbackRouteReady) return;
+    const v = videoRef.current;
+    if (v) {
+      try { v.pause(); } catch {}
+      try { v.removeAttribute("src"); } catch {}
+      v.src = "";
+      try { v.load(); } catch {}
+    }
     instantSwitchRef.current = true;
     setSwitchingEpisode(true);
     sourceBaseRef.current = src;
@@ -959,6 +966,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setVideoError(false);
     setQualityFailMsg(null);
     failedSrcsRef.current.clear();
+    pendingSeek.current = 0;
     const t = setTimeout(() => {
       instantSwitchRef.current = false;
       setSwitchingEpisode(false);
