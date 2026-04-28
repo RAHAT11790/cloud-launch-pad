@@ -97,6 +97,11 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
 };
 
+const shouldForceDirectProxy = (url: string): boolean => {
+  const value = String(url || "").trim().toLowerCase();
+  return value.startsWith("http://") || /sttv|sttvs/.test(value) || /bot-hosting\.net/.test(value);
+};
+
 interface AudioTrackOption {
   language: string;
   label: string;
