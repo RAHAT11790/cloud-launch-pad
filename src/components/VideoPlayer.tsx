@@ -580,14 +580,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   // Auto-switch to premium server for premium users
   useEffect(() => {
-    if (isPremium && videoServers.length > 0 && !premiumServerApplied.current) {
-      const premIdx = videoServers.findIndex(s => s.locked);
+    if (isPremium && effectiveVideoServers.length > 0 && !premiumServerApplied.current) {
+      const premIdx = effectiveVideoServers.findIndex(s => s.locked);
       if (premIdx >= 0 && premIdx !== activeServerIndex) {
         premiumServerApplied.current = true;
         setTimeout(() => switchServer(premIdx), 300);
       }
     }
-  }, [isPremium, effectiveVideoServers]);
+  }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer]);
 
   // Ad gate - only run after premium AND freeAccess data have loaded
   useEffect(() => {
@@ -1278,13 +1278,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         } else {
           // ===== AUTO SERVER FAILOVER =====
           // All quality/route fallbacks exhausted — try next server automatically
-          if (videoServers.length > 1) {
-            const nextServerIdx = (activeServerIndex + 1) % videoServers.length;
+          if (effectiveVideoServers.length > 1) {
+            const nextServerIdx = (activeServerIndex + 1) % effectiveVideoServers.length;
             // Only auto-failover if we haven't cycled through all servers
             const failoverKey = `__server_failover_${nextServerIdx}`;
             if (!failedSrcsRef.current.has(failoverKey)) {
               failedSrcsRef.current.add(failoverKey);
-              const serverName = videoServers[nextServerIdx]?.name || `Server ${nextServerIdx + 1}`;
+              const serverName = effectiveVideoServers[nextServerIdx]?.name || `Server ${nextServerIdx + 1}`;
               setQualityFailMsg(`Server down. Switching to ${serverName}...`);
               setTimeout(() => setQualityFailMsg(null), 3500);
               // Reset failed srcs for the new server (keep failover keys)
@@ -1408,7 +1408,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       }
       if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, videoServers, activeServerIndex]);
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex]);
 
   useEffect(() => {
     const onFs = () => {
@@ -1855,11 +1855,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   <Crop className="w-3.5 h-3.5" />
                   <span className="text-[10px] font-medium">{cropLabels[cropIndex]}</span>
                 </button>
-                {videoServers.length > 1 && !noServerSwitch && (
+                {effectiveVideoServers.length > 1 && !noServerSwitch && (
                   <div className="relative">
                     <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
-                      <span className="text-[10px] font-medium">{manualServerSelected ? (videoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
+                      <span className="text-[10px] font-medium">{manualServerSelected ? (effectiveVideoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
                     </button>
                     {showServerPanel && (
                       <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
@@ -1878,7 +1878,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             {!manualServerSelected && <Check className="w-3 h-3" />}
                           </button>
                         )}
-                        {videoServers.map((srv, idx) => {
+                        {effectiveVideoServers.map((srv, idx) => {
                           const isLocked = srv.locked && !isPremium;
                           return (
                             <button key={idx} onClick={() => { if (!isLocked) switchServer(idx); }}
