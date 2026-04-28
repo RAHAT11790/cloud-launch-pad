@@ -1343,6 +1343,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       // Only show loader if we genuinely don't have data yet
       if (v.readyState < 2) setIsBuffering(true);
     };
+    const onSeeked = () => {
+      setIsBuffering(false);
+    };
+    let stalledTimer: ReturnType<typeof setTimeout> | null = null;
+    const onStalled = () => {
+      if (stalledTimer) clearTimeout(stalledTimer);
+      stalledTimer = setTimeout(() => {
+        if (v.readyState < 3) setIsBuffering(true);
+      }, 1500);
+    };
     v.addEventListener("loadedmetadata", onLoaded);
     v.addEventListener("play", onPlay);
     v.addEventListener("pause", onPause);
