@@ -1860,13 +1860,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             <div className="absolute inset-0 flex flex-col justify-between text-white" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}>
               {/* Top controls */}
               <div className="flex justify-end gap-2 p-3">
-                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1">
+                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95">
                   <Crop className="w-3.5 h-3.5" />
                   <span className="text-[10px] font-medium">{cropLabels[cropIndex]}</span>
                 </button>
                 {effectiveVideoServers.length > 1 && !noServerSwitch && (
                   <div className="relative">
-                    <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-glass h-7 px-2.5 rounded-full flex items-center justify-center gap-1 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
+                    <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
                       <span className="text-[10px] font-medium">{manualServerSelected ? (effectiveVideoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
                     </button>
@@ -1907,20 +1907,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     )}
                   </div>
                 )}
-                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-glass w-8 h-8 rounded-full flex items-center justify-center">
+                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <Lock className="w-3.5 h-3.5" />
                 </button>
               </div>
 
               {/* Center play */}
               <div className="flex items-center justify-center gap-8">
-                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="w-10 h-10 rounded-full bg-foreground/20 flex items-center justify-center backdrop-blur">
+                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <SkipBack className="w-5 h-5" />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="w-14 h-14 rounded-full gradient-primary flex items-center justify-center">
+                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary w-14 h-14 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   {playing ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="w-10 h-10 rounded-full bg-foreground/20 flex items-center justify-center backdrop-blur">
+                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <SkipForward className="w-5 h-5" />
                 </button>
               </div>
@@ -1957,13 +1957,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     </button>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] bg-foreground/20 px-2 py-0.5 rounded">{playbackRate}x</span>
+                    <span className="player-control-chip text-[10px] px-2 py-0.5 rounded">{playbackRate}x</span>
                     {availableQualities.length > 1 && (
                       <div className="relative">
                         <button
                           onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); }}
                           className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all ${
-                            currentQuality !== "Auto" ? "gradient-primary text-white" : "bg-foreground/20"
+                            currentQuality !== "Auto" ? "gradient-primary text-white" : "player-control-chip"
                           }`}
                         >
                           {currentQuality}
@@ -1999,7 +1999,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         <button
                           onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); }}
                           className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
-                            currentAudioTrack !== "Default" ? "gradient-primary text-white" : "bg-foreground/20"
+                            currentAudioTrack !== "Default" ? "gradient-primary text-white" : "player-control-chip"
                           }`}
                         >
                           🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}
@@ -2030,14 +2030,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       </div>
                     )}
                     {onNextEpisode && (
-                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="text-[10px] bg-primary/30 px-2 py-0.5 rounded flex items-center gap-1">
+                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip text-[10px] px-2 py-0.5 rounded flex items-center gap-1 transition-transform duration-150 active:scale-95">
                         Next <ChevronRight className="w-3 h-3" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); }} className="player-glass w-7 h-7 rounded-full flex items-center justify-center">
+                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                       <Settings className="w-3 h-3" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-glass w-7 h-7 rounded-full flex items-center justify-center">
+                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                       {isFullscreen ? <Minimize className="w-3 h-3" /> : <Maximize className="w-3 h-3" />}
                     </button>
                   </div>
@@ -2049,7 +2049,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           {/* Locked indicator */}
           {locked && showControls && (
             <div className="absolute top-3 right-3 z-20" onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => { setLocked(false); setShowControls(true); scheduleHideTimer(); }} className="player-glass w-10 h-10 rounded-full flex items-center justify-center">
+              <button onClick={() => { setLocked(false); setShowControls(true); scheduleHideTimer(); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                 <Unlock className="w-4 h-4 text-primary" />
               </button>
             </div>
