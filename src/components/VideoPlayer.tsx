@@ -133,6 +133,7 @@ interface VideoPlayerProps {
   onSeasonChange?: (idx: number) => void;
   suggestedAnime?: AnimeItem[];
   onSuggestedClick?: (anime: AnimeItem) => void;
+  nextEpisodeSrc?: string;
 }
 
 const formatTime = (t: number) => {
@@ -141,7 +142,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc }: VideoPlayerProps) => {
   const branding = useBranding();
   // Removed preload anime character image - no longer needed
 
@@ -730,9 +731,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (activeIdx < 0 || activeIdx >= episodeList.length - 1) return;
     // Find the next episode's src from qualityOptions or main src
     // We preload via <link rel="preload"> which is lightweight
-    const nextEpisode = episodeList[activeIdx + 1];
-    if (!nextEpisode) return;
-    const nextSrc = resolvePlaybackSrc(String((nextEpisode as any).src || src));
+    const nextSrc = resolvePlaybackSrc(nextEpisodeSrc || "");
     if (!nextSrc) return;
     // Clean up old preload
     if (preloadLinkRef.current) {
@@ -752,7 +751,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         preloadLinkRef.current = null;
       }
     };
-  }, [episodeList, src, resolvePlaybackSrc]);
+  }, [episodeList, nextEpisodeSrc, src, resolvePlaybackSrc]);
 
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
