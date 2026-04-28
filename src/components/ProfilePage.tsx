@@ -553,21 +553,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
 
   useEffect(() => {
     if (!userId) return;
-    const wlRef = ref(db, `users/${userId}/watchlist`);
-    const unsub1 = onValue(wlRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      setWatchlist(Object.values(data));
-    });
-    // Watch history (per-account)
-    const whRef = ref(db, `users/${userId}/watchHistory`);
-    const unsub2 = onValue(whRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      const items = Object.values(data).filter((v: any) => v && typeof v === "object" && v.id) as any[];
-      items.sort((a: any, b: any) => (b.watchedAt || 0) - (a.watchedAt || 0));
-      setWatchHistory(items);
-    });
     const premRef = ref(db, `users/${userId}/premium`);
-    const unsub3 = onValue(premRef, (snap) => {
+    const unsubPremium = onValue(premRef, (snap) => {
       const data = snap.val();
       if (data && data.expiresAt > Date.now()) {
         setIsPremium(true);
@@ -575,7 +562,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
         setPremiumMaxDevices(data.maxDevices || 1);
         const devCount = data.devices ? Object.keys(data.devices).length : 0;
         setPremiumDeviceCount(devCount);
-        // Device limit is enforced at login time, just mark check done
         setDeviceExceeded(false);
         setDeviceCheckDone(true);
       } else {
@@ -585,25 +571,51 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
         setDeviceCheckDone(true);
       }
     });
-    // Load bKash settings
-    const unsub4 = onValue(ref(db, "bkashSettings"), (snap) => {
-      setBkashSettings(snap.val());
-    });
-    const paymentQuery = query(ref(db, "bkashPayments"), orderByChild("userId"), equalTo(userId));
-    const unsub5 = onValue(paymentQuery, (snap) => {
-      const items = Object.entries(snap.val() || {})
-        .map(([id, item]: any) => ({ id, ...item }))
-        .sort((a: any, b: any) => (b.submittedAt || 0) - (a.submittedAt || 0));
 
-      const activePending = items.find((item: any) => item.status === "pending") || null;
-      setPendingPaymentRequest(activePending);
+    const wlRef = ref(db, `users/${userId}/watchlist`);
+    const whRef = ref(db, `users/${userId}/watchHistory`);
 
-      if (!activePending) {
-        setEditingPendingRequest(false);
-      }
-    });
+    Promise.all([get(wlRef), get(whRef)]).then(([wlSnap, whSnap]) => {
+      const wlData = wlSnap.val() || {};
+      setWatchlist(Object.values(wlData));
 
-    return () => { unsub1(); unsub2(); unsub3(); unsub4(); unsub5(); };
+      const whData = whSnap.val() || {};
+      const items = Object.values(whData).filter((v: any) => v && typeof v === "object" && v.id) as any[];
+      items.sort((a: any, b: any) => (b.watchedAt || 0) - (a.watchedAt || 0));
+      setWatchHistory(items);
+    }).catch(() => {});
+
+    const idle = window.setTimeout(() => {
+      const unsubBkash = onValue(ref(db, "bkashSettings"), (snap) => {
+        setBkashSettings(snap.val());
+      });
+      const paymentQuery = query(ref(db, "bkashPayments"), orderByChild("userId"), equalTo(userId));
+      const unsubPayments = onValue(paymentQuery, (snap) => {
+        const items = Object.entries(snap.val() || {})
+          .map(([id, item]: any) => ({ id, ...item }))
+          .sort((a: any, b: any) => (b.submittedAt || 0) - (a.submittedAt || 0));
+
+        const activePending = items.find((item: any) => item.status === "pending") || null;
+        setPendingPaymentRequest(activePending);
+
+        if (!activePending) {
+          setEditingPendingRequest(false);
+        }
+      });
+
+      (window as any).__rs_profile_cleanup__ = () => {
+        unsubBkash();
+        unsubPayments();
+      };
+    }, 250);
+
+    return () => {
+      unsubPremium();
+      window.clearTimeout(idle);
+      const cleanup = (window as any).__rs_profile_cleanup__;
+      if (typeof cleanup === "function") cleanup();
+      delete (window as any).__rs_profile_cleanup__;
+    };
   }, [userId]);
 
   const formatRemainingTime = (ms: number) => {

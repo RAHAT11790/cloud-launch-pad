@@ -61,6 +61,10 @@ const isDirectPlaybackUrl = (url: string): boolean => {
   return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
 };
 
+const isInsecureHttpSource = (url: string): boolean => {
+  return String(url || "").trim().toLowerCase().startsWith("http://");
+};
+
 const isBypassSource = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
@@ -97,19 +101,23 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
   const prefersDirectPlayback = isDirectPlaybackUrl(url);
+  const mustUseProxy = isInsecureHttpSource(url);
 
   if (isBypassSource(url)) {
     addCandidate(url);
     return candidates;
   }
 
-  if (customProxyCandidate) addCandidate(customProxyCandidate);
-  if (BUILTIN_STREAM_PROXY) {
-    addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
+  if (prefersDirectPlayback && !mustUseProxy) {
+    addCandidate(url);
+    return candidates;
   }
-  if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
 
-  if (prefersDirectPlayback && candidates.length === 0) {
+  if (mustUseProxy) {
+    if (BUILTIN_STREAM_PROXY) addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+  } else {
     addCandidate(url);
   }
 
@@ -126,7 +134,7 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
 
 const shouldForceDirectProxy = (url: string): boolean => {
   const value = String(url || "").trim().toLowerCase();
-  return value.startsWith("http://") || /sttv|sttvs/.test(value) || /bot-hosting\.net/.test(value);
+  return value.startsWith("http://");
 };
 
 interface AudioTrackOption {
@@ -946,9 +954,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const v = videoRef.current;
     if (v) {
       try { v.pause(); } catch {}
-      try { v.removeAttribute("src"); } catch {}
-      v.src = "";
-      try { v.load(); } catch {}
     }
     instantSwitchRef.current = true;
     setSwitchingEpisode(true);
@@ -965,7 +970,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const t = setTimeout(() => {
       instantSwitchRef.current = false;
       setSwitchingEpisode(false);
-    }, 1200);
+    }, 450);
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
 
@@ -988,11 +993,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     setShowFixedLoader(true);
 
-    // Auto-hide after 5 seconds regardless
+    // Auto-hide quickly so fullscreen/switching doesn't sit under a black veil
     loaderTimeoutRef.current = setTimeout(() => {
       setShowFixedLoader(false);
       loaderTimeoutRef.current = null;
-    }, 800);
+    }, 260);
 
     // Also hide immediately when video fires canplay/playing
     const v = videoRef.current;
@@ -1344,7 +1349,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
       if (waitingTimer) clearTimeout(waitingTimer);
-      waitingTimer = setTimeout(() => setIsBuffering(true), 500);
+      waitingTimer = setTimeout(() => setIsBuffering(true), 900);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
@@ -1369,7 +1374,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           v.src = savedSrc;
           v.load();
         }
-      }, 10000); // Wait 10s before considering stalled - prevents premature reloads
+      }, 15000); // Wait longer so aggressive reload doesn't kill otherwise-fast servers
     };
 
     v.addEventListener("loadedmetadata", onLoaded);
@@ -1525,7 +1530,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd]);
 
   const toggleFullscreen = useCallback(async () => {
-    const el = videoContainerRef.current;
+    const videoEl = videoRef.current;
+    const el = videoEl || videoContainerRef.current;
     if (!el) return;
     try {
       if (document.fullscreenElement) {
@@ -1678,6 +1684,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const handleTouchEnd = useCallback(() => setSwipeState(null), []);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const lightweightMode = !isFullscreen;
 
   return (
     <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
@@ -2247,15 +2254,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         })()}
 
         {/* Download Button with Quality Picker + Offline Playback */}
-        {!isFullscreen && !adGateActive && !hideDownload && currentSrc && (
-          <div className="mt-3 w-full max-w-md mx-auto">
-            <div className="rounded-lg border border-border/60 bg-card/40 px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Proxy Link</p>
-              <p className="mt-1 break-all text-[11px] leading-5 text-foreground/80">{currentSrc}</p>
-            </div>
-          </div>
-        )}
-
         {!isFullscreen && !adGateActive && !hideDownload && (() => {
           const normalizeKeyPart = (value: string) =>
             value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -2543,7 +2541,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         )}
 
         {/* Suggested Videos */}
-        {suggestedAnime && suggestedAnime.length > 0 && onSuggestedClick && (
+        {lightweightMode && suggestedAnime && suggestedAnime.length > 0 && onSuggestedClick && (
           <div className="mt-4 bg-background rounded-xl p-4">
             <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5 text-foreground">
               <Play className="w-3.5 h-3.5 text-primary" /> Suggested for you

@@ -2,14 +2,16 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
-import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import Unlock from "./pages/Unlock";
 import MiniApp from "./pages/MiniApp";
 import DynamicMeta from "./components/DynamicMeta";
 import ManifestManager from "./components/ManifestManager";
+
+const Admin = lazy(() => import("./pages/Admin"));
 
 const queryClient = new QueryClient();
 
@@ -24,7 +26,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/app" element={<Index />} />
-          <Route path="/admin" element={<Admin />} />
+          <Route path="/admin" element={<Suspense fallback={null}><Admin /></Suspense>} />
           <Route path="/unlock" element={<Unlock />} />
           <Route path="/mini" element={<MiniApp />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
