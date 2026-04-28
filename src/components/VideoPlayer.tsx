@@ -220,7 +220,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
   // ===== SERVER CHANGER =====
-  const [videoServers, setVideoServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
+  const [videoServers, setVideoServers] = useState<VideoServerOption[]>([]);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
   const [showServerPanel, setShowServerPanel] = useState(false);
@@ -229,16 +229,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
       const val = snap.val();
-      let servers: { name: string; domain: string; locked?: boolean }[] = [];
+      let servers: VideoServerOption[] = [];
       if (val && Array.isArray(val)) {
         servers = val.filter((s: any) => s && s.domain);
       } else if (val && typeof val === "object") {
         servers = Object.values(val).filter((s: any) => s && s.domain) as any[];
       }
-      setVideoServers(servers);
+      setVideoServers(servers.slice(0, PROXY_SERVER_LIMIT));
     });
     return () => unsub();
   }, []);
+
+  const effectiveVideoServers = useMemo(() => {
+    if (noServerSwitch) return [];
+    if (videoServers.length > 0) return videoServers.slice(0, PROXY_SERVER_LIMIT);
+    return buildFallbackServers(src).slice(0, PROXY_SERVER_LIMIT);
+  }, [noServerSwitch, src, videoServers]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
   // The branded `req.html` page on the embed server posts video events to us
@@ -581,7 +587,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         setTimeout(() => switchServer(premIdx), 300);
       }
     }
-  }, [isPremium, videoServers]);
+  }, [isPremium, effectiveVideoServers]);
 
   // Ad gate - only run after premium AND freeAccess data have loaded
   useEffect(() => {
@@ -736,7 +742,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
-    const server = videoServers[serverIndex];
+    const server = effectiveVideoServers[serverIndex];
     if (!server?.domain) return rawUrl;
     const domainTrim = server.domain.trim().replace(/\/$/, "");
     const isHfDomain = /hf\.space|huggingface/i.test(domainTrim);
@@ -750,7 +756,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       const match = rawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
       return `${domainTrim}${match ? match[1] : rawUrl}`;
     }
-  }, [videoServers]);
+  }, [effectiveVideoServers]);
 
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
@@ -786,8 +792,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [episodeList, nextEpisodeSrc, src, resolvePlaybackSrc]);
 
   const switchServer = useCallback((serverIndex: number) => {
-    if (serverIndex === activeServerIndex || !videoServers[serverIndex]) return;
-    if (videoServers[serverIndex].locked && !isPremium) return;
+    if (serverIndex === activeServerIndex || !effectiveVideoServers[serverIndex]) return;
+    if (effectiveVideoServers[serverIndex].locked && !isPremium) return;
     if (serverSwitchingRef.current) return;
     const v = videoRef.current;
     if (!v) return;
@@ -798,6 +804,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
+    setVideoError(false);
+    setQualityFailMsg(null);
+    setIsBuffering(true);
+    setShowFixedLoader(true);
+    setSwitchingEpisode(true);
 
     // Keep last frame visible by NOT clearing src — just swap directly
     setManualServerSelected(true);
@@ -805,8 +816,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
     setCurrentSrc(resolved);
-    serverSwitchingRef.current = false;
-  }, [activeServerIndex, videoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
+    window.setTimeout(() => {
+      serverSwitchingRef.current = false;
+      setSwitchingEpisode(false);
+    }, 900);
+  }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
