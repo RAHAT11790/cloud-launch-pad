@@ -1255,8 +1255,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
 
         if (sameQualityRouteFallback) {
-          setQualityFailMsg(`"${failedQualityLabel}" source blocked. Trying fallback route...`);
-          setTimeout(() => setQualityFailMsg(null), 3500);
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
           setCurrentSrc(sameQualityRouteFallback);
           return;
@@ -1268,8 +1266,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         });
 
         if (nextOption) {
-          setQualityFailMsg(`"${failedQualityLabel}" quality not available. Switching to "${nextOption.label}"...`);
-          setTimeout(() => setQualityFailMsg(null), 4000);
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
           const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
           activeSourceBaseRef.current = nextOption.src;
@@ -1290,9 +1286,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             const failoverKey = `__server_failover_${nextServerIdx}`;
             if (!failedSrcsRef.current.has(failoverKey)) {
               failedSrcsRef.current.add(failoverKey);
-              const serverName = effectiveVideoServers[nextServerIdx]?.name || `Server ${nextServerIdx + 1}`;
-              setQualityFailMsg(`Server down. Switching to ${serverName}...`);
-              setTimeout(() => setQualityFailMsg(null), 3500);
               // Reset failed srcs for the new server (keep failover keys)
               const failoverKeys = new Set([...failedSrcsRef.current].filter(k => k.startsWith("__server_failover_")));
               failedSrcsRef.current = failoverKeys;
@@ -1786,7 +1779,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           {/* Loading spinner on top of thumbnail */}
           {showLoaderOverlay && (
             <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none">
-              <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+              <div className="player-loader-shell">
+                <div className="player-loader-ring" />
+                <img
+                  src={playerLoaderLogo}
+                  alt="Player loader"
+                  className="player-loader-logo"
+                  loading="eager"
+                  decoding="async"
+                />
+              </div>
             </div>
           )}
 
@@ -1829,12 +1831,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   </button>
                 </div>
               </div>
-            </div>
-          )}
-
-          {qualityFailMsg && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 player-glass px-4 py-2.5 rounded-xl text-center max-w-[85%] animate-in fade-in slide-in-from-top-2 duration-300">
-              <p className="text-xs font-semibold text-accent">⚠ {qualityFailMsg}</p>
             </div>
           )}
 
