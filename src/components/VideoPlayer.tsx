@@ -1330,47 +1330,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
       if (waitingTimer) clearTimeout(waitingTimer);
-      waitingTimer = setTimeout(() => setIsBuffering(true), 600);
+      // Longer debounce — avoid flashing loader on tiny network hiccups during smooth playback
+      waitingTimer = setTimeout(() => {
+        if (v.readyState < 3) setIsBuffering(true);
+      }, 1200);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
       setIsBuffering(false);
     };
-    const onSeeked = () => {
-      // Only clear buffering if video has enough data to play
-      if (v.readyState >= 3) {
-        if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
-        setIsBuffering(false);
-      }
+    const onLoadStart = () => {
+      // Only show loader if we genuinely don't have data yet
+      if (v.readyState < 2) setIsBuffering(true);
     };
-    // Stalled: video stopped downloading - try to recover
-    let stalledTimer: ReturnType<typeof setTimeout> | null = null;
-    const onStalled = () => {
-      stalledTimer = setTimeout(() => {
-        // Only reload if video truly hasn't loaded anything at all (readyState 0 = HAVE_NOTHING)
-        if (v.currentTime === 0 && v.readyState <= 1 && v.networkState === 2) {
-          console.log('Video stalled at 0:00 with no data, reloading source...');
-          const savedSrc = v.src;
-          v.src = '';
-          v.src = savedSrc;
-          v.load();
-        }
-      }, 15000); // Wait longer so aggressive reload doesn't kill otherwise-fast servers
-    };
-
-    v.addEventListener("loadedmetadata", onLoaded);
-    v.addEventListener("play", onPlay);
-    v.addEventListener("pause", onPause);
-    v.addEventListener("ended", onEnded);
-    v.addEventListener("error", onError);
-    v.addEventListener("canplay", onCanPlay);
-    v.addEventListener("canplaythrough", onCanPlayThrough);
-    v.addEventListener("waiting", onWaiting);
-    v.addEventListener("playing", onPlaying);
-    v.addEventListener("seeked", onSeeked);
+...
     v.addEventListener("stalled", onStalled);
-    setIsBuffering(true);
-    v.load();
+    v.addEventListener("loadstart", onLoadStart);
+    // Show loader only if data isn't already buffered (fast switch keeps UI clean)
+    if (v.readyState < 2) setIsBuffering(true);
+    // NOTE: do NOT call v.load() — setting v.src already triggers loading.
+    // Forcing v.load() on every server/quality switch restarts download from scratch
+    // and adds 5-10s latency on otherwise-fast HTTPS sources.
 
     return () => {
       cancelAnimationFrame(rafId.current);
