@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
-import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl, callEdgeFunction } from "@/lib/edgeFunctionRouter";
 import { WeeklyEpTabButton, WeeklyEpManager } from "@/components/admin/WeeklyEpManager";
 // AdminNotificationBell removed
 import MiniAppManager from "@/components/admin/MiniAppManager";
@@ -3173,11 +3173,48 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       if (Object.keys(userNotifUpdates).length > 0) {
         await update(ref(db), userNotifUpdates);
       }
-      toast.success(`In-app notification sent to ${targetUserIds.length} users`);
+      toast.success(`In-app notification saved for ${targetUserIds.length} users`);
       setNotifTitle("");
       setNotifMessage("");
 
-      // FCM push removed — only in-app notifications were sent above
+      // ---- FCM push delivery (web browsers) ----
+      try {
+        const dataPayload: Record<string, string> = { type: notifType };
+        if (contentId) {
+          dataPayload.key = contentId;
+          dataPayload.contentId = contentId;
+          dataPayload.contentType = contentType;
+          // Deep link so click on the system notification opens the anime page
+          dataPayload.url = `/?anime=${encodeURIComponent(contentId)}`;
+        }
+        const pushBody: Record<string, any> = {
+          title: savedTitle,
+          body: savedMessage,
+          data: dataPayload,
+        };
+        if (contentPoster) {
+          pushBody.image = contentPoster;
+          pushBody.imageUrl = contentPoster;
+        }
+        if (notifTarget !== "all") {
+          // Restrict to selected user IDs (online subset)
+          pushBody.userIds = targetUserIds;
+        }
+        const pushRes = await callEdgeFunction("send-fcm", pushBody).catch((e) => {
+          console.warn("[FCM] send-fcm call failed:", e);
+          return null;
+        });
+        if (pushRes?.ok) {
+          toast.success(
+            `Push sent: ${pushRes.success}/${pushRes.totalTokens} delivered` +
+              (pushRes.invalidRemoved ? ` (cleaned ${pushRes.invalidRemoved} stale)` : "")
+          );
+        } else if (pushRes?.error) {
+          toast.error(`Push error: ${pushRes.error}`);
+        }
+      } catch (pushErr: any) {
+        console.warn("FCM push delivery skipped:", pushErr);
+      }
     } catch (err: any) {
       console.warn("Notification send failed:", err);
       toast.error("Error: " + err.message);

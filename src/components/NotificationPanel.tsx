@@ -3,7 +3,7 @@ import { Bell, X, Check, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, set, update } from "@/lib/firebase";
 import { SITE_ICON_URL, SITE_URL } from "@/lib/siteConfig";
-// FCM removed — in-app bell only
+import { registerFcmForUser } from "@/lib/fcmRegister";
 
 const NOTIFICATION_BADGE_URL = "/notification-badge.svg";
 
@@ -15,11 +15,52 @@ const PRIMARY_SITE_ORIGIN = (() => {
   }
 })();
 
-// FCM permission/token registration removed — bell uses Firebase realtime only.
-const requestNotificationPermission = async (_userId?: string) => { /* no-op */ };
+// Register the browser for FCM push so the user keeps getting notifications
+// even when the tab is closed. Safe to call repeatedly — internally cached.
+const requestNotificationPermission = async (userId?: string) => {
+  if (!userId) return;
+  try {
+    await registerFcmForUser(userId);
+  } catch (err) {
+    console.warn("[NotificationPanel] FCM register failed:", err);
+  }
+};
 
-// Browser push notifications removed — bell shows everything in-app
-const showBrowserNotification = (_title: string, _body: string, _contentId?: string, _image?: string): boolean => false;
+// Show a system Notification when a NEW unread item appears while the tab is
+// open. Background pushes are handled by the service worker.
+const showBrowserNotification = (
+  title: string,
+  body: string,
+  contentId?: string,
+  image?: string
+): boolean => {
+  try {
+    if (typeof window === "undefined" || !("Notification" in window)) return false;
+    if (Notification.permission !== "granted") return false;
+    if (document.visibilityState === "visible") return false;
+
+    const url = contentId
+      ? `${PRIMARY_SITE_ORIGIN}/?anime=${encodeURIComponent(contentId)}`
+      : PRIMARY_SITE_ORIGIN;
+
+    const n = new Notification(title || "RS ANIME", {
+      body: body || "",
+      icon: image || SITE_ICON_URL,
+      image,
+      badge: NOTIFICATION_BADGE_URL,
+      tag: contentId || undefined,
+      data: { url },
+    } as NotificationOptions);
+    n.onclick = () => {
+      window.focus();
+      window.location.href = url;
+      n.close();
+    };
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 interface NotifItem {
   id: string;
