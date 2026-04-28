@@ -66,11 +66,6 @@ const isBypassSource = (url: string): boolean => {
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
 };
 
-const isProxyCandidateUrl = (url: string): boolean => {
-  const normalized = String(url || "").trim().toLowerCase();
-  return normalized.startsWith("http://") || normalized.startsWith("https://");
-};
-
 const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
   try {
     const parsed = new URL(rawUrl);
