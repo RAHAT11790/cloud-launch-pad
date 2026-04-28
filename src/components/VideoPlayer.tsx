@@ -1343,7 +1343,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       // Only show loader if we genuinely don't have data yet
       if (v.readyState < 2) setIsBuffering(true);
     };
-...
+    v.addEventListener("loadedmetadata", onLoaded);
+    v.addEventListener("play", onPlay);
+    v.addEventListener("pause", onPause);
+    v.addEventListener("ended", onEnded);
+    v.addEventListener("error", onError);
+    v.addEventListener("canplay", onCanPlay);
+    v.addEventListener("canplaythrough", onCanPlayThrough);
+    v.addEventListener("waiting", onWaiting);
+    v.addEventListener("playing", onPlaying);
+    v.addEventListener("seeked", onSeeked);
     v.addEventListener("stalled", onStalled);
     v.addEventListener("loadstart", onLoadStart);
     // Show loader only if data isn't already buffered (fast switch keeps UI clean)
