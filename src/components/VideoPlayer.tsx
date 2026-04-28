@@ -1386,18 +1386,31 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.removeEventListener("playing", onPlaying);
       v.removeEventListener("seeked", onSeeked);
       v.removeEventListener("stalled", onStalled);
-      // Ensure video is fully stopped on unmount (prevents background playback)
-      v.pause();
-      v.src = '';
-      v.load();
-      // Clean up any preload element
+      // NOTE: do NOT clear v.src here. This cleanup runs on every currentSrc change
+      // (server / quality / audio switch). Wiping src would discard the freshly-set
+      // source React just rendered and force a restart from 0:00. Real teardown
+      // happens in the unmount-only effect below.
+    };
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex]);
+
+  // Unmount-only teardown: stop background playback when the player is removed.
+  useEffect(() => {
+    return () => {
+      const v = videoRef.current;
+      if (v) {
+        try { v.pause(); } catch {}
+        try { v.removeAttribute("src"); v.src = ""; v.load(); } catch {}
+      }
       if (preloadLinkRef.current) {
         try { document.head.removeChild(preloadLinkRef.current); } catch {}
         preloadLinkRef.current = null;
       }
-      if ('mediaSession' in navigator) { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+      }
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex]);
+  }, []);
 
   useEffect(() => {
     const onFs = () => {
