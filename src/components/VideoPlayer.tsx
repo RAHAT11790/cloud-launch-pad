@@ -327,8 +327,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   useEffect(() => {
     if (noProxy) {
       setCdnEnabled(false);
-      setProxyUrl('');
-      setProxyApiKey('');
       setPlaybackRouteReady(true);
       return;
     }
@@ -714,24 +712,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
-    // Per-server proxy override: if the active server has a `proxyId`, route
-    // through that proxy. Otherwise fall back to the global proxy setting.
+    // Only per-server admin proxy is allowed. No global fallback.
     const activeServer = effectiveVideoServers[activeServerIndex];
     const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
-    const effProxyUrl = serverProxy?.url || proxyUrl || undefined;
-    const effProxyKey = serverProxy?.apiKey || proxyApiKey || undefined;
+    const effProxyUrl = serverProxy?.url || undefined;
+    const effProxyKey = serverProxy?.apiKey || undefined;
     return getPrimaryPlaybackSrc(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
-  }, [cdnEnabled, proxyUrl, proxyApiKey, customProxies, effectiveVideoServers, activeServerIndex]);
+  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex]);
 
   const resolvePlaybackCandidates = useCallback((rawUrl: string) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return [] as string[];
     const activeServer = effectiveVideoServers[activeServerIndex];
     const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
-    const effProxyUrl = serverProxy?.url || proxyUrl || undefined;
-    const effProxyKey = serverProxy?.apiKey || proxyApiKey || undefined;
+    const effProxyUrl = serverProxy?.url || undefined;
+    const effProxyKey = serverProxy?.apiKey || undefined;
     return buildPlaybackCandidates(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
-  }, [cdnEnabled, proxyUrl, proxyApiKey, customProxies, effectiveVideoServers, activeServerIndex]);
+  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     const server = effectiveVideoServers[serverIndex];
@@ -803,8 +800,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     // been updated yet — its closure still points at the old server.
     const targetServer = effectiveVideoServers[serverIndex];
     const targetServerProxy = targetServer?.proxyId ? customProxies[targetServer.proxyId] : null;
-    const effProxyUrl = targetServerProxy?.url || proxyUrl || undefined;
-    const effProxyKey = targetServerProxy?.apiKey || proxyApiKey || undefined;
+    const effProxyUrl = targetServerProxy?.url || undefined;
+    const effProxyKey = targetServerProxy?.apiKey || undefined;
     const resolved = getPrimaryPlaybackSrc(newRawSrc, cdnEnabled, effProxyUrl, effProxyKey);
 
     setShowServerPanel(false);
@@ -856,7 +853,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
       }
     }, 8000);
-  }, [activeServerIndex, effectiveVideoServers, applyServerDomain, isPremium, customProxies, proxyUrl, proxyApiKey, cdnEnabled]);
+  }, [activeServerIndex, effectiveVideoServers, applyServerDomain, isPremium, customProxies, cdnEnabled]);
 
   // Auto-switch to premium server for premium users
   useEffect(() => {
@@ -1431,7 +1428,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex]);
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
