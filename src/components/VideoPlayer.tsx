@@ -228,7 +228,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
   const [showServerPanel, setShowServerPanel] = useState(false);
-  const premiumServerApplied = useRef(false);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
@@ -282,6 +281,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         case "meta":
         case "canplay":
           // Iframe is loaded — kick off playback and clear the buffering UI
+          setSwitchingEpisode(false);
           setIsBuffering(false);
           setShowFixedLoader(false);
           setVideoError(false);
@@ -295,6 +295,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           break;
         case "playing":
           setPlaying(true);
+          setSwitchingEpisode(false);
           setIsBuffering(false);
           setShowFixedLoader(false);
           break;
@@ -330,6 +331,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           if (onNextEpisode) onNextEpisode();
           break;
         case "error":
+          setSwitchingEpisode(false);
           setVideoError(true);
           setIsBuffering(false);
           break;
@@ -375,7 +377,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       unsub2();
     };
   }, [noProxy, src]);
-  const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
+  const [isPremium, setIsPremium] = useState<boolean | null>(() => {
+    try {
+      const raw = localStorage.getItem("rsanime_premium_cache");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (typeof parsed?.value === "boolean" && Number(parsed?.expiresAt || 0) > Date.now()) {
+        return parsed.value;
+      }
+    } catch {}
+    return null;
+  }); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
   const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
   const [shortenLoading, setShortenLoading] = useState(false);
@@ -570,13 +582,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       try { const u = localStorage.getItem("rsanime_user"); if (u) return JSON.parse(u).id; } catch {} return null;
     };
     const uid = getUserId();
-    if (!uid) { setIsPremium(false); return; }
+    if (!uid) {
+      setIsPremium(false);
+      try { localStorage.setItem("rsanime_premium_cache", JSON.stringify({ value: false, expiresAt: Date.now() + 5 * 60 * 1000 })); } catch {}
+      return;
+    }
 
     const premRef = ref(db, `users/${uid}/premium`);
     const unsub = onValue(premRef, (snap) => {
       const data = snap.val();
       const isPrem = !!(data && data.active === true && data.expiresAt > Date.now());
       setIsPremium(isPrem);
+      try {
+        localStorage.setItem("rsanime_premium_cache", JSON.stringify({
+          value: isPrem,
+          expiresAt: Date.now() + 5 * 60 * 1000,
+        }));
+      } catch {}
     });
     return () => unsub();
   }, []);
@@ -753,6 +775,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
   const instantSwitchRef = useRef(false);
+  const preferredServerIndex = useMemo(() => {
+    if (effectiveVideoServers.length === 0) return 0;
+    if (isPremium) {
+      const premiumIdx = effectiveVideoServers.findIndex((server) => server.locked);
+      if (premiumIdx >= 0) return premiumIdx;
+    }
+    const freeIdx = effectiveVideoServers.findIndex((server) => !server.locked);
+    return freeIdx >= 0 ? freeIdx : 0;
+  }, [effectiveVideoServers, isPremium]);
 
   // Preload next episode for instant switching
   useEffect(() => {
@@ -802,6 +833,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
+    setSwitchingEpisode(true);
     setVideoError(false);
     setIsBuffering(true);
     setShowFixedLoader(true);
@@ -814,12 +846,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
 
-    // Swap src directly + force reload so the browser drops any stalled
-    // connection from the previous server and starts fetching immediately.
+    // Swap src directly so the browser starts the new request immediately
+    // without an extra forced reload cycle that adds switch latency.
     try {
       v.pause();
       v.src = resolved;
-      v.load();
     } catch {}
 
     setCurrentSrc(resolved);
@@ -830,17 +861,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       serverSwitchingRef.current = false;
     }, 250);
   }, [activeServerIndex, currentSrc, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
-
-  // Auto-switch to premium server for premium users
-  useEffect(() => {
-    if (isPremium && effectiveVideoServers.length > 0 && !premiumServerApplied.current) {
-      const premIdx = effectiveVideoServers.findIndex(s => s.locked);
-      if (premIdx >= 0 && premIdx !== activeServerIndex) {
-        premiumServerApplied.current = true;
-        setTimeout(() => switchServer(premIdx), 300);
-      }
-    }
-  }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
@@ -972,23 +992,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (v) {
       try { v.pause(); } catch {}
     }
+    const hasPreferredServer = effectiveVideoServers.length > 0;
+    const nextServerIndex = hasPreferredServer ? preferredServerIndex : 0;
+    const nextRawSrc = hasPreferredServer ? applyServerDomain(src, nextServerIndex) : src;
+
     instantSwitchRef.current = true;
     setSwitchingEpisode(true);
     sourceBaseRef.current = src;
-    activeSourceBaseRef.current = src;
-    const resolvedSrc = resolvePlaybackSrc(src);
+    activeSourceBaseRef.current = nextRawSrc;
+    const resolvedSrc = resolvePlaybackSrc(nextRawSrc);
     setCurrentSrc(resolvedSrc);
+    setActiveServerIndex(nextServerIndex);
     setCurrentQuality("Auto");
-    setManualServerSelected(false);
+    setManualServerSelected(hasPreferredServer);
     setVideoError(false);
+    setIsBuffering(true);
+    setShowFixedLoader(true);
     failedSrcsRef.current.clear();
     pendingSeek.current = 0;
-    const t = setTimeout(() => {
+    return () => {
       instantSwitchRef.current = false;
-      setSwitchingEpisode(false);
-    }, 450);
-    return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
+    };
+  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, effectiveVideoServers.length, preferredServerIndex, applyServerDomain]);
 
   // Loader follows real buffering state — show whenever video isn't playable, hide as soon as it can play.
   useEffect(() => {
@@ -997,13 +1022,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       loaderTimeoutRef.current = null;
     }
 
-    if (!currentSrc || switchingEpisode) {
+    if (!currentSrc) {
       setShowFixedLoader(false);
       return;
     }
 
-    // Strict mapping: loader visibility == buffering state.
-    setShowFixedLoader(isBuffering);
+    // Keep the loader visible during real buffering and during source switches
+    // so the player never flashes a blank black frame between servers.
+    setShowFixedLoader(isBuffering || switchingEpisode);
   }, [currentSrc, isBuffering, switchingEpisode]);
 
   // Simple volume sync - no AudioContext needed
@@ -1159,11 +1185,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, [videoError, clearHideTimer]);
 
-  // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
-  // Show loader during server switch so the user gets feedback while the new
-  // source is fetching. Only suppress it during episode transitions where the
-  // outer flow already shows its own loader.
-  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !switchingEpisode;
+  // Keep the loader visible during real source switches too so the player
+  // doesn't flash a blank frame between server changes.
+  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader;
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
@@ -1333,6 +1357,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
     const onCanPlay = () => {
       setVideoError(false);
+      setSwitchingEpisode(false);
       setIsBuffering(false);
       // Also apply pending seek here in case loadedmetadata didn't fire
       if (pendingSeek.current !== null && v.duration > 0) {
@@ -1345,6 +1370,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       }
     };
     const onCanPlayThrough = () => {
+      setSwitchingEpisode(false);
       setIsBuffering(false);
     };
     // Debounce waiting briefly to avoid flashing on tiny buffer hiccups
@@ -1358,6 +1384,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
+      setSwitchingEpisode(false);
       setIsBuffering(false);
     };
     const onLoadStart = () => {
@@ -1365,6 +1392,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (v.readyState < 2) setIsBuffering(true);
     };
     const onSeeked = () => {
+      setSwitchingEpisode(false);
       setIsBuffering(false);
     };
     let stalledTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1373,6 +1401,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       stalledTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
       }, 1500);
+    };
+    const onEmptied = () => {
+      setSwitchingEpisode(true);
+      setIsBuffering(true);
     };
     v.addEventListener("loadedmetadata", onLoaded);
     v.addEventListener("play", onPlay);
@@ -1386,6 +1418,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     v.addEventListener("seeked", onSeeked);
     v.addEventListener("stalled", onStalled);
     v.addEventListener("loadstart", onLoadStart);
+    v.addEventListener("emptied", onEmptied);
     // Show loader only if data isn't already buffered (fast switch keeps UI clean)
     if (v.readyState < 2) setIsBuffering(true);
     // NOTE: do NOT call v.load() — setting v.src already triggers loading.
@@ -1406,6 +1439,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.removeEventListener("playing", onPlaying);
       v.removeEventListener("seeked", onSeeked);
       v.removeEventListener("stalled", onStalled);
+      v.removeEventListener("emptied", onEmptied);
       // NOTE: do NOT clear v.src here. This cleanup runs on every currentSrc change
       // (server / quality / audio switch). Wiping src would discard the freshly-set
       // source React just rendered and force a restart from 0:00. Real teardown
