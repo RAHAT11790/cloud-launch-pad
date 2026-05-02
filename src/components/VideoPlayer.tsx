@@ -2432,6 +2432,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       }
                       // Show quality picker if multiple qualities available
                       if (availableQualities.length > 1) {
+                        setBulkDownloadMode(false);
                         setShowDownloadQualityPicker(true);
                       } else {
                         // Only one quality - download directly
