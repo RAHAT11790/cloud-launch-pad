@@ -7894,7 +7894,7 @@ ${tgHashtags}`;
                           <option value="" disabled>No custom proxies yet</option>
                         )}
                         {proxyList.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
+                          <option key={p.id} value={p.id}>{p.name} — {p.url}</option>
                         ))}
                       </select>
                     </div>
