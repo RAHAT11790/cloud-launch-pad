@@ -180,6 +180,15 @@ export default function EgdManager({
   const [logEndAt, setLogEndAt] = useState("");
   const [projectSecrets, setProjectSecrets] = useState<string[]>([]);
 
+  // ---------- Server health: red flashing popup when deployer is unresponsive ----------
+  const [serverHealth, setServerHealth] = useState<{
+    status: "ok" | "down" | "checking" | "idle";
+    message: string;
+    lastCheckedAt: number;
+    consecutiveFailures: number;
+  }>({ status: "idle", message: "", lastCheckedAt: 0, consecutiveFailures: 0 });
+  const [showHealthPopup, setShowHealthPopup] = useState(false);
+
   // ---------- Load deployer URL ----------
   useEffect(() => {
     const r = ref(db, "egdManager/config/deployerUrl");
