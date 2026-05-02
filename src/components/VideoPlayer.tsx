@@ -2359,12 +2359,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             toast.info(`${quality} ডাউনলোড শুরু হয়েছে`);
           };
 
-          // Bulk: download every episode of the current season at the chosen quality
+          // Bulk: download every episode of the current season at the chosen quality.
+          // Skips episodes that are already saved offline.
           const startBulkDownloadWithQuality = async (quality: string) => {
             const season = seasons && currentSeasonIdx !== undefined ? seasons[currentSeasonIdx] : null;
             if (!season || !season.episodes?.length) {
               const { toast } = await import("sonner");
-              toast.error("কোন এপিসোড পাওয়া যায়নি");
+              toast.error("No episodes found");
               return;
             }
             const { downloadManager } = await import("@/lib/downloadManager");
@@ -2378,10 +2379,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               return ep.link || ep.link1080 || ep.link720 || ep.link480;
             };
             let queued = 0;
+            let skipped = 0;
             for (const ep of season.episodes) {
               const epUrl = pickEpUrl(ep);
               if (!epUrl) continue;
               const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
+              // Skip if already saved offline at the same (or better) quality
+              const alreadySaved = downloadedEpisodes.some(
+                (d) => d.subtitle === epSubtitle && (d.quality === quality || d.quality === "Auto")
+              );
+              if (alreadySaved) { skipped++; continue; }
               const epDlId = createDownloadId(title, epSubtitle, quality, epUrl);
               const proxied = getPrimaryPlaybackSrc(epUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
               downloadManager.startDownload({
@@ -2396,8 +2403,62 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             }
             setShowDownloadQualityPicker(false);
             setBulkDownloadMode(false);
-            toast.success(`${queued} এপিসোড ${quality}-এ ডাউনলোড শুরু হয়েছে`);
+            if (queued === 0 && skipped > 0) {
+              toast.info(`All ${skipped} episodes are already downloaded`);
+            } else if (skipped > 0) {
+              toast.success(`${queued} episodes queued at ${quality} • ${skipped} skipped (already saved)`);
+            } else {
+              toast.success(`${queued} episodes queued at ${quality}`);
+            }
           };
+
+          // Pre-flight: HEAD-probe each episode URL to estimate total MB at a given quality
+          const [bulkSizePreview, setBulkSizePreview] = [
+            (window as any).__bulkSizePreview,
+            (v: any) => { (window as any).__bulkSizePreview = v; },
+          ];
+          const probeBulkSize = async (quality: string): Promise<{ totalMB: number; eps: number; skipped: number }> => {
+            const season = seasons && currentSeasonIdx !== undefined ? seasons[currentSeasonIdx] : null;
+            if (!season?.episodes?.length) return { totalMB: 0, eps: 0, skipped: 0 };
+            const pickEpUrl = (ep: any): string => {
+              const q = quality.toLowerCase();
+              if (q.includes("4k") || q.includes("2160")) return ep.link4k || ep.link1080 || ep.link720 || ep.link480 || ep.link;
+              if (q.includes("1080")) return ep.link1080 || ep.link720 || ep.link480 || ep.link;
+              if (q.includes("720")) return ep.link720 || ep.link480 || ep.link1080 || ep.link;
+              if (q.includes("480")) return ep.link480 || ep.link720 || ep.link1080 || ep.link;
+              return ep.link || ep.link1080 || ep.link720 || ep.link480;
+            };
+            let total = 0; let counted = 0; let skipped = 0;
+            const probes = season.episodes.slice(0, 30).map(async (ep) => {
+              const epUrl = pickEpUrl(ep);
+              if (!epUrl) return;
+              const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
+              const alreadySaved = downloadedEpisodes.some(
+                (d) => d.subtitle === epSubtitle && (d.quality === quality || d.quality === "Auto")
+              );
+              if (alreadySaved) { skipped++; return; }
+              const proxied = getPrimaryPlaybackSrc(epUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+              try {
+                const ctrl = new AbortController();
+                const t = setTimeout(() => ctrl.abort(), 4000);
+                const r = await fetch(proxied, { method: "HEAD", signal: ctrl.signal });
+                clearTimeout(t);
+                const len = Number(r.headers.get("Content-Length") || 0);
+                if (len > 0) { total += len; counted++; }
+              } catch {}
+            });
+            await Promise.allSettled(probes);
+            // Extrapolate average size to the remaining (un-probed) episodes
+            const remainingEps = season.episodes.length - 30 - skipped;
+            const avg = counted > 0 ? total / counted : 0;
+            const totalBytes = total + Math.max(0, remainingEps) * avg;
+            return {
+              totalMB: totalBytes / (1024 * 1024),
+              eps: season.episodes.length - skipped,
+              skipped,
+            };
+          };
+
 
           const playOffline = async (episodeData?: any) => {
             const ep = episodeData || savedEpisode;
