@@ -18,7 +18,7 @@ import {
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
-import { WeeklyEpTabButton, WeeklyEpManager } from "@/components/admin/WeeklyEpManager";
+// WeeklyEpManager removed
 // AdminNotificationBell removed
 import MiniAppManager from "@/components/admin/MiniAppManager";
 import EgdManager from "@/components/admin/EgdManager";
@@ -565,14 +565,15 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const [fnOverrides, setFnOverrides] = useState<Record<string, { enabled: boolean; customUrl: string }>>({});
 
   const CORE_FUNCTIONS: { key: string; label: string; endpoint: string }[] = [
-        { key: "weekly-auto-detect", label: "📅 Weekly Auto-Detect", endpoint: "weekly-auto-detect" },
-    // FCM endpoint removed
     { key: "telegram-post", label: "📢 Telegram Post", endpoint: "telegram-post" },
     { key: "rs-bot", label: "💬 RS Bot (Telegram)", endpoint: "rs-bot" },
     { key: "send-otp-email", label: "📧 Send OTP Email", endpoint: "send-otp-email" },
-    { key: "shorten-arolinks", label: "🔗 Shorten AroLinks", endpoint: "shorten-arolinks" },
-    { key: "shorten-shrinkme", label: "🔗 Shorten ShrinkMe", endpoint: "shorten-shrinkme" },
-    { key: "shorten-vplink", label: "🔗 Shorten VP Link", endpoint: "shorten-vplink" },
+    { key: "stream-proxy", label: "🎬 Stream Proxy", endpoint: "stream-proxy" },
+    { key: "mini-app", label: "📱 Mini App", endpoint: "mini-app" },
+    { key: "apk-download", label: "📦 APK Download", endpoint: "apk-download" },
+    { key: "access-bot", label: "🔓 Access Bot", endpoint: "access-bot" },
+    { key: "link-share-bot", label: "📤 Link Share Bot", endpoint: "link-share-bot" },
+    { key: "process-email-queue", label: "📨 Email Queue", endpoint: "process-email-queue" },
   ];
 
   useEffect(() => {
