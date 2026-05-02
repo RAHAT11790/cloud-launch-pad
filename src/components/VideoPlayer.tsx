@@ -750,13 +750,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
-    // Old iframe server flow is disabled for episode/video switching speed.
-    // Everything non-direct is routed through the fast stream proxy path instead.
+    // Per-server proxy override: if the active server has a `proxyId`, route
+    // through that proxy. Otherwise fall back to the global proxy setting.
+    const activeServer = effectiveVideoServers[activeServerIndex];
+    const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
+    const effProxyUrl = serverProxy?.url || proxyUrl || undefined;
+    const effProxyKey = serverProxy?.apiKey || proxyApiKey || undefined;
     if (shouldForceDirectProxy(trimmed) && BUILTIN_STREAM_PROXY) {
       return buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, trimmed);
     }
-    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-  }, [cdnEnabled, proxyUrl, proxyApiKey]);
+    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
+  }, [cdnEnabled, proxyUrl, proxyApiKey, customProxies, effectiveVideoServers, activeServerIndex]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     const server = effectiveVideoServers[serverIndex];
