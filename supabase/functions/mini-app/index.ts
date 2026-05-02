@@ -483,9 +483,12 @@ serve(async (req) => {
       const userId = String(entry.userId || "");
       if (!userId) return json({ ok: false, error: "no_user" }, 500);
 
-      const hoursSnap = await fbGet("settings/unlockDurationHours");
-      const hours =
-        typeof hoursSnap === "number" && hoursSnap > 0 ? hoursSnap : 24;
+      // Use the saved tier hours from the token (so fallback honours selected tier)
+      let hours = Number(entry.grantHours);
+      if (!(hours > 0)) {
+        const hoursSnap = await fbGet("settings/unlockDurationHours");
+        hours = typeof hoursSnap === "number" && hoursSnap > 0 ? hoursSnap : 24;
+      }
       const now = Date.now();
       const expiresAt = now + hours * 60 * 60 * 1000;
 
