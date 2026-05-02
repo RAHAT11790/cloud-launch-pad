@@ -22,6 +22,9 @@ interface VideoServerOption {
   name: string;
   domain: string;
   locked?: boolean;
+  /** Optional proxy id (key in `settings/customProxies`). If set, this
+   * server plays through that proxy instead of the globally selected one. */
+  proxyId?: string;
 }
 
 const PROXY_SERVER_LIMIT = 3;
