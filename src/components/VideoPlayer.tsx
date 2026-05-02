@@ -765,21 +765,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return buildPlaybackCandidates(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
   }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex, manualServerSelected]);
 
-  const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
+  const getServerSourceUrl = useCallback((rawUrl: string, serverIndex: number) => {
     const server = effectiveVideoServers[serverIndex];
-    if (!server?.domain) return rawUrl;
-    const domainTrim = server.domain.trim().replace(/\/$/, "");
-    const isHfDomain = /hf\.space|huggingface/i.test(domainTrim);
-    if (isHfDomain) return rawUrl;
-
-    // Regular host-swap servers (e.g. fi3.bot-hosting.net swap, render mirror)
-    try {
-      const url = new URL(rawUrl);
-      return `${domainTrim}${url.pathname}${url.search}${url.hash}`;
-    } catch {
-      const match = rawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
-      return `${domainTrim}${match ? match[1] : rawUrl}`;
-    }
+    if (!server?.domain) return String(rawUrl || "").trim();
+    return buildServerSourceUrl(rawUrl, server.domain);
   }, [effectiveVideoServers]);
 
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
@@ -828,7 +817,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     const savedTime = v.currentTime || 0;
     const wasPlaying = !v.paused;
-    const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
+    const newRawSrc = getServerSourceUrl(sourceBaseRef.current, serverIndex);
 
     const resolved = resolvePlaybackSrc(newRawSrc, { serverIndex, forceServer: true });
 
@@ -881,7 +870,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
       }
     }, 8000);
-  }, [activeServerIndex, effectiveVideoServers, applyServerDomain, isPremium, resolvePlaybackSrc]);
+  }, [activeServerIndex, effectiveVideoServers, getServerSourceUrl, isPremium, resolvePlaybackSrc]);
 
   // Auto-switch to premium server for premium users
   useEffect(() => {
