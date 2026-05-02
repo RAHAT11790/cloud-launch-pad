@@ -330,6 +330,7 @@ serve(async (req) => {
       return json({ ok: true, tiers });
     }
 
+    if (action === "grant") {
       const userId = String(body?.userId || "").trim();
       const source = String(body?.source || "site").trim(); // 'site' | 'api' | 'short'
       const apiKey = String(body?.apiKey || "").trim();
