@@ -868,6 +868,7 @@ export default function MiniApp() {
           source: mode,
           apiKey: apiKey || undefined,
           shortId: shortId || undefined,
+          tierId: selectedTier?.id || undefined,
         }),
       });
       const data = await r.json();
