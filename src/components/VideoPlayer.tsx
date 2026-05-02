@@ -59,6 +59,15 @@ const isInsecureHttpSource = (url: string): boolean => {
   return String(url || "").trim().toLowerCase().startsWith("http://");
 };
 
+const getBrowserSafeDirectUrl = (url: string): string => {
+  const trimmed = String(url || "").trim();
+  if (!trimmed) return "";
+  if (typeof window !== "undefined" && window.location.protocol === "https:" && isInsecureHttpSource(trimmed)) {
+    return trimmed.replace(/^http:\/\//i, "https://");
+  }
+  return trimmed;
+};
+
 const isBypassSource = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
@@ -108,7 +117,7 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
 
   // ===== NO PROXY = DIRECT ONLY =====
   // No proxy assigned → play raw URL directly. No proxy fallback.
-  addCandidate(url);
+  addCandidate(getBrowserSafeDirectUrl(url));
   return candidates;
 };
 
