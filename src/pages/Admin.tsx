@@ -10976,14 +10976,12 @@ const buildProxyTestUrl = (proxyBase: string, testUrl: string, apiKey?: string):
   return url;
 };
 
-// Proxy Server presets - only range-safe proxies for reliable seek/skip
-const PROXY_SERVERS = [
-  { id: 'supabase', name: 'Built-in Proxy (Default)', region: '🌐 Auto Region • Range ✓', url: '' },
-];
+// Only user-added proxies are selectable. If none is selected, playback stays direct.
+const PROXY_SERVERS: { id: string; name: string; region: string; url: string }[] = [];
 
 // Proxy Server Selector sub-component
 const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
-  const [activeProxy, setActiveProxy] = useState('supabase');
+  const [activeProxy, setActiveProxy] = useState('');
   const [customProxies, setCustomProxies] = useState<{ id: string; name: string; url: string; apiKey?: string }[]>([]);
   const [newProxyName, setNewProxyName] = useState('');
   const [newProxyUrl, setNewProxyUrl] = useState('');
@@ -10996,7 +10994,7 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
   useEffect(() => {
     const unsub1 = onValue(ref(db, "settings/proxyServer"), (snap) => {
       const val = snap.val();
-      const incomingId = val?.id || 'supabase';
+      const incomingId = val?.id || '';
       setActiveProxy(incomingId);
       setLoading(false);
     });
@@ -11016,6 +11014,12 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
 
   const selectProxy = async (id: string) => {
     try {
+      if (!id) {
+        await remove(ref(db, "settings/proxyServer"));
+        setActiveProxy("");
+        toast.success("প্রক্সি বন্ধ — direct mode active");
+        return;
+      }
       const proxy = allProxies.find(p => p.id === id);
       const url = proxy && 'url' in proxy ? proxy.url : '';
       const apiKey = proxy && 'apiKey' in proxy ? (proxy as any).apiKey : '';
@@ -11050,8 +11054,8 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
     try {
       await remove(ref(db, `settings/customProxies/${id}`));
       if (activeProxy === id) {
-        await set(ref(db, "settings/proxyServer"), { id: 'supabase', url: null, apiKey: null });
-        setActiveProxy('supabase');
+        await remove(ref(db, "settings/proxyServer"));
+        setActiveProxy('');
       }
       toast.success("প্রক্সি মুছে ফেলা হয়েছে");
     } catch {
@@ -11079,6 +11083,21 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
 
   return (
     <div className="space-y-2">
+      <button
+        onClick={() => selectProxy("")}
+        className={`w-full flex items-center justify-between p-2.5 rounded-lg border transition-all ${
+          !activeProxy ? 'border-cyan-500/50 bg-cyan-500/10' : 'border-zinc-700/50 bg-zinc-800/30 hover:border-zinc-600'
+        }`}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${!activeProxy ? 'bg-cyan-400' : 'bg-zinc-600'}`} />
+          <div className="min-w-0 text-left">
+            <div className="text-xs font-medium truncate">Direct (no proxy)</div>
+            <div className="text-[10px] text-zinc-500">Player will use the server URL exactly as saved</div>
+          </div>
+        </div>
+      </button>
+
       {allProxies.map(proxy => (
         <div
           key={proxy.id}
