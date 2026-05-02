@@ -89,8 +89,43 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
       })).sort((a, b) => a.order - b.order);
       setForceChannels(list);
     });
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); };
+    const u7 = onValue(ref(db, "miniApp/unlockTiers"), (snap) => {
+      const raw = snap.val() || {};
+      const list: UnlockTier[] = Object.entries(raw).map(([id, val]: [string, any]) => ({
+        id,
+        label: String(val?.label || ""),
+        adsRequired: Math.max(1, Math.min(50, Number(val?.adsRequired) || 5)),
+        hours: Math.max(1, Number(val?.hours) || 24),
+        enabled: val?.enabled !== false,
+        highlight: !!val?.highlight,
+        order: Number(val?.order || 0),
+      })).sort((a, b) => a.order - b.order || a.adsRequired - b.adsRequired);
+      setUnlockTiers(list);
+    });
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); };
   }, []);
+
+  // ========== Unlock Tiers helpers ==========
+  const addTier = async () => {
+    await push(ref(db, "miniApp/unlockTiers"), {
+      label: `${unlockTiers.length === 0 ? "Quick Unlock" : "Tier " + (unlockTiers.length + 1)}`,
+      adsRequired: 5,
+      hours: 24,
+      enabled: true,
+      highlight: false,
+      order: unlockTiers.length,
+    });
+    toast.success("New tier added");
+  };
+  const updateTier = async (id: string, patch: Partial<UnlockTier>) => {
+    await update(ref(db, `miniApp/unlockTiers/${id}`), patch);
+  };
+  const deleteTier = async (id: string) => {
+    if (!confirm("Delete this unlock tier?")) return;
+    await remove(ref(db, `miniApp/unlockTiers/${id}`));
+    toast.success("Tier deleted");
+  };
+
 
   const saveSettings = async () => {
     await set(ref(db, "settings/unlockViaTelegramMini"), enabled);
