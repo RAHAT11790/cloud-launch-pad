@@ -18,7 +18,7 @@ import {
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
-import { WeeklyEpTabButton, WeeklyEpManager } from "@/components/admin/WeeklyEpManager";
+// WeeklyEpManager removed
 // AdminNotificationBell removed
 import MiniAppManager from "@/components/admin/MiniAppManager";
 import EgdManager from "@/components/admin/EgdManager";
@@ -51,178 +51,7 @@ interface Season {
 
 import { THEME_PRESETS, type ThemePreset } from "@/lib/themePresets";
 
-// ==================== FCM PROVIDER TOGGLE SECTION ====================
-const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
-  const [activeProvider, setActiveProvider] = useState<"cloudflare" | "supabase">("cloudflare");
-  const [cfUrl, setCfUrl] = useState("");
-  const [cfUrlInput, setCfUrlInput] = useState("");
-  const [sbUrl, setSbUrl] = useState("");
-  const [sbUrlInput, setSbUrlInput] = useState("");
-  const [testing, setTesting] = useState<string | null>(null);
-  const [testResults, setTestResults] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
-
-  useEffect(() => {
-    const unsub = onValue(ref(db, "settings/fcmProvider"), (snap) => {
-      const val = snap.val();
-      if (val) {
-        setActiveProvider(val.active || "cloudflare");
-        setCfUrl(val.cloudflareUrl || "");
-        setCfUrlInput(val.cloudflareUrl || "");
-        setSbUrl(val.supabaseUrl || "");
-        setSbUrlInput(val.supabaseUrl || "");
-      }
-    });
-    return () => unsub();
-  }, []);
-
-  const switchProvider = async (provider: "cloudflare" | "supabase") => {
-    const url = provider === "cloudflare" ? cfUrl : sbUrl;
-    if (!url) {
-      toast.error(`${provider === "cloudflare" ? "Cloudflare" : "Supabase"} URL সেট করো আগে!`);
-      return;
-    }
-    setActiveProvider(provider);
-    await update(ref(db, "settings/fcmProvider"), { active: provider, url });
-    toast.success(`🔔 FCM Provider: ${provider === "cloudflare" ? "☁️ Cloudflare" : "🟢 Supabase"} চালু হয়েছে!`);
-  };
-
-  const saveCfUrl = async () => {
-    const url = cfUrlInput.trim();
-    setCfUrl(url);
-    const updates: Record<string, any> = { cloudflareUrl: url };
-    if (activeProvider === "cloudflare") updates.url = url;
-    await update(ref(db, "settings/fcmProvider"), updates);
-    toast.success("✅ Cloudflare FCM URL সেভ হয়েছে!");
-  };
-
-  const saveSbUrl = async () => {
-    const url = sbUrlInput.trim();
-    setSbUrl(url);
-    const updates: Record<string, any> = { supabaseUrl: url };
-    if (activeProvider === "supabase") updates.url = url;
-    await update(ref(db, "settings/fcmProvider"), updates);
-    toast.success("✅ Supabase FCM URL সেভ হয়েছে!");
-  };
-
-  const testProvider = async (provider: "cloudflare" | "supabase") => {
-    const url = provider === "cloudflare" ? cfUrl : sbUrl;
-    if (!url) { toast.error("URL দাও আগে!"); return; }
-    setTesting(provider);
-    const start = Date.now();
-    try {
-      const controller = new AbortController();
-      const t = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(provider === "supabase" && SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
-        },
-        body: JSON.stringify({ tokens: [], title: "test", body: "test" }),
-        signal: controller.signal,
-      });
-      clearTimeout(t);
-      const latency = Date.now() - start;
-      const text = await res.text().catch(() => "");
-      const alive = text.includes('"error"') || text.includes('"success"') || text.includes('"totalTokens"') || res.status < 500;
-      setTestResults(prev => ({ ...prev, [provider]: { alive, latency } }));
-    } catch {
-      setTestResults(prev => ({ ...prev, [provider]: { alive: false, latency: Date.now() - start } }));
-    }
-    setTesting(null);
-  };
-
-  return (
-    <div className={`${glassCard} p-4 mb-4`}>
-      <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-        <Bell size={14} className="text-yellow-400" /> 🔔 FCM Push Provider
-      </h3>
-      <p className="text-[10px] text-zinc-400 mb-4">
-        Choose Cloudflare or Supabase as your push notification provider. Only one active at a time.
-      </p>
-
-      {/* Provider Toggle */}
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        <button
-          onClick={() => switchProvider("cloudflare")}
-          className={`p-3 rounded-xl border-2 transition-all text-center ${
-            activeProvider === "cloudflare"
-              ? "border-cyan-500 bg-cyan-500/10"
-              : "border-zinc-700/40 bg-zinc-800/40 opacity-60"
-          }`}
-        >
-          <div className="text-lg mb-1">☁️</div>
-          <div className="text-[11px] font-semibold text-white">Cloudflare</div>
-          {activeProvider === "cloudflare" && (
-            <div className="flex items-center justify-center gap-1 mt-1">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-[9px] text-green-400">Active</span>
-            </div>
-          )}
-        </button>
-        <button
-          onClick={() => switchProvider("supabase")}
-          className={`p-3 rounded-xl border-2 transition-all text-center ${
-            activeProvider === "supabase"
-              ? "border-emerald-500 bg-emerald-500/10"
-              : "border-zinc-700/40 bg-zinc-800/40 opacity-60"
-          }`}
-        >
-          <div className="text-lg mb-1">🟢</div>
-          <div className="text-[11px] font-semibold text-white">Supabase</div>
-          {activeProvider === "supabase" && (
-            <div className="flex items-center justify-center gap-1 mt-1">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-[9px] text-green-400">Active</span>
-            </div>
-          )}
-        </button>
-      </div>
-
-      {/* Cloudflare URL */}
-      <div className={`p-3 rounded-xl border mb-3 ${activeProvider === "cloudflare" ? "border-cyan-500/40 bg-zinc-800/60" : "border-zinc-700/30 bg-zinc-800/20 opacity-50"}`}>
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[11px] font-semibold">☁️ Cloudflare FCM URL</span>
-          {testResults.cloudflare && (
-            <span className={`text-[9px] font-mono ${testResults.cloudflare.alive ? "text-green-400" : "text-red-400"}`}>
-              {testResults.cloudflare.alive ? `✓ ${testResults.cloudflare.latency}ms` : "✕ Down"}
-            </span>
-          )}
-        </div>
-        <div className="flex gap-1.5">
-          <input value={cfUrlInput} onChange={(e) => setCfUrlInput(e.target.value)}
-            placeholder="https://worker.workers.dev/send-fcm" className={`${inputClass} !text-[10px] !py-1.5 flex-1`} />
-          <button onClick={saveCfUrl} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}><Save size={10} /></button>
-          <button onClick={() => testProvider("cloudflare")} disabled={testing === "cloudflare"} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
-            {testing === "cloudflare" ? <RefreshCw size={10} className="animate-spin" /> : <Activity size={10} />}
-          </button>
-        </div>
-      </div>
-
-      {/* Supabase URL */}
-      <div className={`p-3 rounded-xl border ${activeProvider === "supabase" ? "border-emerald-500/40 bg-zinc-800/60" : "border-zinc-700/30 bg-zinc-800/20 opacity-50"}`}>
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[11px] font-semibold">🟢 Supabase FCM URL 1</span>
-          {testResults.supabase && (
-            <span className={`text-[9px] font-mono ${testResults.supabase.alive ? "text-green-400" : "text-red-400"}`}>
-              {testResults.supabase.alive ? `✓ ${testResults.supabase.latency}ms` : "✕ Down"}
-            </span>
-          )}
-        </div>
-        <div className="flex gap-1.5 mb-2">
-          <input value={sbUrlInput} onChange={(e) => setSbUrlInput(e.target.value)}
-            placeholder="https://xxx.supabase.co/functions/v1/send-fcm" className={`${inputClass} !text-[10px] !py-1.5 flex-1`} />
-          <button onClick={saveSbUrl} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}><Save size={10} /></button>
-          <button onClick={() => testProvider("supabase")} disabled={testing === "supabase"} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
-            {testing === "supabase" ? <RefreshCw size={10} className="animate-spin" /> : <Activity size={10} />}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-
+// FCM provider section removed — FCM push notifications fully disabled site-wide.
 
 // ==================== TELEGRAM PROVIDER SECTION ====================
 const TelegramProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
@@ -565,14 +394,15 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const [fnOverrides, setFnOverrides] = useState<Record<string, { enabled: boolean; customUrl: string }>>({});
 
   const CORE_FUNCTIONS: { key: string; label: string; endpoint: string }[] = [
-        { key: "weekly-auto-detect", label: "📅 Weekly Auto-Detect", endpoint: "weekly-auto-detect" },
-    // FCM endpoint removed
     { key: "telegram-post", label: "📢 Telegram Post", endpoint: "telegram-post" },
     { key: "rs-bot", label: "💬 RS Bot (Telegram)", endpoint: "rs-bot" },
     { key: "send-otp-email", label: "📧 Send OTP Email", endpoint: "send-otp-email" },
-    { key: "shorten-arolinks", label: "🔗 Shorten AroLinks", endpoint: "shorten-arolinks" },
-    { key: "shorten-shrinkme", label: "🔗 Shorten ShrinkMe", endpoint: "shorten-shrinkme" },
-    { key: "shorten-vplink", label: "🔗 Shorten VP Link", endpoint: "shorten-vplink" },
+    { key: "stream-proxy", label: "🎬 Stream Proxy", endpoint: "stream-proxy" },
+    { key: "mini-app", label: "📱 Mini App", endpoint: "mini-app" },
+    { key: "apk-download", label: "📦 APK Download", endpoint: "apk-download" },
+    { key: "access-bot", label: "🔓 Access Bot", endpoint: "access-bot" },
+    { key: "link-share-bot", label: "📤 Link Share Bot", endpoint: "link-share-bot" },
+    { key: "process-email-queue", label: "📨 Email Queue", endpoint: "process-email-queue" },
   ];
 
   useEffect(() => {
@@ -659,15 +489,6 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     toast.success("✅ কাস্টম URL সেভ হয়েছে!");
   };
 
-  const applyShortenerToAdService = async (serviceId: string, functionUrl: string) => {
-    const target = functionUrl.trim();
-    if (!target) {
-      toast.error("এই shortener-এর URL এখনো set করা হয়নি");
-      return;
-    }
-    await update(ref(db, `settings/adServices/${serviceId}`), { functionUrl: target, updatedAt: Date.now() });
-    toast.success("✅ Shortener URL ad service-এ বসানো হয়েছে");
-  };
 
   return (
     <div>
@@ -1055,7 +876,7 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
           </div>
           {newMode === "shortener" && (
             <input value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
-              placeholder="Supabase Function URL (যেমন: https://xxx.supabase.co/functions/v1/shorten-arolinks)" className={inputClass} />
+              placeholder="Custom Shortener API URL (optional)" className={inputClass} />
           )}
           <input value={newColor} onChange={(e) => setNewColor(e.target.value)}
             placeholder="বাটন কালার CSS (যেমন: linear-gradient(135deg, #f59e0b, #ef4444))" className={inputClass} />
