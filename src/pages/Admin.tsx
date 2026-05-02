@@ -489,15 +489,6 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     toast.success("✅ কাস্টম URL সেভ হয়েছে!");
   };
 
-  const applyShortenerToAdService = async (serviceId: string, functionUrl: string) => {
-    const target = functionUrl.trim();
-    if (!target) {
-      toast.error("এই shortener-এর URL এখনো set করা হয়নি");
-      return;
-    }
-    await update(ref(db, `settings/adServices/${serviceId}`), { functionUrl: target, updatedAt: Date.now() });
-    toast.success("✅ Shortener URL ad service-এ বসানো হয়েছে");
-  };
 
   return (
     <div>
