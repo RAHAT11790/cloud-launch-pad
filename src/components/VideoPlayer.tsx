@@ -958,7 +958,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     // Restore playback position after source change
       const restoreTime = () => {
         if (v.duration > 0) {
-          v.currentTime = savedTime;
+          setVideoCurrentTime(v, savedTime);
           if (wasPlaying) v.play().catch(() => {});
           v.removeEventListener("loadedmetadata", restoreTime);
         }
@@ -991,7 +991,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (v && currentSrc !== finalResolvedSrc) {
       const restoreTime = () => {
         if (v.duration > 0) {
-          v.currentTime = savedTime;
+          setVideoCurrentTime(v, savedTime);
           if (wasPlaying) v.play().catch(() => {});
           v.removeEventListener("loadedmetadata", restoreTime);
         }
@@ -1580,7 +1580,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!v) return;
 
     const nextTime = getSafeSeekTime(v, v.currentTime + seconds);
-    v.currentTime = nextTime;
+    setVideoCurrentTime(v, nextTime);
 
     setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
     setTimeout(() => setSkipIndicator(null), 600);
@@ -1641,7 +1641,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    v.currentTime = getSafeSeekTime(v, pct * v.duration);
+    setVideoCurrentTime(v, pct * v.duration);
     resetHideTimer();
   }, [getSafeSeekTime, resetHideTimer]);
 
@@ -1656,7 +1656,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
-    v.currentTime = getSafeSeekTime(v, pct * v.duration);
+    setVideoCurrentTime(v, pct * v.duration);
     resetHideTimer();
   }, [getSafeSeekTime, resetHideTimer]);
 
@@ -1668,7 +1668,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     const target = getSafeSeekTime(v, pct * v.duration);
-    v.currentTime = target;
+    setVideoCurrentTime(v, target);
 
     // Update progress bar immediately
     if (progressRef.current && v.duration > 0) {
