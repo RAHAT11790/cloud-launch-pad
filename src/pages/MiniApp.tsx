@@ -323,6 +323,10 @@ export default function MiniApp() {
   const t = STR[lang];
 
   const [adType, setAdType] = useState<"rewarded" | "inApp" | null>(null);
+  const [tiers, setTiers] = useState<UnlockTier[]>([]);
+  const [selectedTier, setSelectedTier] = useState<UnlockTier | null>(null);
+  const REQUIRED_VIEWS = selectedTier?.adsRequired ?? DEFAULT_REQUIRED_VIEWS;
+  const grantHours = selectedTier?.hours ?? DEFAULT_HOURS;
   const [views, setViews] = useState(0);
   const [adRunning, setAdRunning] = useState(false);
   const [granted, setGranted] = useState(false);
