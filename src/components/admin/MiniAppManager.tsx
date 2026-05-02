@@ -56,6 +56,7 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
   const [newRedirect, setNewRedirect] = useState("");
   const [setupBusy, setSetupBusy] = useState(false);
   const [forceChannels, setForceChannels] = useState<ForceChannelConfig[]>([]);
+  const [unlockTiers, setUnlockTiers] = useState<UnlockTier[]>([]);
 
   useEffect(() => {
     const u1 = onValue(ref(db, "miniApp/stats"), (snap) => setStats(snap.val() || {}));
