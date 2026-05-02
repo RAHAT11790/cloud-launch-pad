@@ -139,8 +139,13 @@ class DownloadManager {
     subtitle?: string;
     poster?: string;
     quality: string;
+    /** When true (bulk mode), only save to IndexedDB. Skip the browser
+     * download trigger (a.click) so the OS/browser does NOT show a separate
+     * "Save As" prompt. This fixes the bulk re-download bug where the browser
+     * pop-up blocker queues 10+ saves and re-fetches every file. */
+    skipBrowserSave?: boolean;
   }) {
-    const { id, url, title, subtitle, poster, quality } = params;
+    const { id, url, title, subtitle, poster, quality, skipBrowserSave } = params;
 
     if (this.isDownloading(id)) return;
 
