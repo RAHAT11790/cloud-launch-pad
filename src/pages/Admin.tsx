@@ -10976,14 +10976,12 @@ const buildProxyTestUrl = (proxyBase: string, testUrl: string, apiKey?: string):
   return url;
 };
 
-// Proxy Server presets - only range-safe proxies for reliable seek/skip
-const PROXY_SERVERS = [
-  { id: 'supabase', name: 'Built-in Proxy (Default)', region: '🌐 Auto Region • Range ✓', url: '' },
-];
+// Only user-added proxies are selectable. If none is selected, playback stays direct.
+const PROXY_SERVERS: { id: string; name: string; region: string; url: string }[] = [];
 
 // Proxy Server Selector sub-component
 const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
-  const [activeProxy, setActiveProxy] = useState('supabase');
+  const [activeProxy, setActiveProxy] = useState('');
   const [customProxies, setCustomProxies] = useState<{ id: string; name: string; url: string; apiKey?: string }[]>([]);
   const [newProxyName, setNewProxyName] = useState('');
   const [newProxyUrl, setNewProxyUrl] = useState('');
@@ -10996,7 +10994,7 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
   useEffect(() => {
     const unsub1 = onValue(ref(db, "settings/proxyServer"), (snap) => {
       const val = snap.val();
-      const incomingId = val?.id || 'supabase';
+      const incomingId = val?.id || '';
       setActiveProxy(incomingId);
       setLoading(false);
     });
@@ -11050,8 +11048,8 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
     try {
       await remove(ref(db, `settings/customProxies/${id}`));
       if (activeProxy === id) {
-        await set(ref(db, "settings/proxyServer"), { id: 'supabase', url: null, apiKey: null });
-        setActiveProxy('supabase');
+        await remove(ref(db, "settings/proxyServer"));
+        setActiveProxy('');
       }
       toast.success("প্রক্সি মুছে ফেলা হয়েছে");
     } catch {
