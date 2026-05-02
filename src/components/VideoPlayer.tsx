@@ -2349,6 +2349,46 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             toast.info(`${quality} ডাউনলোড শুরু হয়েছে`);
           };
 
+          // Bulk: download every episode of the current season at the chosen quality
+          const startBulkDownloadWithQuality = async (quality: string) => {
+            const season = seasons && currentSeasonIdx !== undefined ? seasons[currentSeasonIdx] : null;
+            if (!season || !season.episodes?.length) {
+              const { toast } = await import("sonner");
+              toast.error("কোন এপিসোড পাওয়া যায়নি");
+              return;
+            }
+            const { downloadManager } = await import("@/lib/downloadManager");
+            const { toast } = await import("sonner");
+            const pickEpUrl = (ep: any): string => {
+              const q = quality.toLowerCase();
+              if (q.includes("4k") || q.includes("2160")) return ep.link4k || ep.link1080 || ep.link720 || ep.link480 || ep.link;
+              if (q.includes("1080")) return ep.link1080 || ep.link720 || ep.link480 || ep.link;
+              if (q.includes("720")) return ep.link720 || ep.link480 || ep.link1080 || ep.link;
+              if (q.includes("480")) return ep.link480 || ep.link720 || ep.link1080 || ep.link;
+              return ep.link || ep.link1080 || ep.link720 || ep.link480;
+            };
+            let queued = 0;
+            for (const ep of season.episodes) {
+              const epUrl = pickEpUrl(ep);
+              if (!epUrl) continue;
+              const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
+              const epDlId = createDownloadId(title, epSubtitle, quality, epUrl);
+              const proxied = getPrimaryPlaybackSrc(epUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+              downloadManager.startDownload({
+                id: epDlId,
+                url: proxied,
+                title,
+                subtitle: epSubtitle,
+                poster,
+                quality,
+              });
+              queued++;
+            }
+            setShowDownloadQualityPicker(false);
+            setBulkDownloadMode(false);
+            toast.success(`${queued} এপিসোড ${quality}-এ ডাউনলোড শুরু হয়েছে`);
+          };
+
           const playOffline = async (episodeData?: any) => {
             const ep = episodeData || savedEpisode;
             if (!ep) return;
