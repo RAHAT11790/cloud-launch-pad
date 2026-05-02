@@ -791,6 +791,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!v) return;
 
     const savedTime = v.currentTime || 0;
+    const wasPlaying = !v.paused;
     const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
     const resolved = resolvePlaybackSrc(newRawSrc);
 
@@ -799,18 +800,52 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setVideoError(false);
     setIsBuffering(true);
     setShowFixedLoader(true);
-    setSwitchingEpisode(true);
 
-    // Keep last frame visible by NOT clearing src — just swap directly
     setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
+
+    // Reset failed src tracking so the new server gets a fair chance
+    failedSrcsRef.current.clear();
+    retryAttemptsRef.current.clear();
+
+    // Force a hard reload — even if `resolved` equals current src, we want a fresh fetch
+    try {
+      v.pause();
+      v.removeAttribute("src");
+      v.load();
+    } catch {}
+
     setCurrentSrc(resolved);
+
+    // Imperatively apply new src on next frame so the swap actually fires loadstart
+    requestAnimationFrame(() => {
+      const vv = videoRef.current;
+      if (!vv) return;
+      try {
+        vv.src = resolved;
+        vv.load();
+        if (wasPlaying) vv.play().catch(() => {});
+      } catch {}
+    });
+
+    // Safety: if new server hasn't produced any playable data in 8s, auto-failover
+    window.setTimeout(() => {
+      const vv = videoRef.current;
+      if (vv && vv.readyState < 2 && !vv.paused === false) {
+        // Still stuck — try the next available server automatically
+        const nextIdx = effectiveVideoServers.findIndex((s, i) => i !== serverIndex && (!s.locked || isPremium));
+        if (nextIdx >= 0 && nextIdx !== serverIndex) {
+          serverSwitchingRef.current = false;
+          switchServer(nextIdx);
+        }
+      }
+    }, 8000);
+
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
-      setSwitchingEpisode(false);
-    }, 900);
+    }, 600);
   }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
 
   // Auto-switch to premium server for premium users
