@@ -3,7 +3,6 @@ import { db, ref, set, onValue, push, remove, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import {
   Sparkles, Eye, MousePointerClick, CheckCircle2, KeyRound, Plus, Trash2, Copy, Power, Save,
-  Clock, Zap, Star,
 } from "lucide-react";
 
 interface Props {
@@ -33,16 +32,6 @@ interface ForceChannelConfig {
   order: number;
 }
 
-interface UnlockTier {
-  id: string;
-  label: string;
-  adsRequired: number;
-  hours: number;
-  enabled: boolean;
-  highlight?: boolean;
-  order: number;
-}
-
 const randomKey = () =>
   `mini_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`;
 
@@ -56,7 +45,6 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
   const [newRedirect, setNewRedirect] = useState("");
   const [setupBusy, setSetupBusy] = useState(false);
   const [forceChannels, setForceChannels] = useState<ForceChannelConfig[]>([]);
-  const [unlockTiers, setUnlockTiers] = useState<UnlockTier[]>([]);
 
   useEffect(() => {
     const u1 = onValue(ref(db, "miniApp/stats"), (snap) => setStats(snap.val() || {}));
@@ -89,43 +77,8 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
       })).sort((a, b) => a.order - b.order);
       setForceChannels(list);
     });
-    const u7 = onValue(ref(db, "miniApp/unlockTiers"), (snap) => {
-      const raw = snap.val() || {};
-      const list: UnlockTier[] = Object.entries(raw).map(([id, val]: [string, any]) => ({
-        id,
-        label: String(val?.label || ""),
-        adsRequired: Math.max(1, Math.min(50, Number(val?.adsRequired) || 5)),
-        hours: Math.max(1, Number(val?.hours) || 24),
-        enabled: val?.enabled !== false,
-        highlight: !!val?.highlight,
-        order: Number(val?.order || 0),
-      })).sort((a, b) => a.order - b.order || a.adsRequired - b.adsRequired);
-      setUnlockTiers(list);
-    });
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); };
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); };
   }, []);
-
-  // ========== Unlock Tiers helpers ==========
-  const addTier = async () => {
-    await push(ref(db, "miniApp/unlockTiers"), {
-      label: `${unlockTiers.length === 0 ? "Quick Unlock" : "Tier " + (unlockTiers.length + 1)}`,
-      adsRequired: 5,
-      hours: 24,
-      enabled: true,
-      highlight: false,
-      order: unlockTiers.length,
-    });
-    toast.success("New tier added");
-  };
-  const updateTier = async (id: string, patch: Partial<UnlockTier>) => {
-    await update(ref(db, `miniApp/unlockTiers/${id}`), patch);
-  };
-  const deleteTier = async (id: string) => {
-    if (!confirm("Delete this unlock tier?")) return;
-    await remove(ref(db, `miniApp/unlockTiers/${id}`));
-    toast.success("Tier deleted");
-  };
-
 
   const saveSettings = async () => {
     await set(ref(db, "settings/unlockViaTelegramMini"), enabled);
@@ -341,110 +294,6 @@ export default function MiniAppManager({ glassCard, inputClass, btnPrimary, btnS
       </div>
 
       <AccessBotSection glassCard={cardCls} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
-
-      {/* ============ UNLOCK TIERS ============ */}
-      <div className={cardCls}>
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <div className="min-w-0">
-            <h3 className="font-semibold text-sm flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-400" /> Unlock Tiers
-            </h3>
-            <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-              Multiple unlock options shown in the Mini App. Each tier = N ads → X hours of access. Add as many as you want.
-            </p>
-          </div>
-          <button onClick={addTier} className={`${btnPrimary} px-3 py-2 text-xs flex items-center gap-1.5 shrink-0`}>
-            <Plus className="w-3.5 h-3.5" /> Add Tier
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          {unlockTiers.length === 0 && (
-            <div className="text-center py-6 px-3 rounded-xl bg-muted/30 border border-dashed border-border/50">
-              <p className="text-xs text-muted-foreground">No unlock tiers yet. Add one to give users a choice.</p>
-              <p className="text-[10px] text-muted-foreground mt-1">If empty, Mini App falls back to default 5 ads = 24h.</p>
-            </div>
-          )}
-          {unlockTiers.map((tier, idx) => (
-            <div
-              key={tier.id}
-              className={`rounded-xl border p-3 space-y-2 transition ${
-                tier.highlight
-                  ? "border-amber-400/50 bg-gradient-to-br from-amber-500/10 to-fuchsia-500/5"
-                  : "border-border/50 bg-muted/30"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold ${tier.highlight ? "bg-amber-400 text-black" : "bg-muted text-foreground"}`}>
-                  {idx + 1}
-                </div>
-                <input
-                  value={tier.label}
-                  onChange={(e) => updateTier(tier.id, { label: e.target.value })}
-                  placeholder="Tier label (e.g. Quick Unlock)"
-                  className={`${inputClass} flex-1`}
-                />
-                <button
-                  onClick={() => updateTier(tier.id, { highlight: !tier.highlight })}
-                  className={`p-1.5 rounded ${tier.highlight ? "text-amber-400" : "text-muted-foreground hover:text-foreground"}`}
-                  title="Mark as Recommended"
-                >
-                  <Star className="w-3.5 h-3.5" fill={tier.highlight ? "currentColor" : "none"} />
-                </button>
-                <button
-                  onClick={() => updateTier(tier.id, { enabled: !tier.enabled })}
-                  className={`p-1.5 rounded ${tier.enabled ? "text-emerald-500" : "text-muted-foreground"}`}
-                  title="Enable / Disable"
-                >
-                  <Power className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => deleteTier(tier.id)}
-                  className="p-1.5 hover:bg-muted rounded text-rose-500"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-muted-foreground flex items-center gap-1 mb-1">
-                    <Eye className="w-3 h-3" /> Ads required
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={tier.adsRequired}
-                    onChange={(e) => updateTier(tier.id, { adsRequired: Math.max(1, Math.min(50, Number(e.target.value) || 1)) })}
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground flex items-center gap-1 mb-1">
-                    <Clock className="w-3 h-3" /> Hours of access
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={tier.hours}
-                    onChange={(e) => updateTier(tier.id, { hours: Math.max(1, Number(e.target.value) || 1) })}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                <span>
-                  📺 <b className="text-foreground">{tier.adsRequired}</b> ads → 🕒 <b className="text-foreground">{tier.hours}h</b>
-                </span>
-                <span className={tier.enabled ? "text-emerald-500" : "text-rose-500"}>
-                  {tier.enabled ? "● Live" : "○ Hidden"}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
 
       {/* Mini App URL */}
       <div className={cardCls}>

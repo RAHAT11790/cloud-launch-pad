@@ -23,16 +23,7 @@ const MONETAG_ZONE = "10925319";
 const MONETAG_SDK = `https://libtl.com/sdk.js`;
 const MONETAG_SCRIPT_ID = `monetag-sdk-${MONETAG_ZONE}`;
 const MONETAG_REQUEST_VAR = "mini_unlock";
-const DEFAULT_REQUIRED_VIEWS = 5;
-const DEFAULT_HOURS = 24;
-
-interface UnlockTier {
-  id: string;
-  label: string;
-  adsRequired: number;
-  hours: number;
-  highlight?: boolean;
-}
+const REQUIRED_VIEWS = 5;
 
 let monetagLoadPromise: Promise<boolean> | null = null;
 
@@ -323,10 +314,6 @@ export default function MiniApp() {
   const t = STR[lang];
 
   const [adType, setAdType] = useState<"rewarded" | "inApp" | null>(null);
-  const [tiers, setTiers] = useState<UnlockTier[]>([]);
-  const [selectedTier, setSelectedTier] = useState<UnlockTier | null>(null);
-  const REQUIRED_VIEWS = selectedTier?.adsRequired ?? DEFAULT_REQUIRED_VIEWS;
-  const grantHours = selectedTier?.hours ?? DEFAULT_HOURS;
   const [views, setViews] = useState(0);
   const [adRunning, setAdRunning] = useState(false);
   const [granted, setGranted] = useState(false);
@@ -569,28 +556,6 @@ export default function MiniApp() {
         .catch(() => {});
     }
   }, [mode, isShortMode, shortId]);
-
-  // Fetch admin-configured unlock tiers
-  useEffect(() => {
-    let cancelled = false;
-    fetch(FN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "list-tiers" }),
-    })
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled) return;
-        if (d?.ok && Array.isArray(d.tiers) && d.tiers.length > 0) {
-          setTiers(d.tiers);
-          // Auto-select highlighted tier or first one
-          const recommended = d.tiers.find((t: UnlockTier) => t.highlight) || d.tiers[0];
-          setSelectedTier(recommended);
-        }
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
 
   // Build the displayed profile.
   // - Telegram & external users: use what we already have from initData / URL params.
@@ -868,7 +833,6 @@ export default function MiniApp() {
           source: mode,
           apiKey: apiKey || undefined,
           shortId: shortId || undefined,
-          tierId: selectedTier?.id || undefined,
         }),
       });
       const data = await r.json();
@@ -1207,65 +1171,6 @@ export default function MiniApp() {
                 ))}
               </div>
             </div>
-
-            {/* Unlock tier picker (admin-configured) */}
-            {tiers.length > 0 && views === 0 && !adType && (
-              <div className="mb-5">
-                <div className="text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider flex items-center gap-1.5">
-                  <Sparkles className="w-3 h-3 text-amber-300" />
-                  {lang === "en" ? "Choose your unlock plan" : "আনলক প্ল্যান বেছে নিন"}
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                  {tiers.map((tier) => {
-                    const active = selectedTier?.id === tier.id;
-                    return (
-                      <button
-                        key={tier.id}
-                        onClick={() => setSelectedTier(tier)}
-                        className={`relative text-left p-3 rounded-2xl border transition active:scale-[0.99] ${
-                          active
-                            ? "bg-gradient-to-br from-fuchsia-500/25 to-cyan-500/15 border-fuchsia-300/70 shadow-lg shadow-fuchsia-500/20"
-                            : "bg-white/[0.04] border-white/10 hover:border-white/25"
-                        }`}
-                      >
-                        {tier.highlight && (
-                          <span className="absolute -top-2 right-3 text-[9px] font-extrabold uppercase tracking-wider bg-gradient-to-r from-amber-400 to-orange-500 text-black px-2 py-0.5 rounded-full shadow-lg">
-                            ★ {lang === "en" ? "Best" : "বেস্ট"}
-                          </span>
-                        )}
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                              active
-                                ? "bg-gradient-to-br from-fuchsia-500 to-cyan-400 text-black"
-                                : "bg-white/10 text-white/70"
-                            }`}
-                          >
-                            <Zap className="w-5 h-5" fill={active ? "currentColor" : "none"} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-bold text-[14px] truncate">{tier.label}</div>
-                            <div className="text-[11px] text-white/55 mt-0.5">
-                              📺 <b className="text-white/85">{tier.adsRequired}</b>{" "}
-                              {lang === "en" ? "ads" : "অ্যাড"} → 🕒{" "}
-                              <b className="text-white/85">{tier.hours}h</b>{" "}
-                              {lang === "en" ? "access" : "অ্যাক্সেস"}
-                            </div>
-                          </div>
-                          <div
-                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                              active ? "border-fuchsia-300 bg-fuchsia-400" : "border-white/30"
-                            }`}
-                          >
-                            {active && <CheckCircle2 className="w-3.5 h-3.5 text-black" />}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
             {/* Ad type chooser */}
             {!adType && views < REQUIRED_VIEWS && (

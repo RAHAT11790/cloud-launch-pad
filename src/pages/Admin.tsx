@@ -18,7 +18,7 @@ import {
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
-// WeeklyEpManager removed
+import { WeeklyEpTabButton, WeeklyEpManager } from "@/components/admin/WeeklyEpManager";
 // AdminNotificationBell removed
 import MiniAppManager from "@/components/admin/MiniAppManager";
 import EgdManager from "@/components/admin/EgdManager";
@@ -51,7 +51,178 @@ interface Season {
 
 import { THEME_PRESETS, type ThemePreset } from "@/lib/themePresets";
 
-// FCM provider section removed — FCM push notifications fully disabled site-wide.
+// ==================== FCM PROVIDER TOGGLE SECTION ====================
+const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
+  const [activeProvider, setActiveProvider] = useState<"cloudflare" | "supabase">("cloudflare");
+  const [cfUrl, setCfUrl] = useState("");
+  const [cfUrlInput, setCfUrlInput] = useState("");
+  const [sbUrl, setSbUrl] = useState("");
+  const [sbUrlInput, setSbUrlInput] = useState("");
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/fcmProvider"), (snap) => {
+      const val = snap.val();
+      if (val) {
+        setActiveProvider(val.active || "cloudflare");
+        setCfUrl(val.cloudflareUrl || "");
+        setCfUrlInput(val.cloudflareUrl || "");
+        setSbUrl(val.supabaseUrl || "");
+        setSbUrlInput(val.supabaseUrl || "");
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const switchProvider = async (provider: "cloudflare" | "supabase") => {
+    const url = provider === "cloudflare" ? cfUrl : sbUrl;
+    if (!url) {
+      toast.error(`${provider === "cloudflare" ? "Cloudflare" : "Supabase"} URL সেট করো আগে!`);
+      return;
+    }
+    setActiveProvider(provider);
+    await update(ref(db, "settings/fcmProvider"), { active: provider, url });
+    toast.success(`🔔 FCM Provider: ${provider === "cloudflare" ? "☁️ Cloudflare" : "🟢 Supabase"} চালু হয়েছে!`);
+  };
+
+  const saveCfUrl = async () => {
+    const url = cfUrlInput.trim();
+    setCfUrl(url);
+    const updates: Record<string, any> = { cloudflareUrl: url };
+    if (activeProvider === "cloudflare") updates.url = url;
+    await update(ref(db, "settings/fcmProvider"), updates);
+    toast.success("✅ Cloudflare FCM URL সেভ হয়েছে!");
+  };
+
+  const saveSbUrl = async () => {
+    const url = sbUrlInput.trim();
+    setSbUrl(url);
+    const updates: Record<string, any> = { supabaseUrl: url };
+    if (activeProvider === "supabase") updates.url = url;
+    await update(ref(db, "settings/fcmProvider"), updates);
+    toast.success("✅ Supabase FCM URL সেভ হয়েছে!");
+  };
+
+  const testProvider = async (provider: "cloudflare" | "supabase") => {
+    const url = provider === "cloudflare" ? cfUrl : sbUrl;
+    if (!url) { toast.error("URL দাও আগে!"); return; }
+    setTesting(provider);
+    const start = Date.now();
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(provider === "supabase" && SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+        },
+        body: JSON.stringify({ tokens: [], title: "test", body: "test" }),
+        signal: controller.signal,
+      });
+      clearTimeout(t);
+      const latency = Date.now() - start;
+      const text = await res.text().catch(() => "");
+      const alive = text.includes('"error"') || text.includes('"success"') || text.includes('"totalTokens"') || res.status < 500;
+      setTestResults(prev => ({ ...prev, [provider]: { alive, latency } }));
+    } catch {
+      setTestResults(prev => ({ ...prev, [provider]: { alive: false, latency: Date.now() - start } }));
+    }
+    setTesting(null);
+  };
+
+  return (
+    <div className={`${glassCard} p-4 mb-4`}>
+      <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+        <Bell size={14} className="text-yellow-400" /> 🔔 FCM Push Provider
+      </h3>
+      <p className="text-[10px] text-zinc-400 mb-4">
+        Choose Cloudflare or Supabase as your push notification provider. Only one active at a time.
+      </p>
+
+      {/* Provider Toggle */}
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <button
+          onClick={() => switchProvider("cloudflare")}
+          className={`p-3 rounded-xl border-2 transition-all text-center ${
+            activeProvider === "cloudflare"
+              ? "border-cyan-500 bg-cyan-500/10"
+              : "border-zinc-700/40 bg-zinc-800/40 opacity-60"
+          }`}
+        >
+          <div className="text-lg mb-1">☁️</div>
+          <div className="text-[11px] font-semibold text-white">Cloudflare</div>
+          {activeProvider === "cloudflare" && (
+            <div className="flex items-center justify-center gap-1 mt-1">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-[9px] text-green-400">Active</span>
+            </div>
+          )}
+        </button>
+        <button
+          onClick={() => switchProvider("supabase")}
+          className={`p-3 rounded-xl border-2 transition-all text-center ${
+            activeProvider === "supabase"
+              ? "border-emerald-500 bg-emerald-500/10"
+              : "border-zinc-700/40 bg-zinc-800/40 opacity-60"
+          }`}
+        >
+          <div className="text-lg mb-1">🟢</div>
+          <div className="text-[11px] font-semibold text-white">Supabase</div>
+          {activeProvider === "supabase" && (
+            <div className="flex items-center justify-center gap-1 mt-1">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-[9px] text-green-400">Active</span>
+            </div>
+          )}
+        </button>
+      </div>
+
+      {/* Cloudflare URL */}
+      <div className={`p-3 rounded-xl border mb-3 ${activeProvider === "cloudflare" ? "border-cyan-500/40 bg-zinc-800/60" : "border-zinc-700/30 bg-zinc-800/20 opacity-50"}`}>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[11px] font-semibold">☁️ Cloudflare FCM URL</span>
+          {testResults.cloudflare && (
+            <span className={`text-[9px] font-mono ${testResults.cloudflare.alive ? "text-green-400" : "text-red-400"}`}>
+              {testResults.cloudflare.alive ? `✓ ${testResults.cloudflare.latency}ms` : "✕ Down"}
+            </span>
+          )}
+        </div>
+        <div className="flex gap-1.5">
+          <input value={cfUrlInput} onChange={(e) => setCfUrlInput(e.target.value)}
+            placeholder="https://worker.workers.dev/send-fcm" className={`${inputClass} !text-[10px] !py-1.5 flex-1`} />
+          <button onClick={saveCfUrl} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}><Save size={10} /></button>
+          <button onClick={() => testProvider("cloudflare")} disabled={testing === "cloudflare"} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
+            {testing === "cloudflare" ? <RefreshCw size={10} className="animate-spin" /> : <Activity size={10} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Supabase URL */}
+      <div className={`p-3 rounded-xl border ${activeProvider === "supabase" ? "border-emerald-500/40 bg-zinc-800/60" : "border-zinc-700/30 bg-zinc-800/20 opacity-50"}`}>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[11px] font-semibold">🟢 Supabase FCM URL 1</span>
+          {testResults.supabase && (
+            <span className={`text-[9px] font-mono ${testResults.supabase.alive ? "text-green-400" : "text-red-400"}`}>
+              {testResults.supabase.alive ? `✓ ${testResults.supabase.latency}ms` : "✕ Down"}
+            </span>
+          )}
+        </div>
+        <div className="flex gap-1.5 mb-2">
+          <input value={sbUrlInput} onChange={(e) => setSbUrlInput(e.target.value)}
+            placeholder="https://xxx.supabase.co/functions/v1/send-fcm" className={`${inputClass} !text-[10px] !py-1.5 flex-1`} />
+          <button onClick={saveSbUrl} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}><Save size={10} /></button>
+          <button onClick={() => testProvider("supabase")} disabled={testing === "supabase"} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
+            {testing === "supabase" ? <RefreshCw size={10} className="animate-spin" /> : <Activity size={10} />}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 
 // ==================== TELEGRAM PROVIDER SECTION ====================
 const TelegramProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
@@ -394,15 +565,14 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const [fnOverrides, setFnOverrides] = useState<Record<string, { enabled: boolean; customUrl: string }>>({});
 
   const CORE_FUNCTIONS: { key: string; label: string; endpoint: string }[] = [
+        { key: "weekly-auto-detect", label: "📅 Weekly Auto-Detect", endpoint: "weekly-auto-detect" },
+    // FCM endpoint removed
     { key: "telegram-post", label: "📢 Telegram Post", endpoint: "telegram-post" },
     { key: "rs-bot", label: "💬 RS Bot (Telegram)", endpoint: "rs-bot" },
     { key: "send-otp-email", label: "📧 Send OTP Email", endpoint: "send-otp-email" },
-    { key: "stream-proxy", label: "🎬 Stream Proxy", endpoint: "stream-proxy" },
-    { key: "mini-app", label: "📱 Mini App", endpoint: "mini-app" },
-    { key: "apk-download", label: "📦 APK Download", endpoint: "apk-download" },
-    { key: "access-bot", label: "🔓 Access Bot", endpoint: "access-bot" },
-    { key: "link-share-bot", label: "📤 Link Share Bot", endpoint: "link-share-bot" },
-    { key: "process-email-queue", label: "📨 Email Queue", endpoint: "process-email-queue" },
+    { key: "shorten-arolinks", label: "🔗 Shorten AroLinks", endpoint: "shorten-arolinks" },
+    { key: "shorten-shrinkme", label: "🔗 Shorten ShrinkMe", endpoint: "shorten-shrinkme" },
+    { key: "shorten-vplink", label: "🔗 Shorten VP Link", endpoint: "shorten-vplink" },
   ];
 
   useEffect(() => {
@@ -489,6 +659,15 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     toast.success("✅ কাস্টম URL সেভ হয়েছে!");
   };
 
+  const applyShortenerToAdService = async (serviceId: string, functionUrl: string) => {
+    const target = functionUrl.trim();
+    if (!target) {
+      toast.error("এই shortener-এর URL এখনো set করা হয়নি");
+      return;
+    }
+    await update(ref(db, `settings/adServices/${serviceId}`), { functionUrl: target, updatedAt: Date.now() });
+    toast.success("✅ Shortener URL ad service-এ বসানো হয়েছে");
+  };
 
   return (
     <div>
@@ -876,7 +1055,7 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
           </div>
           {newMode === "shortener" && (
             <input value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
-              placeholder="Custom Shortener API URL (optional)" className={inputClass} />
+              placeholder="Supabase Function URL (যেমন: https://xxx.supabase.co/functions/v1/shorten-arolinks)" className={inputClass} />
           )}
           <input value={newColor} onChange={(e) => setNewColor(e.target.value)}
             placeholder="বাটন কালার CSS (যেমন: linear-gradient(135deg, #f59e0b, #ef4444))" className={inputClass} />
@@ -7676,18 +7855,10 @@ ${tgHashtags}`;
         {/* ==================== VIDEO SERVERS ==================== */}
         {activeSection === "video-servers" && (() => {
           const VideoServersSection = () => {
-            type VS = { name: string; domain: string; locked?: boolean; proxyId?: string };
-            const [servers, setServers] = useState<VS[]>([]);
+            const [servers, setServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
             const [vsLoading, setVsLoading] = useState(true);
             const [newName, setNewName] = useState("");
             const [newDomain, setNewDomain] = useState("");
-            const [newProxyId, setNewProxyId] = useState<string>("");
-            const [editIdx, setEditIdx] = useState<number | null>(null);
-            const [editName, setEditName] = useState("");
-            const [editDomain, setEditDomain] = useState("");
-            const [editProxyId, setEditProxyId] = useState<string>("");
-            // Available proxies pulled from Settings → Proxy Server (custom proxies)
-            const [proxyList, setProxyList] = useState<{ id: string; name: string; url: string }[]>([]);
 
             useEffect(() => {
               const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
@@ -7702,59 +7873,20 @@ ${tgHashtags}`;
                 }
                 setVsLoading(false);
               });
-              const unsub2 = onValue(ref(db, "settings/customProxies"), (snap) => {
-                const val = snap.val();
-                if (val && typeof val === "object") {
-                  setProxyList(
-                    Object.entries(val).map(([id, v]: any) => ({ id, name: v.name || id, url: v.url || "" })),
-                  );
-                } else {
-                  setProxyList([]);
-                }
-              });
-              return () => { unsub(); unsub2(); };
+              return () => unsub();
             }, []);
 
-            const saveServers = async (updated: VS[]) => {
+            const saveServers = async (updated: { name: string; domain: string; locked?: boolean }[]) => {
               await set(ref(db, "settings/videoServers"), updated);
               toast.success("✅ Server list saved!");
             };
 
             const addServer = () => {
               if (!newDomain.trim()) { toast.error("Enter domain!"); return; }
-              const entry: VS = {
-                name: newName.trim() || `Server ${servers.length + 1}`,
-                domain: newDomain.trim(),
-                locked: false,
-              };
-              if (newProxyId) entry.proxyId = newProxyId;
-              saveServers([...servers, entry]);
-              setNewName(""); setNewDomain(""); setNewProxyId("");
-            };
-
-            const beginEdit = (idx: number) => {
-              const s = servers[idx];
-              setEditIdx(idx);
-              setEditName(s.name || "");
-              setEditDomain(s.domain || "");
-              setEditProxyId(s.proxyId || "");
-            };
-
-            const cancelEdit = () => { setEditIdx(null); setEditName(""); setEditDomain(""); setEditProxyId(""); };
-
-            const saveEdit = () => {
-              if (editIdx === null) return;
-              if (!editDomain.trim()) { toast.error("Domain required"); return; }
-              const updated = [...servers];
-              const prev = updated[editIdx];
-              updated[editIdx] = {
-                ...prev,
-                name: editName.trim() || prev.name,
-                domain: editDomain.trim(),
-                proxyId: editProxyId || undefined,
-              };
+              const updated = [...servers, { name: newName.trim() || `Server ${servers.length + 1}`, domain: newDomain.trim(), locked: false }];
               saveServers(updated);
-              cancelEdit();
+              setNewName("");
+              setNewDomain("");
             };
 
             const toggleLocked = (idx: number) => {
@@ -7776,132 +7908,70 @@ ${tgHashtags}`;
               saveServers(updated);
             };
 
-            const proxyName = (id?: string) => {
-              if (!id) return null;
-              return proxyList.find(p => p.id === id)?.name || id;
-            };
-
             return (
               <div>
                 <div className={`${glassCard} p-4 mb-4`}>
                   <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                    <Activity size={14} className="text-cyan-400" /> Video Server Manager
+                    <Activity size={14} className="text-cyan-400" /> ভিডিও সার্ভার ম্যানেজার
                   </h3>
                   <p className="text-[11px] text-zinc-400 mb-4">
-                    Add at least 2 servers to show the "Server" button in the player. You can attach a proxy per server — that server will play through the chosen proxy. Servers without a proxy play directly.
+                    ভিডিও প্লেয়ারে সার্ভার চেঞ্জ বাটন দেখানোর জন্য কমপক্ষে ২টি সার্ভার যোগ করুন। শুধু ডোমেইন পরিবর্তন হবে, ফাইল পাথ একই থাকবে।
                   </p>
 
                   {vsLoading ? (
                     <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>
                   ) : servers.length === 0 ? (
-                    <p className="text-zinc-500 text-[11px] text-center py-4 mb-4">No servers yet. Add one below.</p>
+                    <p className="text-zinc-500 text-[11px] text-center py-4 mb-4">কোনো সার্ভার নেই। নিচে থেকে যোগ করুন।</p>
                   ) : (
                     <div className="space-y-2 mb-4">
                       {servers.map((srv, idx) => (
-                        <div key={idx} className="p-2.5 bg-zinc-800/40 rounded-xl border border-zinc-700/30">
-                          {editIdx === idx ? (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-bold text-cyan-300 px-2 py-1 bg-cyan-500/10 rounded">EDIT S{idx + 1}</span>
-                              </div>
-                              <input value={editName} onChange={e => setEditName(e.target.value)} className={inputClass} placeholder="Server name" />
-                              <input value={editDomain} onChange={e => setEditDomain(e.target.value)} className={inputClass} placeholder="Domain (e.g. https://example.com)" />
-                              <div>
-                                <label className="text-[10px] text-zinc-400 block mb-1">Proxy (optional)</label>
-                                <select
-                                  value={editProxyId}
-                                  onChange={e => setEditProxyId(e.target.value)}
-                                  className={inputClass}
-                                >
-                                  <option value="">— Direct (no proxy) —</option>
-                                  {proxyList.length === 0 && (
-                                    <option value="" disabled>No custom proxies (add in Settings → Proxy Server)</option>
-                                  )}
-                                  {proxyList.map(p => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div className="flex gap-1.5">
-                                <button onClick={saveEdit} className={`${btnPrimary} flex-1 py-2 text-[11px]`}>💾 Save</button>
-                                <button onClick={cancelEdit} className="flex-1 py-2 text-[11px] rounded-lg bg-zinc-700/50 hover:bg-zinc-700 text-zinc-300">Cancel</button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center flex-shrink-0">
-                                <span className="text-[11px] font-bold text-cyan-300">S{idx + 1}</span>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <span className="text-[12px] font-medium block truncate flex items-center gap-1 flex-wrap">
-                                  {srv.name}
-                                  {srv.locked && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md font-bold">PREMIUM</span>}
-                                  {srv.proxyId && (
-                                    <span className="text-[9px] px-1.5 py-0.5 bg-purple-500/20 text-purple-300 rounded-md font-bold">
-                                      🔀 {proxyName(srv.proxyId)}
-                                    </span>
-                                  )}
-                                </span>
-                                <span className="text-[10px] text-zinc-500 block truncate">{srv.domain}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <button onClick={() => beginEdit(idx)} title="Edit" className="text-cyan-400 hover:text-cyan-300 p-1">
-                                  <Edit size={13} />
-                                </button>
-                                <button onClick={() => toggleLocked(idx)} title={srv.locked ? "Unlock" : "Lock (premium only)"}
-                                  className={`p-1 rounded ${srv.locked ? "text-amber-400 hover:text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}>
-                                  {srv.locked ? <Lock size={13} /> : <Unlock size={13} />}
-                                </button>
-                                <button onClick={() => moveServer(idx, -1)} disabled={idx === 0} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
-                                  <ChevronLeft size={12} />
-                                </button>
-                                <button onClick={() => moveServer(idx, 1)} disabled={idx === servers.length - 1} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
-                                  <ChevronRight size={12} />
-                                </button>
-                                <button onClick={() => removeServer(idx)} className="text-red-400 hover:text-red-300 p-1">
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            </div>
-                          )}
+                        <div key={idx} className="flex items-center gap-2 p-2.5 bg-zinc-800/40 rounded-xl border border-zinc-700/30">
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[11px] font-bold text-cyan-300">S{idx + 1}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[12px] font-medium block truncate flex items-center gap-1">
+                              {srv.name}
+                              {srv.locked && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md font-bold">PREMIUM</span>}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 block truncate">{srv.domain}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => toggleLocked(idx)} title={srv.locked ? "Unlock (make free)" : "Lock (premium only)"}
+                              className={`p-1 rounded ${srv.locked ? "text-amber-400 hover:text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}>
+                              {srv.locked ? <Lock size={13} /> : <Unlock size={13} />}
+                            </button>
+                            <button onClick={() => moveServer(idx, -1)} disabled={idx === 0} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
+                              <ChevronLeft size={12} />
+                            </button>
+                            <button onClick={() => moveServer(idx, 1)} disabled={idx === servers.length - 1} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
+                              <ChevronRight size={12} />
+                            </button>
+                            <button onClick={() => removeServer(idx)} className="text-red-400 hover:text-red-300 p-1">
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
 
                   <div className="border border-dashed border-zinc-700 rounded-xl p-3 space-y-2">
-                    <p className="text-[11px] text-zinc-400 font-medium">➕ Add new server</p>
-                    <input value={newName} onChange={e => setNewName(e.target.value)} className={inputClass} placeholder="Server name (e.g. Server 1)" />
-                    <input value={newDomain} onChange={e => setNewDomain(e.target.value)} className={inputClass} placeholder="Domain (e.g. https://example.com)" />
-                    <div>
-                      <label className="text-[10px] text-zinc-400 block mb-1">Proxy (optional — proxies come from Settings → Proxy Server)</label>
-                      <select
-                        value={newProxyId}
-                        onChange={e => setNewProxyId(e.target.value)}
-                        className={inputClass}
-                      >
-                        <option value="">— Direct (no proxy) —</option>
-                        {proxyList.length === 0 && (
-                          <option value="" disabled>No custom proxies yet</option>
-                        )}
-                        {proxyList.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <p className="text-[11px] text-zinc-400 font-medium">➕ নতুন সার্ভার যোগ করুন</p>
+                    <input value={newName} onChange={e => setNewName(e.target.value)} className={inputClass} placeholder="সার্ভারের নাম (যেমন: Server 1)" />
+                    <input value={newDomain} onChange={e => setNewDomain(e.target.value)} className={inputClass} placeholder="ডোমেইন (যেমন: https://example.com)" />
                     <button onClick={addServer} className={`${btnPrimary} w-full py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2`}>
-                      <Plus size={14} /> Add Server
+                      <Plus size={14} /> সার্ভার যোগ করুন
                     </button>
                   </div>
                 </div>
 
                 <div className={`${glassCard} p-4`}>
-                  <h4 className="text-xs font-semibold mb-2 text-zinc-300">📖 How it works</h4>
+                  <h4 className="text-xs font-semibold mb-2 text-zinc-300">📖 কিভাবে কাজ করে?</h4>
                   <ul className="text-[11px] text-zinc-400 space-y-1.5 list-disc list-inside">
-                    <li>2+ servers → "Server" button shows in player</li>
-                    <li>Switching a server only swaps the domain — file path stays the same</li>
-                    <li>If a server has a proxy attached, that server plays through the proxy automatically</li>
-                    <li>Manage your proxy pool in <b>Settings → Proxy Server</b></li>
+                    <li>কমপক্ষে ২টি সার্ভার থাকলে প্লেয়ারে "Server" বাটন দেখাবে</li>
+                    <li>সার্ভার চেঞ্জ করলে শুধু ডোমেইন বদলাবে, চ্যানেল/ফাইল আইডি একই থাকবে</li>
+                    <li>উদাহরণ: <code className="text-cyan-400">https://s1.example.com</code>/8866/file.mkv → <code className="text-cyan-400">https://s2.example.com</code>/8866/file.mkv</li>
                   </ul>
                 </div>
               </div>
