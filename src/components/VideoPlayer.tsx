@@ -2362,8 +2362,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           };
 
           // Bulk: download every episode of the current season at the chosen quality.
-          // Skips episodes that are already saved offline.
-          const startBulkDownloadWithQuality = async (quality: string) => {
+          // Skips episodes already saved offline.
+          // Mode "all": queue every episode in parallel (current behavior).
+          // Mode "sequential": kick off only the first; the manager + an internal
+          // chain will start the next as soon as the previous finishes.
+          const startBulkDownloadWithQuality = async (
+            quality: string,
+            mode: "all" | "sequential" = "all",
+          ) => {
             const season = seasons && currentSeasonIdx !== undefined ? seasons[currentSeasonIdx] : null;
             if (!season || !season.episodes?.length) {
               const { toast } = await import("sonner");
@@ -2380,37 +2386,70 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               if (q.includes("480")) return ep.link480 || ep.link720 || ep.link1080 || ep.link;
               return ep.link || ep.link1080 || ep.link720 || ep.link480;
             };
-            let queued = 0;
+
+            // Build the task list (sorted by episode number, ascending)
+            const tasks: { id: string; url: string; subtitle: string }[] = [];
             let skipped = 0;
-            for (const ep of season.episodes) {
+            const sortedEps = [...season.episodes].sort(
+              (a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0),
+            );
+            for (const ep of sortedEps) {
               const epUrl = pickEpUrl(ep);
               if (!epUrl) continue;
               const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
-              // Skip if already saved offline at the same (or better) quality
               const alreadySaved = downloadedEpisodes.some(
-                (d) => d.subtitle === epSubtitle && (d.quality === quality || d.quality === "Auto")
+                (d) => d.subtitle === epSubtitle && (d.quality === quality || d.quality === "Auto"),
               );
               if (alreadySaved) { skipped++; continue; }
               const epDlId = createDownloadId(title, epSubtitle, quality, epUrl);
               const proxied = getPrimaryPlaybackSrc(epUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-              downloadManager.startDownload({
-                id: epDlId,
-                url: proxied,
-                title,
-                subtitle: epSubtitle,
-                poster,
-                quality,
-              });
-              queued++;
+              tasks.push({ id: epDlId, url: proxied, subtitle: epSubtitle });
             }
+
             setShowDownloadQualityPicker(false);
             setBulkDownloadMode(false);
-            if (queued === 0 && skipped > 0) {
-              toast.info(`All ${skipped} episodes are already downloaded`);
-            } else if (skipped > 0) {
-              toast.success(`${queued} episodes queued at ${quality} • ${skipped} skipped (already saved)`);
+
+            if (tasks.length === 0) {
+              toast.info(skipped > 0 ? `All ${skipped} episodes are already downloaded` : "Nothing to download");
+              return;
+            }
+
+            // skipBrowserSave: TRUE → save only to IndexedDB (no browser pop-up,
+            // no re-download trigger). User plays them from the in-app library.
+            const startOne = (t: { id: string; url: string; subtitle: string }) =>
+              downloadManager.startDownload({
+                id: t.id, url: t.url, title, subtitle: t.subtitle, poster, quality,
+                skipBrowserSave: true,
+              });
+
+            if (mode === "all") {
+              // Parallel: queue everything at once
+              tasks.forEach((t) => startOne(t));
+              toast.success(
+                `${tasks.length} episodes downloading in parallel${skipped > 0 ? ` • ${skipped} skipped` : ""}`,
+              );
             } else {
-              toast.success(`${queued} episodes queued at ${quality}`);
+              // Sequential: start the first, then chain via a subscription that
+              // watches for completion of the head task before starting the next.
+              const queue = [...tasks];
+              const runNext = () => {
+                const next = queue.shift();
+                if (!next) return;
+                startOne(next);
+                // subscribe and wait for "complete" or for it to be removed
+                const unsub = downloadManager.subscribe((map) => {
+                  const entry = map.get(next.id);
+                  if (!entry || entry.status === "complete" || entry.status === "error") {
+                    unsub();
+                    // small gap so the manager can clean up
+                    setTimeout(runNext, 300);
+                  }
+                });
+              };
+              runNext();
+              toast.success(
+                `${tasks.length} episodes queued one-by-one${skipped > 0 ? ` • ${skipped} skipped` : ""}`,
+              );
             }
           };
 
