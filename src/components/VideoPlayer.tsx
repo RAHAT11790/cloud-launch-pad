@@ -846,12 +846,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
 
-    // Swap src directly + force reload so the browser drops any stalled
-    // connection from the previous server and starts fetching immediately.
+    // Swap src directly so the browser starts the new request immediately
+    // without an extra forced reload cycle that adds switch latency.
     try {
       v.pause();
       v.src = resolved;
-      v.load();
     } catch {}
 
     setCurrentSrc(resolved);
@@ -1186,11 +1185,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, [videoError, clearHideTimer]);
 
-  // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
-  // Show loader during server switch so the user gets feedback while the new
-  // source is fetching. Only suppress it during episode transitions where the
-  // outer flow already shows its own loader.
-  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !switchingEpisode;
+  // Keep the loader visible during real source switches too so the player
+  // doesn't flash a blank frame between server changes.
+  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader;
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
