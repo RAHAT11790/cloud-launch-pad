@@ -945,7 +945,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       // Switch to a different URL for this language
       sourceBaseRef.current = audioUrl;
       const finalAudioUrl = manualServerSelected ? applyServerDomain(audioUrl, activeServerIndex) : audioUrl;
-      const proxiedSrc = resolvePlaybackSrc(finalAudioUrl);
+      const proxiedSrc = resolvePlaybackSrc(finalAudioUrl, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
       activeSourceBaseRef.current = finalAudioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
@@ -1290,7 +1290,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (next > MAX_RETRIES) {
         console.log('Video failed after retries. URL:', currentSrc);
         failedSrcsRef.current.add(currentSrc);
-        const sameQualityRouteFallback = resolvePlaybackCandidates(activeSourceBaseRef.current)
+        const sameQualityRouteFallback = resolvePlaybackCandidates(activeSourceBaseRef.current, { forceServer: manualServerSelected, serverIndex: activeServerIndex })
           .find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
 
         if (sameQualityRouteFallback) {
@@ -1300,13 +1300,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
 
         const nextOption = availableQualities.find((q) => {
-          const candidateSrc = resolvePlaybackSrc(q.src);
+          const candidateSrc = resolvePlaybackSrc(q.src, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
           return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
         });
 
         if (nextOption) {
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          const newFallbackSrc = resolvePlaybackSrc(nextOption.src);
+          const newFallbackSrc = resolvePlaybackSrc(nextOption.src, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
           activeSourceBaseRef.current = nextOption.src;
           if (newFallbackSrc === currentSrc) {
             v.currentTime = pendingSeek.current;
@@ -1599,7 +1599,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     sourceBaseRef.current = option.src;
     const finalOptionSrc = manualServerSelected ? applyServerDomain(option.src, activeServerIndex) : option.src;
     activeSourceBaseRef.current = finalOptionSrc;
-    const newSrc = resolvePlaybackSrc(finalOptionSrc);
+    const newSrc = resolvePlaybackSrc(finalOptionSrc, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
 
     if (newSrc === currentSrc) {
       setCurrentQuality(option.label);
@@ -1924,7 +1924,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             setShowServerPanel(false);
                             setManualServerSelected(false);
                             activeSourceBaseRef.current = sourceBaseRef.current;
-                            setCurrentSrc(resolvePlaybackSrc(sourceBaseRef.current));
+                            setCurrentSrc(resolvePlaybackSrc(sourceBaseRef.current, { forceServer: false }));
                           }}
                             className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
                               !manualServerSelected ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
@@ -2280,7 +2280,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 </div>
                 <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
                   <video
-                    src={resolvePlaybackSrc(activeVid.url)}
+                    src={resolvePlaybackSrc(activeVid.url, { forceServer: manualServerSelected, serverIndex: activeServerIndex })}
                     className="w-full h-full"
                     controls
                     autoPlay
@@ -2335,7 +2335,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
             const dlId = createDownloadId(title, subtitle, quality, qualitySrc);
-            const proxiedUrl = resolvePlaybackSrc(qualitySrc);
+            const proxiedUrl = resolvePlaybackSrc(qualitySrc, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
             const { downloadManager } = await import("@/lib/downloadManager");
             downloadManager.startDownload({
               id: dlId,
@@ -2391,7 +2391,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               );
               if (alreadySaved) { skipped++; continue; }
               const epDlId = createDownloadId(title, epSubtitle, quality, epUrl);
-              const proxied = resolvePlaybackSrc(epUrl);
+              const proxied = resolvePlaybackSrc(epUrl, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
               tasks.push({ id: epDlId, url: proxied, subtitle: epSubtitle });
             }
 
@@ -2463,7 +2463,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 (d) => d.subtitle === epSubtitle && (d.quality === quality || d.quality === "Auto")
               );
               if (alreadySaved) { skipped++; return; }
-              const proxied = resolvePlaybackSrc(epUrl);
+              const proxied = resolvePlaybackSrc(epUrl, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
               try {
                 const ctrl = new AbortController();
                 const t = setTimeout(() => ctrl.abort(), 4000);
