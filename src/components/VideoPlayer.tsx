@@ -50,22 +50,8 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   return url;
 };
 
-const isDirectPlaybackUrl = (url: string): boolean => {
-  const normalized = url.trim().toLowerCase();
-  return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
-};
-
-const isInsecureHttpSource = (url: string): boolean => {
-  return String(url || "").trim().toLowerCase().startsWith("http://");
-};
-
-const getBrowserSafeDirectUrl = (url: string): string => {
-  const trimmed = String(url || "").trim();
-  if (!trimmed) return "";
-  if (typeof window !== "undefined" && window.location.protocol === "https:" && isInsecureHttpSource(trimmed)) {
-    return trimmed.replace(/^http:\/\//i, "https://");
-  }
-  return trimmed;
+const getDirectPlaybackUrl = (url: string): string => {
+  return String(url || "").trim();
 };
 
 const isBypassSource = (url: string): boolean => {
@@ -117,8 +103,31 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
 
   // ===== NO PROXY = DIRECT ONLY =====
   // No proxy assigned → play raw URL directly. No proxy fallback.
-  addCandidate(getBrowserSafeDirectUrl(url));
+  addCandidate(getDirectPlaybackUrl(url));
   return candidates;
+};
+
+const buildServerSourceUrl = (rawUrl: string, serverValue?: string): string => {
+  const trimmedRawUrl = String(rawUrl || "").trim();
+  const trimmedServerValue = String(serverValue || "").trim();
+  if (!trimmedServerValue) return trimmedRawUrl;
+
+  if (trimmedServerValue.includes("{url}")) {
+    return trimmedServerValue.split("{url}").join(encodeURIComponent(trimmedRawUrl));
+  }
+
+  try {
+    const serverUrl = new URL(trimmedServerValue);
+    const isOriginOnly = serverUrl.pathname === "/" && !serverUrl.search && !serverUrl.hash;
+    if (!isOriginOnly) {
+      return trimmedServerValue;
+    }
+
+    const sourceUrl = new URL(trimmedRawUrl);
+    return `${serverUrl.origin}${sourceUrl.pathname}${sourceUrl.search}${sourceUrl.hash}`;
+  } catch {
+    return trimmedServerValue || trimmedRawUrl;
+  }
 };
 
 const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
