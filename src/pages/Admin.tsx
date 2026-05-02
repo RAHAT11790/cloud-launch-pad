@@ -7780,6 +7780,10 @@ ${tgHashtags}`;
               if (!id) return null;
               return proxyList.find(p => p.id === id)?.name || id;
             };
+            const proxyUrl = (id?: string) => {
+              if (!id) return null;
+              return proxyList.find(p => p.id === id)?.url || null;
+            };
 
             return (
               <div>
@@ -7818,7 +7822,7 @@ ${tgHashtags}`;
                                     <option value="" disabled>No custom proxies (add in Settings → Proxy Server)</option>
                                   )}
                                   {proxyList.map(p => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                    <option key={p.id} value={p.id}>{p.name} — {p.url}</option>
                                   ))}
                                 </select>
                               </div>
@@ -7843,6 +7847,11 @@ ${tgHashtags}`;
                                   )}
                                 </span>
                                 <span className="text-[10px] text-zinc-500 block truncate">{srv.domain}</span>
+                                {srv.proxyId && proxyUrl(srv.proxyId) && (
+                                  <span className="text-[9px] text-purple-300/70 block truncate font-mono" title={proxyUrl(srv.proxyId) || ''}>
+                                    🔀 {proxyUrl(srv.proxyId)}
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-1">
                                 <button onClick={() => beginEdit(idx)} title="Edit" className="text-cyan-400 hover:text-cyan-300 p-1">
@@ -7885,7 +7894,7 @@ ${tgHashtags}`;
                           <option value="" disabled>No custom proxies yet</option>
                         )}
                         {proxyList.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
+                          <option key={p.id} value={p.id}>{p.name} — {p.url}</option>
                         ))}
                       </select>
                     </div>
