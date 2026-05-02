@@ -33,6 +33,16 @@ interface ForceChannelConfig {
   order: number;
 }
 
+interface UnlockTier {
+  id: string;
+  label: string;
+  adsRequired: number;
+  hours: number;
+  enabled: boolean;
+  highlight?: boolean;
+  order: number;
+}
+
 const randomKey = () =>
   `mini_${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`;
 
