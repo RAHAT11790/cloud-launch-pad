@@ -951,8 +951,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       else if (q.includes('480')) audioUrl = track.src480 || track.src;
       // Switch to a different URL for this language
       sourceBaseRef.current = audioUrl;
-      const finalAudioUrl = manualServerSelected ? getServerSourceUrl(audioUrl, activeServerIndex) : audioUrl;
-      const proxiedSrc = resolvePlaybackSrc(finalAudioUrl, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
+      const proxiedSrc = resolvePlaybackSrc(audioUrl, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
       activeSourceBaseRef.current = audioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
@@ -988,8 +987,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentAudioTrack("Default");
     setShowAudioPanel(false);
 
-    const finalDefaultSrc = manualServerSelected ? getServerSourceUrl(defaultRawSrc, activeServerIndex) : defaultRawSrc;
-    const finalResolvedSrc = resolvePlaybackSrc(finalDefaultSrc, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
+    const finalResolvedSrc = resolvePlaybackSrc(defaultRawSrc, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
 
     if (v && currentSrc !== finalResolvedSrc) {
       const restoreTime = () => {
@@ -1604,9 +1602,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     sourceBaseRef.current = option.src;
-    const finalOptionSrc = manualServerSelected ? getServerSourceUrl(option.src, activeServerIndex) : option.src;
     activeSourceBaseRef.current = option.src;
-    const newSrc = resolvePlaybackSrc(finalOptionSrc, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
+    const newSrc = resolvePlaybackSrc(option.src, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
 
     if (newSrc === currentSrc) {
       setCurrentQuality(option.label);
