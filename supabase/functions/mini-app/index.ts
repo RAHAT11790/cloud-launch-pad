@@ -343,9 +343,7 @@ serve(async (req) => {
       if (source === "short" && shortId) {
         const entry = await fbGet(`miniApp/shortLinks/${shortId}`);
         if (!entry) return json({ ok: false, error: "not_found" }, 404);
-        const hoursSnap = await fbGet("settings/unlockDurationHours");
-        const hours = typeof hoursSnap === "number" && hoursSnap > 0 ? hoursSnap : 24;
-        const expiresAt = Date.now() + hours * 60 * 60 * 1000;
+        const expiresAt = Date.now() + grantHours * 60 * 60 * 1000;
         await fbPatch(`miniApp/shortLinks/${shortId}`, {
           completes: (entry.completes || 0) + 1,
           lastUsedAt: Date.now(),
@@ -363,7 +361,7 @@ serve(async (req) => {
         const botResult = await sendTelegramUnlockMessage(userId, {
           dest: entry.dest,
           expiresAt,
-          label: entry.label || "External",
+          label: tierLabel || entry.label || "External",
         });
         notifyLinkShareBot(userId).catch(() => {});
         return json({
@@ -372,6 +370,8 @@ serve(async (req) => {
           dest: entry.dest,
           label: entry.label || "External",
           botUrl: botResult?.botUrl || "",
+          hours: grantHours,
+          expiresAt,
         });
       }
 
@@ -392,12 +392,10 @@ serve(async (req) => {
           completedAt: Date.now(),
           userId,
         });
-        const hoursSnap = await fbGet("settings/unlockDurationHours");
-        const hours = typeof hoursSnap === "number" && hoursSnap > 0 ? hoursSnap : 24;
         const botResult = await sendTelegramUnlockMessage(userId, {
           dest: found.entry.redirectUrl || "",
-          expiresAt: Date.now() + hours * 60 * 60 * 1000,
-          label: found.entry.label || "External",
+          expiresAt: Date.now() + grantHours * 60 * 60 * 1000,
+          label: tierLabel || found.entry.label || "External",
         });
         notifyLinkShareBot(userId).catch(() => {});
 
@@ -407,15 +405,13 @@ serve(async (req) => {
           redirectUrl: found.entry.redirectUrl || "",
           label: found.entry.label || "External",
           botUrl: botResult?.botUrl || "",
+          hours: grantHours,
         });
       }
 
-      // ===== Site mode: grant 24h access to userId =====
-      const hoursSnap = await fbGet("settings/unlockDurationHours");
-      const hours =
-        typeof hoursSnap === "number" && hoursSnap > 0 ? hoursSnap : 24;
+      // ===== Site mode: grant access to userId using selected tier hours =====
       const now = Date.now();
-      const expiresAt = now + hours * 60 * 60 * 1000;
+      const expiresAt = now + grantHours * 60 * 60 * 1000;
 
       await fbPut(`users/${userId}/freeAccess`, {
         active: true,
@@ -423,6 +419,8 @@ serve(async (req) => {
         expiresAt,
         viaToken: "mini-app",
         source: "telegram-mini-app",
+        tierId: tierId || null,
+        tierLabel: tierLabel || null,
       });
 
       // Also mirror into freeAccessUsers/{userId} so Admin panel sees Mini App users
@@ -436,10 +434,11 @@ serve(async (req) => {
           email: uEmail,
           unlockedAt: now,
           expiresAt,
-          prizeHours: hours,
+          prizeHours: grantHours,
           prizeMinutes: 0,
           mode: "miniapp",
           source: "telegram-mini-app",
+          tierLabel: tierLabel || null,
         });
       } catch (_) {}
 
@@ -449,6 +448,7 @@ serve(async (req) => {
         userId,
         grantedAt: now,
         expiresAt,
+        tierId: tierId || null,
       });
 
       // Also create a one-time fallback token for the user to paste in browser
@@ -458,15 +458,17 @@ serve(async (req) => {
         createdAt: now,
         expiresAt: now + 30 * 60 * 1000,
         consumed: false,
+        grantHours,
+        tierId: tierId || null,
       });
 
       const botResult = await sendTelegramUnlockMessage(userId, {
         expiresAt,
-        label: "RS ANIME",
+        label: tierLabel || "RS ANIME",
       });
       notifyLinkShareBot(userId).catch(() => {});
 
-      return json({ ok: true, mode: "site", expiresAt, fallbackToken: token, botUrl: botResult?.botUrl || "" });
+      return json({ ok: true, mode: "site", expiresAt, hours: grantHours, fallbackToken: token, botUrl: botResult?.botUrl || "" });
     }
 
     if (action === "consume-fallback-token") {
