@@ -2585,39 +2585,37 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 )}
               </div>
 
-              {/* Download All Episodes (only for webseries with multiple episodes) */}
-              {seasons && currentSeasonIdx !== undefined && seasons[currentSeasonIdx]?.episodes?.length > 1 && (
-                <button
-                  onClick={() => {
-                    if (availableQualities.length > 1) {
-                      setBulkDownloadMode(true);
-                      setShowDownloadQualityPicker(true);
-                    } else {
-                      startBulkDownloadWithQuality(currentQuality || "Auto");
-                    }
-                  }}
-                  className="w-full py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2 bg-secondary text-foreground border border-primary/40 hover:bg-primary/10 transition-all text-sm"
-                >
-                  <Download className="w-4 h-4 text-primary" />
-                  Download All Episodes
-                  <span className="text-[10px] opacity-70">({seasons[currentSeasonIdx].episodes.length} eps • {seasons[currentSeasonIdx].name})</span>
-                </button>
-              )}
+              {/* Standalone "Download All" button removed — merged into dropdown below */}
 
-              {/* Quality Picker Dropdown */}
+              {/* Quality Picker Dropdown — supports single + bulk via toggle */}
               {showDownloadQualityPicker && (
                 <div className="bg-card border border-border rounded-xl p-3 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-sm font-bold text-foreground">
-                      {bulkDownloadMode ? "All Episodes — Select Quality" : "কোয়ালিটি সিলেক্ট করুন"}
+                      {bulkDownloadMode ? "All Episodes — Select Quality" : "Select Quality"}
                     </p>
                     <button
-                      onClick={() => { setShowDownloadQualityPicker(false); setBulkDownloadMode(false); }}
+                      onClick={() => { setShowDownloadQualityPicker(false); setBulkDownloadMode(false); setBulkSizeEstimate(null); }}
                       className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center"
                     >
                       <X className="w-3 h-3" />
                     </button>
                   </div>
+
+                  {/* Bulk-mode toggle (only shown when season has >1 episode) */}
+                  {seasons && currentSeasonIdx !== undefined && seasons[currentSeasonIdx]?.episodes?.length > 1 && (
+                    <div className="flex gap-1.5 mb-2">
+                      <button
+                        onClick={() => { setBulkDownloadMode(false); setBulkSizeEstimate(null); }}
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${!bulkDownloadMode ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}
+                      >This Episode</button>
+                      <button
+                        onClick={() => { setBulkDownloadMode(true); setBulkSizeEstimate(null); }}
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${bulkDownloadMode ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}
+                      >All Episodes ({seasons[currentSeasonIdx].episodes.length})</button>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-2">
                     {availableQualities.map((opt) => {
                       const is4K = is4KLabel(opt.label);
@@ -2625,16 +2623,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       return (
                         <button
                           key={opt.label}
-                          onClick={() => {
+                          onClick={async () => {
                             if (locked4K) return;
-                            if (bulkDownloadMode) startBulkDownloadWithQuality(opt.label);
-                            else startDownloadWithQuality(opt.label, opt.src);
+                            if (bulkDownloadMode) {
+                              // Show size preview first; user confirms via the "Start Download" button below
+                              setProbingBulk(true);
+                              setBulkSizeEstimate(null);
+                              const est = await probeBulkSize(opt.label);
+                              setBulkSizeEstimate({ ...est, quality: opt.label });
+                              setProbingBulk(false);
+                            } else {
+                              startDownloadWithQuality(opt.label, opt.src);
+                            }
                           }}
-                          disabled={locked4K}
+                          disabled={locked4K || probingBulk}
                           className={`py-2.5 px-3 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${
                             locked4K
                               ? "bg-secondary/50 text-muted-foreground opacity-50 cursor-not-allowed"
-                              : "bg-secondary hover:bg-primary hover:text-primary-foreground border border-border hover:border-primary"
+                              : bulkSizeEstimate?.quality === opt.label
+                                ? "bg-primary text-primary-foreground border border-primary"
+                                : "bg-secondary hover:bg-primary hover:text-primary-foreground border border-border hover:border-primary"
                           }`}
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -2644,13 +2652,48 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       );
                     })}
                   </div>
+
+                  {/* Size preview + start button (bulk mode only) */}
                   {bulkDownloadMode && (
-                    <p className="text-[10px] text-muted-foreground mt-2 text-center">
-                      Episodes will queue one by one. Keep app open until done.
-                    </p>
+                    <>
+                      {probingBulk && (
+                        <div className="mt-3 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Calculating total size…
+                        </div>
+                      )}
+                      {!probingBulk && bulkSizeEstimate && (
+                        <div className="mt-3 p-2.5 rounded-lg bg-primary/10 border border-primary/30">
+                          <div className="flex items-center justify-between text-[11px] mb-2">
+                            <span className="text-muted-foreground">Quality</span>
+                            <span className="font-bold text-primary">{bulkSizeEstimate.quality}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] mb-1">
+                            <span className="text-muted-foreground">Episodes to download</span>
+                            <span className="font-semibold text-foreground">{bulkSizeEstimate.eps}{bulkSizeEstimate.skipped > 0 && <span className="text-emerald-400 ml-1">(+{bulkSizeEstimate.skipped} already saved)</span>}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] mb-2">
+                            <span className="text-muted-foreground">Estimated total size</span>
+                            <span className="font-bold text-foreground">~{bulkSizeEstimate.totalMB.toFixed(0)} MB</span>
+                          </div>
+                          <button
+                            onClick={() => startBulkDownloadWithQuality(bulkSizeEstimate.quality)}
+                            disabled={bulkSizeEstimate.eps === 0}
+                            className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-[12px] font-bold hover:scale-[1.01] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {bulkSizeEstimate.eps === 0 ? "All episodes already downloaded" : `Start Downloading ${bulkSizeEstimate.eps} Episodes`}
+                          </button>
+                        </div>
+                      )}
+                      {!probingBulk && !bulkSizeEstimate && (
+                        <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                          Tap a quality to see total download size.
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               )}
+
 
               {/* Downloaded Episodes List (inline, right here) */}
               {downloadedEpisodes.length > 0 && (
