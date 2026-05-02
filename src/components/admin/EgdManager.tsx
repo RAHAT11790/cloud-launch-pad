@@ -200,6 +200,66 @@ export default function EgdManager({
     });
   }, []);
 
+  // ---------- Health probe: ping deployer every 30s ----------
+  useEffect(() => {
+    if (!savedDeployerUrl) {
+      setServerHealth({ status: "idle", message: "", lastCheckedAt: 0, consecutiveFailures: 0 });
+      setShowHealthPopup(false);
+      return;
+    }
+
+    let cancelled = false;
+    const probe = async () => {
+      if (cancelled) return;
+      const startedAt = Date.now();
+      try {
+        const base = savedDeployerUrl.replace(/\/+$/, "");
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        const r = await fetch(`${base}/list`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+          signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        const text = await r.text();
+        let d: any = null;
+        try { d = JSON.parse(text); } catch {}
+
+        if (cancelled) return;
+        if (r.ok && (d?.ok || Array.isArray(d?.functions))) {
+          setServerHealth({
+            status: "ok",
+            message: `Healthy · ${Date.now() - startedAt}ms`,
+            lastCheckedAt: Date.now(),
+            consecutiveFailures: 0,
+          });
+          setShowHealthPopup(false);
+        } else {
+          throw new Error(`HTTP ${r.status}: ${(typeof d?.error === "string" ? d.error : text).slice(0, 120)}`);
+        }
+      } catch (e: any) {
+        if (cancelled) return;
+        const msg = e?.name === "AbortError"
+          ? "Server not responding (timeout 8s)"
+          : (e?.message || "Network error");
+        setServerHealth((prev) => ({
+          status: "down",
+          message: msg,
+          lastCheckedAt: Date.now(),
+          consecutiveFailures: prev.consecutiveFailures + 1,
+        }));
+        setShowHealthPopup(true);
+      }
+    };
+
+    setServerHealth((prev) => ({ ...prev, status: "checking" }));
+    probe();
+    const id = setInterval(probe, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [savedDeployerUrl]);
+
   const appendError = (msg: string) =>
     setErrorLog((prev) => `[${new Date().toLocaleTimeString()}] ${msg}\n` + prev);
 
