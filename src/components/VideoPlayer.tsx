@@ -101,7 +101,7 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     return candidates;
   }
 
-  if (prefersDirectPlayback && !mustUseProxy) {
+  if (prefersDirectPlayback) {
     addCandidate(url);
     return candidates;
   }
@@ -736,9 +736,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
     const effProxyUrl = serverProxy?.url || proxyUrl || undefined;
     const effProxyKey = serverProxy?.apiKey || proxyApiKey || undefined;
-    if (shouldForceDirectProxy(trimmed) && BUILTIN_STREAM_PROXY) {
-      return buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, trimmed);
-    }
     return getPrimaryPlaybackSrc(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
   }, [cdnEnabled, proxyUrl, proxyApiKey, customProxies, effectiveVideoServers, activeServerIndex]);
 
@@ -814,12 +811,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const targetServerProxy = targetServer?.proxyId ? customProxies[targetServer.proxyId] : null;
     const effProxyUrl = targetServerProxy?.url || proxyUrl || undefined;
     const effProxyKey = targetServerProxy?.apiKey || proxyApiKey || undefined;
-    let resolved: string;
-    if (shouldForceDirectProxy(newRawSrc) && BUILTIN_STREAM_PROXY) {
-      resolved = buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, newRawSrc);
-    } else {
-      resolved = getPrimaryPlaybackSrc(newRawSrc, cdnEnabled, effProxyUrl, effProxyKey);
-    }
+    const resolved = getPrimaryPlaybackSrc(newRawSrc, cdnEnabled, effProxyUrl, effProxyKey);
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
