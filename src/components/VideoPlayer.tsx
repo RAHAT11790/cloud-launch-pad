@@ -2510,12 +2510,36 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 )}
               </div>
 
+              {/* Download All Episodes (only for webseries with multiple episodes) */}
+              {seasons && currentSeasonIdx !== undefined && seasons[currentSeasonIdx]?.episodes?.length > 1 && (
+                <button
+                  onClick={() => {
+                    if (availableQualities.length > 1) {
+                      setBulkDownloadMode(true);
+                      setShowDownloadQualityPicker(true);
+                    } else {
+                      startBulkDownloadWithQuality(currentQuality || "Auto");
+                    }
+                  }}
+                  className="w-full py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2 bg-secondary text-foreground border border-primary/40 hover:bg-primary/10 transition-all text-sm"
+                >
+                  <Download className="w-4 h-4 text-primary" />
+                  Download All Episodes
+                  <span className="text-[10px] opacity-70">({seasons[currentSeasonIdx].episodes.length} eps • {seasons[currentSeasonIdx].name})</span>
+                </button>
+              )}
+
               {/* Quality Picker Dropdown */}
               {showDownloadQualityPicker && (
                 <div className="bg-card border border-border rounded-xl p-3 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-bold text-foreground">কোয়ালিটি সিলেক্ট করুন</p>
-                    <button onClick={() => setShowDownloadQualityPicker(false)} className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center">
+                    <p className="text-sm font-bold text-foreground">
+                      {bulkDownloadMode ? "All Episodes — Select Quality" : "কোয়ালিটি সিলেক্ট করুন"}
+                    </p>
+                    <button
+                      onClick={() => { setShowDownloadQualityPicker(false); setBulkDownloadMode(false); }}
+                      className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center"
+                    >
                       <X className="w-3 h-3" />
                     </button>
                   </div>
@@ -2527,7 +2551,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         <button
                           key={opt.label}
                           onClick={() => {
-                            if (!locked4K) startDownloadWithQuality(opt.label, opt.src);
+                            if (locked4K) return;
+                            if (bulkDownloadMode) startBulkDownloadWithQuality(opt.label);
+                            else startDownloadWithQuality(opt.label, opt.src);
                           }}
                           disabled={locked4K}
                           className={`py-2.5 px-3 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${
@@ -2543,6 +2569,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       );
                     })}
                   </div>
+                  {bulkDownloadMode && (
+                    <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                      Episodes will queue one by one. Keep app open until done.
+                    </p>
+                  )}
                 </div>
               )}
 
