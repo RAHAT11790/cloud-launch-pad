@@ -312,7 +312,24 @@ serve(async (req) => {
       return json({ ok: true, token });
     }
 
-    if (action === "grant") {
+    // Public: list enabled unlock tiers (admin-configured options)
+    if (action === "list-tiers") {
+      const all = (await fbGet("miniApp/unlockTiers")) || {};
+      const tiers = Object.entries(all)
+        .map(([id, val]: [string, any]) => ({
+          id,
+          label: String(val?.label || ""),
+          adsRequired: Math.max(1, Math.min(50, Number(val?.adsRequired) || 5)),
+          hours: Math.max(1, Number(val?.hours) || 24),
+          enabled: val?.enabled !== false,
+          order: Number(val?.order) || 0,
+          highlight: !!val?.highlight,
+        }))
+        .filter((t) => t.enabled && t.label)
+        .sort((a, b) => a.order - b.order || a.adsRequired - b.adsRequired);
+      return json({ ok: true, tiers });
+    }
+
       const userId = String(body?.userId || "").trim();
       const source = String(body?.source || "site").trim(); // 'site' | 'api' | 'short'
       const apiKey = String(body?.apiKey || "").trim();
