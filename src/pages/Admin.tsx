@@ -7822,7 +7822,7 @@ ${tgHashtags}`;
                                     <option value="" disabled>No custom proxies (add in Settings → Proxy Server)</option>
                                   )}
                                   {proxyList.map(p => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                    <option key={p.id} value={p.id}>{p.name} — {p.url}</option>
                                   ))}
                                 </select>
                               </div>
