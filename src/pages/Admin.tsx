@@ -7780,6 +7780,10 @@ ${tgHashtags}`;
               if (!id) return null;
               return proxyList.find(p => p.id === id)?.name || id;
             };
+            const proxyUrl = (id?: string) => {
+              if (!id) return null;
+              return proxyList.find(p => p.id === id)?.url || null;
+            };
 
             return (
               <div>
