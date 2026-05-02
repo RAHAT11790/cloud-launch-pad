@@ -1548,13 +1548,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [muted, isEmbedPlayback, sendEmbedCmd]);
 
   const getSafeSeekTime = useCallback((v: HTMLVideoElement, target: number) => {
-    if (!Number.isFinite(v.duration) || v.duration <= 0) return Math.max(0, target);
+    const safeTarget = Number.isFinite(target) ? target : (Number.isFinite(v.currentTime) ? v.currentTime : 0);
+    if (!Number.isFinite(v.duration) || v.duration <= 0) return Math.max(0, safeTarget);
     // Clamp ONLY to total duration. Do NOT clamp to the `seekable` window —
     // that prevents long skips outside the currently-buffered range and makes
     // jumps feel like "loading forever". The browser will issue a fresh
     // HTTP Range request automatically when currentTime moves past buffered data.
-    return Math.min(Math.max(target, 0), v.duration);
+    return Math.min(Math.max(safeTarget, 0), v.duration);
   }, []);
+
+  const setVideoCurrentTime = useCallback((v: HTMLVideoElement | null, target: number | null | undefined) => {
+    if (!v) return;
+    const nextTime = getSafeSeekTime(v, Number(target ?? 0));
+    if (!Number.isFinite(nextTime)) return;
+    v.currentTime = nextTime;
+  }, [getSafeSeekTime]);
 
   const seek = useCallback((seconds: number) => {
     if (isEmbedPlayback) {
