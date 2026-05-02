@@ -775,6 +775,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
   const instantSwitchRef = useRef(false);
+  const preferredServerIndex = useMemo(() => {
+    if (effectiveVideoServers.length === 0) return 0;
+    if (isPremium) {
+      const premiumIdx = effectiveVideoServers.findIndex((server) => server.locked);
+      if (premiumIdx >= 0) return premiumIdx;
+    }
+    const freeIdx = effectiveVideoServers.findIndex((server) => !server.locked);
+    return freeIdx >= 0 ? freeIdx : 0;
+  }, [effectiveVideoServers, isPremium]);
 
   // Preload next episode for instant switching
   useEffect(() => {
@@ -824,6 +833,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
+    setSwitchingEpisode(true);
     setVideoError(false);
     setIsBuffering(true);
     setShowFixedLoader(true);
@@ -852,17 +862,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       serverSwitchingRef.current = false;
     }, 250);
   }, [activeServerIndex, currentSrc, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
-
-  // Auto-switch to premium server for premium users
-  useEffect(() => {
-    if (isPremium && effectiveVideoServers.length > 0 && !premiumServerApplied.current) {
-      const premIdx = effectiveVideoServers.findIndex(s => s.locked);
-      if (premIdx >= 0 && premIdx !== activeServerIndex) {
-        premiumServerApplied.current = true;
-        setTimeout(() => switchServer(premIdx), 300);
-      }
-    }
-  }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
@@ -994,23 +993,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (v) {
       try { v.pause(); } catch {}
     }
+    const hasPreferredServer = effectiveVideoServers.length > 0;
+    const nextServerIndex = hasPreferredServer ? preferredServerIndex : 0;
+    const nextRawSrc = hasPreferredServer ? applyServerDomain(src, nextServerIndex) : src;
+
     instantSwitchRef.current = true;
     setSwitchingEpisode(true);
     sourceBaseRef.current = src;
-    activeSourceBaseRef.current = src;
-    const resolvedSrc = resolvePlaybackSrc(src);
+    activeSourceBaseRef.current = nextRawSrc;
+    const resolvedSrc = resolvePlaybackSrc(nextRawSrc);
     setCurrentSrc(resolvedSrc);
+    setActiveServerIndex(nextServerIndex);
     setCurrentQuality("Auto");
-    setManualServerSelected(false);
+    setManualServerSelected(hasPreferredServer);
     setVideoError(false);
+    setIsBuffering(true);
+    setShowFixedLoader(true);
     failedSrcsRef.current.clear();
     pendingSeek.current = 0;
-    const t = setTimeout(() => {
+    return () => {
       instantSwitchRef.current = false;
-      setSwitchingEpisode(false);
-    }, 450);
-    return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
+    };
+  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, effectiveVideoServers.length, preferredServerIndex, applyServerDomain]);
 
   // Loader follows real buffering state — show whenever video isn't playable, hide as soon as it can play.
   useEffect(() => {
@@ -1019,13 +1023,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       loaderTimeoutRef.current = null;
     }
 
-    if (!currentSrc || switchingEpisode) {
+    if (!currentSrc) {
       setShowFixedLoader(false);
       return;
     }
 
-    // Strict mapping: loader visibility == buffering state.
-    setShowFixedLoader(isBuffering);
+    // Keep the loader visible during real buffering and during source switches
+    // so the player never flashes a blank black frame between servers.
+    setShowFixedLoader(isBuffering || switchingEpisode);
   }, [currentSrc, isBuffering, switchingEpisode]);
 
   // Simple volume sync - no AudioContext needed
