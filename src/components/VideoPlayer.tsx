@@ -784,7 +784,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [episodeList, nextEpisodeSrc, src, resolvePlaybackSrc]);
 
   const switchServer = useCallback((serverIndex: number) => {
-    if (serverIndex === activeServerIndex || !effectiveVideoServers[serverIndex]) return;
+    if (!effectiveVideoServers[serverIndex]) return;
     if (effectiveVideoServers[serverIndex].locked && !isPremium) return;
     if (serverSwitchingRef.current) return;
     const v = videoRef.current;
@@ -794,24 +794,42 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
     const resolved = resolvePlaybackSrc(newRawSrc);
 
+    // No-op if already on this server with same resolved url
+    if (serverIndex === activeServerIndex && resolved === currentSrc) {
+      setShowServerPanel(false);
+      return;
+    }
+
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
     setVideoError(false);
     setIsBuffering(true);
     setShowFixedLoader(true);
-    setSwitchingEpisode(true);
 
-    // Keep last frame visible by NOT clearing src — just swap directly
+    // Reset failed cache so the newly chosen server gets a clean retry budget
+    failedSrcsRef.current.clear();
+
     setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
+
+    // Swap src directly + force reload so the browser drops any stalled
+    // connection from the previous server and starts fetching immediately.
+    try {
+      v.pause();
+      v.src = resolved;
+      v.load();
+    } catch {}
+
     setCurrentSrc(resolved);
+
+    // Release the switching lock quickly — real loader visibility is now
+    // driven by the video element's own buffering events.
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
-      setSwitchingEpisode(false);
-    }, 900);
-  }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
+    }, 250);
+  }, [activeServerIndex, currentSrc, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
 
   // Auto-switch to premium server for premium users
   useEffect(() => {
