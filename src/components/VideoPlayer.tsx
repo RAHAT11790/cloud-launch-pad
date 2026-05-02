@@ -880,7 +880,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         setShowFixedLoader(false);
       }
     }, 1200);
-
   }, [activeServerIndex, effectiveVideoServers, isPremium, manualServerSelected, resolveServerPlaybackSrc]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
@@ -1331,21 +1330,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           }
           setCurrentQuality(nextOption.label);
         } else {
-          // ===== AUTO SERVER FAILOVER =====
-          // All quality/route fallbacks exhausted — try next server automatically
-          if (effectiveVideoServers.length > 1) {
-            const nextServerIdx = (activeServerIndex + 1) % effectiveVideoServers.length;
-            // Only auto-failover if we haven't cycled through all servers
-            const failoverKey = `__server_failover_${nextServerIdx}`;
-            if (!failedSrcsRef.current.has(failoverKey)) {
-              failedSrcsRef.current.add(failoverKey);
-              // Reset failed srcs for the new server (keep failover keys)
-              const failoverKeys = new Set([...failedSrcsRef.current].filter(k => k.startsWith("__server_failover_")));
-              failedSrcsRef.current = failoverKeys;
-              switchServer(nextServerIdx);
-              return;
-            }
-          }
           setVideoError(true);
         }
         return;
