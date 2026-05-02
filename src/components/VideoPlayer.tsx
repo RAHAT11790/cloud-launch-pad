@@ -971,7 +971,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const resetToDefaultAudio = useCallback(() => {
     const v = videoRef.current;
     const defaultRawSrc = src;
-    const defaultResolvedSrc = resolvePlaybackSrc(defaultRawSrc, { forceServer: false });
     const savedTime = v?.currentTime || 0;
     const wasPlaying = !!v && !v.paused;
 
@@ -1936,15 +1935,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         {!isPremium && (
                           <button onClick={() => {
                             setShowServerPanel(false);
-                            setManualServerSelected(false);
+                            const fallbackServerIndex = preferredServerIndex >= 0 ? preferredServerIndex : 0;
+                            const shouldUseServer = effectiveVideoServers.length > 0;
+                            setManualServerSelected(shouldUseServer);
+                            if (shouldUseServer) setActiveServerIndex(fallbackServerIndex);
                             activeSourceBaseRef.current = sourceBaseRef.current;
-                            setCurrentSrc(resolvePlaybackSrc(sourceBaseRef.current, { forceServer: false }));
+                            setCurrentSrc(
+                              shouldUseServer
+                                ? resolveServerPlaybackSrc(sourceBaseRef.current, fallbackServerIndex)
+                                : resolveDirectPlaybackSrc(sourceBaseRef.current)
+                            );
                           }}
                             className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
-                              !manualServerSelected ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                              preferredServerIndex === -1 || (manualServerSelected && activeServerIndex === preferredServerIndex) ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                             }`}>
                             <span>Default</span>
-                            {!manualServerSelected && <Check className="w-3 h-3" />}
+                            {(preferredServerIndex === -1 || (manualServerSelected && activeServerIndex === preferredServerIndex)) && <Check className="w-3 h-3" />}
                           </button>
                         )}
                         {effectiveVideoServers.map((srv, idx) => {
