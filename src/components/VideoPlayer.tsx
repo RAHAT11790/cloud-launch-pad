@@ -30,15 +30,8 @@ interface VideoServerOption {
 const PROXY_SERVER_LIMIT = 3;
 
 // Cloudflare CDN proxy for fast video streaming
-import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
+import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
-
-// Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
-// Auto-applied to plain http:// sources (e.g. Server 1 bot-hosting.net) to bypass
-// browser mixed-content blocks. HTTPS sources stay direct (zero overhead).
-const BUILTIN_STREAM_PROXY = SUPABASE_URL
-  ? `${SUPABASE_URL}/functions/v1/stream-proxy?url={url}`
-  : "";
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -91,7 +84,7 @@ const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
   }
 };
 
-const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
+const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
   if (!url) return [];
 
   const candidates: string[] = [];
@@ -100,11 +93,8 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
     candidates.push(candidate);
   };
 
-  const encoded = encodeURIComponent(url);
-  const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
   const prefersDirectPlayback = isDirectPlaybackUrl(url);
-  const mustUseProxy = isInsecureHttpSource(url);
 
   if (isBypassSource(url)) {
     addCandidate(url);
@@ -116,13 +106,8 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
     return candidates;
   }
 
-  if (mustUseProxy) {
-    if (BUILTIN_STREAM_PROXY) addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
-    if (customProxyCandidate) addCandidate(customProxyCandidate);
-    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
-  } else {
-    addCandidate(url);
-  }
+  if (customProxyCandidate) addCandidate(customProxyCandidate);
+  addCandidate(url);
 
   if (candidates.length === 0) {
     addCandidate(url);
@@ -133,11 +118,6 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
 
 const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
-};
-
-const shouldForceDirectProxy = (url: string): boolean => {
-  const value = String(url || "").trim().toLowerCase();
-  return value.startsWith("http://");
 };
 
 interface AudioTrackOption {
