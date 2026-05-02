@@ -30,8 +30,6 @@ interface VideoServerOption {
 const PROXY_SERVER_LIMIT = 3;
 
 // Cloudflare CDN proxy for fast video streaming
-import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
-const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -739,6 +737,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return getPrimaryPlaybackSrc(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
   }, [cdnEnabled, proxyUrl, proxyApiKey, customProxies, effectiveVideoServers, activeServerIndex]);
 
+  const resolvePlaybackCandidates = useCallback((rawUrl: string) => {
+    const trimmed = String(rawUrl || "").trim();
+    if (!trimmed) return [] as string[];
+    const activeServer = effectiveVideoServers[activeServerIndex];
+    const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
+    const effProxyUrl = serverProxy?.url || proxyUrl || undefined;
+    const effProxyKey = serverProxy?.apiKey || proxyApiKey || undefined;
+    return buildPlaybackCandidates(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
+  }, [cdnEnabled, proxyUrl, proxyApiKey, customProxies, effectiveVideoServers, activeServerIndex]);
+
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     const server = effectiveVideoServers[serverIndex];
     if (!server?.domain) return rawUrl;
@@ -1288,12 +1296,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (next > MAX_RETRIES) {
         console.log('Video failed after retries. URL:', currentSrc);
         failedSrcsRef.current.add(currentSrc);
-        const sameQualityRouteFallback = buildPlaybackCandidates(
-          activeSourceBaseRef.current,
-          cdnEnabled,
-          proxyUrl || undefined,
-          proxyApiKey || undefined
-        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
+        const sameQualityRouteFallback = resolvePlaybackCandidates(activeSourceBaseRef.current)
+          .find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
 
         if (sameQualityRouteFallback) {
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
@@ -1302,13 +1306,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
 
         const nextOption = availableQualities.find((q) => {
-          const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+          const candidateSrc = resolvePlaybackSrc(q.src);
           return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
         });
 
         if (nextOption) {
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+          const newFallbackSrc = resolvePlaybackSrc(nextOption.src);
           activeSourceBaseRef.current = nextOption.src;
           if (newFallbackSrc === currentSrc) {
             v.currentTime = pendingSeek.current;
@@ -2288,7 +2292,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 </div>
                 <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
                   <video
-                    src={getPrimaryPlaybackSrc(activeVid.url, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined)}
+                    src={resolvePlaybackSrc(activeVid.url)}
                     className="w-full h-full"
                     controls
                     autoPlay
@@ -2343,7 +2347,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
             const dlId = createDownloadId(title, subtitle, quality, qualitySrc);
-            const proxiedUrl = getPrimaryPlaybackSrc(qualitySrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+            const proxiedUrl = resolvePlaybackSrc(qualitySrc);
             const { downloadManager } = await import("@/lib/downloadManager");
             downloadManager.startDownload({
               id: dlId,
@@ -2399,7 +2403,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               );
               if (alreadySaved) { skipped++; continue; }
               const epDlId = createDownloadId(title, epSubtitle, quality, epUrl);
-              const proxied = getPrimaryPlaybackSrc(epUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+              const proxied = resolvePlaybackSrc(epUrl);
               tasks.push({ id: epDlId, url: proxied, subtitle: epSubtitle });
             }
 
@@ -2471,7 +2475,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 (d) => d.subtitle === epSubtitle && (d.quality === quality || d.quality === "Auto")
               );
               if (alreadySaved) { skipped++; return; }
-              const proxied = getPrimaryPlaybackSrc(epUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+              const proxied = resolvePlaybackSrc(epUrl);
               try {
                 const ctrl = new AbortController();
                 const t = setTimeout(() => ctrl.abort(), 4000);
