@@ -180,6 +180,15 @@ export default function EgdManager({
   const [logEndAt, setLogEndAt] = useState("");
   const [projectSecrets, setProjectSecrets] = useState<string[]>([]);
 
+  // ---------- Server health: red flashing popup when deployer is unresponsive ----------
+  const [serverHealth, setServerHealth] = useState<{
+    status: "ok" | "down" | "checking" | "idle";
+    message: string;
+    lastCheckedAt: number;
+    consecutiveFailures: number;
+  }>({ status: "idle", message: "", lastCheckedAt: 0, consecutiveFailures: 0 });
+  const [showHealthPopup, setShowHealthPopup] = useState(false);
+
   // ---------- Load deployer URL ----------
   useEffect(() => {
     const r = ref(db, "egdManager/config/deployerUrl");
@@ -190,6 +199,66 @@ export default function EgdManager({
       setShowSetup(!v);
     });
   }, []);
+
+  // ---------- Health probe: ping deployer every 30s ----------
+  useEffect(() => {
+    if (!savedDeployerUrl) {
+      setServerHealth({ status: "idle", message: "", lastCheckedAt: 0, consecutiveFailures: 0 });
+      setShowHealthPopup(false);
+      return;
+    }
+
+    let cancelled = false;
+    const probe = async () => {
+      if (cancelled) return;
+      const startedAt = Date.now();
+      try {
+        const base = savedDeployerUrl.replace(/\/+$/, "");
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        const r = await fetch(`${base}/list`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+          signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        const text = await r.text();
+        let d: any = null;
+        try { d = JSON.parse(text); } catch {}
+
+        if (cancelled) return;
+        if (r.ok && (d?.ok || Array.isArray(d?.functions))) {
+          setServerHealth({
+            status: "ok",
+            message: `Healthy · ${Date.now() - startedAt}ms`,
+            lastCheckedAt: Date.now(),
+            consecutiveFailures: 0,
+          });
+          setShowHealthPopup(false);
+        } else {
+          throw new Error(`HTTP ${r.status}: ${(typeof d?.error === "string" ? d.error : text).slice(0, 120)}`);
+        }
+      } catch (e: any) {
+        if (cancelled) return;
+        const msg = e?.name === "AbortError"
+          ? "Server not responding (timeout 8s)"
+          : (e?.message || "Network error");
+        setServerHealth((prev) => ({
+          status: "down",
+          message: msg,
+          lastCheckedAt: Date.now(),
+          consecutiveFailures: prev.consecutiveFailures + 1,
+        }));
+        setShowHealthPopup(true);
+      }
+    };
+
+    setServerHealth((prev) => ({ ...prev, status: "checking" }));
+    probe();
+    const id = setInterval(probe, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [savedDeployerUrl]);
 
   const appendError = (msg: string) =>
     setErrorLog((prev) => `[${new Date().toLocaleTimeString()}] ${msg}\n` + prev);
@@ -407,7 +476,61 @@ export default function EgdManager({
   const isConfigured = !!savedDeployerUrl;
 
   return (
-    <div className="space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
+    <div className="space-y-4 sm:space-y-6 max-w-full overflow-x-hidden relative">
+      {/* ============ RED FLASHING SERVER-DOWN POPUP ============ */}
+      {showHealthPopup && serverHealth.status === "down" && (
+        <div className="sticky top-2 z-50 mb-2">
+          <div
+            className="rounded-2xl border-2 border-red-500/70 bg-gradient-to-r from-red-950/95 via-red-900/95 to-red-950/95 backdrop-blur-xl p-3 sm:p-4 shadow-[0_0_30px_rgba(239,68,68,0.5)]"
+            style={{ animation: "egd-red-pulse 1.4s ease-in-out infinite" }}
+          >
+            <div className="flex items-start gap-3">
+              <div className="relative shrink-0 mt-0.5">
+                <div className="w-3 h-3 rounded-full bg-red-500" style={{ animation: "egd-dot-pulse 1s ease-in-out infinite" }} />
+                <div className="absolute inset-0 w-3 h-3 rounded-full bg-red-500/60" style={{ animation: "egd-ping 1.4s cubic-bezier(0,0,0.2,1) infinite" }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <AlertCircle className="w-4 h-4 text-red-300 shrink-0" />
+                  <h4 className="text-[13px] sm:text-sm font-extrabold text-red-100 truncate">
+                    🚨 Server is not responding
+                  </h4>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-red-500/30 text-red-200 font-bold">
+                    {serverHealth.consecutiveFailures}× failed
+                  </span>
+                </div>
+                <p className="text-[11px] sm:text-xs text-red-200/90 mt-1 break-words leading-snug">
+                  {serverHealth.message}
+                </p>
+                <p className="text-[10px] text-red-300/70 mt-1">
+                  Last checked: {new Date(serverHealth.lastCheckedAt).toLocaleTimeString()} · auto-retrying every 30s
+                </p>
+              </div>
+              <button
+                onClick={() => setShowHealthPopup(false)}
+                className="shrink-0 p-1.5 rounded-lg text-red-200 hover:bg-red-500/20 transition"
+                title="Dismiss (will reappear if server stays down)"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+          <style>{`
+            @keyframes egd-red-pulse {
+              0%, 100% { box-shadow: 0 0 30px rgba(239,68,68,0.45); border-color: rgba(239,68,68,0.7); }
+              50%      { box-shadow: 0 0 50px rgba(239,68,68,0.85); border-color: rgba(239,68,68,1); }
+            }
+            @keyframes egd-dot-pulse {
+              0%, 100% { transform: scale(1);   opacity: 1; }
+              50%      { transform: scale(1.4); opacity: 0.7; }
+            }
+            @keyframes egd-ping {
+              75%, 100% { transform: scale(2.4); opacity: 0; }
+            }
+          `}</style>
+        </div>
+      )}
+
       {/* Header */}
       <div className={glassCard + " p-4 sm:p-6"}>
         <div className="flex items-start sm:items-center justify-between flex-wrap gap-3">
@@ -446,6 +569,27 @@ export default function EgdManager({
           )}
           {isConfigured && (
             <code className="text-[10px] text-zinc-500 truncate max-w-full block">{savedDeployerUrl}</code>
+          )}
+          {isConfigured && serverHealth.status !== "idle" && (
+            <span
+              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold ${
+                serverHealth.status === "ok"
+                  ? "bg-emerald-500/15 text-emerald-300"
+                  : serverHealth.status === "down"
+                  ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                  : "bg-zinc-500/15 text-zinc-300"
+              }`}
+              title={serverHealth.message}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  serverHealth.status === "ok" ? "bg-emerald-400" :
+                  serverHealth.status === "down" ? "bg-red-500 animate-pulse" :
+                  "bg-zinc-400"
+                }`}
+              />
+              {serverHealth.status === "ok" ? "ONLINE" : serverHealth.status === "down" ? "DOWN" : "Checking..."}
+            </span>
           )}
         </div>
       </div>
