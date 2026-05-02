@@ -7847,6 +7847,11 @@ ${tgHashtags}`;
                                   )}
                                 </span>
                                 <span className="text-[10px] text-zinc-500 block truncate">{srv.domain}</span>
+                                {srv.proxyId && proxyUrl(srv.proxyId) && (
+                                  <span className="text-[9px] text-purple-300/70 block truncate font-mono" title={proxyUrl(srv.proxyId) || ''}>
+                                    🔀 {proxyUrl(srv.proxyId)}
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-1">
                                 <button onClick={() => beginEdit(idx)} title="Edit" className="text-cyan-400 hover:text-cyan-300 p-1">
