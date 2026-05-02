@@ -2714,13 +2714,34 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             <span className="text-muted-foreground">Estimated total size</span>
                             <span className="font-bold text-foreground">~{bulkSizeEstimate.totalMB.toFixed(0)} MB</span>
                           </div>
-                          <button
-                            onClick={() => startBulkDownloadWithQuality(bulkSizeEstimate.quality)}
-                            disabled={bulkSizeEstimate.eps === 0}
-                            className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-[12px] font-bold hover:scale-[1.01] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {bulkSizeEstimate.eps === 0 ? "All episodes already downloaded" : `Start Downloading ${bulkSizeEstimate.eps} Episodes`}
-                          </button>
+                          {bulkSizeEstimate.eps === 0 ? (
+                            <button
+                              disabled
+                              className="w-full py-2 rounded-lg bg-secondary text-muted-foreground text-[12px] font-bold opacity-60 cursor-not-allowed"
+                            >
+                              All episodes already downloaded
+                            </button>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <button
+                                onClick={() => startBulkDownloadWithQuality(bulkSizeEstimate.quality, "sequential")}
+                                className="w-full py-2 rounded-lg bg-secondary border border-border text-foreground text-[12px] font-bold hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all flex items-center justify-center gap-1.5"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                One by One Download ({bulkSizeEstimate.eps})
+                              </button>
+                              <button
+                                onClick={() => startBulkDownloadWithQuality(bulkSizeEstimate.quality, "all")}
+                                className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-[12px] font-bold hover:scale-[1.01] transition-all flex items-center justify-center gap-1.5"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                All in One Time ({bulkSizeEstimate.eps})
+                              </button>
+                              <p className="text-[9px] text-muted-foreground text-center pt-0.5">
+                                Saved to in-app library — no browser pop-ups.
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
                       {!probingBulk && !bulkSizeEstimate && (
