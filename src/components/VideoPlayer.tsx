@@ -725,6 +725,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return list;
   }, [src, qualityOptions]);
 
+  const getServerSourceUrl = useCallback((rawUrl: string, serverIndex: number) => {
+    const server = effectiveVideoServers[serverIndex];
+    if (!server?.domain) return String(rawUrl || "").trim();
+    return buildServerSourceUrl(rawUrl, server.domain);
+  }, [effectiveVideoServers]);
+
   const resolvePlaybackSrc = useCallback((
     rawUrl: string,
     options?: { serverIndex?: number; forceServer?: boolean },
@@ -766,12 +772,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const effProxyKey = serverProxy?.apiKey || undefined;
     return buildPlaybackCandidates(serverSourceUrl, cdnEnabled, effProxyUrl, effProxyKey);
   }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex, manualServerSelected, getServerSourceUrl]);
-
-  const getServerSourceUrl = useCallback((rawUrl: string, serverIndex: number) => {
-    const server = effectiveVideoServers[serverIndex];
-    if (!server?.domain) return String(rawUrl || "").trim();
-    return buildServerSourceUrl(rawUrl, server.domain);
-  }, [effectiveVideoServers]);
 
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
