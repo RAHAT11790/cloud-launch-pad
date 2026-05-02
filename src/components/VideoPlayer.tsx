@@ -1360,6 +1360,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
     const onCanPlay = () => {
       setVideoError(false);
+      setSwitchingEpisode(false);
       setIsBuffering(false);
       // Also apply pending seek here in case loadedmetadata didn't fire
       if (pendingSeek.current !== null && v.duration > 0) {
@@ -1372,6 +1373,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       }
     };
     const onCanPlayThrough = () => {
+      setSwitchingEpisode(false);
       setIsBuffering(false);
     };
     // Debounce waiting briefly to avoid flashing on tiny buffer hiccups
@@ -1385,6 +1387,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
+      setSwitchingEpisode(false);
       setIsBuffering(false);
     };
     const onLoadStart = () => {
@@ -1392,6 +1395,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (v.readyState < 2) setIsBuffering(true);
     };
     const onSeeked = () => {
+      setSwitchingEpisode(false);
       setIsBuffering(false);
     };
     let stalledTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1400,6 +1404,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       stalledTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
       }, 1500);
+    };
+    const onEmptied = () => {
+      setSwitchingEpisode(true);
+      setIsBuffering(true);
     };
     v.addEventListener("loadedmetadata", onLoaded);
     v.addEventListener("play", onPlay);
@@ -1413,6 +1421,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     v.addEventListener("seeked", onSeeked);
     v.addEventListener("stalled", onStalled);
     v.addEventListener("loadstart", onLoadStart);
+    v.addEventListener("emptied", onEmptied);
     // Show loader only if data isn't already buffered (fast switch keeps UI clean)
     if (v.readyState < 2) setIsBuffering(true);
     // NOTE: do NOT call v.load() — setting v.src already triggers loading.
@@ -1433,6 +1442,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.removeEventListener("playing", onPlaying);
       v.removeEventListener("seeked", onSeeked);
       v.removeEventListener("stalled", onStalled);
+      v.removeEventListener("emptied", onEmptied);
       // NOTE: do NOT clear v.src here. This cleanup runs on every currentSrc change
       // (server / quality / audio switch). Wiping src would discard the freshly-set
       // source React just rendered and force a restart from 0:00. Real teardown
