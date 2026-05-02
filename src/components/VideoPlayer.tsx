@@ -382,6 +382,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
   const [bulkDownloadMode, setBulkDownloadMode] = useState(false);
+  const [bulkSizeEstimate, setBulkSizeEstimate] = useState<{ totalMB: number; eps: number; skipped: number; quality: string } | null>(null);
+  const [probingBulk, setProbingBulk] = useState(false);
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
@@ -2413,10 +2415,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           };
 
           // Pre-flight: HEAD-probe each episode URL to estimate total MB at a given quality
-          const [bulkSizePreview, setBulkSizePreview] = [
-            (window as any).__bulkSizePreview,
-            (v: any) => { (window as any).__bulkSizePreview = v; },
-          ];
           const probeBulkSize = async (quality: string): Promise<{ totalMB: number; eps: number; skipped: number }> => {
             const season = seasons && currentSeasonIdx !== undefined ? seasons[currentSeasonIdx] : null;
             if (!season?.episodes?.length) return { totalMB: 0, eps: 0, skipped: 0 };
@@ -2429,7 +2427,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               return ep.link || ep.link1080 || ep.link720 || ep.link480;
             };
             let total = 0; let counted = 0; let skipped = 0;
-            const probes = season.episodes.slice(0, 30).map(async (ep) => {
+            const probes = season.episodes.slice(0, 8).map(async (ep) => {
               const epUrl = pickEpUrl(ep);
               if (!epUrl) return;
               const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
@@ -2448,8 +2446,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               } catch {}
             });
             await Promise.allSettled(probes);
-            // Extrapolate average size to the remaining (un-probed) episodes
-            const remainingEps = season.episodes.length - 30 - skipped;
+            // count remaining skipped from un-probed episodes
+            for (let i = 8; i < season.episodes.length; i++) {
+              const ep = season.episodes[i];
+              const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
+              if (downloadedEpisodes.some((d) => d.subtitle === epSubtitle && (d.quality === quality || d.quality === "Auto"))) skipped++;
+            }
+            const remainingEps = season.episodes.length - skipped - counted;
             const avg = counted > 0 ? total / counted : 0;
             const totalBytes = total + Math.max(0, remainingEps) * avg;
             return {
