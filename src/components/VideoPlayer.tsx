@@ -826,7 +826,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const savedTime = v.currentTime || 0;
     const wasPlaying = !v.paused;
     const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
-    const resolved = resolvePlaybackSrc(newRawSrc);
+
+    // Resolve playback for the TARGET server (its proxyId, not the current one's).
+    // We can't rely on `resolvePlaybackSrc` here because activeServerIndex hasn't
+    // been updated yet — its closure still points at the old server.
+    const targetServer = effectiveVideoServers[serverIndex];
+    const targetServerProxy = targetServer?.proxyId ? customProxies[targetServer.proxyId] : null;
+    const effProxyUrl = targetServerProxy?.url || proxyUrl || undefined;
+    const effProxyKey = targetServerProxy?.apiKey || proxyApiKey || undefined;
+    let resolved: string;
+    if (shouldForceDirectProxy(newRawSrc) && BUILTIN_STREAM_PROXY) {
+      resolved = buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, newRawSrc);
+    } else {
+      resolved = getPrimaryPlaybackSrc(newRawSrc, cdnEnabled, effProxyUrl, effProxyKey);
+    }
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
@@ -843,36 +856,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     failedSrcsRef.current.clear();
     retryAttemptsRef.current.clear();
 
-    // Force a hard reload — even if `resolved` equals current src, we want a fresh fetch
+    // Apply the new src directly — synchronous swap is the fastest path.
     try {
       v.pause();
       v.removeAttribute("src");
+      v.src = resolved;
       v.load();
+      if (wasPlaying) v.play().catch(() => {});
     } catch {}
 
     setCurrentSrc(resolved);
 
-    // Imperatively apply new src on next frame so the swap actually fires loadstart
-    requestAnimationFrame(() => {
-      const vv = videoRef.current;
-      if (!vv) return;
-      try {
-        vv.src = resolved;
-        vv.load();
-        if (wasPlaying) vv.play().catch(() => {});
-      } catch {}
-    });
-
-    // Hard safety: 2.5s after switch, force-clear the switching flag so
-    // the loader overlay can disappear once playback actually resumes.
+    // Hard safety: 1.2s after switch, force-clear the switching flag so the
+    // loader overlay can disappear once playback actually resumes (or sooner
+    // via the canplay event handler).
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
       const vv = videoRef.current;
-      if (vv && vv.readyState >= 3) {
+      if (vv && vv.readyState >= 2) {
         setIsBuffering(false);
         setShowFixedLoader(false);
       }
-    }, 2500);
+    }, 1200);
 
     // Auto-failover: if new server still hasn't produced playable data in 8s, jump to next server
     window.setTimeout(() => {
