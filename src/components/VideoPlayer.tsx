@@ -381,6 +381,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [shortenLoading, setShortenLoading] = useState(false);
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
+  const [bulkDownloadMode, setBulkDownloadMode] = useState(false);
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
@@ -425,6 +426,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     import("@/lib/downloadStore").then(({ getAllDownloads }) => {
       getAllDownloads().then((all) => {
         const matching = all.filter(d => d.title === title);
+        // Sort ep1 → ep2 → ... ascending (extract episode number from subtitle)
+        const epNum = (s?: string) => {
+          const m = String(s || "").match(/episode\s*(\d+)|ep\s*(\d+)|\b(\d+)\b/i);
+          return m ? parseInt(m[1] || m[2] || m[3], 10) : 9999;
+        };
+        matching.sort((a, b) => epNum(a.subtitle) - epNum(b.subtitle));
         setDownloadedEpisodes(matching);
       });
     });
@@ -791,6 +798,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!v) return;
 
     const savedTime = v.currentTime || 0;
+    const wasPlaying = !v.paused;
     const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
     const resolved = resolvePlaybackSrc(newRawSrc);
 
@@ -799,18 +807,52 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setVideoError(false);
     setIsBuffering(true);
     setShowFixedLoader(true);
-    setSwitchingEpisode(true);
 
-    // Keep last frame visible by NOT clearing src — just swap directly
     setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
+
+    // Reset failed src tracking so the new server gets a fair chance
+    failedSrcsRef.current.clear();
+    retryAttemptsRef.current.clear();
+
+    // Force a hard reload — even if `resolved` equals current src, we want a fresh fetch
+    try {
+      v.pause();
+      v.removeAttribute("src");
+      v.load();
+    } catch {}
+
     setCurrentSrc(resolved);
+
+    // Imperatively apply new src on next frame so the swap actually fires loadstart
+    requestAnimationFrame(() => {
+      const vv = videoRef.current;
+      if (!vv) return;
+      try {
+        vv.src = resolved;
+        vv.load();
+        if (wasPlaying) vv.play().catch(() => {});
+      } catch {}
+    });
+
+    // Safety: if new server hasn't produced any playable data in 8s, auto-failover
+    window.setTimeout(() => {
+      const vv = videoRef.current;
+      if (vv && vv.readyState < 2 && !vv.paused === false) {
+        // Still stuck — try the next available server automatically
+        const nextIdx = effectiveVideoServers.findIndex((s, i) => i !== serverIndex && (!s.locked || isPremium));
+        if (nextIdx >= 0 && nextIdx !== serverIndex) {
+          serverSwitchingRef.current = false;
+          switchServer(nextIdx);
+        }
+      }
+    }, 8000);
+
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
-      setSwitchingEpisode(false);
-    }, 900);
+    }, 600);
   }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
 
   // Auto-switch to premium server for premium users
@@ -1142,7 +1184,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [videoError, clearHideTimer]);
 
   // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
-  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader && !serverSwitchingRef.current && !switchingEpisode;
+  const showLoaderOverlay = !!currentSrc && !videoError && (showFixedLoader || serverSwitchingRef.current);
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
@@ -2307,6 +2349,46 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             toast.info(`${quality} ডাউনলোড শুরু হয়েছে`);
           };
 
+          // Bulk: download every episode of the current season at the chosen quality
+          const startBulkDownloadWithQuality = async (quality: string) => {
+            const season = seasons && currentSeasonIdx !== undefined ? seasons[currentSeasonIdx] : null;
+            if (!season || !season.episodes?.length) {
+              const { toast } = await import("sonner");
+              toast.error("কোন এপিসোড পাওয়া যায়নি");
+              return;
+            }
+            const { downloadManager } = await import("@/lib/downloadManager");
+            const { toast } = await import("sonner");
+            const pickEpUrl = (ep: any): string => {
+              const q = quality.toLowerCase();
+              if (q.includes("4k") || q.includes("2160")) return ep.link4k || ep.link1080 || ep.link720 || ep.link480 || ep.link;
+              if (q.includes("1080")) return ep.link1080 || ep.link720 || ep.link480 || ep.link;
+              if (q.includes("720")) return ep.link720 || ep.link480 || ep.link1080 || ep.link;
+              if (q.includes("480")) return ep.link480 || ep.link720 || ep.link1080 || ep.link;
+              return ep.link || ep.link1080 || ep.link720 || ep.link480;
+            };
+            let queued = 0;
+            for (const ep of season.episodes) {
+              const epUrl = pickEpUrl(ep);
+              if (!epUrl) continue;
+              const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
+              const epDlId = createDownloadId(title, epSubtitle, quality, epUrl);
+              const proxied = getPrimaryPlaybackSrc(epUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+              downloadManager.startDownload({
+                id: epDlId,
+                url: proxied,
+                title,
+                subtitle: epSubtitle,
+                poster,
+                quality,
+              });
+              queued++;
+            }
+            setShowDownloadQualityPicker(false);
+            setBulkDownloadMode(false);
+            toast.success(`${queued} এপিসোড ${quality}-এ ডাউনলোড শুরু হয়েছে`);
+          };
+
           const playOffline = async (episodeData?: any) => {
             const ep = episodeData || savedEpisode;
             if (!ep) return;
@@ -2350,6 +2432,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       }
                       // Show quality picker if multiple qualities available
                       if (availableQualities.length > 1) {
+                        setBulkDownloadMode(false);
                         setShowDownloadQualityPicker(true);
                       } else {
                         // Only one quality - download directly
@@ -2428,12 +2511,36 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 )}
               </div>
 
+              {/* Download All Episodes (only for webseries with multiple episodes) */}
+              {seasons && currentSeasonIdx !== undefined && seasons[currentSeasonIdx]?.episodes?.length > 1 && (
+                <button
+                  onClick={() => {
+                    if (availableQualities.length > 1) {
+                      setBulkDownloadMode(true);
+                      setShowDownloadQualityPicker(true);
+                    } else {
+                      startBulkDownloadWithQuality(currentQuality || "Auto");
+                    }
+                  }}
+                  className="w-full py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2 bg-secondary text-foreground border border-primary/40 hover:bg-primary/10 transition-all text-sm"
+                >
+                  <Download className="w-4 h-4 text-primary" />
+                  Download All Episodes
+                  <span className="text-[10px] opacity-70">({seasons[currentSeasonIdx].episodes.length} eps • {seasons[currentSeasonIdx].name})</span>
+                </button>
+              )}
+
               {/* Quality Picker Dropdown */}
               {showDownloadQualityPicker && (
                 <div className="bg-card border border-border rounded-xl p-3 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-bold text-foreground">কোয়ালিটি সিলেক্ট করুন</p>
-                    <button onClick={() => setShowDownloadQualityPicker(false)} className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center">
+                    <p className="text-sm font-bold text-foreground">
+                      {bulkDownloadMode ? "All Episodes — Select Quality" : "কোয়ালিটি সিলেক্ট করুন"}
+                    </p>
+                    <button
+                      onClick={() => { setShowDownloadQualityPicker(false); setBulkDownloadMode(false); }}
+                      className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center"
+                    >
                       <X className="w-3 h-3" />
                     </button>
                   </div>
@@ -2445,7 +2552,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         <button
                           key={opt.label}
                           onClick={() => {
-                            if (!locked4K) startDownloadWithQuality(opt.label, opt.src);
+                            if (locked4K) return;
+                            if (bulkDownloadMode) startBulkDownloadWithQuality(opt.label);
+                            else startDownloadWithQuality(opt.label, opt.src);
                           }}
                           disabled={locked4K}
                           className={`py-2.5 px-3 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${
@@ -2461,6 +2570,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       );
                     })}
                   </div>
+                  {bulkDownloadMode && (
+                    <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                      Episodes will queue one by one. Keep app open until done.
+                    </p>
+                  )}
                 </div>
               )}
 
