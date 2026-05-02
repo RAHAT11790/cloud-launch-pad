@@ -739,11 +739,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     const serverIndex = options?.serverIndex ?? activeServerIndex;
     const activeServer = effectiveVideoServers[serverIndex];
+    const serverSourceUrl = getServerSourceUrl(trimmed, serverIndex);
     const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
     const effProxyUrl = serverProxy?.url || undefined;
     const effProxyKey = serverProxy?.apiKey || undefined;
-    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
-  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex, manualServerSelected]);
+    return getPrimaryPlaybackSrc(serverSourceUrl, cdnEnabled, effProxyUrl, effProxyKey);
+  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex, manualServerSelected, getServerSourceUrl]);
 
   const resolvePlaybackCandidates = useCallback((
     rawUrl: string,
@@ -759,11 +760,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     const serverIndex = options?.serverIndex ?? activeServerIndex;
     const activeServer = effectiveVideoServers[serverIndex];
+    const serverSourceUrl = getServerSourceUrl(trimmed, serverIndex);
     const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
     const effProxyUrl = serverProxy?.url || undefined;
     const effProxyKey = serverProxy?.apiKey || undefined;
-    return buildPlaybackCandidates(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
-  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex, manualServerSelected]);
+    return buildPlaybackCandidates(serverSourceUrl, cdnEnabled, effProxyUrl, effProxyKey);
+  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex, manualServerSelected, getServerSourceUrl]);
 
   const getServerSourceUrl = useCallback((rawUrl: string, serverIndex: number) => {
     const server = effectiveVideoServers[serverIndex];
@@ -817,9 +819,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     const savedTime = v.currentTime || 0;
     const wasPlaying = !v.paused;
-    const newRawSrc = getServerSourceUrl(sourceBaseRef.current, serverIndex);
-
-    const resolved = resolvePlaybackSrc(newRawSrc, { serverIndex, forceServer: true });
+    const resolved = resolvePlaybackSrc(sourceBaseRef.current, { serverIndex, forceServer: true });
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
@@ -829,7 +829,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
-    activeSourceBaseRef.current = newRawSrc;
+    activeSourceBaseRef.current = sourceBaseRef.current;
     pendingSeek.current = savedTime;
 
     // Reset failed src tracking so the new server gets a fair chance
