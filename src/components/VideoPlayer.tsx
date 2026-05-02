@@ -50,22 +50,8 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   return url;
 };
 
-const isDirectPlaybackUrl = (url: string): boolean => {
-  const normalized = url.trim().toLowerCase();
-  return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
-};
-
-const isInsecureHttpSource = (url: string): boolean => {
-  return String(url || "").trim().toLowerCase().startsWith("http://");
-};
-
-const getBrowserSafeDirectUrl = (url: string): string => {
-  const trimmed = String(url || "").trim();
-  if (!trimmed) return "";
-  if (typeof window !== "undefined" && window.location.protocol === "https:" && isInsecureHttpSource(trimmed)) {
-    return trimmed.replace(/^http:\/\//i, "https://");
-  }
-  return trimmed;
+const getDirectPlaybackUrl = (url: string): string => {
+  return String(url || "").trim();
 };
 
 const isBypassSource = (url: string): boolean => {
@@ -117,8 +103,31 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
 
   // ===== NO PROXY = DIRECT ONLY =====
   // No proxy assigned → play raw URL directly. No proxy fallback.
-  addCandidate(getBrowserSafeDirectUrl(url));
+  addCandidate(getDirectPlaybackUrl(url));
   return candidates;
+};
+
+const buildServerSourceUrl = (rawUrl: string, serverValue?: string): string => {
+  const trimmedRawUrl = String(rawUrl || "").trim();
+  const trimmedServerValue = String(serverValue || "").trim();
+  if (!trimmedServerValue) return trimmedRawUrl;
+
+  if (trimmedServerValue.includes("{url}")) {
+    return trimmedServerValue.split("{url}").join(encodeURIComponent(trimmedRawUrl));
+  }
+
+  try {
+    const serverUrl = new URL(trimmedServerValue);
+    const isOriginOnly = serverUrl.pathname === "/" && !serverUrl.search && !serverUrl.hash;
+    if (!isOriginOnly) {
+      return trimmedServerValue;
+    }
+
+    const sourceUrl = new URL(trimmedRawUrl);
+    return `${serverUrl.origin}${sourceUrl.pathname}${sourceUrl.search}${sourceUrl.hash}`;
+  } catch {
+    return trimmedServerValue || trimmedRawUrl;
+  }
 };
 
 const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
@@ -716,6 +725,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return list;
   }, [src, qualityOptions]);
 
+  const getServerSourceUrl = useCallback((rawUrl: string, serverIndex: number) => {
+    const server = effectiveVideoServers[serverIndex];
+    if (!server?.domain) return String(rawUrl || "").trim();
+    return buildServerSourceUrl(rawUrl, server.domain);
+  }, [effectiveVideoServers]);
+
   const resolvePlaybackSrc = useCallback((
     rawUrl: string,
     options?: { serverIndex?: number; forceServer?: boolean },
@@ -730,11 +745,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     const serverIndex = options?.serverIndex ?? activeServerIndex;
     const activeServer = effectiveVideoServers[serverIndex];
+    const serverSourceUrl = getServerSourceUrl(trimmed, serverIndex);
     const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
     const effProxyUrl = serverProxy?.url || undefined;
     const effProxyKey = serverProxy?.apiKey || undefined;
-    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
-  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex, manualServerSelected]);
+    return getPrimaryPlaybackSrc(serverSourceUrl, cdnEnabled, effProxyUrl, effProxyKey);
+  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex, manualServerSelected, getServerSourceUrl]);
 
   const resolvePlaybackCandidates = useCallback((
     rawUrl: string,
@@ -750,28 +766,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     const serverIndex = options?.serverIndex ?? activeServerIndex;
     const activeServer = effectiveVideoServers[serverIndex];
+    const serverSourceUrl = getServerSourceUrl(trimmed, serverIndex);
     const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
     const effProxyUrl = serverProxy?.url || undefined;
     const effProxyKey = serverProxy?.apiKey || undefined;
-    return buildPlaybackCandidates(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
-  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex, manualServerSelected]);
-
-  const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
-    const server = effectiveVideoServers[serverIndex];
-    if (!server?.domain) return rawUrl;
-    const domainTrim = server.domain.trim().replace(/\/$/, "");
-    const isHfDomain = /hf\.space|huggingface/i.test(domainTrim);
-    if (isHfDomain) return rawUrl;
-
-    // Regular host-swap servers (e.g. fi3.bot-hosting.net swap, render mirror)
-    try {
-      const url = new URL(rawUrl);
-      return `${domainTrim}${url.pathname}${url.search}${url.hash}`;
-    } catch {
-      const match = rawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
-      return `${domainTrim}${match ? match[1] : rawUrl}`;
-    }
-  }, [effectiveVideoServers]);
+    return buildPlaybackCandidates(serverSourceUrl, cdnEnabled, effProxyUrl, effProxyKey);
+  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex, manualServerSelected, getServerSourceUrl]);
 
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
@@ -819,9 +819,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     const savedTime = v.currentTime || 0;
     const wasPlaying = !v.paused;
-    const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
-
-    const resolved = resolvePlaybackSrc(newRawSrc, { serverIndex, forceServer: true });
+    const resolved = resolvePlaybackSrc(sourceBaseRef.current, { serverIndex, forceServer: true });
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
@@ -831,7 +829,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
-    activeSourceBaseRef.current = newRawSrc;
+    activeSourceBaseRef.current = sourceBaseRef.current;
     pendingSeek.current = savedTime;
 
     // Reset failed src tracking so the new server gets a fair chance
@@ -872,7 +870,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
       }
     }, 8000);
-  }, [activeServerIndex, effectiveVideoServers, applyServerDomain, isPremium, resolvePlaybackSrc]);
+  }, [activeServerIndex, effectiveVideoServers, getServerSourceUrl, isPremium, resolvePlaybackSrc]);
 
   // Auto-switch to premium server for premium users
   useEffect(() => {
@@ -953,9 +951,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       else if (q.includes('480')) audioUrl = track.src480 || track.src;
       // Switch to a different URL for this language
       sourceBaseRef.current = audioUrl;
-      const finalAudioUrl = manualServerSelected ? applyServerDomain(audioUrl, activeServerIndex) : audioUrl;
-      const proxiedSrc = resolvePlaybackSrc(finalAudioUrl, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
-      activeSourceBaseRef.current = finalAudioUrl;
+      const proxiedSrc = resolvePlaybackSrc(audioUrl, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
+      activeSourceBaseRef.current = audioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
     // Restore playback position after source change
@@ -969,7 +966,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.addEventListener("loadedmetadata", restoreTime);
     }
     setShowAudioPanel(false);
-  }, [currentQuality, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
+  }, [currentQuality, resolvePlaybackSrc, manualServerSelected, activeServerIndex, getServerSourceUrl]);
 
   const resetToDefaultAudio = useCallback(() => {
     const v = videoRef.current;
@@ -990,8 +987,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentAudioTrack("Default");
     setShowAudioPanel(false);
 
-    const finalDefaultSrc = manualServerSelected ? applyServerDomain(defaultRawSrc, activeServerIndex) : defaultRawSrc;
-    const finalResolvedSrc = resolvePlaybackSrc(finalDefaultSrc, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
+    const finalResolvedSrc = resolvePlaybackSrc(defaultRawSrc, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
 
     if (v && currentSrc !== finalResolvedSrc) {
       const restoreTime = () => {
@@ -1003,11 +999,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       };
 
       v.addEventListener("loadedmetadata", restoreTime);
-      activeSourceBaseRef.current = finalDefaultSrc;
+      activeSourceBaseRef.current = defaultRawSrc;
       setCurrentSrc(finalResolvedSrc);
     }
 
-  }, [currentSrc, resolvePlaybackSrc, src, manualServerSelected, activeServerIndex, applyServerDomain]);
+  }, [currentSrc, resolvePlaybackSrc, src, manualServerSelected, activeServerIndex, getServerSourceUrl]);
 
   useEffect(() => {
     if (!playbackRouteReady) return;
@@ -1606,9 +1602,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     sourceBaseRef.current = option.src;
-    const finalOptionSrc = manualServerSelected ? applyServerDomain(option.src, activeServerIndex) : option.src;
-    activeSourceBaseRef.current = finalOptionSrc;
-    const newSrc = resolvePlaybackSrc(finalOptionSrc, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
+    activeSourceBaseRef.current = option.src;
+    const newSrc = resolvePlaybackSrc(option.src, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
 
     if (newSrc === currentSrc) {
       setCurrentQuality(option.label);
@@ -1622,7 +1617,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentQuality(option.label);
     setShowSettings(false);
 
-  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
+  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, getServerSourceUrl]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
