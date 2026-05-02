@@ -951,9 +951,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       else if (q.includes('480')) audioUrl = track.src480 || track.src;
       // Switch to a different URL for this language
       sourceBaseRef.current = audioUrl;
-      const finalAudioUrl = manualServerSelected ? applyServerDomain(audioUrl, activeServerIndex) : audioUrl;
+      const finalAudioUrl = manualServerSelected ? getServerSourceUrl(audioUrl, activeServerIndex) : audioUrl;
       const proxiedSrc = resolvePlaybackSrc(finalAudioUrl, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
-      activeSourceBaseRef.current = finalAudioUrl;
+      activeSourceBaseRef.current = audioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
     // Restore playback position after source change
@@ -967,7 +967,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.addEventListener("loadedmetadata", restoreTime);
     }
     setShowAudioPanel(false);
-  }, [currentQuality, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
+  }, [currentQuality, resolvePlaybackSrc, manualServerSelected, activeServerIndex, getServerSourceUrl]);
 
   const resetToDefaultAudio = useCallback(() => {
     const v = videoRef.current;
@@ -988,7 +988,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentAudioTrack("Default");
     setShowAudioPanel(false);
 
-    const finalDefaultSrc = manualServerSelected ? applyServerDomain(defaultRawSrc, activeServerIndex) : defaultRawSrc;
+    const finalDefaultSrc = manualServerSelected ? getServerSourceUrl(defaultRawSrc, activeServerIndex) : defaultRawSrc;
     const finalResolvedSrc = resolvePlaybackSrc(finalDefaultSrc, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
 
     if (v && currentSrc !== finalResolvedSrc) {
@@ -1001,11 +1001,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       };
 
       v.addEventListener("loadedmetadata", restoreTime);
-      activeSourceBaseRef.current = finalDefaultSrc;
+      activeSourceBaseRef.current = defaultRawSrc;
       setCurrentSrc(finalResolvedSrc);
     }
 
-  }, [currentSrc, resolvePlaybackSrc, src, manualServerSelected, activeServerIndex, applyServerDomain]);
+  }, [currentSrc, resolvePlaybackSrc, src, manualServerSelected, activeServerIndex, getServerSourceUrl]);
 
   useEffect(() => {
     if (!playbackRouteReady) return;
@@ -1604,8 +1604,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     sourceBaseRef.current = option.src;
-    const finalOptionSrc = manualServerSelected ? applyServerDomain(option.src, activeServerIndex) : option.src;
-    activeSourceBaseRef.current = finalOptionSrc;
+    const finalOptionSrc = manualServerSelected ? getServerSourceUrl(option.src, activeServerIndex) : option.src;
+    activeSourceBaseRef.current = option.src;
     const newSrc = resolvePlaybackSrc(finalOptionSrc, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
 
     if (newSrc === currentSrc) {
@@ -1620,7 +1620,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentQuality(option.label);
     setShowSettings(false);
 
-  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
+  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, getServerSourceUrl]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
