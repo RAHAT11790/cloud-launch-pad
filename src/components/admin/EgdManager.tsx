@@ -570,6 +570,27 @@ export default function EgdManager({
           {isConfigured && (
             <code className="text-[10px] text-zinc-500 truncate max-w-full block">{savedDeployerUrl}</code>
           )}
+          {isConfigured && serverHealth.status !== "idle" && (
+            <span
+              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold ${
+                serverHealth.status === "ok"
+                  ? "bg-emerald-500/15 text-emerald-300"
+                  : serverHealth.status === "down"
+                  ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                  : "bg-zinc-500/15 text-zinc-300"
+              }`}
+              title={serverHealth.message}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  serverHealth.status === "ok" ? "bg-emerald-400" :
+                  serverHealth.status === "down" ? "bg-red-500 animate-pulse" :
+                  "bg-zinc-400"
+                }`}
+              />
+              {serverHealth.status === "ok" ? "ONLINE" : serverHealth.status === "down" ? "DOWN" : "Checking..."}
+            </span>
+          )}
         </div>
       </div>
 
