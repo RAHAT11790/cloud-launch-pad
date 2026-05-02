@@ -7846,7 +7846,7 @@ ${tgHashtags}`;
                               </div>
                               <div className="flex items-center gap-1">
                                 <button onClick={() => beginEdit(idx)} title="Edit" className="text-cyan-400 hover:text-cyan-300 p-1">
-                                  <Edit2 size={13} />
+                                  <Edit size={13} />
                                 </button>
                                 <button onClick={() => toggleLocked(idx)} title={srv.locked ? "Unlock" : "Lock (premium only)"}
                                   className={`p-1 rounded ${srv.locked ? "text-amber-400 hover:text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}>
