@@ -24,7 +24,7 @@ const createFileSafeName = (value: string) =>
 class DownloadManager {
   private active = new Map<string, ActiveDownload>();
   private abortControllers = new Map<string, AbortController>();
-  private pausedUrls = new Map<string, { url: string; loadedBytes: number }>();
+  private pausedUrls = new Map<string, { url: string; loadedBytes: number; skipBrowserSave?: boolean }>();
   private listeners = new Set<Listener>();
 
   subscribe(fn: Listener) {
@@ -106,12 +106,14 @@ class DownloadManager {
         quality: entry.quality, fileName, size: blob.size, downloadedAt: Date.now(), blob,
       });
 
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl; a.download = fileName;
-      document.body.appendChild(a); a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
+      if (!pausedInfo.skipBrowserSave) {
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl; a.download = fileName;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }
 
       const e2 = this.active.get(id);
       if (e2) { e2.percent = 100; e2.status = "complete"; this.notify(); }
@@ -139,8 +141,13 @@ class DownloadManager {
     subtitle?: string;
     poster?: string;
     quality: string;
+    /** When true (bulk mode), only save to IndexedDB. Skip the browser
+     * download trigger (a.click) so the OS/browser does NOT show a separate
+     * "Save As" prompt. This fixes the bulk re-download bug where the browser
+     * pop-up blocker queues 10+ saves and re-fetches every file. */
+    skipBrowserSave?: boolean;
   }) {
-    const { id, url, title, subtitle, poster, quality } = params;
+    const { id, url, title, subtitle, poster, quality, skipBrowserSave } = params;
 
     if (this.isDownloading(id)) return;
 
@@ -151,7 +158,7 @@ class DownloadManager {
 
     const abortController = new AbortController();
     this.abortControllers.set(id, abortController);
-    this.pausedUrls.set(id, { url, loadedBytes: 0 });
+    this.pausedUrls.set(id, { url, loadedBytes: 0, skipBrowserSave });
 
     this.active.set(id, {
       id, title, subtitle, poster, quality,
@@ -186,14 +193,16 @@ class DownloadManager {
         blob,
       });
 
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
+      if (!skipBrowserSave) {
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }
 
       const entry = this.active.get(id);
       if (entry) {
@@ -227,7 +236,7 @@ class DownloadManager {
         this.notify();
       }
       this.pausedUrls.delete(id);
-      window.open(url, "_blank");
+      if (!skipBrowserSave) window.open(url, "_blank");
       setTimeout(() => {
         this.active.delete(id);
         this.notify();

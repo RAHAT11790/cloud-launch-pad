@@ -22,6 +22,9 @@ interface VideoServerOption {
   name: string;
   domain: string;
   locked?: boolean;
+  /** Optional proxy id (key in `settings/customProxies`). If set, this
+   * server plays through that proxy instead of the globally selected one. */
+  proxyId?: string;
 }
 
 const PROXY_SERVER_LIMIT = 3;
@@ -216,6 +219,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>('');
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
+  // Pool of admin-defined proxies, keyed by id. Used when an individual
+  // server in `videoServers` references a `proxyId`.
+  const [customProxies, setCustomProxies] = useState<Record<string, { url: string; apiKey?: string; name?: string }>>({});
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
@@ -370,9 +376,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       }
     });
 
+    const unsub3 = onValue(ref(db, "settings/customProxies"), (snap) => {
+      const val = snap.val();
+      if (val && typeof val === "object") {
+        setCustomProxies(val as any);
+      } else {
+        setCustomProxies({});
+      }
+    });
+
     return () => {
       unsub1();
       unsub2();
+      unsub3();
     };
   }, [noProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
@@ -734,13 +750,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
-    // Old iframe server flow is disabled for episode/video switching speed.
-    // Everything non-direct is routed through the fast stream proxy path instead.
+    // Per-server proxy override: if the active server has a `proxyId`, route
+    // through that proxy. Otherwise fall back to the global proxy setting.
+    const activeServer = effectiveVideoServers[activeServerIndex];
+    const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
+    const effProxyUrl = serverProxy?.url || proxyUrl || undefined;
+    const effProxyKey = serverProxy?.apiKey || proxyApiKey || undefined;
     if (shouldForceDirectProxy(trimmed) && BUILTIN_STREAM_PROXY) {
       return buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, trimmed);
     }
-    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-  }, [cdnEnabled, proxyUrl, proxyApiKey]);
+    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
+  }, [cdnEnabled, proxyUrl, proxyApiKey, customProxies, effectiveVideoServers, activeServerIndex]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     const server = effectiveVideoServers[serverIndex];
@@ -806,7 +826,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const savedTime = v.currentTime || 0;
     const wasPlaying = !v.paused;
     const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
-    const resolved = resolvePlaybackSrc(newRawSrc);
+
+    // Resolve playback for the TARGET server (its proxyId, not the current one's).
+    // We can't rely on `resolvePlaybackSrc` here because activeServerIndex hasn't
+    // been updated yet — its closure still points at the old server.
+    const targetServer = effectiveVideoServers[serverIndex];
+    const targetServerProxy = targetServer?.proxyId ? customProxies[targetServer.proxyId] : null;
+    const effProxyUrl = targetServerProxy?.url || proxyUrl || undefined;
+    const effProxyKey = targetServerProxy?.apiKey || proxyApiKey || undefined;
+    let resolved: string;
+    if (shouldForceDirectProxy(newRawSrc) && BUILTIN_STREAM_PROXY) {
+      resolved = buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, newRawSrc);
+    } else {
+      resolved = getPrimaryPlaybackSrc(newRawSrc, cdnEnabled, effProxyUrl, effProxyKey);
+    }
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
@@ -823,36 +856,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     failedSrcsRef.current.clear();
     retryAttemptsRef.current.clear();
 
-    // Force a hard reload — even if `resolved` equals current src, we want a fresh fetch
+    // Apply the new src directly — synchronous swap is the fastest path.
     try {
       v.pause();
       v.removeAttribute("src");
+      v.src = resolved;
       v.load();
+      if (wasPlaying) v.play().catch(() => {});
     } catch {}
 
     setCurrentSrc(resolved);
 
-    // Imperatively apply new src on next frame so the swap actually fires loadstart
-    requestAnimationFrame(() => {
-      const vv = videoRef.current;
-      if (!vv) return;
-      try {
-        vv.src = resolved;
-        vv.load();
-        if (wasPlaying) vv.play().catch(() => {});
-      } catch {}
-    });
-
-    // Hard safety: 2.5s after switch, force-clear the switching flag so
-    // the loader overlay can disappear once playback actually resumes.
+    // Hard safety: 1.2s after switch, force-clear the switching flag so the
+    // loader overlay can disappear once playback actually resumes (or sooner
+    // via the canplay event handler).
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
       const vv = videoRef.current;
-      if (vv && vv.readyState >= 3) {
+      if (vv && vv.readyState >= 2) {
         setIsBuffering(false);
         setShowFixedLoader(false);
       }
-    }, 2500);
+    }, 1200);
 
     // Auto-failover: if new server still hasn't produced playable data in 8s, jump to next server
     window.setTimeout(() => {
@@ -865,7 +890,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
       }
     }, 8000);
-  }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
+  }, [activeServerIndex, effectiveVideoServers, applyServerDomain, isPremium, customProxies, proxyUrl, proxyApiKey, cdnEnabled]);
 
   // Auto-switch to premium server for premium users
   useEffect(() => {
@@ -2362,8 +2387,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           };
 
           // Bulk: download every episode of the current season at the chosen quality.
-          // Skips episodes that are already saved offline.
-          const startBulkDownloadWithQuality = async (quality: string) => {
+          // Skips episodes already saved offline.
+          // Mode "all": queue every episode in parallel (current behavior).
+          // Mode "sequential": kick off only the first; the manager + an internal
+          // chain will start the next as soon as the previous finishes.
+          const startBulkDownloadWithQuality = async (
+            quality: string,
+            mode: "all" | "sequential" = "all",
+          ) => {
             const season = seasons && currentSeasonIdx !== undefined ? seasons[currentSeasonIdx] : null;
             if (!season || !season.episodes?.length) {
               const { toast } = await import("sonner");
@@ -2380,37 +2411,70 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               if (q.includes("480")) return ep.link480 || ep.link720 || ep.link1080 || ep.link;
               return ep.link || ep.link1080 || ep.link720 || ep.link480;
             };
-            let queued = 0;
+
+            // Build the task list (sorted by episode number, ascending)
+            const tasks: { id: string; url: string; subtitle: string }[] = [];
             let skipped = 0;
-            for (const ep of season.episodes) {
+            const sortedEps = [...season.episodes].sort(
+              (a, b) => (a.episodeNumber || 0) - (b.episodeNumber || 0),
+            );
+            for (const ep of sortedEps) {
               const epUrl = pickEpUrl(ep);
               if (!epUrl) continue;
               const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
-              // Skip if already saved offline at the same (or better) quality
               const alreadySaved = downloadedEpisodes.some(
-                (d) => d.subtitle === epSubtitle && (d.quality === quality || d.quality === "Auto")
+                (d) => d.subtitle === epSubtitle && (d.quality === quality || d.quality === "Auto"),
               );
               if (alreadySaved) { skipped++; continue; }
               const epDlId = createDownloadId(title, epSubtitle, quality, epUrl);
               const proxied = getPrimaryPlaybackSrc(epUrl, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-              downloadManager.startDownload({
-                id: epDlId,
-                url: proxied,
-                title,
-                subtitle: epSubtitle,
-                poster,
-                quality,
-              });
-              queued++;
+              tasks.push({ id: epDlId, url: proxied, subtitle: epSubtitle });
             }
+
             setShowDownloadQualityPicker(false);
             setBulkDownloadMode(false);
-            if (queued === 0 && skipped > 0) {
-              toast.info(`All ${skipped} episodes are already downloaded`);
-            } else if (skipped > 0) {
-              toast.success(`${queued} episodes queued at ${quality} • ${skipped} skipped (already saved)`);
+
+            if (tasks.length === 0) {
+              toast.info(skipped > 0 ? `All ${skipped} episodes are already downloaded` : "Nothing to download");
+              return;
+            }
+
+            // skipBrowserSave: TRUE → save only to IndexedDB (no browser pop-up,
+            // no re-download trigger). User plays them from the in-app library.
+            const startOne = (t: { id: string; url: string; subtitle: string }) =>
+              downloadManager.startDownload({
+                id: t.id, url: t.url, title, subtitle: t.subtitle, poster, quality,
+                skipBrowserSave: true,
+              });
+
+            if (mode === "all") {
+              // Parallel: queue everything at once
+              tasks.forEach((t) => startOne(t));
+              toast.success(
+                `${tasks.length} episodes downloading in parallel${skipped > 0 ? ` • ${skipped} skipped` : ""}`,
+              );
             } else {
-              toast.success(`${queued} episodes queued at ${quality}`);
+              // Sequential: start the first, then chain via a subscription that
+              // watches for completion of the head task before starting the next.
+              const queue = [...tasks];
+              const runNext = () => {
+                const next = queue.shift();
+                if (!next) return;
+                startOne(next);
+                // subscribe and wait for "complete" or for it to be removed
+                const unsub = downloadManager.subscribe((map) => {
+                  const entry = map.get(next.id);
+                  if (!entry || entry.status === "complete" || entry.status === "error") {
+                    unsub();
+                    // small gap so the manager can clean up
+                    setTimeout(runNext, 300);
+                  }
+                });
+              };
+              runNext();
+              toast.success(
+                `${tasks.length} episodes queued one-by-one${skipped > 0 ? ` • ${skipped} skipped` : ""}`,
+              );
             }
           };
 
@@ -2675,13 +2739,34 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             <span className="text-muted-foreground">Estimated total size</span>
                             <span className="font-bold text-foreground">~{bulkSizeEstimate.totalMB.toFixed(0)} MB</span>
                           </div>
-                          <button
-                            onClick={() => startBulkDownloadWithQuality(bulkSizeEstimate.quality)}
-                            disabled={bulkSizeEstimate.eps === 0}
-                            className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-[12px] font-bold hover:scale-[1.01] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {bulkSizeEstimate.eps === 0 ? "All episodes already downloaded" : `Start Downloading ${bulkSizeEstimate.eps} Episodes`}
-                          </button>
+                          {bulkSizeEstimate.eps === 0 ? (
+                            <button
+                              disabled
+                              className="w-full py-2 rounded-lg bg-secondary text-muted-foreground text-[12px] font-bold opacity-60 cursor-not-allowed"
+                            >
+                              All episodes already downloaded
+                            </button>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <button
+                                onClick={() => startBulkDownloadWithQuality(bulkSizeEstimate.quality, "sequential")}
+                                className="w-full py-2 rounded-lg bg-secondary border border-border text-foreground text-[12px] font-bold hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all flex items-center justify-center gap-1.5"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                One by One Download ({bulkSizeEstimate.eps})
+                              </button>
+                              <button
+                                onClick={() => startBulkDownloadWithQuality(bulkSizeEstimate.quality, "all")}
+                                className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-[12px] font-bold hover:scale-[1.01] transition-all flex items-center justify-center gap-1.5"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                All in One Time ({bulkSizeEstimate.eps})
+                              </button>
+                              <p className="text-[9px] text-muted-foreground text-center pt-0.5">
+                                Saved to in-app library — no browser pop-ups.
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
                       {!probingBulk && !bulkSizeEstimate && (
