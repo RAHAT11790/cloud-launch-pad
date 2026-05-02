@@ -701,11 +701,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         fbGet(histRef).then((snap: any) => {
           if (snap.exists()) {
             const data = snap.val();
-            if (data.currentTime && data.duration && (data.currentTime / data.duration) < 0.95) {
-              pendingSeek.current = data.currentTime;
+              if (Number.isFinite(data.currentTime) && Number.isFinite(data.duration) && data.duration > 0 && (data.currentTime / data.duration) < 0.95) {
+                pendingSeek.current = data.currentTime;
               const v = videoRef.current;
-              if (v && v.duration > 0) {
-                v.currentTime = data.currentTime;
+                if (v && v.duration > 0) {
+                  setVideoCurrentTime(v, data.currentTime);
               }
             }
           }
@@ -1245,8 +1245,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     let lastKnownTime = 0;
     const onLoaded = () => {
       setDuration(v.duration);
-      if (pendingSeek.current !== null) {
-        v.currentTime = pendingSeek.current;
+        if (pendingSeek.current !== null) {
+          setVideoCurrentTime(v, pendingSeek.current);
         pendingSeek.current = null;
       }
       // Only autoplay if ad gate is not active
@@ -1323,7 +1323,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           const newFallbackSrc = resolvePlaybackSrc(nextOption.src, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
           activeSourceBaseRef.current = nextOption.src;
           if (newFallbackSrc === currentSrc) {
-            v.currentTime = pendingSeek.current;
+            setVideoCurrentTime(v, pendingSeek.current);
             pendingSeek.current = null;
             v.load();
           } else {
@@ -1360,13 +1360,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           v.src = currentSrc;
           v.load();
           v.addEventListener('loadedmetadata', () => {
-            if (savedTime > 0) v.currentTime = savedTime;
+            if (savedTime > 0) setVideoCurrentTime(v, savedTime);
             v.play().catch(() => {});
           }, { once: true });
           // Also listen for canplay as fallback for MKV
           v.addEventListener('canplay', () => {
             if (savedTime > 0 && Math.abs(v.currentTime - savedTime) > 2) {
-              v.currentTime = savedTime;
+              setVideoCurrentTime(v, savedTime);
             }
             v.play().catch(() => {});
           }, { once: true });
@@ -1377,8 +1377,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setVideoError(false);
       setIsBuffering(false);
       // Also apply pending seek here in case loadedmetadata didn't fire
-      if (pendingSeek.current !== null && v.duration > 0) {
-        v.currentTime = pendingSeek.current;
+        if (pendingSeek.current !== null && v.duration > 0) {
+          setVideoCurrentTime(v, pendingSeek.current);
         pendingSeek.current = null;
       }
       if (v.paused && !adGateActive) {
