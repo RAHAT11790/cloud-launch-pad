@@ -317,7 +317,27 @@ serve(async (req) => {
       const source = String(body?.source || "site").trim(); // 'site' | 'api' | 'short'
       const apiKey = String(body?.apiKey || "").trim();
       const shortId = String(body?.shortId || "").trim();
+      const tierId = String(body?.tierId || "").trim();
       if (!userId) return json({ ok: false, error: "no_user" }, 400);
+
+      // Resolve tier (admin-configured): { adsRequired, hours, label, enabled }
+      // Tier is the SOURCE OF TRUTH for hours when provided & enabled.
+      let tierHours: number | null = null;
+      let tierLabel = "";
+      if (tierId) {
+        const tier = await fbGet(`miniApp/unlockTiers/${tierId}`);
+        if (tier && tier.enabled !== false) {
+          const h = Number(tier.hours);
+          if (h > 0) tierHours = h;
+          tierLabel = String(tier.label || "");
+        }
+      }
+      const fallbackHoursSnap = await fbGet("settings/unlockDurationHours");
+      const fallbackHours =
+        typeof fallbackHoursSnap === "number" && fallbackHoursSnap > 0
+          ? fallbackHoursSnap
+          : 24;
+      const grantHours = tierHours ?? fallbackHours;
 
       // ===== Short-link mode (external bot via /mini?s=ID) =====
       if (source === "short" && shortId) {
