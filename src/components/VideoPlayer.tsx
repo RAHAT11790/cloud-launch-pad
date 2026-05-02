@@ -425,6 +425,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     import("@/lib/downloadStore").then(({ getAllDownloads }) => {
       getAllDownloads().then((all) => {
         const matching = all.filter(d => d.title === title);
+        // Sort ep1 → ep2 → ... ascending (extract episode number from subtitle)
+        const epNum = (s?: string) => {
+          const m = String(s || "").match(/episode\s*(\d+)|ep\s*(\d+)|\b(\d+)\b/i);
+          return m ? parseInt(m[1] || m[2] || m[3], 10) : 9999;
+        };
+        matching.sort((a, b) => epNum(a.subtitle) - epNum(b.subtitle));
         setDownloadedEpisodes(matching);
       });
     });
