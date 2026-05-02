@@ -236,7 +236,7 @@ class DownloadManager {
         this.notify();
       }
       this.pausedUrls.delete(id);
-      window.open(url, "_blank");
+      if (!skipBrowserSave) window.open(url, "_blank");
       setTimeout(() => {
         this.active.delete(id);
         this.notify();
