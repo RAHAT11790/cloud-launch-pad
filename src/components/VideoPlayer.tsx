@@ -91,26 +91,24 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     candidates.push(candidate);
   };
 
-  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  const prefersDirectPlayback = isDirectPlaybackUrl(url);
-
+  // blob:/data:/mediasource: → always direct
   if (isBypassSource(url)) {
     addCandidate(url);
     return candidates;
   }
 
-  if (prefersDirectPlayback) {
-    addCandidate(url);
+  // ===== STRICT PROXY ENFORCEMENT =====
+  // If admin assigned a proxy to this server → ONLY use proxy.
+  // No direct fallback (even for HTTPS). Direct will never be tried.
+  if (proxyUrl && proxyUrl.trim()) {
+    const customProxyCandidate = buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey);
+    addCandidate(customProxyCandidate);
     return candidates;
   }
 
-  if (customProxyCandidate) addCandidate(customProxyCandidate);
+  // ===== NO PROXY = DIRECT ONLY =====
+  // No proxy assigned → play raw URL directly. No proxy fallback.
   addCandidate(url);
-
-  if (candidates.length === 0) {
-    addCandidate(url);
-  }
-
   return candidates;
 };
 
@@ -1523,18 +1521,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [muted, isEmbedPlayback, sendEmbedCmd]);
 
   const getSafeSeekTime = useCallback((v: HTMLVideoElement, target: number) => {
-    if (!Number.isFinite(v.duration) || v.duration <= 0) return 0;
-
-    let clamped = Math.min(Math.max(target, 0), v.duration);
-
-    // For proxied streams, seek only within seekable range to prevent reset-to-zero
-    if (v.seekable && v.seekable.length > 0) {
-      const start = v.seekable.start(0);
-      const end = v.seekable.end(v.seekable.length - 1);
-      clamped = Math.min(Math.max(clamped, start), end);
-    }
-
-    return clamped;
+    if (!Number.isFinite(v.duration) || v.duration <= 0) return Math.max(0, target);
+    // Clamp ONLY to total duration. Do NOT clamp to the `seekable` window —
+    // that prevents long skips outside the currently-buffered range and makes
+    // jumps feel like "loading forever". The browser will issue a fresh
+    // HTTP Range request automatically when currentTime moves past buffered data.
+    return Math.min(Math.max(target, 0), v.duration);
   }, []);
 
   const seek = useCallback((seconds: number) => {
