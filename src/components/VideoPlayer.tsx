@@ -219,6 +219,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>('');
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
+  // Pool of admin-defined proxies, keyed by id. Used when an individual
+  // server in `videoServers` references a `proxyId`.
+  const [customProxies, setCustomProxies] = useState<Record<string, { url: string; apiKey?: string; name?: string }>>({});
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
@@ -373,9 +376,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       }
     });
 
+    const unsub3 = onValue(ref(db, "settings/customProxies"), (snap) => {
+      const val = snap.val();
+      if (val && typeof val === "object") {
+        setCustomProxies(val as any);
+      } else {
+        setCustomProxies({});
+      }
+    });
+
     return () => {
       unsub1();
       unsub2();
+      unsub3();
     };
   }, [noProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
