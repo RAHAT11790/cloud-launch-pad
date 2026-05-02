@@ -11077,6 +11077,21 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
 
   return (
     <div className="space-y-2">
+      <button
+        onClick={() => selectProxy("")}
+        className={`w-full flex items-center justify-between p-2.5 rounded-lg border transition-all ${
+          !activeProxy ? 'border-cyan-500/50 bg-cyan-500/10' : 'border-zinc-700/50 bg-zinc-800/30 hover:border-zinc-600'
+        }`}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${!activeProxy ? 'bg-cyan-400' : 'bg-zinc-600'}`} />
+          <div className="min-w-0 text-left">
+            <div className="text-xs font-medium truncate">Direct (no proxy)</div>
+            <div className="text-[10px] text-zinc-500">Player will use the server URL exactly as saved</div>
+          </div>
+        </div>
+      </button>
+
       {allProxies.map(proxy => (
         <div
           key={proxy.id}
