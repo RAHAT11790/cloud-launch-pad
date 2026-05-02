@@ -476,7 +476,61 @@ export default function EgdManager({
   const isConfigured = !!savedDeployerUrl;
 
   return (
-    <div className="space-y-4 sm:space-y-6 max-w-full overflow-x-hidden">
+    <div className="space-y-4 sm:space-y-6 max-w-full overflow-x-hidden relative">
+      {/* ============ RED FLASHING SERVER-DOWN POPUP ============ */}
+      {showHealthPopup && serverHealth.status === "down" && (
+        <div className="sticky top-2 z-50 mb-2">
+          <div
+            className="rounded-2xl border-2 border-red-500/70 bg-gradient-to-r from-red-950/95 via-red-900/95 to-red-950/95 backdrop-blur-xl p-3 sm:p-4 shadow-[0_0_30px_rgba(239,68,68,0.5)]"
+            style={{ animation: "egd-red-pulse 1.4s ease-in-out infinite" }}
+          >
+            <div className="flex items-start gap-3">
+              <div className="relative shrink-0 mt-0.5">
+                <div className="w-3 h-3 rounded-full bg-red-500" style={{ animation: "egd-dot-pulse 1s ease-in-out infinite" }} />
+                <div className="absolute inset-0 w-3 h-3 rounded-full bg-red-500/60" style={{ animation: "egd-ping 1.4s cubic-bezier(0,0,0.2,1) infinite" }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <AlertCircle className="w-4 h-4 text-red-300 shrink-0" />
+                  <h4 className="text-[13px] sm:text-sm font-extrabold text-red-100 truncate">
+                    🚨 Server is not responding
+                  </h4>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-red-500/30 text-red-200 font-bold">
+                    {serverHealth.consecutiveFailures}× failed
+                  </span>
+                </div>
+                <p className="text-[11px] sm:text-xs text-red-200/90 mt-1 break-words leading-snug">
+                  {serverHealth.message}
+                </p>
+                <p className="text-[10px] text-red-300/70 mt-1">
+                  Last checked: {new Date(serverHealth.lastCheckedAt).toLocaleTimeString()} · auto-retrying every 30s
+                </p>
+              </div>
+              <button
+                onClick={() => setShowHealthPopup(false)}
+                className="shrink-0 p-1.5 rounded-lg text-red-200 hover:bg-red-500/20 transition"
+                title="Dismiss (will reappear if server stays down)"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+          <style>{`
+            @keyframes egd-red-pulse {
+              0%, 100% { box-shadow: 0 0 30px rgba(239,68,68,0.45); border-color: rgba(239,68,68,0.7); }
+              50%      { box-shadow: 0 0 50px rgba(239,68,68,0.85); border-color: rgba(239,68,68,1); }
+            }
+            @keyframes egd-dot-pulse {
+              0%, 100% { transform: scale(1);   opacity: 1; }
+              50%      { transform: scale(1.4); opacity: 0.7; }
+            }
+            @keyframes egd-ping {
+              75%, 100% { transform: scale(2.4); opacity: 0; }
+            }
+          `}</style>
+        </div>
+      )}
+
       {/* Header */}
       <div className={glassCard + " p-4 sm:p-6"}>
         <div className="flex items-start sm:items-center justify-between flex-wrap gap-3">
