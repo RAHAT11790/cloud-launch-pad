@@ -3,6 +3,7 @@ import { db, ref, set, onValue, push, remove, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import {
   Sparkles, Eye, MousePointerClick, CheckCircle2, KeyRound, Plus, Trash2, Copy, Power, Save,
+  Clock, Zap, Star,
 } from "lucide-react";
 
 interface Props {
