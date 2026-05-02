@@ -195,8 +195,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [settingsTab, setSettingsTab] = useState<"speed" | "quality" | "audio">("speed");
   const [currentQuality, setCurrentQuality] = useState<string>("Auto");
   const [cdnEnabled, setCdnEnabled] = useState(true);
-  const [proxyUrl, setProxyUrl] = useState<string>('');
-  const [proxyApiKey, setProxyApiKey] = useState<string>('');
   // Pool of admin-defined proxies, keyed by id. Used when an individual
   // server in `videoServers` references a `proxyId`.
   const [customProxies, setCustomProxies] = useState<Record<string, { url: string; apiKey?: string; name?: string }>>({});
@@ -343,17 +341,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setCdnEnabled(enabled);
     });
 
-    const unsub2 = onValue(ref(db, "settings/proxyServer"), (snap) => {
-      const val = snap.val();
-      if (val && val.url) {
-        setProxyUrl(val.url);
-        setProxyApiKey(val.apiKey || '');
-      } else {
-        setProxyUrl('');
-        setProxyApiKey('');
-      }
-    });
-
     const unsub3 = onValue(ref(db, "settings/customProxies"), (snap) => {
       const val = snap.val();
       if (val && typeof val === "object") {
@@ -365,7 +352,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     return () => {
       unsub1();
-      unsub2();
       unsub3();
     };
   }, [noProxy, src]);
