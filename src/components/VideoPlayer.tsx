@@ -228,7 +228,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
   const [showServerPanel, setShowServerPanel] = useState(false);
-  const premiumServerApplied = useRef(false);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
@@ -282,6 +281,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         case "meta":
         case "canplay":
           // Iframe is loaded — kick off playback and clear the buffering UI
+          setSwitchingEpisode(false);
           setIsBuffering(false);
           setShowFixedLoader(false);
           setVideoError(false);
@@ -295,6 +295,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           break;
         case "playing":
           setPlaying(true);
+          setSwitchingEpisode(false);
           setIsBuffering(false);
           setShowFixedLoader(false);
           break;
@@ -330,6 +331,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           if (onNextEpisode) onNextEpisode();
           break;
         case "error":
+          setSwitchingEpisode(false);
           setVideoError(true);
           setIsBuffering(false);
           break;
@@ -375,7 +377,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       unsub2();
     };
   }, [noProxy, src]);
-  const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
+  const [isPremium, setIsPremium] = useState<boolean | null>(() => {
+    try {
+      const raw = localStorage.getItem("rsanime_premium_cache");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (typeof parsed?.value === "boolean" && Number(parsed?.expiresAt || 0) > Date.now()) {
+        return parsed.value;
+      }
+    } catch {}
+    return null;
+  }); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
   const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
   const [shortenLoading, setShortenLoading] = useState(false);
@@ -570,13 +582,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       try { const u = localStorage.getItem("rsanime_user"); if (u) return JSON.parse(u).id; } catch {} return null;
     };
     const uid = getUserId();
-    if (!uid) { setIsPremium(false); return; }
+    if (!uid) {
+      setIsPremium(false);
+      try { localStorage.setItem("rsanime_premium_cache", JSON.stringify({ value: false, expiresAt: Date.now() + 5 * 60 * 1000 })); } catch {}
+      return;
+    }
 
     const premRef = ref(db, `users/${uid}/premium`);
     const unsub = onValue(premRef, (snap) => {
       const data = snap.val();
       const isPrem = !!(data && data.active === true && data.expiresAt > Date.now());
       setIsPremium(isPrem);
+      try {
+        localStorage.setItem("rsanime_premium_cache", JSON.stringify({
+          value: isPrem,
+          expiresAt: Date.now() + 5 * 60 * 1000,
+        }));
+      } catch {}
     });
     return () => unsub();
   }, []);
