@@ -570,6 +570,28 @@ export default function MiniApp() {
     }
   }, [mode, isShortMode, shortId]);
 
+  // Fetch admin-configured unlock tiers
+  useEffect(() => {
+    let cancelled = false;
+    fetch(FN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "list-tiers" }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        if (d?.ok && Array.isArray(d.tiers) && d.tiers.length > 0) {
+          setTiers(d.tiers);
+          // Auto-select highlighted tier or first one
+          const recommended = d.tiers.find((t: UnlockTier) => t.highlight) || d.tiers[0];
+          setSelectedTier(recommended);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   // Build the displayed profile.
   // - Telegram & external users: use what we already have from initData / URL params.
   // - Website users: hit Firebase via mini-app edge function for name/email/photo.
