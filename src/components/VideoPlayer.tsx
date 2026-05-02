@@ -59,6 +59,15 @@ const isInsecureHttpSource = (url: string): boolean => {
   return String(url || "").trim().toLowerCase().startsWith("http://");
 };
 
+const getBrowserSafeDirectUrl = (url: string): string => {
+  const trimmed = String(url || "").trim();
+  if (!trimmed) return "";
+  if (typeof window !== "undefined" && window.location.protocol === "https:" && isInsecureHttpSource(trimmed)) {
+    return trimmed.replace(/^http:\/\//i, "https://");
+  }
+  return trimmed;
+};
+
 const isBypassSource = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
@@ -108,7 +117,7 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
 
   // ===== NO PROXY = DIRECT ONLY =====
   // No proxy assigned → play raw URL directly. No proxy fallback.
-  addCandidate(url);
+  addCandidate(getBrowserSafeDirectUrl(url));
   return candidates;
 };
 
@@ -707,26 +716,45 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return list;
   }, [src, qualityOptions]);
 
-  const resolvePlaybackSrc = useCallback((rawUrl: string) => {
+  const resolvePlaybackSrc = useCallback((
+    rawUrl: string,
+    options?: { serverIndex?: number; forceServer?: boolean },
+  ) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
-    // Only per-server admin proxy is allowed. No global fallback.
-    const activeServer = effectiveVideoServers[activeServerIndex];
+
+    const useServerRoute = options?.forceServer ?? manualServerSelected;
+    if (!useServerRoute) {
+      return getPrimaryPlaybackSrc(trimmed, cdnEnabled);
+    }
+
+    const serverIndex = options?.serverIndex ?? activeServerIndex;
+    const activeServer = effectiveVideoServers[serverIndex];
     const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
     const effProxyUrl = serverProxy?.url || undefined;
     const effProxyKey = serverProxy?.apiKey || undefined;
     return getPrimaryPlaybackSrc(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
-  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex]);
+  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex, manualServerSelected]);
 
-  const resolvePlaybackCandidates = useCallback((rawUrl: string) => {
+  const resolvePlaybackCandidates = useCallback((
+    rawUrl: string,
+    options?: { serverIndex?: number; forceServer?: boolean },
+  ) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return [] as string[];
-    const activeServer = effectiveVideoServers[activeServerIndex];
+
+    const useServerRoute = options?.forceServer ?? manualServerSelected;
+    if (!useServerRoute) {
+      return buildPlaybackCandidates(trimmed, cdnEnabled);
+    }
+
+    const serverIndex = options?.serverIndex ?? activeServerIndex;
+    const activeServer = effectiveVideoServers[serverIndex];
     const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
     const effProxyUrl = serverProxy?.url || undefined;
     const effProxyKey = serverProxy?.apiKey || undefined;
     return buildPlaybackCandidates(trimmed, cdnEnabled, effProxyUrl, effProxyKey);
-  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex]);
+  }, [cdnEnabled, customProxies, effectiveVideoServers, activeServerIndex, manualServerSelected]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     const server = effectiveVideoServers[serverIndex];
@@ -793,14 +821,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const wasPlaying = !v.paused;
     const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
 
-    // Resolve playback for the TARGET server (its proxyId, not the current one's).
-    // We can't rely on `resolvePlaybackSrc` here because activeServerIndex hasn't
-    // been updated yet — its closure still points at the old server.
-    const targetServer = effectiveVideoServers[serverIndex];
-    const targetServerProxy = targetServer?.proxyId ? customProxies[targetServer.proxyId] : null;
-    const effProxyUrl = targetServerProxy?.url || undefined;
-    const effProxyKey = targetServerProxy?.apiKey || undefined;
-    const resolved = getPrimaryPlaybackSrc(newRawSrc, cdnEnabled, effProxyUrl, effProxyKey);
+    const resolved = resolvePlaybackSrc(newRawSrc, { serverIndex, forceServer: true });
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
@@ -851,7 +872,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
       }
     }, 8000);
-  }, [activeServerIndex, effectiveVideoServers, applyServerDomain, isPremium, customProxies, cdnEnabled]);
+  }, [activeServerIndex, effectiveVideoServers, applyServerDomain, isPremium, resolvePlaybackSrc]);
 
   // Auto-switch to premium server for premium users
   useEffect(() => {
@@ -933,7 +954,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       // Switch to a different URL for this language
       sourceBaseRef.current = audioUrl;
       const finalAudioUrl = manualServerSelected ? applyServerDomain(audioUrl, activeServerIndex) : audioUrl;
-      const proxiedSrc = resolvePlaybackSrc(finalAudioUrl);
+      const proxiedSrc = resolvePlaybackSrc(finalAudioUrl, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
       activeSourceBaseRef.current = finalAudioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
@@ -953,7 +974,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const resetToDefaultAudio = useCallback(() => {
     const v = videoRef.current;
     const defaultRawSrc = src;
-    const defaultResolvedSrc = resolvePlaybackSrc(defaultRawSrc);
+    const defaultResolvedSrc = resolvePlaybackSrc(defaultRawSrc, { forceServer: false });
     const savedTime = v?.currentTime || 0;
     const wasPlaying = !!v && !v.paused;
 
@@ -970,7 +991,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setShowAudioPanel(false);
 
     const finalDefaultSrc = manualServerSelected ? applyServerDomain(defaultRawSrc, activeServerIndex) : defaultRawSrc;
-    const finalResolvedSrc = resolvePlaybackSrc(finalDefaultSrc);
+    const finalResolvedSrc = resolvePlaybackSrc(finalDefaultSrc, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
 
     if (v && currentSrc !== finalResolvedSrc) {
       const restoreTime = () => {
@@ -998,10 +1019,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setSwitchingEpisode(true);
     sourceBaseRef.current = src;
     activeSourceBaseRef.current = src;
-    const resolvedSrc = resolvePlaybackSrc(src);
+    const resolvedSrc = resolvePlaybackSrc(src, { forceServer: false });
     setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
     setManualServerSelected(false);
+    setActiveServerIndex(0);
     setVideoError(false);
     failedSrcsRef.current.clear();
     pendingSeek.current = 0;
@@ -1277,7 +1299,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (next > MAX_RETRIES) {
         console.log('Video failed after retries. URL:', currentSrc);
         failedSrcsRef.current.add(currentSrc);
-        const sameQualityRouteFallback = resolvePlaybackCandidates(activeSourceBaseRef.current)
+        const sameQualityRouteFallback = resolvePlaybackCandidates(activeSourceBaseRef.current, { forceServer: manualServerSelected, serverIndex: activeServerIndex })
           .find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
 
         if (sameQualityRouteFallback) {
@@ -1287,13 +1309,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
 
         const nextOption = availableQualities.find((q) => {
-          const candidateSrc = resolvePlaybackSrc(q.src);
+          const candidateSrc = resolvePlaybackSrc(q.src, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
           return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
         });
 
         if (nextOption) {
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          const newFallbackSrc = resolvePlaybackSrc(nextOption.src);
+          const newFallbackSrc = resolvePlaybackSrc(nextOption.src, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
           activeSourceBaseRef.current = nextOption.src;
           if (newFallbackSrc === currentSrc) {
             v.currentTime = pendingSeek.current;
@@ -1586,7 +1608,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     sourceBaseRef.current = option.src;
     const finalOptionSrc = manualServerSelected ? applyServerDomain(option.src, activeServerIndex) : option.src;
     activeSourceBaseRef.current = finalOptionSrc;
-    const newSrc = resolvePlaybackSrc(finalOptionSrc);
+    const newSrc = resolvePlaybackSrc(finalOptionSrc, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
 
     if (newSrc === currentSrc) {
       setCurrentQuality(option.label);
@@ -1911,7 +1933,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             setShowServerPanel(false);
                             setManualServerSelected(false);
                             activeSourceBaseRef.current = sourceBaseRef.current;
-                            setCurrentSrc(resolvePlaybackSrc(sourceBaseRef.current));
+                            setCurrentSrc(resolvePlaybackSrc(sourceBaseRef.current, { forceServer: false }));
                           }}
                             className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
                               !manualServerSelected ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
@@ -2267,7 +2289,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 </div>
                 <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
                   <video
-                    src={resolvePlaybackSrc(activeVid.url)}
+                    src={resolvePlaybackSrc(activeVid.url, { forceServer: manualServerSelected, serverIndex: activeServerIndex })}
                     className="w-full h-full"
                     controls
                     autoPlay
@@ -2322,7 +2344,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
             const dlId = createDownloadId(title, subtitle, quality, qualitySrc);
-            const proxiedUrl = resolvePlaybackSrc(qualitySrc);
+            const proxiedUrl = resolvePlaybackSrc(qualitySrc, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
             const { downloadManager } = await import("@/lib/downloadManager");
             downloadManager.startDownload({
               id: dlId,
@@ -2378,7 +2400,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               );
               if (alreadySaved) { skipped++; continue; }
               const epDlId = createDownloadId(title, epSubtitle, quality, epUrl);
-              const proxied = resolvePlaybackSrc(epUrl);
+              const proxied = resolvePlaybackSrc(epUrl, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
               tasks.push({ id: epDlId, url: proxied, subtitle: epSubtitle });
             }
 
@@ -2450,7 +2472,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 (d) => d.subtitle === epSubtitle && (d.quality === quality || d.quality === "Auto")
               );
               if (alreadySaved) { skipped++; return; }
-              const proxied = resolvePlaybackSrc(epUrl);
+              const proxied = resolvePlaybackSrc(epUrl, { forceServer: manualServerSelected, serverIndex: activeServerIndex });
               try {
                 const ctrl = new AbortController();
                 const t = setTimeout(() => ctrl.abort(), 4000);
