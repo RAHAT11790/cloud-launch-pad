@@ -11014,6 +11014,12 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
 
   const selectProxy = async (id: string) => {
     try {
+      if (!id) {
+        await remove(ref(db, "settings/proxyServer"));
+        setActiveProxy("");
+        toast.success("প্রক্সি বন্ধ — direct mode active");
+        return;
+      }
       const proxy = allProxies.find(p => p.id === id);
       const url = proxy && 'url' in proxy ? proxy.url : '';
       const apiKey = proxy && 'apiKey' in proxy ? (proxy as any).apiKey : '';
