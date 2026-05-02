@@ -23,7 +23,16 @@ const MONETAG_ZONE = "10925319";
 const MONETAG_SDK = `https://libtl.com/sdk.js`;
 const MONETAG_SCRIPT_ID = `monetag-sdk-${MONETAG_ZONE}`;
 const MONETAG_REQUEST_VAR = "mini_unlock";
-const REQUIRED_VIEWS = 5;
+const DEFAULT_REQUIRED_VIEWS = 5;
+const DEFAULT_HOURS = 24;
+
+interface UnlockTier {
+  id: string;
+  label: string;
+  adsRequired: number;
+  hours: number;
+  highlight?: boolean;
+}
 
 let monetagLoadPromise: Promise<boolean> | null = null;
 
