@@ -793,9 +793,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !effectiveVideoServers[serverIndex]) return;
     if (effectiveVideoServers[serverIndex].locked && !isPremium) return;
-    if (serverSwitchingRef.current) return;
     const v = videoRef.current;
     if (!v) return;
+
+    // NOTE: do NOT early-return when serverSwitchingRef is true — that was the
+    // root cause of the "loader stuck forever" bug when the user clicked a
+    // second server before the first switch completed. Instead, we always
+    // proceed and let the new switch supersede the previous one.
 
     const savedTime = v.currentTime || 0;
     const wasPlaying = !v.paused;
@@ -837,11 +841,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       } catch {}
     });
 
-    // Safety: if new server hasn't produced any playable data in 8s, auto-failover
+    // Hard safety: 2.5s after switch, force-clear the switching flag so
+    // the loader overlay can disappear once playback actually resumes.
+    window.setTimeout(() => {
+      serverSwitchingRef.current = false;
+      const vv = videoRef.current;
+      if (vv && vv.readyState >= 3) {
+        setIsBuffering(false);
+        setShowFixedLoader(false);
+      }
+    }, 2500);
+
+    // Auto-failover: if new server still hasn't produced playable data in 8s, jump to next server
     window.setTimeout(() => {
       const vv = videoRef.current;
-      if (vv && vv.readyState < 2 && !vv.paused === false) {
-        // Still stuck — try the next available server automatically
+      if (vv && vv.readyState < 2) {
         const nextIdx = effectiveVideoServers.findIndex((s, i) => i !== serverIndex && (!s.locked || isPremium));
         if (nextIdx >= 0 && nextIdx !== serverIndex) {
           serverSwitchingRef.current = false;
@@ -849,10 +863,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
       }
     }, 8000);
-
-    window.setTimeout(() => {
-      serverSwitchingRef.current = false;
-    }, 600);
   }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
 
   // Auto-switch to premium server for premium users
