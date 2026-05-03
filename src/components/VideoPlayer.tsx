@@ -1770,30 +1770,42 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     isSeeking.current = false;
   }, []);
 
-  const lastTap = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
+  const lastTap = useRef<{ time: number; x: number; y: number }>({ time: 0, x: 0, y: 0 });
 
   const handleVideoClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (locked) return;
     const now = Date.now();
-    const clientX = "touches" in e ? e.changedTouches[0].clientX : e.clientX;
+    const point = "touches" in e ? e.changedTouches[0] : e;
+    const clientX = point.clientX;
+    const clientY = point.clientY;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const relX = (clientX - rect.left) / rect.width;
+    const relY = (clientY - rect.top) / rect.height;
+    const isDoubleTap = now - lastTap.current.time < 280
+      && Math.abs(clientX - lastTap.current.x) < 30
+      && Math.abs(clientY - lastTap.current.y) < 30;
 
-    if (now - lastTap.current.time < 250) {
-      // Double tap — cancel single tap
-      // Double tap detected
+    if (singleTapTimeoutRef.current) {
+      clearTimeout(singleTapTimeoutRef.current);
+      singleTapTimeoutRef.current = null;
+    }
+
+    if (isDoubleTap) {
+      e.preventDefault();
       if (relX < 0.33) seek(-10);
       else if (relX > 0.66) seek(10);
-      else {
+      else if (relY > 0.2 && relY < 0.8) {
         togglePlay();
         setSkipIndicator({ side: "center", text: playing ? "⏸" : "▶" });
         setTimeout(() => setSkipIndicator(null), 600);
       }
-      lastTap.current = { time: 0, x: 0 };
+      lastTap.current = { time: 0, x: 0, y: 0 };
     } else {
-      lastTap.current = { time: now, x: clientX };
-      // Show controls INSTANTLY on single tap — no 300ms wait
-      toggleControls();
+      lastTap.current = { time: now, x: clientX, y: clientY };
+      singleTapTimeoutRef.current = setTimeout(() => {
+        requestAnimationFrame(() => toggleControls());
+        singleTapTimeoutRef.current = null;
+      }, 220);
     }
   }, [locked, seek, togglePlay, playing, toggleControls]);
 
