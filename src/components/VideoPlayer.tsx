@@ -1536,6 +1536,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
     return () => {
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+        singleTapTimeoutRef.current = null;
+      }
       const v = videoRef.current;
       if (v) {
         try { v.pause(); } catch {}
