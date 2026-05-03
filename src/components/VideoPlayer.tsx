@@ -884,12 +884,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const wasPlaying = !!v && !v.paused;
     const resolved = resolveServerPlaybackSrc(sourceBaseRef.current, serverIndex);
     if (!resolved) return;
+    if (resolved === currentSrc && activeServerIndex === serverIndex) {
+      setShowServerPanel(false);
+      return;
+    }
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
     setVideoError(false);
-    setIsBuffering(true);
-    setShowFixedLoader(true);
+    suppressLoaderBriefly(1200);
 
     setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
@@ -911,7 +914,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           if (wasPlaying) v.play().catch(() => {});
         };
         v.addEventListener("loadedmetadata", restoreAfterMeta, { once: true });
-        v.src = resolved;
+        if (v.src !== resolved) {
+          v.src = resolved;
+        }
       } catch {}
     }
 
@@ -928,7 +933,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         setShowFixedLoader(false);
       }
     }, 600);
-  }, [activeServerIndex, currentTime, customProxiesLoaded, effectiveVideoServers, isPremium, manualServerSelected, resolveServerPlaybackSrc, serverNeedsProxyBootstrap]);
+  }, [activeServerIndex, currentSrc, currentTime, customProxiesLoaded, effectiveVideoServers, isPremium, manualServerSelected, resolveServerPlaybackSrc, serverNeedsProxyBootstrap, suppressLoaderBriefly]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
