@@ -832,6 +832,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
   const instantSwitchRef = useRef(false);
+  const suppressLoaderBriefly = useCallback((ms = 900) => {
+    suppressLoaderUntilRef.current = performance.now() + ms;
+    setIsBuffering(false);
+    setShowFixedLoader(false);
+  }, []);
 
   // Preload next episode for instant switching
   useEffect(() => {
@@ -1148,12 +1153,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       clearTimeout(hideTimer.current);
       hideTimer.current = null;
     }
-  }, []);
-
-  const suppressLoaderBriefly = useCallback((ms = 900) => {
-    suppressLoaderUntilRef.current = performance.now() + ms;
-    setIsBuffering(false);
-    setShowFixedLoader(false);
   }, []);
 
   const stopAndClosePlayer = useCallback(async () => {
