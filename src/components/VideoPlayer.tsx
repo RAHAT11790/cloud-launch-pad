@@ -1301,8 +1301,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, [videoError, clearHideTimer]);
 
-  // Keep loader subtle: show during real buffering only, avoid full-screen flash during quick switches.
-  const showLoaderOverlay = !!currentSrc && !videoError && isBuffering && !playing;
+  // Keep loader subtle: never cover active video during quick switches/seeks.
+  const showLoaderOverlay = !!currentSrc && !videoError && isBuffering && !playing && performance.now() >= suppressLoaderUntilRef.current;
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
@@ -2033,7 +2033,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   <div className="relative">
                     <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
-                      <span className="text-[10px] font-medium">{effectiveVideoServers[activeServerIndex]?.name || (isPremium ? "Premium Server" : `Server ${Math.max(activeServerIndex + 1, 1)}`)}</span>
+                      <span className="text-[10px] font-medium">{effectiveVideoServers[activeServerIndex]?.name?.trim() || `Server ${Math.max(activeServerIndex + 1, 1)}`}</span>
                     </button>
                     {showServerPanel && (
                       <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
