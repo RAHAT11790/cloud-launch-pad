@@ -54,6 +54,8 @@ const getDirectPlaybackUrl = (url: string): string => {
   return String(url || "").trim();
 };
 
+const isHttpUrl = (url: string): boolean => /^http:\/\//i.test(String(url || "").trim());
+
 const isBypassSource = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
@@ -128,6 +130,15 @@ const buildServerSourceUrl = (rawUrl: string, serverValue?: string): string => {
   } catch {
     return trimmedServerValue || trimmedRawUrl;
   }
+};
+
+const shouldPreferProxyForServerSource = (
+  serverSourceUrl: string,
+  serverProxyUrl?: string,
+): boolean => {
+  if (serverProxyUrl && serverProxyUrl.trim()) return true;
+  if (typeof window === "undefined") return false;
+  return window.location.protocol === "https:" && isHttpUrl(serverSourceUrl);
 };
 
 const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
