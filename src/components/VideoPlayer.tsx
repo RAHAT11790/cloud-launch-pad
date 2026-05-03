@@ -28,6 +28,7 @@ interface VideoServerOption {
 }
 
 const PROXY_SERVER_LIMIT = 3;
+const BACKEND_VIDEO_PROXY_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy?url=`;
 
 // Cloudflare CDN proxy for fast video streaming
 
@@ -53,6 +54,8 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
 const getDirectPlaybackUrl = (url: string): string => {
   return String(url || "").trim();
 };
+
+const isHttpUrl = (url: string): boolean => /^http:\/\//i.test(String(url || "").trim());
 
 const isBypassSource = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
@@ -129,6 +132,17 @@ const buildServerSourceUrl = (rawUrl: string, serverValue?: string): string => {
     return trimmedServerValue || trimmedRawUrl;
   }
 };
+
+const shouldPreferProxyForServerSource = (
+  serverSourceUrl: string,
+  serverProxyUrl?: string,
+): boolean => {
+  if (serverProxyUrl && serverProxyUrl.trim()) return true;
+  if (typeof window === "undefined") return false;
+  return window.location.protocol === "https:" && isHttpUrl(serverSourceUrl);
+};
+
+const getBuiltinVideoProxy = () => BACKEND_VIDEO_PROXY_BASE;
 
 const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
@@ -760,8 +774,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!trimmed) return "";
     const activeServer = effectiveVideoServers[serverIndex];
     const serverSourceUrl = getServerSourceUrl(trimmed, serverIndex);
-    const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
-    return getPrimaryPlaybackSrc(serverSourceUrl, cdnEnabled, serverProxy?.url || undefined, serverProxy?.apiKey || undefined);
+    const assignedProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
+    const fallbackProxy = !assignedProxy && shouldPreferProxyForServerSource(serverSourceUrl, assignedProxy?.url)
+      ? Object.values(customProxies).find((proxy) => !!proxy?.url) || { url: getBuiltinVideoProxy() }
+      : null;
+    const effectiveProxy = assignedProxy || fallbackProxy;
+    return getPrimaryPlaybackSrc(serverSourceUrl, cdnEnabled, effectiveProxy?.url || undefined, effectiveProxy?.apiKey || undefined);
   }, [cdnEnabled, customProxies, effectiveVideoServers, getServerSourceUrl]);
 
   const resolveDirectPlaybackCandidates = useCallback((rawUrl: string) => {
@@ -775,9 +793,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!trimmed) return [] as string[];
     const activeServer = effectiveVideoServers[serverIndex];
     const serverSourceUrl = getServerSourceUrl(trimmed, serverIndex);
-    const serverProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
-    return buildPlaybackCandidates(serverSourceUrl, cdnEnabled, serverProxy?.url || undefined, serverProxy?.apiKey || undefined);
+    const assignedProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
+    const fallbackProxy = !assignedProxy && shouldPreferProxyForServerSource(serverSourceUrl, assignedProxy?.url)
+      ? Object.values(customProxies).find((proxy) => !!proxy?.url) || { url: getBuiltinVideoProxy() }
+      : null;
+    const effectiveProxy = assignedProxy || fallbackProxy;
+    return buildPlaybackCandidates(serverSourceUrl, cdnEnabled, effectiveProxy?.url || undefined, effectiveProxy?.apiKey || undefined);
   }, [cdnEnabled, customProxies, effectiveVideoServers, getServerSourceUrl]);
+
+  const serverNeedsProxyBootstrap = useCallback((rawUrl: string, serverIndex: number) => {
+    const trimmed = String(rawUrl || "").trim();
+    if (!trimmed) return false;
+    const activeServer = effectiveVideoServers[serverIndex];
+    const serverSourceUrl = getServerSourceUrl(trimmed, serverIndex);
+    const assignedProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
+    return !assignedProxy && !customProxiesLoaded && shouldPreferProxyForServerSource(serverSourceUrl) && !getBuiltinVideoProxy();
+  }, [customProxies, customProxiesLoaded, effectiveVideoServers, getServerSourceUrl]);
 
   const resolvePlaybackSrc = useCallback((
     rawUrl: string,
@@ -841,7 +872,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setShowServerPanel(false);
       return;
     }
-    if (effectiveVideoServers[serverIndex].proxyId && !customProxiesLoaded) return;
+    if ((effectiveVideoServers[serverIndex].proxyId && !customProxiesLoaded) || serverNeedsProxyBootstrap(sourceBaseRef.current, serverIndex)) return;
     if (effectiveVideoServers[serverIndex].locked && !isPremium) return;
     const v = videoRef.current;
 
@@ -850,7 +881,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     // second server before the first switch completed. Instead, we always
     // proceed and let the new switch supersede the previous one.
 
-    const savedTime = v && Number.isFinite(v.currentTime) ? v.currentTime : 0;
+    const savedTime = v && Number.isFinite(v.currentTime) ? v.currentTime : currentTime;
     const wasPlaying = !!v && !v.paused;
     const resolved = resolveServerPlaybackSrc(sourceBaseRef.current, serverIndex);
 
@@ -872,8 +903,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     // Apply the new src directly — synchronous swap is the fastest path.
     if (v) {
       try {
-        v.pause();
         v.src = resolved;
+        v.currentTime = Math.max(0, savedTime || 0);
         if (wasPlaying) v.play().catch(() => {});
       } catch {}
     }
@@ -890,8 +921,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         setIsBuffering(false);
         setShowFixedLoader(false);
       }
-    }, 1200);
-  }, [activeServerIndex, customProxiesLoaded, effectiveVideoServers, isPremium, manualServerSelected, resolveServerPlaybackSrc]);
+    }, 600);
+  }, [activeServerIndex, currentTime, customProxiesLoaded, effectiveVideoServers, isPremium, manualServerSelected, resolveServerPlaybackSrc, serverNeedsProxyBootstrap]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
@@ -1035,6 +1066,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       : hasServerDefault
         ? Math.max(preferredServerIndex, 0)
         : 0;
+    if (hasServerDefault && serverNeedsProxyBootstrap(src, nextServerIndex)) return;
     const shouldUseServerRoute = hasServerDefault && (keepCurrentServer || preferredServerIndex >= 0);
     const resolvedSrc = shouldUseServerRoute
       ? resolveServerPlaybackSrc(src, nextServerIndex)
@@ -1044,6 +1076,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setSwitchingEpisode(true);
     sourceBaseRef.current = src;
     activeSourceBaseRef.current = src;
+    const v = videoRef.current;
+    const preservedTime = !isFreshPlayerSession && manualServerSelected && v && Number.isFinite(v.currentTime) ? v.currentTime : 0;
+    pendingSeek.current = preservedTime;
     setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
     setManualServerSelected(keepCurrentServer);
@@ -1051,14 +1086,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setVideoError(false);
     failedSrcsRef.current.clear();
     retryAttemptsRef.current.clear();
-    pendingSeek.current = 0;
 
     const t = setTimeout(() => {
       instantSwitchRef.current = false;
       setSwitchingEpisode(false);
-    }, 450);
+    }, 180);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, hasProxyBoundServer, customProxiesLoaded, effectiveVideoServers, isPremium, preferredServerIndex, manualServerSelected, activeServerIndex, resolveDirectPlaybackSrc, resolveServerPlaybackSrc, animeId, title]);
+  }, [src, qualityOptions, noProxy, playbackRouteReady, hasProxyBoundServer, customProxiesLoaded, effectiveVideoServers, isPremium, preferredServerIndex, manualServerSelected, activeServerIndex, resolveDirectPlaybackSrc, resolveServerPlaybackSrc, animeId, title, serverNeedsProxyBootstrap]);
 
   // Loader follows real buffering state — show whenever video isn't playable, hide as soon as it can play.
   useEffect(() => {
@@ -1229,8 +1263,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, [videoError, clearHideTimer]);
 
-  // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
-  const showLoaderOverlay = !!currentSrc && !videoError && (showFixedLoader || serverSwitchingRef.current);
+  // Keep loader subtle: show during real buffering only, avoid full-screen flash during quick switches.
+  const showLoaderOverlay = !!currentSrc && !videoError && isBuffering && !playing;
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
@@ -1941,32 +1975,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   <div className="relative">
                     <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
-                      <span className="text-[10px] font-medium">{manualServerSelected ? (effectiveVideoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
+                      <span className="text-[10px] font-medium">{effectiveVideoServers[activeServerIndex]?.name || (isPremium ? "Premium Server" : `Server ${Math.max(activeServerIndex + 1, 1)}`)}</span>
                     </button>
                     {showServerPanel && (
                       <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
                         <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
-                        {!isPremium && (
-                          <button onClick={() => {
-                            setShowServerPanel(false);
-                            const fallbackServerIndex = preferredServerIndex >= 0 ? preferredServerIndex : 0;
-                            const shouldUseServer = effectiveVideoServers.length > 0;
-                            setManualServerSelected(shouldUseServer);
-                            if (shouldUseServer) setActiveServerIndex(fallbackServerIndex);
-                            activeSourceBaseRef.current = sourceBaseRef.current;
-                            setCurrentSrc(
-                              shouldUseServer
-                                ? resolveServerPlaybackSrc(sourceBaseRef.current, fallbackServerIndex)
-                                : resolveDirectPlaybackSrc(sourceBaseRef.current)
-                            );
-                          }}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
-                              preferredServerIndex === -1 || (manualServerSelected && activeServerIndex === preferredServerIndex) ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                            }`}>
-                            <span>Default</span>
-                            {(preferredServerIndex === -1 || (manualServerSelected && activeServerIndex === preferredServerIndex)) && <Check className="w-3 h-3" />}
-                          </button>
-                        )}
                         {effectiveVideoServers.map((srv, idx) => {
                           const isLocked = srv.locked && !isPremium;
                           return (
