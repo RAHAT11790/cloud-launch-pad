@@ -28,6 +28,7 @@ interface VideoServerOption {
 }
 
 const PROXY_SERVER_LIMIT = 3;
+const BACKEND_VIDEO_PROXY_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy?url=`;
 
 // Cloudflare CDN proxy for fast video streaming
 
@@ -140,6 +141,8 @@ const shouldPreferProxyForServerSource = (
   if (typeof window === "undefined") return false;
   return window.location.protocol === "https:" && isHttpUrl(serverSourceUrl);
 };
+
+const getBuiltinVideoProxy = () => BACKEND_VIDEO_PROXY_BASE;
 
 const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
