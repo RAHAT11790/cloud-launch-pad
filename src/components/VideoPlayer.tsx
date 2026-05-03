@@ -198,10 +198,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const containerRef = useRef<HTMLDivElement>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const singleTapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSeek = useRef<number | null>(null);
   const rafId = useRef<number>(0);
   const progressRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
+  const suppressLoaderUntilRef = useRef(0);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -748,10 +750,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const preferredServerIndex = useMemo(() => {
     if (effectiveVideoServers.length === 0) return -1;
+
     if (isPremium) {
       const premiumIdx = effectiveVideoServers.findIndex((server) => !!server.locked);
       if (premiumIdx >= 0) return premiumIdx;
+
+      const freeIdx = effectiveVideoServers.findIndex((server) => !server.locked);
+      return freeIdx >= 0 ? freeIdx : 0;
     }
+
     const freeIdx = effectiveVideoServers.findIndex((server) => !server.locked);
     return freeIdx >= 0 ? freeIdx : 0;
   }, [effectiveVideoServers, isPremium]);
@@ -1136,6 +1143,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       clearTimeout(hideTimer.current);
       hideTimer.current = null;
     }
+  }, []);
+
+  const suppressLoaderBriefly = useCallback((ms = 900) => {
+    suppressLoaderUntilRef.current = performance.now() + ms;
+    setIsBuffering(false);
+    setShowFixedLoader(false);
   }, []);
 
   const stopAndClosePlayer = useCallback(async () => {
