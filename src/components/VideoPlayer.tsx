@@ -806,6 +806,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Preload next episode for instant switching
   useEffect(() => {
     if (!episodeList || episodeList.length <= 1) return;
+    if (!playbackRouteReady) return;
+    if (!noProxy && hasProxyBoundServer && !customProxiesLoaded) return;
+    if (effectiveVideoServers.length > 0 && isPremium === null) return;
     const activeIdx = episodeList.findIndex(ep => ep.active);
     if (activeIdx < 0 || activeIdx >= episodeList.length - 1) return;
     // Find the next episode's src from qualityOptions or main src
@@ -830,7 +833,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         preloadLinkRef.current = null;
       }
     };
-  }, [episodeList, nextEpisodeSrc, src, resolvePlaybackSrc]);
+  }, [episodeList, nextEpisodeSrc, src, resolvePlaybackSrc, playbackRouteReady, noProxy, hasProxyBoundServer, customProxiesLoaded, effectiveVideoServers.length, isPremium]);
 
   const switchServer = useCallback((serverIndex: number) => {
     if (!effectiveVideoServers[serverIndex]) return;
