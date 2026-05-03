@@ -1016,11 +1016,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!noProxy && hasProxyBoundServer && !customProxiesLoaded) return;
     if (effectiveVideoServers.length > 0 && isPremium === null) return;
 
-    const v = videoRef.current;
-    if (v) {
-      try { v.pause(); } catch {}
-    }
-
     const hasServerDefault = effectiveVideoServers.length > 0;
     const currentSessionKey = `${animeId || title || "video"}::${src}`;
     const previousSessionKey = playerSessionKeyRef.current;
@@ -1360,7 +1355,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       }
       console.log(`Video error, retry ${next}/${MAX_RETRIES}...`);
       // Exponential backoff: 500ms, 1000ms
-      const delay = next * 500;
+      const delay = next * 350;
       setTimeout(() => {
         if (v) {
           const savedTime = v.currentTime || lastKnownTime;
@@ -1404,7 +1399,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       // Longer debounce — avoid flashing loader on tiny network hiccups during smooth playback
       waitingTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
-      }, 1200);
+      }, 350);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
@@ -1422,7 +1417,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (stalledTimer) clearTimeout(stalledTimer);
       stalledTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
-      }, 1500);
+      }, 500);
     };
     v.addEventListener("loadedmetadata", onLoaded);
     v.addEventListener("play", onPlay);
