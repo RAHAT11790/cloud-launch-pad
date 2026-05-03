@@ -198,10 +198,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const containerRef = useRef<HTMLDivElement>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const singleTapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSeek = useRef<number | null>(null);
   const rafId = useRef<number>(0);
   const progressRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
+  const suppressLoaderUntilRef = useRef(0);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -748,10 +750,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const preferredServerIndex = useMemo(() => {
     if (effectiveVideoServers.length === 0) return -1;
+
     if (isPremium) {
       const premiumIdx = effectiveVideoServers.findIndex((server) => !!server.locked);
       if (premiumIdx >= 0) return premiumIdx;
+
+      const freeIdx = effectiveVideoServers.findIndex((server) => !server.locked);
+      return freeIdx >= 0 ? freeIdx : 0;
     }
+
     const freeIdx = effectiveVideoServers.findIndex((server) => !server.locked);
     return freeIdx >= 0 ? freeIdx : 0;
   }, [effectiveVideoServers, isPremium]);
@@ -825,6 +832,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
   const instantSwitchRef = useRef(false);
+  const suppressLoaderBriefly = useCallback((ms = 900) => {
+    suppressLoaderUntilRef.current = performance.now() + ms;
+    setIsBuffering(false);
+    setShowFixedLoader(false);
+  }, []);
 
   // Preload next episode for instant switching
   useEffect(() => {
@@ -877,12 +889,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const wasPlaying = !!v && !v.paused;
     const resolved = resolveServerPlaybackSrc(sourceBaseRef.current, serverIndex);
     if (!resolved) return;
+    if (resolved === currentSrc && activeServerIndex === serverIndex) {
+      setShowServerPanel(false);
+      return;
+    }
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
     setVideoError(false);
-    setIsBuffering(true);
-    setShowFixedLoader(true);
+    suppressLoaderBriefly(1200);
 
     setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
@@ -904,7 +919,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           if (wasPlaying) v.play().catch(() => {});
         };
         v.addEventListener("loadedmetadata", restoreAfterMeta, { once: true });
-        v.src = resolved;
+        if (v.src !== resolved) {
+          v.src = resolved;
+        }
       } catch {}
     }
 
@@ -921,7 +938,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         setShowFixedLoader(false);
       }
     }, 600);
-  }, [activeServerIndex, currentTime, customProxiesLoaded, effectiveVideoServers, isPremium, manualServerSelected, resolveServerPlaybackSrc, serverNeedsProxyBootstrap]);
+  }, [activeServerIndex, currentSrc, currentTime, customProxiesLoaded, effectiveVideoServers, isPremium, manualServerSelected, resolveServerPlaybackSrc, serverNeedsProxyBootstrap, suppressLoaderBriefly]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
@@ -1119,6 +1136,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
 
+    if (performance.now() < suppressLoaderUntilRef.current) {
+      setShowFixedLoader(false);
+      return;
+    }
+
     // Strict mapping: loader visibility == buffering state.
     setShowFixedLoader(isBuffering);
   }, [currentSrc, isBuffering]);
@@ -1239,27 +1261,30 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (adGateActive || showSettings || showAudioPanel || showQualityPanel || showServerPanel || showDownloadQualityPicker) return;
     // Keep controls visible while a video error is showing — user must reach the server switcher
     if (videoError) return;
+    if (!showControls) return;
     hideTimer.current = setTimeout(() => {
       setShowControls(false);
     }, locked ? 2200 : 3800);
-  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings, videoError]);
+  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showControls, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings, videoError]);
 
   const resetHideTimer = useCallback(() => {
+    if (locked) return;
     setShowControls(true);
     scheduleHideTimer();
-  }, [scheduleHideTimer]);
+  }, [locked, scheduleHideTimer]);
 
   const toggleControls = useCallback(() => {
+    if (locked) return;
     setShowControls((prev) => {
       const next = !prev;
       if (!next) {
         clearHideTimer();
       } else {
-        setTimeout(() => scheduleHideTimer(), 0);
+        requestAnimationFrame(() => scheduleHideTimer());
       }
       return next;
     });
-  }, [clearHideTimer, scheduleHideTimer]);
+  }, [clearHideTimer, locked, scheduleHideTimer]);
 
   useEffect(() => {
     if (showControls) scheduleHideTimer();
@@ -1276,8 +1301,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, [videoError, clearHideTimer]);
 
-  // Keep loader subtle: show during real buffering only, avoid full-screen flash during quick switches.
-  const showLoaderOverlay = !!currentSrc && !videoError && isBuffering && !playing;
+  // Keep loader subtle: never cover active video during quick switches/seeks.
+  const showLoaderOverlay = !!currentSrc && !videoError && isBuffering && !playing && performance.now() >= suppressLoaderUntilRef.current;
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
@@ -1454,6 +1479,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setIsBuffering(false);
     };
     const onLoadStart = () => {
+      if (performance.now() < suppressLoaderUntilRef.current) return;
       // Only show loader if we genuinely don't have data yet
       if (v.readyState < 2) setIsBuffering(true);
     };
@@ -1488,6 +1514,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => {
       cancelAnimationFrame(rafId.current);
       if (stalledTimer) clearTimeout(stalledTimer);
+      if (waitingTimer) clearTimeout(waitingTimer);
       v.removeEventListener("loadedmetadata", onLoaded);
       v.removeEventListener("play", onPlay);
       v.removeEventListener("pause", onPause);
@@ -1509,6 +1536,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
     return () => {
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+        singleTapTimeoutRef.current = null;
+      }
       const v = videoRef.current;
       if (v) {
         try { v.pause(); } catch {}
@@ -1631,12 +1662,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!v) return;
 
     const nextTime = getSafeSeekTime(v, v.currentTime + seconds);
+    suppressLoaderBriefly(700);
     setVideoCurrentTime(v, nextTime);
+
+    if (progressRef.current && v.duration > 0) {
+      progressRef.current.style.width = `${(nextTime / v.duration) * 100}%`;
+    }
+    if (timeDisplayRef.current && v.duration > 0) {
+      timeDisplayRef.current.textContent = `${formatTime(nextTime)} / ${formatTime(v.duration)}`;
+    }
 
     setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
     setTimeout(() => setSkipIndicator(null), 600);
     resetHideTimer();
-  }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd]);
+  }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd, suppressLoaderBriefly]);
 
   const toggleFullscreen = useCallback(async () => {
     const el = videoContainerRef.current || containerRef.current || videoRef.current;
@@ -1735,30 +1774,42 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     isSeeking.current = false;
   }, []);
 
-  const lastTap = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
+  const lastTap = useRef<{ time: number; x: number; y: number }>({ time: 0, x: 0, y: 0 });
 
   const handleVideoClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (locked) return;
     const now = Date.now();
-    const clientX = "touches" in e ? e.changedTouches[0].clientX : e.clientX;
+    const point = "touches" in e ? e.changedTouches[0] : e;
+    const clientX = point.clientX;
+    const clientY = point.clientY;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const relX = (clientX - rect.left) / rect.width;
+    const relY = (clientY - rect.top) / rect.height;
+    const isDoubleTap = now - lastTap.current.time < 280
+      && Math.abs(clientX - lastTap.current.x) < 30
+      && Math.abs(clientY - lastTap.current.y) < 30;
 
-    if (now - lastTap.current.time < 250) {
-      // Double tap — cancel single tap
-      // Double tap detected
+    if (singleTapTimeoutRef.current) {
+      clearTimeout(singleTapTimeoutRef.current);
+      singleTapTimeoutRef.current = null;
+    }
+
+    if (isDoubleTap) {
+      e.preventDefault();
       if (relX < 0.33) seek(-10);
       else if (relX > 0.66) seek(10);
-      else {
+      else if (relY > 0.2 && relY < 0.8) {
         togglePlay();
         setSkipIndicator({ side: "center", text: playing ? "⏸" : "▶" });
         setTimeout(() => setSkipIndicator(null), 600);
       }
-      lastTap.current = { time: 0, x: 0 };
+      lastTap.current = { time: 0, x: 0, y: 0 };
     } else {
-      lastTap.current = { time: now, x: clientX };
-      // Show controls INSTANTLY on single tap — no 300ms wait
-      toggleControls();
+      lastTap.current = { time: now, x: clientX, y: clientY };
+      singleTapTimeoutRef.current = setTimeout(() => {
+        requestAnimationFrame(() => toggleControls());
+        singleTapTimeoutRef.current = null;
+      }, 220);
     }
   }, [locked, seek, togglePlay, playing, toggleControls]);
 
@@ -1986,7 +2037,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   <div className="relative">
                     <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
-                      <span className="text-[10px] font-medium">{effectiveVideoServers[activeServerIndex]?.name || (isPremium ? "Premium Server" : `Server ${Math.max(activeServerIndex + 1, 1)}`)}</span>
+                      <span className="text-[10px] font-medium">{effectiveVideoServers[activeServerIndex]?.name?.trim() || `Server ${Math.max(activeServerIndex + 1, 1)}`}</span>
                     </button>
                     {showServerPanel && (
                       <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
