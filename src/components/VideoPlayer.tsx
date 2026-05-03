@@ -798,6 +798,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return buildPlaybackCandidates(serverSourceUrl, cdnEnabled, effectiveProxy?.url || undefined, effectiveProxy?.apiKey || undefined);
   }, [cdnEnabled, customProxies, effectiveVideoServers, getServerSourceUrl]);
 
+  const serverNeedsProxyBootstrap = useCallback((rawUrl: string, serverIndex: number) => {
+    const trimmed = String(rawUrl || "").trim();
+    if (!trimmed) return false;
+    const activeServer = effectiveVideoServers[serverIndex];
+    const serverSourceUrl = getServerSourceUrl(trimmed, serverIndex);
+    const assignedProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
+    return !assignedProxy && !customProxiesLoaded && shouldPreferProxyForServerSource(serverSourceUrl);
+  }, [customProxies, customProxiesLoaded, effectiveVideoServers, getServerSourceUrl]);
+
   const resolvePlaybackSrc = useCallback((
     rawUrl: string,
     options?: { serverIndex?: number; forceServer?: boolean },
@@ -860,7 +869,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setShowServerPanel(false);
       return;
     }
-    if (effectiveVideoServers[serverIndex].proxyId && !customProxiesLoaded) return;
+    if ((effectiveVideoServers[serverIndex].proxyId && !customProxiesLoaded) || serverNeedsProxyBootstrap(sourceBaseRef.current, serverIndex)) return;
     if (effectiveVideoServers[serverIndex].locked && !isPremium) return;
     const v = videoRef.current;
 
@@ -910,7 +919,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         setShowFixedLoader(false);
       }
     }, 600);
-  }, [activeServerIndex, currentTime, customProxiesLoaded, effectiveVideoServers, isPremium, manualServerSelected, resolveServerPlaybackSrc]);
+  }, [activeServerIndex, currentTime, customProxiesLoaded, effectiveVideoServers, isPremium, manualServerSelected, resolveServerPlaybackSrc, serverNeedsProxyBootstrap]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
@@ -1054,6 +1063,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       : hasServerDefault
         ? Math.max(preferredServerIndex, 0)
         : 0;
+    if (hasServerDefault && serverNeedsProxyBootstrap(src, nextServerIndex)) return;
     const shouldUseServerRoute = hasServerDefault && (keepCurrentServer || preferredServerIndex >= 0);
     const resolvedSrc = shouldUseServerRoute
       ? resolveServerPlaybackSrc(src, nextServerIndex)
@@ -1079,7 +1089,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setSwitchingEpisode(false);
     }, 180);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, hasProxyBoundServer, customProxiesLoaded, effectiveVideoServers, isPremium, preferredServerIndex, manualServerSelected, activeServerIndex, resolveDirectPlaybackSrc, resolveServerPlaybackSrc, animeId, title]);
+  }, [src, qualityOptions, noProxy, playbackRouteReady, hasProxyBoundServer, customProxiesLoaded, effectiveVideoServers, isPremium, preferredServerIndex, manualServerSelected, activeServerIndex, resolveDirectPlaybackSrc, resolveServerPlaybackSrc, animeId, title, serverNeedsProxyBootstrap]);
 
   // Loader follows real buffering state — show whenever video isn't playable, hide as soon as it can play.
   useEffect(() => {
