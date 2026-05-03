@@ -226,6 +226,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [videoServers, setVideoServers] = useState<VideoServerOption[]>([]);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
+  const playerSessionKeyRef = useRef<string>("");
   const [showServerPanel, setShowServerPanel] = useState(false);
 
   useEffect(() => {
@@ -782,21 +783,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     rawUrl: string,
     options?: { serverIndex?: number; forceServer?: boolean },
   ) => {
-    const useServerRoute = options?.forceServer ?? manualServerSelected;
-    if (!useServerRoute) return resolveDirectPlaybackSrc(rawUrl);
+    const useServerRoute = options?.forceServer ?? true;
+    if (!useServerRoute || effectiveVideoServers.length === 0) return resolveDirectPlaybackSrc(rawUrl);
     const serverIndex = options?.serverIndex ?? activeServerIndex;
     return resolveServerPlaybackSrc(rawUrl, serverIndex);
-  }, [activeServerIndex, manualServerSelected, resolveDirectPlaybackSrc, resolveServerPlaybackSrc]);
+  }, [activeServerIndex, effectiveVideoServers.length, resolveDirectPlaybackSrc, resolveServerPlaybackSrc]);
 
   const resolvePlaybackCandidates = useCallback((
     rawUrl: string,
     options?: { serverIndex?: number; forceServer?: boolean },
   ) => {
-    const useServerRoute = options?.forceServer ?? manualServerSelected;
-    if (!useServerRoute) return resolveDirectPlaybackCandidates(rawUrl);
+    const useServerRoute = options?.forceServer ?? true;
+    if (!useServerRoute || effectiveVideoServers.length === 0) return resolveDirectPlaybackCandidates(rawUrl);
     const serverIndex = options?.serverIndex ?? activeServerIndex;
     return resolveServerPlaybackCandidates(rawUrl, serverIndex);
-  }, [activeServerIndex, manualServerSelected, resolveDirectPlaybackCandidates, resolveServerPlaybackCandidates]);
+  }, [activeServerIndex, effectiveVideoServers.length, resolveDirectPlaybackCandidates, resolveServerPlaybackCandidates]);
 
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
@@ -1021,7 +1022,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
 
     const hasServerDefault = effectiveVideoServers.length > 0;
+    const currentSessionKey = `${animeId || title || "video"}::${src}`;
+    const previousSessionKey = playerSessionKeyRef.current;
+    const isFreshPlayerSession = previousSessionKey !== currentSessionKey;
+    playerSessionKeyRef.current = currentSessionKey;
+
     const keepCurrentServer =
+      !isFreshPlayerSession &&
       manualServerSelected &&
       !!effectiveVideoServers[activeServerIndex] &&
       (!effectiveVideoServers[activeServerIndex].locked || !!isPremium);
@@ -1041,7 +1048,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     activeSourceBaseRef.current = src;
     setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
-    setManualServerSelected(shouldUseServerRoute);
+    setManualServerSelected(keepCurrentServer);
     setActiveServerIndex(nextServerIndex);
     setVideoError(false);
     failedSrcsRef.current.clear();
@@ -1053,7 +1060,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setSwitchingEpisode(false);
     }, 450);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, hasProxyBoundServer, customProxiesLoaded, effectiveVideoServers, isPremium, preferredServerIndex, manualServerSelected, activeServerIndex, resolveDirectPlaybackSrc, resolveServerPlaybackSrc]);
+  }, [src, qualityOptions, noProxy, playbackRouteReady, hasProxyBoundServer, customProxiesLoaded, effectiveVideoServers, isPremium, preferredServerIndex, manualServerSelected, activeServerIndex, resolveDirectPlaybackSrc, resolveServerPlaybackSrc, animeId, title]);
 
   // Loader follows real buffering state — show whenever video isn't playable, hide as soon as it can play.
   useEffect(() => {
