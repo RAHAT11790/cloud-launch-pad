@@ -214,6 +214,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Pool of admin-defined proxies, keyed by id. Used when an individual
   // server in `videoServers` references a `proxyId`.
   const [customProxies, setCustomProxies] = useState<Record<string, { url: string; apiKey?: string; name?: string }>>({});
+  const [customProxiesLoaded, setCustomProxiesLoaded] = useState(false);
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
@@ -342,6 +343,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   useEffect(() => {
     if (noProxy) {
       setCdnEnabled(false);
+      setCustomProxiesLoaded(true);
       setPlaybackRouteReady(true);
       return;
     }
@@ -361,6 +363,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       } else {
         setCustomProxies({});
       }
+      setCustomProxiesLoaded(true);
     });
 
     return () => {
