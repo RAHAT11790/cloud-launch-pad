@@ -1250,8 +1250,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, [videoError, clearHideTimer]);
 
-  // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
-  const showLoaderOverlay = !!currentSrc && !videoError && (showFixedLoader || serverSwitchingRef.current);
+  // Keep loader subtle: show during real buffering only, avoid full-screen flash during quick switches.
+  const showLoaderOverlay = !!currentSrc && !videoError && isBuffering && !playing;
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
@@ -1962,32 +1962,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   <div className="relative">
                     <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
-                      <span className="text-[10px] font-medium">{manualServerSelected ? (effectiveVideoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
+                      <span className="text-[10px] font-medium">{effectiveVideoServers[activeServerIndex]?.name || (isPremium ? "Premium Server" : `Server ${Math.max(activeServerIndex + 1, 1)}`)}</span>
                     </button>
                     {showServerPanel && (
                       <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
                         <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
-                        {!isPremium && (
-                          <button onClick={() => {
-                            setShowServerPanel(false);
-                            const fallbackServerIndex = preferredServerIndex >= 0 ? preferredServerIndex : 0;
-                            const shouldUseServer = effectiveVideoServers.length > 0;
-                            setManualServerSelected(shouldUseServer);
-                            if (shouldUseServer) setActiveServerIndex(fallbackServerIndex);
-                            activeSourceBaseRef.current = sourceBaseRef.current;
-                            setCurrentSrc(
-                              shouldUseServer
-                                ? resolveServerPlaybackSrc(sourceBaseRef.current, fallbackServerIndex)
-                                : resolveDirectPlaybackSrc(sourceBaseRef.current)
-                            );
-                          }}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
-                              preferredServerIndex === -1 || (manualServerSelected && activeServerIndex === preferredServerIndex) ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                            }`}>
-                            <span>Default</span>
-                            {(preferredServerIndex === -1 || (manualServerSelected && activeServerIndex === preferredServerIndex)) && <Check className="w-3 h-3" />}
-                          </button>
-                        )}
                         {effectiveVideoServers.map((srv, idx) => {
                           const isLocked = srv.locked && !isPremium;
                           return (
