@@ -776,7 +776,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const serverSourceUrl = getServerSourceUrl(trimmed, serverIndex);
     const assignedProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
     const fallbackProxy = !assignedProxy && shouldPreferProxyForServerSource(serverSourceUrl, assignedProxy?.url)
-      ? Object.values(customProxies).find((proxy) => !!proxy?.url)
+      ? Object.values(customProxies).find((proxy) => !!proxy?.url) || { url: getBuiltinVideoProxy() }
       : null;
     const effectiveProxy = assignedProxy || fallbackProxy;
     return getPrimaryPlaybackSrc(serverSourceUrl, cdnEnabled, effectiveProxy?.url || undefined, effectiveProxy?.apiKey || undefined);
@@ -795,7 +795,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const serverSourceUrl = getServerSourceUrl(trimmed, serverIndex);
     const assignedProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
     const fallbackProxy = !assignedProxy && shouldPreferProxyForServerSource(serverSourceUrl, assignedProxy?.url)
-      ? Object.values(customProxies).find((proxy) => !!proxy?.url)
+      ? Object.values(customProxies).find((proxy) => !!proxy?.url) || { url: getBuiltinVideoProxy() }
       : null;
     const effectiveProxy = assignedProxy || fallbackProxy;
     return buildPlaybackCandidates(serverSourceUrl, cdnEnabled, effectiveProxy?.url || undefined, effectiveProxy?.apiKey || undefined);
@@ -807,7 +807,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const activeServer = effectiveVideoServers[serverIndex];
     const serverSourceUrl = getServerSourceUrl(trimmed, serverIndex);
     const assignedProxy = activeServer?.proxyId ? customProxies[activeServer.proxyId] : null;
-    return !assignedProxy && !customProxiesLoaded && shouldPreferProxyForServerSource(serverSourceUrl);
+    return !assignedProxy && !customProxiesLoaded && shouldPreferProxyForServerSource(serverSourceUrl) && !getBuiltinVideoProxy();
   }, [customProxies, customProxiesLoaded, effectiveVideoServers, getServerSourceUrl]);
 
   const resolvePlaybackSrc = useCallback((
