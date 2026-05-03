@@ -1114,14 +1114,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       loaderTimeoutRef.current = null;
     }
 
-    if (!currentSrc || switchingEpisode) {
+    if (!currentSrc) {
       setShowFixedLoader(false);
       return;
     }
 
     // Strict mapping: loader visibility == buffering state.
     setShowFixedLoader(isBuffering);
-  }, [currentSrc, isBuffering, switchingEpisode]);
+  }, [currentSrc, isBuffering]);
 
   // Simple volume sync - no AudioContext needed
   useEffect(() => {
@@ -1409,9 +1409,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setTimeout(() => {
         if (v) {
           const savedTime = v.currentTime || lastKnownTime;
-          // For MKV files, try removing the src attribute and re-setting it
           v.src = currentSrc;
-          v.load();
           v.addEventListener('loadedmetadata', () => {
             if (savedTime > 0) setVideoCurrentTime(v, savedTime);
             v.play().catch(() => {});
@@ -2002,7 +2000,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                               }`}>
                               <span className="flex items-center gap-1.5">
                                 {srv.locked && <Lock className="w-3 h-3 text-accent" />}
-                                {srv.name || `Server ${idx + 1}`}
+                                {srv.name?.trim() || `Server ${idx + 1}`}
                               </span>
                               {isLocked && <span className="text-[8px] text-accent font-medium">Premium</span>}
                               {!isLocked && activeServerIndex === idx && <Check className="w-3 h-3" />}
