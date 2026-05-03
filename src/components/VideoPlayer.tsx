@@ -1136,6 +1136,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
 
+    if (performance.now() < suppressLoaderUntilRef.current) {
+      setShowFixedLoader(false);
+      return;
+    }
+
     // Strict mapping: loader visibility == buffering state.
     setShowFixedLoader(isBuffering);
   }, [currentSrc, isBuffering]);
@@ -1256,27 +1261,30 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (adGateActive || showSettings || showAudioPanel || showQualityPanel || showServerPanel || showDownloadQualityPicker) return;
     // Keep controls visible while a video error is showing — user must reach the server switcher
     if (videoError) return;
+    if (!showControls) return;
     hideTimer.current = setTimeout(() => {
       setShowControls(false);
     }, locked ? 2200 : 3800);
-  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings, videoError]);
+  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showControls, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings, videoError]);
 
   const resetHideTimer = useCallback(() => {
+    if (locked) return;
     setShowControls(true);
     scheduleHideTimer();
-  }, [scheduleHideTimer]);
+  }, [locked, scheduleHideTimer]);
 
   const toggleControls = useCallback(() => {
+    if (locked) return;
     setShowControls((prev) => {
       const next = !prev;
       if (!next) {
         clearHideTimer();
       } else {
-        setTimeout(() => scheduleHideTimer(), 0);
+        requestAnimationFrame(() => scheduleHideTimer());
       }
       return next;
     });
-  }, [clearHideTimer, scheduleHideTimer]);
+  }, [clearHideTimer, locked, scheduleHideTimer]);
 
   useEffect(() => {
     if (showControls) scheduleHideTimer();
