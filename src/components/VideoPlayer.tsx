@@ -1479,6 +1479,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setIsBuffering(false);
     };
     const onLoadStart = () => {
+      if (performance.now() < suppressLoaderUntilRef.current) return;
       // Only show loader if we genuinely don't have data yet
       if (v.readyState < 2) setIsBuffering(true);
     };
@@ -1513,6 +1514,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => {
       cancelAnimationFrame(rafId.current);
       if (stalledTimer) clearTimeout(stalledTimer);
+      if (waitingTimer) clearTimeout(waitingTimer);
       v.removeEventListener("loadedmetadata", onLoaded);
       v.removeEventListener("play", onPlay);
       v.removeEventListener("pause", onPause);
@@ -1656,12 +1658,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!v) return;
 
     const nextTime = getSafeSeekTime(v, v.currentTime + seconds);
+    suppressLoaderBriefly(700);
     setVideoCurrentTime(v, nextTime);
+
+    if (progressRef.current && v.duration > 0) {
+      progressRef.current.style.width = `${(nextTime / v.duration) * 100}%`;
+    }
+    if (timeDisplayRef.current && v.duration > 0) {
+      timeDisplayRef.current.textContent = `${formatTime(nextTime)} / ${formatTime(v.duration)}`;
+    }
 
     setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
     setTimeout(() => setSkipIndicator(null), 600);
     resetHideTimer();
-  }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd]);
+  }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd, suppressLoaderBriefly]);
 
   const toggleFullscreen = useCallback(async () => {
     const el = videoContainerRef.current || containerRef.current || videoRef.current;
