@@ -480,6 +480,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
   const [premiumExpiry, setPremiumExpiry] = useState<number | null>(null);
   const [premiumMaxDevices, setPremiumMaxDevices] = useState(1);
   const [premiumDeviceCount, setPremiumDeviceCount] = useState(0);
+  const [isCoAdmin, setIsCoAdmin] = useState(false);
   const [redeemInput, setRedeemInput] = useState("");
   const [redeemLoading, setRedeemLoading] = useState(false);
   const [bkashSettings, setBkashSettings] = useState<any>(null);
