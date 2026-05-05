@@ -354,14 +354,38 @@ async function verifyUserWithBackend(user_id: number): Promise<boolean> {
   }
 }
 
-// Verify keyboard — single button (auto-verify, no manual continue)
-// Embeds origin bot username so mini-app redirects back here after success.
+// Verify keyboard — uses vplink shortener pointing back to website,
+// which marks the bot user as verified and redirects back to bot.
 async function verifyKeyboard(user_id: number, returnPayload = "") {
-  const url = `https://t.me/${RS_MINI_BOT}/${RS_MINI_APP_NAME}?startapp=u_tg_${user_id}_r_${returnPayload}_b_${RS_RETURN_BOT}`;
+  let hours = 24;
+  try {
+    const cfg = await fb("GET", `settings/botVerifyHours`);
+    if (cfg && Number(cfg) > 0) hours = Number(cfg);
+  } catch {}
+
+  const token = `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+  try {
+    await fb("PUT", `${NS}/botVerifyTokens/${token}`, {
+      token, tg_user_id: user_id, return_payload: returnPayload, hours,
+      created_at: Date.now(), expires_at: Date.now() + 30 * 60 * 1000, consumed: false,
+    });
+  } catch (e) { console.error("[verifyToken]", e); }
+
+  const SITE_URL = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
+  const me = await botUsername();
+  const callbackUrl = `${SITE_URL}/unlock?botv=${token}&bot=${encodeURIComponent(me)}`;
+
+  let finalUrl = callbackUrl;
+  try {
+    const vplinkKey = Deno.env.get("VPLINK_API_KEY") || "ab26a97a3a3540c5be2ce837bd97526f8e76043d";
+    const apiUrl = `https://vplink.in/api?api=${encodeURIComponent(vplinkKey)}&url=${encodeURIComponent(callbackUrl)}`;
+    const r = await fetch(apiUrl);
+    const j = await r.json().catch(() => ({}));
+    if (j?.status === "success" && j?.shortenedUrl) finalUrl = j.shortenedUrl;
+  } catch (e) { console.error("[vplink]", e); }
+
   return {
-    inline_keyboard: [
-      [{ text: "🎁 ᴠᴇʀɪғʏ ᴀᴄᴄᴇꜱꜱ (24ʜ)", url }],
-    ],
+    inline_keyboard: [[{ text: `🎁 ᴠᴇʀɪғʏ ᴀᴄᴄᴇꜱꜱ (${hours}ʜ)`, url: finalUrl }]],
   };
 }
 
