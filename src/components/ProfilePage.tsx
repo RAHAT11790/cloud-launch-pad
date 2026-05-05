@@ -573,6 +573,12 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
       }
     });
 
+    const unsubCoAdmin = onValue(ref(db, `users/${userId}/coAdmin`), (snap) => {
+      const v = snap.val();
+      setIsCoAdmin(!!(v && v.enabled));
+    });
+    (window as any).__rs_coadmin_unsub__ = unsubCoAdmin;
+
     const wlRef = ref(db, `users/${userId}/watchlist`);
     const whRef = ref(db, `users/${userId}/watchHistory`);
 
