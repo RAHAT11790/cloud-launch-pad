@@ -780,54 +780,43 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
     setVideoError(false);
-    setIsBuffering(true);
-    setShowFixedLoader(true);
 
     setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
 
-    // Reset failed src tracking so the new server gets a fair chance
     failedSrcsRef.current.clear();
     retryAttemptsRef.current.clear();
 
-    // Force a hard reload — even if `resolved` equals current src, we want a fresh fetch
+    // Fast swap — just change src, browser handles the rest. No removeAttribute/double-load.
+    setCurrentSrc(resolved);
     try {
-      v.pause();
-      v.removeAttribute("src");
+      v.src = resolved;
       v.load();
+      if (savedTime > 0) {
+        const onMeta = () => { try { v.currentTime = savedTime; } catch {} v.removeEventListener("loadedmetadata", onMeta); };
+        v.addEventListener("loadedmetadata", onMeta);
+      }
+      if (wasPlaying) v.play().catch(() => {});
     } catch {}
 
-    setCurrentSrc(resolved);
-
-    // Imperatively apply new src on next frame so the swap actually fires loadstart
-    requestAnimationFrame(() => {
-      const vv = videoRef.current;
-      if (!vv) return;
-      try {
-        vv.src = resolved;
-        vv.load();
-        if (wasPlaying) vv.play().catch(() => {});
-      } catch {}
-    });
-
-    // Safety: if new server hasn't produced any playable data in 8s, auto-failover
+    // Auto-failover only if server truly dead (5s, no data at all)
     window.setTimeout(() => {
       const vv = videoRef.current;
-      if (vv && vv.readyState < 2 && !vv.paused === false) {
-        // Still stuck — try the next available server automatically
+      if (!vv) return;
+      if (vv.readyState < 1 && vv.networkState === 3) {
         const nextIdx = effectiveVideoServers.findIndex((s, i) => i !== serverIndex && (!s.locked || isPremium));
         if (nextIdx >= 0 && nextIdx !== serverIndex) {
           serverSwitchingRef.current = false;
           switchServer(nextIdx);
         }
       }
-    }, 2000);
+    }, 5000);
 
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
-    }, 600);
+    }, 400);
   }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
 
   // Auto-switch to premium server for premium users
