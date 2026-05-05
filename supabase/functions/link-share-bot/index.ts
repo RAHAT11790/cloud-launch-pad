@@ -1226,6 +1226,46 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify(r), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
+  // Verify-consume endpoint: POST { token } → marks bot user verified, returns deep link back to bot
+  if (url.pathname.endsWith("/verify-consume") || url.searchParams.get("verifyConsume") === "1") {
+    if (req.method !== "POST") {
+      return new Response(JSON.stringify({ ok: false, error: "POST only" }), {
+        status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    let body: any = {};
+    try { body = await req.json(); } catch {}
+    const token = String(body?.token || "").trim();
+    if (!token) {
+      return new Response(JSON.stringify({ ok: false, error: "token required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    try {
+      const tok: any = await fb("GET", `${NS}/botVerifyTokens/${token}`);
+      if (!tok || tok.consumed || (tok.expires_at && tok.expires_at < Date.now())) {
+        return new Response(JSON.stringify({ ok: false, error: "invalid_or_expired" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const uid = Number(tok.tg_user_id);
+      const hours = Number(tok.hours || 24);
+      await markUserVerified(uid, hours);
+      await fb("PATCH", `${NS}/botVerifyTokens/${token}`, { consumed: true, consumed_at: Date.now() });
+      // Push welcome
+      try { await tryAutoVerifyOnReturn(uid, uid, null); } catch {}
+      const me = await botUsername();
+      const back = `https://t.me/${me}?start=verified`;
+      return new Response(JSON.stringify({ ok: true, hours, deepLink: back }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (e: any) {
+      return new Response(JSON.stringify({ ok: false, error: e?.message || "internal" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
+
   // Push endpoint: POST { user_id, secret } → bot sends welcome to that user.
   if (url.pathname.endsWith("/notify") || url.searchParams.get("notify") === "1") {
     if (req.method !== "POST") {
