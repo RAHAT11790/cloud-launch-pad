@@ -761,34 +761,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const serverSwitchingRef = useRef(false);
   const instantSwitchRef = useRef(false);
 
-  // Preload next episode for instant switching
-  useEffect(() => {
-    if (!episodeList || episodeList.length <= 1) return;
-    const activeIdx = episodeList.findIndex(ep => ep.active);
-    if (activeIdx < 0 || activeIdx >= episodeList.length - 1) return;
-    // Find the next episode's src from qualityOptions or main src
-    // We preload via <link rel="preload"> which is lightweight
-    const nextSrc = resolvePlaybackSrc(nextEpisodeSrc || "");
-    if (!nextSrc) return;
-    // Clean up old preload
-    if (preloadLinkRef.current) {
-      try { document.head.removeChild(preloadLinkRef.current); } catch {}
-      preloadLinkRef.current = null;
-    }
-    const link = document.createElement("link");
-    link.rel = "preload";
-    link.as = "fetch";
-    link.href = nextSrc;
-    link.crossOrigin = "anonymous";
-    preloadLinkRef.current = link;
-    document.head.appendChild(link);
-    return () => {
-      if (preloadLinkRef.current) {
-        try { document.head.removeChild(preloadLinkRef.current); } catch {}
-        preloadLinkRef.current = null;
-      }
-    };
-  }, [episodeList, nextEpisodeSrc, src, resolvePlaybackSrc]);
+  // NOTE: Aggressive next-episode preload removed — it caused CORS fetches
+  // and wasted bandwidth that slowed the *current* video load. Browser will
+  // naturally prefetch via the video element when user switches.
 
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !effectiveVideoServers[serverIndex]) return;
