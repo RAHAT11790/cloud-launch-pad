@@ -618,6 +618,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
 
     return () => {
       unsubPremium();
+      try { unsubCoAdmin(); } catch {}
+      delete (window as any).__rs_coadmin_unsub__;
       window.clearTimeout(idle);
       const cleanup = (window as any).__rs_profile_cleanup__;
       if (typeof cleanup === "function") cleanup();
