@@ -354,14 +354,38 @@ async function verifyUserWithBackend(user_id: number): Promise<boolean> {
   }
 }
 
-// Verify keyboard — single button (auto-verify, no manual continue)
-// Embeds origin bot username so mini-app redirects back here after success.
+// Verify keyboard — uses vplink shortener pointing back to website,
+// which marks the bot user as verified and redirects back to bot.
 async function verifyKeyboard(user_id: number, returnPayload = "") {
-  const url = `https://t.me/${RS_MINI_BOT}/${RS_MINI_APP_NAME}?startapp=u_tg_${user_id}_r_${returnPayload}_b_${RS_RETURN_BOT}`;
+  let hours = 24;
+  try {
+    const cfg = await fb("GET", `settings/botVerifyHours`);
+    if (cfg && Number(cfg) > 0) hours = Number(cfg);
+  } catch {}
+
+  const token = `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+  try {
+    await fb("PUT", `${NS}/botVerifyTokens/${token}`, {
+      token, tg_user_id: user_id, return_payload: returnPayload, hours,
+      created_at: Date.now(), expires_at: Date.now() + 30 * 60 * 1000, consumed: false,
+    });
+  } catch (e) { console.error("[verifyToken]", e); }
+
+  const SITE_URL = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
+  const me = await botUsername();
+  const callbackUrl = `${SITE_URL}/unlock?botv=${token}&bot=${encodeURIComponent(me)}`;
+
+  let finalUrl = callbackUrl;
+  try {
+    const vplinkKey = Deno.env.get("VPLINK_API_KEY") || "ab26a97a3a3540c5be2ce837bd97526f8e76043d";
+    const apiUrl = `https://vplink.in/api?api=${encodeURIComponent(vplinkKey)}&url=${encodeURIComponent(callbackUrl)}`;
+    const r = await fetch(apiUrl);
+    const j = await r.json().catch(() => ({}));
+    if (j?.status === "success" && j?.shortenedUrl) finalUrl = j.shortenedUrl;
+  } catch (e) { console.error("[vplink]", e); }
+
   return {
-    inline_keyboard: [
-      [{ text: "🎁 ᴠᴇʀɪғʏ ᴀᴄᴄᴇꜱꜱ (24ʜ)", url }],
-    ],
+    inline_keyboard: [[{ text: `🎁 ᴠᴇʀɪғʏ ᴀᴄᴄᴇꜱꜱ (${hours}ʜ)`, url: finalUrl }]],
   };
 }
 
@@ -1200,6 +1224,46 @@ Deno.serve(async (req) => {
   if (url.searchParams.get("info")) {
     const r = await tg("getWebhookInfo", {});
     return new Response(JSON.stringify(r), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
+  // Verify-consume endpoint: POST { token } → marks bot user verified, returns deep link back to bot
+  if (url.pathname.endsWith("/verify-consume") || url.searchParams.get("verifyConsume") === "1") {
+    if (req.method !== "POST") {
+      return new Response(JSON.stringify({ ok: false, error: "POST only" }), {
+        status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    let body: any = {};
+    try { body = await req.json(); } catch {}
+    const token = String(body?.token || "").trim();
+    if (!token) {
+      return new Response(JSON.stringify({ ok: false, error: "token required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    try {
+      const tok: any = await fb("GET", `${NS}/botVerifyTokens/${token}`);
+      if (!tok || tok.consumed || (tok.expires_at && tok.expires_at < Date.now())) {
+        return new Response(JSON.stringify({ ok: false, error: "invalid_or_expired" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const uid = Number(tok.tg_user_id);
+      const hours = Number(tok.hours || 24);
+      await markUserVerified(uid, hours);
+      await fb("PATCH", `${NS}/botVerifyTokens/${token}`, { consumed: true, consumed_at: Date.now() });
+      // Push welcome
+      try { await tryAutoVerifyOnReturn(uid, uid, null); } catch {}
+      const me = await botUsername();
+      const back = `https://t.me/${me}?start=verified`;
+      return new Response(JSON.stringify({ ok: true, hours, deepLink: back }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (e: any) {
+      return new Response(JSON.stringify({ ok: false, error: e?.message || "internal" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
   }
 
   // Push endpoint: POST { user_id, secret } → bot sends welcome to that user.
