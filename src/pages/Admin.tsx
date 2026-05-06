@@ -1045,13 +1045,13 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
             </button>
             <button type="button" onClick={() => setNewMode("miniapp")}
               className={`px-2 py-0.5 rounded text-[10px] font-semibold ${newMode === "miniapp" ? "bg-cyan-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
-              📱 Mini App
+              🤖 Telegram Bot
             </button>
             {newMode === "miniapp" && <span className="text-[9px] text-cyan-300 ml-auto">URL লাগবে না</span>}
           </div>
           <div className="flex gap-2">
             <input value={newIcon} onChange={(e) => setNewIcon(e.target.value)} placeholder="🔓" className={`${inputClass} !w-12 !text-center`} />
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={newMode === "miniapp" ? "বাটনের নাম (যেমন: Telegram Mini App)" : "সার্ভিসের নাম (যেমন: AroLinks)"} className={`${inputClass} flex-1`} />
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={newMode === "miniapp" ? "বাটনের নাম (যেমন: Telegram Bot)" : "সার্ভিসের নাম (যেমন: AroLinks)"} className={`${inputClass} flex-1`} />
           </div>
           {newMode === "shortener" && (
             <input value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
