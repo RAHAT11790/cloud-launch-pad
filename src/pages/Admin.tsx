@@ -7135,6 +7135,11 @@ ${tgHashtags}`;
           <EgdManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
+        {/* ==================== FIREBASE CLEANUP ==================== */}
+        {activeSection === "fb-cleanup" && (
+          <FirebaseCleanupSection glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+        )}
+
         {/* ==================== AI CONFIG ==================== */}
         {activeSection === "ai-config" && (
           <AiConfigSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
