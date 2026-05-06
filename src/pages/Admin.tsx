@@ -20,7 +20,7 @@ import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_I
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { WeeklyEpTabButton, WeeklyEpManager } from "@/components/admin/WeeklyEpManager";
 // AdminNotificationBell removed
-import MiniAppManager from "@/components/admin/MiniAppManager";
+
 import EgdManager from "@/components/admin/EgdManager";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 
@@ -4067,7 +4067,7 @@ ${tgHashtags}`;
     { section: "maintenance", icon: <Power size={16} />, label: "Maintenance", group: "Server" },
     { section: "edge-router", icon: <Activity size={16} />, label: "Edge Router" },
     { section: "email-service", icon: <Mail size={16} />, label: "Email Service" },
-    { section: "mini-app", icon: <Sparkles size={16} />, label: "Telegram Mini App" },
+    
     { section: "egd-manager", icon: <Bot size={16} />, label: "EGD MANAGER" },
     { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
