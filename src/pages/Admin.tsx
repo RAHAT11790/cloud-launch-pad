@@ -994,12 +994,12 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                   🔗 Shortener
                 </button>
                 <button
-                  onClick={() => set(ref(db, `settings/adServices/${svc.id}/mode`), "miniapp").then(() => toast.success("Mini App mode"))}
+                  onClick={() => set(ref(db, `settings/adServices/${svc.id}/mode`), "miniapp").then(() => toast.success("Telegram Bot mode"))}
                   className={`px-2 py-0.5 rounded text-[10px] font-semibold ${svc.mode === "miniapp" ? "bg-cyan-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
-                  📱 Mini App
+                  🤖 Telegram Bot
                 </button>
                 {svc.mode === "miniapp" && (
-                  <span className="text-[9px] text-cyan-300 ml-auto">→ Telegram auto</span>
+                  <span className="text-[9px] text-cyan-300 ml-auto">→ Auto verify</span>
                 )}
               </div>
               {/* Per-service duration */}
