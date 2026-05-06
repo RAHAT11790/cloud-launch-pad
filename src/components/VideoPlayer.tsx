@@ -634,12 +634,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const { openExternalBrowser } = await import("@/lib/openExternal");
     try {
       const fb = await import("@/lib/firebase");
-      // Global toggle: send unlock straight to Telegram bot (RS_ANIME_FIND_BOT)
       const tgSnap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramBot"));
-      const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramVerifyBotUsername"));
-      const botUsername = String(botSnap.val() || "RS_ANIME_FIND_BOT").replace(/^@/, "").trim();
-      if (tgSnap.val() === true || service?.mode === "miniapp") {
-        window.location.href = `https://t.me/${botUsername}?start=verify`;
+      const useBot = tgSnap.val() === true || service?.mode === "miniapp";
+      if (useBot) {
+        // Ask backend to mint a proper unlock_<userId> deep link so the bot
+        // auto-sends the Verify (shortener) message instead of just /start.
+        const { createTelegramBotUnlockLink } = await import("@/lib/unlockAccess");
+        const r = await createTelegramBotUnlockLink();
+        if (r.ok && r.deepLink) {
+          window.location.href = r.deepLink;
+          return;
+        }
+        // Fallback: open bot welcome if backend failed
+        const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramVerifyBotUsername"));
+        const botUsername = String(botSnap.val() || "RS_ANIME_FIND_BOT").replace(/^@/, "").trim();
+        window.location.href = `https://t.me/${botUsername}`;
         return;
       }
     } catch {}
@@ -2154,7 +2163,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       <ExternalLink className="w-4 h-4" />
                       {link.service.icon || "🔓"} {link.service.name || `Unlock ${i + 1}`}
                       {link.service.mode === "miniapp" ? (
-                        <span className="text-[10px] opacity-80 ml-1">(Telegram)</span>
+                        <span className="text-[10px] opacity-80 ml-1">(Bot Verify)</span>
                       ) : link.service.durationHours ? (
                         <span className="text-[10px] opacity-80 ml-1">({link.service.durationHours}h access)</span>
                       ) : null}

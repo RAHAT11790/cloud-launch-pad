@@ -23,8 +23,9 @@ import { WeeklyEpTabButton, WeeklyEpManager } from "@/components/admin/WeeklyEpM
 
 import EgdManager from "@/components/admin/EgdManager";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
+import FirebaseCleanupSection from "@/components/admin/FirebaseCleanup";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "fb-cleanup";
 
 interface CastMember {
   name: string;
@@ -890,15 +891,15 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     const id = `ad_${Date.now()}`;
     await set(ref(db, `settings/adServices/${id}`), {
       id,
-      name: "Telegram Mini App",
+      name: "Telegram Bot",
       functionUrl: "miniapp://telegram",
       enabled: true,
-      icon: "📱",
+      icon: "🤖",
       color: "linear-gradient(135deg, #06b6d4, #3b82f6)",
       durationHours: 24,
       mode: "miniapp",
     });
-    toast.success("✅ Telegram Mini App আনলক বাটন যোগ হয়েছে!");
+    toast.success("✅ Telegram Bot আনলক বাটন যোগ হয়েছে!");
   };
 
   const toggleService = async (id: string) => {
@@ -994,12 +995,12 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                   🔗 Shortener
                 </button>
                 <button
-                  onClick={() => set(ref(db, `settings/adServices/${svc.id}/mode`), "miniapp").then(() => toast.success("Mini App mode"))}
+                  onClick={() => set(ref(db, `settings/adServices/${svc.id}/mode`), "miniapp").then(() => toast.success("Telegram Bot mode"))}
                   className={`px-2 py-0.5 rounded text-[10px] font-semibold ${svc.mode === "miniapp" ? "bg-cyan-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
-                  📱 Mini App
+                  🤖 Telegram Bot
                 </button>
                 {svc.mode === "miniapp" && (
-                  <span className="text-[9px] text-cyan-300 ml-auto">→ Telegram auto</span>
+                  <span className="text-[9px] text-cyan-300 ml-auto">→ Auto verify</span>
                 )}
               </div>
               {/* Per-service duration */}
@@ -1023,11 +1024,11 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         })}
       </div>
 
-      {/* Quick preset: Telegram Mini App */}
+      {/* Quick preset: Telegram Bot */}
       <button onClick={addMiniAppPreset}
         className="w-full mb-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 text-white transition-all hover:scale-[1.02]"
         style={{ background: "linear-gradient(135deg, #06b6d4, #3b82f6)" }}>
-        📱 ➕ Telegram Mini App আনলক বাটন (One-click)
+        🤖 ➕ Telegram Bot আনলক বাটন (One-click)
       </button>
 
       {/* Add New Service */}
@@ -1045,13 +1046,13 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
             </button>
             <button type="button" onClick={() => setNewMode("miniapp")}
               className={`px-2 py-0.5 rounded text-[10px] font-semibold ${newMode === "miniapp" ? "bg-cyan-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
-              📱 Mini App
+              🤖 Telegram Bot
             </button>
             {newMode === "miniapp" && <span className="text-[9px] text-cyan-300 ml-auto">URL লাগবে না</span>}
           </div>
           <div className="flex gap-2">
             <input value={newIcon} onChange={(e) => setNewIcon(e.target.value)} placeholder="🔓" className={`${inputClass} !w-12 !text-center`} />
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={newMode === "miniapp" ? "বাটনের নাম (যেমন: Telegram Mini App)" : "সার্ভিসের নাম (যেমন: AroLinks)"} className={`${inputClass} flex-1`} />
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={newMode === "miniapp" ? "বাটনের নাম (যেমন: Telegram Bot)" : "সার্ভিসের নাম (যেমন: AroLinks)"} className={`${inputClass} flex-1`} />
           </div>
           {newMode === "shortener" && (
             <input value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
@@ -2764,6 +2765,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     
     "apk-dw": "APK Download Center",
     "egd-manager": "EGD MANAGER",
+    "fb-cleanup": "Firebase Cleanup",
   };
 
   // ==================== CATEGORIES ====================
@@ -4070,6 +4072,7 @@ ${tgHashtags}`;
     
     { section: "egd-manager", icon: <Bot size={16} />, label: "EGD MANAGER" },
     { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
+    { section: "fb-cleanup", icon: <Trash2 size={16} />, label: "FB Cleanup" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
@@ -7130,6 +7133,11 @@ ${tgHashtags}`;
         {/* ==================== EGD MANAGER ==================== */}
         {activeSection === "egd-manager" && (
           <EgdManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+        )}
+
+        {/* ==================== FIREBASE CLEANUP ==================== */}
+        {activeSection === "fb-cleanup" && (
+          <FirebaseCleanupSection glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
         {/* ==================== AI CONFIG ==================== */}
