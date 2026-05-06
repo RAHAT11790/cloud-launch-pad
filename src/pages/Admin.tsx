@@ -890,15 +890,15 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     const id = `ad_${Date.now()}`;
     await set(ref(db, `settings/adServices/${id}`), {
       id,
-      name: "Telegram Mini App",
+      name: "Telegram Bot",
       functionUrl: "miniapp://telegram",
       enabled: true,
-      icon: "📱",
+      icon: "🤖",
       color: "linear-gradient(135deg, #06b6d4, #3b82f6)",
       durationHours: 24,
       mode: "miniapp",
     });
-    toast.success("✅ Telegram Mini App আনলক বাটন যোগ হয়েছে!");
+    toast.success("✅ Telegram Bot আনলক বাটন যোগ হয়েছে!");
   };
 
   const toggleService = async (id: string) => {
