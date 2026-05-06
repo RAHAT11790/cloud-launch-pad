@@ -4072,6 +4072,7 @@ ${tgHashtags}`;
     
     { section: "egd-manager", icon: <Bot size={16} />, label: "EGD MANAGER" },
     { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
+    { section: "fb-cleanup", icon: <Trash2 size={16} />, label: "FB Cleanup" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
     { section: "branding", icon: <Edit size={16} />, label: "UI+AD Branding" },
     { section: "live-tv", icon: <Activity size={16} />, label: "Live TV" },
