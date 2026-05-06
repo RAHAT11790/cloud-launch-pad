@@ -480,6 +480,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
   const [premiumExpiry, setPremiumExpiry] = useState<number | null>(null);
   const [premiumMaxDevices, setPremiumMaxDevices] = useState(1);
   const [premiumDeviceCount, setPremiumDeviceCount] = useState(0);
+  const [isCoAdmin, setIsCoAdmin] = useState(false);
   const [redeemInput, setRedeemInput] = useState("");
   const [redeemLoading, setRedeemLoading] = useState(false);
   const [bkashSettings, setBkashSettings] = useState<any>(null);
@@ -572,6 +573,12 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
       }
     });
 
+    const unsubCoAdmin = onValue(ref(db, `users/${userId}/coAdmin`), (snap) => {
+      const v = snap.val();
+      setIsCoAdmin(!!(v && v.enabled));
+    });
+    (window as any).__rs_coadmin_unsub__ = unsubCoAdmin;
+
     const wlRef = ref(db, `users/${userId}/watchlist`);
     const whRef = ref(db, `users/${userId}/watchHistory`);
 
@@ -611,6 +618,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
 
     return () => {
       unsubPremium();
+      try { unsubCoAdmin(); } catch {}
+      delete (window as any).__rs_coadmin_unsub__;
       window.clearTimeout(idle);
       const cleanup = (window as any).__rs_profile_cleanup__;
       if (typeof cleanup === "function") cleanup();
@@ -899,6 +908,72 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </div>
+
+          {isCoAdmin && (
+            <div className="mt-6">
+              <p className="text-[11px] uppercase tracking-wider text-yellow-400 font-bold mb-2 px-1 flex items-center gap-1.5">
+                <Crown className="w-3.5 h-3.5" /> Co-Admin Quick Tools
+              </p>
+              <div className="glass-card rounded-xl p-4 border border-yellow-500/30 space-y-3">
+                <button
+                  onClick={async () => {
+                    if (!userId) return;
+                    if (isPremium) {
+                      try {
+                        await set(ref(db, `users/${userId}/premium`), null);
+                        toast.success("✅ Premium removed");
+                      } catch (e: any) { toast.error(e?.message || "Failed"); }
+                    } else {
+                      try {
+                        await set(ref(db, `users/${userId}/premium`), {
+                          expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+                          maxDevices: 5,
+                          grantedBy: "co-admin-self",
+                          grantedAt: Date.now(),
+                        });
+                        toast.success("👑 Premium activated (24h test)");
+                      } catch (e: any) { toast.error(e?.message || "Failed"); }
+                    }
+                  }}
+                  className={`w-full py-2.5 rounded-lg text-sm font-bold transition-all ${
+                    isPremium
+                      ? "bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30"
+                      : "bg-gradient-to-r from-yellow-500 to-orange-500 text-black"
+                  }`}
+                >
+                  {isPremium ? "🚫 Remove Premium" : "⚡ Activate Premium (24h test)"}
+                </button>
+                <button
+                  onClick={() => {
+                    const expiry = Date.now() + 24 * 60 * 60 * 1000;
+                    localStorage.setItem("rsanime_ad_access", expiry.toString());
+                    toast.success("🎁 Free Access activated (24h)");
+                  }}
+                  className="w-full py-2.5 rounded-lg text-sm font-bold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 transition-all"
+                >
+                  🎁 Grant Self Free Access (24h)
+                </button>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem("rsanime_ad_access");
+                    toast.success("Free access cleared");
+                  }}
+                  className="w-full py-2.5 rounded-lg text-sm font-bold bg-white/5 hover:bg-white/10 text-foreground border border-white/10 transition-all"
+                >
+                  🧹 Clear Free Access
+                </button>
+                <a
+                  href="/admin"
+                  className="block w-full text-center py-2.5 rounded-lg text-sm font-bold bg-gradient-to-r from-primary to-accent text-white transition-all"
+                >
+                  🛡️ Open Full Admin Panel
+                </a>
+                <p className="text-[10px] text-muted-foreground text-center">
+                  Sign in to /admin with your Google account (already authorized).
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </motion.div>
     );
