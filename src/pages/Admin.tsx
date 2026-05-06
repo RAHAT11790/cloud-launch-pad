@@ -2761,7 +2761,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "video-servers": "Video Servers",
     "unlock-duration": "Unlock Duration",
     "email-service": "Email Service",
-    "mini-app": "Telegram Mini App",
+    
     "apk-dw": "APK Download Center",
     "egd-manager": "EGD MANAGER",
   };
@@ -7121,10 +7121,6 @@ ${tgHashtags}`;
           <EmailServiceSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
-        {/* ==================== TELEGRAM MINI APP ==================== */}
-        {activeSection === "mini-app" && (
-          <MiniAppManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
-        )}
 
         {/* ==================== APK DW (Download Center) ==================== */}
         {activeSection === "apk-dw" && (
