@@ -634,44 +634,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const { openExternalBrowser } = await import("@/lib/openExternal");
     try {
       const fb = await import("@/lib/firebase");
-
-      // Per-service Mini App mode takes priority
-      const isMiniMode = service?.mode === "miniapp";
-
-      // Global fallback: settings/unlockViaTelegramMini
-      let globalMini = false;
-      if (!isMiniMode) {
-        const miniSnap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramMini"));
-        globalMini = miniSnap.val() === true;
-      }
-
-      if (isMiniMode || globalMini) {
-        const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramMiniBotUsername"));
-        const botUsername = String(botSnap.val() || "RS_ANIME_ACCESS_BOT").replace(/^@/, "").trim();
-        const uid = getLocalUserId();
-        if (botUsername && uid) {
-          // Detect entry source: installed app vs regular Chrome browser.
-          // We also preserve which panel launched the flow so return routing stays exact.
-          const isStandaloneApp =
-            window.matchMedia?.("(display-mode: standalone)")?.matches
-            || (window.navigator as any).standalone === true;
-          const sourceTag = isStandaloneApp ? "app" : "web";
-          const panelTag = window.location.pathname.startsWith("/admin") ? "admin" : "user";
-          const safeUid = String(uid).replace(/[^A-Za-z0-9_-]/g, "");
-          window.location.href = `https://t.me/${botUsername}?startapp=u_${safeUid}_src_${sourceTag}_panel_${panelTag}`;
-          return;
-        }
-      }
-
-      // Priority: legacy Telegram bot deep-link unlock
-      const snap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramBot"));
-      if (snap.val() === true) {
-        const r = await createTelegramBotUnlockLink();
-        if (r.ok && r.deepLink) { window.location.href = r.deepLink; return; }
+      // Global toggle: send unlock straight to Telegram bot (RS_ANIME_FIND_BOT)
+      const tgSnap = await fb.get(fb.ref(fb.db, "settings/unlockViaTelegramBot"));
+      const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramVerifyBotUsername"));
+      const botUsername = String(botSnap.val() || "RS_ANIME_FIND_BOT").replace(/^@/, "").trim();
+      if (tgSnap.val() === true || service?.mode === "miniapp") {
+        window.location.href = `https://t.me/${botUsername}?start=verify`;
+        return;
       }
     } catch {}
     if (url && url !== "miniapp://telegram") {
-      // Use external browser opener — escapes Telegram WebView when needed
       openExternalBrowser(url);
     }
   }, []);
