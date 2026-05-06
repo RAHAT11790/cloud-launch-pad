@@ -1023,11 +1023,11 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         })}
       </div>
 
-      {/* Quick preset: Telegram Mini App */}
+      {/* Quick preset: Telegram Bot */}
       <button onClick={addMiniAppPreset}
         className="w-full mb-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 text-white transition-all hover:scale-[1.02]"
         style={{ background: "linear-gradient(135deg, #06b6d4, #3b82f6)" }}>
-        📱 ➕ Telegram Mini App আনলক বাটন (One-click)
+        🤖 ➕ Telegram Bot আনলক বাটন (One-click)
       </button>
 
       {/* Add New Service */}
