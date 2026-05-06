@@ -5598,31 +5598,6 @@ ${tgHashtags}`;
                         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${user.online ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
                         <button
                           onClick={async () => {
-                            if (!user.email) { toast.error("User has no email — can't grant admin"); return; }
-                            try {
-                              const snap = await get(ref(db, "admin/authorizedEmails"));
-                              const cur = snap.val() || {};
-                              const isAlready = Object.values(cur).some((e: any) => e === user.email);
-                              if (isAlready) {
-                                // Revoke
-                                const entry = Object.entries(cur).find(([_, v]) => v === user.email);
-                                if (entry) await remove(ref(db, `admin/authorizedEmails/${entry[0]}`));
-                                await remove(ref(db, `users/${user.id}/coAdmin`));
-                                toast.success(`🚫 Admin revoked: ${user.email}`);
-                              } else {
-                                await set(ref(db, `admin/authorizedEmails/${user.id}`), user.email);
-                                await set(ref(db, `users/${user.id}/coAdmin`), { enabled: true, grantedAt: Date.now() });
-                                toast.success(`👑 Admin granted: ${user.email}`);
-                              }
-                            } catch (e: any) { toast.error(`Failed: ${e?.message || "unknown"}`); }
-                          }}
-                          className="flex-shrink-0 px-2 h-8 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/30 text-yellow-300 text-[10px] font-bold flex items-center gap-1 transition-colors"
-                          title="Toggle co-admin (Google sign-in to /admin)"
-                        >
-                          👑
-                        </button>
-                        <button
-                          onClick={async () => {
                             const label = user.email || user.name || user.id;
                             if (!window.confirm(`Delete user "${label}"?\n\nThis will remove them from the database and they will be auto-logged out. This action cannot be undone.`)) return;
                             try {
