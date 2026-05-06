@@ -2163,7 +2163,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       <ExternalLink className="w-4 h-4" />
                       {link.service.icon || "🔓"} {link.service.name || `Unlock ${i + 1}`}
                       {link.service.mode === "miniapp" ? (
-                        <span className="text-[10px] opacity-80 ml-1">(Telegram)</span>
+                        <span className="text-[10px] opacity-80 ml-1">(Bot Verify)</span>
                       ) : link.service.durationHours ? (
                         <span className="text-[10px] opacity-80 ml-1">({link.service.durationHours}h access)</span>
                       ) : null}
