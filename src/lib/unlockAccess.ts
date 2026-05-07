@@ -37,6 +37,9 @@ export interface AdService {
   color?: string;
   durationHours?: number; // per-service unlock duration
   mode?: "shortener" | "miniapp"; // routing for unlock button
+  // Optional generic shortener (no edge function needed)
+  siteBase?: string;   // e.g. "https://vplink.in" or "https://shrinkme.io"
+  apiKey?: string;     // shortener provider API key
 }
 
 // --- Get ad services from Firebase ---
