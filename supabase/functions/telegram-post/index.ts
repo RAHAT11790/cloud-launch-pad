@@ -146,6 +146,22 @@ async function sendUnlockMessage(
   return { mainMessageId, noticeMessageId };
 }
 
+function shortAccessCode(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for (let i = 0; i < 8; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return s;
+}
+
+async function fbGet(path: string): Promise<any> {
+  try {
+    const r = await fetch(`${FIREBASE_DB}/${path}.json`);
+    return await r.json().catch(() => null);
+  } catch {
+    return null;
+  }
+}
+
 async function handleUnlockDeepLink(
   botToken: string,
   chatId: number | string,
@@ -153,7 +169,12 @@ async function handleUnlockDeepLink(
   tgUserId: number | string,
 ) {
   const token = randomToken();
+  const code = shortAccessCode();
   const now = Date.now();
+  const hoursVal = await fbGet("settings/telegramFreeAccess/hours");
+  const hours = Number(hoursVal) > 0 ? Number(hoursVal) : 24;
+  const accessMs = hours * 3600_000;
+
   await fbPut(`unlockTokens/${token}`, {
     token,
     ownerUserId: userId,
@@ -164,10 +185,21 @@ async function handleUnlockDeepLink(
     source: "telegram_bot",
     serviceId: "telegram_bot",
     tgUserId: String(tgUserId),
+    grantMs: accessMs,
   });
-  const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}&svc=telegram`;
+  await fbPut(`accessCodes/${code}`, {
+    code,
+    ownerUserId: userId,
+    createdAt: now,
+    expiresAt: now + 30 * 60 * 1000,
+    status: "pending",
+    consumed: false,
+    grantMs: accessMs,
+    tgUserId: String(tgUserId),
+  });
+  const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}&svc=telegram&code=${encodeURIComponent(code)}`;
   const shortUrl = (await shortenUrl(callbackUrl)) || callbackUrl;
-  await sendUnlockMessage(botToken, chatId, shortUrl);
+  await sendUnlockMessage(botToken, chatId, shortUrl, code, hours);
 }
 
 // ========== /start WELCOME MESSAGE ==========
