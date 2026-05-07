@@ -919,6 +919,8 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const [services, setServices] = useState<Record<string, any>>({});
   const [newName, setNewName] = useState("");
   const [newUrl, setNewUrl] = useState("");
+  const [newSiteBase, setNewSiteBase] = useState("");
+  const [newApiKey, setNewApiKey] = useState("");
   const [newIcon, setNewIcon] = useState("🔓");
   const [newColor, setNewColor] = useState("linear-gradient(135deg, #6366f1, #8b5cf6)");
   const [newDuration, setNewDuration] = useState(24);
@@ -936,17 +938,27 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const addService = async () => {
     const name = newName.trim();
     const url = newUrl.trim();
-    if (!name) { toast.error("সার্ভিসের নাম দাও!"); return; }
-    if (newMode === "shortener" && !url) { toast.error("Shortener URL দাও!"); return; }
+    const siteBase = newSiteBase.trim().replace(/\/+$/, "");
+    const apiKey = newApiKey.trim();
+    if (!name) { toast.error("Service name required"); return; }
+    if (newMode === "shortener" && !url && !(siteBase && apiKey)) {
+      toast.error("Provide either an Edge Function URL OR Site URL + API Key");
+      return;
+    }
     const id = `ad_${Date.now()}`;
     await set(ref(db, `settings/adServices/${id}`), {
-      id, name, functionUrl: url || "telegram://verify-bot", enabled: true,
+      id, name,
+      functionUrl: url || (siteBase && apiKey ? "generic://" + siteBase : "telegram://verify-bot"),
+      siteBase: siteBase || null,
+      apiKey: apiKey || null,
+      enabled: true,
       icon: newIcon || "🔓", color: newColor || "",
       durationHours: newDuration || 24,
       mode: newMode === "telegram" ? "miniapp" : "shortener",
     });
-    setNewName(""); setNewUrl(""); setNewIcon("🔓"); setNewDuration(24); setNewMode("shortener");
-    toast.success(`✅ "${name}" যোগ হয়েছে!`);
+    setNewName(""); setNewUrl(""); setNewSiteBase(""); setNewApiKey("");
+    setNewIcon("🔓"); setNewDuration(24); setNewMode("shortener");
+    toast.success(`✅ "${name}" added!`);
   };
 
   const addMiniAppPreset = async () => {
@@ -1117,8 +1129,16 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
             <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={newMode === "telegram" ? "বাটনের নাম (যেমন: Telegram Bot)" : "সার্ভিসের নাম (যেমন: AroLinks)"} className={`${inputClass} flex-1`} />
           </div>
           {newMode === "shortener" && (
-            <input value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
-              placeholder="Supabase Function URL (যেমন: https://xxx.supabase.co/functions/v1/shorten-arolinks)" className={inputClass} />
+            <>
+              <div className="text-[10px] text-zinc-400 -mb-1">Option A — Generic site + API key (no edge function):</div>
+              <div className="flex gap-2">
+                <input value={newSiteBase} onChange={(e) => setNewSiteBase(e.target.value)}
+                  placeholder="Site URL (e.g. https://shrinkme.io)" className={`${inputClass} flex-1`} />
+              </div>
+              <input value={newApiKey} onChange={(e) => setNewApiKey(e.target.value)}
+                placeholder="API token" className={inputClass} />
+              <div className="text-[10px] text-zinc-500 -mb-1 mt-1">Option B — Edge Function URL (advanced):</div>
+            </>
           )}
           <input value={newColor} onChange={(e) => setNewColor(e.target.value)}
             placeholder="বাটন কালার CSS (যেমন: linear-gradient(135deg, #f59e0b, #ef4444))" className={inputClass} />
