@@ -861,7 +861,7 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const [newIcon, setNewIcon] = useState("🔓");
   const [newColor, setNewColor] = useState("linear-gradient(135deg, #6366f1, #8b5cf6)");
   const [newDuration, setNewDuration] = useState(24);
-  const [newMode, setNewMode] = useState<"shortener" | "miniapp">("shortener");
+  const [newMode, setNewMode] = useState<"shortener" | "telegram">("shortener");
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
 
@@ -879,10 +879,10 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     if (newMode === "shortener" && !url) { toast.error("Shortener URL দাও!"); return; }
     const id = `ad_${Date.now()}`;
     await set(ref(db, `settings/adServices/${id}`), {
-      id, name, functionUrl: url || "miniapp://telegram", enabled: true,
+      id, name, functionUrl: url || "telegram://verify-bot", enabled: true,
       icon: newIcon || "🔓", color: newColor || "",
       durationHours: newDuration || 24,
-      mode: newMode,
+      mode: newMode === "telegram" ? "miniapp" : "shortener",
     });
     setNewName(""); setNewUrl(""); setNewIcon("🔓"); setNewDuration(24); setNewMode("shortener");
     toast.success(`✅ "${name}" যোগ হয়েছে!`);
@@ -893,7 +893,7 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     await set(ref(db, `settings/adServices/${id}`), {
       id,
       name: "Telegram Bot",
-      functionUrl: "miniapp://telegram",
+      functionUrl: "telegram://verify-bot",
       enabled: true,
       icon: "🤖",
       color: "linear-gradient(135deg, #06b6d4, #3b82f6)",
@@ -987,7 +987,7 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                 </div>
               </div>
               <p className="text-[9px] text-zinc-400 font-mono truncate mb-2">{svc.functionUrl}</p>
-              {/* Mode selector: shortener vs telegram mini app */}
+              {/* Mode selector: shortener vs telegram bot */}
               <div className="flex items-center gap-2 bg-zinc-900/50 rounded-lg p-2 mb-2">
                 <span className="text-[10px] text-zinc-400">Mode:</span>
                 <button
@@ -1045,15 +1045,15 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
               className={`px-2 py-0.5 rounded text-[10px] font-semibold ${newMode === "shortener" ? "bg-amber-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
               🔗 Shortener
             </button>
-            <button type="button" onClick={() => setNewMode("miniapp")}
-              className={`px-2 py-0.5 rounded text-[10px] font-semibold ${newMode === "miniapp" ? "bg-cyan-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
+            <button type="button" onClick={() => setNewMode("telegram")}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold ${newMode === "telegram" ? "bg-cyan-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
               🤖 Telegram Bot
             </button>
-            {newMode === "miniapp" && <span className="text-[9px] text-cyan-300 ml-auto">URL লাগবে না</span>}
+            {newMode === "telegram" && <span className="text-[9px] text-cyan-300 ml-auto">URL লাগবে না</span>}
           </div>
           <div className="flex gap-2">
             <input value={newIcon} onChange={(e) => setNewIcon(e.target.value)} placeholder="🔓" className={`${inputClass} !w-12 !text-center`} />
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={newMode === "miniapp" ? "বাটনের নাম (যেমন: Telegram Bot)" : "সার্ভিসের নাম (যেমন: AroLinks)"} className={`${inputClass} flex-1`} />
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={newMode === "telegram" ? "বাটনের নাম (যেমন: Telegram Bot)" : "সার্ভিসের নাম (যেমন: AroLinks)"} className={`${inputClass} flex-1`} />
           </div>
           {newMode === "shortener" && (
             <input value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
