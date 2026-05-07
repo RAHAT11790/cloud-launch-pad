@@ -91,10 +91,21 @@ export const getLocalUserId = (): string | null => {
   }
 };
 
-/** Shorten a URL using a specific ad service function URL */
-async function shortenWithService(functionUrl: string, callbackUrl: string): Promise<string | null> {
+/** Shorten via either a configured edge-function URL or a generic site+apiKey */
+async function shortenWithService(svc: AdService, callbackUrl: string): Promise<string | null> {
+  if (svc.siteBase && svc.apiKey) {
+    try {
+      const base = svc.siteBase.replace(/\/+$/, "");
+      const apiUrl = `${base}/api?api=${encodeURIComponent(svc.apiKey)}&url=${encodeURIComponent(callbackUrl)}`;
+      const r = await fetch(apiUrl);
+      const d = await r.json().catch(() => ({}));
+      const out = d?.shortenedUrl || d?.short || (typeof d?.url === "string" ? d.url : null);
+      if (out) return out;
+    } catch {}
+  }
+  if (!svc.functionUrl) return null;
   try {
-    const res = await fetch(functionUrl, {
+    const res = await fetch(svc.functionUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: callbackUrl }),
