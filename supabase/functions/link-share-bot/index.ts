@@ -400,7 +400,7 @@ ${stylish("›› Open any link instantly")}
 
 ${stylish("✦ HOW TO VERIFY ✦")}
 ${stylish("›› 1. Tap VERIFY ACCESS button")}
-${stylish("›› 2. Watch 5 short ads in Mini App")}
+${stylish("›› 2. Open the verify link and complete the ads")}
 ${stylish("›› 3. Auto-return — done!")}
 
 ✦━━━━━━━━━━━━━━━━━━━✦`;
