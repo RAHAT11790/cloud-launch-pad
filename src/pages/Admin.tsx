@@ -853,6 +853,67 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   );
 };
 
+// ==================== TELEGRAM POST FREE-ACCESS CONFIG ====================
+const TelegramFreeAccessConfig = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
+  const [enabled, setEnabled] = useState(false);
+  const [hours, setHours] = useState<number>(24);
+  const [label, setLabel] = useState<string>("🔓 Free Access (24h)");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const r = ref(db, "settings/telegramFreeAccess");
+    const unsub = onValue(r, (snap) => {
+      const v = snap.val() || {};
+      setEnabled(v.enabled === true);
+      setHours(Number(v.hours) > 0 ? Number(v.hours) : 24);
+      setLabel(String(v.label || "🔓 Free Access (24h)"));
+    });
+    return () => unsub();
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await set(ref(db, "settings/telegramFreeAccess"), { enabled, hours, label });
+      toast.success("Saved");
+    } catch (e: any) { toast.error(e?.message || "Save failed"); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className={`${glassCard} p-4 mb-4`}>
+      <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+        <Send size={14} className="text-cyan-400" /> Telegram Post — Free Access Button
+      </h3>
+      <p className="text-[11px] text-zinc-400 mb-3">
+        Auto-attach a "Free Access" button to <b>every</b> Telegram post. Users tap it → bot DM → finish shortener → get access token (paste-able in player).
+      </p>
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between bg-zinc-800/40 rounded-lg p-2.5">
+          <span className="text-xs text-white">Enabled on every post</span>
+          <button onClick={() => setEnabled(v => !v)}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${enabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
+            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+        <div>
+          <label className="text-[10px] text-zinc-400 mb-1 block">Access duration (hours)</label>
+          <input type="number" min={1} max={720} value={hours}
+            onChange={e => setHours(Math.max(1, Number(e.target.value) || 24))}
+            className={inputClass} />
+        </div>
+        <div>
+          <label className="text-[10px] text-zinc-400 mb-1 block">Button label (shown under each TG post)</label>
+          <input type="text" value={label} onChange={e => setLabel(e.target.value)} className={inputClass} placeholder="🔓 Free Access (24h)" />
+        </div>
+        <button onClick={save} disabled={saving} className={`${btnPrimary} w-full py-2 text-xs flex items-center justify-center gap-2`}>
+          <Save size={12} /> {saving ? "Saving..." : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ==================== AD SERVICES SECTION ====================
 const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
   const [services, setServices] = useState<Record<string, any>>({});
