@@ -301,10 +301,12 @@ export const consumeUnlockTokenForCurrentUser = async (
   }
 
   const now = Date.now();
-  // Get service-specific duration from token
-  const tokenSnap = await get(ref(db, `unlockTokens/${token}/serviceId`));
-  const serviceId = tokenSnap.val();
-  const durationMs = await getServiceDurationMs(serviceId);
+  // Get service-specific duration from token (or grantMs override from telegram bot)
+  const tokenSnap = await get(ref(db, `unlockTokens/${token}`));
+  const tokenData = tokenSnap.val() || {};
+  const serviceId = tokenData.serviceId;
+  const grantMsOverride = Number(tokenData.grantMs);
+  const durationMs = grantMsOverride > 0 ? grantMsOverride : await getServiceDurationMs(serviceId);
   const expiresAt = now + durationMs;
 
   await set(ref(db, `users/${userId}/freeAccess`), {
