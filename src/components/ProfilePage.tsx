@@ -557,7 +557,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
     const premRef = ref(db, `users/${userId}/premium`);
     const unsubPremium = onValue(premRef, (snap) => {
       const data = snap.val();
-      if (data && data.expiresAt > Date.now()) {
+      if (data && data.active === true && data.expiresAt > Date.now()) {
         setIsPremium(true);
         setPremiumExpiry(data.expiresAt);
         setPremiumMaxDevices(data.maxDevices || 1);
@@ -918,21 +918,60 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
                 <button
                   onClick={async () => {
                     if (!userId) return;
-                    if (isPremium) {
-                      try {
-                        await set(ref(db, `users/${userId}/premium`), null);
-                        toast.success("✅ Premium removed");
-                      } catch (e: any) { toast.error(e?.message || "Failed"); }
-                    } else {
-                      try {
-                        await set(ref(db, `users/${userId}/premium`), {
-                          expiresAt: Date.now() + 24 * 60 * 60 * 1000,
-                          maxDevices: 5,
-                          grantedBy: "co-admin-self",
-                          grantedAt: Date.now(),
+                    const premiumRef = ref(db, `users/${userId}/premium`);
+                    const backupRef = ref(db, `users/${userId}/premiumRestoreBackup`);
+
+                    try {
+                      const now = Date.now();
+                      const premiumSnap = await get(premiumRef);
+                      const currentPremium = premiumSnap.val() || null;
+
+                      if (currentPremium?.active === true && Number(currentPremium.expiresAt) > now) {
+                        const remainingMs = Math.max(0, Number(currentPremium.expiresAt) - now);
+                        await set(backupRef, {
+                          snapshot: currentPremium,
+                          remainingMs,
+                          savedAt: now,
                         });
-                        toast.success("👑 Premium activated (24h test)");
-                      } catch (e: any) { toast.error(e?.message || "Failed"); }
+
+                        await set(premiumRef, {
+                          ...currentPremium,
+                          active: false,
+                          pausedAt: now,
+                          pausedBy: "co-admin-self",
+                          pausedRemainingMs: remainingMs,
+                        });
+
+                        toast.success("✅ Premium disabled temporarily");
+                        return;
+                      }
+
+                      const backupSnap = await get(backupRef);
+                      const backup = backupSnap.val() || null;
+                      const snapshot = backup?.snapshot || currentPremium;
+                      const remainingMs = Math.max(
+                        0,
+                        Number(backup?.remainingMs || currentPremium?.pausedRemainingMs || 0),
+                      );
+
+                      if (!snapshot || remainingMs <= 0) {
+                        toast.error("Saved premium time not found");
+                        return;
+                      }
+
+                      await set(premiumRef, {
+                        ...snapshot,
+                        devices: currentPremium?.devices || snapshot?.devices || {},
+                        active: true,
+                        expiresAt: now + remainingMs,
+                        restoredAt: now,
+                        restoredBy: "co-admin-self",
+                      });
+
+                      await remove(backupRef);
+                      toast.success("👑 Premium restored");
+                    } catch (e: any) {
+                      toast.error(e?.message || "Failed");
                     }
                   }}
                   className={`w-full py-2.5 rounded-lg text-sm font-bold transition-all ${
@@ -941,7 +980,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
                       : "bg-gradient-to-r from-yellow-500 to-orange-500 text-black"
                   }`}
                 >
-                  {isPremium ? "🚫 Remove Premium" : "⚡ Activate Premium (24h test)"}
+                  {isPremium ? "🚫 Disable Premium" : "⚡ Restore Premium"}
                 </button>
                 <button
                   onClick={() => {
