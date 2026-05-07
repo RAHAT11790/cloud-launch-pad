@@ -65,16 +65,22 @@ async function sendUnlockMessage(
   botToken: string,
   chatId: number | string,
   shortLink: string,
+  accessCode?: string,
+  hours: number = 24,
 ) {
   const telegramBase = `https://api.telegram.org/bot${botToken}`;
+  const codeBlock = accessCode
+    ? `\n\n🔑 <b>YOUR ACCESS TOKEN:</b>\n<code>${accessCode}</code>\n<i>Tap the token to copy. Paste it inside the player Verify box for instant access (valid 30 min).</i>`
+    : "";
   const caption =
-    `<b>🔓 𝐔𝐍𝐋𝐎𝐂𝐊 𝐘𝐎𝐔𝐑 𝟐𝟒𝐇 𝐀𝐂𝐂𝐄𝐒𝐒</b>\n\n` +
-    `✨ <i>Open the link below to unlock</i> <b>24 hours</b> <i>of free access to RS Anime.</i>\n\n` +
+    `<b>🔓 𝐔𝐍𝐋𝐎𝐂𝐊 𝐘𝐎𝐔𝐑 ${hours}𝐇 𝐀𝐂𝐂𝐄𝐒𝐒</b>\n\n` +
+    `✨ <i>Open the link below to unlock</i> <b>${hours} hours</b> <i>of free access to RS Anime.</i>\n\n` +
     `📌 <b>𝐇𝐨𝐰 𝐢𝐭 𝐰𝐨𝐫𝐤𝐬:</b>\n` +
     `1️⃣ Tap the <b>Unlock Access</b> button below\n` +
     `2️⃣ Wait a few seconds on the shortener page\n` +
     `3️⃣ You'll be redirected back automatically\n\n` +
-    `⏱ <i>One tap • One unlock • Fast & safe</i>`;
+    `⏱ <i>One tap • One unlock • Fast & safe</i>` +
+    codeBlock;
   const noticeText =
     `⚠️ <b>𝐈𝐌𝐏𝐎𝐑𝐓𝐀𝐍𝐓 𝐍𝐎𝐓𝐈𝐂𝐄</b>\n\n` +
     `⏰ This link will <b>auto-delete in 30 seconds</b>.\n\n` +
