@@ -465,12 +465,27 @@ serve(async (req) => {
       } catch {}
     }
 
-    // ✨ Optional Free Access button — only when admin explicitly requests it
-    if (includeFreeAccess) {
+    // ✨ Auto-attach Free Access button when global toggle is enabled
+    let autoIncludeFA = false;
+    let autoFAHours = 24;
+    let autoFALabel = "🔓 𝐅𝐫𝐞𝐞 𝐀𝐜𝐜𝐞𝐬𝐬";
+    try {
+      const cfg = await fbGet("settings/telegramFreeAccess");
+      if (cfg && cfg.enabled === true) {
+        autoIncludeFA = true;
+        autoFAHours = Number(cfg.hours) > 0 ? Number(cfg.hours) : 24;
+        autoFALabel = String(cfg.label || `🔓 Free Access (${autoFAHours}h)`);
+      }
+    } catch {}
+
+    if ((includeFreeAccess || autoIncludeFA)) {
       const username = await getBotUsername(botToken);
       if (username) {
+        const label = includeFreeAccess
+          ? "🔓 𝐅𝐫𝐞𝐞 𝐀𝐜𝐜𝐞𝐬𝐬 (𝟐𝟒𝐡)"
+          : autoFALabel;
         buttons.push({
-          text: "🔓 𝐅𝐫𝐞𝐞 𝐀𝐜𝐜𝐞𝐬𝐬 (𝟐𝟒𝐡)",
+          text: label,
           url: `https://t.me/${username}?start=unlock_${encodeURIComponent(freeAccessUserId)}`,
         });
       }
