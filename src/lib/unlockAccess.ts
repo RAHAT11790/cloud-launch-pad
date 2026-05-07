@@ -363,3 +363,40 @@ export async function createTelegramBotUnlockLink(): Promise<{
   }
 }
 
+
+/**
+ * Claim a Telegram-bot generated short access code (e.g., "AB23CDEF")
+ * by calling the telegram-post edge function.
+ */
+export async function claimAccessCode(code: string): Promise<{
+  ok: boolean; durationMs?: number; expiresAt?: number; error?: string;
+}> {
+  const userId = getLocalUserId();
+  if (!userId) return { ok: false, error: "login_required" };
+  const cleanCode = String(code || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (!cleanCode) return { ok: false, error: "empty_code" };
+
+  let endpoint = "";
+  try {
+    const snap = await get(ref(db, "settings/telegramFunctionUrl"));
+    endpoint = String(snap.val() || "").trim();
+  } catch {}
+  if (!endpoint) {
+    const supaUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "";
+    if (supaUrl) endpoint = `${supaUrl}/functions/v1/telegram-post`;
+  }
+  if (!endpoint) return { ok: false, error: "endpoint_not_configured" };
+
+  try {
+    const r = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "claim-access-code", code: cleanCode, userId }),
+    });
+    const data = await r.json();
+    if (!r.ok || !data?.ok) return { ok: false, error: data?.error || "claim_failed" };
+    return { ok: true, durationMs: data.durationMs, expiresAt: data.expiresAt };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "network_error" };
+  }
+}
