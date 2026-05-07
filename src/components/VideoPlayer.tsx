@@ -1704,7 +1704,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               browser doesn't choke on the Matroska container. The iframe is
               the *visual* surface — UI/controls live in this player and drive
               the embed via postMessage (see useEffect above). */}
-          {isEmbedPlayback ? (
+          {isEmbedPlayback && !adGateActive ? (
             (() => {
               // currentSrc is already the fully-built watch URL produced by
               // applyServerDomain() — e.g.
