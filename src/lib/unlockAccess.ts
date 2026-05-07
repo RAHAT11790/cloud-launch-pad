@@ -161,7 +161,7 @@ export const createUnlockLinksForAllServices = async (): Promise<{ ok: boolean; 
       serviceId: svc.id,
     });
     const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}&svc=${encodeURIComponent(svc.id)}`;
-    const shortUrl = await shortenWithService(svc.functionUrl, callbackUrl);
+    const shortUrl = await shortenWithService(svc, callbackUrl);
     if (shortUrl) results.push({ service: svc, shortUrl });
   }));
 
@@ -216,7 +216,7 @@ export const createRandomPrizeLink = async (): Promise<{
   });
 
   const callbackUrl = `${SITE_URL}/unlock?t=${encodeURIComponent(token)}&mode=prize`;
-  const shortUrl = await shortenWithService(service.functionUrl, callbackUrl);
+  const shortUrl = await shortenWithService(service, callbackUrl);
   if (!shortUrl) return { ok: false, error: "shortener_failed" };
 
   return { ok: true, shortUrl };
