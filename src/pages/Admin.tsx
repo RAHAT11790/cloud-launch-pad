@@ -1137,7 +1137,9 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
               </div>
               <input value={newApiKey} onChange={(e) => setNewApiKey(e.target.value)}
                 placeholder="API token" className={inputClass} />
-              <div className="text-[10px] text-zinc-500 -mb-1 mt-1">Option B — Edge Function URL (advanced):</div>
+              <div className="text-[10px] text-zinc-500 -mb-1 mt-1">Option B — Edge Function URL (advanced, optional):</div>
+              <input value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
+                placeholder="https://xxx.supabase.co/functions/v1/shorten-arolinks (optional)" className={inputClass} />
             </>
           )}
           <input value={newColor} onChange={(e) => setNewColor(e.target.value)}
