@@ -359,7 +359,51 @@ serve(async (req) => {
       return json({ ok: true, deepLink, botUsername: username });
     }
 
-    // ========== SET WEBHOOK ==========
+    // ========== CLAIM ACCESS CODE (paste-token flow from website player) ==========
+    if (action === "claim-access-code") {
+      const code = String(body?.code || "").trim().toUpperCase();
+      const userId = String(body?.userId || "").trim();
+      if (!code || !userId) return json({ ok: false, error: "code & userId required" }, 400);
+      const rec = await fbGet(`accessCodes/${code}`);
+      if (!rec) return json({ ok: false, error: "invalid_code" }, 400);
+      if (rec.consumed) return json({ ok: false, error: "already_used" }, 400);
+      if (Number(rec.expiresAt || 0) < Date.now()) return json({ ok: false, error: "expired" }, 400);
+      if (rec.ownerUserId && rec.ownerUserId !== userId) return json({ ok: false, error: "not_owner" }, 400);
+      const grantMs = Number(rec.grantMs) > 0 ? Number(rec.grantMs) : 24 * 3600_000;
+      const expiresAt = Date.now() + grantMs;
+      await fbPut(`accessCodes/${code}`, {
+        ...rec, consumed: true, status: "claimed",
+        claimedByUserId: userId, claimedAt: Date.now(),
+      });
+      // Mirror to user freeAccess
+      await fbPut(`users/${userId}/freeAccess`, {
+        active: true,
+        grantedAt: Date.now(),
+        expiresAt,
+        viaCode: code,
+        source: "telegram_bot_token",
+      });
+      return json({ ok: true, durationMs: grantMs, expiresAt });
+    }
+
+    // ========== GENERIC SHORTENER (multi-site) ==========
+    // body: { url, site, apiKey } – uses any "*.*/api?api=KEY&url=..." style endpoint
+    if (action === "shorten-with-config") {
+      const target = String(body?.url || "").trim();
+      const site = String(body?.site || "").trim().replace(/\/+$/, "");
+      const apiKey = String(body?.apiKey || "").trim();
+      if (!target || !site || !apiKey) return json({ ok: false, error: "url, site, apiKey required" }, 400);
+      try {
+        const apiUrl = `${site}/api?api=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(target)}`;
+        const r = await fetch(apiUrl);
+        const d = await r.json().catch(() => ({}));
+        if (d?.shortenedUrl) return json({ ok: true, shortenedUrl: d.shortenedUrl });
+        return json({ ok: false, error: "shorten_failed", details: d }, 400);
+      } catch (e: any) {
+        return json({ ok: false, error: e?.message || "shorten_error" }, 500);
+      }
+    }
+
     if (action === "set-webhook") {
       const webhookUrl = String(body?.webhookUrl || "").trim();
       if (!webhookUrl) return json({ error: "webhookUrl required" }, 400);
