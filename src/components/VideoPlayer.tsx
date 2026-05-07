@@ -654,7 +654,32 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, []);
 
-  // Save progress every 10s
+  const handleClaimAccessCode = useCallback(async () => {
+    const code = accessCodeInput.trim().toUpperCase().replace(/\s+/g, "");
+    if (!code) { toast.error("Paste your access token first"); return; }
+    setAccessCodeBusy(true);
+    try {
+      const { claimAccessCode } = await import("@/lib/unlockAccess");
+      const r = await claimAccessCode(code);
+      if (r.ok) {
+        toast.success("✅ Access unlocked!");
+        setAccessCodeInput("");
+        setAdGateActive(false);
+      } else {
+        const map: Record<string, string> = {
+          invalid_code: "Invalid token",
+          already_used: "This token was already used",
+          expired: "Token expired – get a new one from the bot",
+          not_owner: "This token belongs to another user",
+          login_required: "Please sign in first",
+          empty_code: "Paste your access token first",
+        };
+        toast.error(map[r.error || ""] || r.error || "Could not claim token");
+      }
+    } finally {
+      setAccessCodeBusy(false);
+    }
+  }, [accessCodeInput]);
   useEffect(() => {
     if (!onSaveProgress) return;
     const v = videoRef.current;
