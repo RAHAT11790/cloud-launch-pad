@@ -2163,16 +2163,65 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
         {/* Device limit is now enforced at login time - no overlay needed */}
 
-        {/* Ad Gate Overlay */}
-        {adGateActive && !deviceBlocked && !unlockBlocked && (
-          <div className="fixed inset-0 z-[400] bg-black/90 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-card rounded-2xl p-6 max-w-sm w-[90%] text-center space-y-4 shadow-2xl border border-border">
-              <h3 className="text-lg font-bold text-foreground">Unlock Free Access</h3>
-              <p className="text-sm text-muted-foreground">Click any link below to get free streaming access</p>
+        {/* Ad Gate Overlay – bilingual professional verify card */}
+        {adGateActive && !deviceBlocked && !unlockBlocked && (() => {
+          const t = verifyLang === "bn"
+            ? {
+                title: "ফ্রি অ্যাক্সেস আনলক করুন",
+                subtitle: "নিচের যেকোনো একটি বাটনে ক্লিক করে সংক্ষিপ্ত শর্টনার শেষ করুন – সম্পন্ন হলে অটো আনলক হয়ে যাবে।",
+                howTitle: "কীভাবে কাজ করে",
+                step1: "১. নিচের যেকোনো আনলক বাটনে চাপুন",
+                step2: "২. শর্টনার পেজে কয়েক সেকেন্ড অপেক্ষা করুন",
+                step3: "৩. ফিরে আসার পর অ্যাক্সেস অটো আনলক হবে",
+                or: "অথবা টেলিগ্রাম থেকে পাওয়া টোকেন পেস্ট করুন",
+                placeholder: "আপনার অ্যাক্সেস টোকেন এখানে পেস্ট করুন",
+                claim: "টোকেন দিয়ে আনলক করুন",
+                preparing: "লিংক প্রস্তুত হচ্ছে...",
+                langBtn: "EN",
+              }
+            : {
+                title: "Unlock Free Access",
+                subtitle: "Tap any unlock button below, complete the short link – you'll be redirected back automatically.",
+                howTitle: "How it works",
+                step1: "1. Tap any Unlock button below",
+                step2: "2. Wait a few seconds on the shortener page",
+                step3: "3. You'll be redirected back automatically",
+                or: "Or paste the token you received from Telegram",
+                placeholder: "Paste your access token here",
+                claim: "Unlock with token",
+                preparing: "Preparing links...",
+                langBtn: "বাং",
+              };
+          return (
+          <div className="fixed inset-0 z-[400] bg-black/90 flex items-center justify-center backdrop-blur-sm p-3 overflow-y-auto">
+            <div className="relative bg-gradient-to-br from-card via-card to-background rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl border border-primary/20 my-auto">
+              {/* Lang toggle */}
+              <button
+                onClick={() => setVerifyLang(v => v === "en" ? "bn" : "en")}
+                className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-primary/15 text-primary text-[10px] font-bold border border-primary/30">
+                🌐 {t.langBtn}
+              </button>
+
+              <div className="text-center space-y-1.5 pt-1">
+                <div className="w-12 h-12 mx-auto rounded-full gradient-primary flex items-center justify-center">
+                  <Lock className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-base font-bold text-foreground">{t.title}</h3>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">{t.subtitle}</p>
+              </div>
+
+              {/* Steps */}
+              <div className="bg-muted/40 rounded-xl p-3 space-y-1 text-left">
+                <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1">{t.howTitle}</p>
+                <p className="text-[11px] text-foreground/80">{t.step1}</p>
+                <p className="text-[11px] text-foreground/80">{t.step2}</p>
+                <p className="text-[11px] text-foreground/80">{t.step3}</p>
+              </div>
+
               {shortenLoading ? (
                 <div className="flex items-center justify-center gap-2 py-3">
                   <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                  <span className="text-sm text-muted-foreground">Preparing links...</span>
+                  <span className="text-sm text-muted-foreground">{t.preparing}</span>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -2180,26 +2229,46 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     <button
                       key={link.service.id || i}
                       onClick={() => handleOpenAdLink(link.shortUrl, link.service)}
-                      className="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all hover:scale-105 text-white"
+                      className="w-full py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 text-white text-sm"
                       style={{ background: link.service.color || (i === 0 ? "linear-gradient(135deg, #6366f1, #8b5cf6)" : "linear-gradient(135deg, #f59e0b, #ef4444)") }}
                     >
                       <ExternalLink className="w-4 h-4" />
                       {link.service.icon || "🔓"} {link.service.name || `Unlock ${i + 1}`}
                       {link.service.durationHours ? (
-                        <span className="text-[10px] opacity-80 ml-1">({link.service.durationHours}h access)</span>
+                        <span className="text-[10px] opacity-80 ml-1">({link.service.durationHours}h)</span>
                       ) : null}
                     </button>
                   ))}
                 </div>
               )}
+
+              {/* Token paste section */}
+              <div className="border-t border-border pt-3 space-y-2">
+                <p className="text-[10px] text-center text-muted-foreground uppercase tracking-wider">— {t.or} —</p>
+                <input
+                  type="text"
+                  value={accessCodeInput}
+                  onChange={(e) => setAccessCodeInput(e.target.value.toUpperCase())}
+                  placeholder={t.placeholder}
+                  className="w-full px-3 py-2.5 rounded-xl bg-muted/60 border border-border text-center font-mono text-sm tracking-widest focus:outline-none focus:border-primary"
+                  maxLength={20}
+                />
+                <button
+                  onClick={handleClaimAccessCode}
+                  disabled={accessCodeBusy || !accessCodeInput.trim()}
+                  className="w-full py-2.5 rounded-xl gradient-primary text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                  {accessCodeBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  {t.claim}
+                </button>
+              </div>
+
               {/* Tutorial Video Buttons */}
               {tutorialVideos.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {tutorialVideos.map((vid, idx) => (
                     <button key={idx}
                       onClick={() => { setActiveTutorialIdx(idx); setShowTutorialVideo(true); }}
-                      className="w-full py-2.5 rounded-xl bg-secondary text-secondary-foreground font-medium flex items-center justify-center gap-2 transition-all hover:scale-105 text-sm"
-                    >
+                      className="w-full py-2 rounded-xl bg-secondary text-secondary-foreground font-medium flex items-center justify-center gap-2 transition-all active:scale-95 text-xs">
                       <Play className="w-3.5 h-3.5" />
                       {vid.title || `Tutorial ${idx + 1}`}
                     </button>
@@ -2208,15 +2277,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               ) : tutorialLink ? (
                 <button
                   onClick={() => { setActiveTutorialIdx(-1); setShowTutorialVideo(true); }}
-                  className="w-full py-2.5 rounded-xl bg-secondary text-secondary-foreground font-medium flex items-center justify-center gap-2 transition-all hover:scale-105 text-sm"
-                >
+                  className="w-full py-2 rounded-xl bg-secondary text-secondary-foreground font-medium flex items-center justify-center gap-2 transition-all active:scale-95 text-xs">
                   <Play className="w-3.5 h-3.5" />
                   How to open my link
                 </button>
               ) : null}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {unlockBlocked && (
           <div className="fixed inset-0 z-[450] bg-black/90 flex items-center justify-center backdrop-blur-sm p-5">
