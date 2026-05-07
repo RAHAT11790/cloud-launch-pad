@@ -412,6 +412,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
   const [unlockBlocked, setUnlockBlocked] = useState(false);
+  const [verifyLang, setVerifyLang] = useState<"en" | "bn">("en");
+  const [accessCodeInput, setAccessCodeInput] = useState("");
+  const [accessCodeBusy, setAccessCodeBusy] = useState(false);
 
   useEffect(() => {
     let unsub: (() => void) | undefined;
