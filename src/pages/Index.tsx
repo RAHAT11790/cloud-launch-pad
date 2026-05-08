@@ -1484,6 +1484,8 @@ const Index = () => {
         if (episode.link4k) qualityOptions.push({ label: "4K", src: episode.link4k });
       }
       if (src) {
+        const hasAccess = await checkAndShowAdGate(anime, sIdx, eIdx);
+        if (!hasAccess) return;
         addToWatchHistory(anime, sIdx, eIdx, true);
         setPlayerState({
           src,
@@ -1499,6 +1501,8 @@ const Index = () => {
       }
     } else {
       if (anime.movieLink) {
+        const hasAccess = await checkAndShowAdGate(anime);
+        if (!hasAccess) return;
         addToWatchHistory(anime, undefined, undefined, true);
         setPlayerState({ src: anime.movieLink, title: anime.title, subtitle: "Movie", anime });
         setSelectedAnime(null);
@@ -1557,9 +1561,11 @@ const Index = () => {
     number: ep.episodeNumber,
     title: ep.title,
     active: i === (playerState?.epIdx ?? 0),
-    onClick: () => {
+    onClick: async () => {
       const season = playerState!.anime.seasons![playerState!.seasonIdx ?? 0];
       const clickedEp = season.episodes[i];
+      const hasAccess = await checkAndShowAdGate(playerState!.anime, playerState!.seasonIdx, i);
+      if (!hasAccess) return;
       const qOpts = getEpisodeQualityOptions(clickedEp);
       addToWatchHistory(playerState!.anime, playerState!.seasonIdx, i);
       setPlayerState({
@@ -1573,11 +1579,13 @@ const Index = () => {
     },
   }));
 
-  const handleVideoPlayerSeasonChange = useCallback((newSeasonIdx: number) => {
+  const handleVideoPlayerSeasonChange = useCallback(async (newSeasonIdx: number) => {
     if (!playerState?.anime.seasons) return;
     const season = playerState.anime.seasons[newSeasonIdx];
     if (!season?.episodes?.length) return;
     const ep = season.episodes[0];
+    const hasAccess = await checkAndShowAdGate(playerState.anime, newSeasonIdx, 0);
+    if (!hasAccess) return;
     const qOpts: { label: string; src: string }[] = [];
     if (ep.link480) qOpts.push({ label: "480p", src: ep.link480 });
     if (ep.link720) qOpts.push({ label: "720p", src: ep.link720 });
@@ -1593,7 +1601,7 @@ const Index = () => {
       qualityOptions: qOpts.length > 0 ? qOpts : undefined,
       nextEpisodeSrc: getEpisodeSrc(season.episodes[1] as Episode),
     });
-  }, [playerState]);
+  }, [checkAndShowAdGate, playerState]);
 
   // Suggested anime: prioritize same category, then same language, excluding current
   const suggestedAnime = useMemo(() => {
