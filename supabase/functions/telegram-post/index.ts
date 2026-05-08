@@ -66,7 +66,7 @@ Hey <b>${firstName}</b>! 👋
 
 ━━━━━━━━━━━━━━━━━━
 
-🎬 Tap <b>Free Access</b> on any post to unlock 24h access instantly!
+🎬 Use the post buttons below to open content instantly!
 `.trim();
 
   const keyboard = {
@@ -121,7 +121,7 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
 
   if (req.method === "GET")
-    return json({ ok: true, service: "telegram-post", actions: ["send", "edit-buttons", "webhook", "set-webhook", "create-unlock-link"] });
+    return json({ ok: true, service: "telegram-post", actions: ["send", "edit-buttons", "set-webhook", "delete-webhook", "webhook-info", "get-bot-username"] });
 
   try {
     const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
@@ -132,80 +132,7 @@ serve(async (req) => {
     const action = String(body?.action || "send");
     const telegramBase = `https://api.telegram.org/bot${botToken}`;
 
-    // ========== AUTO-DETECT TELEGRAM WEBHOOK (update_id present = from Telegram) ==========
-    if (body?.update_id !== undefined) {
-      const message = body?.message;
-      const text = String(message?.text || "");
-      if (text.startsWith("/start")) {
-        const chatId = message.chat.id;
-        const firstName = message.from?.first_name || "Friend";
-        const tgUserId = message.from?.id;
-        const m = text.match(/^\/start\s+unlock_(.+)$/);
-        if (m && m[1]) {
-          await handleUnlockDeepLink(botToken, chatId, m[1].trim(), tgUserId);
-        } else {
-          await sendStartMessage(botToken, chatId, firstName);
-        }
-      }
-      return json({ ok: true });
-    }
-
-    // ========== MANUAL WEBHOOK (from admin panel) ==========
-    if (action === "webhook") {
-      const update = body?.update;
-      if (!update) return json({ ok: true, skipped: true });
-      const message = update?.message;
-      const text = String(message?.text || "");
-      if (text.startsWith("/start")) {
-        const chatId = message.chat.id;
-        const firstName = message.from?.first_name || "Friend";
-        const tgUserId = message.from?.id;
-        const m = text.match(/^\/start\s+unlock_(.+)$/);
-        if (m && m[1]) {
-          await handleUnlockDeepLink(botToken, chatId, m[1].trim(), tgUserId);
-        } else {
-          await sendStartMessage(botToken, chatId, firstName);
-        }
-      }
-      return json({ ok: true });
-    }
-
-    // ========== CREATE UNLOCK LINK (called from website "Verify" button) ==========
-    if (action === "create-unlock-link") {
-      const userId = String(body?.userId || "").trim();
-      if (!userId) return json({ error: "userId required" }, 400);
-      const username = await getBotUsername(botToken);
-      if (!username) return json({ error: "Could not resolve bot username" }, 500);
-      const deepLink = `https://t.me/${username}?start=unlock_${encodeURIComponent(userId)}`;
-      return json({ ok: true, deepLink, botUsername: username });
-    }
-
-    // ========== CLAIM ACCESS CODE (paste-token flow from website player) ==========
-    if (action === "claim-access-code") {
-      const code = String(body?.code || "").trim().toUpperCase();
-      const userId = String(body?.userId || "").trim();
-      if (!code || !userId) return json({ ok: false, error: "code & userId required" }, 400);
-      const rec = await fbGet(`accessCodes/${code}`);
-      if (!rec) return json({ ok: false, error: "invalid_code" }, 400);
-      if (rec.consumed) return json({ ok: false, error: "already_used" }, 400);
-      if (Number(rec.expiresAt || 0) < Date.now()) return json({ ok: false, error: "expired" }, 400);
-      if (rec.ownerUserId && rec.ownerUserId !== userId) return json({ ok: false, error: "not_owner" }, 400);
-      const grantMs = Number(rec.grantMs) > 0 ? Number(rec.grantMs) : 24 * 3600_000;
-      const expiresAt = Date.now() + grantMs;
-      await fbPut(`accessCodes/${code}`, {
-        ...rec, consumed: true, status: "claimed",
-        claimedByUserId: userId, claimedAt: Date.now(),
-      });
-      // Mirror to user freeAccess
-      await fbPut(`users/${userId}/freeAccess`, {
-        active: true,
-        grantedAt: Date.now(),
-        expiresAt,
-        viaCode: code,
-        source: "telegram_bot_token",
-      });
-      return json({ ok: true, durationMs: grantMs, expiresAt });
-    }
+    // telegram-post এখন শুধুই post sender; access / unlock flow আলাদা bot-এ থাকবে
 
     // ========== GENERIC SHORTENER (multi-site) ==========
     // body: { url, site, apiKey } – uses any "*.*/api?api=KEY&url=..." style endpoint
