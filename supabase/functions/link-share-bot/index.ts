@@ -775,7 +775,7 @@ ${stylish("›› Auto cleanup in 1 minute — save it now")}`;
   return sent;
 }
 
-async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tgUserId: number) {
+async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tgUserId: number, from?: any) {
   const now = Date.now();
   const hoursCfg = await fb("GET", `settings/unlockDurationHours`).catch(() => null);
   const hours = Number(hoursCfg) > 0 ? Number(hoursCfg) : 24;
@@ -873,10 +873,11 @@ async function handleVerifyCallback(chat_id: number, message_id: number, callbac
     await answerCallback(callback_id, "✅ Token ready", false);
     const username = ((await botUsername()) || BOT_USERNAME_FALLBACK).replace(/^@/, "");
     const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
-    const summaryText = `✅ <b>Verification Complete</b>\n\nFinish the flow by tapping the button below.\nThe access token will be delivered only after you return here.`;
+    const finalShortUrl = await buildShortenerClaimUrl(token);
+    const summaryText = `✅ <b>Verification Complete</b>\n\nOpen the shortener one more time to receive your access token here.`;
     const summaryMarkup = {
       inline_keyboard: [
-        [{ text: "🎟 Get Access Token", url: `https://t.me/${username}?start=claim_${encodeURIComponent(token)}` }],
+        [{ text: "🎟 Get Access Token", url: finalShortUrl }],
         [{ text: "🌐 Open Website Unlock", url: `${siteUrl}/unlock-required` }],
       ],
     };
@@ -970,7 +971,7 @@ async function handleStart(chat_id: number, user_id: number, from: any, arg?: st
         });
       } catch {}
     }
-    await sendAccessTokenCard(chat_id, String(rec.accessCode), Number(rec.grantMs) || 24 * 3600_000, user_id);
+    await sendAccessTokenCard(chat_id, String(rec.accessCode), Number(rec.grantMs) || 24 * 3600_000, user_id, from);
     return;
   }
 
@@ -980,7 +981,7 @@ async function handleStart(chat_id: number, user_id: number, from: any, arg?: st
       await sendEphemeral(chat_id, stylish("✦ Invalid unlock request ✦"));
       return;
     }
-    await sendWebsiteUnlockMessage(chat_id, ownerUserId, user_id);
+    await sendWebsiteUnlockMessage(chat_id, ownerUserId, user_id, from);
     return;
   }
 
