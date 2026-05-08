@@ -1322,14 +1322,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
 
         const nextOption = availableQualities.find((q) => {
-          const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+          const candidateRawSrc = manualServerSelected ? applyServerDomain(q.src, activeServerIndex) : q.src;
+          const candidateSrc = getPrimaryPlaybackSrc(candidateRawSrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
           return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
         });
 
         if (nextOption) {
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-          activeSourceBaseRef.current = nextOption.src;
+          const nextFallbackRawSrc = manualServerSelected ? applyServerDomain(nextOption.src, activeServerIndex) : nextOption.src;
+          const newFallbackSrc = getPrimaryPlaybackSrc(nextFallbackRawSrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+          activeSourceBaseRef.current = nextFallbackRawSrc;
           if (newFallbackSrc === currentSrc) {
             v.currentTime = pendingSeek.current;
             pendingSeek.current = null;
