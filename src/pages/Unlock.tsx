@@ -13,37 +13,8 @@ const Unlock = () => {
 
   useEffect(() => {
     const doUnlock = async () => {
-      // ===== Telegram bot verify (vplink callback) =====
-      const botvToken = searchParams.get("botv") || "";
-      const botName = searchParams.get("bot") || "RS_ANIME_FIND_BOT";
-      if (botvToken) {
-        try {
-          const r = await fetch(
-            `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/link-share-bot/verify-consume`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ token: botvToken }),
-            },
-          );
-          const data = await r.json();
-          if (!r.ok || !data?.ok) {
-            setStatus("denied");
-            setTimeout(() => { window.location.href = `https://t.me/${botName}`; }, 2000);
-            return;
-          }
-          setPrizeHours(Number(data.hours) || 24);
-          setPrizeMinutes(0);
-          setStatus("success");
-          setTimeout(() => {
-            window.location.href = data.deepLink || `https://t.me/${botName}?start=verified`;
-          }, 1500);
-        } catch {
-          setStatus("denied");
-          setTimeout(() => { window.location.href = `https://t.me/${botName}`; }, 2000);
-        }
-        return;
-      }
+      // Old RS_LINK_SHARE_BOT (botv) flow removed — only the standard
+      // `?t=<token>` (and optional `&code=<accessCode>`) flow is supported now.
 
 
       const token = searchParams.get("t") || "";
