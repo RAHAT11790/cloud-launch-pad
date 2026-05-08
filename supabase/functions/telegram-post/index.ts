@@ -271,7 +271,11 @@ serve(async (req) => {
     } catch {}
 
     if ((includeFreeAccess || autoIncludeFA)) {
-      const username = await getBotUsername(botToken);
+      const username = (
+        Deno.env.get("LINK_SHARE_BOT_USERNAME") ||
+        Deno.env.get("RS_RETURN_BOT") ||
+        "RS_ANIME_FIND_BOT"
+      ).replace(/^@/, "").trim();
       if (username) {
         const label = includeFreeAccess
           ? "🔓 𝐅𝐫𝐞𝐞 𝐀𝐜𝐜𝐞𝐬𝐬 (𝟐𝟒𝐡)"
