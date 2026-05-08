@@ -200,7 +200,7 @@ div[style*="z-index: 2147483647"],
     inset: 0;
     background: linear-gradient(90deg, hsl(var(--primary-dark) / 0.2) 0%, hsl(var(--primary-foreground) / 0.2) 50%, hsl(var(--primary-dark) / 0.45) 100%);
     transform: translateX(-100%);
-    animation: unlockCtaFill 1.1s ease forwards;
+    animation: unlockCtaFill 0.95s ease forwards;
     pointer-events: none;
   }
 
@@ -424,8 +424,9 @@ div[style*="z-index: 2147483647"],
   }
 
   @keyframes unlockCtaFill {
-    0% { transform: translateX(-100%); opacity: 0.2; }
-    100% { transform: translateX(0%); opacity: 1; }
+    0% { transform: translateX(-100%); opacity: 0.22; }
+    45% { transform: translateX(-40%); opacity: 0.5; }
+    100% { transform: translateX(0%); opacity: 0.95; }
   }
 
   @keyframes crownFloat {
