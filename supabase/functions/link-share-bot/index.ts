@@ -64,8 +64,53 @@ const stylish = (s: string) => s.split("").map((c) => STYLE_MAP[c] ?? c).join(""
 function shortAccessCode(): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let s = "";
-  for (let i = 0; i < 8; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  for (let i = 0; i < 15; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
   return s;
+}
+
+async function safeDelete(path: string) {
+  try {
+    await fb("DELETE", path);
+  } catch {}
+}
+
+async function cleanupExpiredAccessArtifacts(now = Date.now()) {
+  try {
+    const [codesRaw, tokensRaw, verifyRaw] = await Promise.all([
+      fb("GET", `accessCodes`).catch(() => null),
+      fb("GET", `unlockTokens`).catch(() => null),
+      fb("GET", `${NS}/botVerifyTokens`).catch(() => null),
+    ]);
+
+    const deletes: Promise<unknown>[] = [];
+
+    for (const [code, rec] of Object.entries((codesRaw || {}) as Record<string, any>)) {
+      if (!rec) continue;
+      if (Number(rec.expiresAt || 0) > 0 && Number(rec.expiresAt) <= now) {
+        deletes.push(safeDelete(`accessCodes/${code}`));
+      }
+    }
+
+    for (const [token, rec] of Object.entries((tokensRaw || {}) as Record<string, any>)) {
+      if (!rec) continue;
+      if (Number(rec.expiresAt || 0) > 0 && Number(rec.expiresAt) <= now) {
+        deletes.push(safeDelete(`unlockTokens/${token}`));
+      }
+    }
+
+    for (const [token, rec] of Object.entries((verifyRaw || {}) as Record<string, any>)) {
+      if (!rec) continue;
+      if (Number(rec.expires_at || 0) > 0 && Number(rec.expires_at) <= now) {
+        deletes.push(safeDelete(`${NS}/botVerifyTokens/${token}`));
+      }
+    }
+
+    if (deletes.length > 0) {
+      await Promise.all(deletes);
+    }
+  } catch (e) {
+    console.error("[cleanupExpiredAccessArtifacts]", e);
+  }
 }
 
 function randomToken(): string {
@@ -707,8 +752,9 @@ async function shortenWithConfiguredAccessService(targetUrl: string): Promise<st
 async function buildShortenerClaimUrl(token: string): Promise<string> {
   const username = (await botUsername()) || BOT_USERNAME_FALLBACK || RS_RETURN_BOT;
   const directBotLink = `https://t.me/${username.replace(/^@/, "")}?start=claim_${encodeURIComponent(token)}`;
-  const shortUrl = await shortenWithConfiguredAccessService(directBotLink) || await shortenViaRs(directBotLink);
-  return shortUrl || directBotLink;
+  const shortUrl = await shortenWithConfiguredAccessService(directBotLink);
+  if (!shortUrl) throw new Error("arolinks_shortener_failed");
+  return shortUrl;
 }
 
 function accessInstructionsText() {
@@ -737,6 +783,7 @@ async function sendAccessTokenCard(chat_id: number, accessCode: string, grantMs:
   const safeName = escapeHtml(identity.label);
   const safeTelegramId = escapeHtml(String(tgUserId));
   const safeCode = escapeHtml(accessCode);
+  const safeCodeLine = `         <code>${safeCode}</code>`;
   const caption = `✦━━━━━━━━━━━━━━━━━━━✦
 ${stylish("✦ RS ACCESS TOKEN ✦")}
 ✦━━━━━━━━━━━━━━━━━━━✦
@@ -747,9 +794,8 @@ ${stylish("›› TELEGRAM ID")}: <code>${safeTelegramId}</code>
 ${stylish("›› ACCESS DURATION")}: <b>${hours}h</b>
 
 ${stylish("✦ ACCESS TOKEN ✦")}
-╔══════════════╗
-║ <code>${safeCode}</code> ║
-╚══════════════╝
+<code>──────── TOKEN BOX ────────</code>
+${safeCodeLine}
 
 ${stylish("›› Tap only the token to copy")}
 ${stylish("›› Paste it in the website unlock box")}
