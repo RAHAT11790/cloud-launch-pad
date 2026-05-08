@@ -485,12 +485,10 @@ function fsubMarkup(notJoined: FsubChannel[], retryCb: string) {
 
 // ============== MAIN MENU ==============
 function mainMenu() {
+  const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
   return {
     inline_keyboard: [
-      [
-        { text: "✦ ABOUT ✦", callback_data: "about" },
-        { text: "✦ CHANNELS ✦", callback_data: "channels" },
-      ],
+      [{ text: "🌐 OPEN WEBSITE", url: `${siteUrl}/unlock-required` }],
       [{ text: "❌ CLOSE", callback_data: "close" }],
     ],
   };
@@ -626,17 +624,76 @@ function isPublicTokenFlow(ownerUserId: string): boolean {
   return !normalized || ["guest", "public", "telegram", "telegram_post", "tg", "token"].includes(normalized);
 }
 
+function escapeHtml(value: string): string {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+async function shortenWithConfiguredAccessService(targetUrl: string): Promise<string | null> {
+  try {
+    const raw = await fb("GET", "settings/adServices").catch(() => null);
+    const services = raw ? Object.values(raw as Record<string, any>) as any[] : [];
+    const candidates = services
+      .filter((svc) => svc && svc.enabled !== false && String(svc.mode || "shortener") !== "miniapp")
+      .sort((a, b) => {
+        const aScore = /aro|arrow/i.test(`${a?.name || ""} ${a?.id || ""}`) ? 10 : 0;
+        const bScore = /aro|arrow/i.test(`${b?.name || ""} ${b?.id || ""}`) ? 10 : 0;
+        return bScore - aScore;
+      });
+
+    for (const svc of candidates) {
+      const shortenerUrl = String(svc.shortenerFunctionUrl || svc.functionUrl || "").trim();
+      if (shortenerUrl) {
+        try {
+          const res = await fetch(shortenerUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: targetUrl }),
+          });
+          const data = await res.json().catch(() => ({}));
+          const out = data?.shortenedUrl || data?.short || data?.url || null;
+          if (out) return out;
+        } catch (e) {
+          console.error("[access-shortener:url]", e);
+        }
+      }
+
+      if (svc?.siteBase && svc?.apiKey) {
+        try {
+          const base = String(svc.siteBase).replace(/\/+$/, "");
+          const apiUrl = `${base}/api?api=${encodeURIComponent(String(svc.apiKey))}&url=${encodeURIComponent(targetUrl)}`;
+          const res = await fetch(apiUrl);
+          const data = await res.json().catch(() => ({}));
+          const out = data?.shortenedUrl || data?.short || data?.url || null;
+          if (out) return out;
+        } catch (e) {
+          console.error("[access-shortener:generic]", e);
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[access-shortener]", e);
+  }
+
+  return null;
+}
+
 async function buildShortenerClaimUrl(token: string): Promise<string> {
   const username = (await botUsername()) || BOT_USERNAME_FALLBACK || RS_RETURN_BOT;
   const directBotLink = `https://t.me/${username.replace(/^@/, "")}?start=claim_${encodeURIComponent(token)}`;
-  const shortUrl = await shortenViaRs(directBotLink);
+  const shortUrl = await shortenWithConfiguredAccessService(directBotLink) || await shortenViaRs(directBotLink);
   return shortUrl || directBotLink;
 }
 
 function accessInstructionsText() {
-  return `Tap <b>✅ Verify 24 Hour Access Now</b>.
-After the shortener finishes, the final link will bring you back here.
-Then the bot will send your access token in this chat.`;
+  return `${stylish("›› Open the shortener link below")}
+${stylish("›› Watch ads and wait for GET LINK")}
+${stylish("›› Final result will return you here")}
+${stylish("›› Then this bot sends your access token")}`;
 }
 
 async function updateWorkflowCard(chat_id: number, message_id: number, caption: string, reply_markup: any, prefersCaption = false) {
@@ -651,17 +708,22 @@ async function sendAccessTokenCard(chat_id: number, accessCode: string, grantMs:
   const profile = await getUserProfileCached(tgUserId);
   const hours = Math.max(1, Math.round(grantMs / 3600000));
   const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
-  const caption = `╔════════════════════╗
-🎟 <b>ACCESS TOKEN</b>
-╚════════════════════╝
+  const safeName = escapeHtml(profile.name || `User ${tgUserId}`);
+  const safeCode = escapeHtml(accessCode);
+  const caption = `✦━━━━━━━━━━━━━━━━━━━✦
+${stylish("✦ RS ACCESS TOKEN ✦")}
+✦━━━━━━━━━━━━━━━━━━━✦
 
-👤 <b>${profile.name || "RS Anime User"}</b>
-⏱ <b>${hours} hours access</b>
+${stylish("›› User")}: <b>${safeName}</b>
+${stylish("›› Access Time")}: <b>${hours} hours</b>
 
-<code>${accessCode}</code>
+<b>${stylish("YOUR ACCESS TOKEN")}</b>
+<code>────────[ ${safeCode} ]────────</code>
 
-Tap the token to copy.
-Paste it on the website unlock box to activate access.`;
+${stylish("›› Tap the token to copy")}
+${stylish("›› Paste it on the website unlock box")}
+
+✦━━━━━━━━━━━━━━━━━━━✦`;
 
   const reply_markup = {
     inline_keyboard: [
@@ -710,31 +772,50 @@ async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tg
   const displayName = site.name || tgProfile.name || "RS Anime User";
   const shortenerUrl = await buildShortenerClaimUrl(token);
 
-  const caption = isPublicFlow ? `╔══════════════════╗
-🔓 <b>TELEGRAM FREE ACCESS</b>
-╚══════════════════╝
+  const safeDisplayName = escapeHtml(displayName);
+  const safeEmail = escapeHtml(site.email || "—");
+  const caption = isPublicFlow ? `✦━━━━━━━━━━━━━━━━━━━✦
+${stylish("✦ RS LINK SHARE BOT ✦")}
+✦━━━━━━━━━━━━━━━━━━━✦
 
-👤 <b>Name:</b> ${displayName}
-🤖 <b>Telegram ID:</b> <code>${tgUserId}</code>
-⏱ <b>Access Duration:</b> ${hours} hours
+${stylish("›› Bot Type")}: ${stylish("Access Bot")}
+${stylish("›› 24 Hour Telegram Access")}
+${stylish("›› Shortener return required")}
 
-${accessInstructionsText()}` : `╔══════════════════╗
-🔓 <b>24 HOUR ACCESS</b>
-╚══════════════════╝
+${stylish("✦ YOUR DETAILS ✦")}
+${stylish("›› Name")}: <b>${safeDisplayName}</b>
+${stylish("›› Telegram ID")}: <code>${tgUserId}</code>
+${stylish("›› Access Duration")}: <b>${hours}h</b>
 
-👤 <b>Name:</b> ${displayName}
-📧 <b>Email:</b> ${site.email}
-🤖 <b>Telegram ID:</b> <code>${tgUserId}</code>
-⏱ <b>Access Duration:</b> ${hours} hours
+${accessInstructionsText()}
 
-${accessInstructionsText()}`;
+${stylish("✦ Powered by")}: <a href="https://t.me/CARTOONFUNNY03">𓆩𝐀𝐍𝐈𝐌𝐄 𝐈𝐍 𝐇𝐈𝐍𝐃𝐈𓆪</a>
+${stylish("✦ MADE WITH ❤️ BY")}: <a href="https://t.me/rs_woner">𝐑𝐒 𝐖𝐎𝐍𝐄𝐑</a>
 
-  const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
-  const unlockUrl = `${siteUrl}/unlock?t=${encodeURIComponent(token)}&svc=telegram&code=${encodeURIComponent(code)}`;
+✦━━━━━━━━━━━━━━━━━━━✦` : `✦━━━━━━━━━━━━━━━━━━━✦
+${stylish("✦ RS LINK SHARE BOT ✦")}
+✦━━━━━━━━━━━━━━━━━━━✦
+
+${stylish("›› Bot Type")}: ${stylish("Website Access Bot")}
+${stylish("›› 24 Hour Website Access")}
+${stylish("›› Shortener return required")}
+
+${stylish("✦ YOUR DETAILS ✦")}
+${stylish("›› Name")}: <b>${safeDisplayName}</b>
+${stylish("›› Email")}: <b>${safeEmail}</b>
+${stylish("›› Telegram ID")}: <code>${tgUserId}</code>
+${stylish("›› Access Duration")}: <b>${hours}h</b>
+
+${accessInstructionsText()}
+
+${stylish("✦ Powered by")}: <a href="https://t.me/CARTOONFUNNY03">𓆩𝐀𝐍𝐈𝐌𝐄 𝐈𝐍 𝐇𝐈𝐍𝐃𝐈𓆪</a>
+${stylish("✦ MADE WITH ❤️ BY")}: <a href="https://t.me/rs_woner">𝐑𝐒 𝐖𝐎𝐍𝐄𝐑</a>
+
+✦━━━━━━━━━━━━━━━━━━━✦`;
 
   const reply_markup = {
     inline_keyboard: [
-      [{ text: "✅ Verify 24 Hour Access Now", url: shortenerUrl }],
+      [{ text: "✅ Verify & Get Access Token", url: shortenerUrl }],
     ],
   };
 
@@ -780,10 +861,9 @@ async function handleVerifyCallback(chat_id: number, message_id: number, callbac
     });
 
     await answerCallback(callback_id, "✅ Token ready", false);
-    const accessCode = String(rec.accessCode || "");
     const username = ((await botUsername()) || BOT_USERNAME_FALLBACK).replace(/^@/, "");
     const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
-    const summaryText = `✅ <b>Verification Complete</b>\n\nYour unique access token is ready.\nTap the button below to receive it in a styled card, then paste it on the website.`;
+    const summaryText = `✅ <b>Verification Complete</b>\n\nFinish the flow by tapping the button below.\nThe access token will be delivered only after you return here.`;
     const summaryMarkup = {
       inline_keyboard: [
         [{ text: "🎟 Get Access Token", url: `https://t.me/${username}?start=claim_${encodeURIComponent(token)}` }],
@@ -792,7 +872,6 @@ async function handleVerifyCallback(chat_id: number, message_id: number, callbac
     };
 
     try { await updateWorkflowCard(chat_id, message_id, summaryText, summaryMarkup, true); } catch {}
-    await sendAccessTokenCard(chat_id, accessCode, grantMs, tgUserId);
     return;
   }
 
