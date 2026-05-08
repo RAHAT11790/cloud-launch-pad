@@ -230,14 +230,31 @@ const UnlockRequired = () => {
                 </button>
               </div>
 
-              <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 via-background/60 to-accent/10 p-5 text-center shadow-[0_0_30px_hsl(var(--primary)/0.18)]">
-                <p className="text-[11px] tracking-[0.32em] text-muted-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>
-                  ──── TOKEN BOX ────
+              <button
+                type="button"
+                onClick={() => {
+                  const tk = accessCode.trim();
+                  if (!tk) {
+                    toast.error(lang === "bn" ? "টোকেন নেই" : "No token to copy");
+                    return;
+                  }
+                  navigator.clipboard.writeText(tk).then(
+                    () => toast.success(lang === "bn" ? "টোকেন কপি হয়েছে" : "Token copied"),
+                    () => toast.error("Copy failed"),
+                  );
+                }}
+                className="block w-full rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 via-background/60 to-accent/10 px-4 py-3 text-center shadow-[0_0_24px_hsl(var(--primary)/0.18)] transition active:scale-[0.98]"
+              >
+                <p className="text-[10px] tracking-[0.3em] text-muted-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>
+                  ✦━━━━━━━━━━━━━━━━━━━✦
                 </p>
-                <p className="mt-4 text-base font-bold text-primary" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-                  🔒 {t.tokenLabel}
+                <p className="my-1.5 text-base font-extrabold tracking-[0.2em] text-primary" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                  ✦ {accessCode.trim() || "—————"} ✦
                 </p>
-              </div>
+                <p className="text-[10px] tracking-[0.3em] text-muted-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>
+                  ✦━━━━━━━━━━━━━━━━━━━✦
+                </p>
+              </button>
             </div>
 
             {/* BOTTOM: How it works (informational, lowest priority) */}
