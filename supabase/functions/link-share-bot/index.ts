@@ -850,7 +850,13 @@ async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tg
   const tgProfile = await saveUserProfile(tgUserId, from || { id: tgUserId });
   const photoToShow = site.photoURL || tgProfile.photo_file_id || tgProfile.photo_url || RS_VERIFY_IMG;
   const identity = formatTelegramIdentity(tgProfile, tgUserId);
-  const shortenerUrl = await buildShortenerClaimUrl(token);
+  let shortenerUrl = "";
+  try {
+    shortenerUrl = await buildShortenerClaimUrl(token);
+  } catch {
+    await sendEphemeral(chat_id, "✦ AroLinks verify link is not available right now ✦", {}, 60_000);
+    return;
+  }
 
   const safeDisplayName = escapeHtml(identity.label);
   const safeTelegramId = escapeHtml(String(tgUserId));
@@ -918,7 +924,13 @@ async function handleVerifyCallback(chat_id: number, message_id: number, callbac
 
     await answerCallback(callback_id, "✅ Token ready", false);
     const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
-    const finalShortUrl = await buildShortenerClaimUrl(token);
+    let finalShortUrl = "";
+    try {
+      finalShortUrl = await buildShortenerClaimUrl(token);
+    } catch {
+      await answerCallback(callback_id, "Shortener unavailable", true);
+      return;
+    }
     const summaryText = `✅ <b>Verification Complete</b>\n\nOpen the shortener one more time to receive your access token here.`;
     const summaryMarkup = {
       inline_keyboard: [
