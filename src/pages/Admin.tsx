@@ -6813,9 +6813,18 @@ ${tgHashtags}`;
             </div>
 
             <div className={`${glassCard} p-4 mb-4`}>
-              <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <Eye size={14} className="text-green-500" /> Active Free Access Users ({freeAccessUsers.length})
-              </h3>
+              <div className="mb-3.5 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Eye size={14} className="text-green-500" /> Active Free Access Users ({freeAccessUsers.length})
+                </h3>
+                <button
+                  onClick={clearAllFreeAccess}
+                  disabled={freeAccessBusy === "all" || freeAccessUsers.length === 0}
+                  className={`${btnSecondary} !px-3 !py-1.5 text-[11px] text-red-400 border-red-500/30 hover:border-red-500 disabled:opacity-50`}
+                >
+                  {freeAccessBusy === "all" ? "Clearing..." : "Clear All"}
+                </button>
+              </div>
               <p className="text-[11px] text-[#D1C4E9] mb-4">
                 যারা AroLinks অ্যাড গেট দিয়ে ফ্রী ২৪ ঘন্টার এক্সেস নিয়েছে তাদের লিস্ট। এক্সেস শেষ হলে স্বয়ংক্রিয়ভাবে মুছে যাবে।
               </p>
@@ -6828,25 +6837,41 @@ ${tgHashtags}`;
                     const hours = Math.floor(remaining / 3600000);
                     const minutes = Math.floor((remaining % 3600000) / 60000);
                     return (
-                      <div key={user.id} className="bg-[#1A1A2E] border border-green-500/20 rounded-xl p-4">
+                      <div key={user.id} className={`bg-[#1A1A2E] border rounded-xl p-4 ${user.suspiciousBypass ? "border-red-500/50" : "border-green-500/20"}`}>
                         <div className="flex items-center gap-3">
-                          <div className="w-[42px] h-[42px] rounded-full bg-gradient-to-br from-green-500 to-green-700 flex items-center justify-center font-bold text-lg flex-shrink-0">
+                          <div className={`w-[42px] h-[42px] rounded-full flex items-center justify-center font-bold text-lg flex-shrink-0 ${user.suspiciousBypass ? "bg-gradient-to-br from-red-500 to-red-700" : "bg-gradient-to-br from-green-500 to-green-700"}`}>
                             {(user.name || "U")[0].toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold truncate">{user.name || "Unknown"}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold truncate">{user.name || "Unknown"}</p>
+                              {user.suspiciousBypass ? <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-500" /> : null}
+                            </div>
                             <p className="text-[11px] text-[#D1C4E9] truncate">{user.email || "No email"}</p>
                           </div>
-                          <div className="text-right flex-shrink-0">
-                            <div className="bg-green-500/15 border border-green-500/30 px-2.5 py-1 rounded-full">
-                              <span className="text-[11px] font-bold text-green-400">{hours}h {minutes}m</span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className={`px-2.5 py-1 rounded-full border ${user.suspiciousBypass ? "bg-red-500/15 border-red-500/30" : "bg-green-500/15 border-green-500/30"}`}>
+                              <span className={`text-[11px] font-bold ${user.suspiciousBypass ? "text-red-400" : "text-green-400"}`}>{hours}h {minutes}m</span>
                             </div>
+                            <button
+                              onClick={() => clearSingleFreeAccess(user)}
+                              disabled={freeAccessBusy === String(user.userId || user.id || "")}
+                              className="h-8 w-8 rounded-full border border-red-500/30 bg-red-500/10 text-red-400 flex items-center justify-center disabled:opacity-50"
+                              title="Cancel access"
+                            >
+                              <X size={14} />
+                            </button>
                           </div>
                         </div>
                         <div className="mt-2.5 flex justify-between items-center text-[10px] text-[#957DAD]">
                           <span>আনলক: {new Date(user.unlockedAt).toLocaleString("bn-BD", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                           <span>শেষ: {new Date(user.expiresAt).toLocaleString("bn-BD", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                         </div>
+                        {user.suspiciousBypass ? (
+                          <div className="mt-2 text-[10px] text-red-300">
+                            ⚠️ 30 second-এর আগেই token নেওয়া হয়েছে — bypass suspect
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })}
