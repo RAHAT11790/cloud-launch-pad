@@ -90,6 +90,11 @@ const isBypassSource = (url: string): boolean => {
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
 };
 
+const isLikelyImageUrl = (url: string): boolean => {
+  const normalized = String(url || "").trim().toLowerCase().split("?")[0].split("#")[0];
+  return /\.(avif|gif|jpe?g|png|svg|webp|bmp)$/i.test(normalized);
+};
+
 const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
   try {
     const parsed = new URL(rawUrl);
@@ -110,7 +115,7 @@ const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
 
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
   const rawUrl = String(url || "").trim();
-  if (!rawUrl) return [];
+  if (!rawUrl || isLikelyImageUrl(rawUrl)) return [];
 
   const candidates: string[] = [];
   const addCandidate = (candidate?: string | null) => {
@@ -1233,6 +1238,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     let lastKnownTime = 0;
     const onLoaded = () => {
       setDuration(v.duration);
+      if (v.readyState >= 2) {
+        setIsBuffering(false);
+      }
       if (pendingSeek.current !== null) {
         v.currentTime = pendingSeek.current;
         pendingSeek.current = null;
@@ -1367,6 +1375,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         }
       }, delay);
     };
+    const onLoadedData = () => {
+      if (v.readyState >= 2) {
+        setVideoError(false);
+        setIsBuffering(false);
+      }
+    };
     const onCanPlay = () => {
       setVideoError(false);
       setIsBuffering(false);
@@ -1415,6 +1429,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     v.addEventListener("pause", onPause);
     v.addEventListener("ended", onEnded);
     v.addEventListener("error", onError);
+    v.addEventListener("loadeddata", onLoadedData);
     v.addEventListener("canplay", onCanPlay);
     v.addEventListener("canplaythrough", onCanPlayThrough);
     v.addEventListener("waiting", onWaiting);
@@ -1436,6 +1451,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.removeEventListener("pause", onPause);
       v.removeEventListener("ended", onEnded);
       v.removeEventListener("error", onError);
+      v.removeEventListener("loadeddata", onLoadedData);
       v.removeEventListener("canplay", onCanPlay);
       v.removeEventListener("canplaythrough", onCanPlayThrough);
       v.removeEventListener("waiting", onWaiting);
