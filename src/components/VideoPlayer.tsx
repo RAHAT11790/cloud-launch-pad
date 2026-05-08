@@ -39,11 +39,11 @@ const PROXY_SERVER_LIMIT = 3;
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
-// Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
+// Built-in ultra-fast HTTPS streaming proxy (Lovable Cloud function).
 // Auto-applied to plain http:// sources (e.g. Server 1 bot-hosting.net) to bypass
 // browser mixed-content blocks. HTTPS sources stay direct (zero overhead).
 const BUILTIN_STREAM_PROXY = SUPABASE_URL
-  ? `${SUPABASE_URL}/functions/v1/stream-proxy?url={url}`
+  ? `${SUPABASE_URL}/functions/v1/video-proxy?url={url}`
   : "";
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
@@ -417,8 +417,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Global download manager state
   const [activeDownloads, setActiveDownloads] = useState<Map<string, any>>(new Map());
   const [globalFreeAccess, setGlobalFreeAccess] = useState<boolean>(false);
-  const [deviceBlocked, setDeviceBlocked] = useState(false);
-  const [deviceBlockInfo, setDeviceBlockInfo] = useState<{ maxDevices: number; currentCount: number } | null>(null);
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
   const [unlockBlocked, setUnlockBlocked] = useState(false);
@@ -477,6 +475,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     const unsubAccess = onValue(ref(db, `users/${uid}/freeAccess`), async (snap) => {
       const requestSeq = ++accessRequestSeq;
+      setFreeAccessLoaded(false);
       const data = snap.val();
       if (data?.active && Number(data.expiresAt) > Date.now()) {
         const { ensureFreeAccessDeviceAllowed } = await import("@/lib/freeAccessDevice");
