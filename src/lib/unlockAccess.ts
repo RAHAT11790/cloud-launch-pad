@@ -48,7 +48,14 @@ export async function getAdServices(): Promise<AdService[]> {
     const snap = await get(ref(db, "settings/adServices"));
     const val = snap.val();
     if (!val) return [];
-    return Object.values(val).filter((s: any) => s.enabled !== false) as AdService[];
+    return (Object.values(val) as AdService[])
+      .filter((s: any) => s.enabled !== false)
+      .sort((a, b) => {
+        const aTelegram = a.mode === "miniapp" || /telegram/i.test(`${a.id} ${a.name}`);
+        const bTelegram = b.mode === "miniapp" || /telegram/i.test(`${b.id} ${b.name}`);
+        if (aTelegram === bTelegram) return 0;
+        return aTelegram ? -1 : 1;
+      });
   } catch {
     return [];
   }
@@ -348,11 +355,13 @@ export async function createTelegramBotUnlockLink(): Promise<{
   if (!userId) return { ok: false, error: "login_required" };
 
   try {
-    // Try the configured Telegram provider URL first
     let endpoint = "";
     try {
-      const snap = await get(ref(db, "settings/telegramFunctionUrl"));
-      endpoint = String(snap.val() || "").trim();
+      const [legacySnap, providerSnap] = await Promise.all([
+        get(ref(db, "settings/telegramFunctionUrl")),
+        get(ref(db, "settings/telegramProvider")),
+      ]);
+      endpoint = String(legacySnap.val() || providerSnap.val()?.url || "").trim();
     } catch {}
 
     if (!endpoint) {
@@ -392,8 +401,11 @@ export async function claimAccessCode(code: string): Promise<{
 
   let endpoint = "";
   try {
-    const snap = await get(ref(db, "settings/telegramFunctionUrl"));
-    endpoint = String(snap.val() || "").trim();
+    const [legacySnap, providerSnap] = await Promise.all([
+      get(ref(db, "settings/telegramFunctionUrl")),
+      get(ref(db, "settings/telegramProvider")),
+    ]);
+    endpoint = String(legacySnap.val() || providerSnap.val()?.url || "").trim();
   } catch {}
   if (!endpoint) {
     const supaUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "";
