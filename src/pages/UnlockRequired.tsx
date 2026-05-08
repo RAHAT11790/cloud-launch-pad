@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { db, ref } from "@/lib/firebase";
 import { createTelegramBotUnlockLink, createUnlockLinksForAllServices, claimAccessCode, getLocalUserId, type AdService } from "@/lib/unlockAccess";
-import { openExternalBrowser } from "@/lib/openExternal";
+import { openExternalBrowser, openTelegramDeepLink } from "@/lib/openExternal";
 
 type UnlockLink = { service: AdService; shortUrl: string };
 type PendingPlayback = {
@@ -84,7 +84,7 @@ const UnlockRequired = () => {
       setTimeout(async () => {
         const result = await createTelegramBotUnlockLink();
         if (result.ok && result.url) {
-          openExternalBrowser(result.url);
+          openTelegramDeepLink(result.url);
           setTimeout(() => setOpeningService(null), 300);
           return;
         }
