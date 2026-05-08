@@ -100,8 +100,21 @@ export const getLocalUserId = (): string | null => {
   }
 };
 
-/** Shorten via either a configured edge-function URL or a generic site+apiKey */
+/** Shorten via dedicated shortener URL, legacy functionUrl, or generic site+apiKey */
 async function shortenWithService(svc: AdService, callbackUrl: string): Promise<string | null> {
+  const shortenerUrl = svc.shortenerFunctionUrl || (svc.functionUrl && !svc.functionUrl.startsWith("telegram://") && !svc.functionUrl.startsWith("generic://") ? svc.functionUrl : "");
+  if (shortenerUrl) {
+    try {
+      const res = await fetch(shortenerUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: callbackUrl }),
+      });
+      const data = await res.json();
+      const out = data?.shortenedUrl || data?.short || data?.url || null;
+      if (out) return out;
+    } catch {}
+  }
   if (svc.siteBase && svc.apiKey) {
     try {
       const base = svc.siteBase.replace(/\/+$/, "");
@@ -112,18 +125,7 @@ async function shortenWithService(svc: AdService, callbackUrl: string): Promise<
       if (out) return out;
     } catch {}
   }
-  if (!svc.functionUrl) return null;
-  try {
-    const res = await fetch(svc.functionUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: callbackUrl }),
-    });
-    const data = await res.json();
-    return data?.shortenedUrl || data?.short || data?.url || null;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 /** Get duration for a specific service */
