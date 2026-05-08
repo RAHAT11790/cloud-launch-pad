@@ -390,6 +390,7 @@ const withBotPath = (base: string, path: string) => `${base.replace(/\/+$/, "")}
  */
 export async function createTelegramBotUnlockLink(): Promise<{
   ok: boolean;
+  url?: string;
   deepLink?: string;
   error?: string;
 }> {
@@ -406,10 +407,11 @@ export async function createTelegramBotUnlockLink(): Promise<{
       body: JSON.stringify({ action: "create-unlock-link", userId }),
     });
     const data = await r.json();
-    if (!r.ok || !data?.deepLink) {
+    const url = data?.url || data?.shortUrl || data?.deepLink || null;
+    if (!r.ok || !url) {
       return { ok: false, error: data?.error || "bot_link_failed" };
     }
-    return { ok: true, deepLink: data.deepLink };
+    return { ok: true, url, deepLink: data?.deepLink || url };
   } catch (e: any) {
     return { ok: false, error: e?.message || "unknown" };
   }
