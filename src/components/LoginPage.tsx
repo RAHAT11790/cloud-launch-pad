@@ -40,6 +40,7 @@ const FloatingParticles = () => (
 );
 
 const LoginPage = ({ onLogin }: LoginPageProps) => {
+  const SESSION_STARTED_AT_KEY = "rs_session_started_at";
   const branding = useBranding();
   const logoSrc = branding.logoUrl || logoImg;
   const [isRegister, setIsRegister] = useState(false);
@@ -157,6 +158,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         } catch (e) {}
 
         localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
+        localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         localStorage.setItem("rs_display_name", gName);
         if (gPhoto) localStorage.setItem("rs_profile_photo", gPhoto);
         toast.success(`Welcome, ${gName}!`);
@@ -206,6 +208,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       } catch (e) {}
 
       localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
+      localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
       localStorage.setItem("rs_display_name", gName);
       if (gPhoto) localStorage.setItem("rs_profile_photo", gPhoto);
       toast.success(`Welcome, ${gName}! Password set successfully ✅`);
@@ -435,6 +438,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
           name: name.trim(), email: email.trim(), createdAt: Date.now(), online: true, lastSeen: Date.now(), id: userId, authProvider: "email",
         });
         localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: name.trim(), email: email.trim() }));
+        localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         localStorage.setItem("rs_display_name", name.trim());
         toast.success("Account created successfully!");
         onLogin(userId);
@@ -460,6 +464,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         const displayName = finalUserData.name || input;
         const loginEmail = finalUserData.email || (input.includes("@") ? input : "");
         localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: displayName, email: loginEmail }));
+        localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         localStorage.setItem("rs_display_name", displayName);
         try {
           await update(ref(db, `users/${uid}`), {
