@@ -83,8 +83,8 @@ async function sendUnlockMessage(
     codeBlock;
   const noticeText =
     `⚠️ <b>𝐈𝐌𝐏𝐎𝐑𝐓𝐀𝐍𝐓 𝐍𝐎𝐓𝐈𝐂𝐄</b>\n\n` +
-    `⏰ This link will <b>auto-delete in 30 seconds</b>.\n\n` +
-    `If you miss it, just tap the <b>Free Access</b> button on any Telegram post or the <b>Verify</b> button on the website again.`;
+    `⏰ This token & link is valid for <b>24 hours</b>.\n\n` +
+    `If anything fails, just tap the <b>Free Access</b> button on any post or the <b>Verify</b> button on the website again.`;
   const keyboard = {
     inline_keyboard: [[{ text: "🔓 𝐔𝐧𝐥𝐨𝐜𝐤 𝐀𝐜𝐜𝐞𝐬𝐬", url: shortLink }]],
   };
