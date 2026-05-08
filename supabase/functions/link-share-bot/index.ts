@@ -675,6 +675,19 @@ async function shortenWithConfiguredAccessService(targetUrl: string): Promise<st
         }
       }
     }
+
+    const aroLinksKey = String(Deno.env.get("AROLINKS_API_KEY") || "").trim();
+    if (aroLinksKey) {
+      try {
+        const apiUrl = `https://arolinks.com/api?api=${encodeURIComponent(aroLinksKey)}&url=${encodeURIComponent(targetUrl)}`;
+        const res = await fetch(apiUrl);
+        const data = await res.json().catch(() => ({}));
+        const out = data?.shortenedUrl || data?.short || data?.url || null;
+        if (out) return out;
+      } catch (e) {
+        console.error("[access-shortener:arolinks]", e);
+      }
+    }
   } catch (e) {
     console.error("[access-shortener]", e);
   }
@@ -725,9 +738,9 @@ async function sendAccessTokenCard(chat_id: number, accessCode: string, grantMs:
 ⏳ <b>${hours}h access</b>
 
 <b>TOKEN</b>
-<code>┌────────────┐
-│ ${safeCode} │
-└────────────┘</code>
+┌────────────┐
+│ <code>${safeCode}</code> │
+└────────────┘
 
 Tap only the code to copy.
 Paste it in the website unlock box.
@@ -822,6 +835,7 @@ Token message auto-cleans in 1 minute.`;
   if (!res?.ok) {
     res = await sendMessage(chat_id, caption, { reply_markup });
   }
+  scheduleDelete(chat_id, res?.result?.message_id, 60_000);
 }
 
 // Handle the "Verify & Unlock" callback button — consume token directly inside the bot
