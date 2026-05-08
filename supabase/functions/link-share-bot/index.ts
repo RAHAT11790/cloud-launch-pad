@@ -1621,7 +1621,6 @@ Deno.serve(async (req) => {
     ensureWebhook().catch(() => {});
     const me = await botUsername();
     const targetBotUsername = me || RS_MINI_BOT || RS_RETURN_BOT;
-    const directLink = `https://t.me/${targetBotUsername}?start=unlock_${encodeURIComponent(userId)}`;
     const deepLink = await buildWebsiteVerifyStartLink(userId);
     return new Response(JSON.stringify({ ok: true, deepLink, botUsername: targetBotUsername }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
