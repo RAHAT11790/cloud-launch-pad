@@ -1248,6 +1248,10 @@ const Index = () => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("resumeUnlock") !== "1" || allAnime.length === 0) return;
 
+    // Wait until free access state is loaded before triggering playback,
+    // otherwise handlePlay will redirect back to /unlock-required (loop).
+    if (!hasFreeAccess() && !saltIsPremium) return;
+
     let pending: { animeId: string; seasonIdx?: number; epIdx?: number } | null = null;
     try {
       const raw = sessionStorage.getItem("rs_pendingUnlockPlayback");
@@ -1262,7 +1266,7 @@ const Index = () => {
 
     try { sessionStorage.removeItem("rs_pendingUnlockPlayback"); } catch {}
     handlePlay(anime, pending.seasonIdx, pending.epIdx);
-  }, [allAnime, handlePlay]);
+  }, [allAnime, handlePlay, userFreeAccessExpiresAt, globalFreeAccess, saltIsPremium]);
 
   const addToWatchHistory = (anime: AnimeItem, seasonIdx?: number, epIdx?: number, preserveProgress = false) => {
     try {
