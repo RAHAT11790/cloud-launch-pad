@@ -1035,6 +1035,24 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         ভিডিও আনলক করতে ইউজার যে অ্যাড লিংকে যাবে সেগুলো এখানে ম্যানেজ করো। প্রতিটি সার্ভিসের জন্য আলাদা আনলক বাটন ও আলাদা সময় সেট করা যায়।
       </p>
 
+      {/* GLOBAL UNLOCK GATE TOGGLE — when OFF, no flash, no redirect, full free playback */}
+      <div className={`mb-4 rounded-xl p-3 border ${gateEnabled ? "bg-green-500/10 border-green-500/30" : "bg-zinc-800/40 border-zinc-700/40"}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-bold text-white">🌐 Unlock Gate (Global)</p>
+            <p className="text-[10px] text-zinc-400 mt-0.5">
+              {gateEnabled
+                ? "ON — ইউজারকে আনলক পেজ দেখাবে, verify করতে হবে"
+                : "OFF — সব ভিডিও সরাসরি ফ্রি প্লে হবে, কোন flash/redirect নেই"}
+            </p>
+          </div>
+          <button onClick={toggleGate}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${gateEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${gateEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+      </div>
+
       {/* Existing services */}
       <div className="space-y-3 mb-4">
         {serviceList.length === 0 && (
