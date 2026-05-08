@@ -618,6 +618,11 @@ ${stylish("✦ ENJOY YOUR ANIME ✦")}
   scheduleDelete(chat_id, res?.result?.message_id);
 }
 
+function isPublicTokenFlow(ownerUserId: string): boolean {
+  const normalized = String(ownerUserId || "").trim().toLowerCase();
+  return !normalized || ["guest", "public", "telegram", "telegram_post", "tg", "token"].includes(normalized);
+}
+
 async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tgUserId: number) {
   const now = Date.now();
   const hoursCfg = await fb("GET", `settings/unlockDurationHours`).catch(() => null);
@@ -626,26 +631,35 @@ async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tg
   const token = randomToken();
   const code = shortAccessCode();
   const expiresAt = now + 24 * 3600_000;
+  const isPublicFlow = isPublicTokenFlow(ownerUserId);
 
   await fb("PUT", `unlockTokens/${token}`, {
-    token, ownerUserId, createdAt: now, expiresAt,
+    token, ownerUserId: isPublicFlow ? null : ownerUserId, createdAt: now, expiresAt,
     status: "pending", consumed: false,
     serviceId: "telegram_bot", source: "telegram_access_bot",
-    tgUserId: String(tgUserId), grantMs,
+    tgUserId: String(tgUserId), grantMs, publicClaim: isPublicFlow,
   });
   await fb("PUT", `accessCodes/${code}`, {
-    code, ownerUserId, createdAt: now, expiresAt,
+    code, ownerUserId: isPublicFlow ? null : ownerUserId, createdAt: now, expiresAt,
     status: "pending", consumed: false,
-    tgUserId: String(tgUserId), grantMs,
+    tgUserId: String(tgUserId), grantMs, publicClaim: isPublicFlow,
   });
 
   // Pull profile info: prefer website profile photo; fallback to Telegram profile photo; fallback to brand image
-  const site = await getWebsiteUserProfile(ownerUserId);
+  const site = isPublicFlow ? { name: "Telegram User", email: "—", photoURL: null } : await getWebsiteUserProfile(ownerUserId);
   const tgProfile = await saveUserProfile(tgUserId, { id: tgUserId });
   const photoToShow = site.photoURL || tgProfile.photo_file_id || tgProfile.photo_url || RS_VERIFY_IMG;
   const displayName = site.name || tgProfile.name || "RS Anime User";
 
-  const caption = `🔓 <b>Access Unlock Verification</b>
+  const caption = isPublicFlow ? `🔓 <b>Telegram Free Access Verification</b>
+
+👤 <b>Name:</b> ${displayName}
+🤖 <b>Telegram ID:</b> <code>${tgUserId}</code>
+⏱ <b>Access Duration:</b> ${hours} hours
+
+Tap <b>✅ Verify &amp; Get Token</b>.
+After verify, the bot will send you a unique access token in this chat.
+Then paste that token on the website Unlock page.` : `🔓 <b>Access Unlock Verification</b>
 
 👤 <b>Name:</b> ${displayName}
 📧 <b>Email:</b> ${site.email}
@@ -663,7 +677,7 @@ Or paste the access code above on the website's Unlock page.`;
 
   const reply_markup = {
     inline_keyboard: [
-      [{ text: "✅ Verify & Unlock", callback_data: `verify_${token}` }],
+      [{ text: isPublicFlow ? "✅ Verify & Get Token" : "✅ Verify & Unlock", callback_data: `verify_${token}` }],
       [{ text: "🌐 Open on Website", url: unlockUrl }],
     ],
   };
