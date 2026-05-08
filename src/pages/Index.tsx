@@ -2098,6 +2098,7 @@ const Index = () => {
           getCleanEmbedUrl={getCleanEmbedUrl}
           animeSaltApi={animeSaltApi}
           addToWatchHistory={addToWatchHistory}
+          onRequireUnlock={checkAndShowAdGate}
           suggestedAnime={[]}
           onSuggestedClick={(anime) => { setSaltPlayerState(null); handleCardClick(anime); }}
         />
