@@ -1177,13 +1177,13 @@ const Index = () => {
       if (episode.link1080) qualityOptions.push({ label: "1080p", src: episode.link1080 });
       if (episode.link4k) qualityOptions.push({ label: "4K", src: episode.link4k });
       if (episode.audioTracks?.length) audioTracks = episode.audioTracks;
-    } else if (anime.movieLink) {
-      src = anime.movieLink;
+      } else if (anime.movieLink) {
+        src = getMovieSrc(anime);
       subtitle = "Movie";
-      if (anime.movieLink480) qualityOptions.push({ label: "480p", src: anime.movieLink480 });
-      if (anime.movieLink720) qualityOptions.push({ label: "720p", src: anime.movieLink720 });
-      if (anime.movieLink1080) qualityOptions.push({ label: "1080p", src: anime.movieLink1080 });
-      if (anime.movieLink4k) qualityOptions.push({ label: "4K", src: anime.movieLink4k });
+        if (!isInvalidPlaybackUrl(anime.movieLink480)) qualityOptions.push({ label: "480p", src: anime.movieLink480! });
+        if (!isInvalidPlaybackUrl(anime.movieLink720)) qualityOptions.push({ label: "720p", src: anime.movieLink720! });
+        if (!isInvalidPlaybackUrl(anime.movieLink1080)) qualityOptions.push({ label: "1080p", src: anime.movieLink1080! });
+        if (!isInvalidPlaybackUrl(anime.movieLink4k)) qualityOptions.push({ label: "4K", src: anime.movieLink4k! });
     }
 
     // Handle AnimeSalt video - check ad-gate first
@@ -1539,7 +1539,23 @@ const Index = () => {
         const hasAccess = await checkAndShowAdGate(anime);
         if (!hasAccess) return;
         addToWatchHistory(anime, undefined, undefined, true);
-        setPlayerState({ src: anime.movieLink, title: anime.title, subtitle: "Movie", anime });
+        const movieSrc = getMovieSrc(anime);
+        if (!movieSrc) {
+          handleCardClick(anime);
+          return;
+        }
+        setPlayerState({
+          src: movieSrc,
+          title: anime.title,
+          subtitle: "Movie",
+          anime,
+          qualityOptions: [
+            !isInvalidPlaybackUrl(anime.movieLink480) ? { label: "480p", src: anime.movieLink480! } : null,
+            !isInvalidPlaybackUrl(anime.movieLink720) ? { label: "720p", src: anime.movieLink720! } : null,
+            !isInvalidPlaybackUrl(anime.movieLink1080) ? { label: "1080p", src: anime.movieLink1080! } : null,
+            !isInvalidPlaybackUrl(anime.movieLink4k) ? { label: "4K", src: anime.movieLink4k! } : null,
+          ].filter(Boolean) as { label: string; src: string }[],
+        });
         setSelectedAnime(null);
       }
     }
