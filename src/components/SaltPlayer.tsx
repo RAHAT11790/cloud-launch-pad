@@ -25,6 +25,7 @@ interface SaltPlayerProps {
   getCleanEmbedUrl: (url: string) => string;
   animeSaltApi: any;
   addToWatchHistory: (anime: AnimeItem, seasonIdx?: number, epIdx?: number, preserveProgress?: boolean) => void;
+  onRequireUnlock?: (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => Promise<boolean>;
   suggestedAnime?: AnimeItem[];
   onSuggestedClick?: (anime: AnimeItem) => void;
 }
@@ -36,7 +37,7 @@ const CROP_PRESETS = [
   { label: "21:9", w: 21, h: 9 },
 ];
 
-export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCleanEmbedUrl, animeSaltApi, addToWatchHistory, suggestedAnime, onSuggestedClick }: SaltPlayerProps) {
+export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCleanEmbedUrl, animeSaltApi, addToWatchHistory, onRequireUnlock, suggestedAnime, onSuggestedClick }: SaltPlayerProps) {
   const [epSearch, setEpSearch] = useState("");
   const [selectedSeasonIdx, setSelectedSeasonIdx] = useState<number>(saltPlayerState.seasonIdx ?? 0);
   const [showCropPanel, setShowCropPanel] = useState(false);
@@ -212,6 +213,10 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   const handleEpisodeClick = async (ep: any, season: any, sIdx: number, eIdx: number) => {
     const epSrc = ep.link;
     if (epSrc?.startsWith("animesalt://")) {
+      if (saltPlayerState.anime && onRequireUnlock) {
+        const hasAccess = await onRequireUnlock(saltPlayerState.anime, sIdx, eIdx);
+        if (!hasAccess) return;
+      }
       const epSlug = epSrc.replace("animesalt://", "");
       try {
         const result = await animeSaltApi.getEpisode(epSlug);
