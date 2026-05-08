@@ -355,6 +355,30 @@ async function getAccessBotEndpoint(): Promise<string> {
     }
   } catch {}
 
+  if (!endpoint) {
+    try {
+      const overrideSnap = await get(ref(db, "settings/functionOverrides/link-share-bot"));
+      const overrideUrl = String(overrideSnap.val()?.customUrl || "").trim();
+      if (overrideUrl && /link-share-bot/i.test(overrideUrl)) {
+        endpoint = overrideUrl;
+      }
+    } catch {}
+  }
+
+  if (!endpoint) {
+    try {
+      const services = await getAdServices();
+      const telegramService = services.find((svc) => {
+        const botUrl = String(svc.telegramBotFunctionUrl || svc.functionUrl || "").trim();
+        return Boolean(botUrl) && /link-share-bot/i.test(botUrl);
+      });
+      const botUrl = String(telegramService?.telegramBotFunctionUrl || telegramService?.functionUrl || "").trim();
+      if (botUrl && /link-share-bot/i.test(botUrl)) {
+        endpoint = botUrl;
+      }
+    } catch {}
+  }
+
   return endpoint;
 }
 
