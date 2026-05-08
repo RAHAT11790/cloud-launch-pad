@@ -782,22 +782,18 @@ async function handleVerifyCallback(chat_id: number, message_id: number, callbac
 
     await answerCallback(callback_id, "✅ Token ready", false);
     const accessCode = String(rec.accessCode || "");
-    const tokenMessage = `🎟 <b>Your Access Token Is Ready</b>\n\n<code>${accessCode}</code>\n\nPaste this token on the website Unlock page to activate ${Math.round(grantMs / 3600000)}h access.`;
+    const username = ((await botUsername()) || BOT_USERNAME_FALLBACK).replace(/^@/, "");
+    const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
+    const summaryText = `✅ <b>Verification Complete</b>\n\nYour unique access token is ready.\nTap the button below to receive it in a styled card, then paste it on the website.`;
+    const summaryMarkup = {
+      inline_keyboard: [
+        [{ text: "🎟 Get Access Token", url: `https://t.me/${username}?start=claim_${encodeURIComponent(token)}` }],
+        [{ text: "🌐 Open Website Unlock", url: `${siteUrl}/unlock-required` }],
+      ],
+    };
 
-    try {
-      await editMessageText(
-        chat_id,
-        message_id,
-        `✅ <b>Verification Complete</b>\n\nYour unique token is now ready below. Copy it and paste it on the website Unlock page.`,
-        { reply_markup: { inline_keyboard: [[{ text: "🌐 Open Website Unlock", url: `${Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app"}/unlock-required` }]] } },
-      );
-    } catch {}
-
-    await sendMessage(chat_id, tokenMessage, {
-      reply_markup: {
-        inline_keyboard: [[{ text: "📋 Copy Token Above", callback_data: "close" }]],
-      },
-    });
+    try { await updateWorkflowCard(chat_id, message_id, summaryText, summaryMarkup, true); } catch {}
+    await sendAccessTokenCard(chat_id, accessCode, grantMs, tgUserId);
     return;
   }
 
