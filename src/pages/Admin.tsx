@@ -918,13 +918,11 @@ const TelegramFreeAccessConfig = ({ glassCard, inputClass, btnPrimary, btnSecond
 const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
   const [services, setServices] = useState<Record<string, any>>({});
   const [newName, setNewName] = useState("");
-  const [newUrl, setNewUrl] = useState("");
-  const [newSiteBase, setNewSiteBase] = useState("");
-  const [newApiKey, setNewApiKey] = useState("");
+  const [newShortenerUrl, setNewShortenerUrl] = useState("");
+  const [newBotUrl, setNewBotUrl] = useState("");
   const [newIcon, setNewIcon] = useState("🔓");
   const [newColor, setNewColor] = useState("linear-gradient(135deg, #6366f1, #8b5cf6)");
-  const [newDuration, setNewDuration] = useState(24);
-  const [newMode, setNewMode] = useState<"shortener" | "telegram">("shortener");
+  const [newMode, setNewMode] = useState<"shortener" | "miniapp">("shortener");
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
   const [gateEnabled, setGateEnabled] = useState<boolean>(true);
@@ -941,68 +939,52 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
 
   const toggleGate = async () => {
     await set(ref(db, "settings/unlockGateEnabled"), !gateEnabled);
-    toast.success(!gateEnabled ? "✅ Unlock gate চালু" : "🚫 Unlock gate বন্ধ — সব ভিডিও ফ্রি প্লে হবে");
+    toast.success(!gateEnabled ? "✅ Unlock gate enabled" : "🚫 Unlock gate disabled — all videos play free");
   };
 
   const addService = async () => {
     const name = newName.trim();
-    const url = newUrl.trim();
-    const siteBase = newSiteBase.trim().replace(/\/+$/, "");
-    const apiKey = newApiKey.trim();
+    const shortenerUrl = newShortenerUrl.trim();
+    const botUrl = newBotUrl.trim();
     if (!name) { toast.error("Service name required"); return; }
-    if (newMode === "shortener" && !url && !(siteBase && apiKey)) {
-      toast.error("Provide either an Edge Function URL OR Site URL + API Key");
-      return;
-    }
+    if (newMode === "shortener" && !shortenerUrl) { toast.error("Shortener Edge Function URL required"); return; }
+    if (newMode === "miniapp" && !botUrl) { toast.error("Telegram Bot Edge Function URL required"); return; }
+
     const id = `ad_${Date.now()}`;
+    const primary = newMode === "miniapp" ? (botUrl || "telegram://verify-bot") : shortenerUrl;
     await set(ref(db, `settings/adServices/${id}`), {
       id, name,
-      functionUrl: url || (siteBase && apiKey ? "generic://" + siteBase : "telegram://verify-bot"),
-      siteBase: siteBase || null,
-      apiKey: apiKey || null,
+      functionUrl: primary,                           // legacy compat
+      shortenerFunctionUrl: shortenerUrl || null,
+      telegramBotFunctionUrl: botUrl || null,
       enabled: true,
-      icon: newIcon || "🔓", color: newColor || "",
-      durationHours: newDuration || 24,
-      mode: newMode === "telegram" ? "miniapp" : "shortener",
+      icon: newIcon || "🔓",
+      color: newColor || "",
+      mode: newMode,
     });
-    setNewName(""); setNewUrl(""); setNewSiteBase(""); setNewApiKey("");
-    setNewIcon("🔓"); setNewDuration(24); setNewMode("shortener");
+    setNewName(""); setNewShortenerUrl(""); setNewBotUrl("");
+    setNewIcon("🔓"); setNewMode("shortener");
     toast.success(`✅ "${name}" added!`);
   };
 
-  const addMiniAppPreset = async () => {
-    const id = `ad_${Date.now()}`;
-    await set(ref(db, `settings/adServices/${id}`), {
-      id,
-      name: "Telegram Bot",
-      functionUrl: "telegram://verify-bot",
-      enabled: true,
-      icon: "🤖",
-      color: "linear-gradient(135deg, #06b6d4, #3b82f6)",
-      durationHours: 24,
-      mode: "miniapp",
-    });
-    toast.success("✅ Telegram Bot আনলক বাটন যোগ হয়েছে!");
+  const updateField = async (id: string, key: string, value: any) => {
+    await set(ref(db, `settings/adServices/${id}/${key}`), value || null);
+    toast.success("Saved");
   };
 
   const toggleService = async (id: string) => {
     const svc = services[id];
     if (!svc) return;
     await set(ref(db, `settings/adServices/${id}/enabled`), !svc.enabled);
-    toast.success(svc.enabled ? "🚫 বন্ধ হয়েছে" : "✅ চালু হয়েছে");
   };
 
   const deleteService = async (id: string) => {
     await remove(ref(db, `settings/adServices/${id}`));
-    toast.success("🗑️ ডিলিট হয়েছে!");
-  };
-
-  const updateDuration = async (id: string, hours: number) => {
-    await set(ref(db, `settings/adServices/${id}/durationHours`), hours);
-    toast.success(`⏱️ ${hours} ঘন্টা সেট হয়েছে!`);
+    toast.success("🗑️ Deleted");
   };
 
   const testService = async (id: string, url: string) => {
+    if (!url) { toast.error("No URL set"); return; }
     setTesting(id);
     const start = Date.now();
     try {
@@ -1016,7 +998,7 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
       });
       clearTimeout(t);
       const data = await res.json().catch(() => ({}));
-      const alive = !!data?.shortenedUrl || !!data?.success;
+      const alive = res.ok || !!data?.shortenedUrl || !!data?.success || !!data?.ok;
       setTestResults(prev => ({ ...prev, [id]: { alive, latency: Date.now() - start } }));
     } catch {
       setTestResults(prev => ({ ...prev, [id]: { alive: false, latency: Date.now() - start } }));
@@ -1029,21 +1011,20 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   return (
     <div className={`${glassCard} p-4 mb-4`}>
       <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-        <Link size={14} className="text-amber-400" /> 📢 Ad Link Services (Unlock বাটন)
+        <Link size={14} className="text-amber-400" /> 📢 Ad Link Services (Unlock Buttons)
       </h3>
       <p className="text-[10px] text-zinc-400 mb-4">
-        ভিডিও আনলক করতে ইউজার যে অ্যাড লিংকে যাবে সেগুলো এখানে ম্যানেজ করো। প্রতিটি সার্ভিসের জন্য আলাদা আনলক বাটন ও আলাদা সময় সেট করা যায়।
+        Manage the ad-link unlock buttons users click to unlock videos. Each service has a Shortener URL and a Telegram Bot URL — pick which one is active per service.
       </p>
 
-      {/* GLOBAL UNLOCK GATE TOGGLE — when OFF, no flash, no redirect, full free playback */}
       <div className={`mb-4 rounded-xl p-3 border ${gateEnabled ? "bg-green-500/10 border-green-500/30" : "bg-zinc-800/40 border-zinc-700/40"}`}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs font-bold text-white">🌐 Unlock Gate (Global)</p>
             <p className="text-[10px] text-zinc-400 mt-0.5">
               {gateEnabled
-                ? "ON — ইউজারকে আনলক পেজ দেখাবে, verify করতে হবে"
-                : "OFF — সব ভিডিও সরাসরি ফ্রি প্লে হবে, কোন flash/redirect নেই"}
+                ? "ON — users must verify via the unlock page"
+                : "OFF — all videos play free, no flash/redirect"}
             </p>
           </div>
           <button onClick={toggleGate}
@@ -1053,13 +1034,16 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
         </div>
       </div>
 
-      {/* Existing services */}
       <div className="space-y-3 mb-4">
         {serviceList.length === 0 && (
-          <p className="text-[10px] text-zinc-500 text-center py-3">কোনো সার্ভিস যোগ হয়নি। নিচে থেকে যোগ করো।</p>
+          <p className="text-[10px] text-zinc-500 text-center py-3">No services yet. Add one below.</p>
         )}
         {serviceList.map((svc: any) => {
           const tr = testResults[svc.id];
+          const activeMode = svc.mode || "shortener";
+          const activeUrl = activeMode === "miniapp"
+            ? (svc.telegramBotFunctionUrl || svc.functionUrl)
+            : (svc.shortenerFunctionUrl || svc.functionUrl);
           return (
             <div key={svc.id} className={`bg-zinc-800/40 rounded-xl p-3 border ${svc.enabled ? "border-green-500/30" : "border-zinc-700/40 opacity-60"}`}>
               <div className="flex items-center justify-between mb-2">
@@ -1073,7 +1057,7 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                   )}
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => testService(svc.id, svc.functionUrl)} disabled={testing === svc.id}
+                  <button onClick={() => testService(svc.id, activeUrl)} disabled={testing === svc.id}
                     className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
                     {testing === svc.id ? <RefreshCw size={10} className="animate-spin" /> : <Activity size={10} />}
                   </button>
@@ -1086,99 +1070,81 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
                   </button>
                 </div>
               </div>
-              <p className="text-[9px] text-zinc-400 font-mono truncate mb-2">{svc.functionUrl}</p>
-              {/* Mode selector: shortener vs telegram bot */}
+
+              {/* Mode selector */}
               <div className="flex items-center gap-2 bg-zinc-900/50 rounded-lg p-2 mb-2">
-                <span className="text-[10px] text-zinc-400">Mode:</span>
+                <span className="text-[10px] text-zinc-400">Active mode:</span>
                 <button
                   onClick={() => set(ref(db, `settings/adServices/${svc.id}/mode`), "shortener").then(() => toast.success("Shortener mode"))}
-                  className={`px-2 py-0.5 rounded text-[10px] font-semibold ${(!svc.mode || svc.mode === "shortener") ? "bg-amber-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
+                  className={`px-2 py-0.5 rounded text-[10px] font-semibold ${activeMode === "shortener" ? "bg-amber-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
                   🔗 Shortener
                 </button>
                 <button
                   onClick={() => set(ref(db, `settings/adServices/${svc.id}/mode`), "miniapp").then(() => toast.success("Telegram Bot mode"))}
-                  className={`px-2 py-0.5 rounded text-[10px] font-semibold ${svc.mode === "miniapp" ? "bg-cyan-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
+                  className={`px-2 py-0.5 rounded text-[10px] font-semibold ${activeMode === "miniapp" ? "bg-cyan-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
                   🤖 Telegram Bot
                 </button>
-                {svc.mode === "miniapp" && (
-                  <span className="text-[9px] text-cyan-300 ml-auto">→ Auto verify</span>
-                )}
               </div>
-              {/* Per-service duration */}
-              <div className="flex items-center gap-2 bg-zinc-900/50 rounded-lg p-2">
-                <Clock size={10} className="text-amber-400 flex-shrink-0" />
-                <span className="text-[10px] text-zinc-400">Duration:</span>
-                <input type="number" min={1} max={720} value={svc.durationHours || 24}
-                  onChange={e => {
-                    const val = Number(e.target.value);
-                    setServices(prev => ({ ...prev, [svc.id]: { ...prev[svc.id], durationHours: val } }));
-                  }}
-                  className="w-14 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-[10px] text-white text-center" />
-                <span className="text-[10px] text-zinc-500">ঘন্টা</span>
-                <button onClick={() => updateDuration(svc.id, svc.durationHours || 24)}
-                  className={`${btnSecondary} !px-2 !py-0.5 !text-[9px]`}>
-                  <Save size={8} />
-                </button>
+
+              {/* Dual URL fields */}
+              <div className="space-y-1.5">
+                <div>
+                  <label className="text-[9px] text-amber-300">🔗 Shortener Edge Function URL</label>
+                  <input
+                    defaultValue={svc.shortenerFunctionUrl || (activeMode === "shortener" ? svc.functionUrl : "") || ""}
+                    onBlur={(e) => updateField(svc.id, "shortenerFunctionUrl", e.target.value.trim())}
+                    placeholder="https://xxx.supabase.co/functions/v1/shorten-arolinks"
+                    className={`${inputClass} !text-[10px]`} />
+                </div>
+                <div>
+                  <label className="text-[9px] text-cyan-300">🤖 Telegram Bot Edge Function URL</label>
+                  <input
+                    defaultValue={svc.telegramBotFunctionUrl || (activeMode === "miniapp" ? svc.functionUrl : "") || ""}
+                    onBlur={(e) => updateField(svc.id, "telegramBotFunctionUrl", e.target.value.trim())}
+                    placeholder="https://xxx.supabase.co/functions/v1/link-share-bot"
+                    className={`${inputClass} !text-[10px]`} />
+                </div>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Quick preset: Telegram Bot */}
-      <button onClick={addMiniAppPreset}
-        className="w-full mb-3 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 text-white transition-all hover:scale-[1.02]"
-        style={{ background: "linear-gradient(135deg, #06b6d4, #3b82f6)" }}>
-        🤖 ➕ Telegram Bot আনলক বাটন (One-click)
-      </button>
-
       {/* Add New Service */}
       <div className="bg-zinc-800/30 rounded-xl p-3 border border-dashed border-zinc-600/50">
         <h4 className="text-[11px] font-semibold text-white mb-2 flex items-center gap-1.5">
-          <PlusCircle size={12} className="text-green-400" /> নতুন সার্ভিস যোগ করো
+          <PlusCircle size={12} className="text-green-400" /> Add New Service
         </h4>
         <div className="space-y-2">
-          {/* Mode selector */}
           <div className="flex items-center gap-2 bg-zinc-900/50 rounded-lg p-2">
-            <span className="text-[10px] text-zinc-400">Mode:</span>
+            <span className="text-[10px] text-zinc-400">Default mode:</span>
             <button type="button" onClick={() => setNewMode("shortener")}
               className={`px-2 py-0.5 rounded text-[10px] font-semibold ${newMode === "shortener" ? "bg-amber-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
               🔗 Shortener
             </button>
-            <button type="button" onClick={() => setNewMode("telegram")}
-              className={`px-2 py-0.5 rounded text-[10px] font-semibold ${newMode === "telegram" ? "bg-cyan-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
+            <button type="button" onClick={() => setNewMode("miniapp")}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold ${newMode === "miniapp" ? "bg-cyan-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
               🤖 Telegram Bot
             </button>
-            {newMode === "telegram" && <span className="text-[9px] text-cyan-300 ml-auto">URL লাগবে না</span>}
           </div>
           <div className="flex gap-2">
             <input value={newIcon} onChange={(e) => setNewIcon(e.target.value)} placeholder="🔓" className={`${inputClass} !w-12 !text-center`} />
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={newMode === "telegram" ? "বাটনের নাম (যেমন: Telegram Bot)" : "সার্ভিসের নাম (যেমন: AroLinks)"} className={`${inputClass} flex-1`} />
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Service name (e.g. AroLinks)" className={`${inputClass} flex-1`} />
           </div>
-          {newMode === "shortener" && (
-            <>
-              <div className="text-[10px] text-zinc-400 -mb-1">Option A — Generic site + API key (no edge function):</div>
-              <div className="flex gap-2">
-                <input value={newSiteBase} onChange={(e) => setNewSiteBase(e.target.value)}
-                  placeholder="Site URL (e.g. https://shrinkme.io)" className={`${inputClass} flex-1`} />
-              </div>
-              <input value={newApiKey} onChange={(e) => setNewApiKey(e.target.value)}
-                placeholder="API token" className={inputClass} />
-              <div className="text-[10px] text-zinc-500 -mb-1 mt-1">Option B — Edge Function URL (advanced, optional):</div>
-              <input value={newUrl} onChange={(e) => setNewUrl(e.target.value)}
-                placeholder="https://xxx.supabase.co/functions/v1/shorten-arolinks (optional)" className={inputClass} />
-            </>
-          )}
+          <div>
+            <label className="text-[9px] text-amber-300">🔗 Shortener Edge Function URL</label>
+            <input value={newShortenerUrl} onChange={(e) => setNewShortenerUrl(e.target.value)}
+              placeholder="https://xxx.supabase.co/functions/v1/shorten-arolinks" className={inputClass} />
+          </div>
+          <div>
+            <label className="text-[9px] text-cyan-300">🤖 Telegram Bot Edge Function URL</label>
+            <input value={newBotUrl} onChange={(e) => setNewBotUrl(e.target.value)}
+              placeholder="https://xxx.supabase.co/functions/v1/link-share-bot" className={inputClass} />
+          </div>
           <input value={newColor} onChange={(e) => setNewColor(e.target.value)}
-            placeholder="বাটন কালার CSS (যেমন: linear-gradient(135deg, #f59e0b, #ef4444))" className={inputClass} />
-          <div className="flex gap-2 items-center">
-            <Clock size={12} className="text-amber-400" />
-            <input type="number" min={1} max={720} value={newDuration} onChange={e => setNewDuration(Number(e.target.value))}
-              className={`${inputClass} !w-20 text-center`} placeholder="24" />
-            <span className="text-[10px] text-zinc-400">ঘন্টা এক্সেস</span>
-          </div>
+            placeholder="Button color CSS (e.g. linear-gradient(135deg, #f59e0b, #ef4444))" className={inputClass} />
           <button onClick={addService} className={`${btnPrimary} w-full`}>
-            <PlusCircle size={12} /> যোগ করো
+            <PlusCircle size={12} /> Add Service
           </button>
         </div>
       </div>
