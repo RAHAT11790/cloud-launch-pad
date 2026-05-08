@@ -355,13 +355,6 @@ async function getAccessBotEndpoint(): Promise<string> {
     }
   } catch {}
 
-  if (!endpoint) {
-    const supaUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "";
-    if (supaUrl) endpoint = `${supaUrl}/functions/v1/link-share-bot`;
-  }
-
-  endpoint = endpoint.replace(/\/telegram-post(?:\/)?$/i, "/link-share-bot");
-
   return endpoint;
 }
 
