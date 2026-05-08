@@ -634,23 +634,39 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     });
   }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
 
-  const handleOpenAdLink = useCallback(async (url: string, _service?: AdService) => {
+  const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
     const { openExternalBrowser } = await import("@/lib/openExternal");
-    try {
-      const fb = await import("@/lib/firebase");
-      const { createTelegramBotUnlockLink } = await import("@/lib/unlockAccess");
-      const r = await createTelegramBotUnlockLink();
-      if (r.ok && r.deepLink) {
-        window.location.href = r.deepLink;
-        return;
-      }
 
-      const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramVerifyBotUsername"));
-      const botUsername = String(botSnap.val() || "RS_ANIME_FIND_BOT").replace(/^@/, "").trim();
-      window.location.href = `https://t.me/${botUsername}`;
+    // Telegram-bot mode: redirect to bot deep link (NOT shortener)
+    const isTelegramMode =
+      service?.mode === "miniapp" ||
+      url === "miniapp://telegram" ||
+      /telegram|t\.me/i.test(service?.id || "") ||
+      /telegram|t\.me/i.test(service?.name || "");
+
+    if (isTelegramMode) {
+      try {
+        const { createTelegramBotUnlockLink } = await import("@/lib/unlockAccess");
+        const r = await createTelegramBotUnlockLink();
+        if (r.ok && r.deepLink) {
+          window.location.href = r.deepLink;
+          return;
+        }
+      } catch {}
+      // Fallback: open bot directly
+      try {
+        const fb = await import("@/lib/firebase");
+        const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramVerifyBotUsername"));
+        const botUsername = String(botSnap.val() || "RS_ANIME_FIND_BOT").replace(/^@/, "").trim();
+        window.location.href = `https://t.me/${botUsername}`;
+      } catch {
+        window.location.href = "https://t.me/RS_ANIME_FIND_BOT";
+      }
       return;
-    } catch {}
-    if (url) {
+    }
+
+    // Shortener mode: open the short URL directly in external browser
+    if (url && url !== "miniapp://telegram") {
       openExternalBrowser(url);
     }
   }, []);
