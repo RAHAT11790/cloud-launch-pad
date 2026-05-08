@@ -1929,6 +1929,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   // Free access users state
   const [freeAccessUsers, setFreeAccessUsers] = useState<any[]>([]);
   const [prizePoolUsers, setPrizePoolUsers] = useState<any[]>([]);
+  const [freeAccessBusy, setFreeAccessBusy] = useState<string | null>(null);
 
   // Settings state
   const [tutorialLink, setTutorialLink] = useState("");
