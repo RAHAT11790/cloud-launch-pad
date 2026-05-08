@@ -111,6 +111,9 @@ const sendPhoto = (chat_id: number, photo: string, caption: string, extra: any =
 const editMessageText = (chat_id: number, message_id: number, text: string, extra: any = {}) =>
   tg("editMessageText", { chat_id, message_id, text, parse_mode: "HTML", disable_web_page_preview: true, ...extra });
 
+const editMessageCaption = (chat_id: number, message_id: number, caption: string, extra: any = {}) =>
+  tg("editMessageCaption", { chat_id, message_id, caption, parse_mode: "HTML", ...extra });
+
 const editMessageMedia = (chat_id: number, message_id: number, media: any, reply_markup?: any) =>
   tg("editMessageMedia", { chat_id, message_id, media, reply_markup });
 
@@ -621,6 +624,53 @@ ${stylish("✦ ENJOY YOUR ANIME ✦")}
 function isPublicTokenFlow(ownerUserId: string): boolean {
   const normalized = String(ownerUserId || "").trim().toLowerCase();
   return !normalized || ["guest", "public", "telegram", "telegram_post", "tg", "token"].includes(normalized);
+}
+
+async function buildShortenerClaimUrl(token: string): Promise<string> {
+  const username = (await botUsername()) || BOT_USERNAME_FALLBACK || RS_RETURN_BOT;
+  const directBotLink = `https://t.me/${username.replace(/^@/, "")}?start=claim_${encodeURIComponent(token)}`;
+  const shortUrl = await shortenViaRs(directBotLink);
+  return shortUrl || directBotLink;
+}
+
+async function updateWorkflowCard(chat_id: number, message_id: number, caption: string, reply_markup: any, prefersCaption = false) {
+  if (prefersCaption) {
+    const edited = await editMessageCaption(chat_id, message_id, caption, { reply_markup });
+    if (edited?.ok) return edited;
+  }
+  return await editMessageText(chat_id, message_id, caption, { reply_markup });
+}
+
+async function sendAccessTokenCard(chat_id: number, accessCode: string, grantMs: number, tgUserId: number) {
+  const profile = await getUserProfileCached(tgUserId);
+  const hours = Math.max(1, Math.round(grantMs / 3600000));
+  const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
+  const caption = `╔══════════════════╗
+🎟 <b>YOUR ACCESS TOKEN</b>
+╚══════════════════╝
+
+👤 <b>User:</b> ${profile.name || "RS Anime User"}
+⏱ <b>Duration:</b> ${hours} hours
+📋 <b>Tap the token to copy</b>
+
+<code>${accessCode}</code>
+
+Paste this code on the website unlock box to activate your access instantly.`;
+
+  const reply_markup = {
+    inline_keyboard: [
+      [{ text: "🌐 Paste Token on Website", url: `${siteUrl}/unlock-required` }],
+      [{ text: "🔁 Send Token Again", url: `https://t.me/${((await botUsername()) || BOT_USERNAME_FALLBACK).replace(/^@/, "")}?start=claim_last` }],
+    ],
+  };
+
+  for (const media of [profile.photo_file_id, profile.photo_url, RS_VERIFY_IMG]) {
+    if (!media) continue;
+    const sent = await sendPhoto(chat_id, media, caption, { reply_markup });
+    if (sent?.ok) return sent;
+  }
+
+  return await sendMessage(chat_id, caption, { reply_markup });
 }
 
 async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tgUserId: number) {
