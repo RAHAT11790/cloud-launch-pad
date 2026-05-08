@@ -59,8 +59,16 @@ import { toast } from "sonner";
 // FCM removed — push notifications no longer used
 import { createUnlockLinkForCurrentUser } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
-// Shortener gate is always-on now (Monetag system removed)
-const isShortenerEnabled = async () => true;
+// Unlock gate toggle — admin can disable from Firebase (settings/unlockGateEnabled).
+// When false: no flash, no redirect, no toast — players play instantly for everyone.
+const isShortenerEnabled = async (): Promise<boolean> => {
+  try {
+    const snap = await get(ref(db, "settings/unlockGateEnabled"));
+    const v = snap.val();
+    if (v === false) return false;
+    return true;
+  } catch { return true; }
+};
 
 type MainPage = "home" | "series" | "livetv" | "movies";
 

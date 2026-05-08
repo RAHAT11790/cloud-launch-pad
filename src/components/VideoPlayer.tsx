@@ -11,8 +11,16 @@ import logoImg from "@/assets/logo.png";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import { toast } from "sonner";
-// Shortener gate is always-on now (Monetag system removed)
-const isShortenerEnabled = async () => true;
+// Unlock gate toggle — admin disables from settings/unlockGateEnabled (Firebase).
+// When false: no ad-gate, no flash — full silent free playback.
+const isShortenerEnabled = async (): Promise<boolean> => {
+  try {
+    const snap = await import("@/lib/firebase").then(m => m.get(m.ref(m.db, "settings/unlockGateEnabled")));
+    const v = snap.val();
+    if (v === false) return false;
+    return true;
+  } catch { return true; }
+};
 
 interface QualityOption {
   label: string;
