@@ -1324,6 +1324,17 @@ async function handleUpdate(update: any) {
     case "/start":
       await handleStart(chat_id, user_id, from, arg || undefined);
       break;
+    case "/unlock": {
+      // Direct unlock command: /unlock <siteUserId>  (or just /unlock to read pending)
+      const siteUid = arg.trim();
+      if (!siteUid) {
+        await sendMessage(chat_id, `🔓 <b>Unlock Command</b>\n\nUsage: <code>/unlock &lt;your-site-user-id&gt;</code>\n\nOr open the unlock page on the website and tap the Telegram button — it will redirect you here automatically.`);
+      } else {
+        await touchUser(user_id);
+        await sendWebsiteUnlockMessage(chat_id, siteUid, user_id);
+      }
+      break;
+    }
     case "/set_channel":
       if (msg.chat.type === "private") await handleSetChannel(chat_id, user_id);
       break;
