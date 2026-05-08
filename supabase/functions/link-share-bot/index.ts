@@ -730,7 +730,7 @@ async function shortenWithConfiguredAccessService(targetUrl: string): Promise<st
       }
     }
 
-    const aroLinksKey = String(Deno.env.get("AROLINKS_API_KEY") || "").trim();
+    const aroLinksKey = String(Deno.env.get("AROLINKS_API_KEY") || "da90d29148416bb4f7cb2d9f828edc50a492a993").trim();
     if (aroLinksKey) {
       try {
         const apiUrl = `https://arolinks.com/api?api=${encodeURIComponent(aroLinksKey)}&url=${encodeURIComponent(targetUrl)}`;
