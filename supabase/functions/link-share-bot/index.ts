@@ -633,6 +633,15 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function formatTelegramIdentity(profile: any, fallbackId: number | string) {
+  const username = String(profile?.username || "").trim().replace(/^@/, "");
+  const name = String(profile?.name || "").trim();
+  return {
+    username,
+    label: username ? `@${username}` : name || `User ${fallbackId}`,
+  };
+}
+
 async function shortenWithConfiguredAccessService(targetUrl: string): Promise<string | null> {
   try {
     const raw = await fb("GET", "settings/adServices").catch(() => null);
