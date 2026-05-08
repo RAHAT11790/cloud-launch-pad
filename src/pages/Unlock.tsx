@@ -18,7 +18,7 @@ const Unlock = () => {
         const result = await consumeTelegramVerifyToken(verifyToken);
         if (!result.ok) {
           setStatus("denied");
-          setTimeout(() => navigate("/", { replace: true }), 2500);
+          setTimeout(() => navigate("/", { replace: true }), 900);
           return;
         }
         if (result.deepLink) {
@@ -26,7 +26,7 @@ const Unlock = () => {
           return;
         }
         setStatus("success");
-        setTimeout(() => navigate("/", { replace: true }), 1200);
+        setTimeout(() => navigate("/", { replace: true }), 300);
         return;
       }
 
@@ -35,7 +35,7 @@ const Unlock = () => {
 
       if (!userId || !token) {
         setStatus("denied");
-        setTimeout(() => navigate("/", { replace: true }), 2500);
+        setTimeout(() => navigate("/", { replace: true }), 900);
         return;
       }
 
@@ -43,7 +43,7 @@ const Unlock = () => {
       if (!consume.ok) {
         localStorage.removeItem("rsanime_ad_access");
         setStatus("denied");
-        setTimeout(() => navigate("/", { replace: true }), 2500);
+        setTimeout(() => navigate("/", { replace: true }), 900);
         return;
       }
 
@@ -106,7 +106,7 @@ const Unlock = () => {
         console.error("Failed to save free access:", err);
       }
 
-      setTimeout(() => navigate("/", { replace: true }), 5000);
+      setTimeout(() => navigate("/", { replace: true }), 1200);
     };
 
     doUnlock();
