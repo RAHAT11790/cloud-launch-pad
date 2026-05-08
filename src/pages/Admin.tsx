@@ -560,8 +560,6 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
   const [telegramPostUrl, setTelegramPostUrl] = useState("");
   const [telegramPostUrlInput, setTelegramPostUrlInput] = useState("");
-  const [telegramAccessUrl, setTelegramAccessUrl] = useState("");
-  const [telegramAccessUrlInput, setTelegramAccessUrlInput] = useState("");
 
   const recommendedShortenerUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/shorten-arolinks`;
   const recommendedTelegramAccessUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/link-share-bot`;
@@ -573,14 +571,8 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
       setTelegramPostUrl(value);
       setTelegramPostUrlInput(value);
     });
-    const unsubAccess = onValue(ref(db, "settings/accessBotFunctionUrl"), (snap) => {
-      const value = String(snap.val() || "");
-      setTelegramAccessUrl(value);
-      setTelegramAccessUrlInput(value);
-    });
     return () => {
       unsub();
-      unsubAccess();
     };
   }, []);
 
@@ -599,14 +591,6 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     await set(ref(db, "settings/functionOverrides/telegram-post"), { enabled: true, customUrl: url || recommendedTelegramPostUrl });
     setTelegramPostUrl(url);
     toast.success("✅ Telegram Post URL saved");
-  };
-
-  const saveTelegramAccessUrl = async () => {
-    const url = telegramAccessUrlInput.trim();
-    await set(ref(db, "settings/accessBotFunctionUrl"), url || recommendedTelegramAccessUrl);
-    await set(ref(db, "settings/functionOverrides/link-share-bot"), { enabled: true, customUrl: url || recommendedTelegramAccessUrl });
-    setTelegramAccessUrl(url || recommendedTelegramAccessUrl);
-    toast.success("✅ Telegram Access URL saved");
   };
 
   return (
