@@ -54,3 +54,23 @@ export function openExternalBrowser(url: string): void {
   // Default: normal Chrome/Safari navigation
   window.location.href = url;
 }
+
+export function openTelegramDeepLink(url: string): void {
+  if (!url || typeof window === "undefined") return;
+
+  try {
+    const match = url.match(/^https?:\/\/t\.me\/([^/?]+)\?start=([^&]+)/i);
+    if (match) {
+      const username = match[1];
+      const start = match[2];
+      const appUrl = `tg://resolve?domain=${encodeURIComponent(username)}&start=${start}`;
+      window.location.href = appUrl;
+      setTimeout(() => {
+        try { window.location.href = url; } catch {}
+      }, 700);
+      return;
+    }
+  } catch {}
+
+  window.location.href = url;
+}
