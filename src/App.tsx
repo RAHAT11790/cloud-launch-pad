@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -15,11 +15,27 @@ const Admin = lazy(() => import("./pages/Admin"));
 
 const queryClient = new QueryClient();
 
+const RouteWarmup = () => {
+  useEffect(() => {
+    const warm = () => import("./pages/Admin");
+    const idle = (window as any).requestIdleCallback;
+    if (typeof idle === "function") {
+      idle(warm);
+      return;
+    }
+    const t = window.setTimeout(warm, 900);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <DynamicMeta />
       <BrowserRouter>
+        <RouteWarmup />
         <ManifestManager />
         <Toaster />
         <Sonner />
