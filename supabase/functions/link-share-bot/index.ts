@@ -700,12 +700,18 @@ async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tg
   const tgProfile = await saveUserProfile(tgUserId, { id: tgUserId });
   const photoToShow = site.photoURL || tgProfile.photo_file_id || tgProfile.photo_url || RS_VERIFY_IMG;
   const displayName = site.name || tgProfile.name || "RS Anime User";
+  const shortenerUrl = await buildShortenerClaimUrl(token);
 
-  const caption = isPublicFlow ? `🔓 <b>Telegram Free Access Verification</b>
+  const caption = isPublicFlow ? `╔══════════════════╗
+🔓 <b>TELEGRAM FREE ACCESS</b>
+╚══════════════════╝
 
 👤 <b>Name:</b> ${displayName}
 🤖 <b>Telegram ID:</b> <code>${tgUserId}</code>
 ⏱ <b>Access Duration:</b> ${hours} hours
+
+Welcome! Finish the verification below to unlock your token.
+After the shortener finishes, tap <b>Get Access Token</b> and the bot will send your code here.
 
 Tap <b>✅ Verify &amp; Get Token</b>.
 After verify, the bot will send you a unique access token in this chat.
@@ -729,6 +735,7 @@ Or paste the access code above on the website's Unlock page.`;
     inline_keyboard: [
       [{ text: isPublicFlow ? "✅ Verify & Get Token" : "✅ Verify & Unlock", callback_data: `verify_${token}` }],
       [{ text: "🌐 Open on Website", url: unlockUrl }],
+      ...(isPublicFlow ? [[{ text: "🔗 Get Access Token", url: shortenerUrl }]] : []),
     ],
   };
 
