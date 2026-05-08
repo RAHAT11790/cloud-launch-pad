@@ -1003,7 +1003,11 @@ async function handleStart(chat_id: number, user_id: number, from: any, arg?: st
     const token = decodeURIComponent(arg.replace("claim_", "")).trim();
     const rec = token ? await fb("GET", `unlockTokens/${token}`).catch(() => null) : null;
     if (!rec?.accessCode) {
-      await sendEphemeral(chat_id, "✦ Access token not found or expired ✦");
+      await sendEphemeral(chat_id, "✦ This verify link has expired ✦\n›› You already received the access token earlier.\n›› Use that token on the website, or get a new access link if you lost it.");
+      return;
+    }
+    if (rec.claimDelivered) {
+      await sendEphemeral(chat_id, "✦ This verify link has expired ✦\n›› You already received the access token earlier.\n›› Use that token on the website, or get a new access link if you lost it.");
       return;
     }
     if (Number(rec.expiresAt || 0) > 0 && Number(rec.expiresAt) <= Date.now()) {
@@ -1034,6 +1038,14 @@ async function handleStart(chat_id: number, user_id: number, from: any, arg?: st
       } catch {}
     }
     await sendAccessTokenCard(chat_id, String(rec.accessCode), Number(rec.grantMs) || 24 * 3600_000, user_id, from);
+    // Mark claim link as used so a second click shows expired
+    try {
+      await fb("PATCH", `unlockTokens/${token}`, {
+        claimDelivered: true,
+        claimDeliveredAt: now,
+        claimDeliveredTo: user_id,
+      });
+    } catch {}
     return;
   }
 
