@@ -995,6 +995,12 @@ async function handleStart(chat_id: number, user_id: number, from: any, arg?: st
       await sendEphemeral(chat_id, "✦ Access token not found or expired ✦");
       return;
     }
+    if (Number(rec.expiresAt || 0) > 0 && Number(rec.expiresAt) <= Date.now()) {
+      await safeDelete(`unlockTokens/${token}`);
+      await safeDelete(`accessCodes/${String(rec.accessCode || "").trim()}`);
+      await sendEphemeral(chat_id, "✦ Access token not found or expired ✦");
+      return;
+    }
     const now = Date.now();
     const verifyShownAt = Number(rec?.verifyShownAt || rec?.createdAt || 0);
     const bypassDetected = verifyShownAt > 0 && now - verifyShownAt < 30_000;
@@ -1760,6 +1766,9 @@ Deno.serve(async (req) => {
     try {
       const tok: any = await fb("GET", `${NS}/botVerifyTokens/${token}`);
       if (!tok || tok.consumed || (tok.expires_at && tok.expires_at < Date.now())) {
+        if (tok?.expires_at && tok.expires_at < Date.now()) {
+          await safeDelete(`${NS}/botVerifyTokens/${token}`);
+        }
         return new Response(JSON.stringify({ ok: false, error: "invalid_or_expired" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
