@@ -871,7 +871,6 @@ async function handleVerifyCallback(chat_id: number, message_id: number, callbac
     });
 
     await answerCallback(callback_id, "✅ Token ready", false);
-    const username = ((await botUsername()) || BOT_USERNAME_FALLBACK).replace(/^@/, "");
     const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
     const finalShortUrl = await buildShortenerClaimUrl(token);
     const summaryText = `✅ <b>Verification Complete</b>\n\nOpen the shortener one more time to receive your access token here.`;
