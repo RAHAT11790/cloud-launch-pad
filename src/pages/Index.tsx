@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Episode } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
@@ -68,6 +69,7 @@ const MAIN_PAGE_ORDER: MainPage[] = ["home", "series", "livetv", "movies"];
 const isMainPage = (page: string): page is MainPage => MAIN_PAGE_ORDER.includes(page as MainPage);
 
 const Index = () => {
+  const navigate = useNavigate();
   const { webseries, movies, allAnime: firebaseAnime, categories, loading } = useFirebaseData();
   const { items: animeSaltItems, loading: saltLoading } = useSelectedAnimeSalt();
   const brandingConfig = useBranding();
@@ -285,6 +287,24 @@ const Index = () => {
     if (globalFreeAccess) return true;
     return userFreeAccessExpiresAt > Date.now();
   }, [globalFreeAccess, userFreeAccessExpiresAt]);
+
+  const redirectToUnlockRequired = useCallback((anime: AnimeItem, seasonIdx?: number, epIdx?: number) => {
+    try {
+      sessionStorage.setItem("rs_pendingUnlockPlayback", JSON.stringify({
+        animeId: anime.id,
+        seasonIdx,
+        epIdx,
+        title: anime.title,
+        poster: anime.poster,
+        backdrop: anime.backdrop,
+      }));
+    } catch {}
+    setPlayerState(null);
+    setSaltPlayerState(null);
+    setSelectedAnime(null);
+    setSaltAdGateActive(false);
+    navigate("/unlock-required");
+  }, [navigate]);
 
   const checkAndShowAdGate = useCallback(async (): Promise<boolean> => {
     // Returns true if access is granted, false if ad-gate shown
@@ -1105,6 +1125,16 @@ const Index = () => {
       return;
     }
 
+    if (!isLoggedIn) {
+      toast.error("ভিডিও দেখতে লগইন করতে হবে");
+      return;
+    }
+
+    if (!hasFreeAccess() && !saltIsPremium) {
+      redirectToUnlockRequired(anime, seasonIdx, epIdx);
+      return;
+    }
+
     dismissDetailsLoadingToast();
 
     let src = "";
@@ -1218,6 +1248,26 @@ const Index = () => {
       setSelectedAnime(null);
     }
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("resumeUnlock") !== "1" || allAnime.length === 0) return;
+
+    let pending: { animeId: string; seasonIdx?: number; epIdx?: number } | null = null;
+    try {
+      const raw = sessionStorage.getItem("rs_pendingUnlockPlayback");
+      pending = raw ? JSON.parse(raw) : null;
+    } catch {}
+
+    window.history.replaceState({}, "", window.location.pathname);
+    if (!pending?.animeId) return;
+
+    const anime = allAnime.find((item) => item.id === pending?.animeId);
+    if (!anime) return;
+
+    try { sessionStorage.removeItem("rs_pendingUnlockPlayback"); } catch {}
+    handlePlay(anime, pending.seasonIdx, pending.epIdx);
+  }, [allAnime, handlePlay]);
 
   const addToWatchHistory = (anime: AnimeItem, seasonIdx?: number, epIdx?: number, preserveProgress = false) => {
     try {
