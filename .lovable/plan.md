@@ -1,43 +1,42 @@
-## Plan
+## কাজের তালিকা (এই চ্যাটেই A-Z শেষ)
 
-1. Rework the APK DW section so it is button-first, not URL-form-first.
-   - Remove the current large URL input-focused layout from `ApkDownloadCenter`.
-   - Keep one simple toggle for the user panel: ON/OFF to show or hide the user-side install/download button.
-   - Show a clear admin-side button inside APK DW for downloading/opening the Admin Panel install target.
-   - Keep the text minimal and mobile-friendly so it matches the screenshot-style admin UI.
+### 1. Unlock + Telegram bot সম্পূর্ণ ঠিক
+- নতুন bot token (`RS_ACCESS_BOT_TOKEN` ইতিমধ্যে আপডেট) দিয়ে webhook reset করব Supabase edge function `link-share-bot` থেকে।
+- `link-share-bot` edge function-এ `/start <token>` handler ঠিক করব যাতে user বট-এ ঢুকলেই verify message + unlock confirm button পায়।
+- Verify ক্লিকের পর Firebase-এ `users/${uid}/freeAccess` activate হবে → mini-app close → website-এ ফিরে আসলে `UnlockRequired` page auto-detect করে player-এ resume করবে (ইতিমধ্যে `onValue` listener আছে)।
+- দ্বিতীয় ক্লিকে অন্য বটে নিয়ে যাওয়ার bug ঠিক করব → unlock service config-এ এক single Telegram provider lock করব।
 
-2. Align the user panel with the requested behavior.
-   - Keep the user profile download/install button controlled only by the admin ON/OFF switch.
-   - Make sure the button label reads like an app install/download action, not a raw APK URL action.
-   - Remove extra helper text or technical wording that makes the mobile UI feel cluttered.
+### 2. "Mini Router" পুরো hide
+- Admin panel-এ "Mini Router" নামের কোন section/tab/label থাকবে না।
+- `Admin.tsx`-এ এটার navigation entry মুছব এবং সংশ্লিষ্ট component শুধু internal hook হিসেবে কাজ করবে — UI-এ দেখা যাবে না।
 
-3. Replace the current “paste APK URL everywhere” behavior with the intended install flow.
-   - Use the existing route-based install setup so Admin Panel and User Panel remain separate install targets.
-   - Ensure the admin button opens the Admin Panel install target and the user button opens the User Panel install target.
-   - Avoid exposing raw URL management as the primary experience in the APK DW screen.
+### 3. AnimeSalt — নিজের VideoPlayer copy
+- `SaltPlayer.tsx`-এর iframe বাদ দিয়ে নিজস্ব `VideoPlayer.tsx`-এর copy বানাব (`AnimeSaltPlayer.tsx`)।
+- AnimeSalt scraper থেকে যে multiple server URLs আসে সেগুলো server-list হিসেবে player-এ বসবে — server switch button থাকবে আমার player UI থেকে।
+- Quality (480/720/1080) selector + fullscreen 100% কাজ করবে (mobile native fullscreen API)।
+- Solid black UI, RGB buffering ring, swipe gesture — main player-এর সাথে সম্পূর্ণ identical।
 
-4. Keep Telegram unlock return behavior intact.
-   - Preserve the source-aware return logic already in place so users still return to admin app, user app, or Chrome correctly after unlock.
-   - Verify the return path still respects panel context (`/admin` vs `/`).
+### 4. NEW episode badge (36h lifecycle)
+- Episode add/update timestamp চেক করে — শেষ 36 ঘণ্টায় add হলে episode card-এ animated "NEW" tag।
+- 36h পার হলে auto disappear (client-side check, কোন cron লাগবে না)।
 
-## Technical details
+### 5. Admin cleanup + flash hide
+- Unlock access global toggle OFF থাকলে user-side-এ কোন flash/toast/banner দেখাবে না — full silent।
+- ON হলে সব unlock buttons + Telegram post inline buttons আগের মতই কাজ করবে।
+- Admin panel-এর unlock/edge-router section-এ duplicate/dead controls সরাব।
 
-- Files to update:
-  - `src/components/admin/ApkDownloadCenter.tsx`
-  - `src/components/ProfilePage.tsx`
-  - potentially small supporting tweaks in `src/components/ManifestManager.tsx` if button targets need tightening
-- Existing logic already available and will be reused:
-  - route-based separate install metadata for `/admin` and `/`
-  - user visibility flag at `settings/apk/userEnabled`
-  - source-aware Telegram return using panel context
-- Main cleanup:
-  - de-emphasize or remove raw `userApkUrl` / `adminApkUrl` inputs from the visible APK DW UI
-  - present direct buttons and one user ON/OFF switch instead of a URL-management form
+## Technical files to touch
+- `supabase/functions/link-share-bot/index.ts` — `/start` verify message, deep-link callback, single-bot lock।
+- `src/lib/unlockAccess.ts` — provider resolution single-source করব।
+- `src/pages/UnlockRequired.tsx` — flash hide when global off।
+- `src/pages/Admin.tsx` — Mini Router tab/label remove, unlock section cleanup।
+- `src/components/SaltPlayer.tsx` → replace with new `AnimeSaltPlayer.tsx` (copy of `VideoPlayer.tsx` adapted for salt server list)।
+- `src/components/AnimeDetails.tsx` / episode list components — NEW badge logic (36h check)।
+- `src/hooks/useAnimeSaltData.ts` — multi-server list expose for player switch।
 
 ## Result
-
-After this update:
-- APK DW will show the admin download/install button clearly
-- APK DW will show the user panel ON/OFF control clearly
-- the user profile will only show the user download/install button when ON
-- the UI will stop feeling like a URL settings form and instead match the requested mobile install flow
+- Telegram unlock end-to-end কাজ করবে: button → bot → verify → ফিরে এসে auto play।
+- AnimeSalt content নিজের player-এ চলবে, fullscreen + server switch সহ।
+- নতুন episode 36 ঘণ্টা NEW দেখাবে।
+- Mini Router UI-তে আর দেখা যাবে না।
+- Unlock OFF হলে কোন flash আসবে না।
