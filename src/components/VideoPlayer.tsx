@@ -64,6 +64,18 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   return url;
 };
 
+const tryUpgradeToHttps = (rawUrl: string): string => {
+  const trimmed = String(rawUrl || "").trim();
+  if (!trimmed.toLowerCase().startsWith("http://")) return trimmed;
+  try {
+    const parsed = new URL(trimmed);
+    parsed.protocol = "https:";
+    return parsed.toString();
+  } catch {
+    return trimmed.replace(/^http:\/\//i, "https://");
+  }
+};
+
 const isDirectPlaybackUrl = (url: string): boolean => {
   const normalized = url.trim().toLowerCase();
   return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
@@ -105,19 +117,20 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
     candidates.push(candidate);
   };
 
-  const encoded = encodeURIComponent(url);
+  const normalizedUrl = tryUpgradeToHttps(url);
+  const encoded = encodeURIComponent(normalizedUrl);
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
-  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  const prefersDirectPlayback = isDirectPlaybackUrl(url);
-  const mustUseProxy = isInsecureHttpSource(url);
+  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, normalizedUrl, proxyApiKey) : null;
+  const prefersDirectPlayback = isDirectPlaybackUrl(normalizedUrl);
+  const mustUseProxy = isInsecureHttpSource(normalizedUrl);
 
-  if (isBypassSource(url)) {
-    addCandidate(url);
+  if (isBypassSource(normalizedUrl)) {
+    addCandidate(normalizedUrl);
     return candidates;
   }
 
   if (prefersDirectPlayback && !mustUseProxy) {
-    addCandidate(url);
+    addCandidate(normalizedUrl);
     return candidates;
   }
 
@@ -127,11 +140,11 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
     if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
     // If nothing configured, fall through to direct (last-resort) below
   } else {
-    addCandidate(url);
+    addCandidate(normalizedUrl);
   }
 
   if (candidates.length === 0) {
-    addCandidate(url);
+    addCandidate(normalizedUrl);
   }
 
   return candidates;
