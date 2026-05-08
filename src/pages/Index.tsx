@@ -184,10 +184,14 @@ const Index = () => {
     try { uid = JSON.parse(localStorage.getItem("rsanime_user") || "{}").id || ""; } catch {}
     if (!uid) return;
     const unsub = onValue(ref(db, `users/${uid}`), (snap) => {
-      if (!snap.exists()) {
+      const data = snap.val();
+      const sessionStartedAt = Number(localStorage.getItem("rs_session_started_at") || "0");
+      if (!snap.exists() || (data?.sessionRevokedAt && sessionStartedAt > 0 && Number(data.sessionRevokedAt) >= sessionStartedAt)) {
         try {
           localStorage.removeItem("rsanime_user");
           localStorage.removeItem("rs_display_name");
+          localStorage.removeItem("rs_profile_photo");
+          localStorage.removeItem("rs_session_started_at");
         } catch {}
         try { window.location.replace("/"); } catch { window.location.href = "/"; }
       }
@@ -1565,6 +1569,7 @@ const Index = () => {
     localStorage.removeItem("rsanime_user");
     localStorage.removeItem("rs_display_name");
     localStorage.removeItem("rs_profile_photo");
+    localStorage.removeItem("rs_session_started_at");
     setIsLoggedIn(false);
   };
 
@@ -1580,6 +1585,7 @@ const Index = () => {
     localStorage.removeItem("rsanime_user");
     localStorage.removeItem("rs_display_name");
     localStorage.removeItem("rs_profile_photo");
+    localStorage.removeItem("rs_session_started_at");
     setDeviceLimitWarning(null);
     setUserFreeAccessExpiresAt(0);
     setIsLoggedIn(false);
