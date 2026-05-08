@@ -288,15 +288,26 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
         {/* Episode List for webseries */}
         {anime.type === "webseries" && anime.seasons && (
           <div className="mb-5 space-y-4">
-            {anime.seasons.map((season, sIdx) => (
+            {anime.seasons.map((season, sIdx) => {
+              const NEW_WINDOW_MS = 36 * 60 * 60 * 1000;
+              const now = Date.now();
+              const animeUpdated = Number((anime as any).updatedAt || 0);
+              const animeRecent = animeUpdated > 0 && now - animeUpdated < NEW_WINDOW_MS;
+              const maxEpNum = season.episodes.reduce((m, e) => Math.max(m, Number(e.episodeNumber || 0)), 0);
+              return (
               <div key={sIdx} className="glass-card p-3.5 rounded-xl">
                 <h3 className="text-[15px] font-bold mb-3 flex items-center category-bar">{season.name}</h3>
                 <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
-                  {season.episodes.map((ep, eIdx) => (
+                  {season.episodes.map((ep, eIdx) => {
+                    const epAddedAt = Number((ep as any).addedAt || 0);
+                    const isNew = epAddedAt > 0
+                      ? (now - epAddedAt < NEW_WINDOW_MS)
+                      : (animeRecent && Number(ep.episodeNumber) === maxEpNum);
+                    return (
                     <button
                       key={eIdx}
                       onClick={() => onPlay(anime, sIdx, eIdx)}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-secondary/60 border border-border/30 hover:border-primary hover:bg-primary/10 transition-all group"
+                      className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-secondary/60 border border-border/30 hover:border-primary hover:bg-primary/10 transition-all group relative"
                     >
                       {/* Thumbnail */}
                       <div className="w-[72px] h-[42px] min-w-[72px] flex-shrink-0 rounded-lg overflow-hidden bg-card relative">
@@ -312,8 +323,11 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
                         <span className="absolute bottom-0.5 right-0.5 text-[8px] font-bold bg-black/70 text-white px-1 rounded">EP {ep.episodeNumber}</span>
                       </div>
                       <div className="flex-1 min-w-0 text-left">
-                        <p className="text-[13px] font-semibold truncate">
+                        <p className="text-[13px] font-semibold truncate flex items-center gap-1.5">
                           Episode {ep.episodeNumber}
+                          {isNew && (
+                            <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white animate-pulse">NEW</span>
+                          )}
                         </p>
                         {ep.title && ep.title !== `Episode ${ep.episodeNumber}` && (
                           <p className="text-[11px] text-muted-foreground truncate">{ep.title}</p>
@@ -321,10 +335,12 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
                       </div>
                       <Play className="w-4 h-4 flex-shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
