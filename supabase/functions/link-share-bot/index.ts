@@ -1710,14 +1710,8 @@ Deno.serve(async (req) => {
     const me = await botUsername();
     const targetBotUsername = me || RS_MINI_BOT || RS_RETURN_BOT;
     const deepLink = `https://t.me/${targetBotUsername}?start=unlock_${encodeURIComponent(userId)}`;
-    const shortUrl = await shortenWithConfiguredAccessService(deepLink);
-    if (!shortUrl) {
-      return new Response(JSON.stringify({ ok: false, error: "arolinks_shortener_failed" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    return new Response(JSON.stringify({ ok: true, deepLink, url: shortUrl, shortUrl, botUsername: targetBotUsername }), {
+    // Telegram Bot mode = direct deep-link, NEVER wrap with AroLinks shortener
+    return new Response(JSON.stringify({ ok: true, deepLink, url: deepLink, shortUrl: deepLink, botUsername: targetBotUsername }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
