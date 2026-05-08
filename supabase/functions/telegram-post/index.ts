@@ -5,6 +5,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const FIREBASE_DB = Deno.env.get("FIREBASE_DB_URL") || "https://rs-anime-default-rtdb.firebaseio.com";
+
+async function fbGet(path: string) {
+  const res = await fetch(`${FIREBASE_DB.replace(/\/$/, "")}/${path}.json`);
+  if (!res.ok) throw new Error(`Firebase GET failed: ${path}`);
+  return await res.json();
+}
+
 type InlineButton = { text: string; url: string };
 
 const json = (data: unknown, status = 200) =>
