@@ -1222,6 +1222,10 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const url = new URL(req.url);
+  let body: any = null;
+  if (req.method === "POST") {
+    try { body = await req.json(); } catch { body = null; }
+  }
 
   if (url.searchParams.get("setWebhook")) {
     const target = url.searchParams.get("setWebhook")!;
@@ -1233,6 +1237,70 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify(r), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
+  if (req.method === "POST" && body?.action === "create-unlock-link") {
+    const userId = String(body?.userId || "").trim();
+    if (!userId) {
+      return new Response(JSON.stringify({ ok: false, error: "userId required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const me = await botUsername();
+    const deepLink = `https://t.me/${me || RS_RETURN_BOT}?start=unlock_${encodeURIComponent(userId)}`;
+    return new Response(JSON.stringify({ ok: true, deepLink, botUsername: me || RS_RETURN_BOT }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  if (req.method === "POST" && body?.action === "claim-access-code") {
+    const code = String(body?.code || "").trim().toUpperCase();
+    const userId = String(body?.userId || "").trim();
+    if (!code || !userId) {
+      return new Response(JSON.stringify({ ok: false, error: "code & userId required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const rec = await fb("GET", `accessCodes/${code}`).catch(() => null);
+    if (!rec) {
+      return new Response(JSON.stringify({ ok: false, error: "invalid_code" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (rec.consumed) {
+      return new Response(JSON.stringify({ ok: false, error: "already_used" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (Number(rec.expiresAt || 0) < Date.now()) {
+      return new Response(JSON.stringify({ ok: false, error: "expired" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (rec.ownerUserId && rec.ownerUserId !== userId) {
+      return new Response(JSON.stringify({ ok: false, error: "not_owner" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const grantMs = Number(rec.grantMs) > 0 ? Number(rec.grantMs) : 24 * 3600_000;
+    const expiresAt = Date.now() + grantMs;
+    await fb("PUT", `accessCodes/${code}`, {
+      ...rec,
+      consumed: true,
+      status: "claimed",
+      claimedByUserId: userId,
+      claimedAt: Date.now(),
+    });
+    await fb("PUT", `users/${userId}/freeAccess`, {
+      active: true,
+      grantedAt: Date.now(),
+      expiresAt,
+      viaCode: code,
+      source: "telegram_access_bot",
+    });
+    return new Response(JSON.stringify({ ok: true, durationMs: grantMs, expiresAt }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   // Verify-consume endpoint: POST { token } → marks bot user verified, returns deep link back to bot
   if (url.pathname.endsWith("/verify-consume") || url.searchParams.get("verifyConsume") === "1") {
     if (req.method !== "POST") {
@@ -1240,8 +1308,6 @@ Deno.serve(async (req) => {
         status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    let body: any = {};
-    try { body = await req.json(); } catch {}
     const token = String(body?.token || "").trim();
     if (!token) {
       return new Response(JSON.stringify({ ok: false, error: "token required" }), {
@@ -1280,8 +1346,6 @@ Deno.serve(async (req) => {
         status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    let body: any = {};
-    try { body = await req.json(); } catch {}
     const provided = String(body?.secret || req.headers.get("x-notify-secret") || "");
     if (!NOTIFY_SECRET || provided !== NOTIFY_SECRET) {
       return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
@@ -1302,8 +1366,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const update = await req.json();
-    handleUpdate(update).catch((e) => console.error("[update]", e));
+    handleUpdate(body).catch((e) => console.error("[update]", e));
     return new Response("ok", { headers: corsHeaders });
   } catch (e) {
     console.error("[server]", e);
