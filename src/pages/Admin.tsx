@@ -2422,6 +2422,42 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     return () => { unsub1(); unsub2(); };
   }, [activeSection]);
 
+  const clearAllFreeAccess = async () => {
+    if (!confirm("সব active free access cancel করতে চান?")) return;
+    setFreeAccessBusy("all");
+    try {
+      const usersSnap = await get(ref(db, "users"));
+      const usersVal = usersSnap.val() || {};
+      await Promise.all([
+        set(ref(db, "freeAccessUsers"), null),
+        ...Object.keys(usersVal).map((uid) => set(ref(db, `users/${uid}/freeAccess`), null).catch(() => {})),
+      ]);
+      toast.success("সব free access বাতিল করা হয়েছে");
+    } catch (e: any) {
+      toast.error(e?.message || "Clear all failed");
+    } finally {
+      setFreeAccessBusy(null);
+    }
+  };
+
+  const clearSingleFreeAccess = async (user: any) => {
+    const uid = String(user?.userId || user?.id || "").trim();
+    if (!uid) return;
+    if (!confirm(`${user?.name || uid} এর free access বাতিল করতে চান?`)) return;
+    setFreeAccessBusy(uid);
+    try {
+      await Promise.all([
+        remove(ref(db, `freeAccessUsers/${uid}`)).catch(() => {}),
+        set(ref(db, `users/${uid}/freeAccess`), null),
+      ]);
+      toast.success("নির্দিষ্ট user-এর free access বাতিল করা হয়েছে");
+    } catch (e: any) {
+      toast.error(e?.message || "Remove failed");
+    } finally {
+      setFreeAccessBusy(null);
+    }
+  };
+
   // Lazy-load PRIZE POOL data
   useEffect(() => {
     if (activeSection !== "free-access") return;
