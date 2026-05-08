@@ -1654,6 +1654,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const url = new URL(req.url);
+  cleanupExpiredAccessArtifacts().catch(() => {});
   let body: any = null;
   if (req.method === "POST") {
     try { body = await req.json(); } catch { body = null; }
@@ -1680,7 +1681,13 @@ Deno.serve(async (req) => {
     const me = await botUsername();
     const targetBotUsername = me || RS_MINI_BOT || RS_RETURN_BOT;
     const deepLink = `https://t.me/${targetBotUsername}?start=unlock_${encodeURIComponent(userId)}`;
-    const shortUrl = await shortenWithConfiguredAccessService(deepLink) || await shortenViaRs(deepLink) || deepLink;
+    const shortUrl = await shortenWithConfiguredAccessService(deepLink);
+    if (!shortUrl) {
+      return new Response(JSON.stringify({ ok: false, error: "arolinks_shortener_failed" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     return new Response(JSON.stringify({ ok: true, deepLink, url: shortUrl, shortUrl, botUsername: targetBotUsername }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -1706,6 +1713,7 @@ Deno.serve(async (req) => {
       });
     }
     if (Number(rec.expiresAt || 0) < Date.now()) {
+      await safeDelete(`accessCodes/${code}`);
       return new Response(JSON.stringify({ ok: false, error: "expired" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
