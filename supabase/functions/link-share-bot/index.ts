@@ -702,13 +702,6 @@ async function buildShortenerClaimUrl(token: string): Promise<string> {
   return shortUrl || directBotLink;
 }
 
-async function buildWebsiteVerifyStartLink(ownerUserId: string): Promise<string> {
-  const username = (await botUsername()) || BOT_USERNAME_FALLBACK || RS_RETURN_BOT;
-  const directBotLink = `https://t.me/${username.replace(/^@/, "")}?start=unlock_${encodeURIComponent(ownerUserId)}`;
-  const shortUrl = await shortenWithConfiguredAccessService(directBotLink) || await shortenViaRs(directBotLink);
-  return shortUrl || directBotLink;
-}
-
 function accessInstructionsText() {
   return `${stylish("›› Open the shortener link below")}
 ${stylish("›› Watch ads and wait for GET LINK")}
@@ -1635,7 +1628,7 @@ Deno.serve(async (req) => {
     ensureWebhook().catch(() => {});
     const me = await botUsername();
     const targetBotUsername = me || RS_MINI_BOT || RS_RETURN_BOT;
-    const deepLink = await buildWebsiteVerifyStartLink(userId);
+    const deepLink = `https://t.me/${targetBotUsername}?start=unlock_${encodeURIComponent(userId)}`;
     return new Response(JSON.stringify({ ok: true, deepLink, botUsername: targetBotUsername }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
