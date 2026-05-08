@@ -124,9 +124,10 @@ Deno.serve(async (req) => {
     respHeaders.set("accept-ranges", "bytes");
   }
   if (!respHeaders.has("cache-control")) {
-    // 1h browser/edge cache — speeds up seek-back & repeated playback
     respHeaders.set("cache-control", "public, max-age=3600");
   }
+  // Force inline playback — strip any attachment header from upstream
+  respHeaders.set("content-disposition", "inline");
 
   // Stream body straight back — zero buffering on our side
   return new Response(upstream.body, {
