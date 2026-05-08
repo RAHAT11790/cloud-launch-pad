@@ -1568,6 +1568,24 @@ const Index = () => {
     setIsLoggedIn(false);
   };
 
+  const handleLogoutAllDevices = async () => {
+    try {
+      const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
+      if (u?.id) {
+        const { logoutAllDevices } = await import("@/lib/premiumDevice");
+        await logoutAllDevices(u.id);
+      }
+    } catch {}
+
+    localStorage.removeItem("rsanime_user");
+    localStorage.removeItem("rs_display_name");
+    localStorage.removeItem("rs_profile_photo");
+    setDeviceLimitWarning(null);
+    setUserFreeAccessExpiresAt(0);
+    setIsLoggedIn(false);
+    toast.success("All devices logged out. Please log in again.");
+  };
+
   const currentEpisodeList = playerState?.anime.seasons?.[playerState.seasonIdx ?? 0]?.episodes.map((ep, i) => ({
     number: ep.episodeNumber,
     title: ep.title,
@@ -2115,7 +2133,7 @@ const Index = () => {
         />
       )}
 
-      {/* Device Limit Warning Overlay - forces logout for over-limit users */}
+      {/* Device Limit Warning Overlay */}
       {deviceLimitWarning && (
         <div className="fixed inset-0 z-[99999] bg-background/98 backdrop-blur-md flex items-center justify-center p-6">
           <div className="w-full max-w-[380px] text-center space-y-5">
@@ -2126,8 +2144,10 @@ const Index = () => {
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
             </div>
-            <h2 className="text-xl font-extrabold text-destructive">Device Limit Exceeded!</h2>
-            <p className="text-sm text-muted-foreground leading-relaxed">{deviceLimitWarning.message}</p>
+            <h2 className="text-xl font-extrabold text-destructive">Device limit exceeded</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Your device limit has been exceeded. Tap the button below to log out from all devices, then log in again.
+            </p>
             
             <div className="bg-card/50 rounded-xl p-4 text-left space-y-2">
               <p className="text-xs font-semibold text-foreground/70 mb-2">Currently logged in:</p>
@@ -2139,12 +2159,10 @@ const Index = () => {
               ))}
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Log out from another device, then log in again on this device.
-            </p>
+            <p className="text-xs text-muted-foreground">{deviceLimitWarning.message}</p>
 
             <button
-              onClick={handleLogout}
+              onClick={handleLogoutAllDevices}
               className="w-full py-3.5 rounded-xl bg-destructive text-destructive-foreground font-bold text-sm flex items-center justify-center gap-2"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2152,7 +2170,14 @@ const Index = () => {
                 <polyline points="16 17 21 12 16 7" />
                 <line x1="21" y1="12" x2="9" y2="12" />
               </svg>
-              Logout
+              Logout from all device
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="w-full py-3 rounded-xl border border-border bg-secondary/40 text-sm font-semibold text-muted-foreground"
+            >
+              Logout this device
             </button>
           </div>
         </div>
