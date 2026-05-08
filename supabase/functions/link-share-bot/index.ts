@@ -689,6 +689,13 @@ async function buildShortenerClaimUrl(token: string): Promise<string> {
   return shortUrl || directBotLink;
 }
 
+async function buildWebsiteVerifyStartLink(ownerUserId: string): Promise<string> {
+  const username = (await botUsername()) || BOT_USERNAME_FALLBACK || RS_RETURN_BOT;
+  const directBotLink = `https://t.me/${username.replace(/^@/, "")}?start=unlock_${encodeURIComponent(ownerUserId)}`;
+  const shortUrl = await shortenWithConfiguredAccessService(directBotLink) || await shortenViaRs(directBotLink);
+  return shortUrl || directBotLink;
+}
+
 function accessInstructionsText() {
   return `${stylish("›› Open the shortener link below")}
 ${stylish("›› Watch ads and wait for GET LINK")}
@@ -710,35 +717,40 @@ async function sendAccessTokenCard(chat_id: number, accessCode: string, grantMs:
   const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
   const safeName = escapeHtml(profile.name || `User ${tgUserId}`);
   const safeCode = escapeHtml(accessCode);
-  const caption = `✦━━━━━━━━━━━━━━━━━━━✦
-${stylish("✦ RS ACCESS TOKEN ✦")}
-✦━━━━━━━━━━━━━━━━━━━✦
+  const caption = `┏━━━━━━━━━━━━━━━━┓
+<b>RS ACCESS TOKEN</b>
+┗━━━━━━━━━━━━━━━━┛
 
-${stylish("›› User")}: <b>${safeName}</b>
-${stylish("›› Access Time")}: <b>${hours} hours</b>
+👤 <b>${safeName}</b>
+⏳ <b>${hours}h access</b>
 
-<b>${stylish("YOUR ACCESS TOKEN")}</b>
-<code>────────[ ${safeCode} ]────────</code>
+<b>TOKEN</b>
+<code>┌────────────┐
+│ ${safeCode} │
+└────────────┘</code>
 
-${stylish("›› Tap the token to copy")}
-${stylish("›› Paste it on the website unlock box")}
-
-✦━━━━━━━━━━━━━━━━━━━✦`;
+Tap only the code to copy.
+Paste it in the website unlock box.
+Auto cleanup in 1 minute — save your token now.`;
 
   const reply_markup = {
     inline_keyboard: [
       [{ text: "🌐 Paste Token on Website", url: `${siteUrl}/unlock-required` }],
-      [{ text: "🔁 Send Token Again", url: `https://t.me/${((await botUsername()) || BOT_USERNAME_FALLBACK).replace(/^@/, "")}?start=claim_last` }],
     ],
   };
 
   for (const media of [profile.photo_file_id, profile.photo_url, RS_VERIFY_IMG]) {
     if (!media) continue;
     const sent = await sendPhoto(chat_id, media, caption, { reply_markup });
-    if (sent?.ok) return sent;
+    if (sent?.ok) {
+      scheduleDelete(chat_id, sent?.result?.message_id, 60_000);
+      return sent;
+    }
   }
 
-  return await sendMessage(chat_id, caption, { reply_markup });
+  const sent = await sendMessage(chat_id, caption, { reply_markup });
+  scheduleDelete(chat_id, sent?.result?.message_id, 60_000);
+  return sent;
 }
 
 async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tgUserId: number) {
@@ -774,44 +786,30 @@ async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tg
 
   const safeDisplayName = escapeHtml(displayName);
   const safeEmail = escapeHtml(site.email || "—");
-  const caption = isPublicFlow ? `✦━━━━━━━━━━━━━━━━━━━✦
-${stylish("✦ RS LINK SHARE BOT ✦")}
-✦━━━━━━━━━━━━━━━━━━━✦
+  const caption = isPublicFlow ? `<b>RS ACCESS BOT</b>
 
-${stylish("›› Bot Type")}: ${stylish("Access Bot")}
-${stylish("›› 24 Hour Telegram Access")}
-${stylish("›› Shortener return required")}
+👤 <b>${safeDisplayName}</b>
+🆔 <code>${tgUserId}</code>
+⏳ <b>${hours}h access</b>
 
-${stylish("✦ YOUR DETAILS ✦")}
-${stylish("›› Name")}: <b>${safeDisplayName}</b>
-${stylish("›› Telegram ID")}: <code>${tgUserId}</code>
-${stylish("›› Access Duration")}: <b>${hours}h</b>
+1. Open short link
+2. Watch ads
+3. Tap Get Link
+4. Bot sends your token
 
-${accessInstructionsText()}
+Token message auto-cleans in 1 minute.` : `<b>RS WEBSITE ACCESS</b>
 
-${stylish("✦ Powered by")}: <a href="https://t.me/CARTOONFUNNY03">𓆩𝐀𝐍𝐈𝐌𝐄 𝐈𝐍 𝐇𝐈𝐍𝐃𝐈𓆪</a>
-${stylish("✦ MADE WITH ❤️ BY")}: <a href="https://t.me/rs_woner">𝐑𝐒 𝐖𝐎𝐍𝐄𝐑</a>
+👤 <b>${safeDisplayName}</b>
+✉️ <b>${safeEmail}</b>
+🆔 <code>${tgUserId}</code>
+⏳ <b>${hours}h access</b>
 
-✦━━━━━━━━━━━━━━━━━━━✦` : `✦━━━━━━━━━━━━━━━━━━━✦
-${stylish("✦ RS LINK SHARE BOT ✦")}
-✦━━━━━━━━━━━━━━━━━━━✦
+1. Open short link
+2. Watch ads
+3. Tap Get Link
+4. Bot sends your token
 
-${stylish("›› Bot Type")}: ${stylish("Website Access Bot")}
-${stylish("›› 24 Hour Website Access")}
-${stylish("›› Shortener return required")}
-
-${stylish("✦ YOUR DETAILS ✦")}
-${stylish("›› Name")}: <b>${safeDisplayName}</b>
-${stylish("›› Email")}: <b>${safeEmail}</b>
-${stylish("›› Telegram ID")}: <code>${tgUserId}</code>
-${stylish("›› Access Duration")}: <b>${hours}h</b>
-
-${accessInstructionsText()}
-
-${stylish("✦ Powered by")}: <a href="https://t.me/CARTOONFUNNY03">𓆩𝐀𝐍𝐈𝐌𝐄 𝐈𝐍 𝐇𝐈𝐍𝐃𝐈𓆪</a>
-${stylish("✦ MADE WITH ❤️ BY")}: <a href="https://t.me/rs_woner">𝐑𝐒 𝐖𝐎𝐍𝐄𝐑</a>
-
-✦━━━━━━━━━━━━━━━━━━━✦`;
+Token message auto-cleans in 1 minute.`;
 
   const reply_markup = {
     inline_keyboard: [
