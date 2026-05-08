@@ -341,10 +341,27 @@ export const consumeUnlockTokenForCurrentUser = async (
   return { ok: true, reason: "claimed", serviceId, durationMs };
 };
 
+async function getAccessBotEndpoint(): Promise<string> {
+  let endpoint = "";
+  try {
+    const [customSnap, legacySnap] = await Promise.all([
+      get(ref(db, "settings/accessBotFunctionUrl")),
+      get(ref(db, "settings/linkShareBotUrl")),
+    ]);
+    endpoint = String(customSnap.val() || legacySnap.val() || "").trim();
+  } catch {}
+
+  if (!endpoint) {
+    const supaUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "";
+    if (supaUrl) endpoint = `${supaUrl}/functions/v1/link-share-bot`;
+  }
+
+  return endpoint;
+}
+
 /**
  * Build a Telegram-bot deep-link unlock URL for the current user.
- * The website Verify button calls this and redirects the user into the bot,
- * which then handles the vplink shortener flow and finally redirects back.
+ * This must always go through the dedicated access bot, not the Telegram post bot.
  */
 export async function createTelegramBotUnlockLink(): Promise<{
   ok: boolean;
@@ -355,20 +372,7 @@ export async function createTelegramBotUnlockLink(): Promise<{
   if (!userId) return { ok: false, error: "login_required" };
 
   try {
-    let endpoint = "";
-    try {
-      const [legacySnap, providerSnap] = await Promise.all([
-        get(ref(db, "settings/telegramFunctionUrl")),
-        get(ref(db, "settings/telegramProvider")),
-      ]);
-      endpoint = String(legacySnap.val() || providerSnap.val()?.url || "").trim();
-    } catch {}
-
-    if (!endpoint) {
-      // Fallback: derive from current Supabase project
-      const supaUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "";
-      if (supaUrl) endpoint = `${supaUrl}/functions/v1/telegram-post`;
-    }
+    const endpoint = await getAccessBotEndpoint();
     if (!endpoint) return { ok: false, error: "telegram_endpoint_not_configured" };
 
     const r = await fetch(endpoint, {
@@ -399,18 +403,7 @@ export async function claimAccessCode(code: string): Promise<{
   const cleanCode = String(code || "").trim().toUpperCase().replace(/\s+/g, "");
   if (!cleanCode) return { ok: false, error: "empty_code" };
 
-  let endpoint = "";
-  try {
-    const [legacySnap, providerSnap] = await Promise.all([
-      get(ref(db, "settings/telegramFunctionUrl")),
-      get(ref(db, "settings/telegramProvider")),
-    ]);
-    endpoint = String(legacySnap.val() || providerSnap.val()?.url || "").trim();
-  } catch {}
-  if (!endpoint) {
-    const supaUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "";
-    if (supaUrl) endpoint = `${supaUrl}/functions/v1/telegram-post`;
-  }
+  const endpoint = await getAccessBotEndpoint();
   if (!endpoint) return { ok: false, error: "endpoint_not_configured" };
 
   try {
