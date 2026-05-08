@@ -178,6 +178,7 @@ interface VideoPlayerProps {
   suggestedAnime?: AnimeItem[];
   onSuggestedClick?: (anime: AnimeItem) => void;
   nextEpisodeSrc?: string;
+  disableUnlockGate?: boolean;
 }
 
 const formatTime = (t: number) => {
@@ -186,7 +187,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, disableUnlockGate = false }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl || logoImg;
   // Removed preload anime character image - no longer needed
@@ -602,6 +603,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   // Ad gate - only run after premium AND freeAccess data have loaded
   useEffect(() => {
+    if (disableUnlockGate) {
+      setAdGateActive(false);
+      return;
+    }
     if (isPremium === null) return; // still loading premium status
     if (!freeAccessLoaded) return; // wait for Firebase freeAccess snapshot — prevents unlock-button flash
 
@@ -640,7 +645,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         else setAdGateActive(false);
       }).catch(() => { setShortenLoading(false); setAdGateActive(false); });
     });
-  }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
+  }, [disableUnlockGate, isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
 
   const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
     const { openExternalBrowser } = await import("@/lib/openExternal");

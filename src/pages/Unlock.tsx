@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { db, ref, set, get } from "@/lib/firebase";
-import { consumeUnlockTokenForCurrentUser, getLocalUserId, getRandomPrizeDuration, getServiceDurationMs } from "@/lib/unlockAccess";
+import { consumeTelegramVerifyToken, consumeUnlockTokenForCurrentUser, getLocalUserId, getRandomPrizeDuration } from "@/lib/unlockAccess";
 
 const Unlock = () => {
   const navigate = useNavigate();
@@ -13,9 +13,22 @@ const Unlock = () => {
 
   useEffect(() => {
     const doUnlock = async () => {
-      // Old RS_LINK_SHARE_BOT (botv) flow removed — only the standard
-      // `?t=<token>` (and optional `&code=<accessCode>`) flow is supported now.
-
+      const verifyToken = searchParams.get("botv") || "";
+      if (verifyToken) {
+        const result = await consumeTelegramVerifyToken(verifyToken);
+        if (!result.ok) {
+          setStatus("denied");
+          setTimeout(() => navigate("/", { replace: true }), 2500);
+          return;
+        }
+        if (result.deepLink) {
+          window.location.replace(result.deepLink);
+          return;
+        }
+        setStatus("success");
+        setTimeout(() => navigate("/", { replace: true }), 1200);
+        return;
+      }
 
       const token = searchParams.get("t") || "";
       const userId = getLocalUserId();

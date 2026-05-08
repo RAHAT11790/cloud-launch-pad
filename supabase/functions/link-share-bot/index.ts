@@ -379,8 +379,7 @@ async function verifyKeyboard(user_id: number, returnPayload = "") {
   } catch (e) { console.error("[verifyToken]", e); }
 
   const SITE_URL = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
-  const me = await botUsername();
-  const callbackUrl = `${SITE_URL}/unlock?botv=${token}&bot=${encodeURIComponent(me)}`;
+  const callbackUrl = `${SITE_URL}/unlock?botv=${token}`;
 
   let finalUrl = callbackUrl;
   try {
@@ -1300,8 +1299,9 @@ Deno.serve(async (req) => {
       });
     }
     const me = await botUsername();
-    const deepLink = `https://t.me/${me || RS_RETURN_BOT}?start=unlock_${encodeURIComponent(userId)}`;
-    return new Response(JSON.stringify({ ok: true, deepLink, botUsername: me || RS_RETURN_BOT }), {
+    const targetBotUsername = me || RS_MINI_BOT || RS_RETURN_BOT;
+    const deepLink = `https://t.me/${targetBotUsername}?start=unlock_${encodeURIComponent(userId)}`;
+    return new Response(JSON.stringify({ ok: true, deepLink, botUsername: targetBotUsername }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

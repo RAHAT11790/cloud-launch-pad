@@ -144,11 +144,7 @@ const UnlockRequired = () => {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="relative min-h-screen overflow-hidden">
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-20"
-          style={{ backgroundImage: pending?.backdrop ? `url(${pending.backdrop})` : undefined }}
-        />
-        <div className="absolute inset-0 bg-background/90 backdrop-blur-md" />
+        <div className="absolute inset-0 bg-background" />
 
         <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-8">
           <div className="rounded-2xl border border-primary/20 bg-card/80 p-5 shadow-2xl backdrop-blur-xl">
@@ -203,7 +199,7 @@ const UnlockRequired = () => {
                     style={{ background: link.service.color || "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)))" }}
                   >
                     <ExternalLink className="h-4 w-4" />
-                    <span>{link.service.icon || "🔓"} {link.service.name || `Unlock ${index + 1}`}</span>
+                     <span>{link.service.icon || "🔓"} {link.service.name || `Unlock ${index + 1}`}</span>
                   </button>
                 ))
               )}

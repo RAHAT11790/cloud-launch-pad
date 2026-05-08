@@ -344,11 +344,11 @@ export const consumeUnlockTokenForCurrentUser = async (
 async function getAccessBotEndpoint(): Promise<string> {
   let endpoint = "";
   try {
-    const [customSnap, legacySnap] = await Promise.all([
-      get(ref(db, "settings/accessBotFunctionUrl")),
-      get(ref(db, "settings/linkShareBotUrl")),
-    ]);
-    endpoint = String(customSnap.val() || legacySnap.val() || "").trim();
+    const customSnap = await get(ref(db, "settings/accessBotFunctionUrl"));
+    const customEndpoint = String(customSnap.val() || "").trim();
+    if (customEndpoint && /link-share-bot/i.test(customEndpoint)) {
+      endpoint = customEndpoint;
+    }
   } catch {}
 
   if (!endpoint) {
@@ -358,6 +358,8 @@ async function getAccessBotEndpoint(): Promise<string> {
 
   return endpoint;
 }
+
+const withBotPath = (base: string, path: string) => `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 
 /**
  * Build a Telegram-bot deep-link unlock URL for the current user.
@@ -387,6 +389,34 @@ export async function createTelegramBotUnlockLink(): Promise<{
     return { ok: true, deepLink: data.deepLink };
   } catch (e: any) {
     return { ok: false, error: e?.message || "unknown" };
+  }
+}
+
+export async function consumeTelegramVerifyToken(token: string): Promise<{
+  ok: boolean;
+  deepLink?: string;
+  hours?: number;
+  error?: string;
+}> {
+  const cleanToken = String(token || "").trim();
+  if (!cleanToken) return { ok: false, error: "empty_token" };
+
+  try {
+    const endpoint = await getAccessBotEndpoint();
+    if (!endpoint) return { ok: false, error: "telegram_endpoint_not_configured" };
+
+    const r = await fetch(withBotPath(endpoint, "verify-consume"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: cleanToken }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data?.ok) {
+      return { ok: false, error: data?.error || "verify_consume_failed" };
+    }
+    return { ok: true, deepLink: data?.deepLink, hours: data?.hours };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "network_error" };
   }
 }
 

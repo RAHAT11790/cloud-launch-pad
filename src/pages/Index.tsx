@@ -57,7 +57,6 @@ import { db, ref, set, onValue, get } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
 // FCM removed — push notifications no longer used
-import { createUnlockLinkForCurrentUser } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 // Unlock gate toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When false: no flash, no redirect, no toast — players play instantly for everyone.
@@ -158,8 +157,6 @@ const Index = () => {
 
   // Ad-gate state for AnimeSalt player
   const [saltAdGateActive, setSaltAdGateActive] = useState(false);
-  const [saltAdGateLink, setSaltAdGateLink] = useState<string | null>(null);
-  const [saltAdGateLoading, setSaltAdGateLoading] = useState(false);
   const [globalFreeAccess, setGlobalFreeAccess] = useState(false);
   const [saltIsPremium, setSaltIsPremium] = useState<boolean | null>(null);
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
@@ -314,7 +311,7 @@ const Index = () => {
     navigate("/unlock-required");
   }, [navigate]);
 
-  const checkAndShowAdGate = useCallback(async (): Promise<boolean> => {
+  const checkAndShowAdGate = useCallback(async (anime?: AnimeItem, seasonIdx?: number, epIdx?: number): Promise<boolean> => {
     // Returns true if access is granted, false if ad-gate shown
     // Device limit is enforced at login time, premium users get direct access
     if (!isLoggedIn) {
@@ -335,25 +332,11 @@ const Index = () => {
     const shortenerOn = await isShortenerEnabled();
     if (!shortenerOn) return true;
 
-    // Show ad-gate
-    setSaltAdGateActive(true);
-    setSaltAdGateLoading(true);
-    try {
-      const result = await createUnlockLinkForCurrentUser();
-      setSaltAdGateLoading(false);
-      if (result.ok && result.shortUrl) {
-        setSaltAdGateLink(result.shortUrl);
-      } else {
-        setSaltAdGateActive(false);
-        toast.error("Unlock link তৈরি করা যায়নি, আবার চেষ্টা করুন");
-      }
-    } catch {
-      setSaltAdGateLoading(false);
-      setSaltAdGateActive(false);
-      toast.error("Unlock service এখন unavailable");
+    if (anime) {
+      redirectToUnlockRequired(anime, seasonIdx, epIdx);
     }
     return false;
-  }, [isLoggedIn, unlockBlocked, saltIsPremium, hasFreeAccess]);
+  }, [isLoggedIn, unlockBlocked, saltIsPremium, hasFreeAccess, redirectToUnlockRequired]);
 
   const [activePage, setActivePage] = useState<MainPage>(() => {
     try {
@@ -1174,7 +1157,7 @@ const Index = () => {
 
     // Handle AnimeSalt video - check ad-gate first
     if (src.startsWith("animesalt://")) {
-      const hasAccess = await checkAndShowAdGate();
+      const hasAccess = await checkAndShowAdGate(anime, seasonIdx, epIdx);
       if (!hasAccess) return;
       const epSlug = src.replace("animesalt://", "");
       try {
@@ -1210,7 +1193,7 @@ const Index = () => {
 
     // Handle AnimeSalt movie playback
     if (src.startsWith("animesalt_movie://")) {
-      const hasAccess = await checkAndShowAdGate();
+      const hasAccess = await checkAndShowAdGate(anime, seasonIdx, epIdx);
       if (!hasAccess) return;
       const movieSlug = src.replace("animesalt_movie://", "");
       try {
@@ -1352,7 +1335,7 @@ const Index = () => {
     if (anime.source === "animesalt") {
       // If we have episode info, try to play that episode directly
       if (item.episodeInfo) {
-        const hasAccess = await checkAndShowAdGate();
+        const hasAccess = await checkAndShowAdGate(anime, item.episodeInfo?.seasonIdx, item.episodeInfo?.epIdx);
         if (!hasAccess) return;
         try {
           // Always check customSeasons from Firebase first (admin edited data)
@@ -2062,6 +2045,7 @@ const Index = () => {
           title={playerState.title}
           subtitle={playerState.subtitle}
           poster={playerState.anime.poster}
+          disableUnlockGate
           onClose={() => { setPlayerState(null); }}
           qualityOptions={playerState.qualityOptions}
           audioTracks={playerState.audioTracks}
@@ -2094,44 +2078,6 @@ const Index = () => {
           onSuggestedClick={(anime) => { setPlayerState(null); handleCardClick(anime); }}
           nextEpisodeSrc={playerState.nextEpisodeSrc}
         />
-      )}
-
-      {/* AnimeSalt Ad Gate overlay */}
-      {saltAdGateActive && (
-        <div className="fixed inset-0 z-[10000] bg-background/95 backdrop-blur-md flex items-center justify-center p-6">
-          <div className="glass-card-strong p-8 max-w-sm w-full text-center space-y-5">
-            <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto">
-              <Lock className="w-8 h-8 text-primary" />
-            </div>
-            <h2 className="text-xl font-bold text-foreground">Unlock Free Access</h2>
-            <p className="text-sm text-muted-foreground">
-              Open the link below to get <span className="text-primary font-semibold">24 hours</span> of free access to all content.
-            </p>
-            {saltAdGateLoading ? (
-              <div className="flex items-center justify-center gap-2 py-4">
-                <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">Generating link...</span>
-              </div>
-            ) : saltAdGateLink ? (
-              <button
-                onClick={async () => {
-                  const { openExternalBrowser } = await import("@/lib/openExternal");
-                  openExternalBrowser(saltAdGateLink);
-                }}
-                className="w-full gradient-primary text-primary-foreground font-bold py-3.5 rounded-xl btn-glow flex items-center justify-center gap-2 text-[15px]"
-              >
-                <ExternalLink className="w-5 h-5" />
-                Open Unlock Link
-              </button>
-            ) : null}
-            <button
-              onClick={() => setSaltAdGateActive(false)}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
       )}
 
       {/* AnimeSalt iframe player with episode list & crop modes */}
