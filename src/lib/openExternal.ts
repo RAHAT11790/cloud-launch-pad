@@ -64,10 +64,16 @@ export function openTelegramDeepLink(url: string): void {
       const username = match[1];
       const start = match[2];
       const appUrl = `tg://resolve?domain=${encodeURIComponent(username)}&start=${start}`;
-      window.location.href = appUrl;
+      if (isInTelegramWebView()) {
+        openExternalBrowser(url);
+        return;
+      }
+
       setTimeout(() => {
-        try { window.location.href = url; } catch {}
-      }, 700);
+        try { window.location.href = appUrl; } catch {}
+      }, 650);
+
+      window.location.href = url;
       return;
     }
   } catch {}
