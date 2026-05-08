@@ -783,7 +783,6 @@ async function sendAccessTokenCard(chat_id: number, accessCode: string, grantMs:
   const safeName = escapeHtml(identity.label);
   const safeTelegramId = escapeHtml(String(tgUserId));
   const safeCode = escapeHtml(accessCode);
-  const safeCodeLine = `         <code>${safeCode}</code>`;
   const caption = `✦━━━━━━━━━━━━━━━━━━━✦
 ${stylish("✦ RS ACCESS TOKEN ✦")}
 ✦━━━━━━━━━━━━━━━━━━━✦
@@ -793,9 +792,9 @@ ${stylish("›› NAME")}: <b>${safeName}</b>
 ${stylish("›› TELEGRAM ID")}: <code>${safeTelegramId}</code>
 ${stylish("›› ACCESS DURATION")}: <b>${hours}h</b>
 
-${stylish("✦ ACCESS TOKEN ✦")}
-<code>──────── TOKEN BOX ────────</code>
-${safeCodeLine}
+✦━━━━━━━━━━━━━━━━━━━✦
+       ✦ <code>${safeCode}</code> ✦
+✦━━━━━━━━━━━━━━━━━━━✦
 
 ${stylish("›› Tap only the token to copy")}
 ${stylish("›› Paste it in the website unlock box")}
