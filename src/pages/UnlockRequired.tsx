@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { db, ref } from "@/lib/firebase";
 import { createTelegramBotUnlockLink, createUnlockLinksForAllServices, claimAccessCode, getLocalUserId, type AdService } from "@/lib/unlockAccess";
-import { openExternalBrowser } from "@/lib/openExternal";
+import { openExternalBrowser, openTelegramDeepLink } from "@/lib/openExternal";
 
 type UnlockLink = { service: AdService; shortUrl: string };
 type PendingPlayback = {
@@ -80,7 +80,7 @@ const UnlockRequired = () => {
     if (isTelegramMode) {
       const result = await createTelegramBotUnlockLink();
       if (result.ok && result.deepLink) {
-        window.location.href = result.deepLink;
+        openTelegramDeepLink(result.deepLink);
         return;
       }
       toast.error("Telegram verify link তৈরি করা যায়নি");
