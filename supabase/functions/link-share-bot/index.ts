@@ -633,6 +633,12 @@ async function buildShortenerClaimUrl(token: string): Promise<string> {
   return shortUrl || directBotLink;
 }
 
+function accessInstructionsText() {
+  return `Tap <b>✅ Verify 24 Hour Access Now</b>.
+After the shortener finishes, the final link will bring you back here.
+Then the bot will send your access token in this chat.`;
+}
+
 async function updateWorkflowCard(chat_id: number, message_id: number, caption: string, reply_markup: any, prefersCaption = false) {
   if (prefersCaption) {
     const edited = await editMessageCaption(chat_id, message_id, caption, { reply_markup });
@@ -645,17 +651,17 @@ async function sendAccessTokenCard(chat_id: number, accessCode: string, grantMs:
   const profile = await getUserProfileCached(tgUserId);
   const hours = Math.max(1, Math.round(grantMs / 3600000));
   const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
-  const caption = `╔══════════════════╗
-🎟 <b>YOUR ACCESS TOKEN</b>
-╚══════════════════╝
+  const caption = `╔════════════════════╗
+🎟 <b>ACCESS TOKEN</b>
+╚════════════════════╝
 
-👤 <b>User:</b> ${profile.name || "RS Anime User"}
-⏱ <b>Duration:</b> ${hours} hours
-📋 <b>Tap the token to copy</b>
+👤 <b>${profile.name || "RS Anime User"}</b>
+⏱ <b>${hours} hours access</b>
 
 <code>${accessCode}</code>
 
-Paste this code on the website unlock box to activate your access instantly.`;
+Tap the token to copy.
+Paste it on the website unlock box to activate access.`;
 
   const reply_markup = {
     inline_keyboard: [
@@ -688,11 +694,13 @@ async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tg
     status: "pending", consumed: false,
     serviceId: "telegram_bot", source: "telegram_access_bot",
     tgUserId: String(tgUserId), grantMs, publicClaim: isPublicFlow, accessCode: code,
+    verifyShownAt: now,
   });
   await fb("PUT", `accessCodes/${code}`, {
     code, ownerUserId: isPublicFlow ? null : ownerUserId, createdAt: now, expiresAt,
     status: "pending", consumed: false,
     tgUserId: String(tgUserId), grantMs, publicClaim: isPublicFlow,
+    verifyShownAt: now,
   });
 
   // Pull profile info: prefer website profile photo; fallback to Telegram profile photo; fallback to brand image
@@ -710,32 +718,23 @@ async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tg
 🤖 <b>Telegram ID:</b> <code>${tgUserId}</code>
 ⏱ <b>Access Duration:</b> ${hours} hours
 
-Welcome! Finish the verification below to unlock your token.
-After the shortener finishes, tap <b>Get Access Token</b> and the bot will send your code here.
-
-Tap <b>✅ Verify &amp; Get Token</b>.
-After verify, the bot will send you a unique access token in this chat.
-Then paste that token on the website Unlock page.` : `🔓 <b>Access Unlock Verification</b>
+${accessInstructionsText()}` : `╔══════════════════╗
+🔓 <b>24 HOUR ACCESS</b>
+╚══════════════════╝
 
 👤 <b>Name:</b> ${displayName}
 📧 <b>Email:</b> ${site.email}
-🆔 <b>Site UID:</b> <code>${ownerUserId}</code>
 🤖 <b>Telegram ID:</b> <code>${tgUserId}</code>
-
 ⏱ <b>Access Duration:</b> ${hours} hours
-🔑 <b>Access Code:</b> <code>${code}</code>
 
-Tap <b>✅ Verify &amp; Unlock</b> to instantly activate your access.
-Or paste the access code above on the website's Unlock page.`;
+${accessInstructionsText()}`;
 
   const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
   const unlockUrl = `${siteUrl}/unlock?t=${encodeURIComponent(token)}&svc=telegram&code=${encodeURIComponent(code)}`;
 
   const reply_markup = {
     inline_keyboard: [
-      [{ text: isPublicFlow ? "✅ Verify & Get Token" : "✅ Verify & Unlock", callback_data: `verify_${token}` }],
-      [{ text: "🌐 Open on Website", url: unlockUrl }],
-      ...(isPublicFlow ? [[{ text: "🔗 Get Access Token", url: shortenerUrl }]] : []),
+      [{ text: "✅ Verify 24 Hour Access Now", url: shortenerUrl }],
     ],
   };
 
