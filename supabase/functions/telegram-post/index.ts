@@ -273,8 +273,9 @@ serve(async (req) => {
     if ((includeFreeAccess || autoIncludeFA)) {
       const username = (
         Deno.env.get("LINK_SHARE_BOT_USERNAME") ||
-        Deno.env.get("RS_RETURN_BOT") ||
-        "RS_ANIME_FIND_BOT"
+        Deno.env.get("RS_MINI_BOT") ||
+        Deno.env.get("RS_ACCESS_BOT_USERNAME") ||
+        "RS_ANIME_ACCESS_BOT"
       ).replace(/^@/, "").trim();
       if (username) {
         const label = includeFreeAccess
