@@ -178,11 +178,13 @@ async function handleUnlockDeepLink(
   const hours = Number(hoursVal) > 0 ? Number(hoursVal) : 24;
   const accessMs = hours * 3600_000;
 
+  // Token / access code valid for 24h so the user has time to claim it.
+  const TOKEN_TTL_MS = 24 * 3600_000;
   await fbPut(`unlockTokens/${token}`, {
     token,
     ownerUserId: userId,
     createdAt: now,
-    expiresAt: now + 30 * 60 * 1000,
+    expiresAt: now + TOKEN_TTL_MS,
     status: "pending",
     consumed: false,
     source: "telegram_bot",
@@ -194,7 +196,7 @@ async function handleUnlockDeepLink(
     code,
     ownerUserId: userId,
     createdAt: now,
-    expiresAt: now + 30 * 60 * 1000,
+    expiresAt: now + TOKEN_TTL_MS,
     status: "pending",
     consumed: false,
     grantMs: accessMs,
