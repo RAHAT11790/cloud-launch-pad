@@ -16,7 +16,7 @@ const corsHeaders = {
 
 // ============== ENV (with inline defaults for portability) ==============
 const BOT_TOKEN =
-  Deno.env.get("LINK_SHARE_BOT_TOKEN") || Deno.env.get("TELEGRAM_BOT_TOKEN") || "";
+  Deno.env.get("RS_ACCESS_BOT_TOKEN") || Deno.env.get("LINK_SHARE_BOT_TOKEN") || Deno.env.get("TELEGRAM_BOT_TOKEN") || "";
 const ADMIN_ID = Number(Deno.env.get("LINK_SHARE_ADMIN_ID") || "6621572366");
 
 // Inline Firebase defaults — same as src/lib/firebase.ts
@@ -59,6 +59,13 @@ const STYLE_MAP: Record<string, string> = {
   y: "ʏ", z: "ᴢ",
 };
 const stylish = (s: string) => s.split("").map((c) => STYLE_MAP[c] ?? c).join("");
+
+function shortAccessCode(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for (let i = 0; i < 8; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return s;
+}
 
 // ============== TELEGRAM HTTP ==============
 const TG = `https://api.telegram.org/bot${BOT_TOKEN}`;
