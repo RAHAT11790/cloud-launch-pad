@@ -109,7 +109,8 @@ const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
 };
 
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
-  if (!url) return [];
+  const rawUrl = String(url || "").trim();
+  if (!rawUrl) return [];
 
   const candidates: string[] = [];
   const addCandidate = (candidate?: string | null) => {
@@ -117,20 +118,20 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
     candidates.push(candidate);
   };
 
-  const normalizedUrl = tryUpgradeToHttps(url);
-  const encoded = encodeURIComponent(normalizedUrl);
-  const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
-  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, normalizedUrl, proxyApiKey) : null;
-  const prefersDirectPlayback = isDirectPlaybackUrl(normalizedUrl);
-  const mustUseProxy = isInsecureHttpSource(normalizedUrl);
+  const directUrl = isInsecureHttpSource(rawUrl) ? rawUrl : tryUpgradeToHttps(rawUrl);
+  const encodedRawUrl = encodeURIComponent(rawUrl);
+  const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encodedRawUrl}` : null;
+  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, rawUrl, proxyApiKey) : null;
+  const prefersDirectPlayback = isDirectPlaybackUrl(directUrl);
+  const mustUseProxy = isInsecureHttpSource(rawUrl);
 
-  if (isBypassSource(normalizedUrl)) {
-    addCandidate(normalizedUrl);
+  if (isBypassSource(rawUrl)) {
+    addCandidate(rawUrl);
     return candidates;
   }
 
   if (prefersDirectPlayback && !mustUseProxy) {
-    addCandidate(normalizedUrl);
+    addCandidate(directUrl);
     return candidates;
   }
 
@@ -140,11 +141,11 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
     if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
     // If nothing configured, fall through to direct (last-resort) below
   } else {
-    addCandidate(normalizedUrl);
+    addCandidate(directUrl);
   }
 
   if (candidates.length === 0) {
-    addCandidate(normalizedUrl);
+    addCandidate(directUrl);
   }
 
   return candidates;
@@ -781,15 +782,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
-    const normalized = tryUpgradeToHttps(trimmed);
     // Old iframe server flow is disabled for episode/video switching speed.
     // Everything non-direct is routed through the fast stream proxy path instead.
     // HTTP source + user-configured proxy → route through user's proxy.
     // No proxy configured → return direct (no Lovable fallback).
-    if (shouldForceDirectProxy(normalized) && proxyUrl) {
-      return buildProxyPlaybackUrl(proxyUrl, normalized, proxyApiKey || undefined);
+    if (shouldForceDirectProxy(trimmed) && proxyUrl) {
+      return buildProxyPlaybackUrl(proxyUrl, trimmed, proxyApiKey || undefined);
     }
-    return getPrimaryPlaybackSrc(normalized, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
