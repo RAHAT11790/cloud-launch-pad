@@ -472,18 +472,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
 
+    let disposed = false;
+    let accessRequestSeq = 0;
+
     const unsubAccess = onValue(ref(db, `users/${uid}/freeAccess`), async (snap) => {
+      const requestSeq = ++accessRequestSeq;
       const data = snap.val();
       if (data?.active && Number(data.expiresAt) > Date.now()) {
         const { ensureFreeAccessDeviceAllowed } = await import("@/lib/freeAccessDevice");
         const allowed = await ensureFreeAccessDeviceAllowed(uid, data);
+        if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(allowed ? Number(data.expiresAt) : 0);
       } else {
+        if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(0);
       }
+      if (disposed || requestSeq !== accessRequestSeq) return;
       setFreeAccessLoaded(true);
     }, () => {
       // On error, mark loaded so UI doesn't hang forever
+      if (disposed) return;
       setFreeAccessLoaded(true);
     });
 
@@ -492,6 +500,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     });
 
     return () => {
+      disposed = true;
       unsubAccess();
       unsubBlocked();
     };
