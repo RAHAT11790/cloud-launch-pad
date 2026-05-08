@@ -2400,6 +2400,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
           prizeMinutes: 0,
           mode: isMini ? "miniapp" : "normal",
           source: fa.source || fa.viaToken || "",
+          suspiciousBypass: fa.suspiciousBypass === true,
+          suspiciousBypassAt: fa.suspiciousBypassAt || 0,
         };
       });
 
