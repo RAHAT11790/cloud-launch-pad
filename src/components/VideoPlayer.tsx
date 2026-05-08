@@ -39,12 +39,11 @@ const PROXY_SERVER_LIMIT = 3;
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
-// Built-in ultra-fast HTTPS streaming proxy (Lovable Cloud function).
-// Auto-applied to plain http:// sources (e.g. Server 1 bot-hosting.net) to bypass
-// browser mixed-content blocks. HTTPS sources stay direct (zero overhead).
-const BUILTIN_STREAM_PROXY = SUPABASE_URL
-  ? `${SUPABASE_URL}/functions/v1/video-proxy?url={url}`
-  : "";
+// NOTE: Lovable's built-in proxy is intentionally NOT used here.
+// Playback proxy is taken ONLY from the admin Settings → Proxy Server
+// (settings/proxyServer.url). If the user has not set a custom proxy,
+// HTTP sources play direct (browser mixed-content rules apply).
+const BUILTIN_STREAM_PROXY = "";
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -123,9 +122,10 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   }
 
   if (mustUseProxy) {
-    if (BUILTIN_STREAM_PROXY) addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
+    // ONLY user-selected proxy from Settings is used. No built-in fallback.
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+    // If nothing configured, fall through to direct (last-resort) below
   } else {
     addCandidate(url);
   }
@@ -775,8 +775,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!trimmed) return "";
     // Old iframe server flow is disabled for episode/video switching speed.
     // Everything non-direct is routed through the fast stream proxy path instead.
-    if (shouldForceDirectProxy(trimmed) && BUILTIN_STREAM_PROXY) {
-      return buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, trimmed);
+    // HTTP source + user-configured proxy → route through user's proxy.
+    // No proxy configured → return direct (no Lovable fallback).
+    if (shouldForceDirectProxy(trimmed) && proxyUrl) {
+      return buildProxyPlaybackUrl(proxyUrl, trimmed, proxyApiKey || undefined);
     }
     return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
