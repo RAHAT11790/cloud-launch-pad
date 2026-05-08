@@ -31,15 +31,17 @@ export async function getUnlockDurationMs(): Promise<number> {
 export interface AdService {
   id: string;
   name: string;
-  functionUrl: string;
+  functionUrl: string;                  // legacy (kept for backward compat)
+  shortenerFunctionUrl?: string;        // new: dedicated shortener edge URL
+  telegramBotFunctionUrl?: string;      // new: dedicated telegram bot edge URL
   enabled: boolean;
   icon?: string;
   color?: string;
-  durationHours?: number; // per-service unlock duration
-  mode?: "shortener" | "miniapp"; // routing for unlock button
-  // Optional generic shortener (no edge function needed)
-  siteBase?: string;   // e.g. "https://vplink.in" or "https://shrinkme.io"
-  apiKey?: string;     // shortener provider API key
+  durationHours?: number;
+  mode?: "shortener" | "miniapp";
+  // Legacy generic shortener (deprecated, no longer added by UI)
+  siteBase?: string;
+  apiKey?: string;
 }
 
 // --- Get ad services from Firebase ---
