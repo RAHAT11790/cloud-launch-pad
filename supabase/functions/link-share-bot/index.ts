@@ -505,6 +505,23 @@ async function botUsername(): Promise<string> {
   return _botUsername;
 }
 
+async function ensureWebhook() {
+  try {
+    const projectUrl = Deno.env.get("SUPABASE_URL") || "";
+    if (!projectUrl) return;
+    const webhookUrl = `${projectUrl.replace(/\/$/, "")}/functions/v1/link-share-bot`;
+    const info = await tg("getWebhookInfo", {});
+    const currentUrl = String(info?.result?.url || "").trim();
+    if (currentUrl === webhookUrl) return;
+    await tg("setWebhook", {
+      url: webhookUrl,
+      allowed_updates: ["message", "callback_query", "chat_join_request"],
+    });
+  } catch (e) {
+    console.error("[ensureWebhook]", e);
+  }
+}
+
 async function permanentLink(channel_id: number): Promise<string> {
   const u = await botUsername();
   return `https://t.me/${u}?start=channel_${channel_id}`;
@@ -1400,6 +1417,7 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    await ensureWebhook();
     const me = await botUsername();
     const targetBotUsername = me || RS_MINI_BOT || RS_RETURN_BOT;
     const deepLink = `https://t.me/${targetBotUsername}?start=unlock_${encodeURIComponent(userId)}`;
