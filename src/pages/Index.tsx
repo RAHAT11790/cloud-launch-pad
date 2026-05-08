@@ -224,14 +224,20 @@ const Index = () => {
     }
     if (!uid) return;
 
+    let disposed = false;
+    let accessRequestSeq = 0;
+
     const unsubAccess = onValue(ref(db, `users/${uid}/freeAccess`), async (snap) => {
+      const requestSeq = ++accessRequestSeq;
       const data = snap.val();
       if (data?.active && Number(data.expiresAt) > Date.now()) {
         // 2-device limit: only allow current device if it's registered or within limit
         const { ensureFreeAccessDeviceAllowed } = await import("@/lib/freeAccessDevice");
         const allowed = await ensureFreeAccessDeviceAllowed(uid, data);
+        if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(allowed ? Number(data.expiresAt) : 0);
       } else {
+        if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(0);
       }
     });
@@ -241,6 +247,7 @@ const Index = () => {
     });
 
     return () => {
+      disposed = true;
       unsubAccess();
       unsubBlocked();
     };
