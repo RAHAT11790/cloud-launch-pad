@@ -273,12 +273,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return buildFallbackServers(src).slice(0, PROXY_SERVER_LIMIT);
   }, [noServerSwitch, src, videoServers]);
 
-  // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
-  // The branded `req.html` page on the embed server posts video events to us
-  // and accepts commands (play/pause/seek/etc). We mirror those events into
-  // a hidden HTMLVideoElement-like surface so the rest of the player UI
-  // (progress bar, time display, server switcher, ad-gate, etc.) keeps
-  // working unchanged.
+  // ===== LEGACY EMBED BRIDGE =====
+  // Some older server setups used an iframe bridge page, but playback now
+  // stays on the native <video src> path because /watch/ routes are not valid
+  // direct media URLs and can return non-playable responses.
   const sendEmbedCmd = useCallback((cmd: string, payload?: Record<string, unknown>) => {
     const w = embedIframeRef.current?.contentWindow;
     if (!w) return;
@@ -287,11 +285,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     } catch { /* noop */ }
   }, []);
 
-  // Iframe is the active playback surface when currentSrc points to hf.space
-  const isEmbedPlayback = useMemo(
-    () => !!currentSrc && /hf\.space|huggingface/i.test(currentSrc),
-    [currentSrc],
-  );
+  // Never switch to iframe mode for direct playback URLs.
+  const isEmbedPlayback = false;
 
   // Throttle React state updates from the iframe → ~1 update/sec
   const lastEmbedSyncRef = useRef(0);
@@ -801,18 +796,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const server = effectiveVideoServers[serverIndex];
     if (!server?.domain) return rawUrl;
     const domainTrim = server.domain.trim().replace(/\/$/, "");
-    const isHfDomain = /hf\.space|huggingface/i.test(domainTrim);
-    if (isHfDomain) {
-      // HF /watch/ endpoint streams the file as inline video (strips attachment headers
-      // from upstream like bot-hosting.net). Without this, direct host-swap would cause
-      // the browser to download the .mkv file instead of playing it.
-      const normalizedRawUrl = tryUpgradeToHttps(rawUrl);
-      const encodedRawUrl = encodeURI(normalizedRawUrl);
-      if (/\/watch(?:\/|$)/i.test(domainTrim)) {
-        return `${domainTrim.replace(/\/$/, "")}/${encodedRawUrl.replace(/^\//, "")}`;
-      }
-      return `${domainTrim}/watch/${encodedRawUrl}`;
-    }
     try {
       const url = new URL(tryUpgradeToHttps(rawUrl));
       return `${domainTrim}${url.pathname}${url.search}${url.hash}`;
