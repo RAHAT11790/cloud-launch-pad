@@ -2387,7 +2387,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       Object.entries(usersData || {}).forEach(([uid, u]: [string, any]) => {
         const fa = u?.freeAccess;
         if (!fa || !fa.active || !fa.expiresAt || fa.expiresAt <= now) return;
-        if (map[uid]) return;
+        if (map[uid]) {
+          if (fa.suspiciousBypass === true) {
+            map[uid] = {
+              ...map[uid],
+              suspiciousBypass: true,
+              suspiciousBypassAt: fa.suspiciousBypassAt || 0,
+            };
+          }
+          return;
+        }
         const isMini = fa.viaToken === "mini-app" || fa.viaToken === "mini-app-fallback" || (typeof fa.source === "string" && fa.source.includes("telegram"));
         map[uid] = {
           id: uid,
