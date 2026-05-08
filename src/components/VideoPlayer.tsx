@@ -801,17 +801,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const server = effectiveVideoServers[serverIndex];
     if (!server?.domain) return rawUrl;
     const domainTrim = server.domain.trim().replace(/\/$/, "");
-    const isHfDomain = /hf\.space|huggingface/i.test(domainTrim);
-    if (isHfDomain) {
-      const normalizedRawUrl = tryUpgradeToHttps(rawUrl);
-      const encodedRawUrl = encodeURI(normalizedRawUrl);
-      if (/\/watch(?:\/|$)/i.test(domainTrim)) {
-        return `${domainTrim.replace(/\/$/, "")}/${encodedRawUrl.replace(/^\//, "")}`;
-      }
-      return `${domainTrim}/watch/${encodedRawUrl}`;
-    }
 
-    // Regular host-swap servers (e.g. fi3.bot-hosting.net swap, render mirror)
+    // All servers (including HF) are host-swap mirrors used as direct <video src>.
+    // Never wrap in /watch/ — that returns an iframe HTML page, not a playable media stream.
     try {
       const url = new URL(tryUpgradeToHttps(rawUrl));
       return `${domainTrim}${url.pathname}${url.search}${url.hash}`;
