@@ -36,7 +36,6 @@ const PASSTHROUGH_RESP = [
   "etag",
   "last-modified",
   "cache-control",
-  "content-disposition",
 ];
 
 Deno.serve(async (req) => {
