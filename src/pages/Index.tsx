@@ -6,18 +6,28 @@ import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
 
+const isInvalidPlaybackUrl = (url?: string | null) => {
+  const normalized = String(url || "").trim().toLowerCase().split("?")[0].split("#")[0];
+  if (!normalized) return true;
+  return /\.(avif|gif|jpe?g|png|svg|webp|bmp)$/i.test(normalized);
+};
+
 // Helper: get best available src from episode (fallback if default link is empty)
 const getEpisodeSrc = (ep?: Episode | null): string => {
   if (!ep) return "";
-  return ep.link || ep.link480 || ep.link720 || ep.link1080 || ep.link4k || "";
+  return [ep.link, ep.link480, ep.link720, ep.link1080, ep.link4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
+};
+
+const getMovieSrc = (anime: AnimeItem): string => {
+  return [anime.movieLink, anime.movieLink480, anime.movieLink720, anime.movieLink1080, anime.movieLink4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
 };
 
 const getEpisodeQualityOptions = (ep: Episode): { label: string; src: string }[] => {
   const qualityOptions: { label: string; src: string }[] = [];
-  if (ep.link480) qualityOptions.push({ label: "480p", src: ep.link480 });
-  if (ep.link720) qualityOptions.push({ label: "720p", src: ep.link720 });
-  if (ep.link1080) qualityOptions.push({ label: "1080p", src: ep.link1080 });
-  if (ep.link4k) qualityOptions.push({ label: "4K", src: ep.link4k });
+  if (!isInvalidPlaybackUrl(ep.link480)) qualityOptions.push({ label: "480p", src: ep.link480! });
+  if (!isInvalidPlaybackUrl(ep.link720)) qualityOptions.push({ label: "720p", src: ep.link720! });
+  if (!isInvalidPlaybackUrl(ep.link1080)) qualityOptions.push({ label: "1080p", src: ep.link1080! });
+  if (!isInvalidPlaybackUrl(ep.link4k)) qualityOptions.push({ label: "4K", src: ep.link4k! });
   return qualityOptions;
 };
 import { AnimatePresence, motion } from "framer-motion";
