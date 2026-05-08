@@ -875,6 +875,27 @@ async function handleStart(chat_id: number, user_id: number, from: any, arg?: st
       await sendEphemeral(chat_id, "✦ Access token not found or expired ✦");
       return;
     }
+    const now = Date.now();
+    const verifyShownAt = Number(rec?.verifyShownAt || rec?.createdAt || 0);
+    const bypassDetected = verifyShownAt > 0 && now - verifyShownAt < 30_000;
+    if (bypassDetected) {
+      try {
+        const ownerUserId = String(rec?.ownerUserId || "").trim();
+        if (ownerUserId) {
+          await fb("PATCH", `users/${ownerUserId}/freeAccess`, {
+            suspiciousBypass: true,
+            suspiciousBypassAt: now,
+            suspiciousBypassToken: token,
+            suspiciousBypassSeconds: Math.max(0, Math.floor((now - verifyShownAt) / 1000)),
+          });
+        }
+        await fb("PATCH", `unlockTokens/${token}`, {
+          bypassDetected: true,
+          bypassDetectedAt: now,
+          bypassDetectedSeconds: Math.max(0, Math.floor((now - verifyShownAt) / 1000)),
+        });
+      } catch {}
+    }
     await sendAccessTokenCard(chat_id, String(rec.accessCode), Number(rec.grantMs) || 24 * 3600_000, user_id);
     return;
   }
