@@ -638,32 +638,6 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
       </div>
 
       <div className={`${glassCard} p-4 mb-4`}>
-        <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-          <Bot size={14} className="text-cyan-400" /> Telegram Access Bot URL
-        </h3>
-        <p className="text-[10px] text-zinc-400 mb-3">
-          website Verify button আর Telegram unlock flow শুধুই এই access bot URL দিয়ে চলবে। Save না করা পর্যন্ত access message যাবে না।
-        </p>
-        <div className="space-y-2">
-          <input
-            value={telegramAccessUrlInput}
-            onChange={(e) => setTelegramAccessUrlInput(e.target.value)}
-            placeholder={recommendedTelegramAccessUrl}
-            className={inputClass}
-          />
-          <div className="flex gap-2">
-            <button onClick={() => setTelegramAccessUrlInput(recommendedTelegramAccessUrl)} className={`${btnSecondary} flex-1`}>
-              Use Recommended
-            </button>
-            <button onClick={saveTelegramAccessUrl} className={`${btnPrimary} flex-1`}>
-              <Save size={12} /> Save
-            </button>
-          </div>
-          {telegramAccessUrl && <p className="text-[10px] text-green-400 break-all">✓ {telegramAccessUrl}</p>}
-        </div>
-      </div>
-
-      <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
           <Link size={14} className="text-amber-400" /> Recommended 2 Links
         </h3>
