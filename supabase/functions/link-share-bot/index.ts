@@ -611,39 +611,101 @@ async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tg
   const expiresAt = now + 24 * 3600_000;
 
   await fb("PUT", `unlockTokens/${token}`, {
-    token,
-    ownerUserId,
-    createdAt: now,
-    expiresAt,
-    status: "pending",
-    consumed: false,
-    serviceId: "telegram_bot",
-    source: "telegram_access_bot",
-    tgUserId: String(tgUserId),
-    grantMs,
+    token, ownerUserId, createdAt: now, expiresAt,
+    status: "pending", consumed: false,
+    serviceId: "telegram_bot", source: "telegram_access_bot",
+    tgUserId: String(tgUserId), grantMs,
   });
-
   await fb("PUT", `accessCodes/${code}`, {
-    code,
-    ownerUserId,
-    createdAt: now,
-    expiresAt,
-    status: "pending",
-    consumed: false,
-    tgUserId: String(tgUserId),
-    grantMs,
+    code, ownerUserId, createdAt: now, expiresAt,
+    status: "pending", consumed: false,
+    tgUserId: String(tgUserId), grantMs,
   });
 
-  const unlockUrl = `${Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app"}/unlock?t=${encodeURIComponent(token)}&svc=telegram&code=${encodeURIComponent(code)}`;
-  await sendMessage(
-    chat_id,
-    `🔓 <b>Unlock ready</b>\n\nTap the button below to activate <b>${hours} hours</b> access.\n\n<b>Access code:</b> <code>${code}</code>\nPaste this code on the website if you want manual unlock.`,
-    {
-      reply_markup: {
-        inline_keyboard: [[{ text: "✅ VERIFY ACCESS", url: unlockUrl }]],
-      },
-    },
-  );
+  // Pull profile info: prefer website profile photo; fallback to Telegram profile photo; fallback to brand image
+  const site = await getWebsiteUserProfile(ownerUserId);
+  const tgProfile = await saveUserProfile(tgUserId, { id: tgUserId });
+  const photoToShow = site.photoURL || tgProfile.photo_file_id || tgProfile.photo_url || RS_VERIFY_IMG;
+  const displayName = site.name || tgProfile.name || "RS Anime User";
+
+  const caption = `🔓 <b>Access Unlock Verification</b>
+
+👤 <b>Name:</b> ${displayName}
+📧 <b>Email:</b> ${site.email}
+🆔 <b>Site UID:</b> <code>${ownerUserId}</code>
+🤖 <b>Telegram ID:</b> <code>${tgUserId}</code>
+
+⏱ <b>Access Duration:</b> ${hours} hours
+🔑 <b>Access Code:</b> <code>${code}</code>
+
+Tap <b>✅ Verify &amp; Unlock</b> to instantly activate your access.
+Or paste the access code above on the website's Unlock page.`;
+
+  const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
+  const unlockUrl = `${siteUrl}/unlock?t=${encodeURIComponent(token)}&svc=telegram&code=${encodeURIComponent(code)}`;
+
+  const reply_markup = {
+    inline_keyboard: [
+      [{ text: "✅ Verify & Unlock", callback_data: `verify_${token}` }],
+      [{ text: "🌐 Open on Website", url: unlockUrl }],
+    ],
+  };
+
+  // Try sending as a photo first; if that fails, fall back to text message
+  let res = await sendPhoto(chat_id, photoToShow, caption, { reply_markup });
+  if (!res?.ok) {
+    res = await sendMessage(chat_id, caption, { reply_markup });
+  }
+}
+
+// Handle the "Verify & Unlock" callback button — consume token directly inside the bot
+async function handleVerifyCallback(chat_id: number, message_id: number, callback_id: string, token: string, tgUserId: number) {
+  if (!token) {
+    await answerCallback(callback_id, "Invalid token", true);
+    return;
+  }
+  let rec: any = null;
+  try { rec = await fb("GET", `unlockTokens/${token}`); } catch {}
+  if (!rec) {
+    await answerCallback(callback_id, "Token not found or expired", true);
+    return;
+  }
+  if (rec.consumed) {
+    await answerCallback(callback_id, "Already used", true);
+    return;
+  }
+  const now = Date.now();
+  if (Number(rec.expiresAt || 0) < now) {
+    await answerCallback(callback_id, "Token expired", true);
+    return;
+  }
+  const ownerUserId = String(rec.ownerUserId || "");
+  if (!ownerUserId) {
+    await answerCallback(callback_id, "Invalid token owner", true);
+    return;
+  }
+  const grantMs = Number(rec.grantMs) > 0 ? Number(rec.grantMs) : 24 * 3600_000;
+  const expiresAt = now + grantMs;
+
+  await fb("PUT", `unlockTokens/${token}`, {
+    ...rec, consumed: true, status: "claimed",
+    claimedByUserId: ownerUserId, claimedAt: now, expiresAt: now,
+  });
+  await fb("PUT", `users/${ownerUserId}/freeAccess`, {
+    active: true, grantedAt: now, expiresAt,
+    viaToken: token, source: "telegram_access_bot_callback",
+  });
+
+  await answerCallback(callback_id, "✅ Access granted!", false);
+  try {
+    await editMessageText(
+      chat_id, message_id,
+      `✅ <b>Access Granted</b>\n\nYour ${Math.round(grantMs / 3600000)}h access has been activated.\n\nReturn to the website — your player will resume automatically.`,
+      { reply_markup: { inline_keyboard: [[{ text: "🌐 Back to Website", url: Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app" }]] } },
+    );
+  } catch {
+    await sendMessage(chat_id, `✅ <b>Access Granted</b> — return to the website now.`);
+  }
 }
 
 // ============== UPDATE HANDLERS ==============
