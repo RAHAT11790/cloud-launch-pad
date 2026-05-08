@@ -558,297 +558,101 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 
 // ==================== CLOUDFLARE WORKER ROUTER SECTION ====================
 const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
-  const [baseUrl, setBaseUrl] = useState("");
-  const [baseUrlInput, setBaseUrlInput] = useState("");
-  const [statuses, setStatuses] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
-  const [checking, setChecking] = useState(false);
+  const [telegramPostUrl, setTelegramPostUrl] = useState("");
+  const [telegramPostUrlInput, setTelegramPostUrlInput] = useState("");
 
-  // Per-function overrides from Firebase
-  const [fnOverrides, setFnOverrides] = useState<Record<string, { enabled: boolean; customUrl: string }>>({});
-
-  const CORE_FUNCTIONS: { key: string; label: string; endpoint: string }[] = [
-        { key: "weekly-auto-detect", label: "📅 Weekly Auto-Detect", endpoint: "weekly-auto-detect" },
-    // FCM endpoint removed
-    { key: "telegram-post", label: "📢 Telegram Post", endpoint: "telegram-post" },
-    { key: "rs-bot", label: "💬 RS Bot (Telegram)", endpoint: "rs-bot" },
-    { key: "send-otp-email", label: "📧 Send OTP Email", endpoint: "send-otp-email" },
-    { key: "shorten-arolinks", label: "🔗 Shorten AroLinks", endpoint: "shorten-arolinks" },
-    { key: "shorten-shrinkme", label: "🔗 Shorten ShrinkMe", endpoint: "shorten-shrinkme" },
-    { key: "shorten-vplink", label: "🔗 Shorten VP Link", endpoint: "shorten-vplink" },
-  ];
+  const recommendedShortenerUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/shorten-arolinks`;
+  const recommendedTelegramAccessUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/link-share-bot`;
+  const recommendedTelegramPostUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/telegram-post`;
 
   useEffect(() => {
-    const unsub = onValue(ref(db, "settings/edgeRouter"), (snap) => {
-      const val = snap.val();
-      if (val) {
-        const url = val.cloudflareBaseUrl || val.denoBaseUrl || "";
-        setBaseUrl(url);
-        setBaseUrlInput(url);
-      }
+    const unsub = onValue(ref(db, "settings/telegramProvider"), (snap) => {
+      const value = String(snap.val()?.url || "");
+      setTelegramPostUrl(value);
+      setTelegramPostUrlInput(value);
     });
-    const unsub2 = onValue(ref(db, "settings/functionOverrides"), (snap) => {
-      setFnOverrides(snap.val() || {});
-    });
-    return () => { unsub(); unsub2(); };
+    return () => unsub();
   }, []);
 
-  const saveBaseUrl = async () => {
-    const url = baseUrlInput.trim();
-    await set(ref(db, "settings/edgeRouter/cloudflareBaseUrl"), url);
-    await set(ref(db, "settings/edgeRouter/platform"), "cloudflare");
-    setBaseUrl(url);
-    toast.success("✅ Base URL সেভ হয়েছে!");
-    checkStatuses(url);
-  };
-
-  const getFunctionUrl = (fn: typeof CORE_FUNCTIONS[0]) => {
-    const override = fnOverrides[fn.key];
-    if (override?.customUrl) return override.customUrl;
-    if (!baseUrl) return "";
-    return `${baseUrl.replace(/\/$/, "")}/${fn.endpoint}`;
-  };
-
-  const BUILT_IN_SHORTENERS = CORE_FUNCTIONS.filter((fn) => fn.endpoint.startsWith("shorten-"));
-  const nonShortenerFunctions = CORE_FUNCTIONS.filter((fn) => !fn.endpoint.startsWith("shorten-"));
-
-  const checkStatuses = async (url?: string) => {
-    setChecking(true);
-    const results: typeof statuses = {};
-    await Promise.all(CORE_FUNCTIONS.map(async (fn) => {
-      const override = fnOverrides[fn.key];
-      if (override?.enabled === false) { results[fn.key] = null; return; }
-      const fnUrl = override?.customUrl || ((url || baseUrl).replace(/\/$/, "") + "/" + fn.endpoint);
-      if (!fnUrl || fnUrl === "/" + fn.endpoint) { results[fn.key] = null; return; }
-      try {
-        const start = Date.now();
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch(fnUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ test: true }),
-          signal: controller.signal,
-        });
-        clearTimeout(t);
-        const latency = Date.now() - start;
-        const text = await res.text().catch(() => "");
-        let data: any = null;
-        try { data = text ? JSON.parse(text) : null; } catch {}
-        const alive = !!data?.success || !!data?.error || !!data?.result || !!data?.shortUrl || !!data?.ok || text.includes('"error"') || text.includes('"success"') || res.status < 500;
-        results[fn.key] = { alive, latency };
-      } catch {
-        results[fn.key] = { alive: false, latency: 0 };
-      }
-    }));
-    setStatuses(results);
-    setChecking(false);
-    const aliveCount = Object.values(results).filter(r => r?.alive).length;
-    toast.success(`Status check done! ${aliveCount}/${CORE_FUNCTIONS.length} active`);
-  };
-
-  const toggleFunction = async (key: string) => {
-    const current = fnOverrides[key] || { enabled: true, customUrl: "" };
-    await set(ref(db, `settings/functionOverrides/${key}`), { ...current, enabled: !current.enabled });
-  };
-
-  const saveCustomUrl = async (key: string, customUrl: string) => {
-    const current = fnOverrides[key] || { enabled: true, customUrl: "" };
-    const url = customUrl.trim();
-    await set(ref(db, `settings/functionOverrides/${key}`), { ...current, customUrl: url });
-    if (key === "telegram-post" && url) {
-      await set(ref(db, "settings/telegramProvider"), { url });
+  const copyText = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(label);
+    } catch {
+      toast.error("Copy failed");
     }
-    toast.success("✅ কাস্টম URL সেভ হয়েছে!");
   };
 
-  const applyShortenerToAdService = async (serviceId: string, functionUrl: string) => {
-    const target = functionUrl.trim();
-    if (!target) {
-      toast.error("এই shortener-এর URL এখনো set করা হয়নি");
-      return;
-    }
-    await update(ref(db, `settings/adServices/${serviceId}`), { functionUrl: target, updatedAt: Date.now() });
-    toast.success("✅ Shortener URL ad service-এ বসানো হয়েছে");
+  const saveTelegramPostUrl = async () => {
+    const url = telegramPostUrlInput.trim();
+    await set(ref(db, "settings/telegramProvider"), { url });
+    await set(ref(db, "settings/functionOverrides/telegram-post"), { enabled: true, customUrl: url || recommendedTelegramPostUrl });
+    setTelegramPostUrl(url);
+    toast.success("✅ Telegram Post URL saved");
   };
 
   return (
     <div>
-      <AdServicesSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
-      {/* FCM provider section removed — Telegram-only delivery */}
-      <TelegramWebhookSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+      <div className={`${glassCard} p-4 mb-4`}>
+        <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+          <Send size={14} className="text-blue-400" /> Telegram Post URL
+        </h3>
+        <p className="text-[10px] text-zinc-400 mb-3">
+          এখানে শুধু Telegram Post function URL থাকবে। বাকি কাটা দেওয়া সব router block বাদ দেওয়া হয়েছে।
+        </p>
+        <div className="space-y-2">
+          <input
+            value={telegramPostUrlInput}
+            onChange={(e) => setTelegramPostUrlInput(e.target.value)}
+            placeholder={recommendedTelegramPostUrl}
+            className={inputClass}
+          />
+          <div className="flex gap-2">
+            <button onClick={() => setTelegramPostUrlInput(recommendedTelegramPostUrl)} className={`${btnSecondary} flex-1`}>
+              Use Recommended
+            </button>
+            <button onClick={saveTelegramPostUrl} className={`${btnPrimary} flex-1`}>
+              <Save size={12} /> Save
+            </button>
+          </div>
+          {telegramPostUrl && <p className="text-[10px] text-green-400 break-all">✓ {telegramPostUrl}</p>}
+        </div>
+      </div>
 
       <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-          <Activity size={14} className="text-cyan-400" /> ☁️ Cloudflare Worker Config
+          <Link size={14} className="text-amber-400" /> Recommended 2 Links
         </h3>
-        <p className="text-[10px] text-zinc-400 mb-4">
-          Cloudflare Worker ডিপ্লয় করলে base URL এখানে দিন। আলাদা function চাইলে নিচে per-function URL ব্যবহার করতে পারবেন।
-        </p>
-        <div className="mb-4">
-          <label className="text-[10px] text-zinc-400 block mb-1">Worker Base URL</label>
-          <div className="flex gap-2">
-            <input value={baseUrlInput} onChange={(e) => setBaseUrlInput(e.target.value)}
-              placeholder="https://your-worker.workers.dev" className={`${inputClass} flex-1 min-w-0`} />
-            <button onClick={saveBaseUrl} className={`${btnPrimary} !px-3 flex-shrink-0`}>
-              <Save size={12} /> Save & Test
-            </button>
-          </div>
-          {baseUrl && <p className="mt-1.5 text-[10px] text-green-400 break-all">✓ {baseUrl}</p>}
-        </div>
-      </div>
-
-      <div className={`${glassCard} p-4 mb-4`}>
-        <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2.5 mb-3">
-          <p className="text-[10px] text-cyan-300 leading-relaxed break-words">
-            💡 <b>Tip:</b> Supabase function URL pattern:
-            <br />
-            <code className="text-[9px] bg-black/30 px-1 py-0.5 rounded text-cyan-200 break-all inline-block max-w-full">
-              {SUPABASE_URL}/functions/v1/<b>function-name</b>
-            </code>
-          </p>
-        </div>
-
-        <div className="mb-4 rounded-xl border border-zinc-700/40 bg-zinc-900/30 p-3">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <h3 className="text-sm font-semibold flex items-center gap-2 min-w-0">
-              <Link size={14} className="text-amber-400 flex-shrink-0" />
-              <span className="truncate">Built-in URL Shorteners</span>
-            </h3>
-            <button
-              onClick={async () => {
-                const updates: Record<string, any> = {};
-                BUILT_IN_SHORTENERS.forEach((fn) => {
-                  const sbUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/${fn.endpoint}`;
-                  const cur = fnOverrides[fn.key] || { enabled: true, customUrl: "" };
-                  updates[fn.key] = { ...cur, customUrl: sbUrl };
-                });
-                await set(ref(db, "settings/functionOverrides"), { ...fnOverrides, ...updates });
-                toast.success("✅ সব built-in shortener-এ Supabase URL সেট হয়েছে!");
-              }}
-              className={`${btnSecondary} !py-1 !px-2.5 !text-[10px]`}
-            >
-              ⚡ Auto-fill
-            </button>
-          </div>
-          <div className="space-y-2.5">
-            {BUILT_IN_SHORTENERS.map((fn) => {
-              const override = fnOverrides[fn.key] || { enabled: true, customUrl: "" };
-              const url = getFunctionUrl(fn);
-              const st = statuses[fn.key];
-              return (
-                <div key={fn.key} className="rounded-lg border border-zinc-700/40 bg-zinc-800/40 p-2.5">
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
-                    <div className="min-w-0 flex items-center gap-2">
-                      <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${st ? (st.alive ? "bg-green-500" : "bg-red-500") : "bg-yellow-500"}`} />
-                      <span className="text-[11px] font-semibold text-white truncate">{fn.label}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <button
-                        onClick={async () => {
-                          if (!url) return;
-                          await navigator.clipboard.writeText(url);
-                          toast.success("URL copied");
-                        }}
-                        className={`${btnSecondary} !px-2 !py-1 !text-[9px] whitespace-nowrap`}
-                      >
-                        Copy
-                      </button>
-                      <button onClick={() => toggleFunction(fn.key)}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${override.enabled !== false ? 'bg-green-600' : 'bg-zinc-600'}`}>
-                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${override.enabled !== false ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-cyan-300 break-all">{url || "URL not set"}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between mb-3 gap-2">
-          <h3 className="text-sm font-semibold flex items-center gap-2 min-w-0">
-            <Zap size={14} className="text-orange-400 flex-shrink-0" /> <span className="truncate">Core Functions</span>
-          </h3>
-          <div className="flex gap-1.5 flex-shrink-0">
-            <button
-              onClick={async () => {
-                const updates: Record<string, any> = {};
-                nonShortenerFunctions.forEach((fn) => {
-                  const sbUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/${fn.endpoint}`;
-                  const cur = fnOverrides[fn.key] || { enabled: true, customUrl: "" };
-                  updates[fn.key] = { ...cur, customUrl: sbUrl };
-                });
-                await set(ref(db, "settings/functionOverrides"), { ...fnOverrides, ...updates });
-                toast.success("✅ core functions-এ Supabase URL সেট হয়েছে!");
-              }}
-              className={`${btnPrimary} !py-1 !px-2.5 !text-[10px]`}
-              title="Auto-fill all with Supabase URLs"
-            >
-              ⚡ Auto-fill SB
-            </button>
-            <button onClick={() => checkStatuses()} disabled={checking} className={`${btnSecondary} !py-1 !px-2.5 !text-[10px]`}>
-              {checking ? <><RefreshCw size={10} className="animate-spin" /> Test</> : <><Activity size={10} /> Test All</>}
-            </button>
-          </div>
-        </div>
         <div className="space-y-3">
-          {nonShortenerFunctions.map((fn) => {
-            const override = fnOverrides[fn.key] || { enabled: true, customUrl: "" };
-            const isEnabled = override.enabled !== false;
-            const st = statuses[fn.key];
-            const activeUrl = getFunctionUrl(fn);
-            return (
-              <div key={fn.key} className="bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40 overflow-hidden">
-                <div className="flex items-center justify-between mb-2 gap-2">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${!isEnabled ? "bg-zinc-600" : st ? (st.alive ? "bg-green-500" : "bg-red-500") : "bg-yellow-500"}`} />
-                    <span className="text-xs font-semibold text-white truncate">{fn.label}</span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {st && isEnabled && (
-                      <span className={`text-[10px] font-mono ${st.alive ? "text-green-400" : "text-red-400"}`}>
-                        {st.alive ? `${st.latency}ms` : "Down"}
-                      </span>
-                    )}
-                    <button onClick={() => toggleFunction(fn.key)}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${isEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
-                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${isEnabled ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex gap-1.5 items-stretch">
-                  <input
-                    value={override.customUrl || ""}
-                    onChange={(e) => setFnOverrides(prev => ({ ...prev, [fn.key]: { ...override, customUrl: e.target.value } }))}
-                    placeholder={activeUrl ? activeUrl.slice(0, 40) + "…" : "Paste full function URL…"}
-                    className={`${inputClass} !text-[10px] !py-1.5 flex-1 min-w-0`}
-                  />
-                  <button
-                    onClick={() => {
-                      const sbUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/${fn.endpoint}`;
-                      setFnOverrides(prev => ({ ...prev, [fn.key]: { ...override, customUrl: sbUrl } }));
-                      saveCustomUrl(fn.key, sbUrl);
-                    }}
-                    className={`${btnSecondary} !px-2 !py-1 !text-[9px] whitespace-nowrap flex-shrink-0`}
-                    title="Use Supabase URL"
-                  >
-                    ⚡ SB
-                  </button>
-                  <button onClick={() => saveCustomUrl(fn.key, override.customUrl || "")}
-                    className={`${btnSecondary} !px-2 !py-1 flex-shrink-0`}
-                    title="Save">
-                    <Save size={11} />
-                  </button>
-                </div>
-                {override.customUrl && <p className="text-[9px] text-cyan-400 mt-1 break-all">⚡ {override.customUrl}</p>}
-                {!isEnabled && <p className="text-[9px] text-red-400 mt-1">🚫 Disabled</p>}
+          <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/30 p-3">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-white">🔗 Shortener URL</p>
+                <p className="text-[9px] text-zinc-400">Ad service-এর shortener function হিসেবে এটা ব্যবহার করো</p>
               </div>
-            );
-          })}
-        </div>
+              <button onClick={() => copyText(recommendedShortenerUrl, "Shortener URL copied")} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
+                Copy
+              </button>
+            </div>
+            <code className="text-[10px] text-cyan-300 break-all block">{recommendedShortenerUrl}</code>
+          </div>
 
+          <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/30 p-3">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-white">🤖 Telegram Access URL</p>
+                <p className="text-[9px] text-zinc-400">Telegram verify / unlock bot function হিসেবে এটা ব্যবহার করো</p>
+              </div>
+              <button onClick={() => copyText(recommendedTelegramAccessUrl, "Telegram Access URL copied")} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
+                Copy
+              </button>
+            </div>
+            <code className="text-[10px] text-cyan-300 break-all block">{recommendedTelegramAccessUrl}</code>
+          </div>
+        </div>
       </div>
+
+      <AdServicesSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
     </div>
   );
 };
