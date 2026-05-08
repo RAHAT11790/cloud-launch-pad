@@ -68,6 +68,25 @@ function shortAccessCode(): string {
   return s;
 }
 
+function randomToken(): string {
+  return `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+}
+
+// Fetch website user profile from Firebase (for photo + name shown in verify card)
+async function getWebsiteUserProfile(ownerUserId: string): Promise<{ name: string; email: string; photoURL: string | null }> {
+  try {
+    const u: any = await fb("GET", `users/${ownerUserId}`);
+    if (u) {
+      return {
+        name: u.name || u.displayName || "RS Anime User",
+        email: u.email || "—",
+        photoURL: u.photoURL || u.avatar || null,
+      };
+    }
+  } catch {}
+  return { name: "RS Anime User", email: "—", photoURL: null };
+}
+
 // ============== TELEGRAM HTTP ==============
 const TG = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
