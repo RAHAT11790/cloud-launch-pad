@@ -746,6 +746,10 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     toast.success(!gateEnabled ? "✅ Unlock gate enabled" : "🚫 Unlock gate disabled — all videos play free");
   };
 
+  const pickPrimaryUrl = (mode: "shortener" | "miniapp", shortenerUrl?: string, botUrl?: string) => {
+    return mode === "miniapp" ? (botUrl || "telegram://verify-bot") : (shortenerUrl || "");
+  };
+
   const addService = async () => {
     const name = newName.trim();
     const shortenerUrl = newShortenerUrl.trim();
@@ -755,7 +759,7 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
     if (newMode === "miniapp" && !botUrl) { toast.error("Telegram Bot Edge Function URL required"); return; }
 
     const id = `ad_${Date.now()}`;
-    const primary = newMode === "miniapp" ? (botUrl || "telegram://verify-bot") : shortenerUrl;
+    const primary = pickPrimaryUrl(newMode, shortenerUrl, botUrl);
     await set(ref(db, `settings/adServices/${id}`), {
       id, name,
       functionUrl: primary,                           // legacy compat
@@ -772,8 +776,27 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   };
 
   const updateField = async (id: string, key: string, value: any) => {
-    await set(ref(db, `settings/adServices/${id}/${key}`), value || null);
+    const svc = services[id] || {};
+    const nextValue = value || null;
+    const nextShortenerUrl = key === "shortenerFunctionUrl" ? (nextValue || "") : (svc.shortenerFunctionUrl || "");
+    const nextBotUrl = key === "telegramBotFunctionUrl" ? (nextValue || "") : (svc.telegramBotFunctionUrl || "");
+    const nextMode = (svc.mode || "shortener") as "shortener" | "miniapp";
+    await update(ref(db, `settings/adServices/${id}`), {
+      [key]: nextValue,
+      functionUrl: pickPrimaryUrl(nextMode, nextShortenerUrl, nextBotUrl),
+      updatedAt: Date.now(),
+    });
     toast.success("Saved");
+  };
+
+  const setServiceMode = async (id: string, mode: "shortener" | "miniapp") => {
+    const svc = services[id] || {};
+    await update(ref(db, `settings/adServices/${id}`), {
+      mode,
+      functionUrl: pickPrimaryUrl(mode, svc.shortenerFunctionUrl || "", svc.telegramBotFunctionUrl || ""),
+      updatedAt: Date.now(),
+    });
+    toast.success(mode === "miniapp" ? "Telegram Bot mode" : "Shortener mode");
   };
 
   const toggleService = async (id: string) => {
@@ -879,12 +902,12 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
               <div className="flex items-center gap-2 bg-zinc-900/50 rounded-lg p-2 mb-2">
                 <span className="text-[10px] text-zinc-400">Active mode:</span>
                 <button
-                  onClick={() => set(ref(db, `settings/adServices/${svc.id}/mode`), "shortener").then(() => toast.success("Shortener mode"))}
+                  onClick={() => setServiceMode(svc.id, "shortener")}
                   className={`px-2 py-0.5 rounded text-[10px] font-semibold ${activeMode === "shortener" ? "bg-amber-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
                   🔗 Shortener
                 </button>
                 <button
-                  onClick={() => set(ref(db, `settings/adServices/${svc.id}/mode`), "miniapp").then(() => toast.success("Telegram Bot mode"))}
+                  onClick={() => setServiceMode(svc.id, "miniapp")}
                   className={`px-2 py-0.5 rounded text-[10px] font-semibold ${activeMode === "miniapp" ? "bg-cyan-500 text-black" : "bg-zinc-700 text-zinc-300"}`}>
                   🤖 Telegram Bot
                 </button>
