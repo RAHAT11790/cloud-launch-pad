@@ -16,7 +16,7 @@ const corsHeaders = {
 
 // ============== ENV (with inline defaults for portability) ==============
 const BOT_TOKEN =
-  Deno.env.get("RS_ACCESS_BOT_TOKEN") || Deno.env.get("LINK_SHARE_BOT_TOKEN") || Deno.env.get("TELEGRAM_BOT_TOKEN") || "";
+  Deno.env.get("LINK_SHARE_BOT_TOKEN") || Deno.env.get("RS_ACCESS_BOT_TOKEN") || "";
 const ADMIN_ID = Number(Deno.env.get("LINK_SHARE_ADMIN_ID") || "6621572366");
 
 // Inline Firebase defaults — same as src/lib/firebase.ts
