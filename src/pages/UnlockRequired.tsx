@@ -48,7 +48,12 @@ const UnlockRequired = () => {
     const unsub = onValue(ref(db, `users/${uid}/freeAccess`), (snap) => {
       const data = snap.val();
       if (data?.active && Number(data.expiresAt) > Date.now()) {
-        resumePlayback();
+        // Only auto-resume if there's a pending playback waiting.
+        // Otherwise the user navigated here manually with already-active access
+        // and we'd cause a /unlock-required ↔ / loop.
+        let hasPending = false;
+        try { hasPending = !!sessionStorage.getItem(PENDING_KEY); } catch {}
+        if (hasPending) resumePlayback();
       }
     });
 
