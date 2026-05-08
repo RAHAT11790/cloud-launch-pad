@@ -1075,6 +1075,11 @@ async function handleCallback(cb: any) {
   const message_id: number = cb.message?.message_id;
 
   try {
+    if (data.startsWith("verify_")) {
+      const token = data.slice("verify_".length);
+      await handleVerifyCallback(chat_id, message_id, cb.id, token, user_id);
+      return;
+    }
     if (data === "about") {
       await editMessageMedia(chat_id, message_id, {
         type: "photo", media: ABOUT_BTN_IMG, parse_mode: "HTML",
