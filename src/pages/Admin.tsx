@@ -3735,6 +3735,8 @@ ${tgHashtags}`;
           caption,
           photoUrl: tgPosterUrl || undefined,
           inlineButtons: inlineButtons.length > 0 ? inlineButtons : undefined,
+          includeFreeAccess: true,
+          freeAccessUserId: "telegram_post",
         };
         try {
           const endpoint = await getEdgeFunctionUrl('telegram-post');
