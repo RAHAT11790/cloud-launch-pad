@@ -37,8 +37,8 @@ export const getDeviceFingerprint = (): string => {
         return hashText(c.toDataURL());
       } catch { return "no_canvas"; }
     })();
-    const deviceId = getDeviceId(); // tie fingerprint to localStorage device ID
-    const raw = `${navigator.userAgent}|${navigator.platform}|${navigator.language}|${screenSize}|${timezoneOffset}|${navigator.hardwareConcurrency || 0}|${(navigator as any).deviceMemory || 0}|${canvas}|${deviceId}`;
+    // Keep fingerprint stable across preview/live domains and localStorage resets.
+    const raw = `${navigator.userAgent}|${navigator.platform}|${navigator.language}|${screenSize}|${timezoneOffset}|${navigator.hardwareConcurrency || 0}|${(navigator as any).deviceMemory || 0}|${canvas}`;
     return `fp_${hashText(raw)}`;
   } catch {
     return "fp_unknown";
@@ -230,6 +230,20 @@ export const unregisterCurrentDevice = async (userId: string): Promise<void> => 
       await remove(ref(db, `users/${userId}/premium/devices/${matchedDeviceId}`));
     }
   } catch {}
+};
+
+export const logoutAllDevices = async (userId: string): Promise<void> => {
+  const now = Date.now();
+
+  await Promise.allSettled([
+    remove(ref(db, `users/${userId}/premium/devices`)),
+    remove(ref(db, `users/${userId}/freeAccess/devices`)),
+    update(ref(db, `users/${userId}`), {
+      online: false,
+      lastSeen: now,
+      sessionRevokedAt: now,
+    }),
+  ]);
 };
 
 // Remove a specific device (admin use)
