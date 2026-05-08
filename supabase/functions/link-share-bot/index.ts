@@ -16,7 +16,7 @@ const corsHeaders = {
 
 // ============== ENV (with inline defaults for portability) ==============
 const BOT_TOKEN =
-  Deno.env.get("LINK_SHARE_BOT_TOKEN") || Deno.env.get("RS_ACCESS_BOT_TOKEN") || "";
+  Deno.env.get("RS_ACCESS_BOT_TOKEN") || Deno.env.get("LINK_SHARE_BOT_TOKEN") || "";
 const ADMIN_ID = Number(Deno.env.get("LINK_SHARE_ADMIN_ID") || "6621572366");
 
 // Inline Firebase defaults — same as src/lib/firebase.ts
@@ -30,8 +30,8 @@ const FIREBASE_SA_JSON = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_KEY") || "";
 const RS_API_KEY = Deno.env.get("RS_API_KEY") || "";
 const RS_MINI_BOT = Deno.env.get("RS_MINI_BOT") || "RS_ANIME_ACCESS_BOT";
 const RS_MINI_APP_NAME = Deno.env.get("RS_MINI_APP_NAME") || "app";
-const RS_RETURN_BOT = (Deno.env.get("RS_RETURN_BOT") || "RS_ANIME_FIND_BOT").replace(/^@/, "");
-const BOT_USERNAME_FALLBACK = (Deno.env.get("LINK_SHARE_BOT_USERNAME") || "RS_ANIME_FIND_BOT").replace(/^@/, "");
+const RS_RETURN_BOT = (Deno.env.get("RS_RETURN_BOT") || "RS_ANIME_ACCESS_BOT").replace(/^@/, "");
+const BOT_USERNAME_FALLBACK = (Deno.env.get("LINK_SHARE_BOT_USERNAME") || Deno.env.get("RS_ACCESS_BOT_USERNAME") || "RS_ANIME_ACCESS_BOT").replace(/^@/, "");
 const RS_BACKEND_URL =
   Deno.env.get("RS_BACKEND_URL") ||
   "https://kqxpzqegtvaiwgdusrin.supabase.co/functions/v1/mini-app";
