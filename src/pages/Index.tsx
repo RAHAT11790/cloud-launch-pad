@@ -240,6 +240,16 @@ const Index = () => {
         const allowed = await ensureFreeAccessDeviceAllowed(uid, data);
         if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(allowed ? Number(data.expiresAt) : 0);
+        if (!allowed) {
+          const devices = data.devices || {};
+          const deviceCount = Object.keys(devices).length;
+          const deviceNames = Object.values(devices).map((d: any) => d?.name || "Unknown Device");
+          setDeviceLimitWarning({
+            message: `Your free access allows up to 2 devices. Currently ${deviceCount} devices are using it. This device is not registered.`,
+            devices: deviceNames,
+            maxDevices: 2,
+          });
+        }
       } else {
         if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(0);
