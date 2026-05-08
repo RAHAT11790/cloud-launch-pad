@@ -31,6 +31,7 @@ const RS_API_KEY = Deno.env.get("RS_API_KEY") || "";
 const RS_MINI_BOT = Deno.env.get("RS_MINI_BOT") || "RS_ANIME_ACCESS_BOT";
 const RS_MINI_APP_NAME = Deno.env.get("RS_MINI_APP_NAME") || "app";
 const RS_RETURN_BOT = (Deno.env.get("RS_RETURN_BOT") || "RS_ANIME_FIND_BOT").replace(/^@/, "");
+const BOT_USERNAME_FALLBACK = (Deno.env.get("LINK_SHARE_BOT_USERNAME") || "Rs_forwards_bot").replace(/^@/, "");
 const RS_BACKEND_URL =
   Deno.env.get("RS_BACKEND_URL") ||
   "https://kqxpzqegtvaiwgdusrin.supabase.co/functions/v1/mini-app";
@@ -476,8 +477,12 @@ function mainMenu() {
 let _botUsername: string | null = null;
 async function botUsername(): Promise<string> {
   if (_botUsername) return _botUsername;
-  const me = await getMe();
-  _botUsername = me.username || "";
+  try {
+    const me = await getMe();
+    _botUsername = me.username || BOT_USERNAME_FALLBACK;
+  } catch {
+    _botUsername = BOT_USERNAME_FALLBACK;
+  }
   return _botUsername;
 }
 
