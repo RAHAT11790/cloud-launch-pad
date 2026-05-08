@@ -1139,8 +1139,12 @@ const Index = () => {
     }
 
     if (!hasFreeAccess() && !saltIsPremium) {
-      redirectToUnlockRequired(anime, seasonIdx, epIdx);
-      return;
+      // If admin disabled the unlock gate entirely, skip redirect and play directly
+      const shortenerOn = await isShortenerEnabled();
+      if (shortenerOn) {
+        redirectToUnlockRequired(anime, seasonIdx, epIdx);
+        return;
+      }
     }
 
     dismissDetailsLoadingToast();
