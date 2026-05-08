@@ -801,9 +801,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const server = effectiveVideoServers[serverIndex];
     if (!server?.domain) return rawUrl;
     const domainTrim = server.domain.trim().replace(/\/$/, "");
-
-    // All servers (including HF) are host-swap mirrors used as direct <video src>.
-    // Never wrap in /watch/ — that returns an iframe HTML page, not a playable media stream.
+    const isHfDomain = /hf\.space|huggingface/i.test(domainTrim);
+    if (isHfDomain) {
+      // HF /watch/ endpoint streams the file as inline video (strips attachment headers
+      // from upstream like bot-hosting.net). Without this, direct host-swap would cause
+      // the browser to download the .mkv file instead of playing it.
+      const normalizedRawUrl = tryUpgradeToHttps(rawUrl);
+      const encodedRawUrl = encodeURI(normalizedRawUrl);
+      if (/\/watch(?:\/|$)/i.test(domainTrim)) {
+        return `${domainTrim.replace(/\/$/, "")}/${encodedRawUrl.replace(/^\//, "")}`;
+      }
+      return `${domainTrim}/watch/${encodedRawUrl}`;
+    }
     try {
       const url = new URL(tryUpgradeToHttps(rawUrl));
       return `${domainTrim}${url.pathname}${url.search}${url.hash}`;
