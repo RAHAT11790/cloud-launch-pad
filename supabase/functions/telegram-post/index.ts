@@ -141,13 +141,10 @@ async function sendUnlockMessage(
     if (rN.ok && dN?.ok) noticeMessageId = dN.result?.message_id ?? null;
   } catch (_) {}
 
-  // Schedule auto-cleanup after 30s (best-effort, edge runtime allows ~60s)
-  if (mainMessageId || noticeMessageId) {
-    const ids = [mainMessageId, noticeMessageId].filter((x): x is number => !!x);
-    setTimeout(() => {
-      ids.forEach((mid) => deleteMessage(botToken, chatId, mid));
-    }, 30_000);
-  }
+  // NOTE: We intentionally do NOT auto-delete these messages anymore.
+  // The user complained that the unlock message was vanishing before they
+  // could tap it. Tokens themselves expire (24h via accessCodes/grantMs),
+  // so leaving the chat history intact is safe.
 
   return { mainMessageId, noticeMessageId };
 }
