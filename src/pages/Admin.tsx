@@ -927,13 +927,22 @@ const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   const [newMode, setNewMode] = useState<"shortener" | "telegram">("shortener");
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { alive: boolean; latency: number } | null>>({});
+  const [gateEnabled, setGateEnabled] = useState<boolean>(true);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/adServices"), (snap) => {
       setServices(snap.val() || {});
     });
-    return () => unsub();
+    const unsubGate = onValue(ref(db, "settings/unlockGateEnabled"), (snap) => {
+      setGateEnabled(snap.val() !== false);
+    });
+    return () => { unsub(); unsubGate(); };
   }, []);
+
+  const toggleGate = async () => {
+    await set(ref(db, "settings/unlockGateEnabled"), !gateEnabled);
+    toast.success(!gateEnabled ? "✅ Unlock gate চালু" : "🚫 Unlock gate বন্ধ — সব ভিডিও ফ্রি প্লে হবে");
+  };
 
   const addService = async () => {
     const name = newName.trim();
