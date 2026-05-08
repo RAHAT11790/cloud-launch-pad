@@ -648,7 +648,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [disableUnlockGate, isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
 
   const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
-    const { openExternalBrowser } = await import("@/lib/openExternal");
+    const { openExternalBrowser, openTelegramDeepLink } = await import("@/lib/openExternal");
 
     // Telegram-bot mode: redirect to bot deep link (NOT shortener)
     const isTelegramMode =
@@ -662,7 +662,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         const { createTelegramBotUnlockLink } = await import("@/lib/unlockAccess");
         const r = await createTelegramBotUnlockLink();
         if (r.ok && r.url) {
-          openExternalBrowser(r.url);
+          openTelegramDeepLink(r.url);
           return;
         }
       } catch {}
