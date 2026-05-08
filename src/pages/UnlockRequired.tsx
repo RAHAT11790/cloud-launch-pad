@@ -185,35 +185,24 @@ const UnlockRequired = () => {
               </div>
             </div>
 
-            <div className="mt-4 space-y-3">
-              {loading ? (
-                <div className="flex items-center justify-center gap-2 rounded-xl bg-secondary/40 px-4 py-5 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" /> {t.loading}
+            <div className="mt-4 rounded-2xl border border-primary/25 bg-secondary/25 p-4 shadow-[0_0_30px_hsl(var(--primary)/0.12)]">
+              <div className="mb-3 text-center">
+                <p className="text-xs uppercase tracking-[0.32em] text-primary" style={{ fontFamily: "'Orbitron', sans-serif" }}>Access Token</p>
+                <div className="mt-2 rounded-xl border border-primary/35 bg-background/80 px-3 py-3 text-center shadow-inner">
+                  <div className="text-[11px] text-muted-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>──────── TOKEN BOX ────────</div>
+                  <div className="mt-2 flex items-center gap-2 text-sm font-semibold">
+                    <Lock className="h-4 w-4 shrink-0 text-primary" /> {t.tokenLabel}
+                  </div>
                 </div>
-              ) : (
-                links.map((link, index) => (
-                  <button
-                    key={`${link.service.id}-${index}`}
-                    onClick={() => openLink(link.shortUrl, link.service)}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white"
-                    style={{ background: link.service.color || "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)))" }}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                     <span>{link.service.icon || "🔓"} {link.service.name || `Unlock ${index + 1}`}</span>
-                  </button>
-                ))
-              )}
-            </div>
-
-            <div className="mt-4 rounded-xl border border-border bg-secondary/30 p-3">
+              </div>
               <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                <Lock className="h-4 w-4 text-primary" /> {t.tokenLabel}
+                <Sparkles className="h-4 w-4 text-primary" /> Paste token here
               </div>
               <input
                 value={accessCode}
                 onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
                 placeholder={t.tokenPlaceholder}
-                className="w-full rounded-xl border border-border bg-background/70 px-3 py-3 text-center font-mono tracking-[0.25em] outline-none focus:border-primary"
+                className="w-full rounded-xl border border-primary/25 bg-background/70 px-3 py-3 text-center font-mono tracking-[0.25em] outline-none focus:border-primary"
                 maxLength={20}
               />
               <button
@@ -224,6 +213,26 @@ const UnlockRequired = () => {
                 {claiming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 {t.claim}
               </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {loading ? (
+                <div className="flex items-center justify-center gap-2 rounded-xl bg-secondary/40 px-4 py-5 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" /> {t.loading}
+                </div>
+              ) : (
+                links.map((link, index) => (
+                  <button
+                    key={`${link.service.id}-${index}`}
+                    onClick={() => openLink(link.shortUrl, link.service)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/20 px-4 py-3 text-sm font-bold text-primary-foreground shadow-lg"
+                    style={{ background: link.service.color || "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)))", fontFamily: "'Russo One', sans-serif" }}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    <span>{link.service.icon || "🔓"} {link.service.name || `Unlock ${index + 1}`}</span>
+                  </button>
+                ))
+              )}
             </div>
 
             <button
