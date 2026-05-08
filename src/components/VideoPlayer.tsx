@@ -662,7 +662,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         const { createTelegramBotUnlockLink } = await import("@/lib/unlockAccess");
         const r = await createTelegramBotUnlockLink();
         if (r.ok && r.deepLink) {
-          window.location.href = r.deepLink;
+          const { openTelegramDeepLink } = await import("@/lib/openExternal");
+          openTelegramDeepLink(r.deepLink);
           return;
         }
       } catch {}
