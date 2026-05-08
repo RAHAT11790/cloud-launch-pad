@@ -726,27 +726,34 @@ async function updateWorkflowCard(chat_id: number, message_id: number, caption: 
   return await editMessageText(chat_id, message_id, caption, { reply_markup });
 }
 
-async function sendAccessTokenCard(chat_id: number, accessCode: string, grantMs: number, tgUserId: number) {
+async function sendAccessTokenCard(chat_id: number, accessCode: string, grantMs: number, tgUserId: number, from?: any) {
+  if (from) {
+    await saveUserProfile(tgUserId, from).catch(() => null);
+  }
   const profile = await getUserProfileCached(tgUserId);
   const hours = Math.max(1, Math.round(grantMs / 3600000));
   const siteUrl = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
-  const safeName = escapeHtml(profile.name || `User ${tgUserId}`);
+  const identity = formatTelegramIdentity(profile, tgUserId);
+  const safeName = escapeHtml(identity.label);
+  const safeTelegramId = escapeHtml(String(tgUserId));
   const safeCode = escapeHtml(accessCode);
-  const caption = `┏━━━━━━━━━━━━━━━━┓
-<b>RS ACCESS TOKEN</b>
-┗━━━━━━━━━━━━━━━━┛
+  const caption = `✦━━━━━━━━━━━━━━━━━━━✦
+${stylish("✦ RS ACCESS TOKEN ✦")}
+✦━━━━━━━━━━━━━━━━━━━✦
 
-👤 <b>${safeName}</b>
-⏳ <b>${hours}h access</b>
+${stylish("✦ YOUR DETAILS ✦")}
+${stylish("›› NAME")}: <b>${safeName}</b>
+${stylish("›› TELEGRAM ID")}: <code>${safeTelegramId}</code>
+${stylish("›› ACCESS DURATION")}: <b>${hours}h</b>
 
-<b>TOKEN</b>
-┌────────────┐
-│ <code>${safeCode}</code> │
-└────────────┘
+${stylish("✦ ACCESS TOKEN ✦")}
+╔══════════════╗
+║ <code>${safeCode}</code> ║
+╚══════════════╝
 
-Tap only the code to copy.
-Paste it in the website unlock box.
-Auto cleanup in 1 minute — save your token now.`;
+${stylish("›› Tap only the token to copy")}
+${stylish("›› Paste it in the website unlock box")}
+${stylish("›› Auto cleanup in 1 minute — save it now")}`;
 
   const reply_markup = {
     inline_keyboard: [
@@ -794,37 +801,26 @@ async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tg
 
   // Pull profile info: prefer website profile photo; fallback to Telegram profile photo; fallback to brand image
   const site = isPublicFlow ? { name: "Telegram User", email: "—", photoURL: null } : await getWebsiteUserProfile(ownerUserId);
-  const tgProfile = await saveUserProfile(tgUserId, { id: tgUserId });
+  const tgProfile = await saveUserProfile(tgUserId, from || { id: tgUserId });
   const photoToShow = site.photoURL || tgProfile.photo_file_id || tgProfile.photo_url || RS_VERIFY_IMG;
-  const displayName = site.name || tgProfile.name || "RS Anime User";
+  const identity = formatTelegramIdentity(tgProfile, tgUserId);
   const shortenerUrl = await buildShortenerClaimUrl(token);
 
-  const safeDisplayName = escapeHtml(displayName);
-  const safeEmail = escapeHtml(site.email || "—");
-  const caption = isPublicFlow ? `<b>RS ACCESS BOT</b>
+  const safeDisplayName = escapeHtml(identity.label);
+  const safeTelegramId = escapeHtml(String(tgUserId));
+  const caption = `✦━━━━━━━━━━━━━━━━━━━✦
+${stylish("✦ RS LINK SHARE BOT ✦")}
+✦━━━━━━━━━━━━━━━━━━━✦
 
-👤 <b>${safeDisplayName}</b>
-🆔 <code>${tgUserId}</code>
-⏳ <b>${hours}h access</b>
+${stylish("✦ YOUR DETAILS ✦")}
+${stylish("›› NAME")}: <b>${safeDisplayName}</b>
+${stylish("›› TELEGRAM ID")}: <code>${safeTelegramId}</code>
+${stylish("›› ACCESS DURATION")}: <b>${hours}h</b>
+${stylish("›› OPEN THE SHORTENER LINK BELOW")}
 
-1. Open short link
-2. Watch ads
-3. Tap Get Link
-4. Bot sends your token
-
-Token message auto-cleans in 1 minute.` : `<b>RS WEBSITE ACCESS</b>
-
-👤 <b>${safeDisplayName}</b>
-✉️ <b>${safeEmail}</b>
-🆔 <code>${tgUserId}</code>
-⏳ <b>${hours}h access</b>
-
-1. Open short link
-2. Watch ads
-3. Tap Get Link
-4. Bot sends your token
-
-Token message auto-cleans in 1 minute.`;
+${stylish("✦ POWERED BY")}: <a href="https://t.me/CARTOONFUNNY03">𓆩𝐀𝐍𝐈𝐌𝐄 𝐈𝐍 𝐇𝐈𝐍𝐃𝐈𓆪</a>
+${stylish("✦ MADE WITH ❤️ BY")}: <a href="https://t.me/rs_woner">𝐑𝐒 𝐖𝐎𝐍𝐄𝐑</a>
+✦━━━━━━━━━━━━━━━━━━━✦`;
 
   const reply_markup = {
     inline_keyboard: [
