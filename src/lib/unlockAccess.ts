@@ -356,6 +356,8 @@ async function getAccessBotEndpoint(): Promise<string> {
     if (supaUrl) endpoint = `${supaUrl}/functions/v1/link-share-bot`;
   }
 
+  endpoint = endpoint.replace(/\/telegram-post(?:\/)?$/i, "/link-share-bot");
+
   return endpoint;
 }
 
