@@ -578,6 +578,51 @@ ${stylish("✦ ENJOY YOUR ANIME ✦")}
   scheduleDelete(chat_id, res?.result?.message_id);
 }
 
+async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tgUserId: number) {
+  const now = Date.now();
+  const hoursCfg = await fb("GET", `settings/unlockDurationHours`).catch(() => null);
+  const hours = Number(hoursCfg) > 0 ? Number(hoursCfg) : 24;
+  const grantMs = hours * 3600_000;
+  const token = randomToken();
+  const code = shortAccessCode();
+  const expiresAt = now + 24 * 3600_000;
+
+  await fb("PUT", `unlockTokens/${token}`, {
+    token,
+    ownerUserId,
+    createdAt: now,
+    expiresAt,
+    status: "pending",
+    consumed: false,
+    serviceId: "telegram_bot",
+    source: "telegram_access_bot",
+    tgUserId: String(tgUserId),
+    grantMs,
+  });
+
+  await fb("PUT", `accessCodes/${code}`, {
+    code,
+    ownerUserId,
+    createdAt: now,
+    expiresAt,
+    status: "pending",
+    consumed: false,
+    tgUserId: String(tgUserId),
+    grantMs,
+  });
+
+  const unlockUrl = `${Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app"}/unlock?t=${encodeURIComponent(token)}&svc=telegram&code=${encodeURIComponent(code)}`;
+  await sendMessage(
+    chat_id,
+    `🔓 <b>Unlock ready</b>\n\nTap the button below to activate <b>${hours} hours</b> access.\n\n<b>Access code:</b> <code>${code}</code>\nPaste this code on the website if you want manual unlock.`,
+    {
+      reply_markup: {
+        inline_keyboard: [[{ text: "✅ VERIFY ACCESS", url: unlockUrl }]],
+      },
+    },
+  );
+}
+
 // ============== UPDATE HANDLERS ==============
 const isAdmin = (uid: number) => uid === ADMIN_ID;
 
@@ -613,6 +658,16 @@ async function tryAutoVerifyOnReturn(chat_id: number, user_id: number, from: any
 
 async function handleStart(chat_id: number, user_id: number, from: any, arg?: string) {
   await touchUser(user_id);
+
+  if (arg && arg.startsWith("unlock_")) {
+    const ownerUserId = decodeURIComponent(arg.replace("unlock_", "")).trim();
+    if (!ownerUserId) {
+      await sendEphemeral(chat_id, stylish("✦ Invalid unlock request ✦"));
+      return;
+    }
+    await sendWebsiteUnlockMessage(chat_id, ownerUserId, user_id);
+    return;
+  }
 
   if (!arg || arg === "verified" || arg === "back") {
     const ok = await tryAutoVerifyOnReturn(chat_id, user_id, from);
