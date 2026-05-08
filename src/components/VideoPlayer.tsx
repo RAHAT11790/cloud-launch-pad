@@ -2201,7 +2201,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         {/* Device limit is now enforced at login time - no overlay needed */}
 
         {/* Ad Gate Overlay – bilingual professional verify card */}
-        {adGateActive && !deviceBlocked && !unlockBlocked && (() => {
+        {adGateActive && !unlockBlocked && (() => {
           const t = verifyLang === "bn"
             ? {
                 title: "ফ্রি অ্যাক্সেস আনলক করুন",
