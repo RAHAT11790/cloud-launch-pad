@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { db, ref } from "@/lib/firebase";
 import { createTelegramBotUnlockLink, createUnlockLinksForAllServices, claimAccessCode, getLocalUserId, type AdService } from "@/lib/unlockAccess";
-import { openExternalBrowser, openTelegramDeepLink } from "@/lib/openExternal";
+import { openExternalBrowser } from "@/lib/openExternal";
 
 type UnlockLink = { service: AdService; shortUrl: string };
 type PendingPlayback = {
@@ -27,6 +27,7 @@ const UnlockRequired = () => {
   const [links, setLinks] = useState<UnlockLink[]>([]);
   const [accessCode, setAccessCode] = useState("");
   const [claiming, setClaiming] = useState(false);
+  const [openingService, setOpeningService] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingPlayback | null>(null);
 
   useEffect(() => {
@@ -78,11 +79,14 @@ const UnlockRequired = () => {
       /telegram/i.test(`${service?.id || ""} ${service?.name || ""}`);
 
     if (isTelegramMode) {
+      setOpeningService(service?.id || "telegram");
       const result = await createTelegramBotUnlockLink();
-      if (result.ok && result.deepLink) {
-        openTelegramDeepLink(result.deepLink);
+      if (result.ok && result.url) {
+        openExternalBrowser(result.url);
+        setTimeout(() => setOpeningService(null), 1400);
         return;
       }
+      setOpeningService(null);
       toast.error("Telegram verify link তৈরি করা যায়নি");
       return;
     }
@@ -118,7 +122,8 @@ const UnlockRequired = () => {
       "সফল হলে আপনাকে আবার player-এ ফিরিয়ে আনা হবে",
     ],
     tokenLabel: "টেলিগ্রাম থেকে পাওয়া টোকেন",
-    tokenPlaceholder: "এখানে access token পেস্ট করুন",
+    tokenHint: "নিচে access token পেস্ট করুন",
+    tokenPlaceholder: "access token এখানে লিখুন",
     claim: "টোকেন দিয়ে আনলক",
     loading: "Unlock button তৈরি হচ্ছে...",
     back: "হোমে ফিরে যান",
@@ -134,7 +139,8 @@ const UnlockRequired = () => {
       "After success, you'll be returned to the player automatically",
     ],
     tokenLabel: "Token from Telegram",
-    tokenPlaceholder: "Paste your access token here",
+    tokenHint: "Paste the access token below",
+    tokenPlaceholder: "Type your access token here",
     claim: "Unlock with token",
     loading: "Preparing unlock buttons...",
     back: "Back to home",
@@ -184,11 +190,15 @@ const UnlockRequired = () => {
                   <button
                     key={`${link.service.id}-${index}`}
                     onClick={() => openLink(link.shortUrl, link.service)}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/20 px-4 py-3 text-sm font-bold text-primary-foreground shadow-lg"
+                    disabled={openingService === (link.service.id || "telegram")}
+                    className="unlock-cta-button relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-primary/20 px-4 py-3 text-sm font-bold text-primary-foreground shadow-lg disabled:opacity-100"
                     style={{ background: link.service.color || "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)))", fontFamily: "'Russo One', sans-serif" }}
                   >
-                    <ExternalLink className="h-4 w-4" />
-                    <span>{link.service.icon || "🔓"} {link.service.name || `Unlock ${index + 1}`}</span>
+                    <span
+                      className={`unlock-cta-fill ${openingService === (link.service.id || "telegram") ? "opacity-100" : "opacity-0"}`}
+                    />
+                    {openingService === (link.service.id || "telegram") ? <Loader2 className="relative z-10 h-4 w-4 animate-spin" /> : <ExternalLink className="relative z-10 h-4 w-4" />}
+                    <span className="relative z-10">{link.service.icon || "🔓"} {link.service.name || `Unlock ${index + 1}`}</span>
                   </button>
                 ))
               )}
@@ -206,7 +216,7 @@ const UnlockRequired = () => {
                 </div>
               </div>
               <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                <Sparkles className="h-4 w-4 text-primary" /> Paste token here
+                <Sparkles className="h-4 w-4 text-primary" /> {t.tokenHint}
               </div>
               <input
                 value={accessCode}
