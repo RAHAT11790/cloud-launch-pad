@@ -207,28 +207,37 @@ const UnlockRequired = () => {
               )}
             </div>
 
-            {/* MIDDLE: Access token paste box */}
-            <div className="mt-4 rounded-2xl border border-primary/25 bg-secondary/25 p-4 shadow-[0_0_30px_hsl(var(--primary)/0.12)]">
-              <div className="rounded-xl border border-primary/35 bg-background/85 px-4 py-4 text-center shadow-inner">
-                <p className="text-[11px] text-muted-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>──────── TOKEN BOX ────────</p>
-                <p className="mt-3 text-sm font-semibold text-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>{t.tokenLabel}</p>
-                <p className="mt-3 text-base font-bold text-primary" style={{ fontFamily: "'Orbitron', sans-serif" }}>{t.tokenHint}</p>
+            {/* MIDDLE: Paste input (top) + TOKEN BOX display (bottom) */}
+            <div className="mt-4 space-y-3">
+              <div className="rounded-2xl border border-primary/25 bg-secondary/25 p-4 shadow-[0_0_30px_hsl(var(--primary)/0.12)]">
+                <p className="text-center text-sm font-bold text-primary" style={{ fontFamily: "'Russo One', sans-serif" }}>
+                  ✦ {t.tokenHint} ✦
+                </p>
+                <input
+                  value={accessCode}
+                  onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
+                  placeholder={t.tokenPlaceholder}
+                  className="mt-3 w-full rounded-xl border border-primary/25 bg-background/70 px-3 py-3 text-center font-mono tracking-[0.25em] outline-none focus:border-primary"
+                  maxLength={20}
+                />
+                <button
+                  onClick={handleClaim}
+                  disabled={claiming || !accessCode.trim()}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground disabled:opacity-50"
+                >
+                  {claiming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {t.claim}
+                </button>
               </div>
-              <input
-                value={accessCode}
-                onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
-                placeholder={t.tokenPlaceholder}
-                className="mt-3 w-full rounded-xl border border-primary/25 bg-background/70 px-3 py-3 text-center font-mono tracking-[0.25em] outline-none focus:border-primary"
-                maxLength={20}
-              />
-              <button
-                onClick={handleClaim}
-                disabled={claiming || !accessCode.trim()}
-                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground disabled:opacity-50"
-              >
-                {claiming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                {t.claim}
-              </button>
+
+              <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 via-background/60 to-accent/10 p-5 text-center shadow-[0_0_30px_hsl(var(--primary)/0.18)]">
+                <p className="text-[11px] tracking-[0.32em] text-muted-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>
+                  ──── TOKEN BOX ────
+                </p>
+                <p className="mt-4 text-base font-bold text-primary" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+                  🔒 {t.tokenLabel}
+                </p>
+              </div>
             </div>
 
             {/* BOTTOM: How it works (informational, lowest priority) */}
