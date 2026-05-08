@@ -1634,7 +1634,8 @@ Deno.serve(async (req) => {
     const me = await botUsername();
     const targetBotUsername = me || RS_MINI_BOT || RS_RETURN_BOT;
     const deepLink = `https://t.me/${targetBotUsername}?start=unlock_${encodeURIComponent(userId)}`;
-    return new Response(JSON.stringify({ ok: true, deepLink, botUsername: targetBotUsername }), {
+    const shortUrl = await shortenWithConfiguredAccessService(deepLink) || await shortenViaRs(deepLink) || deepLink;
+    return new Response(JSON.stringify({ ok: true, deepLink, url: shortUrl, shortUrl, botUsername: targetBotUsername }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
