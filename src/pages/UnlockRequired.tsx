@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ExternalLink, Globe, Loader2, Lock, ShieldCheck, Sparkles } from "lucide-react";
+import { ExternalLink, Globe, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 import { onValue } from "firebase/database";
 import { toast } from "sonner";
 
@@ -79,15 +79,18 @@ const UnlockRequired = () => {
       /telegram/i.test(`${service?.id || ""} ${service?.name || ""}`);
 
     if (isTelegramMode) {
-      setOpeningService(service?.id || "telegram");
-      const result = await createTelegramBotUnlockLink();
-      if (result.ok && result.url) {
-        openExternalBrowser(result.url);
-        setTimeout(() => setOpeningService(null), 1400);
-        return;
-      }
-      setOpeningService(null);
-      toast.error("Telegram verify link তৈরি করা যায়নি");
+      const serviceKey = service?.id || "telegram";
+      setOpeningService(serviceKey);
+      setTimeout(async () => {
+        const result = await createTelegramBotUnlockLink();
+        if (result.ok && result.url) {
+          openExternalBrowser(result.url);
+          setTimeout(() => setOpeningService(null), 300);
+          return;
+        }
+        setOpeningService(null);
+        toast.error("Telegram verify link তৈরি করা যায়নি");
+      }, 950);
       return;
     }
 
@@ -114,14 +117,14 @@ const UnlockRequired = () => {
   const t = useMemo(() => lang === "bn" ? {
     eyebrow: "ভেরিফাই অ্যাক্সেস",
     title: "ভিডিও দেখার আগে অ্যাক্সেস আনলক করুন",
-    subtitle: "অ্যাক্সেস না নেওয়া পর্যন্ত ভিডিও প্লেয়ার খুলবে না। নিচের Telegram বা unlock button ব্যবহার করুন।",
+    subtitle: "ডাইরেক্ট লিংক নয় — verify button আপনাকে shortener flow হয়ে Telegram-এ নিয়ে যাবে, তারপর token নিয়ে এখানে paste করবেন।",
     stepsTitle: "কীভাবে কাজ করে",
     steps: [
       "Telegram Bot বা unlock button-এ চাপুন",
       "Telegram-এ verify message নিন বা short link complete করুন",
       "সফল হলে আপনাকে আবার player-এ ফিরিয়ে আনা হবে",
     ],
-    tokenLabel: "টেলিগ্রাম থেকে পাওয়া টোকেন",
+    tokenLabel: "Telegram থেকে পাওয়া লিংক / টোকেন",
     tokenHint: "নিচে access token পেস্ট করুন",
     tokenPlaceholder: "access token এখানে লিখুন",
     claim: "টোকেন দিয়ে আনলক",
@@ -131,14 +134,14 @@ const UnlockRequired = () => {
   } : {
     eyebrow: "VERIFY ACCESS",
     title: "Unlock access before opening the player",
-    subtitle: "The player stays locked until access is verified. Use Telegram or any unlock button below.",
+    subtitle: "No direct link here — the verify button must go through the shortener flow, then you paste the Telegram token below.",
     stepsTitle: "How it works",
     steps: [
       "Tap Telegram Bot or any unlock button",
       "Receive the verify message in Telegram or complete the short link",
       "After success, you'll be returned to the player automatically",
     ],
-    tokenLabel: "Token from Telegram",
+    tokenLabel: "Link / token from Telegram",
     tokenHint: "Paste the access token below",
     tokenPlaceholder: "Type your access token here",
     claim: "Unlock with token",
@@ -206,23 +209,16 @@ const UnlockRequired = () => {
 
             {/* MIDDLE: Access token paste box */}
             <div className="mt-4 rounded-2xl border border-primary/25 bg-secondary/25 p-4 shadow-[0_0_30px_hsl(var(--primary)/0.12)]">
-              <div className="mb-3 text-center">
-                <p className="text-xs uppercase tracking-[0.32em] text-primary" style={{ fontFamily: "'Orbitron', sans-serif" }}>Access Token</p>
-                <div className="mt-2 rounded-xl border border-primary/35 bg-background/80 px-3 py-3 text-center shadow-inner">
-                  <div className="text-[11px] text-muted-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>──────── TOKEN BOX ────────</div>
-                  <div className="mt-2 flex items-center gap-2 text-sm font-semibold">
-                    <Lock className="h-4 w-4 shrink-0 text-primary" /> {t.tokenLabel}
-                  </div>
-                </div>
-              </div>
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                <Sparkles className="h-4 w-4 text-primary" /> {t.tokenHint}
+              <div className="rounded-xl border border-primary/35 bg-background/85 px-4 py-4 text-center shadow-inner">
+                <p className="text-[11px] text-muted-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>──────── TOKEN BOX ────────</p>
+                <p className="mt-3 text-sm font-semibold text-foreground" style={{ fontFamily: "'Russo One', sans-serif" }}>{t.tokenLabel}</p>
+                <p className="mt-3 text-base font-bold text-primary" style={{ fontFamily: "'Orbitron', sans-serif" }}>{t.tokenHint}</p>
               </div>
               <input
                 value={accessCode}
                 onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
                 placeholder={t.tokenPlaceholder}
-                className="w-full rounded-xl border border-primary/25 bg-background/70 px-3 py-3 text-center font-mono tracking-[0.25em] outline-none focus:border-primary"
+                className="mt-3 w-full rounded-xl border border-primary/25 bg-background/70 px-3 py-3 text-center font-mono tracking-[0.25em] outline-none focus:border-primary"
                 maxLength={20}
               />
               <button
