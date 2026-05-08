@@ -637,7 +637,7 @@ async function sendWebsiteUnlockMessage(chat_id: number, ownerUserId: string, tg
     token, ownerUserId: isPublicFlow ? null : ownerUserId, createdAt: now, expiresAt,
     status: "pending", consumed: false,
     serviceId: "telegram_bot", source: "telegram_access_bot",
-    tgUserId: String(tgUserId), grantMs, publicClaim: isPublicFlow,
+    tgUserId: String(tgUserId), grantMs, publicClaim: isPublicFlow, accessCode: code,
   });
   await fb("PUT", `accessCodes/${code}`, {
     code, ownerUserId: isPublicFlow ? null : ownerUserId, createdAt: now, expiresAt,
@@ -719,17 +719,12 @@ async function handleVerifyCallback(chat_id: number, message_id: number, callbac
   const expiresAt = now + grantMs;
 
   if (rec.publicClaim) {
-    const codeEntry: any = await fb("GET", `accessCodes`).catch(() => null);
-    const matchingCode = codeEntry && typeof codeEntry === "object"
-      ? Object.values(codeEntry).find((item: any) => item?.tgUserId === String(tgUserId) && item?.status === "pending" && item?.consumed !== true)
-      : null;
-
     await fb("PUT", `unlockTokens/${token}`, {
       ...rec, consumed: true, status: "claimed", claimedByTgUserId: String(tgUserId), claimedAt: now, expiresAt: now,
     });
 
     await answerCallback(callback_id, "✅ Token ready", false);
-    const accessCode = String((matchingCode as any)?.code || "");
+    const accessCode = String(rec.accessCode || "");
     const tokenMessage = `🎟 <b>Your Access Token Is Ready</b>\n\n<code>${accessCode}</code>\n\nPaste this token on the website Unlock page to activate ${Math.round(grantMs / 3600000)}h access.`;
 
     try {
