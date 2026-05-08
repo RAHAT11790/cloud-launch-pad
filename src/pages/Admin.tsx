@@ -1899,6 +1899,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [releaseContent, setReleaseContent] = useState("");
   const [releaseSeason, setReleaseSeason] = useState("");
   const [releaseEpisode, setReleaseEpisode] = useState("");
+  const [releaseEpisodeEnd, setReleaseEpisodeEnd] = useState("");
   const [releaseSeasons, setReleaseSeasons] = useState<any[]>([]);
   const [releaseEpisodes, setReleaseEpisodes] = useState<any[]>([]);
   const [showSeasonEpisode, setShowSeasonEpisode] = useState(false);
@@ -2156,6 +2157,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    const [wsNotifyStep, setWsNotifyStep] = useState<"release" | "telegram">("release");
    const [wsNotifySeason, setWsNotifySeason] = useState("");
    const [wsNotifyEpisode, setWsNotifyEpisode] = useState("");
+   const [wsNotifyEpisodeEnd, setWsNotifyEpisodeEnd] = useState("");
    // Captured context for Save+Notify (saveSeries resets form, so we save context before)
    const wsNotifyContextRef = useRef<{ seriesId: string; form: any; seasons: any[] } | null>(null);
 
