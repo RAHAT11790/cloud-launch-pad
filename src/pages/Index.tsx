@@ -2061,10 +2061,12 @@ const Index = () => {
           onSaveProgress={saveVideoProgress}
           onNextEpisode={
             playerState.anime.type === "webseries" && playerState.seasonIdx !== undefined && playerState.epIdx !== undefined
-              ? () => {
+              ? async () => {
                   const season = playerState.anime.seasons![playerState.seasonIdx!];
                   const nextIdx = (playerState.epIdx! + 1) % season.episodes.length;
                   const nextEp = season.episodes[nextIdx];
+                  const hasAccess = await checkAndShowAdGate(playerState.anime, playerState.seasonIdx, nextIdx);
+                  if (!hasAccess) return;
                   const qOpts = getEpisodeQualityOptions(nextEp);
                   addToWatchHistory(playerState.anime, playerState.seasonIdx, nextIdx);
                   setPlayerState({
