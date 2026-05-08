@@ -711,12 +711,43 @@ async function handleVerifyCallback(chat_id: number, message_id: number, callbac
     return;
   }
   const ownerUserId = String(rec.ownerUserId || "");
-  if (!ownerUserId) {
+  if (!ownerUserId && !rec.publicClaim) {
     await answerCallback(callback_id, "Invalid token owner", true);
     return;
   }
   const grantMs = Number(rec.grantMs) > 0 ? Number(rec.grantMs) : 24 * 3600_000;
   const expiresAt = now + grantMs;
+
+  if (rec.publicClaim) {
+    const codeEntry: any = await fb("GET", `accessCodes`).catch(() => null);
+    const matchingCode = codeEntry && typeof codeEntry === "object"
+      ? Object.values(codeEntry).find((item: any) => item?.tgUserId === String(tgUserId) && item?.status === "pending" && item?.consumed !== true)
+      : null;
+
+    await fb("PUT", `unlockTokens/${token}`, {
+      ...rec, consumed: true, status: "claimed", claimedByTgUserId: String(tgUserId), claimedAt: now, expiresAt: now,
+    });
+
+    await answerCallback(callback_id, "✅ Token ready", false);
+    const accessCode = String((matchingCode as any)?.code || "");
+    const tokenMessage = `🎟 <b>Your Access Token Is Ready</b>\n\n<code>${accessCode}</code>\n\nPaste this token on the website Unlock page to activate ${Math.round(grantMs / 3600000)}h access.`;
+
+    try {
+      await editMessageText(
+        chat_id,
+        message_id,
+        `✅ <b>Verification Complete</b>\n\nYour unique token is now ready below. Copy it and paste it on the website Unlock page.`,
+        { reply_markup: { inline_keyboard: [[{ text: "🌐 Open Website Unlock", url: `${Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app"}/unlock-required` }]] } },
+      );
+    } catch {}
+
+    await sendMessage(chat_id, tokenMessage, {
+      reply_markup: {
+        inline_keyboard: [[{ text: "📋 Copy Token Above", callback_data: "close" }]],
+      },
+    });
+    return;
+  }
 
   await fb("PUT", `unlockTokens/${token}`, {
     ...rec, consumed: true, status: "claimed",
@@ -1555,7 +1586,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    handleUpdate(body).catch((e) => console.error("[update]", e));
+    await handleUpdate(body);
     return new Response("ok", { headers: corsHeaders });
   } catch (e) {
     console.error("[server]", e);
