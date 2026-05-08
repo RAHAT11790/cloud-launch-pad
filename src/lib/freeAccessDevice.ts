@@ -78,9 +78,29 @@ export async function ensureFreeAccessDeviceAllowed(userId: string, snap: FreeAc
     return true;
   }
 
-  // Legacy migration: older entries were keyed only by localStorage device id,
-  // which breaks after storage resets / preview-vs-live origins. If every slot is
-  // legacy (no fingerprint yet), replace the oldest slot once and move to stable matching.
+  // If an older slot has the same physical fingerprint but stale local device id,
+  // heal it instead of blocking the user.
+  const staleFingerprintMatch = Object.entries(devices).find(([, device]) => device?.fingerprint === fingerprint);
+  if (staleFingerprintMatch) {
+    const [staleDeviceId, current] = staleFingerprintMatch;
+    try {
+      const nextPayload = {
+        name: info.name,
+        type: info.type,
+        fingerprint,
+        registeredAt: current?.registeredAt || Date.now(),
+        lastSeen: Date.now(),
+      };
+      await set(ref(db, `users/${userId}/freeAccess/devices/${deviceId}`), nextPayload);
+      if (staleDeviceId !== deviceId) {
+        await remove(ref(db, `users/${userId}/freeAccess/devices/${staleDeviceId}`));
+      }
+    } catch {}
+    return true;
+  }
+
+  // Legacy migration: older entries were keyed only by localStorage device id.
+  // If every slot is legacy (no fingerprint yet), replace the oldest slot once.
   const hasFingerprintBackedSlot = Object.values(devices).some((device) => !!device?.fingerprint);
   if (!hasFingerprintBackedSlot) {
     const oldestLegacy = sortDevicesByAge(devices)[0];
