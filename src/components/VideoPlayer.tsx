@@ -786,14 +786,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
+    const normalized = tryUpgradeToHttps(trimmed);
     // Old iframe server flow is disabled for episode/video switching speed.
     // Everything non-direct is routed through the fast stream proxy path instead.
     // HTTP source + user-configured proxy → route through user's proxy.
     // No proxy configured → return direct (no Lovable fallback).
-    if (shouldForceDirectProxy(trimmed) && proxyUrl) {
-      return buildProxyPlaybackUrl(proxyUrl, trimmed, proxyApiKey || undefined);
+    if (shouldForceDirectProxy(normalized) && proxyUrl) {
+      return buildProxyPlaybackUrl(proxyUrl, normalized, proxyApiKey || undefined);
     }
-    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+    return getPrimaryPlaybackSrc(normalized, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
@@ -801,15 +802,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!server?.domain) return rawUrl;
     const domainTrim = server.domain.trim().replace(/\/$/, "");
     const isHfDomain = /hf\.space|huggingface/i.test(domainTrim);
-    if (isHfDomain) return rawUrl;
+    if (isHfDomain) {
+      const normalizedRawUrl = tryUpgradeToHttps(rawUrl);
+      const encodedRawUrl = encodeURI(normalizedRawUrl);
+      if (/\/watch(?:\/|$)/i.test(domainTrim)) {
+        return `${domainTrim.replace(/\/$/, "")}/${encodedRawUrl.replace(/^\//, "")}`;
+      }
+      return `${domainTrim}/watch/${encodedRawUrl}`;
+    }
 
     // Regular host-swap servers (e.g. fi3.bot-hosting.net swap, render mirror)
     try {
-      const url = new URL(rawUrl);
+      const url = new URL(tryUpgradeToHttps(rawUrl));
       return `${domainTrim}${url.pathname}${url.search}${url.hash}`;
     } catch {
-      const match = rawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
-      return `${domainTrim}${match ? match[1] : rawUrl}`;
+      const normalizedRawUrl = tryUpgradeToHttps(rawUrl);
+      const match = normalizedRawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
+      return `${domainTrim}${match ? match[1] : normalizedRawUrl}`;
     }
   }, [effectiveVideoServers]);
 
