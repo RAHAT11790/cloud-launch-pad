@@ -930,21 +930,6 @@ async function tryAutoVerifyOnReturn(chat_id: number, user_id: number, from: any
 async function handleStart(chat_id: number, user_id: number, from: any, arg?: string) {
   await touchUser(user_id);
 
-  if (arg === "claim_last") {
-    const latest = await fb("GET", `unlockTokens`).catch(() => null);
-    const match = latest
-      ? Object.values(latest as Record<string, any>)
-          .filter((item: any) => String(item?.tgUserId || item?.claimedByTgUserId || "") === String(user_id) && item?.accessCode)
-          .sort((a: any, b: any) => Number(b?.createdAt || 0) - Number(a?.createdAt || 0))[0]
-      : null;
-    if (!match?.accessCode) {
-      await sendEphemeral(chat_id, "✦ No recent access token found ✦");
-      return;
-    }
-    await sendAccessTokenCard(chat_id, String(match.accessCode), Number(match.grantMs) || 24 * 3600_000, user_id);
-    return;
-  }
-
   if (arg && arg.startsWith("claim_")) {
     const token = decodeURIComponent(arg.replace("claim_", "")).trim();
     const rec = token ? await fb("GET", `unlockTokens/${token}`).catch(() => null) : null;
@@ -1636,7 +1621,8 @@ Deno.serve(async (req) => {
     ensureWebhook().catch(() => {});
     const me = await botUsername();
     const targetBotUsername = me || RS_MINI_BOT || RS_RETURN_BOT;
-    const deepLink = `https://t.me/${targetBotUsername}?start=unlock_${encodeURIComponent(userId)}`;
+    const directLink = `https://t.me/${targetBotUsername}?start=unlock_${encodeURIComponent(userId)}`;
+    const deepLink = await buildWebsiteVerifyStartLink(userId);
     return new Response(JSON.stringify({ ok: true, deepLink, botUsername: targetBotUsername }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
