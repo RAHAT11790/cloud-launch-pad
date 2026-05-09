@@ -39,11 +39,12 @@ const PROXY_SERVER_LIMIT = 3;
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
-// NOTE: Lovable's built-in proxy is intentionally NOT used here.
-// Playback proxy is taken ONLY from the admin Settings → Proxy Server
-// (settings/proxyServer.url). If the user has not set a custom proxy,
-// HTTP sources play direct (browser mixed-content rules apply).
-const BUILTIN_STREAM_PROXY = "";
+// Built-in playback proxy is kept as a fallback for plain HTTP sources.
+// HTTPS premium/direct links must stay direct and must never be forced
+// through a proxy route.
+const BUILTIN_STREAM_PROXY = SUPABASE_URL
+  ? `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/video-proxy`
+  : "";
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -93,17 +94,8 @@ const isBypassSource = (url: string): boolean => {
 
 const isProxyPreferredSource = (url: string): boolean => {
   const trimmed = String(url || "").trim();
-  if (!trimmed) return false;
-  if (isInsecureHttpSource(trimmed)) return true;
-
-  try {
-    const parsed = new URL(trimmed);
-    const host = parsed.hostname.toLowerCase();
-    const isKnownRsHost = host.includes("bot-hosting.net") || host.includes("sttv") || host.includes("sttvs");
-    return isKnownRsHost;
-  } catch {
-    return false;
-  }
+  if (!trimmed || isBypassSource(trimmed)) return false;
+  return isInsecureHttpSource(trimmed);
 };
 
 const isLikelyImageUrl = (url: string): boolean => {
@@ -129,6 +121,20 @@ const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
   }
 };
 
+const getRoleDefaultServerIndex = (
+  servers: VideoServerOption[],
+  isPremium: boolean | null,
+): number => {
+  if (!servers.length || isPremium === null) return -1;
+
+  if (isPremium) {
+    const premiumIndex = servers.findIndex((server) => !!server.locked);
+    return premiumIndex >= 0 ? premiumIndex : 0;
+  }
+
+  return servers.findIndex((server) => !server.locked);
+};
+
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
   const rawUrl = String(url || "").trim();
   if (!rawUrl || isLikelyImageUrl(rawUrl)) return [];
@@ -143,6 +149,7 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const encodedRawUrl = encodeURIComponent(rawUrl);
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encodedRawUrl}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, rawUrl, proxyApiKey) : null;
+  const builtinProxyCandidate = BUILTIN_STREAM_PROXY ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, rawUrl) : null;
   const prefersDirectPlayback = isDirectPlaybackUrl(directUrl);
   const preferProxyFirst = !!proxyUrl && isProxyPreferredSource(rawUrl);
 
@@ -153,6 +160,7 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
 
   if (preferProxyFirst) {
     if (customProxyCandidate) addCandidate(customProxyCandidate);
+    if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
     if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
     addCandidate(directUrl);
     return candidates;
@@ -161,11 +169,13 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   if (prefersDirectPlayback) {
     addCandidate(directUrl);
     if (customProxyCandidate) addCandidate(customProxyCandidate);
+    if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
     if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
     return candidates;
   }
 
   if (customProxyCandidate) addCandidate(customProxyCandidate);
+  if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
   if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
 
   if (candidates.length === 0) {
