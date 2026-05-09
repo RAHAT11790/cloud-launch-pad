@@ -881,6 +881,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
+    hasStartedPlayingRef.current = false;
 
     failedSrcsRef.current.clear();
     retryAttemptsRef.current.clear();
@@ -1078,8 +1079,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentQuality("Auto");
     setVideoError(false);
     setIsBuffering(true);
+    setShowFixedLoader(true);
     hasStartedPlayingRef.current = false;
     failedSrcsRef.current.clear();
+    retryAttemptsRef.current.clear();
+    serverSwitchingRef.current = false;
     pendingSeek.current = 0;
     const t = setTimeout(() => {
       instantSwitchRef.current = false;
@@ -1731,7 +1735,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
     const v = videoRef.current;
     pendingSeek.current = v?.currentTime || 0;
+    hasStartedPlayingRef.current = false;
     setIsBuffering(true);
+    setShowFixedLoader(true);
+    retryAttemptsRef.current.clear();
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);
     setShowSettings(false);
