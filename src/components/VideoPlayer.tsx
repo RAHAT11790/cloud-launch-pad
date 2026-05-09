@@ -1133,6 +1133,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setIsBuffering(true);
     setShowFixedLoader(true);
     hasStartedPlayingRef.current = false;
+    userSeekingRef.current = false;
     failedSrcsRef.current.clear();
     retryAttemptsRef.current.clear();
     serverSwitchingRef.current = false;
@@ -1569,6 +1570,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const onLoadStart = () => {
       if (v.readyState < 2) setIsBuffering(true);
     };
+    const onEmptied = () => {
+      // Ignore transient empty states during route transitions; keep UI recoverable.
+      if (!currentSrc) return;
+      setVideoError(false);
+      if (v.readyState < 1) setIsBuffering(true);
+    };
     const onSeeked = () => {
       // Skip done — clear any pending loader debounces immediately.
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
@@ -1605,6 +1612,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     v.addEventListener("stalled", onStalled);
     v.addEventListener("suspend", onSuspend);
     v.addEventListener("loadstart", onLoadStart);
+    v.addEventListener("emptied", onEmptied);
     // Show loader only if data isn't already buffered (fast switch keeps UI clean)
     if (v.readyState < 2) setIsBuffering(true);
     // NOTE: do NOT call v.load() — setting v.src already triggers loading.
@@ -1628,6 +1636,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.removeEventListener("seeked", onSeeked);
       v.removeEventListener("stalled", onStalled);
       v.removeEventListener("suspend", onSuspend);
+      v.removeEventListener("emptied", onEmptied);
       // NOTE: do NOT clear v.src here. This cleanup runs on every currentSrc change
       // (server / quality / audio switch). Wiping src would discard the freshly-set
       // source React just rendered and force a restart from 0:00. Real teardown
@@ -2966,7 +2975,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             : 'bg-secondary border-border/40 text-muted-foreground hover:border-primary/30 hover:text-foreground'
                         }`}
                       >
-                        {s.name}
+                        {getShortSeasonLabel(s.name, idx)}
                       </button>
                     );
                   })}
