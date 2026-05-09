@@ -1496,12 +1496,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     // Debounce waiting briefly to avoid flashing on tiny buffer hiccups
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
-      // After first playback we never re-show the loader (per user spec).
-      if (hasStartedPlayingRef.current) return;
       if (waitingTimer) clearTimeout(waitingTimer);
       waitingTimer = setTimeout(() => {
-        if (v.readyState < 3 && !hasStartedPlayingRef.current) setIsBuffering(true);
-      }, 1200);
+        if (v.readyState < 3 || hasStartedPlayingRef.current) setIsBuffering(true);
+      }, hasStartedPlayingRef.current ? 180 : 300);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
@@ -1511,7 +1509,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setIsBuffering(false);
     };
     const onLoadStart = () => {
-      if (hasStartedPlayingRef.current) return;
       if (v.readyState < 2) setIsBuffering(true);
     };
     const onSeeked = () => {
@@ -1519,11 +1516,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
     let stalledTimer: ReturnType<typeof setTimeout> | null = null;
     const onStalled = () => {
-      if (hasStartedPlayingRef.current) return;
       if (stalledTimer) clearTimeout(stalledTimer);
       stalledTimer = setTimeout(() => {
-        if (v.readyState < 3 && !hasStartedPlayingRef.current) setIsBuffering(true);
-      }, 1500);
+        if (v.readyState < 3) setIsBuffering(true);
+      }, hasStartedPlayingRef.current ? 220 : 450);
     };
     const onSuspend = () => {
       if (!v.paused && v.readyState >= 3) {
@@ -1552,6 +1548,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     return () => {
       cancelAnimationFrame(rafId.current);
+      if (waitingTimer) clearTimeout(waitingTimer);
       if (stalledTimer) clearTimeout(stalledTimer);
       v.removeEventListener("loadedmetadata", onLoaded);
       v.removeEventListener("play", onPlay);
