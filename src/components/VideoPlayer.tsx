@@ -157,10 +157,23 @@ const buildPlaybackCandidates = (
     return candidates;
   }
 
-  // Strict track system:
-  // - HTTP  => proxy first
-  // - HTTPS => direct only
-  // No premium/free branching here — only the final URL protocol decides.
+  // PROXY MODE OVERRIDE
+  // - "off"   => never call any proxy/CDN. Direct src only (HTTP or HTTPS).
+  // - "force" => always proxy, regardless of protocol.
+  // - "auto"  => HTTP gets proxy, HTTPS stays direct.
+  if (proxyMode === "off") {
+    addCandidate(directUrl);
+    return candidates;
+  }
+
+  if (proxyMode === "force") {
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
+    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+    addCandidate(directUrl);
+    return candidates;
+  }
+
   if (protocol === "http:") {
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
@@ -185,8 +198,14 @@ const buildPlaybackCandidates = (
   return candidates;
 };
 
-const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
-  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
+const getPrimaryPlaybackSrc = (
+  url: string,
+  cdnEnabled: boolean,
+  proxyUrl?: string,
+  proxyApiKey?: string,
+  proxyMode: ProxyMode = "auto",
+): string => {
+  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey, proxyMode)[0] || url;
 };
 
 interface AudioTrackOption {
