@@ -78,18 +78,41 @@ const tryUpgradeToHttps = (rawUrl: string): string => {
   }
 };
 
+const getPlaybackProtocol = (url: string): string => {
+  const trimmed = String(url || "").trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("blob:") || trimmed.startsWith("data:") || trimmed.startsWith("mediasource:")) {
+    return trimmed.split(":")[0].toLowerCase() + ":";
+  }
+  try {
+    return new URL(trimmed).protocol.toLowerCase();
+  } catch {
+    const match = trimmed.match(/^([a-z]+):\/\//i);
+    return match?.[1] ? `${match[1].toLowerCase()}:` : "";
+  }
+};
+
 const isDirectPlaybackUrl = (url: string): boolean => {
-  const normalized = url.trim().toLowerCase();
-  return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
+  const protocol = getPlaybackProtocol(url);
+  return protocol === "https:" || protocol === "blob:" || protocol === "data:";
 };
 
 const isInsecureHttpSource = (url: string): boolean => {
-  return String(url || "").trim().toLowerCase().startsWith("http://");
+  return getPlaybackProtocol(url) === "http:";
 };
 
 const isBypassSource = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
+};
+
+const isKnownProxyPlaybackUrl = (url: string, proxyUrl?: string): boolean => {
+  const trimmed = String(url || "").trim();
+  if (!trimmed) return false;
+  if (BUILTIN_STREAM_PROXY && trimmed.startsWith(BUILTIN_STREAM_PROXY)) return true;
+  if (CLOUDFLARE_CDN && trimmed.startsWith(`${CLOUDFLARE_CDN}/video-proxy`)) return true;
+  if (proxyUrl && trimmed.startsWith(proxyUrl.trim())) return true;
+  return false;
 };
 
 const isProxyPreferredSource = (url: string): boolean => {
@@ -137,15 +160,23 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encodedRawUrl}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, rawUrl, proxyApiKey) : null;
   const builtinProxyCandidate = BUILTIN_STREAM_PROXY ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, rawUrl) : null;
-  const prefersDirectPlayback = isDirectPlaybackUrl(directUrl);
-  const preferProxyFirst = isProxyPreferredSource(rawUrl);
+  const protocol = getPlaybackProtocol(rawUrl);
 
   if (isBypassSource(rawUrl)) {
     addCandidate(rawUrl);
     return candidates;
   }
 
-  if (preferProxyFirst) {
+  if (isKnownProxyPlaybackUrl(rawUrl, proxyUrl)) {
+    addCandidate(rawUrl);
+    return candidates;
+  }
+
+  // Strict track system:
+  // - HTTP  => proxy first
+  // - HTTPS => direct only
+  // No premium/free branching here — only the final URL protocol decides.
+  if (protocol === "http:") {
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
     if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
@@ -153,7 +184,7 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
     return candidates;
   }
 
-  if (prefersDirectPlayback) {
+  if (protocol === "https:" || isDirectPlaybackUrl(directUrl)) {
     addCandidate(directUrl);
     return candidates;
   }
