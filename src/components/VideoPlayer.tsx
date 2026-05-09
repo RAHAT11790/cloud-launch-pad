@@ -249,6 +249,13 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
+const getShortSeasonLabel = (seasonName: string | undefined, index: number) => {
+  const normalized = String(seasonName || "").trim();
+  const explicitSeasonNumber = normalized.match(/season\s*(\d+)/i)?.[1];
+  if (explicitSeasonNumber) return `Season ${explicitSeasonNumber}`;
+  return `Season ${index + 1}`;
+};
+
 const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, disableUnlockGate = false }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl || logoImg;
@@ -938,17 +945,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     failedSrcsRef.current.clear();
     retryAttemptsRef.current.clear();
 
-    // Fast swap — just change src, browser handles the rest. No removeAttribute/double-load.
+    // Keep server swapping state-driven so the video element does one clean load only.
+    setIsBuffering(true);
+    setShowFixedLoader(true);
     setCurrentSrc(resolved);
-    try {
-      v.src = resolved;
-      v.load();
-      if (savedTime > 0) {
-        const onMeta = () => { try { v.currentTime = savedTime; } catch {} v.removeEventListener("loadedmetadata", onMeta); };
-        v.addEventListener("loadedmetadata", onMeta);
-      }
-      if (wasPlaying) v.play().catch(() => {});
-    } catch {}
 
     // Auto-failover only if server truly dead (5s, no data at all)
     window.setTimeout(() => {
@@ -1209,14 +1209,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
         const v = videoRef.current;
-        if (v) { try { v.pause(); } catch {} }
+        if (v) {
+          pendingSeek.current = v.currentTime || pendingSeek.current;
+          try { v.pause(); } catch {}
+        }
       }
     };
     const onPageHide = () => {
       const v = videoRef.current;
       if (v) {
+        pendingSeek.current = v.currentTime || pendingSeek.current;
         try { v.pause(); } catch {}
-        try { v.removeAttribute("src"); v.src = ""; v.load(); } catch {}
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
@@ -1226,6 +1229,34 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       window.removeEventListener("pagehide", onPageHide);
     };
   }, []);
+
+  useEffect(() => {
+    const restoreDetachedPlayback = () => {
+      const v = videoRef.current;
+      if (!v || !currentSrc || adGateActive) return;
+      const attrSrc = v.getAttribute("src") || "";
+      if (attrSrc || v.currentSrc) return;
+
+      try {
+        v.src = currentSrc;
+        setVideoError(false);
+        setIsBuffering(true);
+        setShowFixedLoader(true);
+      } catch {}
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") restoreDetachedPlayback();
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", restoreDetachedPlayback);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", restoreDetachedPlayback);
+    };
+  }, [adGateActive, currentSrc]);
 
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
