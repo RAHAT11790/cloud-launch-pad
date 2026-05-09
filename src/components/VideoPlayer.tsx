@@ -66,18 +66,6 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   return url;
 };
 
-const tryUpgradeToHttps = (rawUrl: string): string => {
-  const trimmed = String(rawUrl || "").trim();
-  if (!trimmed.toLowerCase().startsWith("http://")) return trimmed;
-  try {
-    const parsed = new URL(trimmed);
-    parsed.protocol = "https:";
-    return parsed.toString();
-  } catch {
-    return trimmed.replace(/^http:\/\//i, "https://");
-  }
-};
-
 const getPlaybackProtocol = (url: string): string => {
   const trimmed = String(url || "").trim();
   if (!trimmed) return "";
@@ -113,12 +101,6 @@ const isKnownProxyPlaybackUrl = (url: string, proxyUrl?: string): boolean => {
   if (CLOUDFLARE_CDN && trimmed.startsWith(`${CLOUDFLARE_CDN}/video-proxy`)) return true;
   if (proxyUrl && trimmed.startsWith(proxyUrl.trim())) return true;
   return false;
-};
-
-const isProxyPreferredSource = (url: string): boolean => {
-  const trimmed = String(url || "").trim();
-  if (!trimmed || isBypassSource(trimmed)) return false;
-  return isInsecureHttpSource(trimmed);
 };
 
 const isLikelyImageUrl = (url: string): boolean => {
