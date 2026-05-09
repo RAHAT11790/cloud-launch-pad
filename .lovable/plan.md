@@ -1,118 +1,55 @@
-## Edge Function Router রিফ্যাক্টর + Telegram /unlock flow
+## Goal
 
-### A. Edge Function Router UI Cleanup (`src/components/admin/EgdManager.tsx` বা সংশ্লিষ্ট admin section)
+`src/components/VideoPlayer.tsx`-এ ৪টা জিনিস ঠিক করব। Premium/free আলাদা logic পুরোপুরি বাদ — শুধু URL protocol (HTTP vs HTTPS) দিয়ে route ঠিক হবে। User off button দিলে কোন proxy call হবেই না।
 
-**বাদ যাবে (সম্পূর্ণ remove):**
-- 🔗 Built-in URL Shorteners section (Shorten AroLinks / ShrinkMe / VP Link blocks)
-- ⚡ Core Functions section এর ভেতর — Weekly Auto-Detect, RS Bot (Telegram), Send OTP Email
-- 🤖 Telegram Bot /start Webhook section (Set/Check/Remove webhook UI)
-- ☁️ Cloudflare Worker Config section
-- 🤖➕ "Telegram Bot আনলক বাটন (One-click)" auto-add button (Ad Link Services এর নিচের)
+## 1. Settings → Proxy section: "Off" button
 
-**যা থাকবে:**
-- 📢 Telegram Post — URL + enable toggle + SB autofill + save (এটাই শুধু Core থেকে থাকবে)
-- 🔗 Ad Link Services section (নিচে নতুন কাঠামো)
+- Settings panel-এর মাঝে নতুন একটা **"Network"** বা **"Proxy"** tab যোগ করব (Speed/Quality/Audio-এর পাশে)। ভিতরে options:
+  - **Auto** (default): HTTP হলে proxy, HTTPS হলে direct।
+  - **Off**: কোনো proxy/CDN call নেই — HTTP হোক বা HTTPS, raw `src` direct play।
+  - **Force Proxy**: সব URL proxy দিয়ে।
+- Selection সংরক্ষিত হবে `localStorage` (`rsanime_proxy_mode`)। প্রতি player open-এ সাথে সাথে apply।
+- Implementation: `buildPlaybackCandidates()` + `resolvePlaybackSrc()`-কে একটা `proxyMode` arg নিতে দেব। `Off` মানে শুধু `[directUrl]` return — HTTP-ও direct।
 
-### B. Ad Link Services — নতুন কাঠামো
+## 2. Free server "block" fix → unified protocol routing
 
-প্রতিটি service-এ এখন **শুধু দুইটা Supabase Edge Function URL** input থাকবে (Site URL + API key অপশন বাদ):
+- `getRoleDefaultServerIndex()` এবং `getTierDefaultSelection()` থেকে premium/free branching বাদ। Default server সবসময় **list-এর প্রথম server** (admin যেটা প্রথমে রেখেছে)। User চাইলে server panel থেকে অন্যটা select করবে।
+- `switchServer`-এর `if (effectiveVideoServers[serverIndex].locked && !isPremium) return` lock-গুলো রেখে দেব শুধু explicit locked server-গুলোর জন্য — কিন্তু RS01/free server কখনো `locked: true` নয়, তাই block ছুটে যাবে।
+- Auto failover (`getAccessibleServerIndexes`)-ও premium-aware থাকবে (premium 4K-server দেখবে), তবে free user কে আর free-only subset-এ আটকাবে না — সব unlocked server পাবে।
+- Result: এখন HTTPS source হলে direct, HTTP হলে proxy — দুই server-ই।
 
-```
-[Service Name] [Enable toggle] [Delete]
+## 3. Ultra-fast skipping (download-feel) + faster initial load
 
-Mode:  ( ) Shortener  ( ) Telegram Bot     ← একই switch, রাউটিং ঠিক করে
+`<video>` element-এ:
+- `preload="auto"` (already), যোগ করব `crossOrigin="anonymous"` শুধু proxied URL-এ (direct HTTPS-এ skip করব যেন CORS error না আসে)।
 
-🔗 Shortener Function URL:
-   https://xxx.supabase.co/functions/v1/shorten-arolinks
-   → website থেকে direct unlock-এর জন্য
+Skip behavior fix:
+- `seek()`-এ এখন আমরা শুধু `v.currentTime = nextTime` সেট করি, কিন্তু loader debounce তখনও 180ms wait করে → user-এর কাছে "load হতেই থাকে" feel আসে। Fix:
+  1. Manual seek চলাকালে `userSeekingRef = true` set করব (`seek()` আর progress-bar touch-এর শুরুতে)। `onWaiting`/`onStalled`-এ `userSeekingRef === true` থাকলে loader debounce **600ms → 1200ms** বাড়াব যেন instant `seeked` আসলে loader-ই দেখাবে না।
+  2. `onSeeked` event-এ `userSeekingRef = false` + `setIsBuffering(false)` সাথে সাথে → skip-এর পরে কখনো stuck loader থাকবে না।
+  3. Remove the redundant `v.load()` call from the error retry path for HTTPS sources — শুধু src reset, no full reload (browser native range request handle করবে)।
+- Range request flow: `video-proxy/index.ts` already Range forward করছে; কিছু changing লাগবে না। Direct HTTPS-এ browser নিজেই Range request করে — এটা অপটিমাল।
 
-🤖 Telegram Bot Function URL:
-   https://xxx.supabase.co/functions/v1/link-share-bot
-   → Telegram দিয়ে access নেওয়ার জন্য
-```
+Faster initial load:
+- `useEffect` ([src] init) তে এখন `setShowFixedLoader(true)` immediate। এর বদলে `requestAnimationFrame`-এর পর only set করব যদি 200ms-এ `playing` event না আসে — fast HTTPS-এ loader flash-ই হবে না।
+- Remove `setTimeout 450ms switchingEpisode` → 150ms করব। `instantSwitchRef`-ও 150ms।
 
-- Mode = **Shortener** → website থেকে shortener link দিয়ে verify
-- Mode = **Telegram Bot** → Telegram bot deep-link দিয়ে verify
-- Duration field সম্পূর্ণ remove (global duration ব্যবহার হবে)
-- "+ নতুন সার্ভিস যোগ করো" form-এও শুধু এই দুইটা URL input থাকবে
+## 4. Side-by-side Season selector inside player
 
-Firebase schema (`settings/adServices/{id}`):
-```ts
-{ id, name, enabled, mode: "shortener" | "miniapp",
-  shortenerFunctionUrl: string,   // নতুন
-  telegramBotFunctionUrl: string, // নতুন
-  // siteBase, apiKey, durationHours, functionUrl → remove/ignore
-}
-```
+বর্তমান player-এর season selector (lines ~2809–2828) wrapping pill row। ঠিক করব:
+- "X Seasons" label সরিয়ে একটা horizontal scroll strip বানাব:
+  ```
+  [ Season 1 ] [ Season 2 ] [ Season 3 ] [ Season 4 ] →
+  ```
+- Container: `flex gap-2 overflow-x-auto scrollbar-hide pb-1` + `touch-action: pan-x`। Active season-এ gradient + glow, inactive-এ subtle border।
+- প্রতিটা button `min-w-[110px]` যাতে একই size-এ সুন্দর line-up হয়।
 
-### C. Telegram `/unlock` command (link-share-bot edge function)
+## Files to edit
 
-**সমস্যা:** এখন bot-এ deep-link click করলে verify message আসে না।
+- `src/components/VideoPlayer.tsx` (only file)
 
-**ফিক্স:**
-1. `link-share-bot/index.ts`-এ `/unlock` text command handler যোগ করব (deep-link `/start <token>` এর পাশাপাশি)।
-2. User যখন `/unlock` পাঠাবে বা website থেকে button-এ চাপলে যে deep-link বানাবো সেটা হবে:
-   `https://t.me/RS_ANIME_FIND_BOT?start=unlock_<userId>`
-3. Bot `/start unlock_<userId>` পেলে:
-   - Telegram-এ user-এর profile photo (`getUserProfilePhotos`) fetch করবে
-   - নিচের মত verify message পাঠাবে (English):
-     ```
-     [user profile photo]
-     👋 Welcome, <first_name>!
-     🆔 Telegram ID: <tg_id>
-     🌐 Site UID: <userId>
-     
-     Tap the button below to verify and unlock 24h access.
-     [✅ Verify & Unlock]   ← inline button, callback_data=verify_<token>
-     ```
-4. User `Verify & Unlock` callback চাপলে → token consume → Firebase `users/${userId}/freeAccess` activate → bot reply: `✅ Access granted! Return to the website — player will resume automatically.`
+## Out of scope
 
-### D. Telegram Post-এর Free Access button flow
-
-(Admin-এ "Telegram Post unlock button" চালু থাকলে প্রতি post-এ `🔓 Free Access` inline button যাবে)
-
-1. User post-এ `Free Access` চাপলে → bot deep-link `?start=postunlock_<animeId>` খুলবে
-2. Bot welcome message পাঠাবে user-এর profile photo সহ + একটা `🔗 Get Access Link` button
-3. সেই button shortener (configured AroLinks function) দিয়ে link বানাবে — শেষ gateway page-এ user যখন finish করবে, redirect আসবে bot-এই (`?start=token_<token>`)
-4. Bot সেই token-সহ welcome message পাঠাবে:
-   ```
-   [user profile photo]
-   🎉 Verification complete!
-   
-   Your access token:
-   `AB23CDEF`
-   
-   📋 Copy this token, return to the website's Unlock page,
-   paste it in the "Access Token" box and tap "Unlock with Token".
-   ```
-5. Website-এর `UnlockRequired.tsx`-এ ইতিমধ্যেই token paste box আছে (`claimAccessCode`) — সেটাই কাজ করবে।
-
-### E. Profile photo logic
-
-- Telegram bot deep-link দিয়ে এলে → Telegram profile photo (getUserProfilePhotos)
-- Website থেকে এলে (UnlockRequired page) → Firebase `users/${uid}/photoURL` থেকে
-- দুই জায়গায় photo না থাকলে → fallback admin/branding logo
-- `/start` (plain, কোনো param ছাড়া) → শুধুমাত্র আপনার সাইটের logo + welcome message
-
-### F. ফাইল cleanup target
-
-- `src/components/admin/EgdManager.tsx` — large UI cleanup (built-in shorteners, core functions extra rows, webhook section, cloudflare config, one-click telegram add — সব remove)
-- `src/lib/edgeFunctionRouter.ts` — শুধু Telegram Post relevant code রাখব
-- `src/lib/unlockAccess.ts` — `AdService` interface update (shortenerFunctionUrl + telegramBotFunctionUrl), `shortenWithService` update
-- `src/pages/Index.tsx` / `VideoPlayer.tsx` — service.mode অনুযায়ী shortener vs telegram URL select
-- `supabase/functions/link-share-bot/index.ts` — `/unlock` command handler, profile photo fetch, post-unlock token flow, English welcome messages
-- `supabase/functions/telegram-post/index.ts` — `🔓 Free Access` button payload `start=postunlock_<animeId>`-এ পাঠানো
-
-### G. একটা কনফার্মেশন দরকার
-
-Mode = **Telegram Bot** select করলে website-এর unlock button-এ চাপলে user-কে কোথায় পাঠাবো?
-- (1) সরাসরি Telegram bot deep-link খুলবে (current behaviour, recommended)
-- (2) আগে shortener-এ পাঠাবো, তারপর শেষে bot-এ — extra ad layer
-
-Plan-এ আমি (1) ধরেছি। ভিন্ন চাইলে জানান।
-
-### Result
-- Admin panel cleaner — শুধু Telegram Post + Ad Link Services দেখাবে
-- প্রতিটা service-এ shortener URL + telegram bot URL দুটোই থাকবে, mode switch দিয়ে control
-- `/unlock` ও deep-link দুটোই bot-এ verify message + profile photo সহ আসবে
-- Telegram post-এর Free Access button → shortener → token → website paste flow পুরোপুরি কাজ করবে
+- Anime details page-এর season list (user বললো player only)।
+- Proxy edge function code change নেই।
+- Premium/free unrelated feature change নেই।
