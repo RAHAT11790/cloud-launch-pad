@@ -1134,7 +1134,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const t = setTimeout(() => {
       instantSwitchRef.current = false;
       setSwitchingEpisode(false);
-    }, 450);
+    }, 150);
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, videoServersLoaded, isPremium, getTierDefaultSelection]);
 
