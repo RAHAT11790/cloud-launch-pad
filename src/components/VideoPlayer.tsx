@@ -1406,7 +1406,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           activeSourceBaseRef.current,
           cdnEnabled,
           proxyUrl || undefined,
-          proxyApiKey || undefined
+          proxyApiKey || undefined,
+          proxyMode
         ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
 
         if (sameQualityRouteFallback) {
@@ -1417,14 +1418,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
         const nextOption = availableQualities.find((q) => {
           const candidateRawSrc = manualServerSelected ? applyServerDomain(q.src, activeServerIndex) : q.src;
-          const candidateSrc = getPrimaryPlaybackSrc(candidateRawSrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+          const candidateSrc = getPrimaryPlaybackSrc(candidateRawSrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, proxyMode);
           return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
         });
 
         if (nextOption) {
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
           const nextFallbackRawSrc = manualServerSelected ? applyServerDomain(nextOption.src, activeServerIndex) : nextOption.src;
-          const newFallbackSrc = getPrimaryPlaybackSrc(nextFallbackRawSrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+          const newFallbackSrc = getPrimaryPlaybackSrc(nextFallbackRawSrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, proxyMode);
           activeSourceBaseRef.current = nextFallbackRawSrc;
           if (newFallbackSrc === currentSrc) {
             v.currentTime = pendingSeek.current;
