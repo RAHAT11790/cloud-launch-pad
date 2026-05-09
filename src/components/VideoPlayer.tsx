@@ -379,6 +379,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   
   // Load CDN + proxy settings from Firebase (skip if noProxy)
   useEffect(() => {
+    let mounted = true;
+
     if (noProxy) {
       setCdnEnabled(false);
       setProxyUrl('');
@@ -387,7 +389,33 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
 
-    setPlaybackRouteReady(true);
+    setPlaybackRouteReady(false);
+
+    (async () => {
+      try {
+        const [cdnSnap, proxySnap] = await Promise.all([
+          get(ref(db, "settings/cdnEnabled")),
+          get(ref(db, "settings/proxyServer")),
+        ]);
+
+        if (!mounted) return;
+
+        setCdnEnabled(cdnSnap.val() !== false);
+
+        const proxyVal = proxySnap.val();
+        if (proxyVal && proxyVal.url) {
+          setProxyUrl(proxyVal.url);
+          setProxyApiKey(proxyVal.apiKey || '');
+        } else {
+          setProxyUrl('');
+          setProxyApiKey('');
+        }
+      } catch {
+        if (!mounted) return;
+      } finally {
+        if (mounted) setPlaybackRouteReady(true);
+      }
+    })();
 
     const unsub1 = onValue(ref(db, "settings/cdnEnabled"), (snap) => {
       const val = snap.val();
@@ -407,6 +435,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     });
 
     return () => {
+      mounted = false;
       unsub1();
       unsub2();
     };
