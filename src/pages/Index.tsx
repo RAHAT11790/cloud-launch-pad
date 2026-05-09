@@ -245,24 +245,15 @@ const Index = () => {
       const requestSeq = ++accessRequestSeq;
       const data = snap.val();
       if (data?.active && Number(data.expiresAt) > Date.now()) {
-        // 2-device limit: only allow current device if it's registered or within limit
         const { ensureFreeAccessDeviceAllowed } = await import("@/lib/freeAccessDevice");
         const allowed = await ensureFreeAccessDeviceAllowed(uid, data);
         if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(allowed ? Number(data.expiresAt) : 0);
-        if (!allowed) {
-          const devices = data.devices || {};
-          const deviceCount = Object.keys(devices).length;
-          const deviceNames = Object.values(devices).map((d: any) => d?.name || "Unknown Device");
-          setDeviceLimitWarning({
-            message: `Your free access allows up to 2 devices. Currently ${deviceCount} devices are using it. This device is not registered.`,
-            devices: deviceNames,
-            maxDevices: 2,
-          });
-        }
+        if (!allowed) setDeviceLimitWarning(null);
       } else {
         if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(0);
+        setDeviceLimitWarning(null);
       }
     });
 
@@ -277,7 +268,7 @@ const Index = () => {
     };
   }, [isLoggedIn]);
 
-  // Realtime device limit monitor - check if current device is still within limit
+  // Premium-only realtime device limit monitor
   useEffect(() => {
     if (!isLoggedIn) return;
     try {
@@ -2180,8 +2171,8 @@ const Index = () => {
         />
       )}
 
-      {/* Device Limit Warning Overlay */}
-      {deviceLimitWarning && (
+      {/* Premium Device Limit Warning Overlay */}
+      {deviceLimitWarning && saltIsPremium && (
         <div className="fixed inset-0 z-[99999] bg-background/98 backdrop-blur-md flex items-center justify-center p-6">
           <div className="w-full max-w-[380px] text-center space-y-5">
             <div className="w-20 h-20 mx-auto mb-2 rounded-full bg-destructive/10 border-2 border-destructive/30 flex items-center justify-center">
