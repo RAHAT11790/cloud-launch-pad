@@ -2370,6 +2370,55 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   })}
                 </div>
               )}
+              {settingsTab === "network" && (
+                <div className="space-y-0.5">
+                  <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider font-medium">Proxy Mode</p>
+                  {([
+                    { id: "auto", label: "Auto", hint: "HTTP via proxy, HTTPS direct" },
+                    { id: "off", label: "Off", hint: "No proxy at all — raw direct src" },
+                    { id: "force", label: "Force Proxy", hint: "Always route through proxy" },
+                  ] as { id: ProxyMode; label: string; hint: string }[]).map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => {
+                        if (proxyMode === opt.id) return;
+                        const v = videoRef.current;
+                        const savedTime = v?.currentTime || 0;
+                        const wasPlaying = !!v && !v.paused;
+                        updateProxyMode(opt.id);
+                        // Re-resolve current source under the new mode.
+                        const baseSrc = activeSourceBaseRef.current || sourceBaseRef.current || src;
+                        const newSrc =
+                          opt.id === "off"
+                            ? baseSrc
+                            : getPrimaryPlaybackSrc(baseSrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, opt.id);
+                        if (newSrc && newSrc !== currentSrc) {
+                          pendingSeek.current = savedTime;
+                          failedSrcsRef.current.clear();
+                          retryAttemptsRef.current.clear();
+                          setCurrentSrc(newSrc);
+                          if (v) {
+                            try {
+                              v.src = newSrc;
+                              v.load();
+                              if (wasPlaying) v.play().catch(() => {});
+                            } catch {}
+                          }
+                        }
+                      }}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                        proxyMode === opt.id ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                      }`}
+                    >
+                      <span className="flex flex-col items-start">
+                        <span>{opt.label}</span>
+                        <span className={`text-[9px] ${proxyMode === opt.id ? "opacity-90" : "opacity-60"}`}>{opt.hint}</span>
+                      </span>
+                      {proxyMode === opt.id && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
