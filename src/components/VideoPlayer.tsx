@@ -543,6 +543,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         const allowed = await ensureFreeAccessDeviceAllowed(uid, data);
         if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(allowed ? Number(data.expiresAt) : 0);
+        if (!allowed) setAdGateActive(false);
       } else {
         if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(0);
