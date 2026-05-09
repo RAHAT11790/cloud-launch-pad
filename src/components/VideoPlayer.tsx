@@ -920,6 +920,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   // Keep RS01/default server on first load; premium servers stay manual-only.
 
+  const getTierDefaultSelection = useCallback((rawUrl: string) => {
+    const defaultServerIndex = getRoleDefaultServerIndex(effectiveVideoServers, isPremium);
+    if (defaultServerIndex < 0) {
+      return {
+        usesServer: false,
+        serverIndex: 0,
+        rawSrc: rawUrl,
+        resolvedSrc: resolvePlaybackSrc(rawUrl),
+      };
+    }
+
+    const tierRawSrc = applyServerDomain(rawUrl, defaultServerIndex);
+    return {
+      usesServer: true,
+      serverIndex: defaultServerIndex,
+      rawSrc: tierRawSrc,
+      resolvedSrc: resolvePlaybackSrc(tierRawSrc),
+    };
+  }, [applyServerDomain, effectiveVideoServers, isPremium, resolvePlaybackSrc]);
+
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
 
 
@@ -1045,7 +1065,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [currentSrc, resolvePlaybackSrc, src, manualServerSelected, activeServerIndex, applyServerDomain]);
 
   useEffect(() => {
-    if (!playbackRouteReady) return;
+    if (!playbackRouteReady || isPremium === null) return;
     const v = videoRef.current;
     if (v) {
       try { v.pause(); } catch {}
@@ -1053,12 +1073,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     instantSwitchRef.current = true;
     setSwitchingEpisode(true);
     sourceBaseRef.current = src;
-    activeSourceBaseRef.current = src;
-    const resolvedSrc = resolvePlaybackSrc(src);
-    setCurrentSrc(resolvedSrc);
+    const tierDefault = getTierDefaultSelection(src);
+    activeSourceBaseRef.current = tierDefault.rawSrc;
+    setActiveServerIndex(tierDefault.serverIndex);
+    setManualServerSelected(tierDefault.usesServer);
+    setCurrentSrc(tierDefault.resolvedSrc);
     setCurrentQuality("Auto");
-    setManualServerSelected(false);
     setVideoError(false);
+    setIsBuffering(true);
     failedSrcsRef.current.clear();
     pendingSeek.current = 0;
     const t = setTimeout(() => {
@@ -1066,7 +1088,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setSwitchingEpisode(false);
     }, 450);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
+  }, [src, qualityOptions, noProxy, playbackRouteReady, isPremium, getTierDefaultSelection]);
 
   // Loader follows real buffering state — show whenever video isn't playable, hide as soon as it can play.
   useEffect(() => {
