@@ -508,6 +508,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // We still show the loader later on real buffering events, but this ref helps
   // us distinguish first-start from post-playback rebuffering.
   const hasStartedPlayingRef = useRef(false);
+  // Tracks active manual scrubbing/skipping so the loader does not flash
+  // during expected mid-seek buffer pauses.
+  const userSeekingRef = useRef(false);
 
   const [tutorialLink, setTutorialLink] = useState<string | null>(null);
   const [tutorialVideos, setTutorialVideos] = useState<{ title: string; url: string }[]>([]);
