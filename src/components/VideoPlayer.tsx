@@ -1509,14 +1509,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
       if (waitingTimer) clearTimeout(waitingTimer);
+      // While the user is actively skipping, suppress the loader for a long
+      // window so quick seeks feel like a download, never a load screen.
+      const debounce = userSeekingRef.current
+        ? 1200
+        : (hasStartedPlayingRef.current ? 180 : 300);
       waitingTimer = setTimeout(() => {
         if (v.readyState < 3 || hasStartedPlayingRef.current) setIsBuffering(true);
-      }, hasStartedPlayingRef.current ? 180 : 300);
+      }, debounce);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
       if (stalledTimer) { clearTimeout(stalledTimer); stalledTimer = null; }
       hasStartedPlayingRef.current = true;
+      userSeekingRef.current = false;
       setVideoError(false);
       setIsBuffering(false);
     };
@@ -1524,14 +1530,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (v.readyState < 2) setIsBuffering(true);
     };
     const onSeeked = () => {
+      // Skip done — clear any pending loader debounces immediately.
+      if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
+      if (stalledTimer) { clearTimeout(stalledTimer); stalledTimer = null; }
+      userSeekingRef.current = false;
       setIsBuffering(false);
     };
     let stalledTimer: ReturnType<typeof setTimeout> | null = null;
     const onStalled = () => {
       if (stalledTimer) clearTimeout(stalledTimer);
+      const debounce = userSeekingRef.current
+        ? 1200
+        : (hasStartedPlayingRef.current ? 220 : 450);
       stalledTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
-      }, hasStartedPlayingRef.current ? 220 : 450);
+      }, debounce);
     };
     const onSuspend = () => {
       if (!v.paused && v.readyState >= 3) {
