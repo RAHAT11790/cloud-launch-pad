@@ -152,7 +152,7 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, rawUrl, proxyApiKey) : null;
   const builtinProxyCandidate = BUILTIN_STREAM_PROXY ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, rawUrl) : null;
   const prefersDirectPlayback = isDirectPlaybackUrl(directUrl);
-  const preferProxyFirst = !!proxyUrl && isProxyPreferredSource(rawUrl);
+  const preferProxyFirst = isProxyPreferredSource(rawUrl);
 
   if (isBypassSource(rawUrl)) {
     addCandidate(rawUrl);
@@ -169,9 +169,6 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
 
   if (prefersDirectPlayback) {
     addCandidate(directUrl);
-    if (customProxyCandidate) addCandidate(customProxyCandidate);
-    if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
-    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
     return candidates;
   }
 
