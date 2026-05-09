@@ -287,12 +287,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return buildFallbackServers(src).slice(0, PROXY_SERVER_LIMIT);
   }, [noServerSwitch, src, videoServers]);
 
-  const getAccessibleServerIndexes = useCallback(() => {
+  const getAccessibleServerIndexes = useCallback((premiumValue: boolean | null) => {
     return effectiveVideoServers
       .map((server, index) => ({ server, index }))
-      .filter(({ server }) => !server.locked || !!isPremium)
+      .filter(({ server }) => !server.locked || !!premiumValue)
       .map(({ index }) => index);
-  }, [effectiveVideoServers, isPremium]);
+  }, [effectiveVideoServers]);
 
   // ===== LEGACY EMBED BRIDGE =====
   // Some older server setups used an iframe bridge page, but playback now
@@ -1062,7 +1062,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [currentSrc, resolvePlaybackSrc, src, manualServerSelected, activeServerIndex, applyServerDomain]);
 
   useEffect(() => {
-    if (!playbackRouteReady || isPremium === null) return;
+    if (!playbackRouteReady || !videoServersLoaded || isPremium === null) return;
     const v = videoRef.current;
     if (v) {
       try { v.pause(); } catch {}
@@ -1086,7 +1086,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setSwitchingEpisode(false);
     }, 450);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, isPremium, getTierDefaultSelection]);
+  }, [src, qualityOptions, noProxy, playbackRouteReady, videoServersLoaded, isPremium, getTierDefaultSelection]);
 
   // Loader rules (per user):
   // 1. Show loader ONLY for the very first load of the current src (until first `playing`).
@@ -1276,7 +1276,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [videoError, clearHideTimer]);
 
   // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
-  const showLoaderOverlay = !!currentSrc && !videoError && (showFixedLoader || serverSwitchingRef.current);
+  const showLoaderOverlay = !!currentSrc && !videoError && showFixedLoader;
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
