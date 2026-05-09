@@ -1410,18 +1410,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           setCurrentQuality(nextOption.label);
         } else {
           // ===== AUTO SERVER FAILOVER =====
-          // All quality/route fallbacks exhausted — try next server automatically
+          // Only rotate across servers the current user is actually allowed to use.
           if (effectiveVideoServers.length > 1) {
-            const nextServerIdx = (activeServerIndex + 1) % effectiveVideoServers.length;
-            // Only auto-failover if we haven't cycled through all servers
-            const failoverKey = `__server_failover_${nextServerIdx}`;
-            if (!failedSrcsRef.current.has(failoverKey)) {
-              failedSrcsRef.current.add(failoverKey);
-              // Reset failed srcs for the new server (keep failover keys)
-              const failoverKeys = new Set([...failedSrcsRef.current].filter(k => k.startsWith("__server_failover_")));
-              failedSrcsRef.current = failoverKeys;
-              switchServer(nextServerIdx);
-              return;
+            const accessibleServerIndexes = getAccessibleServerIndexes(isPremium);
+            const currentAccessiblePos = accessibleServerIndexes.indexOf(activeServerIndex);
+            const nextServerIdx = currentAccessiblePos >= 0
+              ? accessibleServerIndexes[(currentAccessiblePos + 1) % accessibleServerIndexes.length]
+              : accessibleServerIndexes[0];
+
+            if (nextServerIdx !== undefined && nextServerIdx !== activeServerIndex) {
+              const failoverKey = `__server_failover_${nextServerIdx}`;
+              if (!failedSrcsRef.current.has(failoverKey)) {
+                failedSrcsRef.current.add(failoverKey);
+                const failoverKeys = new Set([...failedSrcsRef.current].filter(k => k.startsWith("__server_failover_")));
+                failedSrcsRef.current = failoverKeys;
+                switchServer(nextServerIdx);
+                return;
+              }
             }
           }
           setVideoError(true);
@@ -1551,7 +1556,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex]);
+  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex, getAccessibleServerIndexes, isPremium]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
