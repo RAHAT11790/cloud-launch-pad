@@ -302,6 +302,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
+  const updateProxyMode = useCallback((next: ProxyMode) => {
+    setProxyMode(next);
+    try { localStorage.setItem("rsanime_proxy_mode", next); } catch {}
+  }, []);
+
+
   // ===== SERVER CHANGER =====
   const [videoServers, setVideoServers] = useState<VideoServerOption[]>([]);
   const [videoServersLoaded, setVideoServersLoaded] = useState(false);
