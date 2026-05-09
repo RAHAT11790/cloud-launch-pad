@@ -132,7 +132,8 @@ const getRoleDefaultServerIndex = (
     return premiumIndex >= 0 ? premiumIndex : 0;
   }
 
-  return servers.findIndex((server) => !server.locked);
+  const freeIndex = servers.findIndex((server) => !server.locked);
+  return freeIndex >= 0 ? freeIndex : 0;
 };
 
 const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
@@ -839,8 +840,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
     if (isLikelyImageUrl(trimmed)) return "";
+    if (noProxy) return trimmed;
     return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-  }, [cdnEnabled, proxyUrl, proxyApiKey]);
+  }, [cdnEnabled, noProxy, proxyUrl, proxyApiKey]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     const server = effectiveVideoServers[serverIndex];
