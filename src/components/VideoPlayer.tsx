@@ -800,13 +800,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
     if (isLikelyImageUrl(trimmed)) return "";
-    // Old iframe server flow is disabled for episode/video switching speed.
-    // Everything non-direct is routed through the fast stream proxy path instead.
-    // HTTP source + user-configured proxy → route through user's proxy.
-    // No proxy configured → return direct (no Lovable fallback).
-    if (shouldForceDirectProxy(trimmed) && proxyUrl) {
-      return buildProxyPlaybackUrl(proxyUrl, trimmed, proxyApiKey || undefined);
-    }
     return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
