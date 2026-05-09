@@ -262,6 +262,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   // ===== SERVER CHANGER =====
   const [videoServers, setVideoServers] = useState<VideoServerOption[]>([]);
+  const [videoServersLoaded, setVideoServersLoaded] = useState(false);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
   const [showServerPanel, setShowServerPanel] = useState(false);
@@ -275,6 +276,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         servers = Object.values(val).filter((s: any) => s && s.domain) as any[];
       }
       setVideoServers(servers.slice(0, PROXY_SERVER_LIMIT));
+      setVideoServersLoaded(true);
     });
     return () => unsub();
   }, []);
@@ -284,6 +286,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (videoServers.length > 0) return videoServers.slice(0, PROXY_SERVER_LIMIT);
     return buildFallbackServers(src).slice(0, PROXY_SERVER_LIMIT);
   }, [noServerSwitch, src, videoServers]);
+
+  const getAccessibleServerIndexes = useCallback(() => {
+    return effectiveVideoServers
+      .map((server, index) => ({ server, index }))
+      .filter(({ server }) => !server.locked || !!isPremium)
+      .map(({ index }) => index);
+  }, [effectiveVideoServers, isPremium]);
 
   // ===== LEGACY EMBED BRIDGE =====
   // Some older server setups used an iframe bridge page, but playback now
