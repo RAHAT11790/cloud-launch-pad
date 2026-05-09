@@ -1467,20 +1467,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     // Debounce waiting briefly to avoid flashing on tiny buffer hiccups
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
+      // After first playback we never re-show the loader (per user spec).
+      if (hasStartedPlayingRef.current) return;
       if (waitingTimer) clearTimeout(waitingTimer);
-      // Longer debounce — avoid flashing loader on tiny network hiccups during smooth playback
       waitingTimer = setTimeout(() => {
-        if (v.readyState < 3) setIsBuffering(true);
+        if (v.readyState < 3 && !hasStartedPlayingRef.current) setIsBuffering(true);
       }, 1200);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
       if (stalledTimer) { clearTimeout(stalledTimer); stalledTimer = null; }
+      hasStartedPlayingRef.current = true;
       setVideoError(false);
       setIsBuffering(false);
     };
     const onLoadStart = () => {
-      // Only show loader if we genuinely don't have data yet
+      if (hasStartedPlayingRef.current) return;
       if (v.readyState < 2) setIsBuffering(true);
     };
     const onSeeked = () => {
@@ -1488,9 +1490,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
     let stalledTimer: ReturnType<typeof setTimeout> | null = null;
     const onStalled = () => {
+      if (hasStartedPlayingRef.current) return;
       if (stalledTimer) clearTimeout(stalledTimer);
       stalledTimer = setTimeout(() => {
-        if (v.readyState < 3) setIsBuffering(true);
+        if (v.readyState < 3 && !hasStartedPlayingRef.current) setIsBuffering(true);
       }, 1500);
     };
     const onSuspend = () => {
