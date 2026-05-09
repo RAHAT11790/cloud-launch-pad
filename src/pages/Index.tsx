@@ -1308,6 +1308,7 @@ const Index = () => {
 
       const historyItem: any = {
         id: anime.id,
+        source: anime.source || "firebase",
         title: anime.title,
         poster: anime.poster,
         year: anime.year,
@@ -1363,7 +1364,11 @@ const Index = () => {
       return;
     }
 
-    const anime = allAnime.find(a => a.id === item.id);
+    const preferredSource = item.source || "firebase";
+    const anime =
+      allAnime.find(a => a.id === item.id && (a.source || "firebase") === preferredSource) ||
+      allAnime.find(a => a.id === item.id && (a.source || "firebase") === "firebase") ||
+      allAnime.find(a => a.id === item.id);
     if (!anime) return;
 
     // AnimeSalt source: directly play the last watched episode
