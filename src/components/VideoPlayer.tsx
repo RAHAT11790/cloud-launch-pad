@@ -6,7 +6,7 @@ import {
   ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
-import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
+import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
@@ -50,11 +50,12 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   const encoded = encodeURIComponent(targetUrl);
   if (!base) return targetUrl;
   let url: string;
-  // Support {url} placeholder: https://proxy.example.com/?url={url}
+  // Support {url}/{URL} placeholder: https://proxy.example.com/?url={url}
   if (base.includes('{url}')) url = base.split('{url}').join(encoded);
+  else if (base.includes('{URL}')) url = base.split('{URL}').join(encoded);
   // Support ending with = or ?url= or &url=
-  else if (/[?&]url=$/.test(base) || base.endsWith('=')) url = `${base}${encoded}`;
-  else if (base.includes('?url=') || base.includes('&url=')) url = `${base}${encoded}`;
+  else if (/[?&](?:url|URL)=$/.test(base) || base.endsWith('=')) url = `${base}${encoded}`;
+  else if (base.includes('?url=') || base.includes('&url=') || base.includes('?URL=') || base.includes('&URL=')) url = `${base}${encoded}`;
   // Default: append ?url=
   else url = `${base.replace(/\/$/, '')}?url=${encoded}`;
   // Append API key if provided
@@ -90,6 +91,21 @@ const isBypassSource = (url: string): boolean => {
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
 };
 
+const isProxyPreferredSource = (url: string): boolean => {
+  const trimmed = String(url || "").trim();
+  if (!trimmed) return false;
+  if (isInsecureHttpSource(trimmed)) return true;
+
+  try {
+    const parsed = new URL(trimmed);
+    const host = parsed.hostname.toLowerCase();
+    const isKnownRsHost = host.includes("bot-hosting.net") || host.includes("sttv") || host.includes("sttvs");
+    return isKnownRsHost;
+  } catch {
+    return false;
+  }
+};
+
 const isLikelyImageUrl = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase().split("?")[0].split("#")[0];
   return /\.(avif|gif|jpe?g|png|svg|webp|bmp)$/i.test(normalized);
@@ -123,31 +139,34 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
     candidates.push(candidate);
   };
 
-  const directUrl = isInsecureHttpSource(rawUrl) ? rawUrl : tryUpgradeToHttps(rawUrl);
+  const directUrl = rawUrl;
   const encodedRawUrl = encodeURIComponent(rawUrl);
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encodedRawUrl}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, rawUrl, proxyApiKey) : null;
   const prefersDirectPlayback = isDirectPlaybackUrl(directUrl);
-  const mustUseProxy = isInsecureHttpSource(rawUrl);
+  const preferProxyFirst = !!proxyUrl && isProxyPreferredSource(rawUrl);
 
   if (isBypassSource(rawUrl)) {
     addCandidate(rawUrl);
     return candidates;
   }
 
-  if (prefersDirectPlayback && !mustUseProxy) {
+  if (preferProxyFirst) {
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
     addCandidate(directUrl);
     return candidates;
   }
 
-  if (mustUseProxy) {
-    // ONLY user-selected proxy from Settings is used. No built-in fallback.
+  if (prefersDirectPlayback) {
+    addCandidate(directUrl);
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
-    // If nothing configured, fall through to direct (last-resort) below
-  } else {
-    addCandidate(directUrl);
+    return candidates;
   }
+
+  if (customProxyCandidate) addCandidate(customProxyCandidate);
+  if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
 
   if (candidates.length === 0) {
     addCandidate(directUrl);
@@ -158,11 +177,6 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
 
 const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
-};
-
-const shouldForceDirectProxy = (url: string): boolean => {
-  const value = String(url || "").trim().toLowerCase();
-  return value.startsWith("http://");
 };
 
 interface AudioTrackOption {
