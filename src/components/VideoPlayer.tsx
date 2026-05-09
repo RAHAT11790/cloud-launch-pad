@@ -288,6 +288,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>('');
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
+  const [proxyMode, setProxyMode] = useState<ProxyMode>(() => {
+    try {
+      const v = localStorage.getItem("rsanime_proxy_mode");
+      if (v === "off" || v === "force" || v === "auto") return v;
+    } catch {}
+    return "auto";
+  });
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
