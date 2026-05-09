@@ -837,12 +837,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (!server?.domain) return rawUrl;
     const domainTrim = server.domain.trim().replace(/\/$/, "");
     try {
-      const url = new URL(tryUpgradeToHttps(rawUrl));
+      const url = new URL(rawUrl);
       return `${domainTrim}${url.pathname}${url.search}${url.hash}`;
     } catch {
-      const normalizedRawUrl = tryUpgradeToHttps(rawUrl);
-      const match = normalizedRawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
-      return `${domainTrim}${match ? match[1] : normalizedRawUrl}`;
+      const trimmedRawUrl = String(rawUrl || "").trim();
+      const match = trimmedRawUrl.match(/^https?:\/\/[^\/]+(\/.*)/i);
+      return `${domainTrim}${match ? match[1] : trimmedRawUrl}`;
     }
   }, [effectiveVideoServers]);
 
