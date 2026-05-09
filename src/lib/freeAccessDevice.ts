@@ -1,9 +1,7 @@
-// Free access device tracker — max 2 devices per account.
-// On 3rd device, the user keeps no benefit from free access (will see Unlock again).
+// Free access device tracker — no device count limit.
+// Each physical device must claim its own access separately.
 import { db, ref, set, update, remove } from "@/lib/firebase";
 import { getDeviceFingerprint, getDeviceId, getDeviceInfo } from "@/lib/premiumDevice";
-
-const MAX_FREE_DEVICES = 2;
 
 export interface FreeAccessSnap {
   active?: boolean;
@@ -13,11 +11,6 @@ export interface FreeAccessSnap {
 }
 
 type FreeAccessDeviceEntry = NonNullable<FreeAccessSnap["devices"]>[string];
-
-const sortDevicesByAge = (devices: Record<string, FreeAccessDeviceEntry>) =>
-  Object.entries(devices).sort(
-    ([, a], [, b]) => ((a?.lastSeen || a?.registeredAt || 0) - (b?.lastSeen || b?.registeredAt || 0)),
-  );
 
 const getMatchedDeviceId = (
   devices: Record<string, FreeAccessDeviceEntry>,
@@ -30,8 +23,9 @@ const getMatchedDeviceId = (
 };
 
 /**
- * Returns true if the *current* device is allowed to consume the user's free access.
- * Auto-registers this device if there's room (≤2 total).
+ * Returns true if the current device has access.
+ * Free access is now strictly per-device: the first claiming device keeps access,
+ * and every new device must claim its own access separately.
  */
 export async function ensureFreeAccessDeviceAllowed(userId: string, snap: FreeAccessSnap | null): Promise<boolean> {
   if (!snap || !snap.active || !snap.expiresAt || snap.expiresAt <= Date.now()) return false;
@@ -64,8 +58,9 @@ export async function ensureFreeAccessDeviceAllowed(userId: string, snap: FreeAc
     return true;
   }
 
-  // Room available → register
-  if (Object.keys(devices).length < MAX_FREE_DEVICES) {
+  // Legacy records from older versions may have had no devices map at all.
+  // In that case, bind the current device once and keep access only for it.
+  if (Object.keys(devices).length === 0) {
     try {
       await set(ref(db, `users/${userId}/freeAccess/devices/${deviceId}`), {
         name: info.name,
@@ -78,50 +73,6 @@ export async function ensureFreeAccessDeviceAllowed(userId: string, snap: FreeAc
     return true;
   }
 
-  // If an older slot has the same physical fingerprint but stale local device id,
-  // heal it instead of blocking the user.
-  const staleFingerprintMatch = Object.entries(devices).find(([, device]) => device?.fingerprint === fingerprint);
-  if (staleFingerprintMatch) {
-    const [staleDeviceId, current] = staleFingerprintMatch;
-    try {
-      const nextPayload = {
-        name: info.name,
-        type: info.type,
-        fingerprint,
-        registeredAt: current?.registeredAt || Date.now(),
-        lastSeen: Date.now(),
-      };
-      await set(ref(db, `users/${userId}/freeAccess/devices/${deviceId}`), nextPayload);
-      if (staleDeviceId !== deviceId) {
-        await remove(ref(db, `users/${userId}/freeAccess/devices/${staleDeviceId}`));
-      }
-    } catch {}
-    return true;
-  }
-
-  // Legacy migration: older entries were keyed only by localStorage device id.
-  // If every slot is legacy (no fingerprint yet), replace the oldest slot once.
-  const hasFingerprintBackedSlot = Object.values(devices).some((device) => !!device?.fingerprint);
-  if (!hasFingerprintBackedSlot) {
-    const oldestLegacy = sortDevicesByAge(devices)[0];
-    if (oldestLegacy) {
-      const [legacyDeviceId] = oldestLegacy;
-      try {
-        await set(ref(db, `users/${userId}/freeAccess/devices/${deviceId}`), {
-          name: info.name,
-          type: info.type,
-          fingerprint,
-          registeredAt: Date.now(),
-          lastSeen: Date.now(),
-        });
-        if (legacyDeviceId !== deviceId) {
-          await remove(ref(db, `users/${userId}/freeAccess/devices/${legacyDeviceId}`));
-        }
-      } catch {}
-      return true;
-    }
-  }
-
-  // 3rd device — not allowed
+  // Different device: access must be claimed again on that specific device.
   return false;
 }
