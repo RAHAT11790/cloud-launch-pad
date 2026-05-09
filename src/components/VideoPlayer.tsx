@@ -1069,6 +1069,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentQuality("Auto");
     setVideoError(false);
     setIsBuffering(true);
+    hasStartedPlayingRef.current = false;
     failedSrcsRef.current.clear();
     pendingSeek.current = 0;
     const t = setTimeout(() => {
@@ -1078,7 +1079,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, isPremium, getTierDefaultSelection]);
 
-  // Loader follows real buffering state — show whenever video isn't playable, hide as soon as it can play.
+  // Loader rules (per user):
+  // 1. Show loader ONLY for the very first load of the current src (until first `playing`).
+  // 2. After playback has started once, NEVER show the loader again — no matter what the
+  //    video element reports (waiting / stalled / seeking / suspend etc.).
+  // 3. If the server doesn't respond within 3s on the initial load, force-hide the loader
+  //    so the UI doesn't sit on a forever-spinning wheel.
   useEffect(() => {
     if (loaderTimeoutRef.current) {
       clearTimeout(loaderTimeoutRef.current);
@@ -1090,8 +1096,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
 
-    // Strict mapping: loader visibility == buffering state.
+    if (hasStartedPlayingRef.current) {
+      // Playback has already begun once — keep the loader hidden, always.
+      setShowFixedLoader(false);
+      return;
+    }
+
     setShowFixedLoader(isBuffering);
+
+    if (isBuffering) {
+      // Auto-hide after 3s if the server fails to respond.
+      loaderTimeoutRef.current = setTimeout(() => {
+        setShowFixedLoader(false);
+        setIsBuffering(false);
+      }, 3000);
+    }
   }, [currentSrc, isBuffering, switchingEpisode]);
 
   // Simple volume sync - no AudioContext needed
