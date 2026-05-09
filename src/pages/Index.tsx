@@ -268,45 +268,8 @@ const Index = () => {
     };
   }, [isLoggedIn]);
 
-  // Premium-only realtime device limit monitor
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    try {
-      const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
-      if (!u.id) return;
-      const unsub = onValue(ref(db, `users/${u.id}/premium`), async (snap) => {
-        const data = snap.val();
-        if (!data || !data.active || data.expiresAt <= Date.now()) {
-          setDeviceLimitWarning(null);
-          return;
-        }
-        const maxDevices = Math.max(1, Number(data.maxDevices) || 1);
-        const devices = data.devices || {};
-        const deviceCount = Object.keys(devices).length;
-        if (deviceCount <= maxDevices) {
-          setDeviceLimitWarning(null);
-          return;
-        }
-        // Over limit! Check if THIS device is registered
-        const { getDeviceId, getDeviceFingerprint } = await import("@/lib/premiumDevice");
-        const myDeviceId = getDeviceId();
-        const myFp = getDeviceFingerprint();
-        const isRegistered = devices[myDeviceId] || Object.entries(devices).some(([, d]: any) => d?.fingerprint === myFp);
-        if (!isRegistered) {
-          // This device is NOT registered and limit is exceeded - force warning
-          const deviceNames = Object.values(devices).map((d: any) => d?.name || "Unknown Device");
-          setDeviceLimitWarning({
-            message: `Your account allows up to ${maxDevices} devices. Currently ${deviceCount} devices are logged in. This device is not registered.`,
-            devices: deviceNames,
-            maxDevices,
-          });
-        } else {
-          setDeviceLimitWarning(null);
-        }
-      });
-      return () => unsub();
-    } catch {}
-  }, [isLoggedIn]);
+  // Device-limit popup inside the app is intentionally disabled.
+  // Premium device limits are enforced only during login.
 
   // Welcome voice removed per user request
 
@@ -2171,55 +2134,6 @@ const Index = () => {
         />
       )}
 
-      {/* Premium Device Limit Warning Overlay */}
-      {deviceLimitWarning && saltIsPremium && (
-        <div className="fixed inset-0 z-[99999] bg-background/98 backdrop-blur-md flex items-center justify-center p-6">
-          <div className="w-full max-w-[380px] text-center space-y-5">
-            <div className="w-20 h-20 mx-auto mb-2 rounded-full bg-destructive/10 border-2 border-destructive/30 flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-destructive">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-extrabold text-destructive">Device limit exceeded</h2>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Your device limit has been exceeded. Tap the button below to log out from all devices, then log in again.
-            </p>
-            
-            <div className="bg-card/50 rounded-xl p-4 text-left space-y-2">
-              <p className="text-xs font-semibold text-foreground/70 mb-2">Currently logged in:</p>
-              {deviceLimitWarning.devices.map((name, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span className="text-lg">📱</span>
-                  <span>{name}</span>
-                </div>
-              ))}
-            </div>
-
-            <p className="text-xs text-muted-foreground">{deviceLimitWarning.message}</p>
-
-            <button
-              onClick={handleLogoutAllDevices}
-              className="w-full py-3.5 rounded-xl bg-destructive text-destructive-foreground font-bold text-sm flex items-center justify-center gap-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-              Logout from all device
-            </button>
-
-            <button
-              onClick={handleLogout}
-              className="w-full py-3 rounded-xl border border-border bg-secondary/40 text-sm font-semibold text-muted-foreground"
-            >
-              Logout this device
-            </button>
-          </div>
-        </div>
-      )}
       {/* Live Support Chat */}
       <LiveSupportChat
         isOpen={chatOpen}
