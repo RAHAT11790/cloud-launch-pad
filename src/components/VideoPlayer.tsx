@@ -103,23 +103,9 @@ const isLikelyImageUrl = (url: string): boolean => {
   return /\.(avif|gif|jpe?g|png|svg|webp|bmp)$/i.test(normalized);
 };
 
-const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
-  try {
-    const parsed = new URL(rawUrl);
-    const hostname = parsed.hostname.toLowerCase();
-    const canMirror = hostname.includes("bot-hosting.net") || /sttv|sttvs/.test(hostname);
-    if (!canMirror) return [];
-
-    const port = parsed.port ? `:${parsed.port}` : "";
-    const protocol = parsed.protocol || "http:";
-    return Array.from({ length: PROXY_SERVER_LIMIT }, (_, index) => ({
-      name: `Server ${index + 1}`,
-      domain: `${protocol}//fi${index + 1}.bot-hosting.net${port}`,
-    }));
-  } catch {
-    return [];
-  }
-};
+// NO demo / fallback servers. Only real servers configured in admin → settings/videoServers
+// will ever show up. If the admin hasn't configured anything, the server panel stays empty.
+const buildFallbackServers = (_rawUrl: string): VideoServerOption[] => [];
 
 const getRoleDefaultServerIndex = (
   servers: VideoServerOption[],
