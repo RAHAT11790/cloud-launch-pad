@@ -454,6 +454,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [showFixedLoader, setShowFixedLoader] = useState(true);
   const [switchingEpisode, setSwitchingEpisode] = useState(false);
   const loaderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks whether the current source has begun playing at least once.
+  // After the first `playing` event we never show the loader again until src changes.
+  const hasStartedPlayingRef = useRef(false);
 
   const [tutorialLink, setTutorialLink] = useState<string | null>(null);
   const [tutorialVideos, setTutorialVideos] = useState<{ title: string; url: string }[]>([]);
