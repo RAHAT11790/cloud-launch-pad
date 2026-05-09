@@ -112,22 +112,25 @@ const isLikelyImageUrl = (url: string): boolean => {
 // will ever show up. If the admin hasn't configured anything, the server panel stays empty.
 const buildFallbackServers = (_rawUrl: string): VideoServerOption[] => [];
 
+// Unified server picker: always pick the first server in admin's list.
+// No premium/free branching — protocol of the final URL decides proxy use.
 const getRoleDefaultServerIndex = (
   servers: VideoServerOption[],
-  isPremium: boolean | null,
+  _isPremium: boolean | null,
 ): number => {
-  if (!servers.length || isPremium === null) return -1;
-
-  if (isPremium) {
-    const premiumIndex = servers.findIndex((server) => !!server.locked);
-    return premiumIndex >= 0 ? premiumIndex : 0;
-  }
-
-  const freeIndex = servers.findIndex((server) => !server.locked);
-  return freeIndex >= 0 ? freeIndex : 0;
+  if (!servers.length) return -1;
+  return 0;
 };
 
-const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
+export type ProxyMode = "auto" | "off" | "force";
+
+const buildPlaybackCandidates = (
+  url: string,
+  cdnEnabled: boolean,
+  proxyUrl?: string,
+  proxyApiKey?: string,
+  proxyMode: ProxyMode = "auto",
+): string[] => {
   const rawUrl = String(url || "").trim();
   if (!rawUrl || isLikelyImageUrl(rawUrl)) return [];
 
