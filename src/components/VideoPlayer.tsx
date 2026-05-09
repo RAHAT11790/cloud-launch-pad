@@ -1279,6 +1279,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
     const onPlay = () => {
       setPlaying(true);
+      setVideoError(false);
+      setIsBuffering(false);
       // Start RAF loop for smooth progress
       const tick = () => {
         if (!v.paused && !v.ended) {
@@ -1434,6 +1436,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
+      if (stalledTimer) { clearTimeout(stalledTimer); stalledTimer = null; }
+      setVideoError(false);
       setIsBuffering(false);
     };
     const onLoadStart = () => {
@@ -1450,6 +1454,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         if (v.readyState < 3) setIsBuffering(true);
       }, 1500);
     };
+    const onSuspend = () => {
+      if (!v.paused && v.readyState >= 3) {
+        setIsBuffering(false);
+      }
+    };
     v.addEventListener("loadedmetadata", onLoaded);
     v.addEventListener("play", onPlay);
     v.addEventListener("pause", onPause);
@@ -1462,6 +1471,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     v.addEventListener("playing", onPlaying);
     v.addEventListener("seeked", onSeeked);
     v.addEventListener("stalled", onStalled);
+    v.addEventListener("suspend", onSuspend);
     v.addEventListener("loadstart", onLoadStart);
     // Show loader only if data isn't already buffered (fast switch keeps UI clean)
     if (v.readyState < 2) setIsBuffering(true);
@@ -1484,6 +1494,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       v.removeEventListener("playing", onPlaying);
       v.removeEventListener("seeked", onSeeked);
       v.removeEventListener("stalled", onStalled);
+      v.removeEventListener("suspend", onSuspend);
       // NOTE: do NOT clear v.src here. This cleanup runs on every currentSrc change
       // (server / quality / audio switch). Wiping src would discard the freshly-set
       // source React just rendered and force a restart from 0:00. Real teardown
