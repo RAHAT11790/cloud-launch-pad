@@ -493,9 +493,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [isBuffering, setIsBuffering] = useState(true);
   const [showFixedLoader, setShowFixedLoader] = useState(true);
   const [switchingEpisode, setSwitchingEpisode] = useState(false);
-  const loaderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Tracks whether the current source has begun playing at least once.
-  // After the first `playing` event we never show the loader again until src changes.
+  // We still show the loader later on real buffering events, but this ref helps
+  // us distinguish first-start from post-playback rebuffering.
   const hasStartedPlayingRef = useRef(false);
 
   const [tutorialLink, setTutorialLink] = useState<string | null>(null);
@@ -1125,38 +1125,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [src, qualityOptions, noProxy, playbackRouteReady, videoServersLoaded, isPremium, getTierDefaultSelection]);
 
   // Loader rules (per user):
-  // 1. Show loader ONLY for the very first load of the current src (until first `playing`).
-  // 2. After playback has started once, NEVER show the loader again — no matter what the
-  //    video element reports (waiting / stalled / seeking / suspend etc.).
-  // 3. If the server doesn't respond within 3s on the initial load, force-hide the loader
-  //    so the UI doesn't sit on a forever-spinning wheel.
+  // 1. Show loader only on real loading/buffering moments.
+  // 2. Hide it immediately when playback is ready/playing.
+  // 3. Do not keep it visible with any artificial extra delay.
   useEffect(() => {
-    if (loaderTimeoutRef.current) {
-      clearTimeout(loaderTimeoutRef.current);
-      loaderTimeoutRef.current = null;
-    }
-
-    if (!currentSrc || switchingEpisode) {
-      setShowFixedLoader(false);
-      return;
-    }
-
-    if (hasStartedPlayingRef.current) {
-      // Playback has already begun once — keep the loader hidden, always.
+    if (!currentSrc || switchingEpisode || videoError) {
       setShowFixedLoader(false);
       return;
     }
 
     setShowFixedLoader(isBuffering);
-
-    if (isBuffering) {
-      // Auto-hide after 3s if the server fails to respond.
-      loaderTimeoutRef.current = setTimeout(() => {
-        setShowFixedLoader(false);
-        setIsBuffering(false);
-      }, 3000);
-    }
-  }, [currentSrc, isBuffering, switchingEpisode]);
+  }, [currentSrc, isBuffering, switchingEpisode, videoError]);
 
   // Simple volume sync - no AudioContext needed
   useEffect(() => {
