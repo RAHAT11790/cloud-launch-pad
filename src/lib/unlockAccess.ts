@@ -1,6 +1,7 @@
 import { db, ref, set, get, runTransaction } from "@/lib/firebase";
 import { SITE_URL } from "@/lib/siteConfig";
 import { getUnlockBlockExpiry } from "@/lib/unlockBlock";
+import { getDeviceFingerprint, getDeviceId, getDeviceInfo } from "@/lib/premiumDevice";
 
 const UNLOCK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const DEFAULT_FREE_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
@@ -334,12 +335,25 @@ export const consumeUnlockTokenForCurrentUser = async (
   const durationMs = grantMsOverride > 0 ? grantMsOverride : await getServiceDurationMs(serviceId);
   const expiresAt = now + durationMs;
 
+  const deviceId = getDeviceId();
+  const fingerprint = getDeviceFingerprint();
+  const deviceInfo = getDeviceInfo();
+
   await set(ref(db, `users/${userId}/freeAccess`), {
     active: true,
     grantedAt: now,
     expiresAt,
     viaToken: token,
     serviceId: serviceId || null,
+    devices: {
+      [deviceId]: {
+        name: deviceInfo.name,
+        type: deviceInfo.type,
+        fingerprint,
+        registeredAt: now,
+        lastSeen: now,
+      },
+    },
   });
 
   return { ok: true, reason: "claimed", serviceId, durationMs };
