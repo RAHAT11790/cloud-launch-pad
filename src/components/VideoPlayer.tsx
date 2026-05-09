@@ -2020,10 +2020,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
                         {!isPremium && (
                           <button onClick={() => {
+                            const tierDefault = getTierDefaultSelection(sourceBaseRef.current);
                             setShowServerPanel(false);
-                            setManualServerSelected(false);
-                            activeSourceBaseRef.current = sourceBaseRef.current;
-                            setCurrentSrc(resolvePlaybackSrc(sourceBaseRef.current));
+                            setActiveServerIndex(tierDefault.serverIndex);
+                            setManualServerSelected(tierDefault.usesServer);
+                            activeSourceBaseRef.current = tierDefault.rawSrc;
+                            setCurrentSrc(tierDefault.resolvedSrc);
                           }}
                             className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
                               !manualServerSelected ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
