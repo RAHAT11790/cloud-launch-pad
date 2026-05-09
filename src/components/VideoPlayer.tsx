@@ -272,6 +272,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const rafId = useRef<number>(0);
   const progressRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
+  const resumeOnReturnRef = useRef(false);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -1210,6 +1211,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (document.visibilityState === "hidden") {
         const v = videoRef.current;
         if (v) {
+          resumeOnReturnRef.current = !v.paused;
           pendingSeek.current = v.currentTime || pendingSeek.current;
           try { v.pause(); } catch {}
         }
@@ -1218,6 +1220,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const onPageHide = () => {
       const v = videoRef.current;
       if (v) {
+        resumeOnReturnRef.current = !v.paused || resumeOnReturnRef.current;
         pendingSeek.current = v.currentTime || pendingSeek.current;
         try { v.pause(); } catch {}
       }
@@ -1242,6 +1245,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         setVideoError(false);
         setIsBuffering(true);
         setShowFixedLoader(true);
+        if (resumeOnReturnRef.current) {
+          v.addEventListener("canplay", () => {
+            v.play().catch(() => {});
+            resumeOnReturnRef.current = false;
+          }, { once: true });
+        }
       } catch {}
     };
 
