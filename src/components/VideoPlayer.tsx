@@ -8,7 +8,7 @@ import {
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
-import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getLocalUserId, type AdService } from "@/lib/unlockAccess";
+import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 // Shortener gate is always-on now (Monetag system removed)
 const isShortenerEnabled = async () => true;
@@ -467,12 +467,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
 
-    const unsubAccess = onValue(ref(db, `users/${uid}/freeAccess`), async (snap) => {
+    const unsubAccess = onValue(ref(db, `users/${uid}/freeAccess`), (snap) => {
       const data = snap.val();
       if (data?.active && Number(data.expiresAt) > Date.now()) {
-        const { ensureFreeAccessDeviceAllowed } = await import("@/lib/freeAccessDevice");
-        const allowed = await ensureFreeAccessDeviceAllowed(uid, data);
-        setUserFreeAccessExpiresAt(allowed ? Number(data.expiresAt) : 0);
+        setUserFreeAccessExpiresAt(getCurrentDeviceFreeAccessExpiry(data));
       } else {
         setUserFreeAccessExpiresAt(0);
       }
@@ -1131,7 +1129,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [videoError, clearHideTimer]);
 
   // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
-  const showLoaderOverlay = !!currentSrc && !videoError && (showFixedLoader || serverSwitchingRef.current);
+  const showLoaderOverlay = !!currentSrc && !videoError && !isEmbedPlayback && (showFixedLoader || serverSwitchingRef.current);
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
