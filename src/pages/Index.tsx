@@ -255,15 +255,21 @@ const Index = () => {
     const unsub = onValue(ref(db, `users/${uid}`), (snap) => {
       const data = snap.val();
       const sessionStartedAt = Number(localStorage.getItem("rs_session_started_at") || "0");
-      if (!snap.exists() || (data?.sessionRevokedAt && sessionStartedAt > 0 && Number(data.sessionRevokedAt) >= sessionStartedAt)) {
-        try {
-          localStorage.removeItem("rsanime_user");
-          localStorage.removeItem("rs_display_name");
-          localStorage.removeItem("rs_profile_photo");
-          localStorage.removeItem("rs_session_started_at");
-        } catch {}
-        try { window.location.replace("/"); } catch { window.location.href = "/"; }
-      }
+      const wasExplicitlyDeleted = !!data?.deleted || !!data?.deletedAt;
+      const wasSessionRevoked = !!(data?.sessionRevokedAt && sessionStartedAt > 0 && Number(data.sessionRevokedAt) >= sessionStartedAt);
+      if (!wasExplicitlyDeleted && !wasSessionRevoked) return;
+
+      try {
+        localStorage.removeItem("rsanime_user");
+        localStorage.removeItem("rs_display_name");
+        localStorage.removeItem("rs_profile_photo");
+        localStorage.removeItem("rs_session_started_at");
+      } catch {}
+      setIsLoggedIn(false);
+      setSelectedAnime(null);
+      setPlayerState(null);
+      setSaltPlayerState(null);
+      try { window.history.replaceState({}, "", "/"); } catch {}
     });
     return () => unsub();
   }, [isLoggedIn]);
@@ -1194,6 +1200,10 @@ const Index = () => {
       return;
     }
 
+    if (!freeAccessLoaded) {
+      return;
+    }
+
     if (!hasFreeAccess() && !saltIsPremium) {
       // If admin disabled the unlock gate entirely, skip redirect and play directly
       const shortenerOn = await isShortenerEnabled();
@@ -1235,18 +1245,18 @@ const Index = () => {
       const epSlug = src.replace("animesalt://", "");
       try {
         const result = await cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug));
-        if (result.embedUrl) {
+        const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result);
+        if (primarySrc) {
           // Save to watch history for Continue Watching
           addToWatchHistory(anime, seasonIdx, epIdx, true);
-          const embedServers = (result.allEmbeds || [result.embedUrl]).filter(Boolean);
           setPlayerState({
-            src: result.embedUrl,
+            src: primarySrc,
             title: anime.title,
             subtitle: subtitle || `Episode`,
             anime,
             seasonIdx,
             epIdx,
-            qualityOptions: embedServers.length > 1 ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl })) : undefined,
+            qualityOptions: sourceOptions,
             nextEpisodeSrc:
               anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined
                 ? getEpisodeSrc(anime.seasons[seasonIdx]?.episodes?.[epIdx + 1] as Episode)
@@ -1269,15 +1279,15 @@ const Index = () => {
       const movieSlug = src.replace("animesalt_movie://", "");
       try {
         const result = await cachedApiCall(`movie_${movieSlug}`, () => animeSaltApi.getMovie(movieSlug));
-        if (result.success && result.data?.movieEmbedUrl) {
+        const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result.success ? result.data : result);
+        if (primarySrc) {
           addToWatchHistory(anime, undefined, undefined, true);
-          const embedServers = (result.data.allEmbeds || [result.data.movieEmbedUrl]).filter(Boolean);
           setPlayerState({
-            src: result.data.movieEmbedUrl,
+            src: primarySrc,
             title: anime.title,
             subtitle: "Movie",
             anime,
-            qualityOptions: embedServers.length > 1 ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl })) : undefined,
+            qualityOptions: sourceOptions,
           } as any);
           setSelectedAnime(null);
         } else {
@@ -1311,7 +1321,7 @@ const Index = () => {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("resumeUnlock") !== "1" || allAnime.length === 0) return;
+    if (params.get("resumeUnlock") !== "1" || allAnime.length === 0 || !freeAccessLoaded) return;
 
     // Wait until free access state is loaded before triggering playback,
     // otherwise handlePlay will redirect back to /unlock-required (loop).
@@ -1331,7 +1341,7 @@ const Index = () => {
 
     try { sessionStorage.removeItem("rs_pendingUnlockPlayback"); } catch {}
     handlePlay(anime, pending.seasonIdx, pending.epIdx);
-  }, [allAnime, handlePlay, userFreeAccessExpiresAt, globalFreeAccess, saltIsPremium]);
+  }, [allAnime, handlePlay, userFreeAccessExpiresAt, globalFreeAccess, saltIsPremium, freeAccessLoaded]);
 
   const addToWatchHistory = (anime: AnimeItem, seasonIdx?: number, epIdx?: number, preserveProgress = false) => {
     try {
