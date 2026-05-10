@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { User, Lock, Eye, EyeOff, LogIn, Mail, AlertTriangle, Smartphone, ArrowLeft, KeyRound, Check } from "lucide-react";
 import logoImg from "@/assets/logo.png";
@@ -38,6 +38,45 @@ const FloatingParticles = () => (
     ))}
   </div>
 );
+
+const PARTICLE_SEEDS = Array.from({ length: 20 }, (_, i) => ({
+  id: i,
+  x: ((i * 73) % 100) / 100,
+  y: ((i * 47) % 100) / 100,
+  scale: 0.55 + ((i * 19) % 45) / 100,
+  duration: 3.2 + ((i * 13) % 35) / 10,
+  delay: ((i * 11) % 20) / 10,
+}));
+
+const StaticFloatingParticles = () => {
+  const particles = useMemo(() => PARTICLE_SEEDS, []);
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {particles.map((particle) => (
+        <motion.div
+          key={particle.id}
+          className="absolute w-1 h-1 rounded-full bg-primary/30"
+          initial={{
+            x: particle.x * 400,
+            y: particle.y * 800,
+            scale: particle.scale,
+          }}
+          animate={{
+            y: [null, -100],
+            opacity: [0, 0.8, 0],
+          }}
+          transition={{
+            duration: particle.duration,
+            repeat: Infinity,
+            delay: particle.delay,
+            ease: "easeOut",
+          }}
+        />
+      ))}
+    </div>
+  );
+};
 
 const LoginPage = ({ onLogin }: LoginPageProps) => {
   const SESSION_STARTED_AT_KEY = "rs_session_started_at";
@@ -500,7 +539,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
           />
         </div>
-        <FloatingParticles />
+        <StaticFloatingParticles />
 
         <motion.div className="relative z-10 w-full max-w-[360px] px-5"
           initial={{ y: 40, opacity: 0, scale: 0.9 }}
@@ -607,7 +646,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
           />
         </div>
-        <FloatingParticles />
+        <StaticFloatingParticles />
 
         <motion.div className="relative z-10 w-full max-w-[360px] px-5"
           initial={{ y: 40, opacity: 0, scale: 0.9 }}
@@ -730,7 +769,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         />
       </div>
 
-      <FloatingParticles />
+      <StaticFloatingParticles />
 
       {/* TV Frame / Main Card */}
       <AnimatePresence>
