@@ -17,6 +17,59 @@ const isDirectMediaPlaybackUrl = (url?: string | null) => {
   return /\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(normalized);
 };
 
+const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualityOptions?: { label: string; src: string }[] } => {
+  const seen = new Set<string>();
+  const normalize = (value?: string | null) => String(value || "").trim();
+  const pushUnique = (list: { label: string; src: string }[], label: string, src?: string | null) => {
+    const cleanSrc = normalize(src);
+    if (!cleanSrc || seen.has(cleanSrc)) return;
+    seen.add(cleanSrc);
+    list.push({ label, src: cleanSrc });
+  };
+
+  const directOptions: { label: string; src: string }[] = [];
+  const embedOptions: { label: string; src: string }[] = [];
+
+  const links = Array.isArray(payload?.links) ? payload.links : [];
+  links.forEach((entry: any, index: number) => {
+    const cleanSrc = normalize(entry?.url || entry?.src);
+    if (!cleanSrc) return;
+    const label = String(entry?.quality || entry?.label || `Source ${index + 1}`);
+    if (isDirectMediaPlaybackUrl(cleanSrc)) {
+      pushUnique(directOptions, label, cleanSrc);
+    } else {
+      pushUnique(embedOptions, `Server ${embedOptions.length + 1}`, cleanSrc);
+    }
+  });
+
+  [payload?.streamUrl, payload?.videoUrl, payload?.directUrl, payload?.file].forEach((candidate, index) => {
+    if (isDirectMediaPlaybackUrl(candidate)) {
+      pushUnique(directOptions, index === 0 ? "Auto" : `Source ${index + 1}`, candidate);
+    }
+  });
+
+  const embedCandidates = [payload?.embedUrl, payload?.movieEmbedUrl, ...(Array.isArray(payload?.allEmbeds) ? payload.allEmbeds : [])];
+  embedCandidates.forEach((candidate) => {
+    if (isDirectMediaPlaybackUrl(candidate)) {
+      pushUnique(directOptions, `Source ${directOptions.length + 1}`, candidate);
+    } else {
+      pushUnique(embedOptions, `Server ${embedOptions.length + 1}`, candidate);
+    }
+  });
+
+  if (directOptions.length > 0) {
+    return {
+      primarySrc: directOptions[0].src,
+      qualityOptions: directOptions.length > 1 ? directOptions : undefined,
+    };
+  }
+
+  return {
+    primarySrc: embedOptions[0]?.src || "",
+    qualityOptions: embedOptions.length > 1 ? embedOptions : undefined,
+  };
+};
+
 // Helper: get best available src from episode (fallback if default link is empty)
 const getEpisodeSrc = (ep?: Episode | null): string => {
   if (!ep) return "";
@@ -175,6 +228,7 @@ const Index = () => {
   const [globalFreeAccess, setGlobalFreeAccess] = useState(false);
   const [saltIsPremium, setSaltIsPremium] = useState<boolean | null>(null);
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
+  const [freeAccessLoaded, setFreeAccessLoaded] = useState(false);
   const [unlockBlocked, setUnlockBlocked] = useState(false);
 
   // Device limit enforcement for already logged-in users
@@ -231,6 +285,7 @@ const Index = () => {
   useEffect(() => {
     if (!isLoggedIn) {
       setUserFreeAccessExpiresAt(0);
+      setFreeAccessLoaded(true);
       setUnlockBlocked(false);
       return;
     }
@@ -243,6 +298,8 @@ const Index = () => {
     }
     if (!uid) return;
 
+    setFreeAccessLoaded(false);
+
     let disposed = false;
     let accessRequestSeq = 0;
 
@@ -253,10 +310,12 @@ const Index = () => {
         const allowedExpiry = getCurrentDeviceFreeAccessExpiry(data);
         if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(allowedExpiry);
+        setFreeAccessLoaded(true);
         setDeviceLimitWarning(null);
       } else {
         if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(0);
+        setFreeAccessLoaded(true);
         setDeviceLimitWarning(null);
       }
     });
