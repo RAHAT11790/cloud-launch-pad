@@ -2083,7 +2083,7 @@ const Index = () => {
           title={playerState.title}
           subtitle={playerState.subtitle}
           poster={playerState.anime.poster}
-          disableUnlockGate
+          
           onClose={() => { setPlayerState(null); }}
           qualityOptions={playerState.qualityOptions}
           audioTracks={playerState.audioTracks}
