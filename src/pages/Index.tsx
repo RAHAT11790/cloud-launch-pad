@@ -31,7 +31,6 @@ const getEpisodeQualityOptions = (ep: Episode): { label: string; src: string }[]
   return qualityOptions;
 };
 import { AnimatePresence, motion } from "framer-motion";
-import SaltPlayer from "@/components/SaltPlayer";
 import { X } from "lucide-react";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
@@ -68,6 +67,7 @@ import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
 // FCM removed — push notifications no longer used
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
+import { getCurrentDeviceFreeAccessExpiry } from "@/lib/unlockAccess";
 // Unlock gate toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When false: no flash, no redirect, no toast — players play instantly for everyone.
 const isShortenerEnabled = async (): Promise<boolean> => {
@@ -245,11 +245,10 @@ const Index = () => {
       const requestSeq = ++accessRequestSeq;
       const data = snap.val();
       if (data?.active && Number(data.expiresAt) > Date.now()) {
-        const { ensureFreeAccessDeviceAllowed } = await import("@/lib/freeAccessDevice");
-        const allowed = await ensureFreeAccessDeviceAllowed(uid, data);
+        const allowedExpiry = getCurrentDeviceFreeAccessExpiry(data);
         if (disposed || requestSeq !== accessRequestSeq) return;
-        setUserFreeAccessExpiresAt(allowed ? Number(data.expiresAt) : 0);
-        if (!allowed) setDeviceLimitWarning(null);
+        setUserFreeAccessExpiresAt(allowedExpiry);
+        setDeviceLimitWarning(null);
       } else {
         if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(0);
@@ -1150,22 +1149,20 @@ const Index = () => {
         if (result.embedUrl) {
           // Save to watch history for Continue Watching
           addToWatchHistory(anime, seasonIdx, epIdx, true);
-          const newState = {
-            embedUrl: result.embedUrl,
-            cleanEmbedUrl: getCleanEmbedUrl(result.embedUrl),
+          const embedServers = (result.allEmbeds || [result.embedUrl]).filter(Boolean);
+          setPlayerState({
+            src: result.embedUrl,
             title: anime.title,
             subtitle: subtitle || `Episode`,
             anime,
             seasonIdx,
             epIdx,
-            allEmbeds: result.allEmbeds || [result.embedUrl],
-            currentEmbedIdx: 0,
-            cropMode: 'contain' as const,
-            cropW: 0,
-            cropH: 0,
-            loading: false,
-          };
-          setSaltPlayerState(newState);
+            qualityOptions: embedServers.length > 1 ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl })) : undefined,
+            nextEpisodeSrc:
+              anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined
+                ? getEpisodeSrc(anime.seasons[seasonIdx]?.episodes?.[epIdx + 1] as Episode)
+                : undefined,
+          } as any);
           setSelectedAnime(null);
         } else {
           toast.error("Video source not found");
@@ -1185,20 +1182,14 @@ const Index = () => {
         const result = await cachedApiCall(`movie_${movieSlug}`, () => animeSaltApi.getMovie(movieSlug));
         if (result.success && result.data?.movieEmbedUrl) {
           addToWatchHistory(anime, undefined, undefined, true);
-          const newState = {
-            embedUrl: result.data.movieEmbedUrl,
-            cleanEmbedUrl: getCleanEmbedUrl(result.data.movieEmbedUrl),
+          const embedServers = (result.data.allEmbeds || [result.data.movieEmbedUrl]).filter(Boolean);
+          setPlayerState({
+            src: result.data.movieEmbedUrl,
             title: anime.title,
             subtitle: "Movie",
             anime,
-            allEmbeds: result.data.allEmbeds || [result.data.movieEmbedUrl],
-            currentEmbedIdx: 0,
-            cropMode: 'contain' as const,
-            cropW: 0,
-            cropH: 0,
-            loading: false,
-          };
-          setSaltPlayerState(newState);
+            qualityOptions: embedServers.length > 1 ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl })) : undefined,
+          } as any);
           setSelectedAnime(null);
         } else {
           toast.error("Movie source not found");
