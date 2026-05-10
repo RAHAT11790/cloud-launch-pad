@@ -1,4 +1,4 @@
-import { db, ref, set, get, runTransaction } from "@/lib/firebase";
+import { db, ref, set, get, runTransaction, update } from "@/lib/firebase";
 import { SITE_URL } from "@/lib/siteConfig";
 import { getUnlockBlockExpiry } from "@/lib/unlockBlock";
 import { getDeviceFingerprint, getDeviceId, getDeviceInfo } from "@/lib/premiumDevice";
@@ -99,6 +99,47 @@ export const getLocalUserId = (): string | null => {
   } catch {
     return null;
   }
+};
+
+type FreeAccessDeviceEntry = {
+  name?: string;
+  type?: string;
+  fingerprint?: string;
+  registeredAt?: number;
+  lastSeen?: number;
+  grantedAt?: number;
+  expiresAt?: number;
+  viaToken?: string;
+  serviceId?: string | null;
+};
+
+type FreeAccessRecord = {
+  active?: boolean;
+  grantedAt?: number;
+  expiresAt?: number;
+  viaToken?: string;
+  serviceId?: string | null;
+  devices?: Record<string, FreeAccessDeviceEntry>;
+};
+
+export const getCurrentDeviceFreeAccessExpiry = (snap: FreeAccessRecord | null | undefined): number => {
+  const now = Date.now();
+  if (!snap?.active) return 0;
+
+  const devices = snap.devices || {};
+  const deviceId = getDeviceId();
+  const fingerprint = getDeviceFingerprint();
+  const matched = devices[deviceId] || Object.values(devices).find((d) => d?.fingerprint && d.fingerprint === fingerprint);
+
+  if (matched?.expiresAt && Number(matched.expiresAt) > now) {
+    return Number(matched.expiresAt);
+  }
+
+  if (Object.keys(devices).length === 0 && Number(snap.expiresAt) > now) {
+    return Number(snap.expiresAt);
+  }
+
+  return 0;
 };
 
 /** Shorten via dedicated shortener URL, legacy functionUrl, or generic site+apiKey */
@@ -339,22 +380,38 @@ export const consumeUnlockTokenForCurrentUser = async (
   const fingerprint = getDeviceFingerprint();
   const deviceInfo = getDeviceInfo();
 
-  await set(ref(db, `users/${userId}/freeAccess`), {
+  const freeAccessRef = ref(db, `users/${userId}/freeAccess`);
+  const existingSnap = await get(freeAccessRef);
+  const existing = (existingSnap.val() || {}) as FreeAccessRecord;
+  const existingDevices = existing.devices || {};
+
+  await set(freeAccessRef, {
     active: true,
     grantedAt: now,
-    expiresAt,
+    expiresAt: Math.max(Number(existing.expiresAt || 0), expiresAt),
     viaToken: token,
     serviceId: serviceId || null,
     devices: {
+      ...existingDevices,
       [deviceId]: {
+        ...(existingDevices[deviceId] || {}),
         name: deviceInfo.name,
         type: deviceInfo.type,
         fingerprint,
-        registeredAt: now,
+        registeredAt: existingDevices[deviceId]?.registeredAt || now,
         lastSeen: now,
+        grantedAt: now,
+        expiresAt,
+        viaToken: token,
+        serviceId: serviceId || null,
       },
     },
   });
+
+  const matchedLegacyDeviceId = Object.entries(existingDevices).find(([, device]) => device?.fingerprint && device.fingerprint === fingerprint)?.[0];
+  if (matchedLegacyDeviceId && matchedLegacyDeviceId !== deviceId) {
+    await update(ref(db, `users/${userId}/freeAccess/devices/${matchedLegacyDeviceId}`), { lastSeen: now, expiresAt });
+  }
 
   return { ok: true, reason: "claimed", serviceId, durationMs };
 };
