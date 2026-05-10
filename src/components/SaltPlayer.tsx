@@ -155,7 +155,7 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
       setCustomW("");
       setCustomH("");
     } else {
-      toast.error("সঠিক Width ও Height দিন");
+      toast.error("Enter valid Width and Height");
     }
   }, [customW, customH, applyCrop]);
 
@@ -512,7 +512,7 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
                       })}
                     </div>
                     {episodes.length === 0 && (
-                      <p className="text-xs text-muted-foreground text-center py-4">কোনো এপিসোড পাওয়া যায়নি</p>
+                      <p className="text-xs text-muted-foreground text-center py-4">No episodes found</p>
                     )}
                   </>
                 );
