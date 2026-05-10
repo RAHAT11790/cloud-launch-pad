@@ -12,6 +12,11 @@ const isInvalidPlaybackUrl = (url?: string | null) => {
   return /\.(avif|gif|jpe?g|png|svg|webp|bmp)$/i.test(normalized);
 };
 
+const isDirectMediaPlaybackUrl = (url?: string | null) => {
+  const normalized = String(url || "").trim().toLowerCase();
+  return /\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(normalized);
+};
+
 // Helper: get best available src from episode (fallback if default link is empty)
 const getEpisodeSrc = (ep?: Episode | null): string => {
   if (!ep) return "";
@@ -427,6 +432,31 @@ const Index = () => {
         sessionStorage.removeItem("rs_saltPlayerState");
       }
     } catch {}
+  }, [saltPlayerState]);
+
+  useEffect(() => {
+    if (!saltPlayerState?.embedUrl || !saltPlayerState.anime) return;
+
+    const embedServers = (saltPlayerState.allEmbeds || [saltPlayerState.embedUrl]).filter(Boolean);
+    setPlayerState({
+      src: saltPlayerState.embedUrl,
+      title: saltPlayerState.title,
+      subtitle: saltPlayerState.subtitle,
+      anime: saltPlayerState.anime,
+      seasonIdx: saltPlayerState.seasonIdx,
+      epIdx: saltPlayerState.epIdx,
+      qualityOptions: embedServers.length > 1
+        ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
+        : undefined,
+      nextEpisodeSrc:
+        saltPlayerState.anime.type === "webseries" &&
+        saltPlayerState.anime.seasons &&
+        saltPlayerState.seasonIdx !== undefined &&
+        saltPlayerState.epIdx !== undefined
+          ? getEpisodeSrc(saltPlayerState.anime.seasons[saltPlayerState.seasonIdx]?.episodes?.[saltPlayerState.epIdx + 1] as Episode)
+          : undefined,
+    });
+    setSaltPlayerState(null);
   }, [saltPlayerState]);
 
   // Persist exact current UI layer so refresh returns to the same screen
@@ -2108,20 +2138,7 @@ const Index = () => {
           suggestedAnime={[]}
           onSuggestedClick={(anime) => { setPlayerState(null); handleCardClick(anime); }}
           nextEpisodeSrc={playerState.nextEpisodeSrc}
-        />
-      )}
-
-      {/* AnimeSalt iframe player with episode list & crop modes */}
-      {saltPlayerState && (
-        <SaltPlayer
-          saltPlayerState={saltPlayerState}
-          setSaltPlayerState={setSaltPlayerState}
-          getCleanEmbedUrl={getCleanEmbedUrl}
-          animeSaltApi={animeSaltApi}
-          addToWatchHistory={addToWatchHistory}
-          onRequireUnlock={checkAndShowAdGate}
-          suggestedAnime={[]}
-          onSuggestedClick={(anime) => { setSaltPlayerState(null); handleCardClick(anime); }}
+          forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
         />
       )}
 
