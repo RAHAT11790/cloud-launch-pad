@@ -169,7 +169,15 @@ interface VideoPlayerProps {
   suggestedAnime?: AnimeItem[];
   onSuggestedClick?: (anime: AnimeItem) => void;
   nextEpisodeSrc?: string;
+  forceEmbedMode?: boolean;
 }
+
+const getShortSeasonLabel = (seasonName: string | undefined, index: number) => {
+  const normalized = String(seasonName || "").trim();
+  const explicitSeasonNumber = normalized.match(/season\s*(\d+)/i)?.[1];
+  if (explicitSeasonNumber) return `Season ${explicitSeasonNumber}`;
+  return `Season ${index + 1}`;
+};
 
 const formatTime = (t: number) => {
   const m = Math.floor(t / 60);
@@ -177,7 +185,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl || logoImg;
   // Removed preload anime character image - no longer needed
@@ -266,8 +274,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   // Iframe is the active playback surface when currentSrc points to hf.space
   const isEmbedPlayback = useMemo(
-    () => !!currentSrc && /hf\.space|huggingface/i.test(currentSrc),
-    [currentSrc],
+    () => !!currentSrc && (forceEmbedMode || /hf\.space|huggingface/i.test(currentSrc)),
+    [currentSrc, forceEmbedMode],
   );
 
   // Throttle React state updates from the iframe → ~1 update/sec
@@ -2567,7 +2575,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           : 'bg-secondary border-border/40 text-muted-foreground hover:border-primary/30'
                       }`}
                     >
-                      {s.name}
+                      {getShortSeasonLabel(s.name, idx)}
                     </button>
                   ))}
                 </div>
