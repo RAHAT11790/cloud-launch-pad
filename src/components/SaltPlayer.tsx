@@ -425,10 +425,13 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
           <iframe
             src={saltPlayerState.cleanEmbedUrl || saltPlayerState.embedUrl}
             className={`${isFullscreen ? 'w-full h-full' : 'absolute inset-0 w-full h-full'} border-0`}
-            style={getIframeStyle()}
+            style={{ ...getIframeStyle(), pointerEvents: 'none' }}
             allow="autoplay; encrypted-media; picture-in-picture"
             referrerPolicy="no-referrer"
+            sandbox="allow-scripts allow-same-origin allow-presentation"
           />
+          {/* Transparent overlay — blocks remote iframe's native controls so only our controls open */}
+          <div className="absolute inset-0 z-10" style={{ background: 'transparent' }} />
         </div>
       </div>
 
