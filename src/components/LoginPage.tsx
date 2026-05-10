@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { User, Lock, Eye, EyeOff, LogIn, Mail, AlertTriangle, Smartphone, ArrowLeft, KeyRound, Check } from "lucide-react";
 import logoImg from "@/assets/logo.png";
-import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup, sendPasswordResetEmail } from "@/lib/firebase";
+import { db, auth, googleProvider, ref, set, get, update, remove, signInWithPopup } from "@/lib/firebase";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
@@ -11,33 +11,6 @@ import { useBranding } from "@/hooks/useBranding";
 interface LoginPageProps {
   onLogin: (userId: string) => void;
 }
-
-// Floating particles component
-const FloatingParticles = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none">
-    {[...Array(20)].map((_, i) => (
-      <motion.div
-        key={i}
-        className="absolute w-1 h-1 rounded-full bg-primary/30"
-        initial={{
-          x: Math.random() * 400,
-          y: Math.random() * 800,
-          scale: Math.random() * 0.5 + 0.5,
-        }}
-        animate={{
-          y: [null, -100],
-          opacity: [0, 0.8, 0],
-        }}
-        transition={{
-          duration: Math.random() * 4 + 3,
-          repeat: Infinity,
-          delay: Math.random() * 3,
-          ease: "easeOut",
-        }}
-      />
-    ))}
-  </div>
-);
 
 const PARTICLE_SEEDS = Array.from({ length: 20 }, (_, i) => ({
   id: i,
