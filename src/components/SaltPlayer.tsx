@@ -440,22 +440,30 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
             <>
               {/* Season selector */}
               {saltPlayerState.anime.seasons.length > 1 && (
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">{saltPlayerState.anime.seasons.length} Seasons</span>
-                  <div className="flex flex-wrap gap-1.5 flex-1">
-                    {saltPlayerState.anime.seasons.map((s, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setSelectedSeasonIdx(idx)}
-                        className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                          idx === selectedSeasonIdx
-                            ? 'gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.25)]'
-                            : 'bg-secondary border-border/40 text-muted-foreground hover:border-primary/30'
-                        }`}
-                      >
-                        {s.name}
-                      </button>
-                    ))}
+                <div className="mb-3">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+                    {saltPlayerState.anime.seasons.length} Seasons
+                  </p>
+                  <div
+                    className="flex gap-2 overflow-x-auto scrollbar-hide pb-1"
+                    style={{ touchAction: "pan-x" }}
+                  >
+                    {saltPlayerState.anime.seasons.map((s, idx) => {
+                      const active = idx === selectedSeasonIdx;
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => setSelectedSeasonIdx(idx)}
+                          className={`flex-shrink-0 min-w-[110px] px-4 py-2 rounded-xl text-xs font-semibold border whitespace-nowrap transition-all ${
+                            active
+                              ? 'gradient-primary text-primary-foreground border-primary/40 shadow-[0_2px_12px_hsla(170,75%,45%,0.3)]'
+                              : 'bg-secondary border-border/40 text-muted-foreground hover:border-primary/30 hover:text-foreground'
+                          }`}
+                        >
+                          {getShortSeasonLabel(s.name, idx)}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
