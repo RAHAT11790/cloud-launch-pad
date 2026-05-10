@@ -30,6 +30,13 @@ interface SaltPlayerProps {
   onSuggestedClick?: (anime: AnimeItem) => void;
 }
 
+const getShortSeasonLabel = (seasonName: string | undefined, index: number) => {
+  const normalized = String(seasonName || "").trim();
+  const explicitSeasonNumber = normalized.match(/season\s*(\d+)/i)?.[1];
+  if (explicitSeasonNumber) return `Season ${explicitSeasonNumber}`;
+  return `Season ${index + 1}`;
+};
+
 const CROP_PRESETS = [
   { label: "16:9", w: 16, h: 9 },
   { label: "4:3", w: 4, h: 3 },
