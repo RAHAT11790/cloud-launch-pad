@@ -1,55 +1,54 @@
-## Goal
+## Plan: AN iframe fixes, RS download fixes, season list, auto‑detect notify
 
-`src/components/VideoPlayer.tsx`-এ ৪টা জিনিস ঠিক করব। Premium/free আলাদা logic পুরোপুরি বাদ — শুধু URL protocol (HTTP vs HTTPS) দিয়ে route ঠিক হবে। User off button দিলে কোন proxy call হবেই না।
+### 1. AN (AnimeStill) iframe video — keep iframe, redesign overlay controls
+File: `src/components/VideoPlayer.tsx` (in `forceEmbedMode` / `isEmbedPlayback` branch)
 
-## 1. Settings → Proxy section: "Off" button
+- Keep the iframe loading AN URL exactly as-is (no direct src extraction). Allow iframe interaction (remove `pointerEvents: none`, remove blocking overlay) so AN's own play/pause/seek/quality controls work.
+- Hide our full custom control panel for AN. Render only a minimal floating top-right overlay with TWO buttons:
+  - **Server change** (existing `serverList` switcher).
+  - **Fullscreen / crop** (the existing fit/crop toggle from our player).
+- "Pseudo-fullscreen" for AN iframe (since AN's player has no fullscreen): clicking our fullscreen button calls `element.requestFullscreen()` on the iframe wrapper div + sets `screen.orientation.lock('landscape')` + scales the iframe to fill the viewport (CSS `position:fixed; inset:0; width:100vw; height:100vh`). Tapping it again exits.
+- **Hide download button entirely when AN content is playing** (iframe / `forceEmbedMode`). Download UI only renders for RS direct media.
+- Keep season selector + episode list + suggested rail visible below AN iframe (these are ours, not AN's).
 
-- Settings panel-এর মাঝে নতুন একটা **"Network"** বা **"Proxy"** tab যোগ করব (Speed/Quality/Audio-এর পাশে)। ভিতরে options:
-  - **Auto** (default): HTTP হলে proxy, HTTPS হলে direct।
-  - **Off**: কোনো proxy/CDN call নেই — HTTP হোক বা HTTPS, raw `src` direct play।
-  - **Force Proxy**: সব URL proxy দিয়ে।
-- Selection সংরক্ষিত হবে `localStorage` (`rsanime_proxy_mode`)। প্রতি player open-এ সাথে সাথে apply।
-- Implementation: `buildPlaybackCandidates()` + `resolvePlaybackSrc()`-কে একটা `proxyMode` arg নিতে দেব। `Off` মানে শুধু `[directUrl]` return — HTTP-ও direct।
+### 2. RS download — fix broken/0KB downloads + sequential "Download All"
+File: `src/lib/downloadManager.ts`, `src/components/VideoPlayer.tsx`
 
-## 2. Free server "block" fix → unified protocol routing
+- Root cause of 0KB: HLS (`.m3u8`) blob fetch returns the playlist text (~few KB), not the video. Only direct `.mp4` (HTTPS web-series-style links) are downloadable.
+- New logic in `VideoPlayer` download handler:
+  - Pick the **direct HTTPS mp4 link** from the episode's quality list (`link480/link720/link1080/link4k`) corresponding to selected quality. Skip `.m3u8` / proxy / iframe URLs.
+  - If no direct mp4 is found → toast "Direct download not available for this episode".
+  - For "Download All": queue every episode of the current season into a serial queue (sorted by `episodeNumber` ASC). The queue runs ONE at a time — next starts only after the previous is `complete` or `error`.
+- In `downloadManager.ts`:
+  - Add a `queue: string[]` and `processing: boolean` flag. New `enqueueDownload(params)` pushes to queue and triggers `processQueue()` which awaits each `startDownload` sequentially.
+  - Stop the duplicate browser-notification download: remove the `<a download>` click trigger when `saveVideo` succeeds (file is already saved to IndexedDB; user opens it from the in-app Downloads page). OR keep one and remove the other — we keep IndexedDB only; export/share happens from Downloads page.
+  - On error, do NOT auto-`window.open(url)` (currently re-triggers a browser download). Just mark error and move on.
 
-- `getRoleDefaultServerIndex()` এবং `getTierDefaultSelection()` থেকে premium/free branching বাদ। Default server সবসময় **list-এর প্রথম server** (admin যেটা প্রথমে রেখেছে)। User চাইলে server panel থেকে অন্যটা select করবে।
-- `switchServer`-এর `if (effectiveVideoServers[serverIndex].locked && !isPremium) return` lock-গুলো রেখে দেব শুধু explicit locked server-গুলোর জন্য — কিন্তু RS01/free server কখনো `locked: true` নয়, তাই block ছুটে যাবে।
-- Auto failover (`getAccessibleServerIndexes`)-ও premium-aware থাকবে (premium 4K-server দেখবে), তবে free user কে আর free-only subset-এ আটকাবে না — সব unlocked server পাবে।
-- Result: এখন HTTPS source হলে direct, HTTP হলে proxy — দুই server-ই।
+### 3. Season list — single line, horizontal scroll, both places
+Files: `src/components/VideoPlayer.tsx` (player season strip), `src/components/AnimeDetails.tsx` (details page season header)
 
-## 3. Ultra-fast skipping (download-feel) + faster initial load
+- Wrap the season chips row in a flex container with `overflow-x-auto whitespace-nowrap flex-nowrap` + `[&::-webkit-scrollbar]:hidden`. Each chip uses `shrink-0`.
+- Use `getShortSeasonLabel` everywhere (`Season 1`, `Season 2`...) — apply same helper in `AnimeDetails.tsx` (currently shows raw `season.name`).
+- Touch-action: `pan-x` for smooth horizontal swipe.
 
-`<video>` element-এ:
-- `preload="auto"` (already), যোগ করব `crossOrigin="anonymous"` শুধু proxied URL-এ (direct HTTPS-এ skip করব যেন CORS error না আসে)।
+### 4. Save + Notify — auto-detect newly added episode range + multi-targeting
+File: `src/pages/Admin.tsx` (around lines 2156–5170)
 
-Skip behavior fix:
-- `seek()`-এ এখন আমরা শুধু `v.currentTime = nextTime` সেট করি, কিন্তু loader debounce তখনও 180ms wait করে → user-এর কাছে "load হতেই থাকে" feel আসে। Fix:
-  1. Manual seek চলাকালে `userSeekingRef = true` set করব (`seek()` আর progress-bar touch-এর শুরুতে)। `onWaiting`/`onStalled`-এ `userSeekingRef === true` থাকলে loader debounce **600ms → 1200ms** বাড়াব যেন instant `seeked` আসলে loader-ই দেখাবে না।
-  2. `onSeeked` event-এ `userSeekingRef = false` + `setIsBuffering(false)` সাথে সাথে → skip-এর পরে কখনো stuck loader থাকবে না।
-  3. Remove the redundant `v.load()` call from the error retry path for HTTPS sources — শুধু src reset, no full reload (browser native range request handle করবে)।
-- Range request flow: `video-proxy/index.ts` already Range forward করছে; কিছু changing লাগবে না। Direct HTTPS-এ browser নিজেই Range request করে — এটা অপটিমাল।
+- Track the **baseline** of seasons/episodes when the edit modal opens: `wsBaselineRef.current = deepClone(seasonsData)` set on series load.
+- When user clicks "Save + Notify", BEFORE opening the modal compute the diff:
+  - For each season, find new episode numbers that exist now but didn't in the baseline (or didn't exist at all).
+  - Auto-fill `wsNotifySeason` + `wsNotifyEpisode` (start) + `wsNotifyEpisodeEnd` (end) from the diff.
+  - If multiple non-contiguous ranges or multiple seasons changed, store an array `wsNotifyRanges: Array<{seasonIdx, startEp, endEp}>` and loop through it on confirm — pushing one notification + one Telegram post per range (so episodes 5–10 and 15–20 fire as two targeted notifications).
+- The existing manual selectors stay but pre-populated; user can override. Show a small "Auto-detected: S1 E5–E10" hint above the selectors.
+- Notification body becomes "Episode 5 to 10 are now available!" when range > 1.
 
-Faster initial load:
-- `useEffect` ([src] init) তে এখন `setShowFixedLoader(true)` immediate। এর বদলে `requestAnimationFrame`-এর পর only set করব যদি 200ms-এ `playing` event না আসে — fast HTTPS-এ loader flash-ই হবে না।
-- Remove `setTimeout 450ms switchingEpisode` → 150ms করব। `instantSwitchRef`-ও 150ms।
+### Out of scope (untouched)
+- VideoPlayer src loading / quality switching / server logic for RS.
+- Login page.
+- Free-user device limit (already removed).
 
-## 4. Side-by-side Season selector inside player
-
-বর্তমান player-এর season selector (lines ~2809–2828) wrapping pill row। ঠিক করব:
-- "X Seasons" label সরিয়ে একটা horizontal scroll strip বানাব:
-  ```
-  [ Season 1 ] [ Season 2 ] [ Season 3 ] [ Season 4 ] →
-  ```
-- Container: `flex gap-2 overflow-x-auto scrollbar-hide pb-1` + `touch-action: pan-x`। Active season-এ gradient + glow, inactive-এ subtle border।
-- প্রতিটা button `min-w-[110px]` যাতে একই size-এ সুন্দর line-up হয়।
-
-## Files to edit
-
-- `src/components/VideoPlayer.tsx` (only file)
-
-## Out of scope
-
-- Anime details page-এর season list (user বললো player only)।
-- Proxy edge function code change নেই।
-- Premium/free unrelated feature change নেই।
+### Files to edit
+- `src/components/VideoPlayer.tsx`
+- `src/components/AnimeDetails.tsx`
+- `src/lib/downloadManager.ts`
+- `src/pages/Admin.tsx`
