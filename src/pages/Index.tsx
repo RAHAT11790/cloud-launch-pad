@@ -115,10 +115,27 @@ const apiCache = new Map<string, { data: any; ts: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 min
 const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
   const cached = apiCache.get(key);
-  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data;
-  const data = await fn();
-  apiCache.set(key, { data, ts: Date.now() });
-  return data;
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    // Skip cache if previous response was a failure — allow retry
+    const c: any = cached.data;
+    const ok = c && (c.success === true || c.embedUrl || c.allEmbeds?.length || c.links?.length || c.data);
+    if (ok) return cached.data;
+  }
+  // Try up to 2 times on failure (cloudflare worker / animesalt site flake)
+  let lastErr: any = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const data = await fn();
+      const ok = data && (data.success === true || data.embedUrl || data.allEmbeds?.length || data.links?.length || data.data);
+      if (ok) {
+        apiCache.set(key, { data, ts: Date.now() });
+        return data;
+      }
+      lastErr = new Error("empty");
+    } catch (e) { lastErr = e; }
+    if (attempt === 0) await new Promise(r => setTimeout(r, 600));
+  }
+  throw lastErr || new Error("API failed");
 };
 import { db, ref, set, onValue, get } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
