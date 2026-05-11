@@ -40,6 +40,34 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
+  // Active "NEW" ranges from admin's notification publishing (per season)
+  // Map: seasonNumber -> array of { start, end, ts }
+  const [newRanges, setNewRanges] = useState<Record<number, { start: number; end: number; ts: number }[]>>({});
+
+  useEffect(() => {
+    const r = ref(db, "newEpisodeReleases");
+    const unsub = onValue(r, (snap) => {
+      const data = snap.val() || {};
+      const NEW_WINDOW_MS = 36 * 60 * 60 * 1000;
+      const now = Date.now();
+      const map: Record<number, { start: number; end: number; ts: number }[]> = {};
+      Object.values<any>(data).forEach((rel) => {
+        if (!rel || rel.active === false) return;
+        if (rel.contentId !== anime.id) return;
+        const ts = Number(rel.timestamp || 0);
+        if (!ts || now - ts > NEW_WINDOW_MS) return;
+        const info = rel.episodeInfo || {};
+        const sNum = Number(info.seasonNumber || 0);
+        const start = Number(info.episodeNumber || 0);
+        const end = Number(info.episodeNumberEnd || info.episodeNumber || 0);
+        if (!sNum || !start) return;
+        if (!map[sNum]) map[sNum] = [];
+        map[sNum].push({ start, end: Math.max(end, start), ts });
+      });
+      setNewRanges(map);
+    });
+    return () => unsub();
+  }, [anime.id]);
 
   const getUserId = (): string | null => {
     try { const u = localStorage.getItem("rsanime_user"); if (u) return JSON.parse(u).id; } catch {} return null;
