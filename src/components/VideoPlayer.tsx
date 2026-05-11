@@ -2319,21 +2319,33 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           const savedEpisode = downloadedEpisodes.find(d => d.subtitle === subtitle);
           const isAlreadySaved = !!savedEpisode;
 
+          const isDownloadableUrl = (u: string): boolean => {
+            const v = String(u || "").trim().toLowerCase();
+            if (!v) return false;
+            if (!v.startsWith("https://")) return false;
+            if (v.includes(".m3u8") || v.includes(".mpd")) return false;
+            if (v.includes("/embed/") || v.includes("iframe")) return false;
+            return true;
+          };
+
           const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
+            const { toast } = await import("sonner");
+            if (!isDownloadableUrl(qualitySrc)) {
+              toast.error("Direct download not available for this episode");
+              return;
+            }
             const dlId = createDownloadId(title, subtitle, quality, qualitySrc);
-            const proxiedUrl = getPrimaryPlaybackSrc(qualitySrc, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
             const { downloadManager } = await import("@/lib/downloadManager");
-            downloadManager.startDownload({
+            downloadManager.enqueueDownload({
               id: dlId,
-              url: proxiedUrl,
+              url: qualitySrc, // raw direct mp4 — NO proxy
               title,
               subtitle,
               poster,
               quality,
             });
             setShowDownloadQualityPicker(false);
-            const { toast } = await import("sonner");
-            toast.info(`${quality} ডাউনলোড শুরু হয়েছে`);
+            toast.info(`${quality} added to download queue`);
           };
 
           // Bulk: download every episode of the current season at the chosen quality
