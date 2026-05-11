@@ -3772,7 +3772,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 │ ✦ <b>Gᴇɴʀᴇs :</b> ${tgGenres}
 └──────────────────
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
-📌 Sᴇᴀsᴏɴ #${tgSeason || '01'} • Eᴘɪsᴏᴅᴇ #${tgNewEpAdded || '01'} Aᴅᴅᴇᴅ
+📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
 ${footerLinksHtml}
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
@@ -3900,7 +3900,10 @@ ${tgHashtags}`;
         // Extract just the season number (e.g., "01", "02")
         const seasonNum = release.episodeInfo.seasonNumber || '';
         setTgSeason(String(seasonNum).padStart(2, '0'));
-        setTgNewEpAdded(String(release.episodeInfo.episodeNumber || '').padStart(2, '0'));
+        const startEp = String(release.episodeInfo.episodeNumber || '').padStart(2, '0');
+        const endEpRaw = release.episodeInfo.episodeNumberEnd;
+        const endEp = endEpRaw ? String(endEpRaw).padStart(2, '0') : '';
+        setTgNewEpAdded(endEp && endEp !== startEp ? `${startEp}-${endEp}` : startEp);
       }
     }
     // Get quality info from content
@@ -5177,8 +5180,10 @@ ${tgHashtags}`;
                       setTgTitle(ctxForm.title);
                       const backdropUrl = ctxForm.backdrop || ctxForm.poster || "";
                       setTgPosterUrl(backdropUrl.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
-                      setTgSeason(String(parseInt(wsNotifySeason) + 1).padStart(2, '0'));
-                      setTgNewEpAdded(String(episode?.episodeNumber || parseInt(wsNotifyEpisode) + 1).padStart(2, '0'));
+      const wsStartEp = String(episode?.episodeNumber || parseInt(wsNotifyEpisode) + 1).padStart(2, '0');
+      const wsEndEp = String(episodeEnd?.episodeNumber || episode?.episodeNumber || parseInt(wsNotifyEpisode) + 1).padStart(2, '0');
+      setTgSeason(String(parseInt(wsNotifySeason) + 1).padStart(2, '0'));
+      setTgNewEpAdded(wsEndEp !== wsStartEp ? `${wsStartEp}-${wsEndEp}` : wsStartEp);
                       // Get per-season total episodes from TMDB
                       const seasonNum = parseInt(wsNotifySeason) + 1;
                       try {
