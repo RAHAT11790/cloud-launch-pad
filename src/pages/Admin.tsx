@@ -4278,7 +4278,7 @@ ${tgHashtags}`;
       </header>
 
       {/* Main Content */}
-      <main className="pt-[64px] px-3 pb-[80px] min-h-screen">
+      <main className="pt-[64px] px-3 pb-[116px] min-h-screen">
         {/* ==================== DASHBOARD ==================== */}
         {activeSection === "dashboard" && (
           <div>
@@ -6558,7 +6558,7 @@ ${tgHashtags}`;
 │ ✦ Gᴇɴʀᴇs : ${tgGenres}
 └──────────────────
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
-📌 Sᴇᴀsᴏɴ #${tgSeason || '01'} • Eᴘɪsᴏᴅᴇ #${tgNewEpAdded || '01'} Aᴅᴅᴇᴅ
+📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰`}
 {tgFooterLinks.map(l => `\n๏ ${l.emoji} ${l.label} ${l.emoji}\n   ${l.url}`).join("")}
 {`\n▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n${tgHashtags}`}
