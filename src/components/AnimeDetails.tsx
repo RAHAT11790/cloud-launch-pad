@@ -296,7 +296,10 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
               const maxEpNum = season.episodes.reduce((m, e) => Math.max(m, Number(e.episodeNumber || 0)), 0);
               return (
               <div key={sIdx} className="glass-card p-3.5 rounded-xl">
-                <h3 className="text-[15px] font-bold mb-3 flex items-center category-bar">{season.name}</h3>
+                <h3 className="text-[15px] font-bold mb-3 flex items-center category-bar">{(() => {
+                  const m = String(season.name || "").trim().match(/season\s*(\d+)/i);
+                  return m ? `Season ${m[1]}` : `Season ${sIdx + 1}`;
+                })()}</h3>
                 <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
                   {season.episodes.map((ep, eIdx) => {
                     const epAddedAt = Number((ep as any).addedAt || 0);
