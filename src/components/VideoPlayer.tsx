@@ -260,6 +260,30 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     });
   }, []);
 
+  // Initial 3s show + iframe-tap detection via window blur (iframe steals focus
+  // → window blurs). This mirrors AN's own controls open/close behaviour.
+  useEffect(() => {
+    if (!isEmbedPlayback) return;
+    setShowAnOverlay(true);
+    scheduleAnOverlayHide();
+    const onBlur = () => {
+      // Iframe got focus (user tapped video). Toggle the overlay like AN does.
+      setTimeout(() => {
+        if (document.activeElement?.tagName === "IFRAME") {
+          toggleAnOverlay();
+          // Drop iframe focus so subsequent taps fire blur again
+          (document.activeElement as HTMLElement)?.blur?.();
+          window.focus();
+        }
+      }, 0);
+    };
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      if (anOverlayTimer.current) clearTimeout(anOverlayTimer.current);
+    };
+  }, [isEmbedPlayback, scheduleAnOverlayHide, toggleAnOverlay]);
+
   // ===== SERVER CHANGER =====
   const [videoServers, setVideoServers] = useState<VideoServerOption[]>([]);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
