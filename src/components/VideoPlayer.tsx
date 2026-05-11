@@ -34,7 +34,7 @@ const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 // Auto-applied to plain http:// sources (e.g. Server 1 bot-hosting.net) to bypass
 // browser mixed-content blocks. HTTPS sources stay direct (zero overhead).
 const BUILTIN_STREAM_PROXY = SUPABASE_URL
-  ? `${SUPABASE_URL}/functions/v1/stream-proxy?url={url}`
+  ? `${SUPABASE_URL}/functions/v1/video-proxy?url={url}`
   : "";
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
@@ -135,6 +135,15 @@ const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: stri
 const shouldForceDirectProxy = (url: string): boolean => {
   const value = String(url || "").trim().toLowerCase();
   return value.startsWith("http://");
+};
+
+const isDirectDownloadCandidate = (url: string): boolean => {
+  const value = String(url || "").trim().toLowerCase();
+  if (!value) return false;
+  if (!(value.startsWith("http://") || value.startsWith("https://"))) return false;
+  if (value.includes(".m3u8") || value.includes(".mpd")) return false;
+  if (value.includes("/embed/") || value.includes("iframe")) return false;
+  return true;
 };
 
 interface AudioTrackOption {
