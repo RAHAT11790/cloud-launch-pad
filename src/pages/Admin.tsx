@@ -4997,6 +4997,43 @@ ${tgHashtags}`;
                           form: capturedForm,
                           seasons: capturedSeasons,
                         };
+
+                        // ===== AUTO-DETECT new episode ranges per season =====
+                        const baseline = wsBaselineRef.current || {};
+                        const detected: Array<{ seasonIdx: number; seasonName: string; startEp: number; endEp: number }> = [];
+                        capturedSeasons.forEach((s: any, sIdx: number) => {
+                          const baseSet = baseline[sIdx] || new Set<number>();
+                          const currentNums = (s.episodes || [])
+                            .map((e: any) => Number(e.episodeNumber || 0))
+                            .filter((n: number) => n > 0)
+                            .sort((a: number, b: number) => a - b);
+                          const newNums = currentNums.filter((n: number) => !baseSet.has(n));
+                          if (newNums.length === 0) return;
+                          // Group contiguous ranges
+                          let rangeStart = newNums[0];
+                          let prev = newNums[0];
+                          for (let i = 1; i < newNums.length; i++) {
+                            const cur = newNums[i];
+                            if (cur === prev + 1) { prev = cur; continue; }
+                            detected.push({ seasonIdx: sIdx, seasonName: s.name || `Season ${sIdx + 1}`, startEp: rangeStart, endEp: prev });
+                            rangeStart = cur; prev = cur;
+                          }
+                          detected.push({ seasonIdx: sIdx, seasonName: s.name || `Season ${sIdx + 1}`, startEp: rangeStart, endEp: prev });
+                        });
+                        setWsAutoRanges(detected);
+
+                        // Pre-fill the largest detected range for the modal
+                        if (detected.length > 0) {
+                          const biggest = [...detected].sort((a, b) => (b.endEp - b.startEp) - (a.endEp - a.startEp))[0];
+                          setWsNotifySeason(String(biggest.seasonIdx));
+                          // Episode dropdown is indexed by array position — find ep with that number
+                          const epList = capturedSeasons[biggest.seasonIdx]?.episodes || [];
+                          const startIdx = epList.findIndex((e: any) => Number(e.episodeNumber) === biggest.startEp);
+                          const endIdx = epList.findIndex((e: any) => Number(e.episodeNumber) === biggest.endEp);
+                          if (startIdx >= 0) setWsNotifyEpisode(String(startIdx));
+                          if (endIdx >= 0) setWsNotifyEpisodeEnd(String(endIdx));
+                        }
+
                         saveSeries();
                         // After save, update seriesId from lastSavedSeriesIdRef for new series
                         setTimeout(() => {
