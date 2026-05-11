@@ -305,6 +305,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Iframe is the active playback surface when currentSrc points to hf.space
   const isEmbedPlayback = useMemo(
     () => !!currentSrc && (forceEmbedMode || /hf\.space|huggingface/i.test(currentSrc)),
+    [currentSrc, forceEmbedMode],
   );
 
   // Initial 3s show + iframe-tap detection via window blur (iframe steals focus
