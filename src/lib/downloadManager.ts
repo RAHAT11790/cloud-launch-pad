@@ -26,6 +26,9 @@ class DownloadManager {
   private abortControllers = new Map<string, AbortController>();
   private pausedUrls = new Map<string, { url: string; loadedBytes: number }>();
   private listeners = new Set<Listener>();
+  // Serial queue: only one download runs at a time
+  private queue: Array<{ id: string; url: string; title: string; subtitle?: string; poster?: string; quality: string }> = [];
+  private processing = false;
 
   subscribe(fn: Listener) {
     this.listeners.add(fn);
