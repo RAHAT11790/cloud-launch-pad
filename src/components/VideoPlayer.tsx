@@ -2604,14 +2604,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           <div className="mt-4 bg-background rounded-xl p-4">
             {/* Season selector */}
             {seasons && seasons.length > 1 && onSeasonChange && (
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-semibold text-muted-foreground">{seasons.length} Seasons</span>
-                <div className="flex flex-wrap gap-1.5 flex-1">
+              <div className="mb-3">
+                <span className="text-xs font-semibold text-muted-foreground block mb-2">{seasons.length} Seasons</span>
+                <div
+                  className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
+                  style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}
+                >
                   {seasons.map((s, idx) => (
                     <button
                       key={idx}
                       onClick={() => onSeasonChange(idx)}
-                      className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                      className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
                         idx === (currentSeasonIdx ?? 0)
                           ? 'gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.25)]'
                           : 'bg-secondary border-border/40 text-muted-foreground hover:border-primary/30'
