@@ -1673,6 +1673,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const lightweightMode = !isFullscreen;
+  const embedTransform = cropIndex === 1
+    ? (isFullscreen ? "scale(1.28)" : "scale(1.16)")
+    : cropIndex === 2
+      ? (isFullscreen ? "scaleX(1.14) scaleY(1.08)" : "scaleX(1.08) scaleY(1.03)")
+      : "scale(1)";
 
   return (
     <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
@@ -1731,6 +1736,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   ref={embedIframeRef}
                   src={currentSrc}
                   className="absolute inset-0 w-full h-full bg-black border-0 block"
+                  style={{ transform: embedTransform, transformOrigin: "center center" }}
                   allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                   allowFullScreen
                   referrerPolicy="no-referrer"
@@ -1857,34 +1863,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               Sits at top-right and does NOT cover the iframe so AN's controls remain tappable. */}
           {isEmbedPlayback && !locked && (
             <div className="absolute top-2 right-2 z-30 flex items-center gap-2 pointer-events-auto">
-              {effectiveVideoServers.length > 1 && !noServerSwitch && (
+              {availableQualities.length > 1 && (
                 <div className="relative">
                   <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-touch-button h-8 px-2.5 rounded-full flex items-center justify-center gap-1 bg-black/70 backdrop-blur ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                     <Server className="w-3.5 h-3.5 text-white" />
-                    <span className="text-[10px] font-medium text-white">{manualServerSelected ? (effectiveVideoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
+                    <span className="text-[10px] font-medium text-white">{currentQuality === "Auto" ? (availableQualities[1]?.label || "Server 1") : currentQuality}</span>
                   </button>
                   {showServerPanel && (
                     <div className="absolute top-10 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
                       <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
-                      {!isPremium && (
-                        <button onClick={() => {
-                          setShowServerPanel(false);
-                          setManualServerSelected(false);
-                          activeSourceBaseRef.current = sourceBaseRef.current;
-                          setCurrentSrc(resolvePlaybackSrc(sourceBaseRef.current));
-                        }} className={`w-full text-left px-3 py-2 rounded-lg text-xs ${!manualServerSelected ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}>
-                          Default
-                        </button>
-                      )}
-                      {effectiveVideoServers.map((srv, idx) => (
-                        <button key={idx} onClick={() => switchServer(idx)} className={`w-full text-left px-3 py-2 rounded-lg text-xs ${activeServerIndex === idx ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}>
-                          {srv.name || `Server ${idx + 1}`}
+                      {availableQualities.filter(opt => opt.label !== "Auto").map((opt, idx) => (
+                        <button key={opt.label + opt.src} onClick={() => { switchQuality(opt); setShowServerPanel(false); }} className={`w-full text-left px-3 py-2 rounded-lg text-xs ${currentQuality === opt.label || (currentQuality === "Auto" && idx === 0) ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}>
+                          {opt.label}
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
               )}
+              <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-8 px-2.5 rounded-full flex items-center justify-center gap-1 bg-black/70 backdrop-blur">
+                <Crop className="w-3.5 h-3.5 text-white" />
+                <span className="text-[10px] font-medium text-white">{cropLabels[cropIndex]}</span>
+              </button>
               <button
                 onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
                 className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center bg-black/70 backdrop-blur"
@@ -2328,13 +2328,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           const savedEpisode = downloadedEpisodes.find(d => d.subtitle === subtitle);
           const isAlreadySaved = !!savedEpisode;
 
-          const isDownloadableUrl = (u: string): boolean => {
-            const v = String(u || "").trim().toLowerCase();
-            if (!v) return false;
-            if (!v.startsWith("https://")) return false;
-            if (v.includes(".m3u8") || v.includes(".mpd")) return false;
-            if (v.includes("/embed/") || v.includes("iframe")) return false;
-            return true;
+          const isDownloadableUrl = (u: string): boolean => isDirectDownloadCandidate(u);
+          const getDownloadUrl = (u: string): string => {
+            const clean = String(u || "").trim();
+            if (!clean) return "";
+            return clean.toLowerCase().startsWith("http://") && BUILTIN_STREAM_PROXY
+              ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, clean)
+              : clean;
           };
 
           const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
@@ -2347,7 +2347,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             const { downloadManager } = await import("@/lib/downloadManager");
             downloadManager.enqueueDownload({
               id: dlId,
-              url: qualitySrc, // raw direct mp4 — NO proxy
+              url: getDownloadUrl(qualitySrc),
               title,
               subtitle,
               poster,
@@ -2388,7 +2388,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               const epDlId = createDownloadId(title, epSubtitle, quality, epUrl);
               downloadManager.enqueueDownload({
                 id: epDlId,
-                url: epUrl, // raw direct mp4 — NO proxy
+                url: getDownloadUrl(epUrl),
                 title,
                 subtitle: epSubtitle,
                 poster,
