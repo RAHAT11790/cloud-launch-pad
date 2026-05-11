@@ -2285,7 +2285,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         })()}
 
         {/* Download Button with Quality Picker + Offline Playback */}
-        {!isFullscreen && !adGateActive && !hideDownload && (() => {
+        {!isFullscreen && !adGateActive && !hideDownload && !isEmbedPlayback && (() => {
           const normalizeKeyPart = (value: string) =>
             value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 
