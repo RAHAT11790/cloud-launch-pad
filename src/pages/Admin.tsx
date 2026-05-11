@@ -5268,6 +5268,8 @@ ${tgHashtags}`;
                         setWsNotifyStep("release");
                         setWsNotifySeason("");
                         setWsNotifyEpisode("");
+                        setWsNotifyEpisodeEnd("");
+                        setWsAutoRanges([]);
                         wsNotifyContextRef.current = null;
                         // Switch section then preselect — find the matching release (most recent for this seriesId)
                         setActiveSection("telegram-post");
