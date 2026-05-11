@@ -15,6 +15,12 @@ const Admin = lazy(() => import("./pages/Admin"));
 
 const queryClient = new QueryClient();
 
+const RouteFallback = () => (
+  <div className="fixed inset-0 z-[200] bg-background/95 flex items-center justify-center">
+    <div className="w-7 h-7 rounded-full border-2 border-primary/25 border-t-primary animate-spin" />
+  </div>
+);
+
 const RouteWarmup = () => {
   useEffect(() => {
     const warm = () => import("./pages/Admin");
@@ -23,7 +29,7 @@ const RouteWarmup = () => {
       idle(warm);
       return;
     }
-    const t = window.setTimeout(warm, 900);
+    const t = window.setTimeout(warm, 150);
     return () => window.clearTimeout(t);
   }, []);
 
@@ -42,7 +48,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/app" element={<Index />} />
-          <Route path="/admin" element={<Suspense fallback={null}><Admin /></Suspense>} />
+          <Route path="/admin" element={<Suspense fallback={<RouteFallback />}><Admin /></Suspense>} />
           <Route path="/unlock" element={<Unlock />} />
           <Route path="/unlock-required" element={<UnlockRequired />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
