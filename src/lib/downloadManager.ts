@@ -224,13 +224,32 @@ class DownloadManager {
         return;
       }
 
+      // CORS / network failure on cross-origin direct media (e.g. render.com,
+      // bot-hosting). Fall back to a plain browser download — let the browser
+      // handle the file directly without progress tracking.
+      try {
+        const a = document.createElement("a");
+        a.href = url;
+        const safeName = createFileSafeName(`${title}${subtitle ? ` - ${subtitle}` : ""}${quality && quality !== "Auto" ? ` - ${quality}` : ""}`) || "video";
+        a.download = `${safeName}.mp4`;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        const entry = this.active.get(id);
+        if (entry) { entry.status = "complete"; entry.percent = 100; this.notify(); }
+        setTimeout(() => { this.active.delete(id); this.notify(); }, 2500);
+        this.pausedUrls.delete(id);
+        return;
+      } catch { /* fall through to error state */ }
+
       const entry = this.active.get(id);
       if (entry) {
         entry.status = "error";
         this.notify();
       }
       this.pausedUrls.delete(id);
-      // Do NOT auto-open URL in browser — that triggers a duplicate browser download
       setTimeout(() => {
         this.active.delete(id);
         this.notify();
