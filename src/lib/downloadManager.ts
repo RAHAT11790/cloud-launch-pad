@@ -230,11 +230,56 @@ class DownloadManager {
         this.notify();
       }
       this.pausedUrls.delete(id);
-      window.open(url, "_blank");
+      // Do NOT auto-open URL in browser — that triggers a duplicate browser download
       setTimeout(() => {
         this.active.delete(id);
         this.notify();
       }, 3000);
+    }
+  }
+
+  /** Add a download to the serial queue. Only ONE runs at a time. */
+  enqueueDownload(params: {
+    id: string;
+    url: string;
+    title: string;
+    subtitle?: string;
+    poster?: string;
+    quality: string;
+  }) {
+    // Already active or queued? Skip duplicates.
+    if (this.active.has(params.id)) return;
+    if (this.queue.find(q => q.id === params.id)) return;
+
+    this.queue.push(params);
+    // Show as a placeholder "queued" entry so UI lists it
+    this.active.set(params.id, {
+      id: params.id,
+      title: params.title,
+      subtitle: params.subtitle,
+      poster: params.poster,
+      quality: params.quality,
+      percent: 0,
+      loadedMB: 0,
+      totalMB: 0,
+      status: "paused", // visually "waiting"
+    });
+    this.notify();
+    this.processQueue();
+  }
+
+  private async processQueue() {
+    if (this.processing) return;
+    this.processing = true;
+    try {
+      while (this.queue.length > 0) {
+        const next = this.queue.shift()!;
+        // Remove placeholder so startDownload re-creates as "downloading"
+        this.active.delete(next.id);
+        await this.startDownload(next);
+      }
+    } finally {
+      this.processing = false;
     }
   }
 }
