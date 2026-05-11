@@ -1673,10 +1673,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const lightweightMode = !isFullscreen;
+  // Crop scale tuned to fully eliminate the small black side-bars left by AN's
+  // letterboxed iframe. Slightly higher than before in both windowed + fullscreen.
   const embedTransform = cropIndex === 1
-    ? (isFullscreen ? "scale(1.28)" : "scale(1.16)")
+    ? (isFullscreen ? "scale(1.42)" : "scale(1.28)")
     : cropIndex === 2
-      ? (isFullscreen ? "scaleX(1.14) scaleY(1.08)" : "scaleX(1.08) scaleY(1.03)")
+      ? (isFullscreen ? "scaleX(1.22) scaleY(1.14)" : "scaleX(1.14) scaleY(1.08)")
       : "scale(1)";
 
   return (
