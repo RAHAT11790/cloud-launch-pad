@@ -5114,27 +5114,54 @@ ${tgHashtags}`;
                     if (!ctxSeriesId || !ctxForm?.title) { toast.error("সিরিজ কন্টেক্সট পাওয়া যায়নি"); return; }
                     const season = ctxSeasons[parseInt(wsNotifySeason)];
                     const episode = season?.episodes?.[parseInt(wsNotifyEpisode)];
-                    const newRelease = {
-                      contentId: ctxSeriesId,
-                      contentType: "webseries",
-                      title: ctxForm.title,
-                      poster: ctxForm.poster || "",
-                      year: ctxForm.year || "N/A",
-                      rating: ctxForm.rating || "N/A",
-                      visibility: ctxForm.visibility || "public",
-                      episodeInfo: {
-                        seasonNumber: parseInt(wsNotifySeason) + 1,
-                        episodeNumber: episode?.episodeNumber || parseInt(wsNotifyEpisode) + 1,
-                        seasonName: season?.name || `Season ${parseInt(wsNotifySeason) + 1}`
-                      },
-                      timestamp: Date.now(),
-                      active: true,
-                      weeklyEnabled: ctxForm.weeklyEnabled === true,
-                      weeklyEveryDays: Math.max(1, Number(ctxForm.weeklyEveryDays) || 7)
-                    };
+                    const episodeEnd = wsNotifyEpisodeEnd !== "" ? season?.episodes?.[parseInt(wsNotifyEpisodeEnd)] : null;
+
+                    // Build the list of ranges to publish.
+                    // - If wsAutoRanges has multiple entries → publish each as separate notification (multi-targeting).
+                    // - Otherwise just one range from selectors.
+                    const usingMulti = wsAutoRanges.length > 1;
+                    const rangesToPublish = usingMulti
+                      ? wsAutoRanges.map(r => ({
+                          seasonIdxNum: r.seasonIdx + 1,
+                          seasonName: r.seasonName,
+                          startEp: r.startEp,
+                          endEp: r.endEp,
+                        }))
+                      : [{
+                          seasonIdxNum: parseInt(wsNotifySeason) + 1,
+                          seasonName: season?.name || `Season ${parseInt(wsNotifySeason) + 1}`,
+                          startEp: episode?.episodeNumber || parseInt(wsNotifyEpisode) + 1,
+                          endEp: episodeEnd?.episodeNumber || episode?.episodeNumber || parseInt(wsNotifyEpisode) + 1,
+                        }];
+
                     try {
-                      await set(push(ref(db, "newEpisodeReleases")), newRelease);
-                      toast.success("✅ New Release added!");
+                      for (const r of rangesToPublish) {
+                        const newRelease: any = {
+                          contentId: ctxSeriesId,
+                          contentType: "webseries",
+                          title: ctxForm.title,
+                          poster: ctxForm.poster || "",
+                          year: ctxForm.year || "N/A",
+                          rating: ctxForm.rating || "N/A",
+                          visibility: ctxForm.visibility || "public",
+                          episodeInfo: {
+                            seasonNumber: r.seasonIdxNum,
+                            episodeNumber: r.startEp,
+                            episodeNumberEnd: r.endEp,
+                            seasonName: r.seasonName,
+                          },
+                          timestamp: Date.now(),
+                          active: true,
+                          weeklyEnabled: ctxForm.weeklyEnabled === true,
+                          weeklyEveryDays: Math.max(1, Number(ctxForm.weeklyEveryDays) || 7),
+                        };
+                        await set(push(ref(db, "newEpisodeReleases")), newRelease);
+                      }
+                      toast.success(rangesToPublish.length > 1
+                        ? `✅ ${rangesToPublish.length} new release entries added (multi-range)!`
+                        : "✅ New Release added!");
+                      // Clear so a future Save+Notify on the same form starts fresh
+                      setWsAutoRanges([]);
                       // FCM removed — notifications go through Telegram only.
                       // Skip straight to telegram step (no in-app push, no FCM).
                       // Auto-fill telegram fields
