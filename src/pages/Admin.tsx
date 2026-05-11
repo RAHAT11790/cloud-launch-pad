@@ -2920,6 +2920,14 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     });
     setSeriesCast(data.cast || []);
     setSeasonsData(data.seasons || []);
+    // Snapshot baseline episodes per season for auto-detect on Save+Notify
+    {
+      const base: Record<number, Set<number>> = {};
+      (data.seasons || []).forEach((s: any, i: number) => {
+        base[i] = new Set((s.episodes || []).map((e: any) => Number(e.episodeNumber || 0)).filter((n: number) => n > 0));
+      });
+      wsBaselineRef.current = base;
+    }
     setSeriesEditId(id);
     setActiveSection("webseries");
     setSeriesTab("ws-add");
