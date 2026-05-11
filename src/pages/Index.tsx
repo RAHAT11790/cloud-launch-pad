@@ -1686,15 +1686,27 @@ const Index = () => {
       const clickedEp = season.episodes[i];
       const hasAccess = await checkAndShowAdGate(playerState!.anime, playerState!.seasonIdx, i);
       if (!hasAccess) return;
-      const qOpts = getEpisodeQualityOptions(clickedEp);
+      let nextSrc = getEpisodeSrc(clickedEp);
+      let qOpts = getEpisodeQualityOptions(clickedEp);
+      if (playerState?.anime.source === "animesalt" && String(clickedEp.link || "").startsWith("animesalt://")) {
+        const epSlug = String(clickedEp.link).replace("animesalt://", "");
+        try {
+          const epResult = await animeSaltApi.getEpisode(epSlug);
+          const embedServers = (epResult.allEmbeds || [epResult.embedUrl]).filter(Boolean);
+          nextSrc = epResult.embedUrl || nextSrc;
+          qOpts = embedServers.length > 1
+            ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
+            : [];
+        } catch {}
+      }
       addToWatchHistory(playerState!.anime, playerState!.seasonIdx, i);
       setPlayerState({
         ...playerState!,
-        src: getEpisodeSrc(clickedEp),
+        src: nextSrc,
         subtitle: `${season.name} - Episode ${clickedEp.episodeNumber}`,
         epIdx: i,
         qualityOptions: qOpts.length > 0 ? qOpts : undefined,
-        nextEpisodeSrc: i < season.episodes.length - 1 ? getEpisodeSrc(season.episodes[i + 1]) : undefined,
+        nextEpisodeSrc: undefined,
       });
     },
   }));
@@ -1706,20 +1718,28 @@ const Index = () => {
     const ep = season.episodes[0];
     const hasAccess = await checkAndShowAdGate(playerState.anime, newSeasonIdx, 0);
     if (!hasAccess) return;
-    const qOpts: { label: string; src: string }[] = [];
-    if (ep.link480) qOpts.push({ label: "480p", src: ep.link480 });
-    if (ep.link720) qOpts.push({ label: "720p", src: ep.link720 });
-    if (ep.link1080) qOpts.push({ label: "1080p", src: ep.link1080 });
-    if (ep.link4k) qOpts.push({ label: "4K", src: ep.link4k });
+    let nextSrc = getEpisodeSrc(ep);
+    let qOpts: { label: string; src: string }[] = getEpisodeQualityOptions(ep);
+    if (playerState.anime.source === "animesalt" && String(ep.link || "").startsWith("animesalt://")) {
+      const epSlug = String(ep.link).replace("animesalt://", "");
+      try {
+        const epResult = await animeSaltApi.getEpisode(epSlug);
+        const embedServers = (epResult.allEmbeds || [epResult.embedUrl]).filter(Boolean);
+        nextSrc = epResult.embedUrl || nextSrc;
+        qOpts = embedServers.length > 1
+          ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
+          : [];
+      } catch {}
+    }
     addToWatchHistory(playerState.anime, newSeasonIdx, 0);
     setPlayerState({
       ...playerState,
-      src: getEpisodeSrc(ep),
+      src: nextSrc,
       subtitle: `${season.name} - Episode ${ep.episodeNumber}`,
       seasonIdx: newSeasonIdx,
       epIdx: 0,
       qualityOptions: qOpts.length > 0 ? qOpts : undefined,
-      nextEpisodeSrc: getEpisodeSrc(season.episodes[1] as Episode),
+      nextEpisodeSrc: undefined,
     });
   }, [checkAndShowAdGate, playerState]);
 
@@ -2187,15 +2207,27 @@ const Index = () => {
                   const nextEp = season.episodes[nextIdx];
                   const hasAccess = await checkAndShowAdGate(playerState.anime, playerState.seasonIdx, nextIdx);
                   if (!hasAccess) return;
-                  const qOpts = getEpisodeQualityOptions(nextEp);
+                  let nextSrc = getEpisodeSrc(nextEp);
+                  let qOpts = getEpisodeQualityOptions(nextEp);
+                  if (playerState.anime.source === "animesalt" && String(nextEp.link || "").startsWith("animesalt://")) {
+                    const epSlug = String(nextEp.link).replace("animesalt://", "");
+                    try {
+                      const epResult = await animeSaltApi.getEpisode(epSlug);
+                      const embedServers = (epResult.allEmbeds || [epResult.embedUrl]).filter(Boolean);
+                      nextSrc = epResult.embedUrl || nextSrc;
+                      qOpts = embedServers.length > 1
+                        ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
+                        : [];
+                    } catch {}
+                  }
                   addToWatchHistory(playerState.anime, playerState.seasonIdx, nextIdx);
                   setPlayerState({
                     ...playerState,
-                    src: getEpisodeSrc(nextEp),
+                    src: nextSrc,
                     subtitle: `${season.name} - Episode ${nextEp.episodeNumber}`,
                     epIdx: nextIdx,
                     qualityOptions: qOpts.length > 0 ? qOpts : undefined,
-                    nextEpisodeSrc: nextIdx < season.episodes.length - 1 ? getEpisodeSrc(season.episodes[nextIdx + 1]) : undefined,
+                    nextEpisodeSrc: undefined,
                   });
                 }
               : undefined
