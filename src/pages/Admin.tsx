@@ -4278,7 +4278,7 @@ ${tgHashtags}`;
       </header>
 
       {/* Main Content */}
-      <main className="pt-[64px] px-3 pb-[116px] min-h-screen">
+      <main className="pt-[64px] px-3 pb-[160px] min-h-screen">
         {/* ==================== DASHBOARD ==================== */}
         {activeSection === "dashboard" && (
           <div>
