@@ -331,9 +331,13 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
                 <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
                   {season.episodes.map((ep, eIdx) => {
                     const epAddedAt = Number((ep as any).addedAt || 0);
-                    const isNew = epAddedAt > 0
-                      ? (now - epAddedAt < NEW_WINDOW_MS)
-                      : (animeRecent && Number(ep.episodeNumber) === maxEpNum);
+                    const seasonNumMatch = String(season.name || "").trim().match(/season\s*(\d+)/i);
+                    const seasonNum = seasonNumMatch ? parseInt(seasonNumMatch[1]) : (sIdx + 1);
+                    const epNum = Number(ep.episodeNumber || 0);
+                    const inRange = (newRanges[seasonNum] || []).some(rg => epNum >= rg.start && epNum <= rg.end);
+                    const isNew = inRange
+                      || (epAddedAt > 0 && (now - epAddedAt < NEW_WINDOW_MS))
+                      || (epAddedAt === 0 && animeRecent && epNum === maxEpNum);
                     return (
                     <button
                       key={eIdx}
