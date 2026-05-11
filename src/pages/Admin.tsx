@@ -5065,19 +5065,44 @@ ${tgHashtags}`;
               {wsNotifyStep === "release" ? (
                 <div>
                   <h3 className="text-sm font-bold mb-3 flex items-center gap-2"><Zap size={14} className="text-pink-500" /> New Release তৈরি করুন</h3>
-                  <p className="text-[11px] text-zinc-400 mb-4">{ctxForm?.title ? `"${ctxForm.title}" — সিজন ও এপিসোড সিলেক্ট করুন` : "সিজন ও এপিসোড সিলেক্ট করে New Release পোস্ট করুন"}</p>
-                  <div className="grid grid-cols-2 gap-3 mb-4">
+                  <p className="text-[11px] text-zinc-400 mb-3">{ctxForm?.title ? `"${ctxForm.title}" — সিজন ও এপিসোড সিলেক্ট করুন` : "সিজন ও এপিসোড সিলেক্ট করে New Release পোস্ট করুন"}</p>
+
+                  {/* Auto-detected ranges hint (filled by Save+Notify diff) */}
+                  {wsAutoRanges.length > 0 && (
+                    <div className="mb-3 p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 space-y-1">
+                      <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider">⚡ Auto-detected new episodes</p>
+                      {wsAutoRanges.map((r, i) => (
+                        <p key={i} className="text-[11px] text-emerald-100">
+                          • <b>{r.seasonName}</b> — EP {r.startEp}{r.endEp !== r.startEp ? `–${r.endEp}` : ''}
+                        </p>
+                      ))}
+                      {wsAutoRanges.length > 1 && (
+                        <p className="text-[10px] text-emerald-200/80 pt-1">Each range will be sent as a separate notification.</p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-2 mb-4">
                     <div>
                       <label className="block text-xs text-zinc-400 mb-1.5">Season</label>
-                      <select value={wsNotifySeason} onChange={e => { setWsNotifySeason(e.target.value); setWsNotifyEpisode(""); }} className={selectClass}>
+                      <select value={wsNotifySeason} onChange={e => { setWsNotifySeason(e.target.value); setWsNotifyEpisode(""); setWsNotifyEpisodeEnd(""); }} className={selectClass}>
                         <option value="">Select</option>
                         {ctxSeasons.map((s: any, i: number) => <option key={i} value={String(i)}>{s.name || `Season ${i + 1}`}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-zinc-400 mb-1.5">Episode</label>
+                      <label className="block text-xs text-zinc-400 mb-1.5">EP Start</label>
                       <select value={wsNotifyEpisode} onChange={e => setWsNotifyEpisode(e.target.value)} className={selectClass}>
                         <option value="">Select</option>
+                        {wsNotifySeason !== "" && ctxSeasons[parseInt(wsNotifySeason)]?.episodes?.map((ep: any, i: number) => (
+                          <option key={i} value={String(i)}>EP {ep.episodeNumber || i + 1}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1.5">EP End</label>
+                      <select value={wsNotifyEpisodeEnd} onChange={e => setWsNotifyEpisodeEnd(e.target.value)} className={selectClass}>
+                        <option value="">Same</option>
                         {wsNotifySeason !== "" && ctxSeasons[parseInt(wsNotifySeason)]?.episodes?.map((ep: any, i: number) => (
                           <option key={i} value={String(i)}>EP {ep.episodeNumber || i + 1}</option>
                         ))}
