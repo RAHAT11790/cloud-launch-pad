@@ -240,6 +240,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
 
+  // ===== AN iframe minimal overlay auto-hide =====
+  // Buttons start visible, then auto-hide after 3s. Tapping the iframe area
+  // toggles them (mirrors AN's own controls show/hide behaviour).
+  const [showAnOverlay, setShowAnOverlay] = useState(true);
+  const anOverlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleAnOverlayHide = useCallback(() => {
+    if (anOverlayTimer.current) clearTimeout(anOverlayTimer.current);
+    anOverlayTimer.current = setTimeout(() => setShowAnOverlay(false), 3000);
+  }, []);
+  const toggleAnOverlay = useCallback(() => {
+    setShowAnOverlay((prev) => {
+      const next = !prev;
+      if (anOverlayTimer.current) clearTimeout(anOverlayTimer.current);
+      if (next) {
+        anOverlayTimer.current = setTimeout(() => setShowAnOverlay(false), 3000);
+      }
+      return next;
+    });
+  }, []);
+
   // ===== SERVER CHANGER =====
   const [videoServers, setVideoServers] = useState<VideoServerOption[]>([]);
   const [activeServerIndex, setActiveServerIndex] = useState(0);
