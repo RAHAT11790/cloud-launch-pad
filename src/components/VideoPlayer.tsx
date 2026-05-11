@@ -305,8 +305,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Iframe is the active playback surface when currentSrc points to hf.space
   const isEmbedPlayback = useMemo(
     () => !!currentSrc && (forceEmbedMode || /hf\.space|huggingface/i.test(currentSrc)),
-    [currentSrc, forceEmbedMode],
   );
+
+  // Initial 3s show + iframe-tap detection via window blur (iframe steals focus
+  // → window blurs). This mirrors AN's own controls open/close behaviour.
+  useEffect(() => {
+    if (!isEmbedPlayback) return;
+    setShowAnOverlay(true);
+    scheduleAnOverlayHide();
+    const onBlur = () => {
+      setTimeout(() => {
+        if (document.activeElement?.tagName === "IFRAME") {
+          toggleAnOverlay();
+          (document.activeElement as HTMLElement)?.blur?.();
+          window.focus();
+        }
+      }, 0);
+    };
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      if (anOverlayTimer.current) clearTimeout(anOverlayTimer.current);
+    };
+  }, [isEmbedPlayback, scheduleAnOverlayHide, toggleAnOverlay]);
 
   // Throttle React state updates from the iframe → ~1 update/sec
   const lastEmbedSyncRef = useRef(0);
