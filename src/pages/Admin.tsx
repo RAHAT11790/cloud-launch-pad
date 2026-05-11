@@ -2160,7 +2160,12 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
    const [wsNotifyEpisode, setWsNotifyEpisode] = useState("");
    const [wsNotifyEpisodeEnd, setWsNotifyEpisodeEnd] = useState("");
    // Captured context for Save+Notify (saveSeries resets form, so we save context before)
-   const wsNotifyContextRef = useRef<{ seriesId: string; form: any; seasons: any[] } | null>(null);
+  const wsNotifyContextRef = useRef<{ seriesId: string; form: any; seasons: any[] } | null>(null);
+  // Baseline of episodes when series was loaded for edit. Used to auto-detect new episodes for Save+Notify.
+  // Shape: { [seasonIdx: number]: Set<episodeNumber> }
+  const wsBaselineRef = useRef<Record<number, Set<number>>>({});
+  // Auto-detected ranges shown in modal (read-only hint). Filled when Save+Notify is clicked.
+  const [wsAutoRanges, setWsAutoRanges] = useState<Array<{ seasonIdx: number; seasonName: string; startEp: number; endEp: number }>>([]);
 
 
   useEffect(() => {
