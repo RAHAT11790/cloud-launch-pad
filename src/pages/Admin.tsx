@@ -2167,6 +2167,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   // Auto-detected ranges shown in modal (read-only hint). Filled when Save+Notify is clicked.
   const [wsAutoRanges, setWsAutoRanges] = useState<Array<{ seasonIdx: number; seasonName: string; startEp: number; endEp: number }>>([]);
 
+   const formatEpisodeRangeLabel = useCallback((seasonValue?: string | number, start?: string | number, end?: string | number) => {
+     const seasonText = String(seasonValue ?? "").trim() || "01";
+     const startText = String(start ?? "").trim() || "01";
+     const endText = String(end ?? "").trim();
+     return endText && endText !== startText
+       ? `Sᴇᴀsᴏɴ #${seasonText} • Eᴘɪsᴏᴅᴇ #${startText}-${endText} Aᴅᴅᴇᴅ`
+       : `Sᴇᴀsᴏɴ #${seasonText} • Eᴘɪsᴏᴅᴇ #${startText} Aᴅᴅᴇᴅ`;
+   }, []);
+
 
   useEffect(() => {
     const connRef = ref(db, ".info/connected");
