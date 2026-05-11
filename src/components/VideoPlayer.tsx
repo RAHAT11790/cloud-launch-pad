@@ -1842,8 +1842,52 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
-          {/* Controls Overlay - smooth fade in/out */}
-          {!locked && (
+          {/* ===== EMBED-ONLY MINIMAL OVERLAY (AnimeStill iframe) =====
+              AN's iframe has its own play/pause/seek/quality. We only show:
+              - Server change  - Fullscreen (since AN iframe lacks one)
+              Sits at top-right and does NOT cover the iframe so AN's controls remain tappable. */}
+          {isEmbedPlayback && !locked && (
+            <div className="absolute top-2 right-2 z-30 flex items-center gap-2 pointer-events-auto">
+              {effectiveVideoServers.length > 1 && !noServerSwitch && (
+                <div className="relative">
+                  <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-touch-button h-8 px-2.5 rounded-full flex items-center justify-center gap-1 bg-black/70 backdrop-blur ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
+                    <Server className="w-3.5 h-3.5 text-white" />
+                    <span className="text-[10px] font-medium text-white">{manualServerSelected ? (effectiveVideoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
+                  </button>
+                  {showServerPanel && (
+                    <div className="absolute top-10 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
+                      <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
+                      {!isPremium && (
+                        <button onClick={() => {
+                          setShowServerPanel(false);
+                          setManualServerSelected(false);
+                          activeSourceBaseRef.current = sourceBaseRef.current;
+                          setCurrentSrc(resolvePlaybackSrc(sourceBaseRef.current));
+                        }} className={`w-full text-left px-3 py-2 rounded-lg text-xs ${!manualServerSelected ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}>
+                          Default
+                        </button>
+                      )}
+                      {effectiveVideoServers.map((srv, idx) => (
+                        <button key={idx} onClick={() => switchServer(idx)} className={`w-full text-left px-3 py-2 rounded-lg text-xs ${activeServerIndex === idx ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}>
+                          {srv.name || `Server ${idx + 1}`}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+                className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center bg-black/70 backdrop-blur"
+                aria-label="Fullscreen"
+              >
+                {isFullscreen ? <Minimize className="w-4 h-4 text-white" /> : <Maximize className="w-4 h-4 text-white" />}
+              </button>
+            </div>
+          )}
+
+          {/* Controls Overlay - smooth fade in/out (RS direct video only) */}
+          {!locked && !isEmbedPlayback && (
             <div
               className={`absolute inset-0 flex flex-col justify-between text-white transition-opacity duration-300 ease-out ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
               style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}
