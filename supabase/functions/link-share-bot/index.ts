@@ -1699,6 +1699,48 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify(r), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
+  // Admin helper: identify each known bot token and disable webhooks on
+  // every bot EXCEPT the access bot (this function). Used to take the
+  // RS_ANIME_FIND_BOT (or any stray bot) fully offline.
+  if (url.searchParams.get("fixBots")) {
+    const accessUsername = (await botUsername()) || "";
+    const candidates = [
+      { envName: "TELEGRAM_BOT_TOKEN", token: Deno.env.get("TELEGRAM_BOT_TOKEN") || "" },
+      { envName: "LINK_SHARE_BOT_TOKEN", token: Deno.env.get("LINK_SHARE_BOT_TOKEN") || "" },
+      { envName: "RS_ACCESS_BOT_TOKEN", token: Deno.env.get("RS_ACCESS_BOT_TOKEN") || "" },
+    ];
+    const results: any[] = [];
+    const seen = new Set<string>();
+    for (const c of candidates) {
+      if (!c.token || seen.has(c.token)) continue;
+      seen.add(c.token);
+      const base = `https://api.telegram.org/bot${c.token}`;
+      let username = "";
+      try {
+        const me = await fetch(`${base}/getMe`).then(r => r.json());
+        username = me?.result?.username || "";
+      } catch {}
+      // Skip the access bot itself — we want to keep it online.
+      if (username && accessUsername && username.toLowerCase() === accessUsername.toLowerCase()) {
+        results.push({ env: c.envName, username, action: "kept-online" });
+        continue;
+      }
+      // Take this bot fully offline: delete webhook + drop any pending updates.
+      try {
+        const del = await fetch(`${base}/deleteWebhook?drop_pending_updates=true`, { method: "POST" }).then(r => r.json());
+        results.push({ env: c.envName, username, action: "webhook-deleted", ok: del?.ok === true });
+      } catch (e: any) {
+        results.push({ env: c.envName, username, action: "delete-failed", error: String(e?.message || e) });
+      }
+    }
+    // Make sure the access bot's webhook is restored to this function URL.
+    try { await ensureWebhook(); } catch {}
+    const info = await tg("getWebhookInfo", {}).catch(() => null);
+    return new Response(JSON.stringify({ ok: true, accessUsername, results, accessWebhook: info }, null, 2), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   if (req.method === "POST" && body?.action === "create-unlock-link") {
     const userId = String(body?.userId || "").trim();
     if (!userId) {
