@@ -10,6 +10,8 @@ import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
+import MonetagAdManager from "@/components/MonetagAdManager";
+import { triggerDirectLink as monetagDirectLink } from "@/lib/monetagAds";
 // Shortener gate is always-on now (Monetag system removed)
 const isShortenerEnabled = async () => true;
 
