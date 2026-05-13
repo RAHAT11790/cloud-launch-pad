@@ -1,54 +1,155 @@
-## Plan: AN iframe fixes, RS download fixes, season list, auto‑detect notify
+## Goal
 
-### 1. AN (AnimeStill) iframe video — keep iframe, redesign overlay controls
-File: `src/components/VideoPlayer.tsx` (in `forceEmbedMode` / `isEmbedPlayback` branch)
+1. ব্রাউজার back button smooth করতে প্রত্যেক page/section/function এর জন্য আলাদা React Router route বানানো (user + admin উভয়ের জন্য)।
+2. Monetag ads (popunder + direct link) শুধু video player route এর মাঝে যোগ করা।
+3. Monetag verification service worker (`3nbf4.com` zone `10888250`) site root এ serve করা।
 
-- Keep the iframe loading AN URL exactly as-is (no direct src extraction). Allow iframe interaction (remove `pointerEvents: none`, remove blocking overlay) so AN's own play/pause/seek/quality controls work.
-- Hide our full custom control panel for AN. Render only a minimal floating top-right overlay with TWO buttons:
-  - **Server change** (existing `serverList` switcher).
-  - **Fullscreen / crop** (the existing fit/crop toggle from our player).
-- "Pseudo-fullscreen" for AN iframe (since AN's player has no fullscreen): clicking our fullscreen button calls `element.requestFullscreen()` on the iframe wrapper div + sets `screen.orientation.lock('landscape')` + scales the iframe to fill the viewport (CSS `position:fixed; inset:0; width:100vw; height:100vh`). Tapping it again exits.
-- **Hide download button entirely when AN content is playing** (iframe / `forceEmbedMode`). Download UI only renders for RS direct media.
-- Keep season selector + episode list + suggested rail visible below AN iframe (these are ours, not AN's).
+---
 
-### 2. RS download — fix broken/0KB downloads + sequential "Download All"
-File: `src/lib/downloadManager.ts`, `src/components/VideoPlayer.tsx`
+## Part 1 — Router Restructure
 
-- Root cause of 0KB: HLS (`.m3u8`) blob fetch returns the playlist text (~few KB), not the video. Only direct `.mp4` (HTTPS web-series-style links) are downloadable.
-- New logic in `VideoPlayer` download handler:
-  - Pick the **direct HTTPS mp4 link** from the episode's quality list (`link480/link720/link1080/link4k`) corresponding to selected quality. Skip `.m3u8` / proxy / iframe URLs.
-  - If no direct mp4 is found → toast "Direct download not available for this episode".
-  - For "Download All": queue every episode of the current season into a serial queue (sorted by `episodeNumber` ASC). The queue runs ONE at a time — next starts only after the previous is `complete` or `error`.
-- In `downloadManager.ts`:
-  - Add a `queue: string[]` and `processing: boolean` flag. New `enqueueDownload(params)` pushes to queue and triggers `processQueue()` which awaits each `startDownload` sequentially.
-  - Stop the duplicate browser-notification download: remove the `<a download>` click trigger when `saveVideo` succeeds (file is already saved to IndexedDB; user opens it from the in-app Downloads page). OR keep one and remove the other — we keep IndexedDB only; export/share happens from Downloads page.
-  - On error, do NOT auto-`window.open(url)` (currently re-triggers a browser download). Just mark error and move on.
+### User-facing routes (Index.tsx এর state গুলোকে real route বানানো)
 
-### 3. Season list — single line, horizontal scroll, both places
-Files: `src/components/VideoPlayer.tsx` (player season strip), `src/components/AnimeDetails.tsx` (details page season header)
+```text
+/                       → Home tab
+/series                 → Series tab
+/movies                 → Movies tab
+/livetv                 → Live TV tab
+/profile                → Profile tab
+/search                 → Search overlay
+/anime/:id              → Anime details page
+/anime/:id/season/:s    → Season selected (deep link)
+/watch/:id              → Video player (movie)
+/watch/:id/:season/:ep  → Video player (episode)
+/livetv/:channelId      → Live TV player
+/login                  → Login page
+/about                  → About
+/privacy                → Privacy
+/unlock, /unlock-required → already exist
+```
 
-- Wrap the season chips row in a flex container with `overflow-x-auto whitespace-nowrap flex-nowrap` + `[&::-webkit-scrollbar]:hidden`. Each chip uses `shrink-0`.
-- Use `getShortSeasonLabel` everywhere (`Season 1`, `Season 2`...) — apply same helper in `AnimeDetails.tsx` (currently shows raw `season.name`).
-- Touch-action: `pan-x` for smooth horizontal swipe.
+`Index.tsx` এর internal state (`activePage`, `selectedAnime`, `playerOpen`, `searchOpen`, `profileOpen` ইত্যাদি) কে `useNavigate` + `useParams` + `useLocation` দিয়ে replace করা হবে — যাতে browser back button প্রতি step এ একটা করে UI layer pop করে।
 
-### 4. Save + Notify — auto-detect newly added episode range + multi-targeting
-File: `src/pages/Admin.tsx` (around lines 2156–5170)
+### Admin routes (Admin.tsx এর tab/section গুলোকে nested route বানানো)
 
-- Track the **baseline** of seasons/episodes when the edit modal opens: `wsBaselineRef.current = deepClone(seasonsData)` set on series load.
-- When user clicks "Save + Notify", BEFORE opening the modal compute the diff:
-  - For each season, find new episode numbers that exist now but didn't in the baseline (or didn't exist at all).
-  - Auto-fill `wsNotifySeason` + `wsNotifyEpisode` (start) + `wsNotifyEpisodeEnd` (end) from the diff.
-  - If multiple non-contiguous ranges or multiple seasons changed, store an array `wsNotifyRanges: Array<{seasonIdx, startEp, endEp}>` and loop through it on confirm — pushing one notification + one Telegram post per range (so episodes 5–10 and 15–20 fire as two targeted notifications).
-- The existing manual selectors stay but pre-populated; user can override. Show a small "Auto-detected: S1 E5–E10" hint above the selectors.
-- Notification body becomes "Episode 5 to 10 are now available!" when range > 1.
+```text
+/admin                          → dashboard
+/admin/series                   → series manager
+/admin/series/:id               → edit series
+/admin/series/:id/seasons       → seasons
+/admin/series/:id/episodes      → episodes
+/admin/movies, /admin/movies/:id
+/admin/livetv, /admin/livetv/:id
+/admin/users, /admin/users/:uid
+/admin/notifications
+/admin/new-release
+/admin/telegram
+/admin/telegram/posts
+/admin/telegram/buttons
+/admin/branding
+/admin/edge-router
+/admin/ad-services
+/admin/apk
+/admin/email
+/admin/analytics
+/admin/devices
+/admin/subscriptions
+/admin/import
+/admin/export
+/admin/link-validator
+/admin/url-tools
+/admin/firebase-cleanup
+/admin/egd
+```
 
-### Out of scope (untouched)
-- VideoPlayer src loading / quality switching / server logic for RS.
-- Login page.
-- Free-user device limit (already removed).
+প্রত্যেক admin section আলাদা lazy-loaded route component হবে। Tabs UI পাল্টে `<NavLink>` based sidebar/tab bar হবে যেগুলো URL update করে।
 
-### Files to edit
-- `src/components/VideoPlayer.tsx`
-- `src/components/AnimeDetails.tsx`
-- `src/lib/downloadManager.ts`
-- `src/pages/Admin.tsx`
+### Implementation approach
+
+- নতুন folder `src/routes/` এ split route components তৈরি করা হবে যা existing components wrap করবে।
+- `App.tsx` এ central `<Routes>` config এ সব route register করা হবে (lazy load সবগুলো)।
+- Existing inline-state navigation calls (যেমন `setActivePage("series")`, `setSelectedAnime(x)`) replace করে `navigate("/...")` দিয়ে।
+- Page transitions আগের মতো swipe/translate3d behavior রাখা হবে (memory rule), শুধু source-of-truth URL এ যাবে।
+- sessionStorage based refresh persistence (existing memory) URL based হয়ে যাবে — automatic improvement।
+
+---
+
+## Part 2 — Monetag Ads (video player route only)
+
+### Files
+
+- `src/lib/monetagAds.ts` — singleton helper:
+  - `loadPopunder()` — page load এ একবার শুধু (sessionStorage flag `mt_pop_loaded`)। Script: `https://3nbf4.com/...` Monetag tag।
+  - `triggerDirectLink()` — player surface এ click করলে নতুন tab এ direct link URL open করে, তারপর cooldown (e.g. 60s) এ block।
+- `src/components/MonetagAdManager.tsx` — শুধু `/watch/*` route এ mount হবে। Mount হলে popunder একবার call, unmount এ cleanup।
+- `VideoPlayer.tsx` এ player surface এ overlay click handler যোগ — play/pause toggle এর পাশাপাশি `triggerDirectLink()` call (rate-limited, প্রথম click পর video resume normally)।
+
+### Guards (popunder একবার হওয়া নিশ্চিত)
+
+- `sessionStorage` + in-memory flag check।
+- `window.__mtPopShown` global once-flag।
+- Script tag duplicate check (`document.querySelector('script[data-mt-pop]')`)।
+- Direct link এর জন্য last-trigger timestamp, minimum 45–60s gap; back করে ফিরলে video resume হবে।
+
+User Monetag dashboard থেকে actual popunder + direct-link tag দিলে ওই URL `monetagAds.ts` এ বসানো হবে। আপাতত placeholder constants `MONETAG_POPUNDER_SRC` এবং `MONETAG_DIRECT_LINK_URL` রাখা হবে যা admin → branding/edge-router section থেকেও override করা যাবে।
+
+---
+
+## Part 3 — Monetag Verification Service Worker
+
+User এর দেওয়া snippet:
+
+```js
+self.options = { "domain": "3nbf4.com", "zoneId": 10888250 }
+self.lary = ""
+importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw')
+```
+
+Monetag verification এর জন্য site root এ একটা service worker file দরকার যেটা ওরা fetch করতে পারে। দুটো জায়গায় serve করা হবে:
+
+- `public/sw.js` — root path থেকে accessible (`https://rsanime03.lovable.app/sw.js`)।
+- Verification meta-tag (যদি Monetag চায়) `index.html` `<head>` এ optional — শুধু Monetag docs এ specified কিছু থাকলে।
+
+**Conflict guard**: existing PWA / kill-switch SW নেই project এ, তাই `sw.js` add safe। কিন্তু auto-register করা হবে না (Lovable preview iframe rule) — শুধু Monetag fetch করার জন্য static file হিসেবে থাকবে। Verification এর পর Monetag নিজেই handle করবে।
+
+`index.html` এ minimal register snippet (production only, iframe guard সহ) যোগ করা হবে যাতে Monetag verification pass করে:
+
+```html
+<script>
+  if (location.hostname.endsWith("lovable.app") &&
+      !location.hostname.includes("id-preview") &&
+      window.self === window.top &&
+      "serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(()=>{});
+  }
+</script>
+```
+
+---
+
+## Files to add / change
+
+**New**
+- `src/routes/` (12+ user route components, 20+ admin route components)
+- `src/lib/monetagAds.ts`
+- `src/components/MonetagAdManager.tsx`
+- `public/sw.js`
+
+**Edit**
+- `src/App.tsx` — central route config
+- `src/pages/Index.tsx` — strip internal navigation state, use URL
+- `src/pages/Admin.tsx` — nested routes, sidebar uses NavLink
+- `src/components/VideoPlayer.tsx` — direct-link click handler
+- `index.html` — guarded SW register
+- `src/components/BottomNav.tsx` — NavLink based
+
+---
+
+## Risk / Notes
+
+- Index.tsx 2311 lines — refactor বড়, কিন্তু behavior একই থাকবে (visual + swipe + cache সব preserve)।
+- Admin.tsx এ অনেক section আছে; প্রথম pass এ সব major section route করা হবে, sub-modal গুলো দরকারমতো nested route এ পরিনত হবে।
+- Popunder একবার load — sessionStorage + global flag + DOM duplicate check, তিন স্তরে block।
+- SW register শুধু production domain এ — preview/iframe এ skip (Lovable rule)।
+
+কাজ শুরু করতে approve করো।
