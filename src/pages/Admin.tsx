@@ -23,10 +23,11 @@ const WeeklyEpManager = () => null;
 // AdminNotificationBell removed
 
 import EgdManager from "@/components/admin/EgdManager";
+import MonetagConfig from "@/components/admin/MonetagConfig";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseCleanupSection from "@/components/admin/FirebaseCleanup";
 
-type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "fb-cleanup";
+type Section = "dashboard" | "categories" | "webseries" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "fb-cleanup" | "monetag";
 
 interface CastMember {
   name: string;
@@ -2736,6 +2737,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "apk-dw": "APK Download Center",
     "egd-manager": "EGD MANAGER",
     "fb-cleanup": "Firebase Cleanup",
+    "monetag": "Monetag Ads",
   };
 
   // ==================== CATEGORIES ====================
@@ -4054,6 +4056,7 @@ ${tgHashtags}`;
     { section: "email-service", icon: <Mail size={16} />, label: "Email Service" },
     
     { section: "egd-manager", icon: <Bot size={16} />, label: "EGD MANAGER" },
+    { section: "monetag", icon: <Activity size={16} />, label: "Monetag Ads" },
     { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
     { section: "fb-cleanup", icon: <Trash2 size={16} />, label: "FB Cleanup" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
@@ -7237,6 +7240,11 @@ ${tgHashtags}`;
         {/* ==================== EGD MANAGER ==================== */}
         {activeSection === "egd-manager" && (
           <EgdManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+        )}
+
+        {/* ==================== MONETAG ADS ==================== */}
+        {activeSection === "monetag" && (
+          <MonetagConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
         )}
 
         {/* ==================== FIREBASE CLEANUP ==================== */}
