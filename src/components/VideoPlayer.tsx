@@ -1683,6 +1683,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       lastTap.current = { time: 0, x: 0 };
     } else {
       lastTap.current = { time: now, x: clientX };
+      // Fire Monetag direct link (rate-limited, fail-silent). User returns via back.
+      monetagDirectLink().catch(() => {});
       // Show controls INSTANTLY on single tap — no 300ms wait
       toggleControls();
     }
