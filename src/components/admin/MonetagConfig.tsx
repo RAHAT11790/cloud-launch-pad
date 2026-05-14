@@ -32,42 +32,42 @@ const SLOT_DEFS: Array<{
 }> = [
   {
     key: "popunder", title: "Pop-Under (Classic)", icon: Megaphone,
-    desc: "Monetag dashboard → Site → Pop-Under. Paste the FULL script src URL only (e.g. https://al5sm.com/tag.min.js). Loads once per session on the player.",
-    fieldType: "src", placeholder: "https://al5sm.com/tag.min.js",
+    desc: "Paste ANYTHING from Monetag dashboard: full <script src=...> tag, the IIFE snippet, or just the raw URL — auto-parsed. Loads once per session inside the player.",
+    fieldType: "raw", placeholder: `<script>(function(s){s.dataset.zone='11000277',s.src='https://al5sm.com/tag.min.js'})([document.documentElement,document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>\n\n— or just —\n\nhttps://al5sm.com/tag.min.js`,
   },
   {
     key: "onclickPop", title: "OnClick Pop-Under", icon: MousePointerClick,
-    desc: "Monetag → OnClick. Fires on user tap inside the player. We rate-limit so users aren't spammed.",
-    fieldType: "src", placeholder: "https://al5sm.com/tag.min.js", hasCooldown: true,
+    desc: "Fires on user tap inside the player. Paste the full <script> tag or just the URL. Rate-limited so users aren't spammed.",
+    fieldType: "raw", placeholder: `<script src="https://5gvci.com/act/files/tag.min.js?z=11004211" data-cfasync="false" async></script>`, hasCooldown: true,
   },
   {
-    key: "inPagePush", title: "In-Page Push", icon: Bell,
-    desc: "Monetag → In-Page Push. Slide-in notification that doesn't need browser permission. Paste the script src URL.",
-    fieldType: "src", placeholder: "https://thubanoa.com/1?z=XXXXXXX",
+    key: "inPagePush", title: "In-Page Push / Notifications", icon: Bell,
+    desc: "Slide-in notification (no browser permission needed). Paste the IIFE snippet or full <script> tag — zone is auto-extracted.",
+    fieldType: "raw", placeholder: `<script>(function(s){s.dataset.zone='11000277',s.src='https://al5sm.com/tag.min.js'})([document.documentElement,document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>`,
   },
   {
     key: "nativeBanner", title: "Native Banner", icon: LayoutPanelTop,
-    desc: "Monetag → Native Banner. Renders a content-style ad block. Script src URL.",
-    fieldType: "src", placeholder: "https://pl1234567.profitablecpmrate.com/...",
+    desc: "Content-style ad block. Paste full <script> tag or URL.",
+    fieldType: "raw", placeholder: `<script src="https://...js" async></script>`,
   },
   {
     key: "vignette", title: "Vignette / Interstitial", icon: Maximize2,
-    desc: "Monetag → Vignette Banner. Full-screen interstitial between page views. Script src URL.",
-    fieldType: "src", placeholder: "https://groleegni.net/...",
+    desc: "Full-screen interstitial. Paste full <script> tag or URL.",
+    fieldType: "raw", placeholder: `<script src="https://groleegni.net/..." async></script>`,
   },
   {
     key: "smartBanner", title: "Smart / Sticky Banner", icon: ImageIcon,
-    desc: "Monetag → Smart Banner. Sticky bottom/top ad bar. Script src URL.",
-    fieldType: "src", placeholder: "https://...",
+    desc: "Sticky bottom/top ad bar. Paste full <script> tag or URL.",
+    fieldType: "raw", placeholder: `<script src="https://..." async></script>`,
   },
   {
     key: "directLink", title: "Direct Link", icon: Link2,
-    desc: "Monetag → Direct Link. Just the destination URL — opens in a new tab on player tap with cooldown.",
-    fieldType: "url", placeholder: "https://3nbf4.com/4/1234567", hasCooldown: true,
+    desc: "Just the destination URL — opens in new tab on player tap, with cooldown.",
+    fieldType: "url", placeholder: "https://omg10.com/4/11000244", hasCooldown: true,
   },
   {
     key: "custom1", title: "Custom Slot #1", icon: Code2,
-    desc: "Paste any raw <script>…</script> snippet (Monetag or another network). Injected as-is on the player.",
+    desc: "Free-form. Paste any raw <script>…</script>, IIFE, or URL — auto-parsed.",
     fieldType: "raw", placeholder: "<script>...</script>",
   },
   {
