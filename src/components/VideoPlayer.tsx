@@ -1688,7 +1688,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       // Show controls INSTANTLY on single tap — no 300ms wait
       toggleControls();
     }
-  }, [locked, seek, togglePlay, playing, toggleControls]);
+  }, [locked, seek, togglePlay, playing, toggleControls, isPremium]);
 
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
