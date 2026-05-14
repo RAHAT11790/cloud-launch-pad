@@ -49,6 +49,75 @@ const DEFAULT_CONFIG: MonetagConfig = { enabled: true, slots: {} };
 let cached: MonetagConfig | null = null;
 let cachedPromise: Promise<MonetagConfig> | null = null;
 
+// ----------------------------------------------------------------
+// Smart paste parser.
+// Accepts ANY of these formats in a single field and extracts what we need:
+//   1. Plain URL                      → https://al5sm.com/tag.min.js
+//   2. <script src="..." data-x="y">  → extracts src + all data-* attrs
+//   3. IIFE (Monetag in-page push):
+//        (function(s){s.dataset.zone='11000277',s.src='https://al5sm.com/tag.min.js'})(...)
+//      → extracts src + dataset.zone (+ any other dataset.* assignments)
+//   4. Raw <script>...inline code...</script> → returns rawHtml for blob inject
+// Returns: { src?, dataAttrs?, rawHtml? }
+// ----------------------------------------------------------------
+export type ParsedAd = { src?: string; dataAttrs?: Record<string, string>; rawHtml?: string };
+
+export function parseAdInput(input: string): ParsedAd {
+  const txt = (input || "").trim();
+  if (!txt) return {};
+
+  // 1. Plain URL
+  if (/^https?:\/\/\S+$/i.test(txt)) return { src: txt };
+
+  const dataAttrs: Record<string, string> = {};
+
+  // 2. <script ...> tag — extract src + data-* attrs
+  const scriptTagMatch = txt.match(/<script\b([^>]*)>([\s\S]*?)<\/script>/i);
+  if (scriptTagMatch) {
+    const attrs = scriptTagMatch[1] || "";
+    const inner = (scriptTagMatch[2] || "").trim();
+
+    const srcMatch = attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+    const dataAttrRe = /\bdata-([a-zA-Z0-9_-]+)\s*=\s*["']([^"']*)["']/g;
+    let m: RegExpExecArray | null;
+    while ((m = dataAttrRe.exec(attrs))) dataAttrs[m[1]] = m[2];
+
+    // 3. IIFE inside the script tag (Monetag in-page push pattern)
+    if (inner) {
+      const innerSrc = inner.match(/s\.src\s*=\s*['"]([^'"]+)['"]/);
+      const datasetRe = /s\.dataset\.([a-zA-Z0-9_]+)\s*=\s*['"]([^'"]+)['"]/g;
+      let dm: RegExpExecArray | null;
+      while ((dm = datasetRe.exec(inner))) dataAttrs[dm[1]] = dm[2];
+
+      if (innerSrc?.[1]) {
+        return { src: innerSrc[1], dataAttrs: Object.keys(dataAttrs).length ? dataAttrs : undefined };
+      }
+      // Inline script with no extractable src → treat as raw
+      if (!srcMatch) return { rawHtml: txt };
+    }
+
+    if (srcMatch?.[1]) {
+      return { src: srcMatch[1], dataAttrs: Object.keys(dataAttrs).length ? dataAttrs : undefined };
+    }
+    return { rawHtml: txt };
+  }
+
+  // 3b. Bare IIFE (no <script> wrapper)
+  const bareSrc = txt.match(/s\.src\s*=\s*['"]([^'"]+)['"]/);
+  if (bareSrc?.[1]) {
+    const datasetRe = /s\.dataset\.([a-zA-Z0-9_]+)\s*=\s*['"]([^'"]+)['"]/g;
+    let dm: RegExpExecArray | null;
+    while ((dm = datasetRe.exec(txt))) dataAttrs[dm[1]] = dm[2];
+    return { src: bareSrc[1], dataAttrs: Object.keys(dataAttrs).length ? dataAttrs : undefined };
+  }
+
+  // Fallback: treat as raw HTML/script — wrap in <script> if it looks like JS
+  if (/[{};=()]/.test(txt) && !/^</.test(txt)) {
+    return { rawHtml: `<script>${txt}</script>` };
+  }
+  return { rawHtml: txt };
+}
+
 function normalize(v: any): MonetagConfig {
   const slots: MonetagConfig["slots"] = {};
   const raw = (v && v.slots) || {};
