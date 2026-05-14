@@ -214,7 +214,7 @@ const MonetagConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
                       min={5}
                       className={`${inputClass} w-full max-w-[180px]`}
                       value={slot.cooldownSec ?? 60}
-                      onChange={(e) => updateSlot(def.key, { cooldownSec: Number(e.target.value) })}
+                      onChange={(e) => updateSlot(def.storageKey, { cooldownSec: Number(e.target.value) })}
                     />
                   </div>
                 )}
