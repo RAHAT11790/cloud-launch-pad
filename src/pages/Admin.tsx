@@ -3807,7 +3807,9 @@ ${tgHashtags}`;
           caption,
           photoUrl: tgPosterUrl || undefined,
           inlineButtons: inlineButtons.length > 0 ? inlineButtons : undefined,
-          includeFreeAccess: true,
+          // Free Access button is controlled ENTIRELY by the global toggle at
+          // settings/telegramFreeAccess.enabled (read inside the edge function).
+          // Do NOT force-include here — that would bypass the OFF switch.
           freeAccessUserId: "telegram_post",
         };
         try {

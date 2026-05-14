@@ -6,14 +6,24 @@ import {
   ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
-import { db, ref, onValue, set, remove, update } from "@/lib/firebase";
+import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import MonetagAdManager from "@/components/MonetagAdManager";
 import { triggerDirectLink as monetagDirectLink } from "@/lib/monetagAds";
-// Shortener gate is always-on now (Monetag system removed)
-const isShortenerEnabled = async () => true;
+// Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
+// When OFF: free users get instant access, NO ad gate, NO unlock popup, NO verification flash.
+const isShortenerEnabled = async (): Promise<boolean> => {
+  try {
+    const snap = await get(ref(db, "settings/unlockGateEnabled"));
+    const v = snap.val();
+    // Default true (gate ON) only when explicitly true or unset; explicit false = OFF.
+    return v !== false;
+  } catch {
+    return true;
+  }
+};
 
 interface QualityOption {
   label: string;
