@@ -126,7 +126,7 @@ const MonetagConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   return (
     <div className="space-y-4 max-w-full overflow-hidden">
       {/* ── Master toggle ─────────────────────────────────────── */}
-      <div className={`${glassCard} max-w-full`}>
+      <div className={`${glassCard} max-w-full p-4`}>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="min-w-0 flex-1">
             <h3 className="text-base font-bold text-white">Monetag Ads</h3>
@@ -148,7 +148,7 @@ const MonetagConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         const isOpen = !!open[def.key];
         const Icon = def.icon;
         return (
-          <div key={def.key} className={`${glassCard} max-w-full overflow-hidden`}>
+          <div key={def.key} className={`${glassCard} max-w-full overflow-hidden p-4`}>
             {/* Header (clickable) */}
             <button
               type="button"
@@ -237,7 +237,7 @@ const MonetagConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       })}
 
       {/* ── Info: SW verification ─────────────────────────────── */}
-      <div className={`${glassCard} max-w-full`}>
+      <div className={`${glassCard} max-w-full p-4`}>
         <h4 className="text-sm font-bold text-white mb-2">Verification Service Worker</h4>
         <p className="text-xs text-white/60 break-words">
           Monetag SW served at <code className="text-amber-300 break-all">/sw.js</code> (zone <code>10888250</code>, domain <code>3nbf4.com</code>).
@@ -246,7 +246,7 @@ const MonetagConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         </p>
       </div>
 
-      <div className={`${glassCard} max-w-full`}>
+      <div className={`${glassCard} max-w-full p-4`}>
         <h4 className="text-sm font-bold text-white mb-2">Premium Bypass</h4>
         <p className="text-xs text-white/60 break-words">
           Premium users (active subscription in <code>users/&lt;uid&gt;/premium</code>) get a hard early-return — <strong>no Monetag script is ever injected for them</strong>,
