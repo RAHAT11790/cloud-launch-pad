@@ -4029,7 +4029,7 @@ ${tgHashtags}`;
   // ==================== RENDER HELPERS ====================
   const inputClass = "w-full px-3.5 py-2.5 bg-[#141422] border border-white/8 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors placeholder:text-zinc-500";
   const selectClass = inputClass + " cursor-pointer";
-  const btnPrimary = "bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors cursor-pointer border-none";
+  const btnPrimary = "bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors cursor-pointer border-none px-4 py-3 min-h-[44px] inline-flex items-center justify-center";
   const btnSecondary = "bg-[#1E1E32] border border-white/8 text-white rounded-lg hover:bg-[#252540] transition-colors cursor-pointer";
   const glassCard = "bg-[#16162A] border border-white/6 rounded-xl";
 
@@ -4283,7 +4283,7 @@ ${tgHashtags}`;
       </header>
 
       {/* Main Content */}
-      <main className="pt-[64px] px-3 pb-[160px] min-h-screen">
+      <main className="pt-[64px] px-3 pb-[220px] min-h-screen">
         {/* ==================== DASHBOARD ==================== */}
         {activeSection === "dashboard" && (
           <div>
@@ -6279,7 +6279,7 @@ ${tgHashtags}`;
 
         {/* ==================== TELEGRAM POST ==================== */}
         {activeSection === "telegram-post" && (
-          <div className="pb-28">
+          <div className="pb-40 scroll-mb-40">
             <div className={`${glassCard} relative z-[120] overflow-visible p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
                 <Send size={14} className="text-blue-400" /> টেলিগ্রাম পোস্ট তৈরি করুন
