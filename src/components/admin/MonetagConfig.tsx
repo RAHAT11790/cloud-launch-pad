@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { db, ref, onValue, set } from "@/lib/firebase";
+import { db, ref, onValue, set, update } from "@/lib/firebase";
 import { toast } from "sonner";
+import { ChevronDown, ChevronRight, Megaphone, MousePointerClick, Bell, LayoutPanelTop, Maximize2, Image as ImageIcon, Link2, Code2 } from "lucide-react";
 
 interface Props {
   glassCard: string;
@@ -8,93 +9,248 @@ interface Props {
   btnPrimary: string;
 }
 
+type SlotKey =
+  | "popunder" | "onclickPop" | "inPagePush" | "nativeBanner"
+  | "vignette" | "smartBanner" | "directLink"
+  | "custom1" | "custom2" | "custom3";
+
+type Slot = {
+  enabled: boolean;
+  src?: string;
+  raw?: string;
+  cooldownSec?: number;
+};
+
+const SLOT_DEFS: Array<{
+  key: SlotKey;
+  title: string;
+  icon: any;
+  desc: string;
+  fieldType: "src" | "url" | "raw";
+  placeholder: string;
+  hasCooldown?: boolean;
+}> = [
+  {
+    key: "popunder", title: "Pop-Under (Classic)", icon: Megaphone,
+    desc: "Monetag dashboard → Site → Pop-Under. Paste the FULL script src URL only (e.g. https://al5sm.com/tag.min.js). Loads once per session on the player.",
+    fieldType: "src", placeholder: "https://al5sm.com/tag.min.js",
+  },
+  {
+    key: "onclickPop", title: "OnClick Pop-Under", icon: MousePointerClick,
+    desc: "Monetag → OnClick. Fires on user tap inside the player. We rate-limit so users aren't spammed.",
+    fieldType: "src", placeholder: "https://al5sm.com/tag.min.js", hasCooldown: true,
+  },
+  {
+    key: "inPagePush", title: "In-Page Push", icon: Bell,
+    desc: "Monetag → In-Page Push. Slide-in notification that doesn't need browser permission. Paste the script src URL.",
+    fieldType: "src", placeholder: "https://thubanoa.com/1?z=XXXXXXX",
+  },
+  {
+    key: "nativeBanner", title: "Native Banner", icon: LayoutPanelTop,
+    desc: "Monetag → Native Banner. Renders a content-style ad block. Script src URL.",
+    fieldType: "src", placeholder: "https://pl1234567.profitablecpmrate.com/...",
+  },
+  {
+    key: "vignette", title: "Vignette / Interstitial", icon: Maximize2,
+    desc: "Monetag → Vignette Banner. Full-screen interstitial between page views. Script src URL.",
+    fieldType: "src", placeholder: "https://groleegni.net/...",
+  },
+  {
+    key: "smartBanner", title: "Smart / Sticky Banner", icon: ImageIcon,
+    desc: "Monetag → Smart Banner. Sticky bottom/top ad bar. Script src URL.",
+    fieldType: "src", placeholder: "https://...",
+  },
+  {
+    key: "directLink", title: "Direct Link", icon: Link2,
+    desc: "Monetag → Direct Link. Just the destination URL — opens in a new tab on player tap with cooldown.",
+    fieldType: "url", placeholder: "https://3nbf4.com/4/1234567", hasCooldown: true,
+  },
+  {
+    key: "custom1", title: "Custom Slot #1", icon: Code2,
+    desc: "Paste any raw <script>…</script> snippet (Monetag or another network). Injected as-is on the player.",
+    fieldType: "raw", placeholder: "<script>...</script>",
+  },
+  {
+    key: "custom2", title: "Custom Slot #2", icon: Code2,
+    desc: "Free-form raw script slot.",
+    fieldType: "raw", placeholder: "<script>...</script>",
+  },
+  {
+    key: "custom3", title: "Custom Slot #3", icon: Code2,
+    desc: "Free-form raw script slot.",
+    fieldType: "raw", placeholder: "<script>...</script>",
+  },
+];
+
 const MonetagConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [enabled, setEnabled] = useState(true);
-  const [popunderSrc, setPopunderSrc] = useState("");
-  const [directLinkUrl, setDirectLinkUrl] = useState("");
-  const [cooldown, setCooldown] = useState(60);
-  const [saving, setSaving] = useState(false);
+  const [slots, setSlots] = useState<Record<string, Slot>>({});
+  const [open, setOpen] = useState<Record<string, boolean>>({ popunder: true });
+  const [savingKey, setSavingKey] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/monetag"), (snap) => {
       const v = snap.val() || {};
       setEnabled(v.enabled !== false);
-      setPopunderSrc(v.popunderSrc || "");
-      setDirectLinkUrl(v.directLinkUrl || "");
-      setCooldown(Number(v.directCooldownSec) > 0 ? Number(v.directCooldownSec) : 60);
+      setSlots(v.slots || {});
     });
     return () => unsub();
   }, []);
 
-  const save = async () => {
-    setSaving(true);
+  const saveGlobal = async (next: boolean) => {
+    setEnabled(next);
+    try { await update(ref(db, "settings/monetag"), { enabled: next }); toast.success(next ? "Monetag enabled" : "Monetag disabled"); }
+    catch (e: any) { toast.error(e?.message || "Save failed"); }
+  };
+
+  const updateSlot = (key: SlotKey, patch: Partial<Slot>) => {
+    setSlots((p) => ({ ...p, [key]: { enabled: true, ...(p[key] || {}), ...patch } }));
+  };
+
+  const saveSlot = async (key: SlotKey) => {
+    setSavingKey(key);
     try {
-      await set(ref(db, "settings/monetag"), {
-        enabled,
-        popunderSrc: popunderSrc.trim(),
-        directLinkUrl: directLinkUrl.trim(),
-        directCooldownSec: Math.max(5, Number(cooldown) || 60),
-      });
-      toast.success("Monetag config saved");
-    } catch (e: any) {
-      toast.error(e?.message || "Save failed");
-    } finally {
-      setSaving(false);
-    }
+      const cur = slots[key] || { enabled: true };
+      const clean: Slot = {
+        enabled: cur.enabled !== false,
+        src: typeof cur.src === "string" ? cur.src.trim() : "",
+        raw: typeof cur.raw === "string" ? cur.raw : "",
+        cooldownSec: Number(cur.cooldownSec) > 0 ? Number(cur.cooldownSec) : undefined,
+      };
+      await set(ref(db, `settings/monetag/slots/${key}`), clean);
+      toast.success("Slot saved");
+    } catch (e: any) { toast.error(e?.message || "Save failed"); }
+    finally { setSavingKey(null); }
   };
 
   return (
-    <div className="space-y-4">
-      <div className={glassCard}>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-bold text-white">Monetag Ads (Video Player Only)</h3>
-          <label className="flex items-center gap-2 text-xs text-white/80">
-            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-            Enabled
+    <div className="space-y-4 max-w-full overflow-hidden">
+      {/* ── Master toggle ─────────────────────────────────────── */}
+      <div className={`${glassCard} max-w-full`}>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-bold text-white">Monetag Ads</h3>
+            <p className="text-xs text-white/50 mt-1 break-words">
+              All slots load <strong>only inside the video player</strong>, and are <strong>fully skipped for premium users</strong>.
+              Anti-adblock fallback (fetch + blob inject) is built in — even DNS/extension blockers can't strip these.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-white/80 shrink-0">
+            <input type="checkbox" className="w-4 h-4 accent-amber-400" checked={enabled} onChange={(e) => saveGlobal(e.target.checked)} />
+            <span>Master {enabled ? "ON" : "OFF"}</span>
           </label>
         </div>
-        <p className="text-xs text-white/50 mb-3">
-          Popunder loads <strong>once per session</strong> when the video player opens. Direct link fires on
-          player tap with cooldown to mimic 9anime-style ad behavior.
-        </p>
-
-        <label className="block text-xs text-white/70 mb-1">Popunder script src (full URL)</label>
-        <input
-          className={inputClass}
-          placeholder="https://3nbf4.com/abc/xyz.js"
-          value={popunderSrc}
-          onChange={(e) => setPopunderSrc(e.target.value)}
-        />
-
-        <label className="block text-xs text-white/70 mb-1 mt-3">Direct link URL</label>
-        <input
-          className={inputClass}
-          placeholder="https://3nbf4.com/4/1234567"
-          value={directLinkUrl}
-          onChange={(e) => setDirectLinkUrl(e.target.value)}
-        />
-
-        <label className="block text-xs text-white/70 mb-1 mt-3">Direct link cooldown (seconds)</label>
-        <input
-          type="number"
-          min={5}
-          className={inputClass}
-          value={cooldown}
-          onChange={(e) => setCooldown(Number(e.target.value))}
-        />
-
-        <button onClick={save} disabled={saving} className={`${btnPrimary} mt-4`}>
-          {saving ? "Saving..." : "Save Monetag Config"}
-        </button>
       </div>
 
-      <div className={glassCard}>
+      {/* ── Slot cards ────────────────────────────────────────── */}
+      {SLOT_DEFS.map((def) => {
+        const slot = slots[def.key] || { enabled: true };
+        const isOpen = !!open[def.key];
+        const Icon = def.icon;
+        return (
+          <div key={def.key} className={`${glassCard} max-w-full overflow-hidden`}>
+            {/* Header (clickable) */}
+            <button
+              type="button"
+              onClick={() => setOpen((p) => ({ ...p, [def.key]: !isOpen }))}
+              className="w-full flex items-center gap-3 text-left"
+            >
+              <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                <Icon size={16} className="text-amber-300" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-bold text-white truncate">{def.title}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${slot.enabled !== false ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-white/50"}`}>
+                    {slot.enabled !== false ? "ON" : "OFF"}
+                  </span>
+                  {(slot.src || slot.raw) ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300">configured</span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/40">empty</span>
+                  )}
+                </div>
+              </div>
+              {isOpen ? <ChevronDown size={16} className="text-white/60 shrink-0" /> : <ChevronRight size={16} className="text-white/60 shrink-0" />}
+            </button>
+
+            {isOpen && (
+              <div className="mt-3 pt-3 border-t border-white/10 space-y-3">
+                <p className="text-xs text-white/60 break-words">{def.desc}</p>
+
+                <label className="flex items-center gap-2 text-xs text-white/80">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 accent-amber-400"
+                    checked={slot.enabled !== false}
+                    onChange={(e) => updateSlot(def.key, { enabled: e.target.checked })}
+                  />
+                  Slot enabled
+                </label>
+
+                {def.fieldType === "raw" ? (
+                  <div>
+                    <label className="block text-xs text-white/70 mb-1">Raw script snippet</label>
+                    <textarea
+                      className={`${inputClass} font-mono text-xs min-h-[120px] w-full max-w-full break-all`}
+                      placeholder={def.placeholder}
+                      value={slot.raw || ""}
+                      onChange={(e) => updateSlot(def.key, { raw: e.target.value })}
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs text-white/70 mb-1">
+                      {def.fieldType === "url" ? "Destination URL" : "Script src URL"}
+                    </label>
+                    <input
+                      className={`${inputClass} w-full max-w-full`}
+                      placeholder={def.placeholder}
+                      value={slot.src || ""}
+                      onChange={(e) => updateSlot(def.key, { src: e.target.value })}
+                    />
+                  </div>
+                )}
+
+                {def.hasCooldown && (
+                  <div>
+                    <label className="block text-xs text-white/70 mb-1">Cooldown (seconds between triggers)</label>
+                    <input
+                      type="number"
+                      min={5}
+                      className={`${inputClass} w-full max-w-[180px]`}
+                      value={slot.cooldownSec ?? 60}
+                      onChange={(e) => updateSlot(def.key, { cooldownSec: Number(e.target.value) })}
+                    />
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                  <button onClick={() => saveSlot(def.key)} disabled={savingKey === def.key} className={`${btnPrimary} text-sm`}>
+                    {savingKey === def.key ? "Saving…" : "Save Slot"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* ── Info: SW verification ─────────────────────────────── */}
+      <div className={`${glassCard} max-w-full`}>
         <h4 className="text-sm font-bold text-white mb-2">Verification Service Worker</h4>
-        <p className="text-xs text-white/60">
-          Monetag SW is served at <code className="text-amber-300">/sw.js</code> (zone <code>10888250</code>,
-          domain <code>3nbf4.com</code>). It auto-registers only on the published domain — preview iframes
-          are skipped per Lovable rules. To verify in Monetag dashboard, point them to{" "}
-          <code className="text-amber-300">https://rsanime03.lovable.app/sw.js</code>.
+        <p className="text-xs text-white/60 break-words">
+          Monetag SW served at <code className="text-amber-300 break-all">/sw.js</code> (zone <code>10888250</code>, domain <code>3nbf4.com</code>).
+          Auto-registers on the published domain only — preview iframes are skipped per Lovable rules.
+          Verify in Monetag dashboard with <code className="text-amber-300 break-all">https://rsanime03.lovable.app/sw.js</code>.
+        </p>
+      </div>
+
+      <div className={`${glassCard} max-w-full`}>
+        <h4 className="text-sm font-bold text-white mb-2">Premium Bypass</h4>
+        <p className="text-xs text-white/60 break-words">
+          Premium users (active subscription in <code>users/&lt;uid&gt;/premium</code>) get a hard early-return — <strong>no Monetag script is ever injected for them</strong>,
+          and the player tap-to-direct-link handler is disabled.
         </p>
       </div>
     </div>
