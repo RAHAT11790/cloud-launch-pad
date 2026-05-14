@@ -297,7 +297,6 @@ export async function loadAmbientSlots(): Promise<void> {
     }
   }
 }
-}
 
 /**
  * Click-driven slot: trigger direct link or onclick popunder on user gesture.
@@ -313,19 +312,27 @@ export async function triggerClickSlots(): Promise<void> {
   const now = Date.now();
   const last = window.__mtDirectLastTs || 0;
 
-  // OnClick popunder script — load once on first user gesture
+  // OnClick popunder script — load once on first user gesture (parse paste)
   const onclick = cfg.slots.onclickPop;
-  if (onclick && onclick.enabled !== false && onclick.src && !slotMarker("mt_onclickPop")) {
-    loadScriptResilient(onclick.src, onclick.data, "data-mt-onclickPop");
+  if (onclick && onclick.enabled !== false && !slotMarker("mt_onclickPop")) {
+    const raw = onclick.src || onclick.raw || "";
+    const parsed = parseAdInput(raw);
+    const mergedData = { ...(onclick.data || {}), ...(parsed.dataAttrs || {}) };
+    if (parsed.src) loadScriptResilient(parsed.src, mergedData, "data-mt-onclickPop");
+    else if (parsed.rawHtml) injectRawSnippet(parsed.rawHtml, "data-mt-onclickPop");
   }
 
-  // Direct link — open in new tab, cooldown
+  // Direct link — open in new tab, cooldown. Accept URL or any pasted snippet.
   const dl = cfg.slots.directLink;
-  if (dl && dl.enabled !== false && dl.src) {
+  if (dl && dl.enabled !== false && (dl.src || dl.raw)) {
     const cd = (dl.cooldownSec || 60) * 1000;
     if (now - last >= cd) {
-      window.__mtDirectLastTs = now;
-      try { window.open(dl.src, "_blank", "noopener,noreferrer"); } catch {}
+      const parsed = parseAdInput(dl.src || dl.raw || "");
+      const target = parsed.src || (dl.src || "").trim();
+      if (target && /^https?:\/\//i.test(target)) {
+        window.__mtDirectLastTs = now;
+        try { window.open(target, "_blank", "noopener,noreferrer"); } catch {}
+      }
     }
   }
 }
