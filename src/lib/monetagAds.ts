@@ -284,16 +284,19 @@ export async function loadAmbientSlots(): Promise<void> {
     if (!slot || slot.enabled === false) continue;
     if (slotMarker(`mt_${key}`)) continue;
 
-    // Custom slots accept raw HTML
-    if ((key === "custom1" || key === "custom2" || key === "custom3") && slot.raw) {
-      injectRawSnippet(slot.raw, `data-mt-${key}`);
-      continue;
-    }
-    if (slot.src) {
-      // fire-and-forget
-      loadScriptResilient(slot.src, slot.data, `data-mt-${key}`);
+    // Combine src + raw fields — user may paste anything in either
+    const inputs = [slot.src, slot.raw].filter((x) => typeof x === "string" && x!.trim().length > 0) as string[];
+    for (const input of inputs) {
+      const parsed = parseAdInput(input);
+      const mergedData = { ...(slot.data || {}), ...(parsed.dataAttrs || {}) };
+      if (parsed.src) {
+        loadScriptResilient(parsed.src, mergedData, `data-mt-${key}`);
+      } else if (parsed.rawHtml) {
+        injectRawSnippet(parsed.rawHtml, `data-mt-${key}`);
+      }
     }
   }
+}
 }
 
 /**
