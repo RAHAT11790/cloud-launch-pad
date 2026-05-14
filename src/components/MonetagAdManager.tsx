@@ -1,16 +1,22 @@
 import { useEffect } from "react";
-import { loadPopunderOnce } from "@/lib/monetagAds";
+import { loadAmbientSlots, setPremium } from "@/lib/monetagAds";
+
+interface Props {
+  isPremium?: boolean | null;
+}
 
 /**
- * Mount this only inside the video player route.
- * Loads Monetag popunder ONCE per session — multiple mounts are safe.
+ * Mount this only inside the video player.
+ * Premium users: ZERO ad scripts injected (early return).
  */
-const MonetagAdManager = () => {
+const MonetagAdManager = ({ isPremium }: Props) => {
   useEffect(() => {
-    // Defer one tick so the player UI paints first
-    const t = window.setTimeout(() => { loadPopunderOnce(); }, 200);
+    if (isPremium === null) return; // still loading premium status — be safe, wait
+    setPremium(!!isPremium);
+    if (isPremium) return; // premium → never load ads
+    const t = window.setTimeout(() => { loadAmbientSlots(); }, 250);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [isPremium]);
   return null;
 };
 
