@@ -22,70 +22,58 @@ type Slot = {
 };
 
 const SLOT_DEFS: Array<{
-  key: SlotKey;
+  id: string;
+  storageKey: SlotKey;
   title: string;
   icon: any;
   desc: string;
+  inputLabel: string;
   fieldType: "src" | "url" | "raw";
   placeholder: string;
   hasCooldown?: boolean;
 }> = [
   {
-    key: "popunder", title: "Pop-Under (Classic)", icon: Megaphone,
-    desc: "Paste ANYTHING from Monetag dashboard: full <script src=...> tag, the IIFE snippet, or just the raw URL — auto-parsed. Loads once per session inside the player.",
-    fieldType: "raw", placeholder: `<script>(function(s){s.dataset.zone='11000277',s.src='https://al5sm.com/tag.min.js'})([document.documentElement,document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>\n\n— or just —\n\nhttps://al5sm.com/tag.min.js`,
+    id: "multitag", storageKey: "popunder", title: "Multitag (all-in-one)", icon: Megaphone,
+    desc: "Official Monetag bundle from the docs. One code can activate Onclick, Push Notifications, In-Page Push, and Vignette together. Use this only if you want the combined Monetag setup.",
+    inputLabel: "Multitag code",
+    fieldType: "raw", placeholder: `<script src="https://example-monetag-domain.com/tag.min.js" data-cfasync="false" async></script>\n\nবা full code snippet paste করুন`,
   },
   {
-    key: "onclickPop", title: "OnClick Pop-Under", icon: MousePointerClick,
-    desc: "Fires on user tap inside the player. Paste the full <script> tag or just the URL. Rate-limited so users aren't spammed.",
+    id: "onclickPop", storageKey: "onclickPop", title: "OnClick PopUnder", icon: MousePointerClick,
+    desc: "Official Monetag click-triggered tab ad. Paste the exact tag from Monetag docs/dashboard. It fires only on player interaction and respects cooldown.",
+    inputLabel: "OnClick PopUnder tag",
     fieldType: "raw", placeholder: `<script src="https://5gvci.com/act/files/tag.min.js?z=11004211" data-cfasync="false" async></script>`, hasCooldown: true,
   },
   {
-    key: "inPagePush", title: "In-Page Push / Notifications", icon: Bell,
-    desc: "Slide-in notification (no browser permission needed). Paste the IIFE snippet or full <script> tag — zone is auto-extracted.",
-    fieldType: "raw", placeholder: `<script>(function(s){s.dataset.zone='11000277',s.src='https://al5sm.com/tag.min.js'})([document.documentElement,document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>`,
+    id: "pushNotifications", storageKey: "custom1", title: "Push Notifications", icon: Bell,
+    desc: "Official Monetag browser-push format. This needs a verified site and service worker. Paste the exact Monetag push tag here.",
+    inputLabel: "Push Notifications tag",
+    fieldType: "raw", placeholder: `<script src="https://example-monetag-domain.com/tag.min.js" data-cfasync="false" async></script>`,
   },
   {
-    key: "nativeBanner", title: "Native Banner", icon: LayoutPanelTop,
-    desc: "Content-style ad block. Paste full <script> tag or URL.",
-    fieldType: "raw", placeholder: `<script src="https://...js" async></script>`,
+    id: "inPagePush", storageKey: "inPagePush", title: "In-Page Push (Banner)", icon: LayoutPanelTop,
+    desc: "Official Monetag in-page banner format. Usually this is the Monetag IIFE snippet with s.dataset.zone + s.src, but full <script> tags and raw src URLs are also accepted.",
+    inputLabel: "In-Page Push code",
+    fieldType: "raw", placeholder: `(function(s){s.dataset.zone='11000277',s.src='https://al5sm.com/tag.min.js'})([document.documentElement,document.body].filter(Boolean).pop().appendChild(document.createElement('script')))` ,
   },
   {
-    key: "vignette", title: "Vignette / Interstitial", icon: Maximize2,
-    desc: "Full-screen interstitial. Paste full <script> tag or URL.",
-    fieldType: "raw", placeholder: `<script src="https://groleegni.net/..." async></script>`,
+    id: "vignette", storageKey: "vignette", title: "Vignette Banner", icon: Maximize2,
+    desc: "Official Monetag vignette format. Paste the exact tag or snippet given by Monetag. It shows as an overlay-style banner when the player session starts.",
+    inputLabel: "Vignette tag",
+    fieldType: "raw", placeholder: `<script src="https://example-monetag-domain.com/tag.min.js" data-cfasync="false" async></script>`,
   },
   {
-    key: "smartBanner", title: "Smart / Sticky Banner", icon: ImageIcon,
-    desc: "Sticky bottom/top ad bar. Paste full <script> tag or URL.",
-    fieldType: "raw", placeholder: `<script src="https://..." async></script>`,
-  },
-  {
-    key: "directLink", title: "Direct Link", icon: Link2,
-    desc: "Just the destination URL — opens in new tab on player tap, with cooldown.",
+    id: "directLink", storageKey: "directLink", title: "Direct Link (SmartLink)", icon: Link2,
+    desc: "Official Monetag smart link. Paste only the direct destination URL from Monetag. It opens in a new tab on player tap and respects cooldown.",
+    inputLabel: "Direct Link URL",
     fieldType: "url", placeholder: "https://omg10.com/4/11000244", hasCooldown: true,
-  },
-  {
-    key: "custom1", title: "Custom Slot #1", icon: Code2,
-    desc: "Free-form. Paste any raw <script>…</script>, IIFE, or URL — auto-parsed.",
-    fieldType: "raw", placeholder: "<script>...</script>",
-  },
-  {
-    key: "custom2", title: "Custom Slot #2", icon: Code2,
-    desc: "Free-form raw script slot.",
-    fieldType: "raw", placeholder: "<script>...</script>",
-  },
-  {
-    key: "custom3", title: "Custom Slot #3", icon: Code2,
-    desc: "Free-form raw script slot.",
-    fieldType: "raw", placeholder: "<script>...</script>",
   },
 ];
 
 const MonetagConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [enabled, setEnabled] = useState(true);
   const [slots, setSlots] = useState<Record<string, Slot>>({});
-  const [open, setOpen] = useState<Record<string, boolean>>({ popunder: true });
+  const [open, setOpen] = useState<Record<string, boolean>>({ multitag: true });
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   useEffect(() => {
@@ -107,17 +95,22 @@ const MonetagConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
     setSlots((p) => ({ ...p, [key]: { enabled: true, ...(p[key] || {}), ...patch } }));
   };
 
-  const saveSlot = async (key: SlotKey) => {
-    setSavingKey(key);
+  const saveSlot = async (def: typeof SLOT_DEFS[number]) => {
+    setSavingKey(def.id);
     try {
-      const cur = slots[key] || { enabled: true };
+      const cur = slots[def.storageKey] || { enabled: true };
       const clean: Slot = {
         enabled: cur.enabled !== false,
-        src: typeof cur.src === "string" ? cur.src.trim() : "",
-        raw: typeof cur.raw === "string" ? cur.raw : "",
-        cooldownSec: Number(cur.cooldownSec) > 0 ? Number(cur.cooldownSec) : undefined,
       };
-      await set(ref(db, `settings/monetag/slots/${key}`), clean);
+      const src = typeof cur.src === "string" ? cur.src.trim() : "";
+      const raw = typeof cur.raw === "string" ? cur.raw.trim() : "";
+      if (src) clean.src = src;
+      if (raw) clean.raw = raw;
+      if (def.hasCooldown) {
+        const cooldown = Number(cur.cooldownSec);
+        clean.cooldownSec = cooldown > 0 ? cooldown : 60;
+      }
+      await set(ref(db, `settings/monetag/slots/${def.storageKey}`), clean);
       toast.success("Slot saved");
     } catch (e: any) { toast.error(e?.message || "Save failed"); }
     finally { setSavingKey(null); }
@@ -134,6 +127,9 @@ const MonetagConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
               All slots load <strong>only inside the video player</strong>, and are <strong>fully skipped for premium users</strong>.
               Anti-adblock fallback (fetch + blob inject) is built in — even DNS/extension blockers can't strip these.
             </p>
+            <p className="text-[11px] text-white/40 mt-2 break-words">
+              Official Monetag web formats used here: <strong>Multitag</strong>, <strong>OnClick PopUnder</strong>, <strong>Push Notifications</strong>, <strong>In-Page Push (Banner)</strong>, <strong>Vignette Banner</strong>, and <strong>Direct Link (SmartLink)</strong>.
+            </p>
           </div>
           <label className="flex items-center gap-2 text-xs text-white/80 shrink-0">
             <input type="checkbox" className="w-4 h-4 accent-amber-400" checked={enabled} onChange={(e) => saveGlobal(e.target.checked)} />
@@ -144,15 +140,15 @@ const MonetagConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
 
       {/* ── Slot cards ────────────────────────────────────────── */}
       {SLOT_DEFS.map((def) => {
-        const slot = slots[def.key] || { enabled: true };
-        const isOpen = !!open[def.key];
+        const slot = slots[def.storageKey] || { enabled: true };
+        const isOpen = !!open[def.id];
         const Icon = def.icon;
         return (
-          <div key={def.key} className={`${glassCard} max-w-full overflow-hidden p-4`}>
+          <div key={def.id} className={`${glassCard} max-w-full overflow-hidden p-4`}>
             {/* Header (clickable) */}
             <button
               type="button"
-              onClick={() => setOpen((p) => ({ ...p, [def.key]: !isOpen }))}
+              onClick={() => setOpen((p) => ({ ...p, [def.id]: !isOpen }))}
               className="w-full flex items-center gap-3 text-left"
             >
               <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
@@ -183,31 +179,29 @@ const MonetagConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
                     type="checkbox"
                     className="w-4 h-4 accent-amber-400"
                     checked={slot.enabled !== false}
-                    onChange={(e) => updateSlot(def.key, { enabled: e.target.checked })}
+                    onChange={(e) => updateSlot(def.storageKey, { enabled: e.target.checked })}
                   />
                   Slot enabled
                 </label>
 
                 {def.fieldType === "raw" ? (
                   <div>
-                    <label className="block text-xs text-white/70 mb-1">Raw script snippet</label>
+                    <label className="block text-xs text-white/70 mb-1">{def.inputLabel}</label>
                     <textarea
-                      className={`${inputClass} font-mono text-xs min-h-[120px] w-full max-w-full break-all`}
+                      className={`${inputClass} font-mono text-xs leading-relaxed min-h-[140px] w-full max-w-full break-all whitespace-pre-wrap resize-y`}
                       placeholder={def.placeholder}
                       value={slot.raw || ""}
-                      onChange={(e) => updateSlot(def.key, { raw: e.target.value })}
+                      onChange={(e) => updateSlot(def.storageKey, { raw: e.target.value })}
                     />
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-xs text-white/70 mb-1">
-                      {def.fieldType === "url" ? "Destination URL" : "Script src URL"}
-                    </label>
+                    <label className="block text-xs text-white/70 mb-1">{def.inputLabel}</label>
                     <input
                       className={`${inputClass} w-full max-w-full`}
                       placeholder={def.placeholder}
                       value={slot.src || ""}
-                      onChange={(e) => updateSlot(def.key, { src: e.target.value })}
+                      onChange={(e) => updateSlot(def.storageKey, { src: e.target.value })}
                     />
                   </div>
                 )}
@@ -225,9 +219,9 @@ const MonetagConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
                   </div>
                 )}
 
-                <div className="flex justify-end">
-                  <button onClick={() => saveSlot(def.key)} disabled={savingKey === def.key} className={`${btnPrimary} text-sm`}>
-                    {savingKey === def.key ? "Saving…" : "Save Slot"}
+                <div className="flex flex-col sm:flex-row sm:justify-end">
+                  <button onClick={() => saveSlot(def)} disabled={savingKey === def.id} className={`${btnPrimary} w-full sm:w-auto min-h-11 px-4 py-3 inline-flex items-center justify-center whitespace-nowrap text-sm disabled:opacity-60`}>
+                    {savingKey === def.id ? "Saving…" : "Save Slot"}
                   </button>
                 </div>
               </div>
