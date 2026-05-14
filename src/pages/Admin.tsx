@@ -6279,7 +6279,7 @@ ${tgHashtags}`;
 
         {/* ==================== TELEGRAM POST ==================== */}
         {activeSection === "telegram-post" && (
-          <div>
+          <div className="pb-28">
             <div className={`${glassCard} relative z-[120] overflow-visible p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
                 <Send size={14} className="text-blue-400" /> টেলিগ্রাম পোস্ট তৈরি করুন
