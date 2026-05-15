@@ -37,6 +37,7 @@ const SLOT_DEFS: Array<{
     desc: "Official Monetag bundle from the docs. One code can activate Onclick, Push Notifications, In-Page Push, and Vignette together. Use this only if you want the combined Monetag setup.",
     inputLabel: "Multitag code",
     fieldType: "raw", placeholder: `<script src="https://example-monetag-domain.com/tag.min.js" data-cfasync="false" async></script>\n\nবা full code snippet paste করুন`,
+    hasCooldown: true,
   },
   {
     id: "onclickPop", storageKey: "onclickPop", title: "OnClick PopUnder", icon: MousePointerClick,
@@ -48,19 +49,19 @@ const SLOT_DEFS: Array<{
     id: "pushNotifications", storageKey: "custom1", title: "Push Notifications", icon: Bell,
     desc: "Official Monetag browser-push format. This needs a verified site and service worker. Paste the exact Monetag push tag here.",
     inputLabel: "Push Notifications tag",
-    fieldType: "raw", placeholder: `<script src="https://example-monetag-domain.com/tag.min.js" data-cfasync="false" async></script>`,
+    fieldType: "raw", placeholder: `<script src="https://example-monetag-domain.com/tag.min.js" data-cfasync="false" async></script>`, hasCooldown: true,
   },
   {
     id: "inPagePush", storageKey: "inPagePush", title: "In-Page Push (Banner)", icon: LayoutPanelTop,
     desc: "Official Monetag in-page banner format. Usually this is the Monetag IIFE snippet with s.dataset.zone + s.src, but full <script> tags and raw src URLs are also accepted.",
     inputLabel: "In-Page Push code",
-    fieldType: "raw", placeholder: `(function(s){s.dataset.zone='11000277',s.src='https://al5sm.com/tag.min.js'})([document.documentElement,document.body].filter(Boolean).pop().appendChild(document.createElement('script')))` ,
+    fieldType: "raw", placeholder: `(function(s){s.dataset.zone='11000277',s.src='https://al5sm.com/tag.min.js'})([document.documentElement,document.body].filter(Boolean).pop().appendChild(document.createElement('script')))` , hasCooldown: true,
   },
   {
     id: "vignette", storageKey: "vignette", title: "Vignette Banner", icon: Maximize2,
     desc: "Official Monetag vignette format. Paste the exact tag or snippet given by Monetag. It shows as an overlay-style banner when the player session starts.",
     inputLabel: "Vignette tag",
-    fieldType: "raw", placeholder: `<script src="https://example-monetag-domain.com/tag.min.js" data-cfasync="false" async></script>`,
+    fieldType: "raw", placeholder: `<script src="https://example-monetag-domain.com/tag.min.js" data-cfasync="false" async></script>`, hasCooldown: true,
   },
   {
     id: "directLink", storageKey: "directLink", title: "Direct Link (SmartLink)", icon: Link2,
@@ -211,7 +212,7 @@ const MonetagConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
                     <label className="block text-xs text-white/70 mb-1">Cooldown (seconds between triggers)</label>
                     <input
                       type="number"
-                      min={5}
+                       min={1}
                       className={`${inputClass} w-full max-w-[180px]`}
                       value={slot.cooldownSec ?? 60}
                       onChange={(e) => updateSlot(def.storageKey, { cooldownSec: Number(e.target.value) })}
