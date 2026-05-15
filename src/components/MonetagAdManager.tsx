@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { loadAmbientSlots, setPremium } from "@/lib/monetagAds";
+import { enterMonetagPlayerScope, exitMonetagPlayerScope, loadAmbientSlots, setPremium } from "@/lib/monetagAds";
 
 interface Props {
   isPremium?: boolean | null;
@@ -10,6 +10,11 @@ interface Props {
  * Premium users: ZERO ad scripts injected (early return).
  */
 const MonetagAdManager = ({ isPremium }: Props) => {
+  useEffect(() => {
+    enterMonetagPlayerScope();
+    return () => exitMonetagPlayerScope();
+  }, []);
+
   useEffect(() => {
     if (isPremium === null) return; // still loading premium status — be safe, wait
     setPremium(!!isPremium);
