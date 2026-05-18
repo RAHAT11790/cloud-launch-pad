@@ -891,6 +891,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [ccTab, setCcTab] = useState<"audio" | "subtitle">("audio");
   const [showSubtitlePanel, setShowSubtitlePanel] = useState(false);
   const hlsRef = useRef<Hls | null>(null);
+  const subtitleSwitchingUntilRef = useRef(0);
+
+  const syncNativeSubtitleVisibility = useCallback((selectedIdx: number) => {
+    const v = videoRef.current;
+    if (!v?.textTracks) return;
+
+    const subtitleTracks = Array.from(v.textTracks).filter(
+      (track) => track.kind === "subtitles" || track.kind === "captions",
+    );
+
+    subtitleTracks.forEach((track, index) => {
+      try {
+        track.mode = selectedIdx >= 0 && index === selectedIdx ? "showing" : "disabled";
+      } catch {}
+    });
+  }, []);
 
   // ===== HLS.js attachment =====
   // For any .m3u8 source we own playback via hls.js so the manifest's
