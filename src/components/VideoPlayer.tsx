@@ -915,6 +915,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (selectedIdx < 0) return null;
 
     const subtitleTracks = getSubtitleTextTracks();
+    if (subtitleTracks[selectedIdx]) return subtitleTracks[selectedIdx];
     const targetMeta = hlsSubtitleOptions.find((track) => track.id === selectedIdx);
 
     return subtitleTracks.find((track) => {
@@ -2371,7 +2372,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                               <button key={st.id} onClick={() => switchHlsSubtitle(st.id)} className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${currentHlsSubtitle === st.id ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}><span className="truncate flex-1 min-w-0">{st.label || st.language || `Subtitle ${st.id + 1}`}</span>{currentHlsSubtitle === st.id && <Check className="w-3 h-3 shrink-0" />}</button>
                             ))}
                             {!!subtitleStatusMessage && (
-                              <div className={`mt-1 rounded-lg px-2 py-1.5 text-[10px] leading-relaxed ${subtitleStatusTone === "warning" ? "bg-destructive/15 text-destructive" : subtitleStatusTone === "success" ? "bg-primary/15 text-primary-foreground" : "bg-foreground/10 text-muted-foreground"}`}>
+                              <div className={`mt-1 rounded-lg px-2 py-1.5 text-[10px] leading-relaxed ${subtitleStatusTone === "warning" ? "bg-destructive/15 text-destructive" : subtitleStatusTone === "success" ? "bg-primary/15 text-primary" : "bg-foreground/10 text-muted-foreground"}`}>
                                 {subtitleStatusMessage}
                               </div>
                             )}
