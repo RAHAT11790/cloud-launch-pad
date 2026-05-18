@@ -901,11 +901,41 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [subtitleStatusMessage, setSubtitleStatusMessage] = useState("");
   const [subtitleStatusTone, setSubtitleStatusTone] = useState<"neutral" | "success" | "warning">("neutral");
   const [subtitleCueVersion, setSubtitleCueVersion] = useState(0);
+  const [captionFontScale, setCaptionFontScale] = useState(1);
+  const [captionVerticalOffset, setCaptionVerticalOffset] = useState(10);
   const hlsRef = useRef<Hls | null>(null);
   const hlsSubtitleMetaRef = useRef<HlsSubtitleOption[]>([]);
   const subtitleCueListRef = useRef<Array<{ start: number; end: number; text: string }>>([]);
   const subtitlePollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const subtitleSwitchingUntilRef = useRef(0);
+
+  const decodeSubtitleEntities = useCallback((value: string) => {
+    return value
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&#39;/gi, "'")
+      .replace(/&quot;/gi, '"');
+  }, []);
+
+  const sanitizeSubtitleText = useCallback((rawText: string) => {
+    return decodeSubtitleEntities(
+      rawText
+        .replace(/<\d{2}:\d{2}:\d{2}\.\d{3}>/g, "")
+        .replace(/<\/?.*?>/g, "")
+        .split("\n")
+        .map((line) =>
+          line
+            .replace(/^[\u200B-\u200F\uFEFF]+|[\u200B-\u200F\uFEFF]+$/g, "")
+            .replace(/^[♪♫♬【】「」『』〈〉《》〔〕]+\s*/g, "")
+            .replace(/\s*[♪♫♬【】「」『』〈〉《》〔〕]+$/g, "")
+            .trim(),
+        )
+        .filter(Boolean)
+        .join("\n"),
+    ).trim();
+  }, [decodeSubtitleEntities]);
 
   const parseVttToCues = useCallback((vttText: string) => {
     const normalized = vttText.replace(/\r/g, "");
@@ -927,11 +957,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       const [startRaw, endRaw] = timingLine.split("-->").map((part) => part.trim().split(/\s+/)[0]);
       const start = toSeconds(startRaw || "");
       const end = toSeconds(endRaw || "");
-      const text = lines.slice(timingIndex + 1).join("\n").trim();
+      const text = sanitizeSubtitleText(lines.slice(timingIndex + 1).join("\n"));
       if (!text || Number.isNaN(start) || Number.isNaN(end)) return [];
       return [{ start, end, text }];
     });
-  }, []);
+  }, [sanitizeSubtitleText]);
 
   const clearSubtitlePolling = useCallback(() => {
     if (subtitlePollTimerRef.current) {
@@ -956,17 +986,88 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setSubtitleOverlayText(activeText);
   }, [currentHlsSubtitle]);
 
-  const resolveSubtitleFileUrl = useCallback(async (playlistUrl: string) => {
-    const response = await fetch(playlistUrl, { mode: "cors" });
+  const fetchSubtitleText = useCallback(async (targetUrl: string) => {
+    const response = await fetch(targetUrl, { mode: "cors" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const playlistText = await response.text();
-    const mediaLine = playlistText
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .find((line) => line && !line.startsWith("#"));
-    if (!mediaLine) throw new Error("No subtitle media file found");
-    return new URL(mediaLine, playlistUrl).toString();
+    return response.text();
   }, []);
+
+  const applyCueOffset = useCallback((cues: Array<{ start: number; end: number; text: string }>, offsetSeconds: number) => {
+    if (!offsetSeconds) return cues;
+    return cues.map((cue) => ({
+      ...cue,
+      start: cue.start + offsetSeconds,
+      end: cue.end + offsetSeconds,
+    }));
+  }, []);
+
+  const extractSubtitleSegments = useCallback((playlistText: string, playlistUrl: string) => {
+    const normalized = playlistText.replace(/\r/g, "").trim();
+    if (!normalized) return [] as Array<{ url: string; offset: number; duration: number }>;
+    if (/^WEBVTT\b/i.test(normalized)) {
+      return [{ url: playlistUrl, offset: 0, duration: 0 }];
+    }
+
+    const lines = normalized.split("\n").map((line) => line.trim()).filter(Boolean);
+    let nextDuration = 0;
+    let cumulativeOffset = 0;
+
+    return lines.flatMap((line) => {
+      if (line.startsWith("#EXTINF:")) {
+        nextDuration = Number.parseFloat(line.slice(8).split(",")[0] || "0") || 0;
+        return [];
+      }
+      if (!line || line.startsWith("#")) return [];
+
+      const segment = {
+        url: new URL(line, playlistUrl).toString(),
+        offset: cumulativeOffset,
+        duration: nextDuration,
+      };
+      cumulativeOffset += nextDuration;
+      nextDuration = 0;
+      return [segment];
+    });
+  }, []);
+
+  const loadSubtitleTrackCues = useCallback(async (trackUrl: string, depth = 0): Promise<Array<{ start: number; end: number; text: string }>> => {
+    if (depth > 3) throw new Error("Subtitle nesting too deep");
+
+    const payload = await fetchSubtitleText(trackUrl);
+    const normalized = payload.replace(/\r/g, "").trim();
+    if (!normalized) return [];
+    if (/^WEBVTT\b/i.test(normalized)) return parseVttToCues(payload);
+    if (!/^#EXTM3U\b/i.test(normalized)) return parseVttToCues(payload);
+
+    const segments = extractSubtitleSegments(payload, trackUrl);
+    if (segments.length === 0) throw new Error("No subtitle media file found");
+
+    const allSegments = await Promise.all(
+      segments.map(async (segment) => {
+        const segmentText = await fetchSubtitleText(segment.url);
+        const trimmedSegment = segmentText.replace(/\r/g, "").trim();
+        const parsedSegmentCues = /^#EXTM3U\b/i.test(trimmedSegment)
+          ? await loadSubtitleTrackCues(segment.url, depth + 1)
+          : parseVttToCues(segmentText);
+
+        const maxCueEnd = parsedSegmentCues.reduce((max, cue) => Math.max(max, cue.end), 0);
+        const looksRelative = segment.offset > 0 && maxCueEnd <= Math.max(segment.duration + 2, 120);
+
+        return looksRelative ? applyCueOffset(parsedSegmentCues, segment.offset) : parsedSegmentCues;
+      }),
+    );
+
+    const deduped = new Map<string, { start: number; end: number; text: string }>();
+    allSegments
+      .flat()
+      .sort((a, b) => a.start - b.start || a.end - b.end)
+      .forEach((cue) => {
+        const key = `${cue.start.toFixed(3)}:${cue.end.toFixed(3)}:${cue.text}`;
+        if (!deduped.has(key)) deduped.set(key, cue);
+      });
+
+    return Array.from(deduped.values());
+  }, [applyCueOffset, extractSubtitleSegments, fetchSubtitleText, parseVttToCues]);
 
   const loadSubtitleCues = useCallback(async (selectedIdx: number) => {
     if (selectedIdx < 0) {
@@ -993,11 +1094,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     try {
       setSubtitleStatusTone("neutral");
       setSubtitleStatusMessage("Loading subtitles...");
-      const subtitleFileUrl = await resolveSubtitleFileUrl(targetMeta.url);
-      const response = await fetch(subtitleFileUrl, { mode: "cors" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const vttText = await response.text();
-      const cues = parseVttToCues(vttText);
+      const cues = await loadSubtitleTrackCues(targetMeta.url);
       subtitleCueListRef.current = cues;
       setSubtitleCueVersion((value) => value + 1);
       syncSubtitleOverlay();
@@ -1019,7 +1116,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setSubtitleStatusMessage("This subtitle track could not be loaded from the stream.");
       clearSubtitlePolling();
     }
-  }, [clearSubtitlePolling, parseVttToCues, resolveSubtitleFileUrl, syncSubtitleOverlay]);
+  }, [clearSubtitlePolling, loadSubtitleTrackCues, syncSubtitleOverlay]);
 
   const isPlayerPanelTarget = useCallback((target: EventTarget | null) => {
     return target instanceof HTMLElement && !!target.closest("[data-player-panel='true']");
