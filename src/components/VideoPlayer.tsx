@@ -2039,6 +2039,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [swipeState, locked, brightness, boostedVolume, muted, applyPlayerVolume]);
 
   const handleTouchEnd = useCallback(() => setSwipeState(null), []);
+  const stopPanelPointerPropagation = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+  }, []);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const lightweightMode = !isFullscreen;
@@ -2299,12 +2302,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   </button>
                 ) : effectiveVideoServers.length > 1 && !noServerSwitch ? (
                   <div className="relative">
-                    <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
+                    <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); setShowCcPanel(false); setShowSettings(false); setShowQualityPanel(false); setShowAudioPanel(false); }} className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
                       <span className="text-[10px] font-medium">{manualServerSelected ? (effectiveVideoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
                     </button>
                     {showServerPanel && (
-                      <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[132px] max-h-[44vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={(e) => e.stopPropagation()}>
+                      <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[132px] max-h-[44vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation}>
                         <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
                         {!isPremium && (
                           <button onClick={() => {
@@ -2350,7 +2353,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       <span className="text-[10px] font-medium">CC</span>
                     </button>
                     {showCcPanel && (
-                      <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 w-[176px] max-w-[72vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={(e) => e.stopPropagation()}>
+                      <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 w-[176px] max-w-[72vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation}>
                         <div className="flex gap-1 mb-2">
                           <button onClick={() => setCcTab("audio")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Languages className="w-3 h-3" /> Audio</button>
                           <button onClick={() => setCcTab("subtitle")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "subtitle" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Subtitles className="w-3 h-3" /> Subtitle</button>
@@ -2431,8 +2434,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     <span className="player-control-chip text-[10px] px-2 py-0.5 rounded shrink-0">{playbackRate}x</span>
                     {availableQualities.length > 1 && (
                       <div className="relative shrink-0">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); }}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
                           className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all ${
                             currentQuality !== "Auto" ? "gradient-primary text-white" : "player-control-chip"
                           }`}
@@ -2440,7 +2443,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           {currentQuality}
                         </button>
                         {showQualityPanel && (
-                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[112px] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={(e) => e.stopPropagation()}>
+                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[112px] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation}>
                             <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Quality</p>
                             {availableQualities.map((opt) => {
                               const is4K = is4KLabel(opt.label);
@@ -2467,8 +2470,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     {/* Audio track button */}
                     {audioTrackOptions.length > 0 && (
                       <div className="relative shrink-0">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); }}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
                           className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 max-w-[90px] ${
                             currentAudioTrack !== "Default" ? "gradient-primary text-white" : "player-control-chip"
                           }`}
@@ -2476,7 +2479,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           <span className="truncate">🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}</span>
                         </button>
                         {showAudioPanel && (
-                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 w-[168px] max-w-[72vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={(e) => e.stopPropagation()}>
+                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 w-[168px] max-w-[72vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation}>
                             <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
                             <button onClick={resetToDefaultAudio}
                               className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between ${
@@ -2503,7 +2506,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         Next <ChevronRight className="w-3 h-3" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       <Settings className="w-3 h-3" />
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
@@ -2529,7 +2532,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           {/* Settings panel */}
           {showSettings && (
-            <div className="absolute bottom-16 right-3 player-glass rounded-xl p-2 z-20 w-[170px] max-w-[70vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute bottom-16 right-3 player-glass rounded-xl p-2 z-20 w-[170px] max-w-[70vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation}>
               <button onClick={() => setShowSettings(false)} className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-foreground/20 flex items-center justify-center hover:bg-foreground/30 transition-all">
                 <X className="w-3 h-3" />
               </button>
