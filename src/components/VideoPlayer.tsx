@@ -907,41 +907,106 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const subtitlePollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const subtitleSwitchingUntilRef = useRef(0);
 
-  const getSubtitleTextTracks = useCallback(() => {
-    const v = videoRef.current;
-    if (!v?.textTracks) return [] as TextTrack[];
+  const parseVttToCues = useCallback((vttText: string) => {
+    const normalized = vttText.replace(/\r/g, "");
+    const blocks = normalized.split(/\n\n+/);
+    const toSeconds = (raw: string) => {
+      const clean = raw.trim().replace(",", ".");
+      const parts = clean.split(":").map(Number);
+      if (parts.some((part) => Number.isNaN(part))) return NaN;
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      if (parts.length === 2) return parts[0] * 60 + parts[1];
+      return Number.NaN;
+    };
 
-    return Array.from(v.textTracks).filter(
-      (track) => track.kind === "subtitles" || track.kind === "captions",
-    );
+    return blocks.flatMap((block) => {
+      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+      const timingIndex = lines.findIndex((line) => line.includes("-->"));
+      if (timingIndex === -1) return [];
+      const timingLine = lines[timingIndex];
+      const [startRaw, endRaw] = timingLine.split("-->").map((part) => part.trim().split(/\s+/)[0]);
+      const start = toSeconds(startRaw || "");
+      const end = toSeconds(endRaw || "");
+      const text = lines.slice(timingIndex + 1).join("\n").trim();
+      if (!text || Number.isNaN(start) || Number.isNaN(end)) return [];
+      return [{ start, end, text }];
+    });
   }, []);
 
-  const getResolvedSubtitleTrack = useCallback((selectedIdx: number) => {
-    if (selectedIdx < 0) return null;
+  const clearSubtitlePolling = useCallback(() => {
+    if (subtitlePollTimerRef.current) {
+      clearInterval(subtitlePollTimerRef.current);
+      subtitlePollTimerRef.current = null;
+    }
+  }, []);
 
-    const subtitleTracks = getSubtitleTextTracks();
-    if (subtitleTracks[selectedIdx]) return subtitleTracks[selectedIdx];
+  const syncSubtitleOverlay = useCallback(() => {
+    const v = videoRef.current;
+    if (!v || currentHlsSubtitle < 0) {
+      setSubtitleOverlayText("");
+      return;
+    }
+
+    const activeText = subtitleCueListRef.current
+      .filter((cue) => v.currentTime >= cue.start && v.currentTime <= cue.end)
+      .map((cue) => cue.text)
+      .join("\n")
+      .trim();
+
+    setSubtitleOverlayText(activeText);
+  }, [currentHlsSubtitle]);
+
+  const loadSubtitleCues = useCallback(async (selectedIdx: number) => {
+    if (selectedIdx < 0) {
+      subtitleCueListRef.current = [];
+      setSubtitleCueVersion((value) => value + 1);
+      setSubtitleStatusTone("success");
+      setSubtitleStatusMessage("Subtitles turned off.");
+      setSubtitleOverlayText("");
+      clearSubtitlePolling();
+      return;
+    }
+
     const targetMeta = hlsSubtitleMetaRef.current.find((track) => track.id === selectedIdx);
+    if (!targetMeta?.url) {
+      subtitleCueListRef.current = [];
+      setSubtitleCueVersion((value) => value + 1);
+      setSubtitleStatusTone("warning");
+      setSubtitleStatusMessage("Subtitle track was found, but its file URL is missing.");
+      setSubtitleOverlayText("");
+      clearSubtitlePolling();
+      return;
+    }
 
-    return subtitleTracks.find((track) => {
-      if (!targetMeta) return false;
-      return (
-        (!!targetMeta.label && track.label === targetMeta.label) ||
-        (!!targetMeta.language && track.language === targetMeta.language)
-      );
-    }) || subtitleTracks[selectedIdx] || null;
-  }, [getSubtitleTextTracks]);
+    try {
+      setSubtitleStatusTone("neutral");
+      setSubtitleStatusMessage("Loading subtitles...");
+      const response = await fetch(targetMeta.url, { mode: "cors" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const vttText = await response.text();
+      const cues = parseVttToCues(vttText);
+      subtitleCueListRef.current = cues;
+      setSubtitleCueVersion((value) => value + 1);
+      syncSubtitleOverlay();
+      clearSubtitlePolling();
+      subtitlePollTimerRef.current = setInterval(syncSubtitleOverlay, 250);
 
-  const syncNativeSubtitleVisibility = useCallback((selectedIdx: number) => {
-    const subtitleTracks = getSubtitleTextTracks();
-    const selectedTrack = getResolvedSubtitleTrack(selectedIdx);
-
-    subtitleTracks.forEach((track) => {
-      try {
-        track.mode = selectedIdx >= 0 && track === selectedTrack ? "hidden" : "disabled";
-      } catch {}
-    });
-  }, [getResolvedSubtitleTrack, getSubtitleTextTracks]);
+      if (cues.length > 0) {
+        setSubtitleStatusTone("success");
+        setSubtitleStatusMessage("Subtitles are working.");
+      } else {
+        setSubtitleStatusTone("warning");
+        setSubtitleStatusMessage("Subtitle file loaded, but it contains no usable captions.");
+      }
+    } catch (error) {
+      subtitleCueListRef.current = [];
+      setSubtitleCueVersion((value) => value + 1);
+      setSubtitleOverlayText("");
+      setSubtitleStatusTone("warning");
+      setSubtitleStatusMessage("This subtitle track could not be loaded from the stream.");
+      clearSubtitlePolling();
+    }
+  }, [clearSubtitlePolling, parseVttToCues, syncSubtitleOverlay]);
 
   const isPlayerPanelTarget = useCallback((target: EventTarget | null) => {
     return target instanceof HTMLElement && !!target.closest("[data-player-panel='true']");
