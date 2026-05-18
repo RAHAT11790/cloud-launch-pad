@@ -2278,10 +2278,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}
                         </button>
                         {showAudioPanel && (
-                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
+                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 w-[180px] max-w-[78vw] max-h-[240px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
                             <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
                             <button onClick={resetToDefaultAudio}
-                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                              className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between ${
                                 currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                               }`}>
                               <span>Default</span>
@@ -2289,13 +2289,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             </button>
                             {audioTrackOptions.map((track, idx) => (
                               <button key={idx} onClick={() => switchAudioTrack(track)}
-                                className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${
                                   currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                                 }`}>
-                                <span className="flex items-center gap-1.5">
-                                  🎧 {track.label}
-                                </span>
-                                {currentAudioTrack === track.label && <Check className="w-3 h-3" />}
+                                <span className="truncate flex-1 min-w-0">{track.label}</span>
+                                {currentAudioTrack === track.label && <Check className="w-3 h-3 shrink-0" />}
                               </button>
                             ))}
                           </div>
