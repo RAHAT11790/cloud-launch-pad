@@ -900,6 +900,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [subtitleStatusMessage, setSubtitleStatusMessage] = useState("");
   const [subtitleStatusTone, setSubtitleStatusTone] = useState<"neutral" | "success" | "warning">("neutral");
   const hlsRef = useRef<Hls | null>(null);
+  const hlsSubtitleMetaRef = useRef<HlsSubtitleOption[]>([]);
   const subtitleSwitchingUntilRef = useRef(0);
 
   const getSubtitleTextTracks = useCallback(() => {
@@ -916,7 +917,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     const subtitleTracks = getSubtitleTextTracks();
     if (subtitleTracks[selectedIdx]) return subtitleTracks[selectedIdx];
-    const targetMeta = hlsSubtitleOptions.find((track) => track.id === selectedIdx);
+    const targetMeta = hlsSubtitleMetaRef.current.find((track) => track.id === selectedIdx);
 
     return subtitleTracks.find((track) => {
       if (!targetMeta) return false;
@@ -925,7 +926,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         (!!targetMeta.language && track.language === targetMeta.language)
       );
     }) || subtitleTracks[selectedIdx] || null;
-  }, [getSubtitleTextTracks, hlsSubtitleOptions]);
+  }, [getSubtitleTextTracks]);
 
   const syncNativeSubtitleVisibility = useCallback((selectedIdx: number) => {
     const subtitleTracks = getSubtitleTextTracks();
@@ -937,6 +938,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       } catch {}
     });
   }, [getResolvedSubtitleTrack, getSubtitleTextTracks]);
+
+  const isPlayerPanelTarget = useCallback((target: EventTarget | null) => {
+    return target instanceof HTMLElement && !!target.closest("[data-player-panel='true']");
+  }, []);
 
   useEffect(() => {
     if (!isHlsSrc || currentHlsSubtitle < 0) {
