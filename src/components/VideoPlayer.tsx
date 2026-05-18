@@ -176,6 +176,7 @@ interface HlsSubtitleOption {
   id: number;
   label: string;
   language: string;
+  url?: string;
 }
 
 interface VideoPlayerProps {
