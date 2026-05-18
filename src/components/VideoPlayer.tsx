@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
+import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
@@ -168,6 +169,13 @@ interface AudioTrackOption {
   src1080?: string;
   src4k?: string;
   nativeIndex?: number; // If set, switch native audio track
+  hlsAudioIndex?: number; // If set, switch hls.js audio track
+}
+
+interface HlsSubtitleOption {
+  id: number;
+  label: string;
+  language: string;
 }
 
 interface VideoPlayerProps {
