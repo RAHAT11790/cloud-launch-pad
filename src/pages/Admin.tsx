@@ -2703,6 +2703,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     dashboard: "Dashboard",
     categories: "Categories",
     webseries: "Web Series",
+    "weekly-episode": "Weekly Episode",
     movies: "Movies",
     users: "Users",
     notifications: "Notifications",
