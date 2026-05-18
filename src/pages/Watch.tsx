@@ -5,6 +5,7 @@ import type { AnimeItem, Episode } from "@/data/animeData";
 import VideoPlayer from "@/components/VideoPlayer";
 import SplashLoader from "@/components/SplashLoader";
 import { useFirebaseData } from "@/hooks/useFirebaseData";
+import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
 import { db, get, ref } from "@/lib/firebase";
 import { animeSaltApi } from "@/lib/animeSaltApi";
 
@@ -94,7 +95,8 @@ const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualit
 const Watch = () => {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { allAnime, loading } = useFirebaseData();
+  const { allAnime: firebaseAnime, loading } = useFirebaseData();
+  const { items: animeSaltItems, loading: saltLoading } = useSelectedAnimeSalt();
   const animeId = params.get("anime") || "";
   const seasonParam = Number(params.get("season") || "0");
   const episodeParam = Number(params.get("episode") || "0");
@@ -103,6 +105,7 @@ const Watch = () => {
   const [forceEmbedMode, setForceEmbedMode] = useState(false);
   const [loadingPlayer, setLoadingPlayer] = useState(true);
 
+  const allAnime = useMemo(() => [...firebaseAnime, ...animeSaltItems], [firebaseAnime, animeSaltItems]);
   const anime = useMemo(() => allAnime.find((item) => item.id === animeId), [allAnime, animeId]);
   const seasonIdx = Number.isFinite(seasonParam) ? seasonParam : 0;
   const epIdx = Number.isFinite(episodeParam) ? episodeParam : 0;
@@ -124,7 +127,7 @@ const Watch = () => {
     let cancelled = false;
 
     const load = async () => {
-      if (loading) return;
+      if (loading || saltLoading) return;
       if (!anime) {
         setLoadingPlayer(false);
         return;
@@ -193,7 +196,7 @@ const Watch = () => {
     return () => {
       cancelled = true;
     };
-  }, [anime, epIdx, loading, seasonIdx]);
+  }, [anime, epIdx, loading, saltLoading, seasonIdx]);
 
   const episode = anime?.type === "webseries" ? anime.seasons?.[seasonIdx]?.episodes?.[epIdx] : undefined;
   const audioTracks = episode?.audioTracks;
@@ -214,7 +217,7 @@ const Watch = () => {
     ? () => navigate(`/video?anime=${anime.id}&season=${seasonIdx}&episode=${epIdx + 1}`)
     : undefined;
 
-  if (loading || loadingPlayer) {
+  if (loading || saltLoading || loadingPlayer) {
     return <SplashLoader />;
   }
 
