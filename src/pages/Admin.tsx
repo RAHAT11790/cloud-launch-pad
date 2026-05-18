@@ -4360,7 +4360,7 @@ ${tgHashtags}`;
                 ) : (
                   <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1 pb-1">
                     {todayScheduled.slice(0, 8).map((it: any) => (
-                      <button key={it.seriesId} onClick={() => showSection("weekly-episode")}
+                      <button key={it.seriesId} onClick={() => editSeries(it.seriesId)}
                         className="flex-shrink-0 w-[78px] group">
                         <img src={it.poster || ""} className="w-[78px] h-[108px] rounded-lg object-cover border border-white/8 group-hover:border-indigo-500/50 transition"
                           onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/78x108/141422/6366f1?text=N"; }} />
