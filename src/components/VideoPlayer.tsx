@@ -956,6 +956,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setSubtitleOverlayText(activeText);
   }, [currentHlsSubtitle]);
 
+  const resolveSubtitleFileUrl = useCallback(async (playlistUrl: string) => {
+    const response = await fetch(playlistUrl, { mode: "cors" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const playlistText = await response.text();
+    const mediaLine = playlistText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line && !line.startsWith("#"));
+    if (!mediaLine) throw new Error("No subtitle media file found");
+    return new URL(mediaLine, playlistUrl).toString();
+  }, []);
+
   const loadSubtitleCues = useCallback(async (selectedIdx: number) => {
     if (selectedIdx < 0) {
       subtitleCueListRef.current = [];
@@ -981,7 +993,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     try {
       setSubtitleStatusTone("neutral");
       setSubtitleStatusMessage("Loading subtitles...");
-      const response = await fetch(targetMeta.url, { mode: "cors" });
+      const subtitleFileUrl = await resolveSubtitleFileUrl(targetMeta.url);
+      const response = await fetch(subtitleFileUrl, { mode: "cors" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const vttText = await response.text();
       const cues = parseVttToCues(vttText);
@@ -1006,7 +1019,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setSubtitleStatusMessage("This subtitle track could not be loaded from the stream.");
       clearSubtitlePolling();
     }
-  }, [clearSubtitlePolling, parseVttToCues, syncSubtitleOverlay]);
+  }, [clearSubtitlePolling, parseVttToCues, resolveSubtitleFileUrl, syncSubtitleOverlay]);
 
   const isPlayerPanelTarget = useCallback((target: EventTarget | null) => {
     return target instanceof HTMLElement && !!target.closest("[data-player-panel='true']");
@@ -1014,90 +1027,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   useEffect(() => {
     if (!isHlsSrc || currentHlsSubtitle < 0) {
+      clearSubtitlePolling();
       setSubtitleOverlayText("");
-      setSubtitleStatusMessage("");
-      setSubtitleStatusTone("neutral");
+      if (!isHlsSrc) {
+        setSubtitleStatusMessage("");
+        setSubtitleStatusTone("neutral");
+      }
       return;
     }
 
-    let cancelled = false;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    let statusTimer: ReturnType<typeof setTimeout> | null = null;
-    let boundTrack: TextTrack | null = null;
-
-    const getCueText = (track: TextTrack | null) => {
-      if (!track?.activeCues?.length) return "";
-      return Array.from(track.activeCues)
-        .map((cue: any) => (typeof cue?.text === "string" ? cue.text.trim() : ""))
-        .filter(Boolean)
-        .join("\n");
-    };
-
-    const bindTrack = (attempt = 0) => {
-      if (cancelled) return;
-
-      const track = getResolvedSubtitleTrack(currentHlsSubtitle);
-      if (!track) {
-        setSubtitleOverlayText("");
-        setSubtitleStatusTone("neutral");
-        setSubtitleStatusMessage("Loading subtitles...");
-        if (attempt < 8) {
-          retryTimer = setTimeout(() => bindTrack(attempt + 1), 250);
-        } else {
-          setSubtitleStatusTone("warning");
-          setSubtitleStatusMessage("Subtitle track was detected, but captions are not available for this video.");
-        }
-        return;
-      }
-
-      boundTrack = track;
-      try {
-        track.mode = "hidden";
-      } catch {}
-
-      const syncCueState = () => {
-        const cueText = getCueText(track);
-        const cueCount = track.cues?.length ?? 0;
-
-        setSubtitleOverlayText(cueText);
-
-        if (cueText) {
-          setSubtitleStatusTone("success");
-          setSubtitleStatusMessage("Subtitles are working.");
-        } else if (cueCount > 0) {
-          setSubtitleStatusTone("neutral");
-          setSubtitleStatusMessage("Subtitle track loaded. Captions will appear during dialogue.");
-        } else {
-          setSubtitleStatusTone("neutral");
-          setSubtitleStatusMessage("Loading subtitles...");
-        }
-      };
-
-      syncCueState();
-      track.addEventListener("cuechange", syncCueState as EventListener);
-
-      statusTimer = setTimeout(() => {
-        if (cancelled || !boundTrack) return;
-        const cueCount = boundTrack.cues?.length ?? 0;
-        const cueText = getCueText(boundTrack);
-        if (!cueText && cueCount === 0) {
-          setSubtitleStatusTone("warning");
-          setSubtitleStatusMessage("Subtitle track was detected, but this video does not provide usable captions.");
-        }
-      }, 2200);
-
-      return () => track.removeEventListener("cuechange", syncCueState as EventListener);
-    };
-
-    const cleanupTrack = bindTrack();
+    loadSubtitleCues(currentHlsSubtitle);
 
     return () => {
-      cancelled = true;
-      if (retryTimer) clearTimeout(retryTimer);
-      if (statusTimer) clearTimeout(statusTimer);
-      cleanupTrack?.();
+      clearSubtitlePolling();
     };
-  }, [currentHlsSubtitle, getResolvedSubtitleTrack, isHlsSrc]);
+  }, [clearSubtitlePolling, currentHlsSubtitle, isHlsSrc, loadSubtitleCues]);
 
   // ===== HLS.js attachment =====
   // For any .m3u8 source we own playback via hls.js so the manifest's
