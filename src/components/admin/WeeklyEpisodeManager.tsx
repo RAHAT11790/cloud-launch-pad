@@ -110,14 +110,15 @@ export default function WeeklyEpisodeManager({
     const s = seriesById[seriesId];
     if (!s) { toast.error("Series not found"); return; }
     const total = countEpisodes(s);
-    const entry: Schedule = {
+    const entry: Record<string, any> = {
       seriesId,
       title: s.title || "Untitled",
       poster: s.poster || "",
       day,
-      expectedEpisodes: s.totalEpisodes || s.numberOfEpisodes || undefined,
       updatedAt: Date.now(),
     };
+    const exp = s.totalEpisodes || s.numberOfEpisodes;
+    if (exp) entry.expectedEpisodes = exp;
     await set(ref(db, `weeklySchedule/${seriesId}`), entry);
     if (!opts?.silent) toast.success(`Scheduled on ${day}`);
     return total;
