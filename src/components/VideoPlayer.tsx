@@ -2025,11 +2025,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isPlayerPanelTarget(e.target)) return;
     const t = e.touches[0];
     setSwipeState({ startX: t.clientX, startY: t.clientY, type: null });
-  }, []);
+  }, [isPlayerPanelTarget]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (isPlayerPanelTarget(e.target)) return;
     if (!swipeState || locked) return;
     const t = e.touches[0];
     const dy = t.clientY - swipeState.startY;
@@ -2047,9 +2049,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setBrightness(newBr);
       setSwipeState({ ...swipeState, startY: t.clientY });
     }
-  }, [swipeState, locked, brightness, boostedVolume, muted, applyPlayerVolume]);
+  }, [swipeState, locked, brightness, boostedVolume, muted, applyPlayerVolume, isPlayerPanelTarget]);
 
-  const handleTouchEnd = useCallback(() => setSwipeState(null), []);
+  const handleTouchEnd = useCallback((e?: React.TouchEvent) => {
+    if (e && isPlayerPanelTarget(e.target)) return;
+    setSwipeState(null);
+  }, [isPlayerPanelTarget]);
   const stopPanelPointerPropagation = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.stopPropagation();
   }, []);
