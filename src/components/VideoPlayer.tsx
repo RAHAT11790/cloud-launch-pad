@@ -701,13 +701,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
 
   const handleOpenAdLink = useCallback(async (url: string, _service?: AdService) => {
-    const { openExternalBrowser } = await import("@/lib/openExternal");
+    const { openExternalBrowser, openTelegramDeepLink } = await import("@/lib/openExternal");
     try {
       const fb = await import("@/lib/firebase");
       const { createTelegramBotUnlockLink } = await import("@/lib/unlockAccess");
       const r = await createTelegramBotUnlockLink();
       if (r.ok && r.deepLink) {
-        window.location.href = r.deepLink;
+        openTelegramDeepLink(r.deepLink);
         return;
       }
 
