@@ -2932,7 +2932,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         telegramCustomButtonUrl: data.telegramCustomButton?.url || "",
     });
     setSeriesCast(data.cast || []);
-    setSeasonsData(data.seasons || []);
+    const loadedSeasons = data.seasons || [];
+    setSeasonsData(loadedSeasons);
+    // Auto-expand only the LATEST (running) season; collapse earlier finished seasons
+    {
+      const latestIdx = Math.max(0, loadedSeasons.length - 1);
+      const expandMap: Record<number, boolean> = {};
+      if (loadedSeasons.length > 0) expandMap[latestIdx] = true;
+      setExpandedSeasons(expandMap);
+    }
     // Snapshot baseline episodes per season for auto-detect on Save+Notify
     {
       const base: Record<number, Set<number>> = {};
@@ -2945,6 +2953,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     setActiveSection("webseries");
     setSeriesTab("ws-add");
     toast.info("Editing: " + data.title);
+    // Auto-scroll to Seasons & Episodes section for quick episode editing
+    setTimeout(() => {
+      document.getElementById("seasons-episodes-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 250);
   };
 
   const deleteSeries = (id: string) => {
