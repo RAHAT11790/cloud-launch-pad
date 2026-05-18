@@ -937,45 +937,47 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     hls.loadSource(currentSrc);
     hls.attachMedia(v);
 
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      // Audio tracks → push into audio panel
+    const refreshHlsAudio = () => {
       const aTracks = hls.audioTracks || [];
-      if (aTracks.length > 0) {
-        const opts: AudioTrackOption[] = aTracks.map((t, i) => ({
-          language: t.lang || `aud${i + 1}`,
-          label: t.name || t.lang || `Audio ${i + 1}`,
-          hlsAudioIndex: i,
-        }));
-        setAudioTrackOptions(prev => {
-          const manual = prev.filter(p => p.src);
-          return [...opts, ...manual];
-        });
-        const defIdx = aTracks.findIndex((t) => (t as any).default);
-        if (defIdx >= 0) setCurrentAudioTrack(opts[defIdx].label);
-      }
-      // Subtitle tracks
+      const opts: AudioTrackOption[] = aTracks.map((t, i) => ({
+        language: t.lang || `aud${i + 1}`,
+        label: t.name || t.lang || `Audio ${i + 1}`,
+        hlsAudioIndex: i,
+      }));
+      setHlsAudioOptions(opts);
+      const active = typeof hls.audioTrack === "number" ? hls.audioTrack : -1;
+      setCurrentHlsAudio(active >= 0 ? active : (opts.length > 0 ? 0 : -1));
+    };
+
+    const refreshHlsSubs = () => {
       const sTracks = hls.subtitleTracks || [];
-      if (sTracks.length > 0) {
-        setHlsSubtitleOptions(sTracks.map((t, i) => ({
-          id: i,
-          label: t.name || t.lang || `Subtitle ${i + 1}`,
-          language: t.lang || "und",
-        })));
-        // Show subtitles immediately for the default track
-        hls.subtitleDisplay = true;
-        const defS = sTracks.findIndex((t) => (t as any).default);
-        if (defS >= 0) {
-          hls.subtitleTrack = defS;
-          setCurrentHlsSubtitle(defS);
-        } else {
-          setCurrentHlsSubtitle(-1);
-        }
-      } else {
-        setHlsSubtitleOptions([]);
+      setHlsSubtitleOptions(sTracks.map((t, i) => ({
+        id: i,
+        label: t.name || t.lang || `Subtitle ${i + 1}`,
+        language: t.lang || "und",
+      })));
+      if (sTracks.length === 0) {
         setCurrentHlsSubtitle(-1);
+        return;
       }
-      // Autoplay
+      hls.subtitleDisplay = true;
+      const defS = sTracks.findIndex((t) => (t as any).default);
+      if (defS >= 0) {
+        hls.subtitleTrack = defS;
+        setCurrentHlsSubtitle(defS);
+      }
+    };
+
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      refreshHlsAudio();
+      refreshHlsSubs();
       v.play().catch(() => {});
+    });
+    hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, refreshHlsAudio);
+    hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, refreshHlsAudio);
+    hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, refreshHlsSubs);
+    hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_e, d: any) => {
+      if (typeof d?.id === "number") setCurrentHlsSubtitle(d.id);
     });
 
     hls.on(Hls.Events.ERROR, (_evt, data) => {
