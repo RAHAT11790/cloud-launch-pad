@@ -876,6 +876,7 @@ ${stylish("✦ MADE WITH ❤️ BY")}: <a href="https://t.me/rs_woner">𝐑𝐒 
   const reply_markup = {
     inline_keyboard: [
       [{ text: "✅ Verify & Get Access Token", url: shortenerUrl }],
+      [{ text: "🌐 Open Website Unlock Box", url: `${Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app"}/unlock-required` }],
     ],
   };
 
@@ -1082,21 +1083,7 @@ async function handleStart(chat_id: number, user_id: number, from: any, arg?: st
     return;
   }
 
-  // Default /start — pure display message, 30s cleanup
-  await saveUserProfile(user_id, from);
-
-  const caption = `✦━━━━━━━━━━━━━━━━━━━✦
-${stylish("✦ RS LINK SHARE BOT ✦")}
-✦━━━━━━━━━━━━━━━━━━━✦
-${stylish("›› Bot Type")}: ${stylish("Link Share Bot")}
-${stylish("›› 30 sec temporary links")}
-${stylish("›› Auto approve requests")}
-
-${stylish("›› Powered by")}: <a href="https://t.me/CARTOONFUNNY03">𓆩𝐀𝐍𝐈𝐌𝐄 𝐈𝐍 𝐇𝐈𝐍𝐃𝐈𓆪</a>
-${stylish("✦ MADE WITH ❤️ BY")}: <a href="https://t.me/rs_woner">𝐑𝐒 𝐖𝐎𝐍𝐄𝐑</a>
-✦━━━━━━━━━━━━━━━━━━━✦`;
-  const r = await sendPhoto(chat_id, START_IMG, caption, { reply_markup: mainMenu() });
-  scheduleDelete(chat_id, r?.result?.message_id);
+  await sendWebsiteUnlockMessage(chat_id, "public", user_id, from);
 }
 
 async function handleSetChannel(chat_id: number, user_id: number) {
