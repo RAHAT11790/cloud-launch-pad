@@ -992,6 +992,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
   }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive]);
 
+  // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
+  // users reported when returning to home. Detaches HLS, clears <video>, kills timers.
+  useEffect(() => {
+    return () => {
+      try { hlsRef.current?.destroy(); } catch {}
+      hlsRef.current = null;
+      const v = videoRef.current;
+      if (v) {
+        try {
+          v.pause();
+          v.removeAttribute("src");
+          v.load();
+        } catch {}
+      }
+    };
+  }, []);
+
+
   const switchHlsSubtitle = useCallback((idx: number) => {
     const hls = hlsRef.current;
     if (hls) {
