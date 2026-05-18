@@ -2184,9 +2184,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     e.stopPropagation();
   }, []);
 
+  const keepPanelScrollActive = useCallback((e: React.TouchEvent | React.UIEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+  }, []);
+
   const stopPanelWheelPropagation = useCallback((e: React.WheelEvent) => {
     e.stopPropagation();
   }, []);
+
+  const panelBaseClass = "player-glass rounded-xl p-2 z-30 overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]";
+  const panelBaseStyle = { WebkitOverflowScrolling: "touch" as const, overscrollBehavior: "contain" as const, touchAction: "pan-y" as const };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const lightweightMode = !isFullscreen;
@@ -2283,8 +2290,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           )}
 
           {subtitleOverlayText && !isEmbedPlayback && (
-            <div className="pointer-events-none absolute inset-x-3 bottom-14 z-[8] flex justify-center">
-              <div className="max-w-[88%] rounded-lg bg-black/72 px-3 py-1.5 text-center text-[12px] font-medium leading-snug text-white backdrop-blur-sm whitespace-pre-line shadow-lg">
+            <div
+              className="pointer-events-none absolute inset-x-3 z-[8] flex justify-center"
+              style={{ bottom: `clamp(8px, ${captionVerticalOffset}%, 28%)` }}
+            >
+              <div
+                className="max-w-[92%] px-1 text-center font-medium leading-snug text-white whitespace-pre-line"
+                style={{ fontSize: `${Math.round(12 * captionFontScale)}px`, lineHeight: Math.max(1.2, 1.34 - ((captionFontScale - 1) * 0.08)) }}
+              >
                 {subtitleOverlayText}
               </div>
             </div>
@@ -2498,7 +2511,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       <span className="text-[10px] font-medium">CC</span>
                     </button>
                     {showCcPanel && (
-                      <div data-player-panel="true" className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 w-[176px] max-w-[72vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]" style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y" }} onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation} onWheel={stopPanelWheelPropagation}>
+                      <div data-player-panel="true" className={`absolute top-9 right-0 ${panelBaseClass} w-[196px] max-w-[78vw] max-h-[48vh]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
                         <div className="flex gap-1 mb-2">
                           <button onClick={() => setCcTab("audio")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Languages className="w-3 h-3" /> Audio</button>
                           <button onClick={() => setCcTab("subtitle")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "subtitle" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Subtitles className="w-3 h-3" /> Subtitle</button>
@@ -2510,11 +2523,43 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             ))}
                           </div>
                         ) : (
-                          <div className="space-y-0.5">
+                          <div className="space-y-1">
                             <button onClick={() => switchHlsSubtitle(-1)} className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between ${currentHlsSubtitle < 0 ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}><span>Off</span>{currentHlsSubtitle < 0 && <Check className="w-3 h-3" />}</button>
                             {hlsSubtitleOptions.length === 0 ? <p className="text-[10px] text-muted-foreground text-center py-2">No subtitles in stream</p> : hlsSubtitleOptions.map((st) => (
                               <button key={st.id} onClick={() => switchHlsSubtitle(st.id)} className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${currentHlsSubtitle === st.id ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}><span className="truncate flex-1 min-w-0">{st.label || st.language || `Subtitle ${st.id + 1}`}</span>{currentHlsSubtitle === st.id && <Check className="w-3 h-3 shrink-0" />}</button>
                             ))}
+                            <div className="mt-2 space-y-2 rounded-lg bg-foreground/10 px-2 py-2">
+                              <div>
+                                <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
+                                  <span>Caption size</span>
+                                  <span>{captionFontScale.toFixed(1)}x</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={0.8}
+                                  max={1.8}
+                                  step={0.1}
+                                  value={captionFontScale}
+                                  onChange={(e) => setCaptionFontScale(Number(e.target.value))}
+                                  className="w-full accent-primary"
+                                />
+                              </div>
+                              <div>
+                                <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
+                                  <span>Caption position</span>
+                                  <span>{captionVerticalOffset}%</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={4}
+                                  max={28}
+                                  step={1}
+                                  value={captionVerticalOffset}
+                                  onChange={(e) => setCaptionVerticalOffset(Number(e.target.value))}
+                                  className="w-full accent-primary"
+                                />
+                              </div>
+                            </div>
                             {!!subtitleStatusMessage && (
                               <div className={`mt-1 rounded-lg px-2 py-1.5 text-[10px] leading-relaxed ${subtitleStatusTone === "warning" ? "bg-destructive/15 text-destructive" : subtitleStatusTone === "success" ? "bg-primary/15 text-primary" : "bg-foreground/10 text-muted-foreground"}`}>
                                 {subtitleStatusMessage}
@@ -2588,7 +2633,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           {currentQuality}
                         </button>
                         {showQualityPanel && (
-                          <div data-player-panel="true" className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[112px] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]" style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y" }} onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation} onWheel={stopPanelWheelPropagation}>
+                          <div data-player-panel="true" className={`absolute bottom-8 right-0 ${panelBaseClass} min-w-[112px] max-h-[44vh]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
                             <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Quality</p>
                             {availableQualities.map((opt) => {
                               const is4K = is4KLabel(opt.label);
@@ -2624,7 +2669,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           <span className="truncate">🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}</span>
                         </button>
                         {showAudioPanel && (
-                          <div data-player-panel="true" className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 w-[168px] max-w-[72vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]" style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y" }} onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation} onWheel={stopPanelWheelPropagation}>
+                          <div data-player-panel="true" className={`absolute bottom-8 right-0 ${panelBaseClass} w-[168px] max-w-[72vw] max-h-[44vh]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
                             <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
                             <button onClick={resetToDefaultAudio}
                               className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between ${
@@ -2677,7 +2722,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           {/* Settings panel */}
           {showSettings && (
-            <div data-player-panel="true" className="absolute bottom-16 right-3 player-glass rounded-xl p-2 z-20 w-[170px] max-w-[70vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]" style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y" }} onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation} onWheel={stopPanelWheelPropagation}>
+            <div data-player-panel="true" className={`absolute bottom-16 right-3 ${panelBaseClass} z-20 w-[170px] max-w-[70vw] max-h-[44vh]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
               <button onClick={() => setShowSettings(false)} className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-foreground/20 flex items-center justify-center hover:bg-foreground/30 transition-all">
                 <X className="w-3 h-3" />
               </button>
