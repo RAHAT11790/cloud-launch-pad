@@ -2134,6 +2134,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             />
           )}
 
+          {subtitleOverlayText && !isEmbedPlayback && (
+            <div className="pointer-events-none absolute inset-x-3 bottom-14 z-[8] flex justify-center">
+              <div className="max-w-[88%] rounded-lg bg-black/72 px-3 py-1.5 text-center text-[12px] font-medium leading-snug text-white backdrop-blur-sm whitespace-pre-line shadow-lg">
+                {subtitleOverlayText}
+              </div>
+            </div>
+          )}
+
           {/* Video Error Banner — non-blocking, controls always remain accessible above (z-40) */}
           {videoError && (
             <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[5] pointer-events-none px-3 max-w-[90%]">
@@ -2279,19 +2287,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}
             >
               {/* Top controls */}
-              <div className="flex justify-end gap-2 p-3">
+              <div className="flex justify-end gap-1.5 p-2.5 sm:p-3">
                 <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95">
                   <Crop className="w-3.5 h-3.5" />
                   <span className="text-[10px] font-medium">{cropLabels[cropIndex]}</span>
                 </button>
-                {effectiveVideoServers.length > 1 && !noServerSwitch && (
+                {isHlsSrc ? (
+                  <button className="player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <Server className="w-3.5 h-3.5" />
+                    <span className="text-[10px] font-medium">RS HLS</span>
+                  </button>
+                ) : effectiveVideoServers.length > 1 && !noServerSwitch ? (
                   <div className="relative">
                     <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
                       <span className="text-[10px] font-medium">{manualServerSelected ? (effectiveVideoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
                     </button>
                     {showServerPanel && (
-                      <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
+                      <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[132px] max-h-[44vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={(e) => e.stopPropagation()}>
                         <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
                         {!isPremium && (
                           <button onClick={() => {
@@ -2326,7 +2339,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       </div>
                     )}
                   </div>
-                )}
+                ) : null}
                 {isHlsSrc && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
                   <div className="relative">
                     <button
@@ -2337,7 +2350,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       <span className="text-[10px] font-medium">CC</span>
                     </button>
                     {showCcPanel && (
-                      <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 w-[190px] max-w-[76vw] max-h-[220px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
+                      <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 w-[176px] max-w-[72vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={(e) => e.stopPropagation()}>
                         <div className="flex gap-1 mb-2">
                           <button onClick={() => setCcTab("audio")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Languages className="w-3 h-3" /> Audio</button>
                           <button onClick={() => setCcTab("subtitle")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "subtitle" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Subtitles className="w-3 h-3" /> Subtitle</button>
@@ -2354,6 +2367,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             {hlsSubtitleOptions.length === 0 ? <p className="text-[10px] text-muted-foreground text-center py-2">No subtitles in stream</p> : hlsSubtitleOptions.map((st) => (
                               <button key={st.id} onClick={() => switchHlsSubtitle(st.id)} className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${currentHlsSubtitle === st.id ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}><span className="truncate flex-1 min-w-0">{st.label || st.language || `Subtitle ${st.id + 1}`}</span>{currentHlsSubtitle === st.id && <Check className="w-3 h-3 shrink-0" />}</button>
                             ))}
+                            {!!subtitleStatusMessage && (
+                              <div className={`mt-1 rounded-lg px-2 py-1.5 text-[10px] leading-relaxed ${subtitleStatusTone === "warning" ? "bg-destructive/15 text-destructive" : subtitleStatusTone === "success" ? "bg-primary/15 text-primary-foreground" : "bg-foreground/10 text-muted-foreground"}`}>
+                                {subtitleStatusMessage}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -2383,7 +2401,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 {/* Progress bar - GPU accelerated with will-change */}
                 <div
                   ref={progressBarRef}
-                  className="w-full h-6 flex items-center cursor-pointer mb-2 relative touch-none"
+                  className="w-full h-6 flex items-center cursor-pointer mb-2 relative"
                   onClick={(e) => { e.stopPropagation(); handleProgressClick(e); }}
                   onTouchStart={handleProgressTouchStart}
                   onTouchMove={handleProgressTouchMove}
@@ -2422,7 +2440,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           {currentQuality}
                         </button>
                         {showQualityPanel && (
-                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[120px] shadow-lg" onClick={(e) => e.stopPropagation()}>
+                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[112px] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={(e) => e.stopPropagation()}>
                             <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Quality</p>
                             {availableQualities.map((opt) => {
                               const is4K = is4KLabel(opt.label);
@@ -2458,7 +2476,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           <span className="truncate">🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}</span>
                         </button>
                         {showAudioPanel && (
-                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 w-[180px] max-w-[78vw] max-h-[240px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
+                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 w-[168px] max-w-[72vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={(e) => e.stopPropagation()}>
                             <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
                             <button onClick={resetToDefaultAudio}
                               className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between ${
@@ -2511,7 +2529,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           {/* Settings panel */}
           {showSettings && (
-            <div className="absolute bottom-16 right-3 player-glass rounded-xl p-2.5 z-20 w-[188px] max-w-[74vw] max-h-[220px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute bottom-16 right-3 player-glass rounded-xl p-2 z-20 w-[170px] max-w-[70vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={(e) => e.stopPropagation()}>
               <button onClick={() => setShowSettings(false)} className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-foreground/20 flex items-center justify-center hover:bg-foreground/30 transition-all">
                 <X className="w-3 h-3" />
               </button>
