@@ -304,11 +304,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => unsub();
   }, []);
 
+  const isRawHlsSource = useMemo(() => /\.m3u8(\?|#|$)/i.test(String(src || "")), [src]);
+
   const effectiveVideoServers = useMemo(() => {
-    if (noServerSwitch) return [];
+    if (noServerSwitch || isRawHlsSource) return [];
     if (videoServers.length > 0) return videoServers.slice(0, PROXY_SERVER_LIMIT);
     return buildFallbackServers(src).slice(0, PROXY_SERVER_LIMIT);
-  }, [noServerSwitch, src, videoServers]);
+  }, [isRawHlsSource, noServerSwitch, src, videoServers]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
   // The branded `req.html` page on the embed server posts video events to us
@@ -894,24 +896,133 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentHlsSubtitle, setCurrentHlsSubtitle] = useState<number>(-1); // -1 = off
   const [showCcPanel, setShowCcPanel] = useState(false);
   const [ccTab, setCcTab] = useState<"audio" | "subtitle">("audio");
-  const [showSubtitlePanel, setShowSubtitlePanel] = useState(false);
+  const [subtitleOverlayText, setSubtitleOverlayText] = useState("");
+  const [subtitleStatusMessage, setSubtitleStatusMessage] = useState("");
+  const [subtitleStatusTone, setSubtitleStatusTone] = useState<"neutral" | "success" | "warning">("neutral");
   const hlsRef = useRef<Hls | null>(null);
   const subtitleSwitchingUntilRef = useRef(0);
 
-  const syncNativeSubtitleVisibility = useCallback((selectedIdx: number) => {
+  const getSubtitleTextTracks = useCallback(() => {
     const v = videoRef.current;
-    if (!v?.textTracks) return;
+    if (!v?.textTracks) return [] as TextTrack[];
 
-    const subtitleTracks = Array.from(v.textTracks).filter(
+    return Array.from(v.textTracks).filter(
       (track) => track.kind === "subtitles" || track.kind === "captions",
     );
+  }, []);
 
-    subtitleTracks.forEach((track, index) => {
+  const getResolvedSubtitleTrack = useCallback((selectedIdx: number) => {
+    if (selectedIdx < 0) return null;
+
+    const subtitleTracks = getSubtitleTextTracks();
+    const targetMeta = hlsSubtitleOptions.find((track) => track.id === selectedIdx);
+
+    return subtitleTracks.find((track) => {
+      if (!targetMeta) return false;
+      return (
+        (!!targetMeta.label && track.label === targetMeta.label) ||
+        (!!targetMeta.language && track.language === targetMeta.language)
+      );
+    }) || subtitleTracks[selectedIdx] || null;
+  }, [getSubtitleTextTracks, hlsSubtitleOptions]);
+
+  const syncNativeSubtitleVisibility = useCallback((selectedIdx: number) => {
+    const subtitleTracks = getSubtitleTextTracks();
+    const selectedTrack = getResolvedSubtitleTrack(selectedIdx);
+
+    subtitleTracks.forEach((track) => {
       try {
-        track.mode = selectedIdx >= 0 && index === selectedIdx ? "showing" : "disabled";
+        track.mode = selectedIdx >= 0 && track === selectedTrack ? "hidden" : "disabled";
       } catch {}
     });
-  }, []);
+  }, [getResolvedSubtitleTrack, getSubtitleTextTracks]);
+
+  useEffect(() => {
+    if (!isHlsSrc || currentHlsSubtitle < 0) {
+      setSubtitleOverlayText("");
+      setSubtitleStatusMessage("");
+      setSubtitleStatusTone("neutral");
+      return;
+    }
+
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let statusTimer: ReturnType<typeof setTimeout> | null = null;
+    let boundTrack: TextTrack | null = null;
+
+    const getCueText = (track: TextTrack | null) => {
+      if (!track?.activeCues?.length) return "";
+      return Array.from(track.activeCues)
+        .map((cue: any) => (typeof cue?.text === "string" ? cue.text.trim() : ""))
+        .filter(Boolean)
+        .join("\n");
+    };
+
+    const bindTrack = (attempt = 0) => {
+      if (cancelled) return;
+
+      const track = getResolvedSubtitleTrack(currentHlsSubtitle);
+      if (!track) {
+        setSubtitleOverlayText("");
+        setSubtitleStatusTone("neutral");
+        setSubtitleStatusMessage("Loading subtitles...");
+        if (attempt < 8) {
+          retryTimer = setTimeout(() => bindTrack(attempt + 1), 250);
+        } else {
+          setSubtitleStatusTone("warning");
+          setSubtitleStatusMessage("Subtitle track was detected, but captions are not available for this video.");
+        }
+        return;
+      }
+
+      boundTrack = track;
+      try {
+        track.mode = "hidden";
+      } catch {}
+
+      const syncCueState = () => {
+        const cueText = getCueText(track);
+        const cueCount = track.cues?.length ?? 0;
+
+        setSubtitleOverlayText(cueText);
+
+        if (cueText) {
+          setSubtitleStatusTone("success");
+          setSubtitleStatusMessage("Subtitles are working.");
+        } else if (cueCount > 0) {
+          setSubtitleStatusTone("neutral");
+          setSubtitleStatusMessage("Subtitle track loaded. Captions will appear during dialogue.");
+        } else {
+          setSubtitleStatusTone("neutral");
+          setSubtitleStatusMessage("Loading subtitles...");
+        }
+      };
+
+      syncCueState();
+      track.addEventListener("cuechange", syncCueState as EventListener);
+
+      statusTimer = setTimeout(() => {
+        if (cancelled || !boundTrack) return;
+        const cueCount = boundTrack.cues?.length ?? 0;
+        const cueText = getCueText(boundTrack);
+        if (!cueText && cueCount === 0) {
+          setSubtitleStatusTone("warning");
+          setSubtitleStatusMessage("Subtitle track was detected, but this video does not provide usable captions.");
+        }
+      }, 2200);
+
+      return () => track.removeEventListener("cuechange", syncCueState as EventListener);
+    };
+
+    const cleanupTrack = bindTrack();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      if (statusTimer) clearTimeout(statusTimer);
+      cleanupTrack?.();
+    };
+  }, [currentHlsSubtitle, getResolvedSubtitleTrack, isHlsSrc]);
 
   // ===== HLS.js attachment =====
   // For any .m3u8 source we own playback via hls.js so the manifest's
