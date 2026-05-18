@@ -2211,6 +2211,39 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     )}
                   </div>
                 )}
+                {isHlsSrc && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
+                  <div className="relative">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowCcPanel((p) => !p); setCcTab(currentHlsSubtitle >= 0 ? "subtitle" : "audio"); setShowAudioPanel(false); setShowQualityPanel(false); setShowSettings(false); }}
+                      className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
+                    >
+                      <Subtitles className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-medium">CC</span>
+                    </button>
+                    {showCcPanel && (
+                      <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 w-[190px] max-w-[76vw] max-h-[220px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex gap-1 mb-2">
+                          <button onClick={() => setCcTab("audio")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Languages className="w-3 h-3" /> Audio</button>
+                          <button onClick={() => setCcTab("subtitle")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "subtitle" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Subtitles className="w-3 h-3" /> Subtitle</button>
+                        </div>
+                        {ccTab === "audio" ? (
+                          <div className="space-y-0.5">
+                            {hlsAudioOptions.length === 0 ? <p className="text-[10px] text-muted-foreground text-center py-3">No audio tracks in stream</p> : hlsAudioOptions.map((track, i) => (
+                              <button key={i} onClick={() => switchHlsAudio(i)} className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${currentHlsAudio === i ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}><span className="truncate flex-1 min-w-0">{track.label || track.language || `Audio ${i + 1}`}</span>{currentHlsAudio === i && <Check className="w-3 h-3 shrink-0" />}</button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="space-y-0.5">
+                            <button onClick={() => switchHlsSubtitle(-1)} className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between ${currentHlsSubtitle < 0 ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}><span>Off</span>{currentHlsSubtitle < 0 && <Check className="w-3 h-3" />}</button>
+                            {hlsSubtitleOptions.length === 0 ? <p className="text-[10px] text-muted-foreground text-center py-2">No subtitles in stream</p> : hlsSubtitleOptions.map((st) => (
+                              <button key={st.id} onClick={() => switchHlsSubtitle(st.id)} className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${currentHlsSubtitle === st.id ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}><span className="truncate flex-1 min-w-0">{st.label || st.language || `Subtitle ${st.id + 1}`}</span>{currentHlsSubtitle === st.id && <Check className="w-3 h-3 shrink-0" />}</button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <Lock className="w-3.5 h-3.5" />
                 </button>
@@ -2260,7 +2293,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-wrap justify-end max-w-[68%]">
+                  <div className="flex items-center gap-1 justify-end max-w-[72%] overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                     <span className="player-control-chip text-[10px] px-2 py-0.5 rounded shrink-0">{playbackRate}x</span>
                     {availableQualities.length > 1 && (
                       <div className="relative shrink-0">
@@ -2331,68 +2364,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         )}
                       </div>
                     )}
-                    {/* Unified CC button — HLS only (audio + subtitle tabs) */}
-                    {isHlsSrc && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
-                      <div className="relative shrink-0">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setShowCcPanel(p => !p); setShowAudioPanel(false); setShowQualityPanel(false); }}
-                          className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
-                            currentHlsSubtitle >= 0 ? "gradient-primary text-white" : "player-control-chip"
-                          }`}
-                        >
-                          <Subtitles className="w-3 h-3" /> CC
-                        </button>
-                        {showCcPanel && (
-                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 w-[200px] max-w-[78vw] max-h-[240px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex gap-1 mb-2">
-                              <button onClick={() => setCcTab("audio")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10"}`}>
-                                <Languages className="w-3 h-3" /> Audio
-                              </button>
-                              <button onClick={() => setCcTab("subtitle")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "subtitle" ? "gradient-primary text-white" : "bg-foreground/10"}`}>
-                                <Subtitles className="w-3 h-3" /> Subtitle
-                              </button>
-                            </div>
-                            {ccTab === "audio" && (
-                              <div className="space-y-0.5">
-                                {hlsAudioOptions.length === 0 ? (
-                                  <p className="text-[10px] text-muted-foreground text-center py-3">No audio tracks in stream</p>
-                                ) : hlsAudioOptions.map((track, i) => (
-                                  <button key={i} onClick={() => switchHlsAudio(i)}
-                                    className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${
-                                      currentHlsAudio === i ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                                    }`}>
-                                    <span className="truncate flex-1 min-w-0">{track.label || track.language || `Audio ${i + 1}`}</span>
-                                    {currentHlsAudio === i && <Check className="w-3 h-3 shrink-0" />}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                            {ccTab === "subtitle" && (
-                              <div className="space-y-0.5">
-                                <button onClick={() => switchHlsSubtitle(-1)}
-                                  className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between ${
-                                    currentHlsSubtitle < 0 ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                                  }`}>
-                                  <span>Off</span>
-                                  {currentHlsSubtitle < 0 && <Check className="w-3 h-3" />}
-                                </button>
-                                {hlsSubtitleOptions.length === 0 ? (
-                                  <p className="text-[10px] text-muted-foreground text-center py-2">No subtitles in stream</p>
-                                ) : hlsSubtitleOptions.map((st) => (
-                                  <button key={st.id} onClick={() => switchHlsSubtitle(st.id)}
-                                    className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${
-                                      currentHlsSubtitle === st.id ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                                    }`}>
-                                    <span className="truncate flex-1 min-w-0">{st.label || st.language || `Subtitle ${st.id + 1}`}</span>
-                                    {currentHlsSubtitle === st.id && <Check className="w-3 h-3 shrink-0" />}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
                     {onNextEpisode && (
                       <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip text-[10px] px-2 py-0.5 rounded flex items-center gap-1 transition-transform duration-150 active:scale-95 shrink-0">
                         Next <ChevronRight className="w-3 h-3" />
@@ -2424,7 +2395,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           {/* Settings panel */}
           {showSettings && (
-            <div className="absolute bottom-16 right-3 player-glass rounded-xl p-2.5 z-20 w-[210px] max-w-[78vw] max-h-[230px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute bottom-16 right-3 player-glass rounded-xl p-2.5 z-20 w-[188px] max-w-[74vw] max-h-[220px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
               <button onClick={() => setShowSettings(false)} className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-foreground/20 flex items-center justify-center hover:bg-foreground/30 transition-all">
                 <X className="w-3 h-3" />
               </button>
