@@ -883,6 +883,124 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
+  const [hlsSubtitleOptions, setHlsSubtitleOptions] = useState<HlsSubtitleOption[]>([]);
+  const [currentHlsSubtitle, setCurrentHlsSubtitle] = useState<number>(-1); // -1 = off
+  const [showSubtitlePanel, setShowSubtitlePanel] = useState(false);
+  const hlsRef = useRef<Hls | null>(null);
+
+  // ===== HLS.js attachment =====
+  // For any .m3u8 source we own playback via hls.js so the manifest's
+  // audio + subtitle renditions are exposed to our control panel. Safari
+  // (native HLS) only gets used when hls.js can't run.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !currentSrc || !isHlsSrc || isEmbedPlayback || adGateActive) {
+      // Tear down any existing instance when not in HLS mode
+      if (hlsRef.current) {
+        try { hlsRef.current.destroy(); } catch {}
+        hlsRef.current = null;
+      }
+      return;
+    }
+
+    // Safari: native HLS — still expose subtitle tracks via TextTrackList
+    if (v.canPlayType("application/vnd.apple.mpegurl") && !Hls.isSupported()) {
+      v.src = currentSrc;
+      return;
+    }
+
+    if (!Hls.isSupported()) return;
+
+    // Fresh instance per source change
+    if (hlsRef.current) {
+      try { hlsRef.current.destroy(); } catch {}
+      hlsRef.current = null;
+    }
+
+    const hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: false,
+      backBufferLength: 90,
+      maxBufferLength: 60,
+      maxMaxBufferLength: 180,
+      startLevel: -1,
+      capLevelToPlayerSize: false,
+      // Subtitles
+      renderTextTracksNatively: false,
+    });
+    hlsRef.current = hls;
+
+    hls.loadSource(currentSrc);
+    hls.attachMedia(v);
+
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      // Audio tracks → push into audio panel
+      const aTracks = hls.audioTracks || [];
+      if (aTracks.length > 0) {
+        const opts: AudioTrackOption[] = aTracks.map((t, i) => ({
+          language: t.lang || `aud${i + 1}`,
+          label: t.name || t.lang || `Audio ${i + 1}`,
+          hlsAudioIndex: i,
+        }));
+        setAudioTrackOptions(prev => {
+          const manual = prev.filter(p => p.src);
+          return [...opts, ...manual];
+        });
+        const defIdx = aTracks.findIndex((t) => (t as any).default);
+        if (defIdx >= 0) setCurrentAudioTrack(opts[defIdx].label);
+      }
+      // Subtitle tracks
+      const sTracks = hls.subtitleTracks || [];
+      if (sTracks.length > 0) {
+        setHlsSubtitleOptions(sTracks.map((t, i) => ({
+          id: i,
+          label: t.name || t.lang || `Subtitle ${i + 1}`,
+          language: t.lang || "und",
+        })));
+        // Show subtitles immediately for the default track
+        hls.subtitleDisplay = true;
+        const defS = sTracks.findIndex((t) => (t as any).default);
+        if (defS >= 0) {
+          hls.subtitleTrack = defS;
+          setCurrentHlsSubtitle(defS);
+        } else {
+          setCurrentHlsSubtitle(-1);
+        }
+      } else {
+        setHlsSubtitleOptions([]);
+        setCurrentHlsSubtitle(-1);
+      }
+      // Autoplay
+      v.play().catch(() => {});
+    });
+
+    hls.on(Hls.Events.ERROR, (_evt, data) => {
+      if (!data.fatal) return;
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        try { hls.startLoad(); } catch {}
+      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        try { hls.recoverMediaError(); } catch {}
+      } else {
+        try { hls.destroy(); } catch {}
+        hlsRef.current = null;
+      }
+    });
+
+    return () => {
+      try { hls.destroy(); } catch {}
+      if (hlsRef.current === hls) hlsRef.current = null;
+    };
+  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive]);
+
+  const switchHlsSubtitle = useCallback((idx: number) => {
+    const hls = hlsRef.current;
+    if (hls) {
+      hls.subtitleDisplay = idx >= 0;
+      hls.subtitleTrack = idx;
+    }
+    setCurrentHlsSubtitle(idx);
+    setShowSubtitlePanel(false);
+  }, []);
 
 
   // Build audio track options from props + detect native audio tracks on video load
