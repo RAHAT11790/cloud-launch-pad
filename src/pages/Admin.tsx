@@ -8157,6 +8157,18 @@ ${tgHashtags}`;
           />
         )}
 
+        {/* ==================== WEEKLY EPISODE ==================== */}
+        {activeSection === "weekly-episode" && (
+          <WeeklyEpisodeManager
+            webseriesData={webseriesData}
+            glassCard={glassCard}
+            inputClass={inputClass}
+            selectClass={selectClass}
+            btnPrimary={btnPrimary}
+            btnSecondary={btnSecondary}
+            onEditSeries={(id) => editSeries(id)}
+          />
+        )}
 
 
         {activeSection === "analytics" && (() => {
