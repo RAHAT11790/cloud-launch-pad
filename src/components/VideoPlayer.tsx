@@ -40,6 +40,7 @@ const PROXY_SERVER_LIMIT = 3;
 
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
+import { triggerBackgroundVideoDownload } from "@/lib/videoDownload";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 // Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
@@ -2407,18 +2408,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               toast.error("Direct download not available for this episode");
               return;
             }
-            const dlId = createDownloadId(title, subtitle, quality, qualitySrc);
-            const { downloadManager } = await import("@/lib/downloadManager");
-            downloadManager.enqueueDownload({
-              id: dlId,
-              url: getDownloadUrl(qualitySrc),
-              title,
-              subtitle,
-              poster,
-              quality,
-            });
+            const downloadFileName = `${title}${subtitle ? ` - ${subtitle}` : ""}${quality && quality !== "Auto" ? ` - ${quality}` : ""}.mp4`;
+            const ok = triggerBackgroundVideoDownload(getDownloadUrl(qualitySrc), downloadFileName);
+            if (!ok) return;
             setShowDownloadQualityPicker(false);
-            toast.info(`${quality} added to download queue`);
+            toast.success("Background download started");
           };
 
           // Bulk: download every episode of the current season at the chosen quality
@@ -2429,7 +2423,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               toast.error("কোন এপিসোড পাওয়া যায়নি");
               return;
             }
-            const { downloadManager } = await import("@/lib/downloadManager");
             const { toast } = await import("sonner");
             const pickEpUrl = (ep: any): string => {
               const q = quality.toLowerCase();
@@ -2449,16 +2442,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               const epUrl = pickEpUrl(ep);
               if (!epUrl || !isDownloadableUrl(epUrl)) { skipped++; continue; }
               const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
-              const epDlId = createDownloadId(title, epSubtitle, quality, epUrl);
-              downloadManager.enqueueDownload({
-                id: epDlId,
-                url: getDownloadUrl(epUrl),
-                title,
-                subtitle: epSubtitle,
-                poster,
-                quality,
-              });
-              queued++;
+              const downloadFileName = `${title} - ${epSubtitle}${quality && quality !== "Auto" ? ` - ${quality}` : ""}.mp4`;
+              const started = triggerBackgroundVideoDownload(getDownloadUrl(epUrl), downloadFileName);
+              if (started) queued++;
+              else skipped++;
             }
             setShowDownloadQualityPicker(false);
             setBulkDownloadMode(false);
