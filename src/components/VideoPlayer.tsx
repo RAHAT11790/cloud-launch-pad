@@ -749,6 +749,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Restore watch position (per-account)
   useEffect(() => {
     if (!animeId) return;
+    if (typeof initialSeekTime === "number" && initialSeekTime > 0) {
+      pendingSeek.current = initialSeekTime;
+    }
     try {
       const user = localStorage.getItem("rsanime_user");
       if (!user) return;
@@ -759,18 +762,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         fbGet(histRef).then((snap: any) => {
           if (snap.exists()) {
             const data = snap.val();
-            if (data.currentTime && data.duration && (data.currentTime / data.duration) < 0.95) {
-              pendingSeek.current = data.currentTime;
+            const resumeFrom = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : data.currentTime;
+            if (resumeFrom && data.duration && (resumeFrom / data.duration) < 0.95) {
+              pendingSeek.current = resumeFrom;
               const v = videoRef.current;
               if (v && v.duration > 0) {
-                v.currentTime = data.currentTime;
+                v.currentTime = resumeFrom;
               }
             }
           }
         });
       });
     } catch {}
-  }, [animeId]);
+  }, [animeId, initialSeekTime]);
 
   // Build quality list - 4K is premium-only
   const is4KLabel = (label: string) => /4k|2160|uhd/i.test(label);
@@ -1204,13 +1208,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setManualServerSelected(false);
     setVideoError(false);
     failedSrcsRef.current.clear();
-    pendingSeek.current = 0;
+    pendingSeek.current = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : 0;
     const t = setTimeout(() => {
       instantSwitchRef.current = false;
       setSwitchingEpisode(false);
     }, 450);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc]);
+  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, initialSeekTime]);
 
   // Loader follows real buffering state — show whenever video isn't playable, hide as soon as it can play.
   useEffect(() => {
@@ -1569,6 +1573,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     // Debounce waiting briefly to avoid flashing on tiny buffer hiccups
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
+      if (subtitleSwitchingUntilRef.current > Date.now()) return;
       if (waitingTimer) clearTimeout(waitingTimer);
       // Longer debounce — avoid flashing loader on tiny network hiccups during smooth playback
       waitingTimer = setTimeout(() => {
@@ -1580,6 +1585,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setIsBuffering(false);
     };
     const onLoadStart = () => {
+      if (subtitleSwitchingUntilRef.current > Date.now()) return;
       // Only show loader if we genuinely don't have data yet
       if (v.readyState < 2) setIsBuffering(true);
     };
@@ -1588,6 +1594,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
     let stalledTimer: ReturnType<typeof setTimeout> | null = null;
     const onStalled = () => {
+      if (subtitleSwitchingUntilRef.current > Date.now()) return;
       if (stalledTimer) clearTimeout(stalledTimer);
       stalledTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
