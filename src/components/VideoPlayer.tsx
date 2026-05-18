@@ -1456,13 +1456,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const scheduleHideTimer = useCallback(() => {
     clearHideTimer();
-    if (adGateActive || showSettings || showAudioPanel || showQualityPanel || showServerPanel || showDownloadQualityPicker) return;
+    if (adGateActive || showSettings || showAudioPanel || showQualityPanel || showServerPanel || showCcPanel || showDownloadQualityPicker) return;
     // Keep controls visible while a video error is showing — user must reach the server switcher
     if (videoError) return;
     hideTimer.current = setTimeout(() => {
       setShowControls(false);
     }, locked ? 2200 : 3800);
-  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings, videoError]);
+  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showCcPanel, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings, videoError]);
 
   const resetHideTimer = useCallback(() => {
     setShowControls(true);
@@ -1903,7 +1903,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
     setPlaybackRate(rate);
     setShowSettings(false);
-  }, [isEmbedPlayback, sendEmbedCmd]);
+    resetHideTimer();
+  }, [isEmbedPlayback, resetHideTimer, sendEmbedCmd]);
 
 
   const switchQuality = useCallback((option: QualityOption) => {
@@ -1944,6 +1945,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const isSeeking = useRef(false);
 
   const handleProgressTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
     e.stopPropagation();
     isSeeking.current = true;
     const v = videoRef.current;
@@ -1955,6 +1957,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [getSafeSeekTime, resetHideTimer]);
 
   const handleProgressTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
     e.stopPropagation();
     if (!isSeeking.current) return;
     const v = videoRef.current;
@@ -1974,9 +1977,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [getSafeSeekTime]);
 
   const handleProgressTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    e.preventDefault();
     e.stopPropagation();
     isSeeking.current = false;
-  }, []);
+    resetHideTimer();
+  }, [resetHideTimer]);
 
   const lastTap = useRef<{ time: number; x: number }>({ time: 0, x: 0 });
 
