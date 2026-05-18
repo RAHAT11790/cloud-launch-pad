@@ -1936,7 +1936,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           ) : (
             <video
               ref={videoRef}
-              src={adGateActive ? "" : currentSrc}
+              src={adGateActive || (isHlsSrc && Hls.isSupported()) ? undefined : currentSrc}
+              crossOrigin="anonymous"
               className="w-full h-full bg-black"
               style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
               playsInline
