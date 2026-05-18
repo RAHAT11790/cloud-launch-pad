@@ -2266,6 +2266,40 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         )}
                       </div>
                     )}
+                    {/* HLS subtitle / CC button */}
+                    {hlsSubtitleOptions.length > 0 && (
+                      <div className="relative">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowSubtitlePanel(p => !p); setShowAudioPanel(false); setShowQualityPanel(false); }}
+                          className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
+                            currentHlsSubtitle >= 0 ? "gradient-primary text-white" : "player-control-chip"
+                          }`}
+                        >
+                          CC {currentHlsSubtitle >= 0 ? `· ${hlsSubtitleOptions[currentHlsSubtitle]?.label?.slice(0, 8) || "On"}` : ""}
+                        </button>
+                        {showSubtitlePanel && (
+                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[160px] max-h-[240px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
+                            <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Subtitles</p>
+                            <button onClick={() => switchHlsSubtitle(-1)}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                currentHlsSubtitle < 0 ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                              }`}>
+                              <span>Off</span>
+                              {currentHlsSubtitle < 0 && <Check className="w-3 h-3" />}
+                            </button>
+                            {hlsSubtitleOptions.map((st) => (
+                              <button key={st.id} onClick={() => switchHlsSubtitle(st.id)}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                  currentHlsSubtitle === st.id ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                                }`}>
+                                <span>📝 {st.label}</span>
+                                {currentHlsSubtitle === st.id && <Check className="w-3 h-3" />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {onNextEpisode && (
                       <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip text-[10px] px-2 py-0.5 rounded flex items-center gap-1 transition-transform duration-150 active:scale-95">
                         Next <ChevronRight className="w-3 h-3" />
