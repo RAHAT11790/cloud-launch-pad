@@ -1072,8 +1072,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       maxMaxBufferLength: 180,
       startLevel: -1,
       capLevelToPlayerSize: false,
-      // Subtitles — let the browser render WEBVTT cues natively
-      renderTextTracksNatively: true,
+      // Keep subtitle handling inside our custom overlay so the native track UI
+      // does not silently hide cues on Android Chrome.
+      renderTextTracksNatively: false,
     });
     hlsRef.current = hls;
 
