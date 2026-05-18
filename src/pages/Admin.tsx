@@ -4809,7 +4809,21 @@ ${tgHashtags}`;
                           )}
                           {expandedSeasons[sIdx] && (
                             <div>
-                              {season.episodes.map((ep, eIdx) => (
+                              {/* Quick Add Episode (TOP) — fast workflow: add new ep without scrolling */}
+                              <button onClick={() => addEpisode(sIdx)}
+                                className="w-full mb-3 py-3 rounded-lg text-[12px] font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/20">
+                                <Plus size={13} /> Add Episode {(season.episodes?.length || 0) + 1} (Quick)
+                              </button>
+                              {season.episodes.length > 0 && (
+                                <p className="text-[10px] text-zinc-500 mb-2 px-1">
+                                  Showing newest first • {season.episodes.length} episode{season.episodes.length === 1 ? "" : "s"}
+                                </p>
+                              )}
+                              {season.episodes
+                                .map((ep, eIdx) => ({ ep, eIdx }))
+                                .slice()
+                                .reverse()
+                                .map(({ ep, eIdx }) => (
                                 <div key={eIdx} className="mb-3 bg-white/[0.03] px-3 py-3 rounded-lg border border-white/5">
                                   <div className="flex items-center justify-between mb-2">
                                     <span className="text-xs font-semibold text-purple-400">Episode {ep.episodeNumber}</span>
@@ -4899,7 +4913,6 @@ ${tgHashtags}`;
                                   </div>
                                 </div>
                               ))}
-                              <button onClick={() => addEpisode(sIdx)} className={`${btnSecondary} w-full py-2.5 text-xs mt-2`}><Plus size={12} className="mr-1" /> Add Episode</button>
                             </div>
                           )}
                         </div>
