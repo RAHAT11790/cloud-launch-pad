@@ -1,5 +1,5 @@
 // Global singleton download manager - state persists across navigation
-import { saveVideo, downloadWithProgress } from "./downloadStore";
+import { hasDownload, saveVideo, downloadWithProgress } from "./downloadStore";
 
 export interface ActiveDownload {
   id: string;
@@ -20,6 +20,13 @@ const createFileSafeName = (value: string) =>
     .replace(/[^a-zA-Z0-9\s\-_]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+
+const buildFileName = (title: string, subtitle?: string, quality?: string) => {
+  const parts = [title, subtitle, quality && quality !== "Auto" ? quality : ""]
+    .map((part) => createFileSafeName(String(part || "")))
+    .filter(Boolean);
+  return `${parts.join(" - ") || "video"}.mp4`;
+};
 
 class DownloadManager {
   private active = new Map<string, ActiveDownload>();
@@ -79,6 +86,12 @@ class DownloadManager {
     const entry = this.active.get(id);
     const pausedInfo = this.pausedUrls.get(id);
     if (!entry || entry.status !== "paused" || !pausedInfo) return;
+    if (await hasDownload(id)) {
+      this.pausedUrls.delete(id);
+      this.active.delete(id);
+      this.notify();
+      return;
+    }
 
     const abortController = new AbortController();
     this.abortControllers.set(id, abortController);
@@ -99,14 +112,11 @@ class DownloadManager {
       this.abortControllers.delete(id);
       this.pausedUrls.delete(id);
 
-      const qualitySuffix = entry.quality && entry.quality !== "Auto" ? ` - ${entry.quality}` : "";
-      const safeName = createFileSafeName(`${entry.title}${entry.subtitle ? ` - ${entry.subtitle}` : ""}${qualitySuffix}`) || "video";
-      const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
-      const fileName = `${safeName}-${stamp}.mp4`;
+      const fileName = buildFileName(entry.title, entry.subtitle, entry.quality);
 
       await saveVideo({
         id, title: entry.title, subtitle: entry.subtitle, poster: entry.poster,
-        quality: entry.quality, fileName, size: blob.size, downloadedAt: Date.now(), blob,
+        quality: entry.quality, fileName, sourceUrl: pausedInfo.url, size: blob.size, downloadedAt: Date.now(), blob,
       });
 
       const blobUrl = URL.createObjectURL(blob);
@@ -146,6 +156,7 @@ class DownloadManager {
     const { id, url, title, subtitle, poster, quality } = params;
 
     if (this.isDownloading(id)) return;
+    if (await hasDownload(id)) return;
 
     // If paused, resume instead
     if (this.active.get(id)?.status === "paused") {
@@ -177,13 +188,11 @@ class DownloadManager {
       this.abortControllers.delete(id);
       this.pausedUrls.delete(id);
 
-      const qualitySuffix = quality && quality !== "Auto" ? ` - ${quality}` : "";
-      const safeName = createFileSafeName(`${title}${subtitle ? ` - ${subtitle}` : ""}${qualitySuffix}`) || "video";
-      const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
-      const fileName = `${safeName}-${stamp}.mp4`;
+      const fileName = buildFileName(title, subtitle, quality);
 
       await saveVideo({
         id, title, subtitle, poster, quality, fileName,
+        sourceUrl: url,
         size: blob.size,
         downloadedAt: Date.now(),
         blob,
@@ -270,21 +279,25 @@ class DownloadManager {
     if (this.active.has(params.id)) return;
     if (this.queue.find(q => q.id === params.id)) return;
 
-    this.queue.push(params);
-    // Show as a placeholder "queued" entry so UI lists it
-    this.active.set(params.id, {
-      id: params.id,
-      title: params.title,
-      subtitle: params.subtitle,
-      poster: params.poster,
-      quality: params.quality,
-      percent: 0,
-      loadedMB: 0,
-      totalMB: 0,
-      status: "paused", // visually "waiting"
+    hasDownload(params.id).then((exists) => {
+      if (exists) return;
+
+      this.queue.push(params);
+      // Show as a placeholder "queued" entry so UI lists it
+      this.active.set(params.id, {
+        id: params.id,
+        title: params.title,
+        subtitle: params.subtitle,
+        poster: params.poster,
+        quality: params.quality,
+        percent: 0,
+        loadedMB: 0,
+        totalMB: 0,
+        status: "paused", // visually "waiting"
+      });
+      this.notify();
+      this.processQueue();
     });
-    this.notify();
-    this.processQueue();
   }
 
   private async processQueue() {
