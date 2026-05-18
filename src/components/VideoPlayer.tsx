@@ -4,7 +4,7 @@ import { useBranding } from "@/hooks/useBranding";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock,
-  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server
+  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Languages, Captions
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
@@ -260,6 +260,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const sourceBaseRef = useRef(src);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
+  const hasCombinedTrackControls = isHlsSrc && (audioTrackOptions.length > 0 || hlsSubtitleOptions.length > 0);
+  const activeSubtitleLabel = currentHlsSubtitle >= 0 ? (hlsSubtitleOptions[currentHlsSubtitle]?.label || "On") : "Off";
 
   // ===== AN iframe minimal overlay auto-hide =====
   // Buttons start visible, then auto-hide after 3s. Tapping the iframe area
@@ -2114,12 +2116,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}
             >
               {/* Top controls */}
-              <div className="flex justify-end gap-2 p-3">
+              <div className="flex justify-end gap-2 p-3 flex-wrap">
                 <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95">
                   <Crop className="w-3.5 h-3.5" />
                   <span className="text-[10px] font-medium">{cropLabels[cropIndex]}</span>
                 </button>
-                {effectiveVideoServers.length > 1 && !noServerSwitch && (
+                {isHlsSrc ? (
+                  <span className="player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 text-[10px] font-medium">
+                    <Server className="w-3.5 h-3.5" />
+                    RS HLS
+                  </span>
+                ) : effectiveVideoServers.length > 1 && !noServerSwitch && (
                   <div className="relative">
                     <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
@@ -2158,6 +2165,72 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             </button>
                           );
                         })}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {hasCombinedTrackControls && (
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowAudioPanel((prev) => !prev);
+                        setShowSubtitlePanel(false);
+                        setShowQualityPanel(false);
+                      }}
+                      className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${currentAudioTrack !== "Default" || currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
+                    >
+                      <Languages className="w-3.5 h-3.5" />
+                      <Captions className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-medium">Audio · Sub</span>
+                    </button>
+                    {showAudioPanel && (
+                      <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[190px] max-h-[280px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
+                        {audioTrackOptions.length > 0 && (
+                          <>
+                            <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio</p>
+                            <button onClick={resetToDefaultAudio}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                              }`}>
+                              <span>Default</span>
+                              {currentAudioTrack === "Default" && <Check className="w-3 h-3" />}
+                            </button>
+                            {audioTrackOptions.map((track, idx) => (
+                              <button key={idx} onClick={() => switchAudioTrack(track)}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                  currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                                }`}>
+                                <span>{track.label}</span>
+                                {currentAudioTrack === track.label && <Check className="w-3 h-3" />}
+                              </button>
+                            ))}
+                          </>
+                        )}
+                        {hlsSubtitleOptions.length > 0 && (
+                          <>
+                            <p className="text-[9px] text-muted-foreground my-1.5 px-2 uppercase tracking-wider font-medium">Subtitle</p>
+                            <button onClick={() => switchHlsSubtitle(-1)}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                currentHlsSubtitle < 0 ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                              }`}>
+                              <span>Off</span>
+                              {currentHlsSubtitle < 0 && <Check className="w-3 h-3" />}
+                            </button>
+                            {hlsSubtitleOptions.map((track) => (
+                              <button key={track.id} onClick={() => switchHlsSubtitle(track.id)}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                  currentHlsSubtitle === track.id ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                                }`}>
+                                <span>{track.label}</span>
+                                {currentHlsSubtitle === track.id && <Check className="w-3 h-3" />}
+                              </button>
+                            ))}
+                          </>
+                        )}
+                        {audioTrackOptions.length === 0 && hlsSubtitleOptions.length > 0 && (
+                          <p className="px-2 pb-1 text-[10px] text-muted-foreground">Subtitle: {activeSubtitleLabel}</p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2249,7 +2322,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       </div>
                     )}
                     {/* Audio track button */}
-                    {audioTrackOptions.length > 0 && (
+                    {audioTrackOptions.length > 0 && !hasCombinedTrackControls && (
                       <div className="relative">
                         <button
                           onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); }}
@@ -2285,7 +2358,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       </div>
                     )}
                     {/* HLS subtitle / CC button */}
-                    {hlsSubtitleOptions.length > 0 && (
+                    {hlsSubtitleOptions.length > 0 && !hasCombinedTrackControls && (
                       <div className="relative">
                         <button
                           onClick={(e) => { e.stopPropagation(); setShowSubtitlePanel(p => !p); setShowAudioPanel(false); setShowQualityPanel(false); }}
