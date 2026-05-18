@@ -323,10 +323,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     } catch { /* noop */ }
   }, []);
 
+  // HLS / m3u8 detection — these MUST go through native <video>+hls.js, never iframe,
+  // so the player controls (audio track / subtitle / quality / seek) keep working.
+  const isHlsSrc = useMemo(
+    () => !!currentSrc && /\.m3u8(\?|#|$)/i.test(currentSrc),
+    [currentSrc],
+  );
+
   // Iframe is the active playback surface when currentSrc points to hf.space
+  // (BUT not for direct .m3u8 — those play natively via hls.js).
   const isEmbedPlayback = useMemo(
-    () => !!currentSrc && (forceEmbedMode || /hf\.space|huggingface/i.test(currentSrc)),
-    [currentSrc, forceEmbedMode],
+    () => !!currentSrc && !isHlsSrc && (forceEmbedMode || /hf\.space|huggingface/i.test(currentSrc)),
+    [currentSrc, forceEmbedMode, isHlsSrc],
   );
 
   // Initial 3s show + iframe-tap detection via window blur (iframe steals focus
