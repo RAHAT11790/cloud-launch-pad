@@ -900,8 +900,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [subtitleOverlayText, setSubtitleOverlayText] = useState("");
   const [subtitleStatusMessage, setSubtitleStatusMessage] = useState("");
   const [subtitleStatusTone, setSubtitleStatusTone] = useState<"neutral" | "success" | "warning">("neutral");
+  const [subtitleCueVersion, setSubtitleCueVersion] = useState(0);
   const hlsRef = useRef<Hls | null>(null);
   const hlsSubtitleMetaRef = useRef<HlsSubtitleOption[]>([]);
+  const subtitleCueListRef = useRef<Array<{ start: number; end: number; text: string }>>([]);
+  const subtitlePollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const subtitleSwitchingUntilRef = useRef(0);
 
   const getSubtitleTextTracks = useCallback(() => {
