@@ -1094,11 +1094,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
       const refreshHlsSubs = () => {
       const sTracks = hls.subtitleTracks || [];
-      setHlsSubtitleOptions(sTracks.map((t, i) => ({
+      const nextSubtitleOptions = sTracks.map((t, i) => ({
         id: i,
         label: t.name || t.lang || `Subtitle ${i + 1}`,
         language: t.lang || "und",
-      })));
+      }));
+      hlsSubtitleMetaRef.current = nextSubtitleOptions;
+      setHlsSubtitleOptions(nextSubtitleOptions);
       if (sTracks.length === 0) {
         setCurrentHlsSubtitle(-1);
         return;
@@ -1166,6 +1168,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const switchHlsSubtitle = useCallback((idx: number) => {
     const hls = hlsRef.current;
     subtitleSwitchingUntilRef.current = Date.now() + 1600;
+    setSubtitleOverlayText("");
+    setSubtitleStatusTone(idx >= 0 ? "neutral" : "success");
+    setSubtitleStatusMessage(idx >= 0 ? "Loading subtitles..." : "Subtitles turned off.");
     if (hls) {
       hls.subtitleDisplay = idx >= 0;
       hls.subtitleTrack = idx;
@@ -2046,6 +2051,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const handleTouchEnd = useCallback(() => setSwipeState(null), []);
   const stopPanelPointerPropagation = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+  }, []);
+
+  const stopPanelWheelPropagation = useCallback((e: React.WheelEvent) => {
     e.stopPropagation();
   }, []);
 
