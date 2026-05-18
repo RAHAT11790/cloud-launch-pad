@@ -2369,10 +2369,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         Next <ChevronRight className="w-3 h-3" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       <Settings className="w-3 h-3" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       {isFullscreen ? <Minimize className="w-3 h-3" /> : <Maximize className="w-3 h-3" />}
                     </button>
                   </div>
