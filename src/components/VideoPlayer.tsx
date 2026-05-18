@@ -883,8 +883,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
+  const [hlsAudioOptions, setHlsAudioOptions] = useState<AudioTrackOption[]>([]);
+  const [currentHlsAudio, setCurrentHlsAudio] = useState<number>(-1);
   const [hlsSubtitleOptions, setHlsSubtitleOptions] = useState<HlsSubtitleOption[]>([]);
   const [currentHlsSubtitle, setCurrentHlsSubtitle] = useState<number>(-1); // -1 = off
+  const [showCcPanel, setShowCcPanel] = useState(false);
+  const [ccTab, setCcTab] = useState<"audio" | "subtitle">("audio");
   const [showSubtitlePanel, setShowSubtitlePanel] = useState(false);
   const hlsRef = useRef<Hls | null>(null);
 
