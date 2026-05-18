@@ -4038,6 +4038,7 @@ ${tgHashtags}`;
     { section: "dashboard", icon: <LayoutDashboard size={16} />, label: "Dashboard" },
     { section: "categories", icon: <FolderOpen size={16} />, label: "Categories" },
     { section: "webseries", icon: <Film size={16} />, label: "Web Series" },
+    { section: "weekly-episode", icon: <CalendarDays size={16} />, label: "Weekly Episode" },
     { section: "movies", icon: <Video size={16} />, label: "Movies" },
     { section: "users", icon: <Users size={16} />, label: "Users" },
     { section: "comments", icon: <MessageCircle size={16} />, label: "Comments", group: "New Features" },
