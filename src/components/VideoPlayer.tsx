@@ -1112,6 +1112,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         id: i,
         label: t.name || t.lang || `Subtitle ${i + 1}`,
         language: t.lang || "und",
+        url: t.url,
       }));
       hlsSubtitleMetaRef.current = nextSubtitleOptions;
       setHlsSubtitleOptions(nextSubtitleOptions);
@@ -1124,7 +1125,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (defS >= 0) {
         hls.subtitleTrack = defS;
         setCurrentHlsSubtitle(defS);
-        window.setTimeout(() => syncNativeSubtitleVisibility(defS), 0);
       }
     };
 
@@ -1139,7 +1139,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_e, d: any) => {
       if (typeof d?.id === "number") {
         setCurrentHlsSubtitle(d.id);
-        window.setTimeout(() => syncNativeSubtitleVisibility(d.id), 0);
       }
     });
 
@@ -1175,7 +1174,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       try { hls.destroy(); } catch {}
       if (hlsRef.current === hls) hlsRef.current = null;
     };
-  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive, syncNativeSubtitleVisibility]);
+  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive]);
 
   // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
   // users reported when returning to home. Detaches HLS, clears <video>, kills timers.
@@ -1205,10 +1204,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       hls.subtitleDisplay = idx >= 0;
       hls.subtitleTrack = idx;
     }
-    syncNativeSubtitleVisibility(idx);
     setCurrentHlsSubtitle(idx);
     setIsBuffering(false);
-  }, [syncNativeSubtitleVisibility]);
+  }, []);
 
   const switchHlsAudio = useCallback((idx: number) => {
     const hls = hlsRef.current;
