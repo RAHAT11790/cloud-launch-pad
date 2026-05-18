@@ -1131,6 +1131,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     hls.on(Hls.Events.ERROR, (_evt, data) => {
       if (!data.fatal) return;
+      const recoverableTrackDetails = new Set([
+        Hls.ErrorDetails.SUBTITLE_LOAD_ERROR,
+        Hls.ErrorDetails.SUBTITLE_TRACK_LOAD_TIMEOUT,
+        Hls.ErrorDetails.AUDIO_TRACK_LOAD_ERROR,
+        Hls.ErrorDetails.AUDIO_TRACK_LOAD_TIMEOUT,
+      ]);
+
+      if (recoverableTrackDetails.has(data.details as any)) {
+        if (data.details === Hls.ErrorDetails.SUBTITLE_LOAD_ERROR || data.details === Hls.ErrorDetails.SUBTITLE_TRACK_LOAD_TIMEOUT) {
+          setSubtitleStatusTone("warning");
+          setSubtitleStatusMessage("This subtitle track could not be loaded from the stream.");
+          setSubtitleOverlayText("");
+        }
+        return;
+      }
+
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
         try { hls.startLoad(); } catch {}
       } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
