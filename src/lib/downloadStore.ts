@@ -10,6 +10,7 @@ export interface DownloadedVideo {
   poster?: string;
   quality?: string;
   fileName: string;
+  sourceUrl?: string;
   size: number;
   downloadedAt: number;
   blob?: Blob;
@@ -47,6 +48,21 @@ export async function getVideoBlob(id: string): Promise<Blob | null> {
     req.onsuccess = () => resolve(req.result?.blob || null);
     req.onerror = () => reject(req.error);
   });
+}
+
+export async function getDownload(id: string): Promise<DownloadedVideo | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const req = tx.objectStore(STORE_NAME).get(id);
+    req.onsuccess = () => resolve((req.result as DownloadedVideo | undefined) || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function hasDownload(id: string): Promise<boolean> {
+  const item = await getDownload(id);
+  return !!item?.blob;
 }
 
 export async function getAllDownloads(): Promise<DownloadedVideo[]> {
