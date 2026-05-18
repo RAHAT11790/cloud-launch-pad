@@ -1093,7 +1093,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setCurrentHlsAudio(active >= 0 ? active : (opts.length > 0 ? 0 : -1));
     };
 
-      const refreshHlsSubs = () => {
+    const refreshHlsSubs = () => {
       const sTracks = hls.subtitleTracks || [];
       const nextSubtitleOptions = sTracks.map((t, i) => ({
         id: i,
@@ -1111,7 +1111,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (defS >= 0) {
         hls.subtitleTrack = defS;
         setCurrentHlsSubtitle(defS);
-          window.setTimeout(() => syncNativeSubtitleVisibility(defS), 0);
+        window.setTimeout(() => syncNativeSubtitleVisibility(defS), 0);
       }
     };
 
