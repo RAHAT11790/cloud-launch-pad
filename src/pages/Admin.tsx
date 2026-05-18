@@ -4698,7 +4698,7 @@ ${tgHashtags}`;
                       )}
                     </div>
 
-                    <div className={`${glassCard} p-4 mb-4`}>
+                    <div id="seasons-episodes-section" className={`${glassCard} p-4 mb-4 scroll-mt-4`}>
                       <div className="flex justify-between items-center mb-3.5">
                         <div className="text-base font-semibold flex items-center gap-2.5">📋 Seasons & Episodes</div>
                         <div className="flex gap-1.5 items-center">
