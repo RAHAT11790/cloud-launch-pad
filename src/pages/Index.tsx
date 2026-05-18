@@ -506,14 +506,6 @@ const Index = () => {
   }, [playerState]);
 
   useEffect(() => {
-    if (!playerState) return;
-    const seasonQuery = playerState.seasonIdx !== undefined ? `&season=${playerState.seasonIdx}` : "";
-    const episodeQuery = playerState.epIdx !== undefined ? `&episode=${playerState.epIdx}` : "";
-    navigate(`/video?anime=${playerState.anime.id}${seasonQuery}${episodeQuery}`);
-    setPlayerState(null);
-  }, [navigate, playerState]);
-
-  useEffect(() => {
     try {
       if (saltPlayerState) {
         const { loading, ...rest } = saltPlayerState;
@@ -1241,18 +1233,106 @@ const Index = () => {
     dismissDetailsLoadingToast();
 
     let src = "";
+    let subtitle = "";
+    let qualityOptions: { label: string; src: string }[] = [];
+    let audioTracks: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[] | undefined;
     if (anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined) {
       const season = anime.seasons[seasonIdx];
       const episode = season.episodes[epIdx];
       src = getEpisodeSrc(episode);
-    } else if (anime.movieLink) {
-      src = getMovieSrc(anime);
+      subtitle = `${season.name} - Episode ${episode.episodeNumber}`;
+      if (episode.link480) qualityOptions.push({ label: "480p", src: episode.link480 });
+      if (episode.link720) qualityOptions.push({ label: "720p", src: episode.link720 });
+      if (episode.link1080) qualityOptions.push({ label: "1080p", src: episode.link1080 });
+      if (episode.link4k) qualityOptions.push({ label: "4K", src: episode.link4k });
+      if (episode.audioTracks?.length) audioTracks = episode.audioTracks;
+      } else if (anime.movieLink) {
+        src = getMovieSrc(anime);
+      subtitle = "Movie";
+        if (!isInvalidPlaybackUrl(anime.movieLink480)) qualityOptions.push({ label: "480p", src: anime.movieLink480! });
+        if (!isInvalidPlaybackUrl(anime.movieLink720)) qualityOptions.push({ label: "720p", src: anime.movieLink720! });
+        if (!isInvalidPlaybackUrl(anime.movieLink1080)) qualityOptions.push({ label: "1080p", src: anime.movieLink1080! });
+        if (!isInvalidPlaybackUrl(anime.movieLink4k)) qualityOptions.push({ label: "4K", src: anime.movieLink4k! });
+    }
+
+    // Handle AnimeSalt video - check ad-gate first
+    if (src.startsWith("animesalt://")) {
+      const hasAccess = await checkAndShowAdGate(anime, seasonIdx, epIdx);
+      if (!hasAccess) return;
+      const epSlug = src.replace("animesalt://", "");
+      try {
+        const result = await cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug));
+        const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result);
+        if (primarySrc) {
+          // Save to watch history for Continue Watching
+          addToWatchHistory(anime, seasonIdx, epIdx, true);
+          setPlayerState({
+            src: primarySrc,
+            title: anime.title,
+            subtitle: subtitle || `Episode`,
+            anime,
+            seasonIdx,
+            epIdx,
+            qualityOptions: sourceOptions,
+            nextEpisodeSrc:
+              anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined
+                ? getEpisodeSrc(anime.seasons[seasonIdx]?.episodes?.[epIdx + 1] as Episode)
+                : undefined,
+          } as any);
+          setSelectedAnime(null);
+        } else {
+          toast.error("Video source not found");
+        }
+      } catch {
+        toast.error("Failed to load video");
+      }
+      return;
+    }
+
+    // Handle AnimeSalt movie playback
+    if (src.startsWith("animesalt_movie://")) {
+      const hasAccess = await checkAndShowAdGate(anime, seasonIdx, epIdx);
+      if (!hasAccess) return;
+      const movieSlug = src.replace("animesalt_movie://", "");
+      try {
+        const result = await cachedApiCall(`movie_${movieSlug}`, () => animeSaltApi.getMovie(movieSlug));
+        const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result.success ? result.data : result);
+        if (primarySrc) {
+          addToWatchHistory(anime, undefined, undefined, true);
+          setPlayerState({
+            src: primarySrc,
+            title: anime.title,
+            subtitle: "Movie",
+            anime,
+            qualityOptions: sourceOptions,
+          } as any);
+          setSelectedAnime(null);
+        } else {
+          toast.error("Movie source not found");
+        }
+      } catch {
+        toast.error("Failed to load movie");
+      }
+      return;
     }
 
     if (src) {
       addToWatchHistory(anime, seasonIdx, epIdx);
+      setPlayerState({
+        src,
+        title: anime.title,
+        subtitle,
+        anime,
+        seasonIdx,
+        epIdx,
+        qualityOptions,
+        audioTracks,
+        nextEpisodeSrc:
+          anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined
+            ? getEpisodeSrc(anime.seasons[seasonIdx]?.episodes?.[epIdx + 1] as Episode)
+            : undefined,
+      });
       setSelectedAnime(null);
-      navigate(`/video?anime=${anime.id}${seasonIdx !== undefined ? `&season=${seasonIdx}` : ""}${epIdx !== undefined ? `&episode=${epIdx}` : ""}`);
     }
   };
 
@@ -2025,7 +2105,64 @@ const Index = () => {
   // hero slider, sections, etc.) so nothing runs in the background. This is the
   // "separate page" the user has been asking for — same React tree, but the
   // home UI no longer renders, eliminating leaks and CPU drain.
-  if (playerState) return null;
+  if (playerState) {
+    return (
+      <div className="fixed inset-0 z-[100] bg-black">
+        <VideoPlayer
+          src={playerState.src}
+          title={playerState.title}
+          subtitle={playerState.subtitle}
+          poster={playerState.anime.poster}
+          onClose={() => { setPlayerState(null); }}
+          qualityOptions={playerState.qualityOptions}
+          audioTracks={playerState.audioTracks}
+          animeId={playerState.anime.id}
+          onSaveProgress={saveVideoProgress}
+          onNextEpisode={
+            playerState.anime.type === "webseries" && playerState.seasonIdx !== undefined && playerState.epIdx !== undefined
+              ? async () => {
+                  const season = playerState.anime.seasons![playerState.seasonIdx!];
+                  const nextIdx = (playerState.epIdx! + 1) % season.episodes.length;
+                  const nextEp = season.episodes[nextIdx];
+                  const hasAccess = await checkAndShowAdGate(playerState.anime, playerState.seasonIdx, nextIdx);
+                  if (!hasAccess) return;
+                  let nextSrc = getEpisodeSrc(nextEp);
+                  let qOpts = getEpisodeQualityOptions(nextEp);
+                  if (playerState.anime.source === "animesalt" && String(nextEp.link || "").startsWith("animesalt://")) {
+                    const epSlug = String(nextEp.link).replace("animesalt://", "");
+                    try {
+                      const epResult = await animeSaltApi.getEpisode(epSlug);
+                      const embedServers = (epResult.allEmbeds || [epResult.embedUrl]).filter(Boolean);
+                      nextSrc = epResult.embedUrl || nextSrc;
+                      qOpts = embedServers.length > 1
+                        ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
+                        : [];
+                    } catch {}
+                  }
+                  addToWatchHistory(playerState.anime, playerState.seasonIdx, nextIdx);
+                  setPlayerState({
+                    ...playerState,
+                    src: nextSrc,
+                    subtitle: `${season.name} - Episode ${nextEp.episodeNumber}`,
+                    epIdx: nextIdx,
+                    qualityOptions: qOpts.length > 0 ? qOpts : undefined,
+                    nextEpisodeSrc: undefined,
+                  });
+                }
+              : undefined
+          }
+          episodeList={currentEpisodeList}
+          seasons={playerState.anime.seasons}
+          currentSeasonIdx={playerState.seasonIdx}
+          onSeasonChange={handleVideoPlayerSeasonChange}
+          suggestedAnime={[]}
+          onSuggestedClick={(anime) => { setPlayerState(null); handleCardClick(anime); }}
+          nextEpisodeSrc={playerState.nextEpisodeSrc}
+          forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background" style={customBgImage ? { backgroundImage: `url(${customBgImage})`, backgroundSize: 'cover', backgroundAttachment: 'fixed', backgroundPosition: 'center' } : undefined}>
