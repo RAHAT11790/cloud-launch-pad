@@ -925,8 +925,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       maxMaxBufferLength: 180,
       startLevel: -1,
       capLevelToPlayerSize: false,
-      // Subtitles
-      renderTextTracksNatively: false,
+      // Subtitles — let the browser render WEBVTT cues natively
+      renderTextTracksNatively: true,
     });
     hlsRef.current = hls;
 
