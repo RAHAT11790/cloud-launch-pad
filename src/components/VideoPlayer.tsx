@@ -2229,7 +2229,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end max-w-[68%]">
                     <span className="player-control-chip text-[10px] px-2 py-0.5 rounded">{playbackRate}x</span>
                     {availableQualities.length > 1 && (
                       <div className="relative">
