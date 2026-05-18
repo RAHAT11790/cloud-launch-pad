@@ -2230,9 +2230,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     </button>
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap justify-end max-w-[68%]">
-                    <span className="player-control-chip text-[10px] px-2 py-0.5 rounded">{playbackRate}x</span>
+                    <span className="player-control-chip text-[10px] px-2 py-0.5 rounded shrink-0">{playbackRate}x</span>
                     {availableQualities.length > 1 && (
-                      <div className="relative">
+                      <div className="relative shrink-0">
                         <button
                           onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); }}
                           className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all ${
