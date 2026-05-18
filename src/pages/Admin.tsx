@@ -4332,8 +4332,45 @@ ${tgHashtags}`;
               ))}
             </div>
 
-            <div className={`${glassCard} p-4 mb-3`}>
-              <h3 className="text-sm font-semibold mb-2.5">User Activity</h3>
+            {/* Weekly Episode preview (between Series stats and Telegram quick action area) */}
+            <div className={`${glassCard} p-4 mb-3 relative overflow-hidden`}>
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                      <CalendarDays size={16} className="text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Weekly Episode</h3>
+                      <p className="text-[10.5px] text-zinc-400">Today ({todayDayName}) — {todayScheduled.length} scheduled</p>
+                    </div>
+                  </div>
+                  <button onClick={() => showSection("weekly-episode")}
+                    className="text-[11px] font-semibold text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 px-2.5 py-1.5 rounded-lg flex items-center gap-1 hover:bg-indigo-500/25 transition">
+                    Manage <ChevronRight size={12} />
+                  </button>
+                </div>
+
+                {todayScheduled.length === 0 ? (
+                  <button onClick={() => showSection("weekly-episode")}
+                    className="w-full text-[12px] text-zinc-400 bg-[#141422] border border-dashed border-white/10 hover:border-indigo-500/40 rounded-lg py-4">
+                    No anime scheduled for today — tap to add
+                  </button>
+                ) : (
+                  <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1 pb-1">
+                    {todayScheduled.slice(0, 8).map((it: any) => (
+                      <button key={it.seriesId} onClick={() => showSection("weekly-episode")}
+                        className="flex-shrink-0 w-[78px] group">
+                        <img src={it.poster || ""} className="w-[78px] h-[108px] rounded-lg object-cover border border-white/8 group-hover:border-indigo-500/50 transition"
+                          onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/78x108/141422/6366f1?text=N"; }} />
+                        <p className="text-[10px] text-zinc-300 truncate mt-1">{it.title}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
               <div className="flex gap-4 items-center">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full bg-green-500" />
