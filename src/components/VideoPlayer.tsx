@@ -2302,36 +2302,64 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         )}
                       </div>
                     )}
-                    {/* HLS subtitle / CC button */}
-                    {hlsSubtitleOptions.length > 0 && (
+                    {/* Unified CC button — HLS only (audio + subtitle tabs) */}
+                    {isHlsSrc && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
                       <div className="relative">
                         <button
-                          onClick={(e) => { e.stopPropagation(); setShowSubtitlePanel(p => !p); setShowAudioPanel(false); setShowQualityPanel(false); }}
+                          onClick={(e) => { e.stopPropagation(); setShowCcPanel(p => !p); setShowAudioPanel(false); setShowQualityPanel(false); }}
                           className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
                             currentHlsSubtitle >= 0 ? "gradient-primary text-white" : "player-control-chip"
                           }`}
                         >
-                          CC {currentHlsSubtitle >= 0 ? `· ${hlsSubtitleOptions[currentHlsSubtitle]?.label?.slice(0, 8) || "On"}` : ""}
+                          <Subtitles className="w-3 h-3" /> CC
                         </button>
-                        {showSubtitlePanel && (
-                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[160px] max-h-[240px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
-                            <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Subtitles</p>
-                            <button onClick={() => switchHlsSubtitle(-1)}
-                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
-                                currentHlsSubtitle < 0 ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                              }`}>
-                              <span>Off</span>
-                              {currentHlsSubtitle < 0 && <Check className="w-3 h-3" />}
-                            </button>
-                            {hlsSubtitleOptions.map((st) => (
-                              <button key={st.id} onClick={() => switchHlsSubtitle(st.id)}
-                                className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
-                                  currentHlsSubtitle === st.id ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                                }`}>
-                                <span>📝 {st.label}</span>
-                                {currentHlsSubtitle === st.id && <Check className="w-3 h-3" />}
+                        {showCcPanel && (
+                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[200px] max-h-[280px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex gap-1 mb-2">
+                              <button onClick={() => setCcTab("audio")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10"}`}>
+                                <Languages className="w-3 h-3" /> Audio
                               </button>
-                            ))}
+                              <button onClick={() => setCcTab("subtitle")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "subtitle" ? "gradient-primary text-white" : "bg-foreground/10"}`}>
+                                <Subtitles className="w-3 h-3" /> Subtitle
+                              </button>
+                            </div>
+                            {ccTab === "audio" && (
+                              <div className="space-y-0.5">
+                                {hlsAudioOptions.length === 0 ? (
+                                  <p className="text-[10px] text-muted-foreground text-center py-3">No audio tracks in stream</p>
+                                ) : hlsAudioOptions.map((track, i) => (
+                                  <button key={i} onClick={() => switchHlsAudio(i)}
+                                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                      currentHlsAudio === i ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                                    }`}>
+                                    <span>🎧 {track.label} {track.language && track.language !== track.label ? `· ${track.language}` : ""}</span>
+                                    {currentHlsAudio === i && <Check className="w-3 h-3" />}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {ccTab === "subtitle" && (
+                              <div className="space-y-0.5">
+                                <button onClick={() => switchHlsSubtitle(-1)}
+                                  className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                    currentHlsSubtitle < 0 ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                                  }`}>
+                                  <span>Off</span>
+                                  {currentHlsSubtitle < 0 && <Check className="w-3 h-3" />}
+                                </button>
+                                {hlsSubtitleOptions.length === 0 ? (
+                                  <p className="text-[10px] text-muted-foreground text-center py-2">No subtitles in stream</p>
+                                ) : hlsSubtitleOptions.map((st) => (
+                                  <button key={st.id} onClick={() => switchHlsSubtitle(st.id)}
+                                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                      currentHlsSubtitle === st.id ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                                    }`}>
+                                    <span>📝 {st.label} {st.language && st.language !== st.label ? `· ${st.language}` : ""}</span>
+                                    {currentHlsSubtitle === st.id && <Check className="w-3 h-3" />}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
