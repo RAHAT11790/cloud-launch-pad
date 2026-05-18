@@ -1587,6 +1587,7 @@ const Index = () => {
       if (src) {
         const hasAccess = await checkAndShowAdGate(anime, sIdx, eIdx);
         if (!hasAccess) return;
+        const episode = anime.seasons?.[sIdx]?.episodes?.[eIdx];
         addToWatchHistory(anime, sIdx, eIdx, true);
         setPlayerState({
           src,
@@ -1595,6 +1596,8 @@ const Index = () => {
           anime,
           seasonIdx: sIdx,
           epIdx: eIdx,
+          audioTracks: episode?.audioTracks,
+          resumeTime: item.currentTime || 0,
           qualityOptions: qualityOptions.length > 0 ? qualityOptions : undefined,
           nextEpisodeSrc: getEpisodeSrc(anime.seasons?.[sIdx]?.episodes?.[eIdx + 1] as Episode),
         });
@@ -2117,6 +2120,7 @@ const Index = () => {
           qualityOptions={playerState.qualityOptions}
           audioTracks={playerState.audioTracks}
           animeId={playerState.anime.id}
+          initialSeekTime={playerState.resumeTime}
           onSaveProgress={saveVideoProgress}
           onNextEpisode={
             playerState.anime.type === "webseries" && playerState.seasonIdx !== undefined && playerState.epIdx !== undefined
