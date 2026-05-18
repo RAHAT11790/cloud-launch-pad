@@ -260,8 +260,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const sourceBaseRef = useRef(src);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
-  const hasCombinedTrackControls = isHlsSrc && (audioTrackOptions.length > 0 || hlsSubtitleOptions.length > 0);
-  const activeSubtitleLabel = currentHlsSubtitle >= 0 ? (hlsSubtitleOptions[currentHlsSubtitle]?.label || "On") : "Off";
 
   // ===== AN iframe minimal overlay auto-hide =====
   // Buttons start visible, then auto-hide after 3s. Tapping the iframe area
@@ -889,6 +887,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [currentHlsSubtitle, setCurrentHlsSubtitle] = useState<number>(-1); // -1 = off
   const [showSubtitlePanel, setShowSubtitlePanel] = useState(false);
   const hlsRef = useRef<Hls | null>(null);
+  const hasCombinedTrackControls = isHlsSrc && (audioTrackOptions.length > 0 || hlsSubtitleOptions.length > 0);
+  const activeSubtitleLabel = currentHlsSubtitle >= 0 ? (hlsSubtitleOptions[currentHlsSubtitle]?.label || "On") : "Off";
 
   // ===== HLS.js attachment =====
   // For any .m3u8 source we own playback via hls.js so the manifest's
@@ -1019,6 +1019,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       hls.subtitleTrack = idx;
     }
     setCurrentHlsSubtitle(idx);
+    setShowAudioPanel(false);
     setShowSubtitlePanel(false);
   }, []);
 
