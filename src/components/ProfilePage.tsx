@@ -197,7 +197,6 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const [qualityUrls, setQualityUrls] = useState<{ label: string; src: string; downloadId: string }[]>([]);
   const videoPlayRef = useRef<HTMLVideoElement>(null);
-  const [activeDownloads, setActiveDownloads] = useState<Map<string, any>>(new Map());
 
   const loadDownloads = async () => {
     try {
@@ -209,20 +208,6 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
   };
 
   useEffect(() => { loadDownloads(); }, []);
-
-  // Subscribe to global download manager
-  useEffect(() => {
-    let unsub: (() => void) | undefined;
-    import("@/lib/downloadManager").then(({ downloadManager }) => {
-      unsub = downloadManager.subscribe((map) => {
-        setActiveDownloads(new Map(map));
-        // Refresh completed downloads list
-        const hasComplete = Array.from(map.values()).some(d => d.status === "complete");
-        if (hasComplete) loadDownloads();
-      });
-    });
-    return () => { unsub?.(); };
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -294,11 +279,6 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // Merge active downloads with saved downloads
-  const activeList = Array.from(activeDownloads.values())
-    .filter((d: any) => d.status === "downloading" || d.status === "paused")
-    .sort((a: any) => a.status === "downloading" ? -1 : 1);
-
   return (
     <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
       initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
@@ -331,82 +311,19 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
         );
       })()}
 
-      {/* Active Downloads Section */}
-      {activeList.length > 0 && (
-        <div className="mb-4 space-y-2">
-          <p className="text-xs font-semibold text-primary uppercase tracking-wider">Downloading now</p>
-          {activeList.map((dl: any) => {
-            const isDlPaused = dl.status === "paused";
-            return (
-            <div key={dl.id} className={`glass-card rounded-xl p-3 border ${isDlPaused ? "border-accent/20" : "border-primary/20"}`}>
-              <div className="flex items-center gap-3 mb-2">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isDlPaused ? "bg-accent/20" : "bg-primary/20"}`}>
-                  {isDlPaused ? <PauseCircle className="w-5 h-5 text-accent" /> : <Loader2 className="w-5 h-5 text-primary animate-spin" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">{dl.title}</p>
-                  {dl.subtitle && <p className="text-xs text-primary truncate">{dl.subtitle}</p>}
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className={`text-xs font-mono ${isDlPaused ? "text-accent" : "text-primary"}`}>{dl.percent}% {isDlPaused ? "⏸" : ""}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {dl.loadedMB.toFixed(1)}/{dl.totalMB > 0 ? dl.totalMB.toFixed(1) : "??"} MB
-                    </span>
-                    {dl.quality !== "Auto" && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">{dl.quality}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {isDlPaused ? (
-                    <button
-                      onClick={async () => {
-                        const { downloadManager } = await import("@/lib/downloadManager");
-                        downloadManager.resumeDownload(dl.id);
-                        toast.info("Download resumed");
-                      }}
-                      className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center hover:bg-primary/40 transition-colors"
-                    >
-                      <PlayCircle className="w-3.5 h-3.5 text-primary" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={async () => {
-                        const { downloadManager } = await import("@/lib/downloadManager");
-                        downloadManager.pauseDownload(dl.id);
-                        toast.info("Download paused");
-                      }}
-                      className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center hover:bg-accent/40 transition-colors"
-                    >
-                      <PauseCircle className="w-3.5 h-3.5 text-accent" />
-                    </button>
-                  )}
-                  <button
-                    onClick={async () => {
-                      const { downloadManager } = await import("@/lib/downloadManager");
-                      downloadManager.cancelDownload(dl.id);
-                      toast.info("Download cancelled");
-                    }}
-                    className="w-8 h-8 rounded-full bg-destructive/20 flex items-center justify-center hover:bg-destructive/40 transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5 text-destructive" />
-                  </button>
-                </div>
-              </div>
-              <div className="w-full h-1.5 rounded-full bg-foreground/10 overflow-hidden">
-                <div className="h-full rounded-full gradient-primary transition-all duration-300 ease-linear" style={{ width: `${dl.percent}%` }} />
-              </div>
-            </div>
-            );
-          })}
-        </div>
-      )}
+      <div className="mb-4 glass-card rounded-xl p-3 border border-primary/20">
+        <p className="text-sm font-semibold text-foreground">Background downloads run in your browser</p>
+        <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+          New video downloads now continue from the browser download manager even after leaving the site. Older offline-saved videos still appear below.
+        </p>
+      </div>
 
       {loading ? (
         <div className="py-16 text-center">
           <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
           <p className="text-sm text-muted-foreground">Loading downloads...</p>
         </div>
-      ) : downloads.length === 0 && activeList.length === 0 ? (
+      ) : downloads.length === 0 ? (
         <div className="py-16 text-center text-muted-foreground">
           <Download className="w-14 h-14 mx-auto mb-3 opacity-30" />
           <h3 className="text-base font-semibold mb-2 text-foreground">No downloads yet</h3>
