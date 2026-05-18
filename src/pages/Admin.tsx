@@ -8495,6 +8495,7 @@ ${tgHashtags}`;
         {[
           { section: "dashboard" as Section, icon: <LayoutDashboard size={18} />, label: "Dashboard" },
           { section: "webseries" as Section, icon: <Film size={18} />, label: "Series" },
+          { section: "weekly-episode" as Section, icon: <CalendarDays size={18} />, label: "Weekly" },
           { section: "movies" as Section, icon: <Video size={18} />, label: "Movies" },
           { section: "telegram-post" as Section, icon: <Send size={18} />, label: "Telegram" },
         ].map(item => (
