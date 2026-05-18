@@ -2268,14 +2268,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     )}
                     {/* Audio track button */}
                     {audioTrackOptions.length > 0 && (
-                      <div className="relative">
+                      <div className="relative shrink-0">
                         <button
                           onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); }}
-                          className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
+                          className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 max-w-[90px] ${
                             currentAudioTrack !== "Default" ? "gradient-primary text-white" : "player-control-chip"
                           }`}
                         >
-                          🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}
+                          <span className="truncate">🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}</span>
                         </button>
                         {showAudioPanel && (
                           <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 w-[180px] max-w-[78vw] max-h-[240px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
