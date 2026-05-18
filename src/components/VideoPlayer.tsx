@@ -2499,7 +2499,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           <span className="truncate">🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}</span>
                         </button>
                         {showAudioPanel && (
-                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 w-[168px] max-w-[72vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation}>
+                          <div data-player-panel="true" className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 w-[168px] max-w-[72vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]" style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y" }} onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation} onWheel={stopPanelWheelPropagation}>
                             <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
                             <button onClick={resetToDefaultAudio}
                               className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between ${
@@ -2552,7 +2552,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           {/* Settings panel */}
           {showSettings && (
-            <div className="absolute bottom-16 right-3 player-glass rounded-xl p-2 z-20 w-[170px] max-w-[70vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation}>
+            <div data-player-panel="true" className="absolute bottom-16 right-3 player-glass rounded-xl p-2 z-20 w-[170px] max-w-[70vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]" style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y" }} onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation} onWheel={stopPanelWheelPropagation}>
               <button onClick={() => setShowSettings(false)} className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-foreground/20 flex items-center justify-center hover:bg-foreground/30 transition-all">
                 <X className="w-3 h-3" />
               </button>
