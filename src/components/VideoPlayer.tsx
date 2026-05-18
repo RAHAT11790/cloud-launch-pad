@@ -2350,35 +2350,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
         {/* Download Button with Quality Picker + Offline Playback */}
         {!isFullscreen && !adGateActive && !hideDownload && !isEmbedPlayback && (() => {
-          const normalizeKeyPart = (value: string) =>
-            value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-
-          const createUrlHash = (value: string) => {
-            let hash = 0;
-            for (let i = 0; i < value.length; i++) {
-              hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
-            }
-            return hash.toString(36);
-          };
-
-          const createDownloadId = (videoTitle: string, videoSubtitle: string | undefined, quality: string, url: string) => {
-            const base = [videoTitle, videoSubtitle].filter(Boolean).map((part) => normalizeKeyPart(part as string)).join("__") || "video";
-            const qualityPart = normalizeKeyPart(quality || "Auto") || "auto";
-            return `${base}__${qualityPart}__${createUrlHash(url)}`;
-          };
-
-          const relatedDownloads = Array.from(activeDownloads.values()).filter((item: any) => (
-            item.title === title && (!subtitle || item.subtitle === subtitle)
-          ));
-
-          const dl = relatedDownloads.find((item: any) => item.status === "downloading")
-            ?? relatedDownloads.find((item: any) => item.status === "paused")
-            ?? relatedDownloads.find((item: any) => item.status === "complete");
-
-          const isDownloading = dl?.status === "downloading";
-          const isPaused = dl?.status === "paused";
-          const isComplete = dl?.status === "complete";
-
           // Check if this episode is already saved in IndexedDB
           const savedEpisode = downloadedEpisodes.find(d => d.subtitle === subtitle);
           const isAlreadySaved = !!savedEpisode;
@@ -2462,7 +2433,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             <div className="mt-5 w-full max-w-md mx-auto space-y-3">
               {/* Main Download / Play Offline Button */}
               <div className="relative">
-                {isAlreadySaved && !isDownloading && !isPaused ? (
+                {isAlreadySaved ? (
                   /* Already downloaded - show play offline button */
                   <button
                     onClick={() => playOffline()}
@@ -2476,14 +2447,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 ) : (
                   <button
                     onClick={async () => {
-                      if (isDownloading || isComplete) return;
-                      if (isPaused && dl) {
-                        const { downloadManager } = await import("@/lib/downloadManager");
-                        downloadManager.resumeDownload(dl.id);
-                        const { toast } = await import("sonner");
-                        toast.info("Download resumed");
-                        return;
-                      }
                       // Show quality picker if multiple qualities available
                       if (availableQualities.length > 1) {
                         setBulkDownloadMode(false);
@@ -2493,77 +2456,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                         startDownloadWithQuality(currentQuality, src);
                       }
                     }}
-                    disabled={isDownloading || isComplete}
-                    className={`relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all overflow-hidden ${
-                      isComplete
-                        ? "bg-primary text-primary-foreground"
-                        : isDownloading
-                          ? "bg-secondary text-foreground border border-primary/30"
-                          : isPaused
-                            ? "bg-secondary text-foreground border border-accent/30"
-                            : "gradient-primary text-primary-foreground btn-glow hover:scale-[1.02]"
-                    }`}
+                    className="relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all overflow-hidden gradient-primary text-primary-foreground btn-glow hover:scale-[1.02]"
                   >
-                    {isDownloading && dl && (
-                      <div
-                        className="absolute inset-0 gradient-primary opacity-80 transition-all duration-300 ease-linear"
-                        style={{ width: `${dl.percent}%` }}
-                      />
-                    )}
                     <span className="relative z-10 flex items-center gap-2">
-                      {isComplete ? (
-                        <><Check className="w-4 h-4" /> Downloaded</>
-                      ) : isDownloading && dl ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span className="font-mono">{dl.percent}%</span>
-                          <span className="text-xs opacity-80">
-                            {dl.loadedMB.toFixed(1)}/{dl.totalMB > 0 ? dl.totalMB.toFixed(1) : "??"} MB
-                          </span>
-                          {dl.quality !== "Auto" && <span className="text-[10px] opacity-80">• {dl.quality}</span>}
-                        </>
-                      ) : isPaused && dl ? (
-                        <>
-                          <PlayCircle className="w-4 h-4" />
-                          <span>Resume</span>
-                          <span className="font-mono text-xs opacity-80">{dl.percent}%</span>
-                        </>
-                      ) : (
-                        <><Download className="w-4 h-4" /> Download</>
-                      )}
+                      <Download className="w-4 h-4" />
+                      <span>Background Download</span>
                     </span>
                   </button>
                 )}
-                {/* Pause & Cancel buttons */}
-                {isDownloading && dl && (
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex items-center gap-1">
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const { downloadManager } = await import("@/lib/downloadManager");
-                        downloadManager.pauseDownload(dl.id);
-                        const { toast } = await import("sonner");
-                        toast.info("Download paused");
-                      }}
-                      className="w-8 h-8 rounded-full bg-accent/80 hover:bg-accent flex items-center justify-center transition-all"
-                    >
-                      <PauseCircle className="w-4 h-4 text-white" />
-                    </button>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        const { downloadManager } = await import("@/lib/downloadManager");
-                        downloadManager.cancelDownload(dl.id);
-                        const { toast } = await import("sonner");
-                        toast.info("Download cancelled");
-                      }}
-                      className="w-8 h-8 rounded-full bg-destructive/80 hover:bg-destructive flex items-center justify-center transition-all"
-                    >
-                      <X className="w-4 h-4 text-white" />
-                    </button>
-                  </div>
-                )}
               </div>
+              {!isAlreadySaved && (
+                <p className="text-[11px] text-center text-muted-foreground leading-relaxed px-3">
+                  Download will open in your browser download manager and can continue after leaving the site.
+                </p>
+              )}
 
               {/* Download All Episodes (only for webseries with multiple episodes) */}
               {seasons && currentSeasonIdx !== undefined && seasons[currentSeasonIdx]?.episodes?.length > 1 && (
