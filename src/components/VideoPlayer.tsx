@@ -2327,7 +2327,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       <span className="text-[10px] font-medium">{manualServerSelected ? (effectiveVideoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
                     </button>
                     {showServerPanel && (
-                      <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[132px] max-h-[44vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation}>
+                      <div data-player-panel="true" className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[132px] max-h-[44vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]" style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y" }} onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation} onWheel={stopPanelWheelPropagation}>
                         <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
                         {!isPremium && (
                           <button onClick={() => {
@@ -2373,7 +2373,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       <span className="text-[10px] font-medium">CC</span>
                     </button>
                     {showCcPanel && (
-                      <div className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 w-[176px] max-w-[72vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation}>
+                      <div data-player-panel="true" className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 w-[176px] max-w-[72vw] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]" style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y" }} onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation} onWheel={stopPanelWheelPropagation}>
                         <div className="flex gap-1 mb-2">
                           <button onClick={() => setCcTab("audio")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Languages className="w-3 h-3" /> Audio</button>
                           <button onClick={() => setCcTab("subtitle")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "subtitle" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Subtitles className="w-3 h-3" /> Subtitle</button>
@@ -2463,7 +2463,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           {currentQuality}
                         </button>
                         {showQualityPanel && (
-                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[112px] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg" onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation}>
+                          <div data-player-panel="true" className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[112px] max-h-[42vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]" style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y" }} onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation} onWheel={stopPanelWheelPropagation}>
                             <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Quality</p>
                             {availableQualities.map((opt) => {
                               const is4K = is4KLabel(opt.label);
