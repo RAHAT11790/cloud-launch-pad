@@ -2302,7 +2302,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     )}
                     {/* Unified CC button — HLS only (audio + subtitle tabs) */}
                     {isHlsSrc && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
-                      <div className="relative">
+                      <div className="relative shrink-0">
                         <button
                           onClick={(e) => { e.stopPropagation(); setShowCcPanel(p => !p); setShowAudioPanel(false); setShowQualityPanel(false); }}
                           className={`text-[10px] px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
