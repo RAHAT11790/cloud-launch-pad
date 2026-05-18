@@ -2295,7 +2295,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     <span className="text-[10px] font-medium text-white">{currentQuality === "Auto" ? (availableQualities[1]?.label || "Server 1") : currentQuality}</span>
                   </button>
                   {showServerPanel && (
-                    <div className="absolute top-10 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] shadow-lg" onClick={(e) => e.stopPropagation()}>
+                    <div data-player-panel="true" className="absolute top-10 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] max-h-[44vh] overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]" style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y" }} onClick={(e) => e.stopPropagation()} onWheel={stopPanelWheelPropagation}>
                       <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
                       {availableQualities.filter(opt => opt.label !== "Auto").map((opt, idx) => (
                         <button key={opt.label + opt.src} onClick={() => { switchQuality(opt); setShowServerPanel(false); }} className={`w-full text-left px-3 py-2 rounded-lg text-xs ${currentQuality === opt.label || (currentQuality === "Auto" && idx === 0) ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}>
