@@ -1049,7 +1049,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const savedTime = v.currentTime;
     const wasPlaying = !v.paused;
 
-    if (track.nativeIndex !== undefined) {
+    if (track.hlsAudioIndex !== undefined && hlsRef.current) {
+      // Switch HLS.js audio rendition (preserves time + playing state automatically)
+      hlsRef.current.audioTrack = track.hlsAudioIndex;
+      setCurrentAudioTrack(track.label);
+    } else if (track.nativeIndex !== undefined) {
       // Switch native audio track
       const audioTracks = (v as any).audioTracks;
       if (audioTracks) {
