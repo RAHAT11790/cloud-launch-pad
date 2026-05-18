@@ -1028,7 +1028,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       hls.subtitleTrack = idx;
     }
     setCurrentHlsSubtitle(idx);
-    setShowSubtitlePanel(false);
+  }, []);
+
+  const switchHlsAudio = useCallback((idx: number) => {
+    const hls = hlsRef.current;
+    if (hls && idx >= 0) {
+      try { hls.audioTrack = idx; } catch {}
+    }
+    setCurrentHlsAudio(idx);
   }, []);
 
 
