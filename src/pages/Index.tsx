@@ -2268,61 +2268,8 @@ const Index = () => {
         )}
       </AnimatePresence>
 
-      {playerState && (
-        <VideoPlayer
-          src={playerState.src}
-          title={playerState.title}
-          subtitle={playerState.subtitle}
-          poster={playerState.anime.poster}
-          
-          onClose={() => { setPlayerState(null); }}
-          qualityOptions={playerState.qualityOptions}
-          audioTracks={playerState.audioTracks}
-          animeId={playerState.anime.id}
-          onSaveProgress={saveVideoProgress}
-          onNextEpisode={
-            playerState.anime.type === "webseries" && playerState.seasonIdx !== undefined && playerState.epIdx !== undefined
-              ? async () => {
-                  const season = playerState.anime.seasons![playerState.seasonIdx!];
-                  const nextIdx = (playerState.epIdx! + 1) % season.episodes.length;
-                  const nextEp = season.episodes[nextIdx];
-                  const hasAccess = await checkAndShowAdGate(playerState.anime, playerState.seasonIdx, nextIdx);
-                  if (!hasAccess) return;
-                  let nextSrc = getEpisodeSrc(nextEp);
-                  let qOpts = getEpisodeQualityOptions(nextEp);
-                  if (playerState.anime.source === "animesalt" && String(nextEp.link || "").startsWith("animesalt://")) {
-                    const epSlug = String(nextEp.link).replace("animesalt://", "");
-                    try {
-                      const epResult = await animeSaltApi.getEpisode(epSlug);
-                      const embedServers = (epResult.allEmbeds || [epResult.embedUrl]).filter(Boolean);
-                      nextSrc = epResult.embedUrl || nextSrc;
-                      qOpts = embedServers.length > 1
-                        ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
-                        : [];
-                    } catch {}
-                  }
-                  addToWatchHistory(playerState.anime, playerState.seasonIdx, nextIdx);
-                  setPlayerState({
-                    ...playerState,
-                    src: nextSrc,
-                    subtitle: `${season.name} - Episode ${nextEp.episodeNumber}`,
-                    epIdx: nextIdx,
-                    qualityOptions: qOpts.length > 0 ? qOpts : undefined,
-                    nextEpisodeSrc: undefined,
-                  });
-                }
-              : undefined
-          }
-          episodeList={currentEpisodeList}
-          seasons={playerState.anime.seasons}
-          currentSeasonIdx={playerState.seasonIdx}
-          onSeasonChange={handleVideoPlayerSeasonChange}
-          suggestedAnime={[]}
-          onSuggestedClick={(anime) => { setPlayerState(null); handleCardClick(anime); }}
-          nextEpisodeSrc={playerState.nextEpisodeSrc}
-          forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
-        />
-      )}
+      {/* VideoPlayer is rendered via early-return above when playerState is active —
+          this guarantees the home tree is fully unmounted while playing. */}
 
       {/* Live Support Chat */}
       <LiveSupportChat
