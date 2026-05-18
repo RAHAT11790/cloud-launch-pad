@@ -904,6 +904,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         try { hlsRef.current.destroy(); } catch {}
         hlsRef.current = null;
       }
+      // Clear HLS-only track UI so CC button hides for non-HLS sources
+      setHlsAudioOptions([]);
+      setHlsSubtitleOptions([]);
+      setCurrentHlsAudio(-1);
+      setCurrentHlsSubtitle(-1);
       return;
     }
 
