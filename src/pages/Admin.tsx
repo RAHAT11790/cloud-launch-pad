@@ -3388,6 +3388,18 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     return guests;
   }, [usersData]);
   const recentContent = useMemo(() => [...webseriesData, ...moviesData].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3), [webseriesData, moviesData]);
+
+  // Weekly schedule (for dashboard preview)
+  const [weeklyScheduleData, setWeeklyScheduleData] = useState<Record<string, any>>({});
+  useEffect(() => {
+    const unsub = onValue(ref(db, "weeklySchedule"), snap => setWeeklyScheduleData(snap.val() || {}));
+    return () => unsub();
+  }, []);
+  const todayDayName = useMemo(() => new Date().toLocaleDateString("en-US", { weekday: "long" }), []);
+  const todayScheduled = useMemo(
+    () => Object.values(weeklyScheduleData).filter((s: any) => s?.day === todayDayName),
+    [weeklyScheduleData, todayDayName]
+  );
   const categoryList = useMemo(() => Object.entries(categoriesData).map(([id, cat]: any) => ({ id, name: cat.name })), [categoriesData]);
   const languageOptions = useMemo(() => ["English", "Hindi", "Tamil", "Telugu", "Korean", "Japanese", "Spanish", "Multi"], []);
 
