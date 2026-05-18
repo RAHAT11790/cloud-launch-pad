@@ -53,6 +53,8 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   const target = url.searchParams.get("url");
+  const forceDownload = url.searchParams.get("download") === "1";
+  const requestedFileName = String(url.searchParams.get("filename") || "video.mp4").trim();
   if (!target) {
     return new Response("Missing ?url= parameter", {
       status: 400,
@@ -126,8 +128,16 @@ Deno.serve(async (req) => {
   if (!respHeaders.has("cache-control")) {
     respHeaders.set("cache-control", "public, max-age=3600");
   }
-  // Force inline playback — strip any attachment header from upstream
-  respHeaders.set("content-disposition", "inline");
+  // Force browser-managed background download when requested, otherwise inline playback.
+  if (forceDownload) {
+    const safeFileName = requestedFileName
+      .replace(/[\\/:*?"<>|]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() || "video.mp4";
+    respHeaders.set("content-disposition", `attachment; filename*=UTF-8''${encodeURIComponent(safeFileName)}`);
+  } else {
+    respHeaders.set("content-disposition", "inline");
+  }
 
   // Stream body straight back — zero buffering on our side
   return new Response(upstream.body, {
