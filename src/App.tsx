@@ -12,6 +12,7 @@ import DynamicMeta from "./components/DynamicMeta";
 import ManifestManager from "./components/ManifestManager";
 
 const Admin = lazy(() => import("./pages/Admin"));
+const Watch = lazy(() => import("./pages/Watch"));
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/app" element={<Index />} />
+          <Route path="/video" element={<Suspense fallback={<RouteFallback />}><Watch /></Suspense>} />
           <Route path="/admin" element={<Suspense fallback={<RouteFallback />}><Admin /></Suspense>} />
           <Route path="/unlock" element={<Unlock />} />
           <Route path="/unlock-required" element={<UnlockRequired />} />
