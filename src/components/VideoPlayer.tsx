@@ -200,6 +200,7 @@ interface VideoPlayerProps {
   onSuggestedClick?: (anime: AnimeItem) => void;
   nextEpisodeSrc?: string;
   forceEmbedMode?: boolean;
+  initialSeekTime?: number;
 }
 
 const getShortSeasonLabel = (seasonName: string | undefined, index: number) => {
@@ -215,7 +216,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl || logoImg;
   // Removed preload anime character image - no longer needed
@@ -970,7 +971,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setCurrentHlsAudio(active >= 0 ? active : (opts.length > 0 ? 0 : -1));
     };
 
-    const refreshHlsSubs = () => {
+      const refreshHlsSubs = () => {
       const sTracks = hls.subtitleTracks || [];
       setHlsSubtitleOptions(sTracks.map((t, i) => ({
         id: i,
@@ -986,6 +987,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (defS >= 0) {
         hls.subtitleTrack = defS;
         setCurrentHlsSubtitle(defS);
+          window.setTimeout(() => syncNativeSubtitleVisibility(defS), 0);
       }
     };
 
@@ -998,7 +1000,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, refreshHlsAudio);
     hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, refreshHlsSubs);
     hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_e, d: any) => {
-      if (typeof d?.id === "number") setCurrentHlsSubtitle(d.id);
+      if (typeof d?.id === "number") {
+        setCurrentHlsSubtitle(d.id);
+        window.setTimeout(() => syncNativeSubtitleVisibility(d.id), 0);
+      }
     });
 
     hls.on(Hls.Events.ERROR, (_evt, data) => {
@@ -1017,7 +1022,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       try { hls.destroy(); } catch {}
       if (hlsRef.current === hls) hlsRef.current = null;
     };
-  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive]);
+  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive, syncNativeSubtitleVisibility]);
 
   // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
   // users reported when returning to home. Detaches HLS, clears <video>, kills timers.
@@ -1039,12 +1044,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const switchHlsSubtitle = useCallback((idx: number) => {
     const hls = hlsRef.current;
+    subtitleSwitchingUntilRef.current = Date.now() + 1600;
     if (hls) {
       hls.subtitleDisplay = idx >= 0;
       hls.subtitleTrack = idx;
     }
+    syncNativeSubtitleVisibility(idx);
     setCurrentHlsSubtitle(idx);
-  }, []);
+    setIsBuffering(false);
+  }, [syncNativeSubtitleVisibility]);
 
   const switchHlsAudio = useCallback((idx: number) => {
     const hls = hlsRef.current;
