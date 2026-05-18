@@ -462,6 +462,7 @@ const Index = () => {
     qualityOptions?: { label: string; src: string }[];
     audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
     nextEpisodeSrc?: string;
+    resumeTime?: number;
   } | null>(() => {
     try {
       const saved = sessionStorage.getItem("rs_playerState");
