@@ -2314,7 +2314,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           <Subtitles className="w-3 h-3" /> CC
                         </button>
                         {showCcPanel && (
-                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 min-w-[200px] max-h-[280px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
+                          <div className="absolute bottom-8 right-0 player-glass rounded-xl p-2 z-30 w-[200px] max-w-[78vw] max-h-[240px] overflow-y-auto shadow-lg" onClick={(e) => e.stopPropagation()}>
                             <div className="flex gap-1 mb-2">
                               <button onClick={() => setCcTab("audio")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10"}`}>
                                 <Languages className="w-3 h-3" /> Audio
@@ -2329,11 +2329,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                                   <p className="text-[10px] text-muted-foreground text-center py-3">No audio tracks in stream</p>
                                 ) : hlsAudioOptions.map((track, i) => (
                                   <button key={i} onClick={() => switchHlsAudio(i)}
-                                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                    className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${
                                       currentHlsAudio === i ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                                     }`}>
-                                    <span>🎧 {track.label} {track.language && track.language !== track.label ? `· ${track.language}` : ""}</span>
-                                    {currentHlsAudio === i && <Check className="w-3 h-3" />}
+                                    <span className="truncate flex-1 min-w-0">{track.label || track.language || `Audio ${i + 1}`}</span>
+                                    {currentHlsAudio === i && <Check className="w-3 h-3 shrink-0" />}
                                   </button>
                                 ))}
                               </div>
@@ -2341,7 +2341,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             {ccTab === "subtitle" && (
                               <div className="space-y-0.5">
                                 <button onClick={() => switchHlsSubtitle(-1)}
-                                  className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                  className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between ${
                                     currentHlsSubtitle < 0 ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                                   }`}>
                                   <span>Off</span>
@@ -2351,11 +2351,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                                   <p className="text-[10px] text-muted-foreground text-center py-2">No subtitles in stream</p>
                                 ) : hlsSubtitleOptions.map((st) => (
                                   <button key={st.id} onClick={() => switchHlsSubtitle(st.id)}
-                                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                                    className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${
                                       currentHlsSubtitle === st.id ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                                     }`}>
-                                    <span>📝 {st.label} {st.language && st.language !== st.label ? `· ${st.language}` : ""}</span>
-                                    {currentHlsSubtitle === st.id && <Check className="w-3 h-3" />}
+                                    <span className="truncate flex-1 min-w-0">{st.label || st.language || `Subtitle ${st.id + 1}`}</span>
+                                    {currentHlsSubtitle === st.id && <Check className="w-3 h-3 shrink-0" />}
                                   </button>
                                 ))}
                               </div>
