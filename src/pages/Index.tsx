@@ -2100,6 +2100,70 @@ const Index = () => {
 
 
 
+  // === DEDICATED PLAYER VIEW ===
+  // When a video is playing, unmount the ENTIRE home tree (header, swipe track,
+  // hero slider, sections, etc.) so nothing runs in the background. This is the
+  // "separate page" the user has been asking for — same React tree, but the
+  // home UI no longer renders, eliminating leaks and CPU drain.
+  if (playerState) {
+    return (
+      <div className="fixed inset-0 z-[100] bg-black">
+        <VideoPlayer
+          src={playerState.src}
+          title={playerState.title}
+          subtitle={playerState.subtitle}
+          poster={playerState.anime.poster}
+          onClose={() => { setPlayerState(null); }}
+          qualityOptions={playerState.qualityOptions}
+          audioTracks={playerState.audioTracks}
+          animeId={playerState.anime.id}
+          onSaveProgress={saveVideoProgress}
+          onNextEpisode={
+            playerState.anime.type === "webseries" && playerState.seasonIdx !== undefined && playerState.epIdx !== undefined
+              ? async () => {
+                  const season = playerState.anime.seasons![playerState.seasonIdx!];
+                  const nextIdx = (playerState.epIdx! + 1) % season.episodes.length;
+                  const nextEp = season.episodes[nextIdx];
+                  const hasAccess = await checkAndShowAdGate(playerState.anime, playerState.seasonIdx, nextIdx);
+                  if (!hasAccess) return;
+                  let nextSrc = getEpisodeSrc(nextEp);
+                  let qOpts = getEpisodeQualityOptions(nextEp);
+                  if (playerState.anime.source === "animesalt" && String(nextEp.link || "").startsWith("animesalt://")) {
+                    const epSlug = String(nextEp.link).replace("animesalt://", "");
+                    try {
+                      const epResult = await animeSaltApi.getEpisode(epSlug);
+                      const embedServers = (epResult.allEmbeds || [epResult.embedUrl]).filter(Boolean);
+                      nextSrc = epResult.embedUrl || nextSrc;
+                      qOpts = embedServers.length > 1
+                        ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
+                        : [];
+                    } catch {}
+                  }
+                  addToWatchHistory(playerState.anime, playerState.seasonIdx, nextIdx);
+                  setPlayerState({
+                    ...playerState,
+                    src: nextSrc,
+                    subtitle: `${season.name} - Episode ${nextEp.episodeNumber}`,
+                    epIdx: nextIdx,
+                    qualityOptions: qOpts.length > 0 ? qOpts : undefined,
+                    nextEpisodeSrc: undefined,
+                  });
+                }
+              : undefined
+          }
+          episodeList={currentEpisodeList}
+          seasons={playerState.anime.seasons}
+          currentSeasonIdx={playerState.seasonIdx}
+          onSeasonChange={handleVideoPlayerSeasonChange}
+          suggestedAnime={[]}
+          onSuggestedClick={(anime) => { setPlayerState(null); handleCardClick(anime); }}
+          nextEpisodeSrc={playerState.nextEpisodeSrc}
+          forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background" style={customBgImage ? { backgroundImage: `url(${customBgImage})`, backgroundSize: 'cover', backgroundAttachment: 'fixed', backgroundPosition: 'center' } : undefined}>
       <Header onSearchClick={() => setShowSearch(true)} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
