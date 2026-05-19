@@ -98,9 +98,8 @@ import AnimeSection from "@/components/AnimeSection";
 import AnimeDetails from "@/components/AnimeDetails";
 import VideoPlayer from "@/components/VideoPlayer";
 import NotificationsPage from "@/pages/NotificationsPage";
-import { lazy, Suspense } from "react";
+import ProfilePage from "@/components/ProfilePage";
 import SearchPage from "@/components/SearchPage";
-const ProfilePage = lazy(() => import("@/components/ProfilePage"));
 import NewEpisodeReleases from "@/components/NewEpisodeReleases";
 import LoginPage from "@/components/LoginPage";
 import { useFirebaseData } from "@/hooks/useFirebaseData";
@@ -446,8 +445,6 @@ const Index = () => {
     try { return sessionStorage.getItem("rs_uiLayer") === "profile"; } catch { return false; }
   });
   const [chatOpen, setChatOpen] = useState(false);
-  const routeDrivenDetailsRef = useRef(false);
-  const routeDrivenPlayerRef = useRef(false);
 
   const buildAnimeRoute = useCallback((animeId: string) => `/anime/${encodeURIComponent(animeId)}`, []);
   const buildWatchRoute = useCallback((animeId: string, seasonIdx?: number, epIdx?: number) => {
