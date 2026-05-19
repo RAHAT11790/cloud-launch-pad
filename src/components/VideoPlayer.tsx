@@ -41,7 +41,8 @@ const PROXY_SERVER_LIMIT = 3;
 
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
-import { triggerBackgroundVideoDownload } from "@/lib/videoDownload";
+import { triggerBackgroundVideoDownload, buildVideoDownloadUrl } from "@/lib/videoDownload";
+import { downloadManager } from "@/lib/downloadManager";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 // Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
