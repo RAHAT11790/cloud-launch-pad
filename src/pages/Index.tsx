@@ -99,7 +99,7 @@ import AnimeDetails from "@/components/AnimeDetails";
 import VideoPlayer from "@/components/VideoPlayer";
 import NotificationsPage from "@/pages/NotificationsPage";
 import { lazy, Suspense } from "react";
-const SearchPage = lazy(() => import("@/components/SearchPage"));
+import SearchPage from "@/components/SearchPage";
 const ProfilePage = lazy(() => import("@/components/ProfilePage"));
 import NewEpisodeReleases from "@/components/NewEpisodeReleases";
 import LoginPage from "@/components/LoginPage";
