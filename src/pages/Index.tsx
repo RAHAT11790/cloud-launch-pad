@@ -576,16 +576,14 @@ const Index = () => {
           ? "saltPlayer"
           : selectedAnime
             ? "details"
-            : showSearch
-              ? "search"
-              : showProfile
+            : showProfile
                 ? "profile"
                 : (activePage === "series" || activePage === "movies")
                   ? activePage
                   : "home";
       sessionStorage.setItem("rs_uiLayer", layer);
     } catch {}
-  }, [playerState, saltPlayerState, selectedAnime, showSearch, showProfile, activePage]);
+  }, [playerState, saltPlayerState, selectedAnime, showProfile, activePage]);
 
   // AnimeSalt details request control + cache (avoid stale loading toast on cached reopen)
   const detailsCacheRef = useRef<Map<string, AnimeItem>>(new Map());
@@ -679,17 +677,15 @@ const Index = () => {
     if (playerState) return "player";
     if (saltPlayerState) return "saltPlayer";
     if (selectedAnime) return "details";
-    if (showSearch) return "search";
     if (showProfile) return "profile";
     if (activePage === "series" || activePage === "movies" || activePage === "livetv") return activePage;
     return "home";
-  }, [playerState, saltPlayerState, selectedAnime, showSearch, showProfile, activePage]);
+  }, [playerState, saltPlayerState, selectedAnime, showProfile, activePage]);
 
 
   useEffect(() => {
     try {
       const layer = sessionStorage.getItem("rs_uiLayer");
-      if (layer === "search") setShowSearch(true);
       if (layer === "profile") setShowProfile(true);
       if (layer === "series" || layer === "movies" || layer === "livetv") setActivePage(layer);
     } catch {}
@@ -700,7 +696,6 @@ const Index = () => {
     if (layer === "player") { setPlayerState(null); return true; }
     if (layer === "saltPlayer") { setSaltPlayerState(null); return true; }
     if (layer === "details") { setSelectedAnime(null); return true; }
-    if (layer === "search") { setShowSearch(false); return true; }
     if (layer === "profile") { setShowProfile(false); return true; }
     if (layer === "series" || layer === "movies" || layer === "livetv") {
       setVisualPage("home");
@@ -717,10 +712,43 @@ const Index = () => {
   }, [location.search]);
 
   useEffect(() => {
+    if (isAnimeRoute && animeRouteId) {
+      if (selectedAnime?.id !== animeRouteId) setPendingAnimeId(animeRouteId);
+      return;
+    }
+    if (!isWatchRoute && selectedAnime) {
+      setSelectedAnime(null);
+    }
+  }, [animeRouteId, isAnimeRoute, isWatchRoute, selectedAnime]);
+
+  useEffect(() => {
+    if (!isWatchRoute) {
+      if (playerState) setPlayerState(null);
+      return;
+    }
+    if (!watchRouteAnimeId || allAnime.length === 0 || !freeAccessLoaded) return;
+
+    const params = new URLSearchParams(location.search);
+    const seasonIdx = params.get("s");
+    const epIdx = params.get("e");
+    const targetAnime = allAnime.find((item) => item.id === watchRouteAnimeId);
+    if (!targetAnime) return;
+
+    const nextSeasonIdx = seasonIdx !== null ? Number(seasonIdx) : undefined;
+    const nextEpIdx = epIdx !== null ? Number(epIdx) : undefined;
+    const sameAnime = playerState?.anime.id === watchRouteAnimeId;
+    const sameSeason = (playerState?.seasonIdx ?? undefined) === nextSeasonIdx;
+    const sameEpisode = (playerState?.epIdx ?? undefined) === nextEpIdx;
+    if (sameAnime && sameSeason && sameEpisode) return;
+
+    void handlePlay(targetAnime, nextSeasonIdx, nextEpIdx);
+  }, [allAnime, freeAccessLoaded, handlePlay, isWatchRoute, location.search, playerState, watchRouteAnimeId]);
+
+  useEffect(() => {
     // Routed pages (/search, /notifications) own their own history entry — do NOT
     // push our rsAnime guard state on top of them, otherwise the browser back
     // button needs two clicks (one to pop our duplicate, one to actually leave).
-    if (isSearchRoute || isNotificationsRoute) return;
+    if (isRoutedOverlay) return;
 
     if (window.history.state?.rsAnime !== true) {
       window.history.pushState({ rsAnime: true, page: "home" }, "");
@@ -737,13 +765,13 @@ const Index = () => {
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [handleBackPress, isNotificationsRoute, isSearchRoute]);
+  }, [handleBackPress, isRoutedOverlay]);
 
   useEffect(() => {
-    if (isSearchRoute || isNotificationsRoute) return;
+    if (isRoutedOverlay) return;
     const layer = getCurrentLayer();
     if (layer !== "home") window.history.pushState({ rsAnime: true, page: layer }, "");
-  }, [getCurrentLayer, isNotificationsRoute, isSearchRoute]);
+  }, [getCurrentLayer, isRoutedOverlay]);
 
   // Handle deep link: open anime detail from URL ?anime=ID
   useEffect(() => {
