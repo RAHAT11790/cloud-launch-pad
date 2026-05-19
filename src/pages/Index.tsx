@@ -2251,7 +2251,7 @@ const Index = () => {
           title={playerState.title}
           subtitle={playerState.subtitle}
           poster={playerState.anime.poster}
-          onClose={() => { closeRouteLayer("/"); }}
+          onClose={hardCloseToHome}
           qualityOptions={playerState.qualityOptions}
           audioTracks={playerState.audioTracks}
           animeId={playerState.anime.id}
@@ -2295,7 +2295,11 @@ const Index = () => {
           currentSeasonIdx={playerState.seasonIdx}
           onSeasonChange={handleVideoPlayerSeasonChange}
           suggestedAnime={[]}
-          onSuggestedClick={(anime) => { navigate(buildAnimeRoute(anime.id)); handleCardClick(anime); }}
+          onSuggestedClick={(anime) => {
+            stopAllPlayback();
+            navigate(buildAnimeRoute(anime.id));
+            handleCardClick(anime);
+          }}
           nextEpisodeSrc={playerState.nextEpisodeSrc}
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
         />
