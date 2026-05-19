@@ -2620,7 +2620,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                       {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
                   </div>
-                  <div className="flex items-center gap-1 justify-end max-w-[72%] overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                  <div className="flex items-center gap-1 justify-end flex-wrap max-w-[72%]">
                     <span className="player-control-chip text-[10px] px-2 py-0.5 rounded shrink-0">{playbackRate}x</span>
                     {availableQualities.length > 1 && (
                       <div className="relative shrink-0">
