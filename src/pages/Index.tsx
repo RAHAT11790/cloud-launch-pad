@@ -1953,7 +1953,7 @@ const Index = () => {
     );
   }
 
-  if (loading && !playerState && !saltPlayerState) {
+  if (loading && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute) {
     return <SplashLoader />;
   }
 
@@ -2223,7 +2223,24 @@ const Index = () => {
       </main>
       <BottomNav activePage={showProfile ? "profile" : visualPage} onNavigate={handleNavigate} />
 
-      {/* Search moved to /search route — see SearchPageRoute */}
+      <AnimatePresence>
+        {isSearchRoute && (
+          <Suspense fallback={<div className="fixed inset-0 z-[200] bg-background/95 flex items-center justify-center"><div className="w-7 h-7 rounded-full border-2 border-primary/25 border-t-primary animate-spin" /></div>}>
+            <SearchPage
+              allAnime={allAnime}
+              onClose={() => {
+                if (window.history.length > 1) navigate(-1);
+                else navigate("/");
+              }}
+              onCardClick={(anime) => navigate(`/?anime=${encodeURIComponent(anime.id)}`)}
+            />
+          </Suspense>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isNotificationsRoute && <NotificationsPage />}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showProfile && (
