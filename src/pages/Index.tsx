@@ -1300,6 +1300,7 @@ const Index = () => {
       return;
     }
 
+    stopAllPlayback();
     const targetWatchRoute = buildWatchRoute(anime.id, seasonIdx, epIdx);
     if (location.pathname !== targetWatchRoute || location.search !== new URL(targetWatchRoute, window.location.origin).search) {
       navigate(targetWatchRoute);
@@ -1422,6 +1423,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!isWatchRoute) {
+      stopAllPlayback();
       if (playerState) setPlayerState(null);
       return;
     }
@@ -1436,7 +1438,7 @@ const Index = () => {
     const sameAnime = playerState?.anime.id === watchRouteAnimeId;
     const sameSeason = (playerState?.seasonIdx ?? undefined) === nextSeasonIdx;
     const sameEpisode = (playerState?.epIdx ?? undefined) === nextEpIdx;
-    if (sameAnime && sameSeason && sameEpisode) return;
+    if (sameAnime && sameSeason && sameEpisode && playerState) return;
 
     void handlePlay(targetAnime, nextSeasonIdx, nextEpIdx);
   }, [allAnime, freeAccessLoaded, isWatchRoute, location.search, playerState, watchRouteAnimeId]);
@@ -1692,6 +1694,10 @@ const Index = () => {
       if (src) {
         const hasAccess = await checkAndShowAdGate(anime, sIdx, eIdx);
         if (!hasAccess) return;
+        const targetWatchRoute = buildWatchRoute(anime.id, sIdx, eIdx);
+        if (`${location.pathname}${location.search}` !== targetWatchRoute) {
+          navigate(targetWatchRoute);
+        }
         const episode = anime.seasons?.[sIdx]?.episodes?.[eIdx];
         addToWatchHistory(anime, sIdx, eIdx, true);
         setPlayerState({
@@ -1712,6 +1718,10 @@ const Index = () => {
       if (anime.movieLink) {
         const hasAccess = await checkAndShowAdGate(anime);
         if (!hasAccess) return;
+        const targetWatchRoute = buildWatchRoute(anime.id);
+        if (`${location.pathname}${location.search}` !== targetWatchRoute) {
+          navigate(targetWatchRoute);
+        }
         addToWatchHistory(anime, undefined, undefined, true);
         const movieSrc = getMovieSrc(anime);
         if (!movieSrc) {
