@@ -2294,9 +2294,7 @@ const Index = () => {
 
       <AnimatePresence>
         {showProfile && (
-          <Suspense fallback={<div className="fixed inset-0 z-[200] bg-background/95 flex items-center justify-center"><div className="w-7 h-7 rounded-full border-2 border-primary/25 border-t-primary animate-spin" /></div>}>
-            <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
-          </Suspense>
+          <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
         )}
       </AnimatePresence>
 
