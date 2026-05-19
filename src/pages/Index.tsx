@@ -1261,6 +1261,11 @@ const Index = () => {
       return;
     }
 
+    const targetWatchRoute = buildWatchRoute(anime.id, seasonIdx, epIdx);
+    if (location.pathname !== targetWatchRoute || location.search !== new URL(targetWatchRoute, window.location.origin).search) {
+      navigate(targetWatchRoute);
+    }
+
     if (!hasFreeAccess() && !saltIsPremium) {
       // If admin disabled the unlock gate entirely, skip redirect and play directly
       const shortenerOn = await isShortenerEnabled();
@@ -1375,6 +1380,27 @@ const Index = () => {
       setSelectedAnime(null);
     }
   };
+
+  useEffect(() => {
+    if (!isWatchRoute) {
+      if (playerState) setPlayerState(null);
+      return;
+    }
+    if (!watchRouteAnimeId || allAnime.length === 0 || !freeAccessLoaded) return;
+
+    const params = new URLSearchParams(location.search);
+    const nextSeasonIdx = params.get("s") !== null ? Number(params.get("s")) : undefined;
+    const nextEpIdx = params.get("e") !== null ? Number(params.get("e")) : undefined;
+    const targetAnime = allAnime.find((item) => item.id === watchRouteAnimeId);
+    if (!targetAnime) return;
+
+    const sameAnime = playerState?.anime.id === watchRouteAnimeId;
+    const sameSeason = (playerState?.seasonIdx ?? undefined) === nextSeasonIdx;
+    const sameEpisode = (playerState?.epIdx ?? undefined) === nextEpIdx;
+    if (sameAnime && sameSeason && sameEpisode) return;
+
+    void handlePlay(targetAnime, nextSeasonIdx, nextEpIdx);
+  }, [allAnime, freeAccessLoaded, isWatchRoute, location.search, playerState, watchRouteAnimeId]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
