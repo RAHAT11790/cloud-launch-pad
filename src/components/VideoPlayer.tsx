@@ -2633,7 +2633,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                           {currentQuality}
                         </button>
                         {showQualityPanel && (
-                          <div data-player-panel="true" className={`absolute bottom-8 right-0 ${panelBaseClass} min-w-[112px] max-h-[44vh]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
+                          <div data-player-panel="true" className={`absolute bottom-8 right-0 ${panelBaseClass} min-w-[120px] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
                             <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Quality</p>
                             {availableQualities.map((opt) => {
                               const is4K = is4KLabel(opt.label);
