@@ -2722,7 +2722,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           {/* Settings panel */}
           {showSettings && (
-            <div data-player-panel="true" className={`absolute bottom-16 right-3 ${panelBaseClass} z-20 w-[170px] max-w-[70vw] max-h-[44vh]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
+            <div data-player-panel="true" className={`absolute bottom-16 right-3 ${panelBaseClass} z-20 w-[180px] max-w-[72vw] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
               <button onClick={() => setShowSettings(false)} className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-foreground/20 flex items-center justify-center hover:bg-foreground/30 transition-all">
                 <X className="w-3 h-3" />
               </button>
