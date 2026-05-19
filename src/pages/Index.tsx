@@ -1426,7 +1426,7 @@ const Index = () => {
   useEffect(() => {
     if (!isWatchRoute) {
       stopAllPlayback();
-      if (playerState) setPlayerState(null);
+      if (playerStateRef.current) setPlayerState(null);
       return;
     }
     if (!watchRouteAnimeId || allAnime.length === 0 || !freeAccessLoaded) return;
@@ -1437,13 +1437,14 @@ const Index = () => {
     const targetAnime = allAnime.find((item) => item.id === watchRouteAnimeId);
     if (!targetAnime) return;
 
-    const sameAnime = playerState?.anime.id === watchRouteAnimeId;
-    const sameSeason = (playerState?.seasonIdx ?? undefined) === nextSeasonIdx;
-    const sameEpisode = (playerState?.epIdx ?? undefined) === nextEpIdx;
-    if (sameAnime && sameSeason && sameEpisode && playerState) return;
+    const current = playerStateRef.current;
+    const sameAnime = current?.anime.id === watchRouteAnimeId;
+    const sameSeason = (current?.seasonIdx ?? undefined) === nextSeasonIdx;
+    const sameEpisode = (current?.epIdx ?? undefined) === nextEpIdx;
+    if (sameAnime && sameSeason && sameEpisode && current) return;
 
     void handlePlay(targetAnime, nextSeasonIdx, nextEpIdx);
-  }, [allAnime, freeAccessLoaded, isWatchRoute, location.search, playerState, watchRouteAnimeId]);
+  }, [allAnime, freeAccessLoaded, isWatchRoute, location.search, watchRouteAnimeId]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
