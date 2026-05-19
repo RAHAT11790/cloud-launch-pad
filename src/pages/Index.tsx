@@ -2292,6 +2292,7 @@ const Index = () => {
                     qualityOptions: qOpts.length > 0 ? qOpts : undefined,
                     nextEpisodeSrc: undefined,
                   });
+                  navigate(buildWatchRoute(playerState.anime.id, playerState.seasonIdx, nextIdx), { replace: true });
                 }
               : undefined
           }
