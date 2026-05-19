@@ -1,72 +1,90 @@
-# Full Fix Plan — Log Channel Backup + Dedicated Video Player Route + HLS Tracks
+# Overlay → Routes Migration + Video Player Fixes
 
-## 1. Python Bot (`main_rahat.py`) — Log Channel Backup System
+## Scope (confirmed)
 
-The streaming link must be built from the **log channel's** `chat_id` + `message_id` + a security hash, exactly like your old links. Right now the bot never forwards the finished video to the log channel, so there is no backup and the link format is wrong.
+- **Keep**: Bottom-nav swipe strip (Home/Series/LiveTV/Movies). It's not an overlay — it's the core UX.
+- **Convert to real routes**: AnimeDetails, VideoPlayer, Search, Notifications, all Admin tabs.
+- **Fix**: Video player Quality button (not working) + landscape mode panel scrolling (CC, Subtitle, Settings).
 
-**Changes (delivered as full code in chat):**
+## Why staged
 
-- New env / config:
-  - `LOG_CHANNEL_ID` (e.g. `-1001234567890`) — the bin/log channel.
-  - `STREAM_SECRET` — HMAC secret for the hash segment.
-- After a task finishes converting:
-  1. Upload the final MP4 (or master HLS folder zipped reference) to the log channel via `bot.send_video(LOG_CHANNEL_ID, ...)`.
-  2. Capture `msg.message_id` and `msg.video.file_id`.
-  3. Build the link in the **old format**:
-     ```
-     https://<host>/stream/<log_channel_id>/<message_id>/<hash>/master.m3u8
-     ```
-     where `hash = hmac_sha256(secret, f"{channel_id}:{message_id}").hexdigest()[:16]`.
-  4. Persist `(task_id → channel_id, message_id, hash, file_id)` in `tasks.json` so streams can be re-resolved from Telegram if local cache is wiped (true backup).
-- Flask stream server:
-  - New route `/stream/<channel_id>/<message_id>/<hash>/master.m3u8` validates hash, then resolves to the cached HLS or, if missing, re-downloads the original from the log channel using `file_id` and re-segments.
-  - Keep the legacy `/stream/<task_id>/master.m3u8` working as an alias.
-- Hardening: retries on Telegram 429/5xx, per-task lock to prevent double upload, graceful failure if `LOG_CHANNEL_ID` unset (logs warning, still serves stream but no backup).
-- Keep all previous features (RAHAT MEDIA STUDIO branding, compact progress bars, VTT subs, multi-audio HLS, native player at `/play/<task_id>`).
+This touches `Index.tsx` (the central orchestrator), `AnimeDetails`, `VideoPlayer`, `SearchPage`, `NotificationPanel`, `Admin.tsx`, AI chat link handler, suggestion clicks, sessionStorage persistence, back-button logic, and PWA deep-link handling. Doing it all in one shot = high break risk. I'll ship it in 3 stages, each independently testable.
 
-Full file will be pasted in chat after approval.
+---
 
-## 2. Dedicated Video Player Route (no more overlay on Home)
+## Stage 1 — Video Player fixes (small, ship first)
 
-**Problem today:** `VideoPlayer` is rendered conditionally inside `Index.tsx` on top of the home screen, so the hero slider, sections, and state all stay mounted → memory leaks and lag.
+**Files**: `src/components/VideoPlayer.tsx`
 
-**Fix:**
+1. **Quality button (Auto/quality tab) fix**
+   - Debug why the quality panel button click handler isn't firing — likely event swallowed by the new `data-player-panel` touch guard or panel state collision with Settings panel.
+   - Ensure quality panel opens, lists all available qualities (manual only, no ABR per memory), and switching applies cleanly without restarting playback.
+   - Make sure the Settings → Speed panel and Quality panel use separate state (no collision).
 
-- Add `/watch/:animeId/:episodeId?` route in `src/App.tsx`, lazy-loaded.
-- New page `src/pages/Watch.tsx`:
-  - Loads anime + episode from Firebase using URL params (no dependency on Home state).
-  - Renders only `<VideoPlayer />` full-screen — nothing else mounted.
-  - On close → `navigate(-1)` returns to previous page (Home stays in its last scroll state via the existing sessionStorage persistence).
-- `Index.tsx`:
-  - Remove the `<VideoPlayer ... />` overlay block and its `selectedEpisode` open-state.
-  - Replace "play" handlers (in `AnimeDetails`, `NewEpisodeReleases`, `WeeklyEpisodeManager` previews, continue-watching, etc.) with `navigate('/watch/'+animeId+'/'+episodeId)`.
-- `VideoPlayer.tsx`:
-  - Accept `onClose` prop that defaults to `navigate(-1)` when used from `/watch`.
-  - Add aggressive cleanup on unmount: detach `hls.js`, `video.removeAttribute('src')`, `video.load()`, clear all timers, revoke any blob URLs — confirms no leaks when leaving the route.
-- Home page no longer re-renders while video plays → hero slider, sections, etc. fully unmount perception-wise (they stay in memory but are idle and not animating because the route changed).
+2. **Landscape scroll fix for CC / Subtitle / Settings panels**
+   - In landscape, panel `max-height` currently uses `vh` which collapses → no scroll room. Switch to `min(70vh, 80vw)` or container-relative sizing.
+   - Verify `touch-action: pan-y`, `overscroll-contain`, and `WebkitOverflowScrolling: touch` are applied to the actual scrollable inner div (not the outer wrapper).
+   - Confirm parent gesture handler still ignores `data-player-panel="true"`.
 
-## 3. HLS Audio + Subtitle Buttons (no overlay, clean UI)
+3. **Verify** by logging into `rahatsarker224@gmail.com` and playing Captain Tsubasa Ep 28; screenshot quality panel + landscape CC scroll.
 
-Already wired `hls.js` last turn. Polish:
+---
 
-- **Audio button (`Languages` icon)** and **CC button (`Subtitles` icon)** placed inline in the bottom control bar, right side, between Quality and Settings — same pill style as Quality button.
-- Click → opens a bottom-sheet panel (same pattern as existing Quality panel) listing tracks with a checkmark on the active one. Panels are **siblings of the video**, not absolutely positioned over the controls — no overlay z-index conflicts.
-- Buttons auto-hide when the HLS manifest exposes 0 or 1 track of that type (so non-HLS sources don't show empty buttons).
-- Labels use the manifest's `name`/`lang` (e.g. "Hindi", "Japanese", "English CC") with a fallback to `Track 1/2/3`.
-- Subtitle "Off" option always present.
-- All styles use semantic tokens (`bg-card`, `text-foreground`, `border-border`) — matches your existing player.
+## Stage 2 — User-facing overlays → routes
 
-## 4. Verification
+**New routes** in `App.tsx`:
+- `/anime/:id` → `AnimeDetailsPage` (wraps existing `AnimeDetails` content)
+- `/watch/:id` → `WatchPage` (wraps `VideoPlayer`, reads season/episode from query: `?s=1&e=5`)
+- `/search` → `SearchPageRoute`
+- `/notifications` → `NotificationsPage`
 
-- Build passes.
-- Manually test: open anime → click episode → URL changes to `/watch/...`, Home unmounts visually, player loads HLS, audio + sub buttons appear and switch tracks, close returns to Home with scroll preserved.
-- Python bot: dry-run path that mocks Telegram upload and asserts link format matches old regex `^/stream/-?\d+/\d+/[a-f0-9]{16}/master\.m3u8$`.
+**Files touched**:
+- `src/App.tsx` — register new routes (lazy-loaded)
+- `src/pages/AnimeDetailsPage.tsx` *(new)* — fetches anime by id, renders existing `AnimeDetails` component, handles back via `navigate(-1)`
+- `src/pages/WatchPage.tsx` *(new)* — same pattern for `VideoPlayer`
+- `src/pages/SearchPageRoute.tsx` *(new)*
+- `src/pages/NotificationsPage.tsx` *(new)*
+- `src/pages/Index.tsx` — **remove** overlay state for these 4 (`selectedAnime`, `playingEpisode`, `showSearch`, `showNotifications`). Replace with `navigate('/anime/:id')` etc.
+- `src/components/AnimeDetails.tsx` — replace `onPlay`/`onClose` overlay calls with `navigate()`; keep the component reusable
+- `src/components/VideoPlayer.tsx` — `onClose` → `navigate(-1)`; suggestion clicks → `navigate('/anime/:id')`
+- AI chat internal links — instead of `onAnimeSelect` state, use `navigate('/anime/:id')`
+- `useSelectedAnimeSalt` / sessionStorage refresh-persistence — replaced by URL params (URL itself is the persistence)
 
-## Order of execution
+**PWA / Telegram deep links** (per source-aware-redirect memory) — keep working by mapping legacy query params to new routes inside `Index.tsx` on mount.
 
-1. Add `/watch` route, `Watch.tsx`, navigation rewires (web side).
-2. VideoPlayer cleanup + audio/sub buttons polish.
-3. Remove overlay from `Index.tsx`.
-4. Paste full revised `main_rahat.py` in chat with log channel backup.
+---
 
-Approve and I'll ship all four in one pass.
+## Stage 3 — Admin panel → routes
+
+**Files**: `src/pages/Admin.tsx` + each tab component
+
+- Current: single `Admin.tsx` with tab state showing different sections as overlays/panels.
+- New: nested routes under `/admin`:
+  - `/admin` (dashboard/landing)
+  - `/admin/series`, `/admin/movies`, `/admin/livetv`, `/admin/users`, `/admin/notifications`, `/admin/apk`, `/admin/branding`, `/admin/analytics`, `/admin/config`, etc.
+- Admin sidebar/tabs become `<Link>`s.
+- Each section becomes a lazy-loaded route component.
+- PIN gate (553300) stays at `/admin` root and guards `<Outlet />`.
+
+---
+
+## Technical notes
+
+- All new pages lazy-loaded with `React.lazy` + `Suspense` (same pattern as current `Admin`).
+- Back button on Android / browser will Just Work because real routes = real history entries.
+- Memory updates after Stage 2 & 3: update `mem://features/navigation/refresh-persistence` (URL-based now) and add a new memory for the route map.
+- No changes to: Firebase data shape, auth, subscription flow, ad-link unlock, swipe nav strip.
+
+## What I will NOT touch this chat
+
+Anything else you mentioned in past chats. Only the 2 things you asked: overlay → routes (per your scope choice) and VideoPlayer quality + landscape scroll.
+
+---
+
+## Order of work
+
+1. Stage 1 (Video Player) — ~30 min, ship and verify.
+2. Stage 2 (user overlays → routes) — biggest chunk.
+3. Stage 3 (admin → routes) — last.
+
+Approve this and I'll start with Stage 1 immediately.
