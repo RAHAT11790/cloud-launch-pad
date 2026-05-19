@@ -697,10 +697,14 @@ const Index = () => {
   }, [location.search]);
 
   useEffect(() => {
+    // Routed pages (/search, /notifications) own their own history entry — do NOT
+    // push our rsAnime guard state on top of them, otherwise the browser back
+    // button needs two clicks (one to pop our duplicate, one to actually leave).
+    if (isSearchRoute || isNotificationsRoute) return;
+
     if (window.history.state?.rsAnime !== true) {
       window.history.pushState({ rsAnime: true, page: "home" }, "");
     }
-    if (isSearchRoute || isNotificationsRoute) return;
     let lastBackPress = 0;
     const onPopState = () => {
       window.history.pushState({ rsAnime: true }, "");
