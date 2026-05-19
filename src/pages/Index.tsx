@@ -517,6 +517,8 @@ const Index = () => {
     } catch {}
     return null;
   });
+  const playerStateRef = useRef(playerState);
+  useEffect(() => { playerStateRef.current = playerState; }, [playerState]);
 
   // AnimeSalt iframe player state
   const [saltPlayerState, setSaltPlayerState] = useState<{
