@@ -2314,7 +2314,7 @@ const Index = () => {
 
       <AnimatePresence>
         {selectedAnime && (
-          <AnimeDetails anime={selectedAnime} onClose={() => closeRouteLayer("/")} onPlay={handlePlay} />)
+          <AnimeDetails anime={selectedAnime} onClose={() => closeRouteLayer("/")} onPlay={handlePlay} />
         )}
       </AnimatePresence>
 
