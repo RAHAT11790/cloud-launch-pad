@@ -1912,11 +1912,22 @@ const Index = () => {
   }, [playerState?.anime, saltPlayerState?.anime, allAnime]);
 
   useEffect(() => {
-    if (!showProfile) return;
-    const idle = window.setTimeout(() => {
-      import("@/components/ProfilePage");
-    }, 60);
-    return () => window.clearTimeout(idle);
+    const warmProfile = () => import("@/components/ProfilePage");
+    if (showProfile) {
+      void warmProfile();
+      return;
+    }
+    const idle = (window as any).requestIdleCallback;
+    if (typeof idle === "function") {
+      const id = idle(warmProfile);
+      return () => {
+        try { (window as any).cancelIdleCallback?.(id); } catch {}
+      };
+    }
+    const timer = window.setTimeout(() => {
+      void warmProfile();
+    }, 120);
+    return () => window.clearTimeout(timer);
   }, [showProfile]);
 
   // ===== SWIPE NAVIGATION — ALL PAGES ALWAYS RENDERED (ZERO FLASH) =====
@@ -1952,6 +1963,7 @@ const Index = () => {
 
   const handleNavigate = useCallback((page: string) => {
     if (page === "profile") {
+      void import("@/components/ProfilePage");
       setShowProfile(true);
       return;
     }
