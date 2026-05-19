@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { Episode } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
@@ -97,6 +97,7 @@ import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
 import AnimeDetails from "@/components/AnimeDetails";
 import VideoPlayer from "@/components/VideoPlayer";
+import NotificationsPage from "@/pages/NotificationsPage";
 import { lazy, Suspense } from "react";
 const SearchPage = lazy(() => import("@/components/SearchPage"));
 const ProfilePage = lazy(() => import("@/components/ProfilePage"));
@@ -162,6 +163,10 @@ const isMainPage = (page: string): page is MainPage => MAIN_PAGE_ORDER.includes(
 
 const Index = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const pathname = location.pathname;
+  const isSearchRoute = pathname === "/search";
+  const isNotificationsRoute = pathname === "/notifications";
   const { webseries, movies, allAnime: firebaseAnime, categories, loading } = useFirebaseData();
   const { items: animeSaltItems, loading: saltLoading } = useSelectedAnimeSalt();
   const brandingConfig = useBranding();
@@ -686,9 +691,16 @@ const Index = () => {
   }, [activePage, getCurrentLayer]);
 
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const animeId = params.get("anime");
+    if (animeId) setPendingAnimeId(animeId);
+  }, [location.search]);
+
+  useEffect(() => {
     if (window.history.state?.rsAnime !== true) {
       window.history.pushState({ rsAnime: true, page: "home" }, "");
     }
+    if (isSearchRoute || isNotificationsRoute) return;
     let lastBackPress = 0;
     const onPopState = () => {
       window.history.pushState({ rsAnime: true }, "");
@@ -701,12 +713,13 @@ const Index = () => {
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [handleBackPress]);
+  }, [handleBackPress, isNotificationsRoute, isSearchRoute]);
 
   useEffect(() => {
+    if (isSearchRoute || isNotificationsRoute) return;
     const layer = getCurrentLayer();
     if (layer !== "home") window.history.pushState({ rsAnime: true, page: layer }, "");
-  }, [getCurrentLayer]);
+  }, [getCurrentLayer, isNotificationsRoute, isSearchRoute]);
 
   // Handle deep link: open anime detail from URL ?anime=ID
   useEffect(() => {
