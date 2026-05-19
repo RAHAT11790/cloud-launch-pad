@@ -722,29 +722,6 @@ const Index = () => {
   }, [animeRouteId, isAnimeRoute, isWatchRoute, selectedAnime]);
 
   useEffect(() => {
-    if (!isWatchRoute) {
-      if (playerState) setPlayerState(null);
-      return;
-    }
-    if (!watchRouteAnimeId || allAnime.length === 0 || !freeAccessLoaded) return;
-
-    const params = new URLSearchParams(location.search);
-    const seasonIdx = params.get("s");
-    const epIdx = params.get("e");
-    const targetAnime = allAnime.find((item) => item.id === watchRouteAnimeId);
-    if (!targetAnime) return;
-
-    const nextSeasonIdx = seasonIdx !== null ? Number(seasonIdx) : undefined;
-    const nextEpIdx = epIdx !== null ? Number(epIdx) : undefined;
-    const sameAnime = playerState?.anime.id === watchRouteAnimeId;
-    const sameSeason = (playerState?.seasonIdx ?? undefined) === nextSeasonIdx;
-    const sameEpisode = (playerState?.epIdx ?? undefined) === nextEpIdx;
-    if (sameAnime && sameSeason && sameEpisode) return;
-
-    void handlePlay(targetAnime, nextSeasonIdx, nextEpIdx);
-  }, [allAnime, freeAccessLoaded, handlePlay, isWatchRoute, location.search, playerState, watchRouteAnimeId]);
-
-  useEffect(() => {
     // Routed pages (/search, /notifications) own their own history entry — do NOT
     // push our rsAnime guard state on top of them, otherwise the browser back
     // button needs two clicks (one to pop our duplicate, one to actually leave).
