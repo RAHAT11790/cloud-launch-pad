@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, forwardRef, lazy, Suspense, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, forwardRef, useMemo, useCallback } from "react";
 import { User, LogOut, History, Bookmark, Settings, ChevronRight, ArrowLeft, Camera, X, Save, Globe, Monitor, Bell, Info, Crown, Gift, Check, Lock, Eye, EyeOff, KeyRound, Clock, Download, Play, Trash2, Loader2, Smartphone, Laptop, Tablet, Shield, AlertTriangle, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, set, remove, get, update, push, query, orderByChild, equalTo } from "@/lib/firebase";
@@ -12,7 +12,7 @@ import AboutPage from "./AboutPage";
 import PrivacyPolicyPage from "./PrivacyPolicyPage";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 
-const VideoPlayer = lazy(() => import("@/components/VideoPlayer"));
+import VideoPlayer from "@/components/VideoPlayer";
 
 
 const DownloadVideoPlayer = ({ src, title, subtitle, poster, onClose, downloadedEpisodes, onPlayEpisode, currentId, qualityOptions, onQualityChange }: {
@@ -47,18 +47,16 @@ const DownloadVideoPlayer = ({ src, title, subtitle, poster, onClose, downloaded
 
   return (
     <div className="fixed inset-0 z-[300]">
-      <Suspense fallback={<div className="fixed inset-0 bg-black flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
-        <VideoPlayer
-          src={src}
-          title={title}
-          subtitle={subtitle}
-          poster={poster}
-          onClose={onClose}
-          hideDownload
-          episodeList={episodeList}
-          qualityOptions={vpQualityOptions}
-        />
-      </Suspense>
+      <VideoPlayer
+        src={src}
+        title={title}
+        subtitle={subtitle}
+        poster={poster}
+        onClose={onClose}
+        hideDownload
+        episodeList={episodeList}
+        qualityOptions={vpQualityOptions}
+      />
     </div>
   );
 };
