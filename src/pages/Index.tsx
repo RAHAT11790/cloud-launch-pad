@@ -2240,7 +2240,7 @@ const Index = () => {
           currentSeasonIdx={playerState.seasonIdx}
           onSeasonChange={handleVideoPlayerSeasonChange}
           suggestedAnime={[]}
-          onSuggestedClick={(anime) => { setPlayerState(null); handleCardClick(anime); }}
+          onSuggestedClick={(anime) => { navigate(buildAnimeRoute(anime.id)); handleCardClick(anime); }}
           nextEpisodeSrc={playerState.nextEpisodeSrc}
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
         />
