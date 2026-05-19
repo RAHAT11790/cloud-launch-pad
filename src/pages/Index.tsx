@@ -2196,7 +2196,7 @@ const Index = () => {
           title={playerState.title}
           subtitle={playerState.subtitle}
           poster={playerState.anime.poster}
-          onClose={() => { setPlayerState(null); }}
+          onClose={() => { closeRouteLayer("/"); }}
           qualityOptions={playerState.qualityOptions}
           audioTracks={playerState.audioTracks}
           animeId={playerState.anime.id}
