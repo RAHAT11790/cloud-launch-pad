@@ -454,10 +454,35 @@ const Index = () => {
     const qs = params.toString();
     return `/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
   }, []);
+  const stopAllPlayback = useCallback(() => {
+    try {
+      document.querySelectorAll("video, audio").forEach((node) => {
+        const media = node as HTMLMediaElement;
+        try { media.pause(); } catch {}
+        try { media.currentTime = 0; } catch {}
+        try { media.removeAttribute("src"); } catch {}
+        try { media.load(); } catch {}
+      });
+      document.querySelectorAll('iframe[title="player"], iframe[src*="hf.space"], iframe[src*="huggingface"]').forEach((node) => {
+        const frame = node as HTMLIFrameElement;
+        try { frame.src = "about:blank"; } catch {}
+      });
+    } catch {}
+  }, []);
+  const hardCloseToHome = useCallback(() => {
+    stopAllPlayback();
+    setPlayerState(null);
+    setSaltPlayerState(null);
+    setSelectedAnime(null);
+    setShowProfile(false);
+    setCustomPostDetail(null);
+    navigate("/", { replace: true });
+  }, [navigate, stopAllPlayback]);
   const closeRouteLayer = useCallback((fallback: string = "/") => {
+    stopAllPlayback();
     if (window.history.length > 1) navigate(-1);
     else navigate(fallback, { replace: true });
-  }, [navigate]);
+  }, [navigate, stopAllPlayback]);
 
   // Persist activePage to sessionStorage
   useEffect(() => {
@@ -690,8 +715,8 @@ const Index = () => {
 
   const handleBackPress = useCallback(() => {
     const layer = getCurrentLayer();
-    if (layer === "player") { setPlayerState(null); return true; }
-    if (layer === "saltPlayer") { setSaltPlayerState(null); return true; }
+    if (layer === "player") { stopAllPlayback(); setPlayerState(null); return true; }
+    if (layer === "saltPlayer") { stopAllPlayback(); setSaltPlayerState(null); return true; }
     if (layer === "details") { setSelectedAnime(null); return true; }
     if (layer === "profile") { setShowProfile(false); return true; }
     if (layer === "series" || layer === "movies" || layer === "livetv") {
@@ -700,7 +725,7 @@ const Index = () => {
       return true;
     }
     return false;
-  }, [activePage, getCurrentLayer]);
+  }, [activePage, getCurrentLayer, stopAllPlayback]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
