@@ -747,16 +747,21 @@ const Index = () => {
     if (layer !== "home") window.history.pushState({ rsAnime: true, page: layer }, "");
   }, [getCurrentLayer, isRoutedOverlay]);
 
-  // Handle deep link: open anime detail from URL ?anime=ID
+  // Handle deep link: open anime detail from URL ?anime=ID (legacy query form)
   useEffect(() => {
     if (pendingAnimeId && allAnime.length > 0) {
       const found = allAnime.find(a => a.id === pendingAnimeId);
       if (found) setSelectedAnime(found);
       setPendingAnimeId(null);
-      // Clean URL
-      window.history.replaceState({}, "", window.location.pathname);
+      // Strip the legacy ?anime= query only; preserve /anime/:id pathname.
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("anime") && !pathname.startsWith("/anime/") && !pathname.startsWith("/watch/")) {
+        params.delete("anime");
+        const qs = params.toString();
+        window.history.replaceState({}, "", pathname + (qs ? `?${qs}` : ""));
+      }
     }
-  }, [pendingAnimeId, allAnime]);
+  }, [pendingAnimeId, allAnime, pathname]);
 
   const filteredAnime = useMemo(() => {
     if (activeCategory !== "All") return allAnime.filter(a => a.category === activeCategory);
