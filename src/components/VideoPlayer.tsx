@@ -2957,6 +2957,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               : clean;
           };
 
+          // Build a stable, unique ID per (anime + subtitle + quality) so the same
+          // episode at the same quality dedupes, and IndexedDB lookups work for
+          // offline playback (Profile → Downloads + the "Play Offline" button).
+          const buildDlId = (q: string, sub: string) =>
+            `${animeId || title}::${sub || "movie"}::${q || "Auto"}`
+              .replace(/\s+/g, "_")
+              .toLowerCase();
+
           const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
             const { toast } = await import("sonner");
             if (!isDownloadableUrl(qualitySrc)) {
@@ -2964,10 +2972,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               return;
             }
             const downloadFileName = `${title}${subtitle ? ` - ${subtitle}` : ""}${quality && quality !== "Auto" ? ` - ${quality}` : ""}.mp4`;
-            const ok = triggerBackgroundVideoDownload(getDownloadUrl(qualitySrc), downloadFileName);
-            if (!ok) return;
+            const proxied = buildVideoDownloadUrl(getDownloadUrl(qualitySrc), downloadFileName);
+            if (!proxied) {
+              // Fallback: pure browser download (no offline save possible)
+              const ok = triggerBackgroundVideoDownload(getDownloadUrl(qualitySrc), downloadFileName);
+              if (ok) toast.success("Background download started");
+              setShowDownloadQualityPicker(false);
+              return;
+            }
+            downloadManager.startDownload({
+              id: buildDlId(quality, subtitle),
+              url: proxied,
+              title,
+              subtitle,
+              poster,
+              quality,
+            });
             setShowDownloadQualityPicker(false);
-            toast.success("Background download started");
+            toast.success("Download started — saving for offline playback");
           };
 
           // Bulk: download every episode of the current season at the chosen quality
@@ -2987,7 +3009,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               if (q.includes("480")) return ep.link480 || ep.link720 || ep.link1080 || ep.link;
               return ep.link || ep.link1080 || ep.link720 || ep.link480;
             };
-            // Sort episodes by ascending episodeNumber so download serial stays correct
             const sortedEps = [...season.episodes].sort(
               (a: any, b: any) => Number(a.episodeNumber || 0) - Number(b.episodeNumber || 0)
             );
@@ -2998,9 +3019,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               if (!epUrl || !isDownloadableUrl(epUrl)) { skipped++; continue; }
               const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
               const downloadFileName = `${title} - ${epSubtitle}${quality && quality !== "Auto" ? ` - ${quality}` : ""}.mp4`;
-              const started = triggerBackgroundVideoDownload(getDownloadUrl(epUrl), downloadFileName);
-              if (started) queued++;
-              else skipped++;
+              const proxied = buildVideoDownloadUrl(getDownloadUrl(epUrl), downloadFileName);
+              if (!proxied) { skipped++; continue; }
+              downloadManager.enqueueDownload({
+                id: buildDlId(quality, epSubtitle),
+                url: proxied,
+                title,
+                subtitle: epSubtitle,
+                poster,
+                quality,
+              });
+              queued++;
             }
             setShowDownloadQualityPicker(false);
             setBulkDownloadMode(false);
