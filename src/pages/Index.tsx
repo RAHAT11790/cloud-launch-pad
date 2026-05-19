@@ -1010,6 +1010,15 @@ const Index = () => {
     // Cancel any stale in-flight AnimeSalt details requests when switching content
     detailsRequestRef.current += 1;
 
+    // Reflect details view in the URL so back-button works as a real route.
+    // Use replace when coming from a routed overlay (search/notifications) to
+    // avoid stacking duplicate entries; push from anywhere else.
+    const targetRoute = buildAnimeRoute(anime.id);
+    if (location.pathname !== targetRoute) {
+      const fromRoutedOverlay = isSearchRoute || isNotificationsRoute;
+      navigate(targetRoute, { replace: fromRoutedOverlay });
+    }
+
     // Track click for trending popularity (fire-and-forget)
     try {
       import("@/lib/firebase").then(({ runTransaction, ref: fbRef, db: fbDb }) => {
