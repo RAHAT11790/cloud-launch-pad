@@ -1511,12 +1511,41 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     } catch {}
 
     const v = videoRef.current;
+    const iframe = embedIframeRef.current;
+
+    try {
+      const embedWindow = iframe?.contentWindow;
+      embedWindow?.postMessage({ target: "rs-embed", cmd: "pause" }, "*");
+      embedWindow?.postMessage({ target: "rs-embed", cmd: "stop" }, "*");
+    } catch {}
+
+    try { hlsRef.current?.destroy(); } catch {}
+    hlsRef.current = null;
+
     if (v) {
       try { v.pause(); } catch {}
       v.removeAttribute("src");
       v.src = "";
       v.load();
     }
+
+    if (iframe) {
+      try { iframe.src = "about:blank"; } catch {}
+    }
+
+    try {
+      document.querySelectorAll("video, audio").forEach((node) => {
+        const media = node as HTMLMediaElement;
+        try { media.pause(); } catch {}
+        try { media.currentTime = 0; } catch {}
+        try { media.removeAttribute("src"); } catch {}
+        try { media.load(); } catch {}
+      });
+      document.querySelectorAll('iframe[title="player"], iframe[src*="hf.space"], iframe[src*="huggingface"]').forEach((node) => {
+        const frame = node as HTMLIFrameElement;
+        try { frame.src = "about:blank"; } catch {}
+      });
+    } catch {}
 
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = null;
