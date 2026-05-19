@@ -67,10 +67,10 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
   return (
     <motion.div
       className="fixed inset-0 z-[200] bg-background overflow-y-auto px-4 pb-24 pt-5"
-      initial={{ y: "-100%" }}
-      animate={{ y: 0 }}
-      exit={{ y: "-100%" }}
-      transition={{ type: "tween", duration: 0.4 }}
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
     >
       <div className="flex items-center gap-2.5 mb-5">
         <button onClick={onClose} className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:bg-primary bg-card" style={{ boxShadow: "var(--neu-shadow-sm)" }}>
