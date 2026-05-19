@@ -1888,7 +1888,8 @@ const Index = () => {
       qualityOptions: qOpts.length > 0 ? qOpts : undefined,
       nextEpisodeSrc: undefined,
     });
-  }, [checkAndShowAdGate, playerState]);
+    navigate(buildWatchRoute(playerState.anime.id, newSeasonIdx, 0), { replace: true });
+  }, [checkAndShowAdGate, playerState, navigate, buildWatchRoute]);
 
   // Suggested anime: prioritize same category, then same language, excluding current
   const suggestedAnime = useMemo(() => {
