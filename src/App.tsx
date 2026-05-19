@@ -12,9 +12,6 @@ import DynamicMeta from "./components/DynamicMeta";
 import ManifestManager from "./components/ManifestManager";
 
 const Admin = lazy(() => import("./pages/Admin"));
-const SearchPageRoute = lazy(() => import("./pages/SearchPageRoute"));
-const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
-
 const queryClient = new QueryClient();
 
 const RouteFallback = () => (
@@ -48,15 +45,10 @@ const App = () => (
         <Toaster />
         <Sonner />
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/app" element={<Index />} />
           <Route path="/admin" element={<Suspense fallback={<RouteFallback />}><Admin /></Suspense>} />
-          <Route path="/search" element={<Suspense fallback={<RouteFallback />}><SearchPageRoute /></Suspense>} />
-          <Route path="/notifications" element={<Suspense fallback={<RouteFallback />}><NotificationsPage /></Suspense>} />
           <Route path="/unlock" element={<Unlock />} />
           <Route path="/unlock-required" element={<UnlockRequired />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
+          <Route path="*" element={<Index />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
