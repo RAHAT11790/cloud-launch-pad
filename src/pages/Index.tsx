@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import type { Episode } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
@@ -165,8 +165,15 @@ const Index = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const pathname = location.pathname;
+  const animeRouteMatch = matchPath("/anime/:animeId", pathname);
+  const watchRouteMatch = matchPath("/watch/:animeId", pathname);
   const isSearchRoute = pathname === "/search";
   const isNotificationsRoute = pathname === "/notifications";
+  const isAnimeRoute = !!animeRouteMatch;
+  const isWatchRoute = !!watchRouteMatch;
+  const isRoutedOverlay = isSearchRoute || isNotificationsRoute || isAnimeRoute || isWatchRoute;
+  const animeRouteId = animeRouteMatch?.params.animeId ? decodeURIComponent(animeRouteMatch.params.animeId) : null;
+  const watchRouteAnimeId = watchRouteMatch?.params.animeId ? decodeURIComponent(watchRouteMatch.params.animeId) : null;
   const { webseries, movies, allAnime: firebaseAnime, categories, loading } = useFirebaseData();
   const { items: animeSaltItems, loading: saltLoading } = useSelectedAnimeSalt();
   const brandingConfig = useBranding();
@@ -434,13 +441,26 @@ const Index = () => {
     // Restore from sessionStorage on refresh
     try { return sessionStorage.getItem("rs_selectedAnimeId"); } catch { return null; }
   });
-  const [showSearch, setShowSearch] = useState(() => {
-    try { return sessionStorage.getItem("rs_uiLayer") === "search"; } catch { return false; }
-  });
+  const showSearch = false;
   const [showProfile, setShowProfile] = useState(() => {
     try { return sessionStorage.getItem("rs_uiLayer") === "profile"; } catch { return false; }
   });
   const [chatOpen, setChatOpen] = useState(false);
+  const routeDrivenDetailsRef = useRef(false);
+  const routeDrivenPlayerRef = useRef(false);
+
+  const buildAnimeRoute = useCallback((animeId: string) => `/anime/${encodeURIComponent(animeId)}`, []);
+  const buildWatchRoute = useCallback((animeId: string, seasonIdx?: number, epIdx?: number) => {
+    const params = new URLSearchParams();
+    if (seasonIdx !== undefined) params.set("s", String(seasonIdx));
+    if (epIdx !== undefined) params.set("e", String(epIdx));
+    const qs = params.toString();
+    return `/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
+  }, []);
+  const closeRouteLayer = useCallback((fallback: string = "/") => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate(fallback, { replace: true });
+  }, [navigate]);
 
   // Persist activePage to sessionStorage
   useEffect(() => {
