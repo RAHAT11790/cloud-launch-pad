@@ -2297,7 +2297,7 @@ const Index = () => {
               if (window.history.length > 1) navigate(-1);
               else navigate("/");
             }}
-            onCardClick={(anime) => navigate(`/?anime=${encodeURIComponent(anime.id)}`)}
+            onCardClick={(anime) => navigate(buildAnimeRoute(anime.id), { replace: true })}
           />
         )}
       </AnimatePresence>
