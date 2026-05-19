@@ -1593,6 +1593,10 @@ const Index = () => {
             // AnimeSalt embed - get slug from custom data
             const epSlug = cEp.slug || (cEp.link?.replace('animesalt://', '') || '');
             if (epSlug) {
+              const targetWatchRoute = buildWatchRoute(anime.id, sIdx, eIdx);
+              if (`${location.pathname}${location.search}` !== targetWatchRoute) {
+                navigate(targetWatchRoute);
+              }
               const epResult = await cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug));
               if (epResult.embedUrl) {
                 addToWatchHistory(anime, sIdx, eIdx, true);
@@ -1652,6 +1656,10 @@ const Index = () => {
                 return;
               }
 
+              const targetWatchRoute = buildWatchRoute(anime.id, sIdx, eIdx);
+              if (`${location.pathname}${location.search}` !== targetWatchRoute) {
+                navigate(targetWatchRoute);
+              }
               const epResult = await cachedApiCall(`ep_${ep.slug}`, () => animeSaltApi.getEpisode(ep.slug));
               if (epResult.embedUrl) {
                 const fullAnime: AnimeItem = { ...anime, seasons: buildSeasons() };
