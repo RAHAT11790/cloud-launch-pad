@@ -89,10 +89,10 @@ const NotificationsPage = () => {
   return (
     <motion.div
       className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
-      initial={{ x: "100%" }}
-      animate={{ x: 0 }}
-      exit={{ x: "100%" }}
-      transition={{ type: "tween", duration: 0.3 }}
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
     >
       <div className="flex items-center justify-between mb-5">
         <button onClick={handleBack} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
