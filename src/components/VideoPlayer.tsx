@@ -1505,7 +1505,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
   }, []);
 
-  const stopAndClosePlayer = useCallback(async () => {
+  const stopAndClosePlayer = useCallback(() => {
+    // INSTANT close: fire onClose synchronously so React unmounts the player
+    // overlay immediately. All teardown happens after, off the critical path.
     clearHideTimer();
     setShowControls(false);
     setLocked(false);
@@ -1514,56 +1516,61 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setShowQualityPanel(false);
     setShowServerPanel(false);
 
-    try {
-      if (document.fullscreenElement) {
-        try { (screen.orientation as any).unlock?.(); } catch {}
-        await document.exitFullscreen().catch(() => {});
-      }
-    } catch {}
-
     const v = videoRef.current;
     const iframe = embedIframeRef.current;
 
-    try {
-      const embedWindow = iframe?.contentWindow;
-      embedWindow?.postMessage({ target: "rs-embed", cmd: "pause" }, "*");
-      embedWindow?.postMessage({ target: "rs-embed", cmd: "stop" }, "*");
-    } catch {}
-
+    // Stop audio instantly (cheap) — prevents lingering sound during animation.
+    try { v?.pause(); } catch {}
     try { hlsRef.current?.destroy(); } catch {}
     hlsRef.current = null;
 
-    if (v) {
-      try { v.pause(); } catch {}
-      v.removeAttribute("src");
-      v.src = "";
-      v.load();
-    }
-
-    if (iframe) {
-      try { iframe.src = "about:blank"; } catch {}
-    }
-
-    try {
-      document.querySelectorAll("video, audio").forEach((node) => {
-        const media = node as HTMLMediaElement;
-        try { media.pause(); } catch {}
-        try { media.currentTime = 0; } catch {}
-        try { media.removeAttribute("src"); } catch {}
-        try { media.load(); } catch {}
-      });
-      document.querySelectorAll('iframe[title="player"], iframe[src*="hf.space"], iframe[src*="huggingface"]').forEach((node) => {
-        const frame = node as HTMLIFrameElement;
-        try { frame.src = "about:blank"; } catch {}
-      });
-    } catch {}
-
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.metadata = null;
-      navigator.mediaSession.playbackState = 'none';
-    }
-
+    // Notify parent NOW — don't await anything before this call.
     onClose();
+
+    // Heavy / async cleanup deferred to next tick so it never blocks close.
+    setTimeout(() => {
+      try {
+        if (document.fullscreenElement) {
+          try { (screen.orientation as any).unlock?.(); } catch {}
+          document.exitFullscreen().catch(() => {});
+        }
+      } catch {}
+
+      try {
+        const embedWindow = iframe?.contentWindow;
+        embedWindow?.postMessage({ target: "rs-embed", cmd: "pause" }, "*");
+        embedWindow?.postMessage({ target: "rs-embed", cmd: "stop" }, "*");
+      } catch {}
+
+      if (v) {
+        try { v.removeAttribute("src"); } catch {}
+        try { v.src = ""; } catch {}
+        try { v.load(); } catch {}
+      }
+      if (iframe) {
+        try { iframe.src = "about:blank"; } catch {}
+      }
+
+      try {
+        document.querySelectorAll("video, audio").forEach((node) => {
+          const media = node as HTMLMediaElement;
+          try { media.pause(); } catch {}
+          try { media.removeAttribute("src"); } catch {}
+          try { media.load(); } catch {}
+        });
+        document.querySelectorAll('iframe[title="player"], iframe[src*="hf.space"], iframe[src*="huggingface"]').forEach((node) => {
+          const frame = node as HTMLIFrameElement;
+          try { frame.src = "about:blank"; } catch {}
+        });
+      } catch {}
+
+      if ('mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.metadata = null;
+          navigator.mediaSession.playbackState = 'none';
+        } catch {}
+      }
+    }, 0);
   }, [clearHideTimer, onClose]);
 
   // Auto-close when user leaves the page/app — pause when tab hidden, fully close on pagehide.
