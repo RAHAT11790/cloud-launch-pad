@@ -1188,11 +1188,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      backBufferLength: 90,
-      maxBufferLength: 60,
-      maxMaxBufferLength: 180,
+      // Ultra-fast startup: small initial buffer so first frag plays ASAP,
+      // then grows aggressively in background for smooth playback.
+      backBufferLength: 30,
+      maxBufferLength: 20,
+      maxMaxBufferLength: 600,
+      maxBufferSize: 120 * 1000 * 1000,
       startLevel: -1,
+      startFragPrefetch: true,
+      testBandwidth: false,
+      progressive: true,
       capLevelToPlayerSize: false,
+      // Faster network timeouts so a slow CDN switch retries quicker
+      manifestLoadingTimeOut: 8000,
+      manifestLoadingMaxRetry: 2,
+      levelLoadingTimeOut: 8000,
+      levelLoadingMaxRetry: 2,
+      fragLoadingTimeOut: 15000,
+      fragLoadingMaxRetry: 4,
       // Keep subtitle handling inside our custom overlay so the native track UI
       // does not silently hide cues on Android Chrome.
       renderTextTracksNatively: false,
