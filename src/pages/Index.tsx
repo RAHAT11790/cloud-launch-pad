@@ -1846,14 +1846,16 @@ const Index = () => {
         } catch {}
       }
       addToWatchHistory(playerState!.anime, playerState!.seasonIdx, i);
-      setPlayerState({
+      const nextState = {
         ...playerState!,
         src: nextSrc,
         subtitle: `${season.name} - Episode ${clickedEp.episodeNumber}`,
         epIdx: i,
         qualityOptions: qOpts.length > 0 ? qOpts : undefined,
         nextEpisodeSrc: undefined,
-      });
+      };
+      playerStateRef.current = nextState; // sync ref BEFORE navigate fires the route effect
+      setPlayerState(nextState);
       navigate(buildWatchRoute(playerState!.anime.id, playerState!.seasonIdx, i), { replace: true });
     },
   }));
