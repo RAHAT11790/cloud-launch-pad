@@ -1452,12 +1452,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   useEffect(() => {
     if (!playbackRouteReady) return;
-    const v = videoRef.current;
-    if (v) {
-      try { v.pause(); } catch {}
-    }
+    // Ultra-fast episode switch: do NOT pause/blank the player. Just swap src
+    // and let the video element load the new source while keeping the UI alive.
     instantSwitchRef.current = true;
-    setSwitchingEpisode(true);
     sourceBaseRef.current = src;
     activeSourceBaseRef.current = src;
     const resolvedSrc = resolvePlaybackSrc(src);
@@ -1467,10 +1464,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setVideoError(false);
     failedSrcsRef.current.clear();
     pendingSeek.current = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : 0;
+    // Very short flag window (no visual blank) — just to suppress the loader
+    // overlay during the immediate src swap so we don't get a flash.
+    setSwitchingEpisode(true);
     const t = setTimeout(() => {
       instantSwitchRef.current = false;
       setSwitchingEpisode(false);
-    }, 450);
+    }, 80);
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, initialSeekTime]);
 
