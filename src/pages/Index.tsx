@@ -1881,7 +1881,7 @@ const Index = () => {
       } catch {}
     }
     addToWatchHistory(playerState.anime, newSeasonIdx, 0);
-    setPlayerState({
+    const nextState = {
       ...playerState,
       src: nextSrc,
       subtitle: `${season.name} - Episode ${ep.episodeNumber}`,
@@ -1889,7 +1889,9 @@ const Index = () => {
       epIdx: 0,
       qualityOptions: qOpts.length > 0 ? qOpts : undefined,
       nextEpisodeSrc: undefined,
-    });
+    };
+    playerStateRef.current = nextState;
+    setPlayerState(nextState);
     navigate(buildWatchRoute(playerState.anime.id, newSeasonIdx, 0), { replace: true });
   }, [checkAndShowAdGate, playerState, navigate, buildWatchRoute]);
 
