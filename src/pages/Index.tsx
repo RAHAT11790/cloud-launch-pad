@@ -2254,7 +2254,7 @@ const Index = () => {
   // home UI no longer renders, eliminating leaks and CPU drain.
   if (playerState) {
     return (
-      <div className="fixed inset-0 z-[100] bg-black">
+      <div className="fixed inset-0 z-[100] bg-black animate-in fade-in duration-150">
         <VideoPlayer
           src={playerState.src}
           title={playerState.title}
