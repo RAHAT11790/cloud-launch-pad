@@ -1498,7 +1498,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
 
     const visibleFor = Date.now() - loaderShownAtRef.current;
-    const MIN_VISIBLE = 500;
+    const MIN_VISIBLE = 1200; // anti-flicker: hold for 1.2s so canplay↔waiting cycles don't blink controls
     if (visibleFor >= MIN_VISIBLE) {
       setShowFixedLoader(false);
     } else {
