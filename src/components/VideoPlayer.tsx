@@ -1474,7 +1474,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, initialSeekTime]);
 
-  // Loader follows real buffering state — show whenever video isn't playable, hide as soon as it can play.
+  // Loader follows real buffering state but with anti-flicker guards:
+  // - Show immediately when buffering starts.
+  // - Once visible, keep on screen for at least 500ms so quick canplay→waiting→canplay
+  //   cycles during HLS start don't make the petals (and the dark overlay covering
+  //   the video area) blink on/off rapidly.
+  const loaderShownAtRef = useRef<number>(0);
   useEffect(() => {
     if (loaderTimeoutRef.current) {
       clearTimeout(loaderTimeoutRef.current);
@@ -1486,8 +1491,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       return;
     }
 
-    // Strict mapping: loader visibility == buffering state.
-    setShowFixedLoader(isBuffering);
+    if (isBuffering) {
+      loaderShownAtRef.current = Date.now();
+      setShowFixedLoader(true);
+      return;
+    }
+
+    const visibleFor = Date.now() - loaderShownAtRef.current;
+    const MIN_VISIBLE = 500;
+    if (visibleFor >= MIN_VISIBLE) {
+      setShowFixedLoader(false);
+    } else {
+      loaderTimeoutRef.current = setTimeout(() => {
+        setShowFixedLoader(false);
+        loaderTimeoutRef.current = null;
+      }, MIN_VISIBLE - visibleFor);
+    }
   }, [currentSrc, isBuffering, switchingEpisode]);
 
   // Simple volume sync - no AudioContext needed
