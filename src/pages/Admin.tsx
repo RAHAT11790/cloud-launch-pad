@@ -3934,21 +3934,28 @@ ${tgHashtags}`;
     const shuffled = [...remaining].sort(() => Math.random() - 0.5);
     const picked = shuffled.slice(0, batchSize);
 
-    // Build professional HTML body
-    const lines = picked.map((it, i) => {
+    // Build professional HTML body — each anime in its own blockquote "box"
+    // Telegram renders <blockquote> with a colored left bar, giving each item a card-like feel.
+    const boxes = picked.map((it, i) => {
       const num = String(i + 1).padStart(2, "0");
       const url = `${SITE_URL}?anime=${encodeURIComponent(it.id)}`;
       const icon = it.type === "movie" ? "🎬" : "📺";
-      // Telegram HTML: title is a clickable anchor
-      return `${num}. ${icon} <a href="${url}"><b>${escapeHtmlBasic(it.title)}</b></a>`;
-    }).join("\n");
+      const tag = it.type === "movie" ? "MOVIE" : "SERIES";
+      const title = escapeHtmlBasic(it.title);
+      return `<blockquote>${icon} <b>#${num}</b>  •  <i>${tag}</i>
+🎯 <a href="${url}"><b>${title}</b></a>
+▶️ <a href="${url}">Tap to Watch Now</a></blockquote>`;
+    }).join("\n\n");
 
-    const caption = `${tgBulkHeader}
-━━━━━━━━━━━━━━━━━━
-${lines}
-━━━━━━━━━━━━━━━━━━
+    const headerText = escapeHtmlBasic(String(tgBulkHeader || "").replace(/<[^>]+>/g, "").trim()) || "RS ANIME • Daily Drops";
+    const caption = `✨ <b>${headerText}</b> ✨
+━━━━━━━━━━━━━━━━━━━
+
+${boxes}
+
+━━━━━━━━━━━━━━━━━━━
 ${tgBulkFooter}
-🌐 <a href="${SITE_URL}">${SITE_URL.replace(/^https?:\/\//, "")}</a>`;
+🌐 <a href="${SITE_URL}"><b>${SITE_URL.replace(/^https?:\/\//, "")}</b></a>`;
 
     const channelIds = tgChannelId.split(/[,\n]+/).map(id => id.trim()).filter(Boolean);
     if (channelIds.length === 0) { toast.error("Enter at least one channel ID"); return; }
