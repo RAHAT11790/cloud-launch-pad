@@ -2012,6 +2012,19 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     return () => clearTimeout(t);
   }, [tgSelectedAnimeId, tgButtons, tgDefaultButtonName]);
   const [tgSending, setTgSending] = useState(false);
+  // Bulk catalog broadcaster — sends random 20 anime per post, no duplicates across sends
+  const [tgBulkSending, setTgBulkSending] = useState(false);
+  const [tgBulkBatchSize, setTgBulkBatchSize] = useState(20);
+  const [tgBulkHeader, setTgBulkHeader] = useState("🎌 𝗥𝗦 𝗔𝗡𝗜𝗠𝗘 — 𝗙𝗥𝗘𝗦𝗛 𝗗𝗥𝗢𝗣");
+  const [tgBulkFooter, setTgBulkFooter] = useState("🔗 Watch Free at RS ANIME • Daily Updates");
+  const [tgBulkSentIds, setTgBulkSentIds] = useState<Record<string, number>>({});
+  const [tgBulkProgress, setTgBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  useEffect(() => {
+    const unsub = onValue(ref(db, "telegramBulkBroadcast/sentIds"), (snap) => {
+      setTgBulkSentIds(snap.val() || {});
+    });
+    return () => unsub();
+  }, []);
   const [tgDropdownOpen, setTgDropdownOpen] = useState(false);
   const [tgContentSearch, setTgContentSearch] = useState("");
   const tgDropdownRef = useRef<HTMLDivElement>(null);
