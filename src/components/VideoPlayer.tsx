@@ -2985,6 +2985,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           // Check if this episode is already saved in IndexedDB
           const savedEpisode = downloadedEpisodes.find(d => d.subtitle === subtitle);
           const isAlreadySaved = !!savedEpisode;
+          const currentDownloadId = buildDlId(currentQuality === "Auto" ? (availableQualities[0]?.label || "Auto") : currentQuality, subtitle);
+          const activeDownload = downloadSnapshot.downloads.get(currentDownloadId)
+            || Array.from(downloadSnapshot.downloads.values()).find((item) => item.subtitle === subtitle);
+          const isDownloadActive = !!activeDownload && (activeDownload.status === "queued" || activeDownload.status === "downloading");
 
           const isDownloadableUrl = (u: string): boolean => isHttpsDownloadableUrl(u);
           const getDownloadUrl = (u: string, fallbackUrls: string[] = []): string => pickHttpsDownloadUrl(u, fallbackUrls);
@@ -3095,6 +3099,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 ) : (
                   <button
                     onClick={async () => {
+                      if (isDownloadActive && activeDownload) {
+                        downloadManager.cancelDownload(activeDownload.id);
+                        return;
+                      }
                       // Show quality picker if multiple qualities available
                       if (availableQualities.length > 1) {
                         setBulkDownloadMode(false);
@@ -3106,16 +3114,34 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     }}
                     className="relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all overflow-hidden gradient-primary text-primary-foreground btn-glow hover:scale-[1.02]"
                   >
+                    {activeDownload && (
+                      <span
+                        className="absolute inset-y-0 left-0 bg-black/65 transition-all duration-300"
+                        style={{ width: `${Math.max(activeDownload.status === "complete" ? 100 : activeDownload.percent, activeDownload.status === "queued" ? 8 : 0)}%` }}
+                      />
+                    )}
                     <span className="relative z-10 flex items-center gap-2">
                       <Download className="w-4 h-4" />
-                      <span>Background Download</span>
+                      <span>
+                        {activeDownload
+                          ? activeDownload.status === "queued"
+                            ? `Queued • Ep ${activeDownload.queueIndex}/${activeDownload.totalInBatch}`
+                            : activeDownload.status === "downloading"
+                              ? `${activeDownload.subtitle || "Episode"} • ${activeDownload.percent}%`
+                              : activeDownload.status === "complete"
+                                ? "Download Complete"
+                                : activeDownload.status === "error"
+                                  ? "Retry Download"
+                                  : "Download Episode"
+                          : "Download Episode"}
+                      </span>
                     </span>
                   </button>
                 )}
               </div>
               {!isAlreadySaved && (
                 <p className="text-[11px] text-center text-muted-foreground leading-relaxed px-3">
-                  Download will open in your browser download manager and can continue after leaving the site.
+                  HTTPS queue downloads one by one with live progress in player, profile, and floating notification.
                 </p>
               )}
 
