@@ -2986,14 +2986,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           const savedEpisode = downloadedEpisodes.find(d => d.subtitle === subtitle);
           const isAlreadySaved = !!savedEpisode;
 
-          const isDownloadableUrl = (u: string): boolean => isDirectDownloadCandidate(u);
-          const getDownloadUrl = (u: string): string => {
-            const clean = String(u || "").trim();
-            if (!clean) return "";
-            return clean.toLowerCase().startsWith("http://") && BUILTIN_STREAM_PROXY
-              ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, clean)
-              : clean;
-          };
+          const isDownloadableUrl = (u: string): boolean => isHttpsDownloadableUrl(u);
+          const getDownloadUrl = (u: string, fallbackUrls: string[] = []): string => pickHttpsDownloadUrl(u, fallbackUrls);
 
           // Build a stable, unique ID per (anime + subtitle + quality) so the same
           // episode at the same quality dedupes, and IndexedDB lookups work for
@@ -3009,25 +3003,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               toast.error("Direct download not available for this episode");
               return;
             }
-            const downloadFileName = `${title}${subtitle ? ` - ${subtitle}` : ""}${quality && quality !== "Auto" ? ` - ${quality}` : ""}.mp4`;
-            const proxied = buildVideoDownloadUrl(getDownloadUrl(qualitySrc), downloadFileName);
-            if (!proxied) {
-              // Fallback: pure browser download (no offline save possible)
-              const ok = triggerBackgroundVideoDownload(getDownloadUrl(qualitySrc), downloadFileName);
-              if (ok) toast.success("Background download started");
-              setShowDownloadQualityPicker(false);
+            const directHttpsUrl = getDownloadUrl(qualitySrc, [src]);
+            if (!directHttpsUrl) {
+              toast.error("HTTPS download server not available for this episode");
               return;
             }
             downloadManager.startDownload({
               id: buildDlId(quality, subtitle),
-              url: proxied,
+              url: directHttpsUrl,
               title,
               subtitle,
               poster,
               quality,
             });
             setShowDownloadQualityPicker(false);
-            toast.success("Download started — saving for offline playback");
+            toast.success("Download queued");
           };
 
           // Bulk: download every episode of the current season at the chosen quality
@@ -3053,15 +3043,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             let queued = 0;
             let skipped = 0;
             for (const ep of sortedEps) {
-              const epUrl = pickEpUrl(ep);
+              const epUrl = getDownloadUrl(pickEpUrl(ep), [ep.link, ep.link480, ep.link720, ep.link1080, ep.link4k]);
               if (!epUrl || !isDownloadableUrl(epUrl)) { skipped++; continue; }
               const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
-              const downloadFileName = `${title} - ${epSubtitle}${quality && quality !== "Auto" ? ` - ${quality}` : ""}.mp4`;
-              const proxied = buildVideoDownloadUrl(getDownloadUrl(epUrl), downloadFileName);
-              if (!proxied) { skipped++; continue; }
               downloadManager.enqueueDownload({
                 id: buildDlId(quality, epSubtitle),
-                url: proxied,
+                url: epUrl,
                 title,
                 subtitle: epSubtitle,
                 poster,
