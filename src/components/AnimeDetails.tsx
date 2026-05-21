@@ -210,7 +210,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
       initial={{ x: "100%" }}
       animate={{ x: 0 }}
       exit={{ x: "100%" }}
-      transition={{ type: "tween", duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+      transition={{ type: "tween", duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
     >
       {/* Header Image */}
       <div className="relative w-full h-[45vh] min-h-[300px] overflow-hidden">
