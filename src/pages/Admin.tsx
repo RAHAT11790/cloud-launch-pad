@@ -6798,8 +6798,95 @@ ${tgBulkFooter}
                 </>
               )}
             </button>
+
+            {/* ============= BULK CATALOG BROADCAST ============= */}
+            {(() => {
+              const totalPool = webseriesData.length + moviesData.length;
+              const sentCount = Object.keys(tgBulkSentIds).length;
+              const remaining = Math.max(0, totalPool - sentCount);
+              return (
+                <div className={`${glassCard} p-4 mt-5 border border-purple-500/30`}>
+                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                    <Send size={14} className="text-purple-400" /> Bulk Catalog Broadcast
+                  </h3>
+                  <p className="text-[11px] text-zinc-400 mb-3">
+                    এক ক্লিকে আপনার ওয়েবসাইটের সব এনিমে থেকে random ব্যাচ Telegram-এ পাঠান। কোনো এনিমে ডুপ্লিকেট হবে না — প্রতিটা ভিন্ন পোস্টে যাবে।
+                  </p>
+
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="bg-white/5 rounded-lg p-2 text-center">
+                      <div className="text-[10px] text-zinc-400">Total</div>
+                      <div className="text-base font-bold text-white">{totalPool}</div>
+                    </div>
+                    <div className="bg-green-500/10 rounded-lg p-2 text-center">
+                      <div className="text-[10px] text-green-400">Sent</div>
+                      <div className="text-base font-bold text-green-400">{sentCount}</div>
+                    </div>
+                    <div className="bg-purple-500/10 rounded-lg p-2 text-center">
+                      <div className="text-[10px] text-purple-400">Remaining</div>
+                      <div className="text-base font-bold text-purple-400">{remaining}</div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div>
+                      <label className="block text-[10px] text-zinc-400 mb-1">Batch size (1-50)</label>
+                      <input type="number" min={1} max={50} value={tgBulkBatchSize}
+                        onChange={e => setTgBulkBatchSize(Math.max(1, Math.min(50, parseInt(e.target.value) || 20)))}
+                        className={inputClass} />
+                    </div>
+                    <div className="flex items-end">
+                      <button onClick={resetBulkSentIds} type="button"
+                        className="w-full py-2 px-3 text-[11px] rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 transition">
+                        🔄 Reset Sent History
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mb-2">
+                    <label className="block text-[10px] text-zinc-400 mb-1">Header (HTML allowed)</label>
+                    <input value={tgBulkHeader} onChange={e => setTgBulkHeader(e.target.value)} className={inputClass} />
+                  </div>
+                  <div className="mb-3">
+                    <label className="block text-[10px] text-zinc-400 mb-1">Footer</label>
+                    <input value={tgBulkFooter} onChange={e => setTgBulkFooter(e.target.value)} className={inputClass} />
+                  </div>
+
+                  {tgBulkProgress && (
+                    <div className="mb-3">
+                      <div className="flex justify-between text-[10px] text-zinc-400 mb-1">
+                        <span>Sending…</span>
+                        <span>{tgBulkProgress.done}/{tgBulkProgress.total}</span>
+                      </div>
+                      <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full bg-purple-500 transition-all"
+                          style={{ width: `${(tgBulkProgress.done / Math.max(1, tgBulkProgress.total)) * 100}%` }} />
+                      </div>
+                    </div>
+                  )}
+
+                  <button onClick={sendBulkCatalogPost} disabled={tgBulkSending || remaining === 0 || !tgChannelId.trim()}
+                    className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white disabled:opacity-50 hover:opacity-95 transition">
+                    {tgBulkSending ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        পাঠানো হচ্ছে...
+                      </>
+                    ) : (
+                      <>
+                        <Send size={16} /> Send {Math.min(tgBulkBatchSize, remaining)} Random Anime
+                      </>
+                    )}
+                  </button>
+                  <p className="text-[10px] text-zinc-500 mt-2 text-center">
+                    উপরের "চ্যানেল আইডি" ফিল্ডের সব চ্যানেলে পাঠানো হবে। প্রতিটা title clickable link হিসেবে যাবে।
+                  </p>
+                </div>
+              );
+            })()}
           </div>
         )}
+
 
         {/* ==================== TG URL CHANGER ==================== */}
         {activeSection === "tg-url-changer" && (() => {
