@@ -350,17 +350,35 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-semibold text-foreground truncate">{item.subtitle || item.title}</p>
                     <p className="text-[10px] text-muted-foreground">
-                      {item.status === "queued" ? `Queued • ${item.queueIndex}/${item.totalInBatch}` : item.status === "downloading" ? `Downloading • ${item.percent}%` : item.status}
+                      {item.status === "queued" ? `Queued • ${item.queueIndex}/${item.totalInBatch}` : item.status === "downloading" ? `Downloading • ${item.percent}%` : item.status === "paused" ? "Paused" : item.status}
                     </p>
                   </div>
-                  {(item.status === "queued" || item.status === "downloading") && (
-                    <button
-                      onClick={() => downloadManager.cancelDownload(item.id)}
-                      className="w-7 h-7 rounded-full bg-destructive/15 flex items-center justify-center shrink-0"
-                    >
-                      <X className="w-3.5 h-3.5 text-destructive" />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {(item.status === "queued" || item.status === "downloading") && (
+                      <button
+                        onClick={() => downloadManager.pauseDownload(item.id)}
+                        className="px-2 py-1 rounded-lg bg-secondary text-[10px] font-semibold text-foreground"
+                      >
+                        Pause
+                      </button>
+                    )}
+                    {item.status === "paused" && (
+                      <button
+                        onClick={() => downloadManager.resumeDownload(item.id)}
+                        className="px-2 py-1 rounded-lg gradient-primary text-[10px] font-semibold text-primary-foreground"
+                      >
+                        Resume
+                      </button>
+                    )}
+                    {(item.status === "queued" || item.status === "downloading" || item.status === "paused") && (
+                      <button
+                        onClick={() => downloadManager.cancelDownload(item.id)}
+                        className="w-7 h-7 rounded-full bg-destructive/15 flex items-center justify-center"
+                      >
+                        <X className="w-3.5 h-3.5 text-destructive" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <Progress value={item.status === "complete" ? 100 : item.percent} className="h-2 bg-background/60" />
               </div>

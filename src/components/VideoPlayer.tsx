@@ -3122,6 +3122,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 ) : (
                   <button
                     onClick={async () => {
+                      if (activeDownload?.status === "paused") {
+                        downloadManager.resumeDownload(activeDownload.id);
+                        return;
+                      }
                       if (isDownloadActive && activeDownload) {
                         downloadManager.cancelDownload(activeDownload.id);
                         return;
@@ -3151,6 +3155,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                             ? `Queued • Ep ${activeDownload.queueIndex}/${activeDownload.totalInBatch}`
                             : activeDownload.status === "downloading"
                               ? `${activeDownload.subtitle || "Episode"} • ${activeDownload.percent}%`
+                              : activeDownload.status === "paused"
+                                ? "Resume Download"
                               : activeDownload.status === "complete"
                                 ? "Download Complete"
                                 : activeDownload.status === "error"

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Download, GripHorizontal, Loader2, X } from "lucide-react";
+import { Download, GripHorizontal, Loader2, Pause, Play, X } from "lucide-react";
 
 import { downloadManager, type ActiveDownload, type DownloadQueueSnapshot } from "@/lib/downloadManager";
 
@@ -121,13 +121,43 @@ export default function DownloadProgressOverlay() {
           <span>{completed}/{items.length} done</span>
         </div>
 
+        <div className="mt-2 flex items-center gap-2">
+          {(activeItem.status === "queued" || activeItem.status === "downloading") && (
+            <button
+              type="button"
+              onClick={() => downloadManager.pauseDownload(activeItem.id)}
+              className="flex h-8 flex-1 items-center justify-center gap-1 rounded-lg bg-secondary/70 text-[10px] font-semibold text-foreground"
+            >
+              <Pause className="h-3.5 w-3.5" /> Pause
+            </button>
+          )}
+          {activeItem.status === "paused" && (
+            <button
+              type="button"
+              onClick={() => downloadManager.resumeDownload(activeItem.id)}
+              className="flex h-8 flex-1 items-center justify-center gap-1 rounded-lg gradient-primary text-[10px] font-semibold text-primary-foreground"
+            >
+              <Play className="h-3.5 w-3.5" /> Resume
+            </button>
+          )}
+          {(activeItem.status === "queued" || activeItem.status === "downloading" || activeItem.status === "paused") && (
+            <button
+              type="button"
+              onClick={() => downloadManager.cancelDownload(activeItem.id)}
+              className="flex h-8 flex-1 items-center justify-center rounded-lg bg-destructive/15 text-[10px] font-semibold text-destructive"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+
         <div className="mt-2 space-y-1.5">
           {items.slice(0, 3).map((item: ActiveDownload) => (
             <div key={item.id} className="rounded-lg bg-secondary/50 px-2 py-1.5">
               <div className="flex items-center justify-between gap-2 text-[10px]">
                 <span className="truncate text-foreground">{item.subtitle || item.title}</span>
                 <span className="shrink-0 text-muted-foreground">
-                  {item.status === "queued" ? "Queued" : item.status === "downloading" ? `${item.percent}%` : item.status}
+                  {item.status === "queued" ? "Queued" : item.status === "downloading" ? `${item.percent}%` : item.status === "paused" ? "Paused" : item.status}
                 </span>
               </div>
             </div>
