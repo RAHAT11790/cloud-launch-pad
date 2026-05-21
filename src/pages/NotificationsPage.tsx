@@ -95,7 +95,15 @@ const NotificationsPage = () => {
       transition={{ duration: 0.15, ease: "easeOut" }}
     >
       <div className="flex items-center justify-between mb-5">
-        <button onClick={handleBack} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <button
+          onPointerDown={(e) => {
+            e.preventDefault();
+            (document.activeElement as HTMLElement | null)?.blur?.();
+            handleBack();
+          }}
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Back"
+        >
           <ArrowLeft className="w-5 h-5" />
           <span className="font-medium">Notifications</span>
         </button>
