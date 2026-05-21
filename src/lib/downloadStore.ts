@@ -95,6 +95,9 @@ export async function downloadWithProgress(
   signal?: AbortSignal
 ): Promise<Blob> {
   const response = await fetch(url, { signal });
+  if (!response.ok) {
+    throw new Error(`Download request failed (${response.status})`);
+  }
   const contentLength = Number(response.headers.get("Content-Length") || 0);
   const reader = response.body?.getReader();
   if (!reader) throw new Error("No readable stream");
@@ -115,6 +118,11 @@ export async function downloadWithProgress(
     const loadedMB = loaded / (1024 * 1024);
     const percent = contentLength ? Math.round((loaded / contentLength) * 100) : 0;
     onProgress(percent, loadedMB, totalMB);
+  }
+
+  if (!contentLength && loaded > 0) {
+    const loadedMB = loaded / (1024 * 1024);
+    onProgress(100, loadedMB, loadedMB);
   }
 
   return new Blob(chunks as unknown as BlobPart[], { type: "video/mp4" });
