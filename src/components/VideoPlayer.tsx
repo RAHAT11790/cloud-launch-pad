@@ -2676,18 +2676,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                     </div>
                   </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <span ref={timeDisplayRef} className="text-[11px] font-medium">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                <div className="flex justify-between items-center gap-2 flex-nowrap">
+                  <div className="flex items-center gap-2 shrink-0 min-w-0">
+                    <span ref={timeDisplayRef} className="text-[11px] font-medium whitespace-nowrap tabular-nums leading-none">{formatTime(currentTime)} / {formatTime(duration)}</span>
                     <button onClick={(e) => {
                       e.stopPropagation();
                       applyPlayerVolume(boostedVolume, !muted);
-                    }} className="w-6 h-6 flex items-center justify-center">
+                    }} className="w-6 h-6 flex items-center justify-center shrink-0">
                       {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
                   </div>
-                  <div className="flex items-center gap-1 justify-end flex-wrap max-w-[72%]">
-                    <span className="player-control-chip text-[10px] px-2 py-0.5 rounded shrink-0">{playbackRate}x</span>
+                  <div className="flex items-center gap-1 justify-end flex-nowrap min-w-0">
+                    <span className="player-control-chip text-[10px] px-2 py-0.5 rounded shrink-0 leading-none">{playbackRate}x</span>
                     {availableQualities.length > 1 && (
                       <div className="relative shrink-0">
                           <button
