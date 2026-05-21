@@ -1,3 +1,5 @@
+import { toast } from "@/hooks/use-toast";
+
 import { hasDownload, saveVideo, downloadWithProgress } from "./downloadStore";
 
 export type DownloadStatus = "queued" | "downloading" | "complete" | "error" | "cancelled";
@@ -16,6 +18,7 @@ export interface ActiveDownload {
   queueIndex: number;
   totalInBatch: number;
   error?: string;
+  fileName?: string;
 }
 
 export interface DownloadQueueSnapshot {
@@ -33,6 +36,7 @@ type DownloadParams = {
   subtitle?: string;
   poster?: string;
   quality: string;
+  fileName?: string;
 };
 
 type QueueItem = DownloadParams & {
@@ -176,9 +180,14 @@ class DownloadManager {
       sequence,
       queueIndex: this.queue.length,
       totalInBatch: this.queue.length,
+        fileName: params.fileName || buildFileName(params.title, params.subtitle, params.quality),
     });
     this.reindexQueueMeta();
     this.notify();
+    toast({
+      title: "Download queued",
+      description: params.subtitle || params.title,
+    });
     void this.processQueue();
   }
 
@@ -225,6 +234,10 @@ class DownloadManager {
     entry.status = "downloading";
     entry.error = undefined;
     this.notify();
+    toast({
+      title: "Download started",
+      description: params.subtitle || params.title,
+    });
 
     const abortController = new AbortController();
     this.abortControllers.set(params.id, abortController);
@@ -249,7 +262,7 @@ class DownloadManager {
         subtitle: params.subtitle,
         poster: params.poster,
         quality: params.quality,
-        fileName: buildFileName(params.title, params.subtitle, params.quality),
+        fileName: params.fileName || buildFileName(params.title, params.subtitle, params.quality),
         sourceUrl: params.url,
         size: blob.size,
         downloadedAt: Date.now(),
@@ -265,7 +278,7 @@ class DownloadManager {
       }
 
       if (!isStandaloneMode()) {
-        const fileName = buildFileName(params.title, params.subtitle, params.quality);
+        const fileName = params.fileName || buildFileName(params.title, params.subtitle, params.quality);
         const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = blobUrl;
@@ -278,14 +291,27 @@ class DownloadManager {
       }
 
       this.notify();
+      toast({
+        title: "Download complete",
+        description: params.subtitle || params.title,
+      });
     } catch (error) {
       const current = this.active.get(params.id);
       if (current) {
         if (error instanceof DOMException && error.name === "AbortError") {
           current.status = "cancelled";
+          toast({
+            title: "Download cancelled",
+            description: params.subtitle || params.title,
+          });
         } else {
           current.status = "error";
           current.error = error instanceof Error ? error.message : "Download failed";
+          toast({
+            variant: "destructive",
+            title: "Download failed",
+            description: current.error,
+          });
         }
       }
       this.notify();
