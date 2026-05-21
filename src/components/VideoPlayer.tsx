@@ -43,6 +43,7 @@ const PROXY_SERVER_LIMIT = 3;
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { pickHttpsDownloadUrl, isHttpsDownloadableUrl } from "@/lib/downloadSources";
+import { buildVideoDownloadUrl } from "@/lib/videoDownload";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 // Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
@@ -2996,9 +2997,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             });
             return baseCandidates;
           };
-          const isDownloadableUrl = (u: string): boolean => isHttpsDownloadableUrl(u);
-          const getDownloadUrl = (u: string, fallbackUrls: string[] = []): string =>
-            pickHttpsDownloadUrl(u, [...deriveServerDownloadCandidates(u), ...fallbackUrls]);
+          const buildDownloadFileName = (quality: string, sub?: string) => {
+            const parts = [title, sub, quality && quality !== "Auto" ? quality : ""]
+              .map((part) => String(part || "").trim())
+              .filter(Boolean);
+            return `${parts.join(" - ") || "video"}.mp4`;
+          };
+          const isDownloadableUrl = (u: string): boolean => isDirectDownloadCandidate(u);
+          const getDownloadUrl = (u: string, quality: string, sub?: string, fallbackUrls: string[] = []): string => {
+            const candidates = [...deriveServerDownloadCandidates(u), ...fallbackUrls].filter(Boolean);
+            const directHttps = pickHttpsDownloadUrl(u, candidates);
+            if (directHttps) return directHttps;
+
+            const managedCandidate = [u, ...candidates].find((candidate) => isDirectDownloadCandidate(candidate));
+            if (!managedCandidate) return "";
+            return buildVideoDownloadUrl(managedCandidate, buildDownloadFileName(quality, sub)) || "";
+          };
 
           // Build a stable, unique ID per (anime + subtitle + quality) so the same
           // episode at the same quality dedupes, and IndexedDB lookups work for
@@ -3015,13 +3029,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
           const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
             const { toast } = await import("sonner");
-            if (!isDownloadableUrl(qualitySrc)) {
-              toast.error("Direct download not available for this episode");
-              return;
-            }
-            const directHttpsUrl = getDownloadUrl(qualitySrc, [src]);
+            const directHttpsUrl = getDownloadUrl(qualitySrc, quality, subtitle, [src]);
             if (!directHttpsUrl) {
-              toast.error("HTTPS download server not available for this episode");
+              toast.error("Download not available for this episode");
               return;
             }
             downloadManager.startDownload({
@@ -3031,9 +3041,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               subtitle,
               poster,
               quality,
+              fileName: buildDownloadFileName(quality, subtitle),
             });
             setShowDownloadQualityPicker(false);
-            toast.success("Download queued");
           };
 
           // Bulk: download every episode of the current season at the chosen quality
@@ -3059,8 +3069,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             let queued = 0;
             let skipped = 0;
             for (const ep of sortedEps) {
-              const epUrl = getDownloadUrl(pickEpUrl(ep), [ep.link, ep.link480, ep.link720, ep.link1080, ep.link4k]);
-              if (!epUrl || !isDownloadableUrl(epUrl)) { skipped++; continue; }
+              const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
+              const epUrl = getDownloadUrl(pickEpUrl(ep), quality, epSubtitle, [ep.link, ep.link480, ep.link720, ep.link1080, ep.link4k]);
+              if (!epUrl) { skipped++; continue; }
               const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
               downloadManager.enqueueDownload({
                 id: buildDlId(quality, epSubtitle),
@@ -3069,6 +3080,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 subtitle: epSubtitle,
                 poster,
                 quality,
+                fileName: buildDownloadFileName(quality, epSubtitle),
               });
               queued++;
             }
