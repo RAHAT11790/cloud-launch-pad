@@ -2986,8 +2986,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           const savedEpisode = downloadedEpisodes.find(d => d.subtitle === subtitle);
           const isAlreadySaved = !!savedEpisode;
 
+          const deriveServerDownloadCandidates = (rawUrl: string) => {
+            const baseCandidates = [rawUrl];
+            if (manualServerSelected) {
+              baseCandidates.push(applyServerDomain(rawUrl, activeServerIndex));
+            }
+            effectiveVideoServers.forEach((_, index) => {
+              baseCandidates.push(applyServerDomain(rawUrl, index));
+            });
+            return baseCandidates;
+          };
           const isDownloadableUrl = (u: string): boolean => isHttpsDownloadableUrl(u);
-          const getDownloadUrl = (u: string, fallbackUrls: string[] = []): string => pickHttpsDownloadUrl(u, fallbackUrls);
+          const getDownloadUrl = (u: string, fallbackUrls: string[] = []): string =>
+            pickHttpsDownloadUrl(u, [...deriveServerDownloadCandidates(u), ...fallbackUrls]);
 
           // Build a stable, unique ID per (anime + subtitle + quality) so the same
           // episode at the same quality dedupes, and IndexedDB lookups work for
