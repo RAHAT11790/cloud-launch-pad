@@ -3911,6 +3911,117 @@ ${tgHashtags}`;
     }
   };
 
+  // ============= BULK CATALOG BROADCAST =============
+  // Sends one Telegram message per channel containing N random anime (title + clickable link).
+  // Tracks sent IDs in Firebase so the SAME anime is never re-sent (no duplicates).
+  const sendBulkCatalogPost = async () => {
+    if (!tgChannelId.trim()) { toast.error("Enter channel ID(s)"); return; }
+    const batchSize = Math.max(1, Math.min(50, tgBulkBatchSize || 20));
+
+    // Build pool from admin-added webseries + movies
+    const pool = [
+      ...webseriesData.map((s: any) => ({ id: String(s.id), title: String(s.title || "").trim(), type: "webseries" as const })),
+      ...moviesData.map((m: any) => ({ id: String(m.id), title: String(m.title || "").trim(), type: "movie" as const })),
+    ].filter(it => it.id && it.title);
+
+    const remaining = pool.filter(it => !tgBulkSentIds[it.id]);
+    if (remaining.length === 0) {
+      toast.error("সব এনিমে পাঠানো হয়ে গেছে! Reset করুন বা নতুন এনিমে যোগ করুন।");
+      return;
+    }
+
+    // Random pick (no duplicate within batch + not previously sent)
+    const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+    const picked = shuffled.slice(0, batchSize);
+
+    // Build professional HTML body
+    const lines = picked.map((it, i) => {
+      const num = String(i + 1).padStart(2, "0");
+      const url = `${SITE_URL}?anime=${encodeURIComponent(it.id)}`;
+      const icon = it.type === "movie" ? "🎬" : "📺";
+      // Telegram HTML: title is a clickable anchor
+      return `${num}. ${icon} <a href="${url}"><b>${escapeHtmlBasic(it.title)}</b></a>`;
+    }).join("\n");
+
+    const caption = `${tgBulkHeader}
+━━━━━━━━━━━━━━━━━━
+${lines}
+━━━━━━━━━━━━━━━━━━
+${tgBulkFooter}
+🌐 <a href="${SITE_URL}">${SITE_URL.replace(/^https?:\/\//, "")}</a>`;
+
+    const channelIds = tgChannelId.split(/[,\n]+/).map(id => id.trim()).filter(Boolean);
+    if (channelIds.length === 0) { toast.error("Enter at least one channel ID"); return; }
+
+    setTgBulkSending(true);
+    setTgBulkProgress({ done: 0, total: channelIds.length });
+
+    let okCount = 0;
+    const failures: string[] = [];
+
+    try {
+      const endpoint = await getEdgeFunctionUrl('telegram-post');
+      for (let i = 0; i < channelIds.length; i++) {
+        const chatId = channelIds[i];
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+            },
+            body: JSON.stringify({ chatId, caption, freeAccessUserId: "telegram_bulk" }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data?.error) {
+            failures.push(`${chatId}: ${data?.error || 'API error'}`);
+          } else {
+            okCount++;
+          }
+        } catch (err: any) {
+          failures.push(`${chatId}: ${err.message || 'network error'}`);
+        }
+        setTgBulkProgress({ done: i + 1, total: channelIds.length });
+      }
+
+      // Persist sent IDs (only if at least one channel succeeded)
+      if (okCount > 0) {
+        const now = Date.now();
+        const updates: Record<string, number> = { ...tgBulkSentIds };
+        picked.forEach(it => { updates[it.id] = now; });
+        try { await set(ref(db, "telegramBulkBroadcast/sentIds"), updates); } catch {}
+      }
+
+      if (failures.length === 0) {
+        toast.success(`✅ ${picked.length} এনিমে, ${okCount}টা চ্যানেলে পাঠানো হয়েছে! (${remaining.length - picked.length}টা বাকি)`);
+      } else if (okCount > 0) {
+        toast.success(`✅ ${okCount}/${channelIds.length} চ্যানেলে সফল`);
+        failures.slice(0, 3).forEach(f => toast.error(f));
+      } else {
+        toast.error("সব চ্যানেলে ব্যর্থ");
+        failures.slice(0, 3).forEach(f => toast.error(f));
+      }
+    } finally {
+      setTgBulkSending(false);
+      setTimeout(() => setTgBulkProgress(null), 1500);
+    }
+  };
+
+  const resetBulkSentIds = async () => {
+    if (!confirm("Reset করলে সব এনিমে আবার পাঠানো যাবে। নিশ্চিত?")) return;
+    try {
+      await set(ref(db, "telegramBulkBroadcast/sentIds"), null);
+      toast.success("✅ Reset complete — সব এনিমে আবার পাঠানো যাবে");
+    } catch (err: any) {
+      toast.error("Reset failed: " + (err.message || ""));
+    }
+  };
+
+  function escapeHtmlBasic(s: string): string {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+
   // Fill telegram fields from release
   const fillTelegramFromRelease = async (releaseId: string) => {
     const release = releasesData.find(r => r.id === releaseId);
