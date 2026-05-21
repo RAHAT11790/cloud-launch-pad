@@ -11,6 +11,8 @@ import { triggerApkDownload } from "@/lib/apkDownload";
 import AboutPage from "./AboutPage";
 import PrivacyPolicyPage from "./PrivacyPolicyPage";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
+import { Progress } from "@/components/ui/progress";
+import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -191,6 +193,7 @@ const AccessTimer = () => {
 const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
   const [downloads, setDownloads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [queueSnapshot, setQueueSnapshot] = useState<DownloadQueueSnapshot>(() => downloadManager.getSnapshotState());
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const [qualityUrls, setQualityUrls] = useState<{ label: string; src: string; downloadId: string }[]>([]);
@@ -206,6 +209,14 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
   };
 
   useEffect(() => { loadDownloads(); }, []);
+
+  useEffect(() => {
+    return downloadManager.subscribe((snapshot) => {
+      setQueueSnapshot(snapshot);
+      const hasCompleted = Array.from(snapshot.downloads.values()).some((item) => item.status === "complete");
+      if (hasCompleted) loadDownloads();
+    });
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -310,11 +321,53 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
       })()}
 
       <div className="mb-4 glass-card rounded-xl p-3 border border-primary/20">
-        <p className="text-sm font-semibold text-foreground">Background downloads run in your browser</p>
+        <p className="text-sm font-semibold text-foreground">Sequential HTTPS downloads</p>
         <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-          New video downloads now continue from the browser download manager even after leaving the site. Older offline-saved videos still appear below.
+          Downloads now run one by one with live progress. Installed app and browser both use the same progress queue.
         </p>
       </div>
+
+      {queueSnapshot.totalCount > 0 && (
+        <div className="mb-4 glass-card rounded-xl p-3 border border-primary/20 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Download Queue</p>
+              <p className="text-[11px] text-muted-foreground">
+                {queueSnapshot.completedCount}/{queueSnapshot.totalCount} complete • {queueSnapshot.queuedCount} waiting
+              </p>
+            </div>
+            <button
+              onClick={() => downloadManager.clearFinished()}
+              className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg bg-secondary text-secondary-foreground"
+            >
+              Clear Done
+            </button>
+          </div>
+          <div className="space-y-2">
+            {Array.from(queueSnapshot.downloads.values()).sort((a, b) => a.sequence - b.sequence).map((item) => (
+              <div key={item.id} className="rounded-xl bg-secondary/55 px-3 py-2.5 border border-border/60">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-foreground truncate">{item.subtitle || item.title}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {item.status === "queued" ? `Queued • ${item.queueIndex}/${item.totalInBatch}` : item.status === "downloading" ? `Downloading • ${item.percent}%` : item.status}
+                    </p>
+                  </div>
+                  {(item.status === "queued" || item.status === "downloading") && (
+                    <button
+                      onClick={() => downloadManager.cancelDownload(item.id)}
+                      className="w-7 h-7 rounded-full bg-destructive/15 flex items-center justify-center shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5 text-destructive" />
+                    </button>
+                  )}
+                </div>
+                <Progress value={item.status === "complete" ? 100 : item.percent} className="h-2 bg-background/60" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="py-16 text-center">
