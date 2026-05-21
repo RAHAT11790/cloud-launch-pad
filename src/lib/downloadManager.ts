@@ -2,7 +2,7 @@ import { toast } from "@/hooks/use-toast";
 
 import { hasDownload, saveVideo, downloadWithProgress } from "./downloadStore";
 
-export type DownloadStatus = "queued" | "downloading" | "complete" | "error" | "cancelled";
+export type DownloadStatus = "queued" | "downloading" | "paused" | "complete" | "error" | "cancelled";
 
 export interface ActiveDownload {
   id: string;
@@ -70,6 +70,8 @@ class DownloadManager {
   private active = new Map<string, ActiveDownload>();
   private listeners = new Set<Listener>();
   private abortControllers = new Map<string, AbortController>();
+  private requests = new Map<string, DownloadParams>();
+  private pauseRequested = new Set<string>();
   private queue: QueueItem[] = [];
   private processing = false;
   private activeId: string | null = null;
@@ -100,10 +102,6 @@ class DownloadManager {
     this.listeners.forEach((fn) => fn(snapshot));
   }
 
-  getActive(): Map<string, ActiveDownload> {
-    return new Map(this.active);
-  }
-
   getSnapshotState() {
     return this.getSnapshot();
   }
@@ -114,7 +112,49 @@ class DownloadManager {
 
   isDownloading(id: string) {
     const item = this.active.get(id);
-    return item?.status === "downloading" || item?.status === "queued";
+    return item?.status === "downloading" || item?.status === "queued" || item?.status === "paused";
+  }
+
+  pauseDownload(id: string) {
+    const item = this.active.get(id);
+    if (!item || item.status === "complete" || item.status === "error" || item.status === "cancelled") return;
+
+    const queuedIndex = this.queue.findIndex((queued) => queued.id === id);
+    if (queuedIndex >= 0) {
+      this.queue.splice(queuedIndex, 1);
+      item.status = "paused";
+      this.reindexQueueMeta();
+      this.notify();
+      toast({ title: "Download paused", description: item.subtitle || item.title });
+      return;
+    }
+
+    const controller = this.abortControllers.get(id);
+    if (controller) {
+      this.pauseRequested.add(id);
+      controller.abort();
+    }
+  }
+
+  resumeDownload(id: string) {
+    const request = this.requests.get(id);
+    const item = this.active.get(id);
+    if (!request || !item || item.status !== "paused") return;
+    if (this.queue.some((queued) => queued.id === id) || this.activeId === id) return;
+
+    item.status = "queued";
+    item.percent = 0;
+    item.loadedMB = 0;
+    item.totalMB = 0;
+    item.error = undefined;
+
+    const sequence = ++this.sequenceSeed;
+    item.sequence = sequence;
+    this.queue.push({ ...request, sequence });
+    this.reindexQueueMeta();
+    this.notify();
+    toast({ title: "Download resumed", description: item.subtitle || item.title });
+    void this.processQueue();
   }
 
   cancelDownload(id: string) {
@@ -133,13 +173,21 @@ class DownloadManager {
     if (existing) {
       existing.status = "cancelled";
       this.notify();
+      toast({
+        title: "Download cancelled",
+        description: existing.subtitle || existing.title,
+      });
       window.setTimeout(() => {
         this.active.delete(id);
+        this.requests.delete(id);
+        this.pauseRequested.delete(id);
         if (this.activeId === id) this.activeId = null;
         this.reindexQueueMeta();
         this.notify();
       }, 220);
     } else {
+      this.requests.delete(id);
+      this.pauseRequested.delete(id);
       this.notify();
     }
   }
@@ -148,6 +196,8 @@ class DownloadManager {
     for (const [id, item] of this.active.entries()) {
       if (item.status === "complete" || item.status === "error" || item.status === "cancelled") {
         this.active.delete(id);
+        this.requests.delete(id);
+        this.pauseRequested.delete(id);
       }
     }
     this.notify();
@@ -165,8 +215,15 @@ class DownloadManager {
     if (this.active.has(params.id) || this.queue.some((item) => item.id === params.id)) return;
     if (await hasDownload(params.id)) return;
 
+    const normalized = {
+      ...params,
+      fileName: params.fileName || buildFileName(params.title, params.subtitle, params.quality),
+    };
+
+    this.requests.set(params.id, normalized);
+
     const sequence = ++this.sequenceSeed;
-    this.queue.push({ ...params, sequence });
+    this.queue.push({ ...normalized, sequence });
     this.active.set(params.id, {
       id: params.id,
       title: params.title,
@@ -180,7 +237,7 @@ class DownloadManager {
       sequence,
       queueIndex: this.queue.length,
       totalInBatch: this.queue.length,
-        fileName: params.fileName || buildFileName(params.title, params.subtitle, params.quality),
+      fileName: normalized.fileName,
     });
     this.reindexQueueMeta();
     this.notify();
@@ -195,14 +252,18 @@ class DownloadManager {
     const ordered = [
       ...(this.activeId ? [this.activeId] : []),
       ...this.queue.map((item) => item.id),
+      ...Array.from(this.active.values())
+        .filter((item) => item.status === "paused")
+        .sort((a, b) => a.sequence - b.sequence)
+        .map((item) => item.id),
     ];
-    const total = ordered.length || Array.from(this.active.values()).filter((item) => item.status === "complete").length;
+    const total = Math.max(ordered.length, 1);
 
     ordered.forEach((id, index) => {
       const item = this.active.get(id);
       if (!item) return;
       item.queueIndex = index + 1;
-      item.totalInBatch = Math.max(total, index + 1);
+      item.totalInBatch = total;
     });
   }
 
@@ -299,11 +360,16 @@ class DownloadManager {
       const current = this.active.get(params.id);
       if (current) {
         if (error instanceof DOMException && error.name === "AbortError") {
-          current.status = "cancelled";
-          toast({
-            title: "Download cancelled",
-            description: params.subtitle || params.title,
-          });
+          if (this.pauseRequested.has(params.id)) {
+            this.pauseRequested.delete(params.id);
+            current.status = "paused";
+            toast({
+              title: "Download paused",
+              description: params.subtitle || params.title,
+            });
+          } else {
+            current.status = "cancelled";
+          }
         } else {
           current.status = "error";
           current.error = error instanceof Error ? error.message : "Download failed";
