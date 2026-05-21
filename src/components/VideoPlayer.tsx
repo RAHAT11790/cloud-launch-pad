@@ -2985,10 +2985,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           // Check if this episode is already saved in IndexedDB
           const savedEpisode = downloadedEpisodes.find(d => d.subtitle === subtitle);
           const isAlreadySaved = !!savedEpisode;
-          const currentDownloadId = buildDlId(currentQuality === "Auto" ? (availableQualities[0]?.label || "Auto") : currentQuality, subtitle);
-          const activeDownload = downloadSnapshot.downloads.get(currentDownloadId)
-            || Array.from(downloadSnapshot.downloads.values()).find((item) => item.subtitle === subtitle);
-          const isDownloadActive = !!activeDownload && (activeDownload.status === "queued" || activeDownload.status === "downloading");
 
           const isDownloadableUrl = (u: string): boolean => isHttpsDownloadableUrl(u);
           const getDownloadUrl = (u: string, fallbackUrls: string[] = []): string => pickHttpsDownloadUrl(u, fallbackUrls);
@@ -3000,6 +2996,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             `${animeId || title}::${sub || "movie"}::${q || "Auto"}`
               .replace(/\s+/g, "_")
               .toLowerCase();
+
+          const currentDownloadId = buildDlId(currentQuality === "Auto" ? (availableQualities[0]?.label || "Auto") : currentQuality, subtitle);
+          const activeDownload = downloadSnapshot.downloads.get(currentDownloadId)
+            || Array.from(downloadSnapshot.downloads.values()).find((item) => item.subtitle === subtitle);
+          const isDownloadActive = !!activeDownload && (activeDownload.status === "queued" || activeDownload.status === "downloading");
 
           const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
             const { toast } = await import("sonner");
