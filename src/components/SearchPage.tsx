@@ -73,7 +73,19 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
       transition={{ duration: 0.15, ease: "easeOut" }}
     >
       <div className="flex items-center gap-2.5 mb-5">
-        <button onClick={onClose} className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:bg-primary bg-card" style={{ boxShadow: "var(--neu-shadow-sm)" }}>
+        <button
+          onPointerDown={(e) => {
+            // Single-tap back: blur input (closes mobile keyboard) and navigate immediately.
+            // Without onPointerDown, the virtual keyboard intercepts the first tap and the
+            // user has to tap twice — once to dismiss the keyboard, once to actually close.
+            e.preventDefault();
+            (document.activeElement as HTMLElement | null)?.blur?.();
+            onClose();
+          }}
+          className="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:bg-primary bg-card"
+          style={{ boxShadow: "var(--neu-shadow-sm)" }}
+          aria-label="Back"
+        >
           <ArrowLeft className="w-4 h-4" />
         </button>
         <div className="relative flex-1">
