@@ -3072,7 +3072,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
               const epUrl = getDownloadUrl(pickEpUrl(ep), quality, epSubtitle, [ep.link, ep.link480, ep.link720, ep.link1080, ep.link4k]);
               if (!epUrl) { skipped++; continue; }
-              const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
               downloadManager.enqueueDownload({
                 id: buildDlId(quality, epSubtitle),
                 url: epUrl,
