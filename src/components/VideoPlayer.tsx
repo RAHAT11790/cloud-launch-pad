@@ -41,8 +41,8 @@ const PROXY_SERVER_LIMIT = 3;
 
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
-import { triggerBackgroundVideoDownload, buildVideoDownloadUrl } from "@/lib/videoDownload";
 import { downloadManager } from "@/lib/downloadManager";
+import { pickHttpsDownloadUrl, isHttpsDownloadableUrl } from "@/lib/downloadSources";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 // Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
@@ -477,6 +477,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
   const [bulkDownloadMode, setBulkDownloadMode] = useState(false);
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
+  const [downloadSnapshot, setDownloadSnapshot] = useState(() => downloadManager.getSnapshotState());
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
   const [videoError, setVideoError] = useState(false);
@@ -524,8 +525,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
     refresh();
     // Re-scan whenever a download finishes (status flips to "complete")
-    const unsub = downloadManager.subscribe((active) => {
-      const anyComplete = Array.from(active.values()).some(d => d.status === "complete");
+    const unsub = downloadManager.subscribe((snapshot) => {
+      setDownloadSnapshot(snapshot);
+      const anyComplete = Array.from(snapshot.downloads.values()).some((d) => d.status === "complete");
       if (anyComplete) refresh();
     });
     return () => { cancelled = true; unsub(); };
