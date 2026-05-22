@@ -265,6 +265,14 @@ serve(async (req) => {
       } catch {}
     }
 
+    // 🆕 GLOBAL permanent custom button — attached to EVERY post when enabled
+    try {
+      const gcb = await fbGet("settings/telegramGlobalButton");
+      if (gcb && gcb.enabled === true && gcb.text && gcb.url) {
+        buttons.push({ text: String(gcb.text), url: String(gcb.url) });
+      }
+    } catch {}
+
     // ✨ Auto-attach Free Access button when global toggle is enabled
     let autoIncludeFA = false;
     let autoFAHours = 24;
