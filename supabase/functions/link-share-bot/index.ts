@@ -1706,13 +1706,44 @@ function similarity(a: string, b: string): number {
   return 1 - dist / maxLen;
 }
 
+function extractCandidatesFromMessage(text: string): string[] {
+  const normalized = normalizeTitle(text);
+  if (!normalized) return [];
+
+  const parts = normalized.split(" ").filter(Boolean);
+  const out = new Set<string>([normalized]);
+
+  for (let size = 1; size <= Math.min(6, parts.length); size++) {
+    for (let start = 0; start <= parts.length - size; start++) {
+      const phrase = parts.slice(start, start + size).join(" ").trim();
+      if (phrase.length >= 3) out.add(phrase);
+    }
+  }
+
+  return Array.from(out);
+}
+
+function scoreItemAgainstMessage(message: string, title: string): number {
+  const msg = normalizeTitle(message);
+  const item = normalizeTitle(title);
+  if (!msg || !item) return 0;
+  if (msg.includes(item)) return 1;
+
+  let best = 0;
+  for (const candidate of extractCandidatesFromMessage(message)) {
+    best = Math.max(best, similarity(candidate, item));
+    if (best >= 1) break;
+  }
+  return best;
+}
+
 function escHtml(s: string): string {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function shareUrlFor(item: CatalogItem): string {
-  return `${SITE_URL}/?anime=${encodeURIComponent(item.id)}`;
+  return `${SITE_URL}/anime/${encodeURIComponent(item.id)}`;
 }
 
 function isAccessTrigger(text: string): boolean {
@@ -1753,7 +1784,7 @@ async function handleGroupQuery(
   chat_id: number, user_id: number, from: any, text: string, reply_to: number,
 ) {
   const query = text.trim();
-  if (query.length < 3 || query.length > 60) return;
+  if (query.length < 3 || query.length > 1200) return;
 
   // Access keyword takes priority
   if (isAccessTrigger(query)) {
@@ -1765,23 +1796,26 @@ async function handleGroupQuery(
   const NOISE = new Set(["hi", "hello", "hey", "ok", "okay", "thanks", "thank", "bro", "bot", "lol", "yes", "no", "hmm"]);
   if (NOISE.has(query.toLowerCase())) return;
 
-  // Run RS + AN search in parallel
-  const [rsAll, anHits] = await Promise.all([
+  // Ignore the same Telegram update if it is retried briefly by Telegram/network.
+  const recentKey = chat_id * 1_000_000_000 + reply_to;
+  const seenAt = recentGroupUpdates.get(recentKey);
+  if (seenAt && Date.now() - seenAt < RECENT_GROUP_UPDATE_TTL) return;
+  recentGroupUpdates.set(recentKey, Date.now());
+
+  // Run RS + AN catalog matching against the full message.
+  const [rsAll, anAll] = await Promise.all([
     loadRsCatalog().catch(() => [] as CatalogItem[]),
-    searchAnimeSalt(query).catch(() => [] as CatalogItem[]),
+    loadAnCatalog().catch(() => [] as CatalogItem[]),
   ]);
 
-  // Score RS items
   const rsScored = rsAll
-    .map((it) => ({ it, score: similarity(query, it.title) }))
+    .map((it) => ({ it, score: scoreItemAgainstMessage(query, it.title) }))
     .filter((x) => x.score >= 0.8)
     .sort((a, b) => b.score - a.score);
 
-  // AN: AnimeSalt search already filters relevancy; still keep ≥0.6 threshold
-  // (their search is keyword-based, so we trust top results)
-  const anScored = anHits
-    .map((it) => ({ it, score: Math.max(0.85, similarity(query, it.title)) }))
-    .filter((x) => x.score >= 0.6)
+  const anScored = anAll
+    .map((it) => ({ it, score: scoreItemAgainstMessage(query, it.title) }))
+    .filter((x) => x.score >= 0.8)
     .sort((a, b) => b.score - a.score);
 
   if (rsScored.length === 0 && anScored.length === 0) return; // silent miss
@@ -1803,10 +1837,10 @@ async function handleGroupQuery(
     if (!g.backdrop && (item.backdrop || item.poster)) g.backdrop = item.backdrop || item.poster;
   };
 
-  rsScored.slice(0, 5).forEach((x) => addToGroup(x.it, x.score));
-  anScored.slice(0, 5).forEach((x) => addToGroup(x.it, x.score));
+  rsScored.slice(0, 12).forEach((x) => addToGroup(x.it, x.score));
+  anScored.slice(0, 12).forEach((x) => addToGroup(x.it, x.score));
 
-  const ranked = Array.from(groups.values()).sort((a, b) => b.score - a.score).slice(0, 3);
+  const ranked = Array.from(groups.values()).sort((a, b) => b.score - a.score).slice(0, 6);
   if (ranked.length === 0) return;
 
   const name = escHtml([from?.first_name, from?.last_name].filter(Boolean).join(" ") || from?.username || "there");
@@ -1817,17 +1851,13 @@ async function handleGroupQuery(
     if (g.an) rows.push([{ text: `▶️ ${truncate(g.an.title, 22)} • AN`, url: shareUrlFor(g.an) }]);
     if (rows.length === 0) continue;
 
-    const caption = `✦━━━━━━━━━━━━━━━━━━━✦
-${stylish("✦ RS ANIME LINK SHARE ✦")}
-✦━━━━━━━━━━━━━━━━━━━✦
-
-<a href="tg://user?id=${user_id}">${name}</a>, ${stylish("here is what you asked for")} 👇
-
-🎬 <b>${escHtml(g.title)}</b>
-${stylish("›› Tap the button to open the anime")}
-${g.rs && g.an ? `${stylish("›› Available on both RS & AN")}` : g.rs ? `${stylish("›› Source: RS catalog")}` : `${stylish("›› Source: AN catalog")}`}
-
-✦━━━━━━━━━━━━━━━━━━━✦`;
+    const caption = `╭─ ${stylish("RS ANIME GROUP SHARE")}
+│
+│ 👤 <a href="tg://user?id=${user_id}">${name}</a>
+│ 🎬 <b>${escHtml(g.title)}</b>
+│ ${g.rs && g.an ? "Available in both RS & AN" : g.rs ? "Available in RS catalog" : "Available in AN catalog"}
+│ ${stylish("Tap a button below to open details")}
+╰─`;
 
     const photo = g.backdrop || START_IMG;
     try {
