@@ -271,7 +271,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
         {/* Share button */}
         <button
           onClick={() => {
-            const url = `${SITE_URL}?anime=${encodeURIComponent(anime.id)}`;
+            const url = `${SITE_URL}/anime/${encodeURIComponent(anime.id)}`;
             navigator.clipboard.writeText(url).then(() => {
               setShareCopied(true);
               setTimeout(() => setShareCopied(false), 2000);
