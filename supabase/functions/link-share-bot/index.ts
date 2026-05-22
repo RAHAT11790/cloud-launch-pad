@@ -1852,6 +1852,13 @@ async function handleUpdate(update: any) {
   }
 
   const text: string = msg.text || msg.caption || "";
+
+  // Group anime link-share + access keyword (non-command messages only)
+  if ((msg.chat.type === "group" || msg.chat.type === "supergroup") && text && !text.startsWith("/")) {
+    await handleGroupQuery(chat_id, user_id, from, text, msg.message_id).catch((e) => console.error("[group]", e));
+    return;
+  }
+
   if (!text.startsWith("/")) return;
 
   const [cmdRaw, ...rest] = text.split(/\s+/);
