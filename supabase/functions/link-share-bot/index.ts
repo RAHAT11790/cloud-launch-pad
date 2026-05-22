@@ -1695,11 +1695,11 @@ function levenshtein(a: string, b: string): number {
 function similarity(a: string, b: string): number {
   const A = normalizeTitle(a), B = normalizeTitle(b);
   if (!A || !B) return 0;
-  // Substring boost: typing "naruto" should match "Naruto Shippuden" strongly
+  if (A === B) return 1;
   if (B.includes(A) || A.includes(B)) {
     const short = Math.min(A.length, B.length);
     const long = Math.max(A.length, B.length);
-    return Math.max(0.85, short / long);
+    return short / long;
   }
   const maxLen = Math.max(A.length, B.length);
   const dist = levenshtein(A, B);
@@ -1712,11 +1712,12 @@ function extractCandidatesFromMessage(text: string): string[] {
 
   const parts = normalized.split(" ").filter(Boolean);
   const out = new Set<string>([normalized]);
+  const minSize = parts.length === 1 ? 1 : 2;
 
-  for (let size = 1; size <= Math.min(6, parts.length); size++) {
+  for (let size = minSize; size <= Math.min(6, parts.length); size++) {
     for (let start = 0; start <= parts.length - size; start++) {
       const phrase = parts.slice(start, start + size).join(" ").trim();
-      if (phrase.length >= 3) out.add(phrase);
+      if (phrase.length >= 4) out.add(phrase);
     }
   }
 
@@ -1731,7 +1732,13 @@ function scoreItemAgainstMessage(message: string, title: string): number {
 
   let best = 0;
   for (const candidate of extractCandidatesFromMessage(message)) {
-    best = Math.max(best, similarity(candidate, item));
+    const score = similarity(candidate, item);
+    const candidateWords = candidate.split(" ").filter(Boolean).length;
+    const itemWords = item.split(" ").filter(Boolean).length;
+    const looksTooPartial = candidateWords === 1 && itemWords > 1 && candidate.length < Math.ceil(item.length * 0.55);
+    if (looksTooPartial) continue;
+
+    best = Math.max(best, score);
     if (best >= 1) break;
   }
   return best;
