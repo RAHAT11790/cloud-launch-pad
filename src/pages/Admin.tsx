@@ -7207,6 +7207,10 @@ ${tgBulkFooter}
             {/* Telegram Post Free Access (auto-attach to every TG post) */}
             <TelegramFreeAccessConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
+            {/* Telegram Post — Global Permanent Custom Button */}
+            <TelegramGlobalButtonConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+
+
             {/* Global Free Access for All */}
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
