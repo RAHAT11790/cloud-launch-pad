@@ -1561,6 +1561,265 @@ ${perm}`,
   }
 }
 
+// ============== GROUP ANIME LINK-SHARE ==============
+// User types an anime name in a group → bot replies with a backdrop photo +
+// buttons that deep-link to the website's anime detail (?anime=<id>) for
+// both RS (Firebase webseries/movies) and AN (AnimeSalt) catalogs.
+
+const SITE_URL = Deno.env.get("SITE_URL") || "https://rsanime03.lovable.app";
+
+type CatalogItem = {
+  id: string;            // share id used in ?anime=<id>
+  title: string;
+  backdrop: string;
+  poster: string;
+  source: "RS" | "AN";
+};
+
+let _rsCache: { items: CatalogItem[]; ts: number } | null = null;
+const RS_TTL = 10 * 60_000;
+
+async function loadRsCatalog(): Promise<CatalogItem[]> {
+  if (_rsCache && Date.now() - _rsCache.ts < RS_TTL) return _rsCache.items;
+  const items: CatalogItem[] = [];
+  for (const path of ["webseries", "movies"]) {
+    try {
+      const data: any = await fb("GET", path);
+      if (!data) continue;
+      for (const [id, raw] of Object.entries<any>(data)) {
+        if (!raw || typeof raw !== "object") continue;
+        const title = String(raw.title || raw.name || "").trim();
+        if (!title) continue;
+        items.push({
+          id,
+          title,
+          backdrop: String(raw.backdrop || raw.poster || ""),
+          poster: String(raw.poster || raw.backdrop || ""),
+          source: "RS",
+        });
+      }
+    } catch (e) { console.error("[loadRsCatalog]", path, e); }
+  }
+  _rsCache = { items, ts: Date.now() };
+  return items;
+}
+
+async function searchAnimeSalt(query: string): Promise<CatalogItem[]> {
+  try {
+    const url = `https://animesalt.ac/?s=${encodeURIComponent(query)}`;
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    if (!r.ok) return [];
+    const html = await r.text();
+    const out: CatalogItem[] = [];
+    const cards = html.match(/<article[^>]*>[\s\S]*?<\/article>/gi) || [];
+    for (const card of cards) {
+      const linkMatch = card.match(/href="https?:\/\/animesalt\.[^/]+\/(series|movies)\/([^/"]+)/i);
+      if (!linkMatch) continue;
+      const slug = linkMatch[2];
+      const titleMatch = card.match(/title="([^"]+)"/i) || card.match(/<h[23][^>]*>([^<]+)<\/h[23]>/i);
+      const title = (titleMatch ? titleMatch[1] : slug)
+        .replace(/&#8217;/g, "'").replace(/&#8211;/g, "-").replace(/&amp;/g, "&").trim();
+      const imgMatch = card.match(/src="([^"]+)"/i) || card.match(/data-src="([^"]+)"/i);
+      const poster = imgMatch ? imgMatch[1] : "";
+      const backdrop = poster.replace("/w342/", "/w1280/").replace("/w500/", "/w1280/");
+      if (!out.some((i) => i.id === `as_${slug}`)) {
+        out.push({ id: `as_${slug}`, title, backdrop, poster, source: "AN" });
+      }
+      if (out.length >= 12) break;
+    }
+    return out;
+  } catch (e) {
+    console.error("[searchAnimeSalt]", e);
+    return [];
+  }
+}
+
+function normalizeTitle(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9\u0900-\u097f\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = new Array(n + 1);
+  for (let j = 0; j <= n; j++) dp[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0]; dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j];
+      dp[j] = Math.min(
+        dp[j] + 1,
+        dp[j - 1] + 1,
+        prev + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+      prev = tmp;
+    }
+  }
+  return dp[n];
+}
+
+function similarity(a: string, b: string): number {
+  const A = normalizeTitle(a), B = normalizeTitle(b);
+  if (!A || !B) return 0;
+  // Substring boost: typing "naruto" should match "Naruto Shippuden" strongly
+  if (B.includes(A) || A.includes(B)) {
+    const short = Math.min(A.length, B.length);
+    const long = Math.max(A.length, B.length);
+    return Math.max(0.85, short / long);
+  }
+  const maxLen = Math.max(A.length, B.length);
+  const dist = levenshtein(A, B);
+  return 1 - dist / maxLen;
+}
+
+function escHtml(s: string): string {
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function shareUrlFor(item: CatalogItem): string {
+  return `${SITE_URL}/?anime=${encodeURIComponent(item.id)}`;
+}
+
+function isAccessTrigger(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+  return /^(access|verify|free\s*access|how\s*to\s*access|how\s*to\s*get\s*access|how\s*can\s*i\s*access|get\s*access|unlock|how\s*to\s*unlock)\b/i.test(t);
+}
+
+async function sendGroupAccessCard(chat_id: number, user_id: number, from: any, reply_to: number) {
+  const name = escHtml([from?.first_name, from?.last_name].filter(Boolean).join(" ") || from?.username || "there");
+  const me = await botUsername();
+  const deepLink = `https://t.me/${me}?start=unlock_${encodeURIComponent(`tg_${user_id}`)}`;
+  const caption = `✦━━━━━━━━━━━━━━━━━━━✦
+${stylish("✦ HOW TO ACCESS RS ANIME ✦")}
+✦━━━━━━━━━━━━━━━━━━━✦
+
+<a href="tg://user?id=${user_id}">${name}</a>, ${stylish("tap the button below")} 👇
+
+${stylish("›› Opens this bot in private")}
+${stylish("›› Finish a tiny ad gate")}
+${stylish("›› Get your 24h access token")}
+${stylish("›› Paste it on the website — done!")}
+
+✦━━━━━━━━━━━━━━━━━━━✦`;
+  await sendPhoto(chat_id, START_IMG, caption, {
+    reply_to_message_id: reply_to,
+    allow_sending_without_reply: true,
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "🎁 𝐆𝐞𝐭 𝐅𝐫𝐞𝐞 𝐀𝐜𝐜𝐞𝐬𝐬 (𝟐𝟒𝐡)", url: deepLink }],
+        [{ text: "🌐 𝐎𝐩𝐞𝐧 𝐖𝐞𝐛𝐬𝐢𝐭𝐞", url: SITE_URL }],
+      ],
+    },
+  }).catch((e) => console.error("[sendGroupAccessCard]", e));
+}
+
+async function handleGroupQuery(
+  chat_id: number, user_id: number, from: any, text: string, reply_to: number,
+) {
+  const query = text.trim();
+  if (query.length < 3 || query.length > 60) return;
+
+  // Access keyword takes priority
+  if (isAccessTrigger(query)) {
+    await sendGroupAccessCard(chat_id, user_id, from, reply_to);
+    return;
+  }
+
+  // Skip super-short / single-word noise words
+  const NOISE = new Set(["hi", "hello", "hey", "ok", "okay", "thanks", "thank", "bro", "bot", "lol", "yes", "no", "hmm"]);
+  if (NOISE.has(query.toLowerCase())) return;
+
+  // Run RS + AN search in parallel
+  const [rsAll, anHits] = await Promise.all([
+    loadRsCatalog().catch(() => [] as CatalogItem[]),
+    searchAnimeSalt(query).catch(() => [] as CatalogItem[]),
+  ]);
+
+  // Score RS items
+  const rsScored = rsAll
+    .map((it) => ({ it, score: similarity(query, it.title) }))
+    .filter((x) => x.score >= 0.8)
+    .sort((a, b) => b.score - a.score);
+
+  // AN: AnimeSalt search already filters relevancy; still keep ≥0.6 threshold
+  // (their search is keyword-based, so we trust top results)
+  const anScored = anHits
+    .map((it) => ({ it, score: Math.max(0.85, similarity(query, it.title)) }))
+    .filter((x) => x.score >= 0.6)
+    .sort((a, b) => b.score - a.score);
+
+  if (rsScored.length === 0 && anScored.length === 0) return; // silent miss
+
+  // Group by canonical normalized title so RS+AN of same anime become 2 buttons in 1 card
+  type Group = { title: string; backdrop: string; rs?: CatalogItem; an?: CatalogItem; score: number };
+  const groups = new Map<string, Group>();
+
+  const addToGroup = (item: CatalogItem, score: number) => {
+    const key = normalizeTitle(item.title).split(" ").slice(0, 4).join(" ");
+    let g = groups.get(key);
+    if (!g) {
+      g = { title: item.title, backdrop: item.backdrop || item.poster, score };
+      groups.set(key, g);
+    }
+    g.score = Math.max(g.score, score);
+    if (item.source === "RS" && !g.rs) g.rs = item;
+    if (item.source === "AN" && !g.an) g.an = item;
+    if (!g.backdrop && (item.backdrop || item.poster)) g.backdrop = item.backdrop || item.poster;
+  };
+
+  rsScored.slice(0, 5).forEach((x) => addToGroup(x.it, x.score));
+  anScored.slice(0, 5).forEach((x) => addToGroup(x.it, x.score));
+
+  const ranked = Array.from(groups.values()).sort((a, b) => b.score - a.score).slice(0, 3);
+  if (ranked.length === 0) return;
+
+  const name = escHtml([from?.first_name, from?.last_name].filter(Boolean).join(" ") || from?.username || "there");
+
+  for (const g of ranked) {
+    const rows: any[] = [];
+    if (g.rs) rows.push([{ text: `▶️ ${truncate(g.rs.title, 22)} • RS`, url: shareUrlFor(g.rs) }]);
+    if (g.an) rows.push([{ text: `▶️ ${truncate(g.an.title, 22)} • AN`, url: shareUrlFor(g.an) }]);
+    if (rows.length === 0) continue;
+
+    const caption = `✦━━━━━━━━━━━━━━━━━━━✦
+${stylish("✦ RS ANIME LINK SHARE ✦")}
+✦━━━━━━━━━━━━━━━━━━━✦
+
+<a href="tg://user?id=${user_id}">${name}</a>, ${stylish("here is what you asked for")} 👇
+
+🎬 <b>${escHtml(g.title)}</b>
+${stylish("›› Tap the button to open the anime")}
+${g.rs && g.an ? `${stylish("›› Available on both RS & AN")}` : g.rs ? `${stylish("›› Source: RS catalog")}` : `${stylish("›› Source: AN catalog")}`}
+
+✦━━━━━━━━━━━━━━━━━━━✦`;
+
+    const photo = g.backdrop || START_IMG;
+    try {
+      const sent = await sendPhoto(chat_id, photo, caption, {
+        reply_to_message_id: reply_to,
+        allow_sending_without_reply: true,
+        reply_markup: { inline_keyboard: rows },
+      });
+      if (!sent?.ok) {
+        await sendPhoto(chat_id, START_IMG, caption, {
+          reply_to_message_id: reply_to,
+          allow_sending_without_reply: true,
+          reply_markup: { inline_keyboard: rows },
+        });
+      }
+    } catch (e) { console.error("[group share send]", e); }
+  }
+}
+
+function truncate(s: string, n: number): string {
+  if (s.length <= n) return s;
+  return s.slice(0, n - 1) + "…";
+}
+
 // ============== UPDATE ROUTER ==============
 async function handleUpdate(update: any) {
   if (update.chat_join_request) {
