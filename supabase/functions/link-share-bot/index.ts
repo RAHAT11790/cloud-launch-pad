@@ -1578,6 +1578,10 @@ type CatalogItem = {
 
 let _rsCache: { items: CatalogItem[]; ts: number } | null = null;
 const RS_TTL = 10 * 60_000;
+let _anCache: { items: CatalogItem[]; ts: number } | null = null;
+const AN_TTL = 10 * 60_000;
+const RECENT_GROUP_UPDATE_TTL = 10 * 60_000;
+const recentGroupUpdates = new Map<number, number>();
 
 async function loadRsCatalog(): Promise<CatalogItem[]> {
   if (_rsCache && Date.now() - _rsCache.ts < RS_TTL) return _rsCache.items;
@@ -1601,6 +1605,34 @@ async function loadRsCatalog(): Promise<CatalogItem[]> {
     } catch (e) { console.error("[loadRsCatalog]", path, e); }
   }
   _rsCache = { items, ts: Date.now() };
+  return items;
+}
+
+async function loadAnCatalog(): Promise<CatalogItem[]> {
+  if (_anCache && Date.now() - _anCache.ts < AN_TTL) return _anCache.items;
+  const items: CatalogItem[] = [];
+  try {
+    const data: any = await fb("GET", "animesaltSelected");
+    if (data && typeof data === "object") {
+      for (const [slug, raw] of Object.entries<any>(data)) {
+        if (!raw || typeof raw !== "object") continue;
+        const title = String(raw.title || slug || "").trim();
+        if (!title) continue;
+        const poster = String(raw.poster || raw.tmdbPoster || raw.posterUrl || raw.backdrop || raw.tmdbBackdrop || raw.backdropUrl || "");
+        const backdrop = String(raw.backdrop || raw.tmdbBackdrop || raw.backdropUrl || poster || "");
+        items.push({
+          id: `as_${slug}`,
+          title,
+          backdrop,
+          poster,
+          source: "AN",
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[loadAnCatalog]", e);
+  }
+  _anCache = { items, ts: Date.now() };
   return items;
 }
 
