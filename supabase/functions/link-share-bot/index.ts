@@ -1817,12 +1817,12 @@ async function handleGroupQuery(
 
   const rsScored = rsAll
     .map((it) => ({ it, score: scoreItemAgainstMessage(query, it.title) }))
-    .filter((x) => x.score >= 0.8)
+    .filter((x) => x.score >= 0.88)
     .sort((a, b) => b.score - a.score);
 
   const anScored = anAll
     .map((it) => ({ it, score: scoreItemAgainstMessage(query, it.title) }))
-    .filter((x) => x.score >= 0.8)
+    .filter((x) => x.score >= 0.88)
     .sort((a, b) => b.score - a.score);
 
   if (rsScored.length === 0 && anScored.length === 0) return; // silent miss
