@@ -722,6 +722,65 @@ const TelegramFreeAccessConfig = ({ glassCard, inputClass, btnPrimary, btnSecond
   );
 };
 
+// ==================== TELEGRAM POST — GLOBAL PERMANENT CUSTOM BUTTON ====================
+const TelegramGlobalButtonConfig = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
+  const [enabled, setEnabled] = useState(false);
+  const [text, setText] = useState("");
+  const [url, setUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const r = ref(db, "settings/telegramGlobalButton");
+    const unsub = onValue(r, (snap) => {
+      const v = snap.val() || {};
+      setEnabled(v.enabled === true);
+      setText(String(v.text || ""));
+      setUrl(String(v.url || ""));
+    });
+    return () => unsub();
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await set(ref(db, "settings/telegramGlobalButton"), { enabled, text: text.trim(), url: url.trim() });
+      toast.success("Global button saved");
+    } catch (e: any) { toast.error(e?.message || "Save failed"); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className={`${glassCard} p-4 mb-4`}>
+      <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+        <Send size={14} className="text-pink-400" /> Telegram Post — Global Permanent Button
+      </h3>
+      <p className="text-[11px] text-zinc-400 mb-3">
+        This button will be attached to <b>every</b> Telegram post automatically. Turn it off anytime to stop sending.
+      </p>
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between bg-zinc-800/40 rounded-lg p-2.5">
+          <span className="text-xs text-white">Enabled on every post</span>
+          <button onClick={() => setEnabled(v => !v)}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${enabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
+            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${enabled ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+        <div>
+          <label className="text-[10px] text-zinc-400 mb-1 block">Button label</label>
+          <input type="text" value={text} onChange={e => setText(e.target.value)} className={inputClass} placeholder="🌐 Visit Website" />
+        </div>
+        <div>
+          <label className="text-[10px] text-zinc-400 mb-1 block">Button URL</label>
+          <input type="text" value={url} onChange={e => setUrl(e.target.value)} className={inputClass} placeholder="https://rsanime03.lovable.app" />
+        </div>
+        <button onClick={save} disabled={saving} className={`${btnPrimary} w-full py-2 text-xs flex items-center justify-center gap-2`}>
+          <Save size={12} /> {saving ? "Saving..." : "Save Global Button"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ==================== AD SERVICES SECTION ====================
 const AdServicesSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
   const [services, setServices] = useState<Record<string, any>>({});
