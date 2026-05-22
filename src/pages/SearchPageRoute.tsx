@@ -17,8 +17,7 @@ const SearchPageRoute = () => {
   }, [firebaseAnime, animeSaltItems]);
 
   const handleCardClick = (anime: AnimeItem) => {
-    // Client-side navigation — no reload. Index handles ?anime=ID and opens details.
-    navigate(`/?anime=${encodeURIComponent(anime.id)}`);
+    navigate(`/anime/${encodeURIComponent(anime.id)}`);
   };
 
   const handleClose = () => {
