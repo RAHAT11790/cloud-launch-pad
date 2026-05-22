@@ -478,7 +478,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
   const [bulkDownloadMode, setBulkDownloadMode] = useState(false);
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
-  const [downloadSnapshot, setDownloadSnapshot] = useState(() => downloadManager.getSnapshotState());
+  
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
   const [videoError, setVideoError] = useState(false);
@@ -525,13 +525,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       });
     };
     refresh();
-    // Re-scan whenever a download finishes (status flips to "complete")
-    const unsub = downloadManager.subscribe((snapshot) => {
-      setDownloadSnapshot(snapshot);
-      const anyComplete = Array.from(snapshot.downloads.values()).some((d) => d.status === "complete");
-      if (anyComplete) refresh();
-    });
-    return () => { cancelled = true; unsub(); };
+    return () => { cancelled = true; };
   }, [title]);
 
   // Listen for global free access from Firebase
