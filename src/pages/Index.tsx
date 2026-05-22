@@ -776,19 +776,22 @@ const Index = () => {
 
   // Handle deep link: open anime detail from URL ?anime=ID (legacy query form)
   useEffect(() => {
-    if (pendingAnimeId && allAnime.length > 0) {
-      const found = allAnime.find(a => a.id === pendingAnimeId);
-      if (found) setSelectedAnime(found);
-      setPendingAnimeId(null);
-      // Strip the legacy ?anime= query only; preserve /anime/:id pathname.
-      const params = new URLSearchParams(window.location.search);
-      if (params.has("anime") && !pathname.startsWith("/anime/") && !pathname.startsWith("/watch/")) {
-        params.delete("anime");
-        const qs = params.toString();
-        window.history.replaceState({}, "", pathname + (qs ? `?${qs}` : ""));
+    if (!pendingAnimeId || allAnime.length === 0) return;
+
+    const found = allAnime.find((a) => a.id === pendingAnimeId);
+    if (found) {
+      setSelectedAnime(found);
+
+      // Legacy shared links still come in as /?anime=<id>.
+      // Immediately normalize them to the real detail route so the details
+      // overlay does not get auto-closed by the route-sync effect.
+      if (!pathname.startsWith("/anime/") && !pathname.startsWith("/watch/")) {
+        navigate(buildAnimeRoute(found.id), { replace: true });
       }
     }
-  }, [pendingAnimeId, allAnime, pathname]);
+
+    setPendingAnimeId(null);
+  }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute]);
 
   const filteredAnime = useMemo(() => {
     if (activeCategory !== "All") return allAnime.filter(a => a.category === activeCategory);
