@@ -3022,11 +3022,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               .replace(/\s+/g, "_")
               .toLowerCase();
 
-          const currentDownloadId = buildDlId(currentQuality === "Auto" ? (availableQualities[0]?.label || "Auto") : currentQuality, subtitle);
-          const activeDownload = downloadSnapshot.downloads.get(currentDownloadId)
-            || Array.from(downloadSnapshot.downloads.values()).find((item) => item.subtitle === subtitle);
-          const isDownloadActive = !!activeDownload && (activeDownload.status === "queued" || activeDownload.status === "downloading");
-
           const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
             const { toast } = await import("sonner");
             const directHttpsUrl = getDownloadUrl(qualitySrc, quality, subtitle, [src]);
@@ -3122,57 +3117,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 ) : (
                   <button
                     onClick={async () => {
-                      if (activeDownload?.status === "paused") {
-                        downloadManager.resumeDownload(activeDownload.id);
-                        return;
-                      }
-                      if (isDownloadActive && activeDownload) {
-                        downloadManager.cancelDownload(activeDownload.id);
-                        return;
-                      }
-                      // Show quality picker if multiple qualities available
                       if (availableQualities.length > 1) {
                         setBulkDownloadMode(false);
                         setShowDownloadQualityPicker(true);
                       } else {
-                        // Only one quality - download directly
                         startDownloadWithQuality(currentQuality, src);
                       }
                     }}
-                    className="relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all overflow-hidden gradient-primary text-primary-foreground btn-glow hover:scale-[1.02]"
+                    className="relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all gradient-primary text-primary-foreground btn-glow hover:scale-[1.02]"
                   >
-                    {activeDownload && (
-                      <span
-                        className="absolute inset-y-0 left-0 bg-black/65 transition-all duration-300"
-                        style={{ width: `${Math.max(activeDownload.status === "complete" ? 100 : activeDownload.percent, activeDownload.status === "queued" ? 8 : 0)}%` }}
-                      />
-                    )}
-                    <span className="relative z-10 flex items-center gap-2">
-                      <Download className="w-4 h-4" />
-                      <span>
-                        {activeDownload
-                          ? activeDownload.status === "queued"
-                            ? `Queued • Ep ${activeDownload.queueIndex}/${activeDownload.totalInBatch}`
-                            : activeDownload.status === "downloading"
-                              ? `${activeDownload.subtitle || "Episode"} • ${activeDownload.percent}%`
-                              : activeDownload.status === "paused"
-                                ? "Resume Download"
-                              : activeDownload.status === "complete"
-                                ? "Download Complete"
-                                : activeDownload.status === "error"
-                                  ? "Retry Download"
-                                  : "Download Episode"
-                          : "Download Episode"}
-                      </span>
-                    </span>
+                    <Download className="w-4 h-4" />
+                    <span>Download Episode</span>
                   </button>
                 )}
               </div>
-              {!isAlreadySaved && (
-                <p className="text-[11px] text-center text-muted-foreground leading-relaxed px-3">
-                  HTTPS queue downloads one by one with live progress in player, profile, and floating notification.
-                </p>
-              )}
 
               {/* Download All Episodes (only for webseries with multiple episodes) */}
               {seasons && currentSeasonIdx !== undefined && seasons[currentSeasonIdx]?.episodes?.length > 1 && (
