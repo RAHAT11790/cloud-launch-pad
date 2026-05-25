@@ -7608,9 +7608,14 @@ ${tgBulkFooter}
           <EgdManager glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
-        {/* ==================== MONETAG ADS ==================== */}
-        {activeSection === "monetag" && (
-          <MonetagConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+        {/* ==================== ADSTERRA ADS ==================== */}
+        {activeSection === "adsterra" && (
+          <AdsterraConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+        )}
+
+        {/* ==================== BACKDROP AI ==================== */}
+        {activeSection === "backdrop-ai" && (
+          <BackdropAiReplacer glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
         {/* ==================== FIREBASE CLEANUP ==================== */}
