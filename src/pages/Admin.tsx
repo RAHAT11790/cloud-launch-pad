@@ -2812,7 +2812,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     "apk-dw": "APK Download Center",
     "egd-manager": "EGD MANAGER",
     "fb-cleanup": "Firebase Cleanup",
-    "monetag": "Monetag Ads",
+    "adsterra": "Adsterra Ads",
+    "backdrop-ai": "Backdrop AI Replacer",
   };
 
   // ==================== CATEGORIES ====================
