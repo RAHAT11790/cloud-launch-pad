@@ -4277,7 +4277,8 @@ ${tgBulkFooter}
     { section: "email-service", icon: <Mail size={16} />, label: "Email Service" },
     
     { section: "egd-manager", icon: <Bot size={16} />, label: "EGD MANAGER" },
-    { section: "monetag", icon: <Activity size={16} />, label: "Monetag Ads" },
+    { section: "adsterra", icon: <Activity size={16} />, label: "Adsterra Ads" },
+    { section: "backdrop-ai", icon: <Activity size={16} />, label: "Backdrop AI" },
     { section: "apk-dw", icon: <Download size={16} />, label: "APK DW" },
     { section: "fb-cleanup", icon: <Trash2 size={16} />, label: "FB Cleanup" },
     { section: "ai-config", icon: <MessageCircle size={16} />, label: "AI Config" },
