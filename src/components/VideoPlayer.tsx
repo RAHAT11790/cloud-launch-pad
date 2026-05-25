@@ -1460,9 +1460,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setManualServerSelected(false);
     setVideoError(false);
     failedSrcsRef.current.clear();
-    pendingSeek.current = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : 0;
-    // Very short flag window (no visual blank) — just to suppress the loader
-    // overlay during the immediate src swap so we don't get a flash.
+    const seekTarget = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : 0;
+    pendingSeek.current = seekTarget;
+    // FORCE-RESET currentTime when switching episodes with no resume requested —
+    // otherwise the <video> element retains the previous episode's playhead and
+    // the new episode appears to "start" 22 minutes in.
+    const _v = videoRef.current;
+    if (_v && seekTarget === 0) {
+      try { _v.currentTime = 0; } catch {}
+      lastKnownTime = 0;
+      const onMetaReset = () => {
+        try { if (pendingSeek.current === 0 || pendingSeek.current === null) _v.currentTime = 0; } catch {}
+        _v.removeEventListener("loadedmetadata", onMetaReset);
+      };
+      _v.addEventListener("loadedmetadata", onMetaReset);
+    }
     setSwitchingEpisode(true);
     const t = setTimeout(() => {
       instantSwitchRef.current = false;
