@@ -11,8 +11,8 @@ import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
-import MonetagAdManager from "@/components/MonetagAdManager";
-import { triggerDirectLink as monetagDirectLink } from "@/lib/monetagAds";
+import AdsterraAdManager from "@/components/AdsterraAdManager";
+import { loadAdsterraSlots } from "@/lib/adsterraAds";
 // Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When OFF: free users get instant access, NO ad gate, NO unlock popup, NO verification flash.
 const isShortenerEnabled = async (): Promise<boolean> => {
