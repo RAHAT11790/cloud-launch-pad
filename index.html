@@ -34,16 +34,18 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Monetag verification SW — production only, never inside Lovable preview iframe
+      // Auto-unregister any legacy ad service workers (Monetag etc).
       (function () {
         try {
-          var h = location.hostname;
-          var inIframe = window.self !== window.top;
-          var isPreview = h.indexOf("id-preview--") !== -1 || h.indexOf("lovableproject.com") !== -1;
-          if (!inIframe && !isPreview && "serviceWorker" in navigator) {
-            window.addEventListener("load", function () {
-              navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(function () {});
-            });
+          if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              regs.forEach(function (r) {
+                try {
+                  var u = (r.active && r.active.scriptURL) || (r.installing && r.installing.scriptURL) || "";
+                  if (/\/sw\.js(\?|$)/.test(u)) r.unregister().catch(function () {});
+                } catch (e) {}
+              });
+            }).catch(function () {});
           }
         } catch (e) {}
       })();
