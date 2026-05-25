@@ -1,13 +1,11 @@
-/* Monetag verification + push service worker */
-self.options = {
-  "domain": "3nbf4.com",
-  "zoneId": 10888250
-};
-self.lary = "";
-try {
-  importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw');
-} catch (e) {
-  // Fail-safe: keep SW alive even if Monetag script can't load
-  self.addEventListener('install', () => self.skipWaiting());
-  self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
-}
+/* No-op service worker (Monetag removed). Kept to gracefully unregister any old SW. */
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    try { await self.registration.unregister(); } catch (e) {}
+    try {
+      const clients = await self.clients.matchAll();
+      clients.forEach((c) => { try { c.navigate(c.url); } catch (e) {} });
+    } catch (e) {}
+  })());
+});
