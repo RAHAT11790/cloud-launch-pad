@@ -1,6 +1,5 @@
-// Generate ULTRA-PROFESSIONAL cinematic 16:9 anime backdrop and upload to ImgBB.
-// Engine: Lovable AI Gateway — google/gemini-2.5-flash-image (Nano Banana).
-// No daily caps, metered via workspace credits — can generate thousands.
+// Generate ULTRA-PROFESSIONAL anime backdrop OR logo via Lovable AI Gateway (Nano Banana).
+// Mode: "backdrop" (16:9 cinematic banner) | "logo" (1:1 square brand mark)
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
@@ -11,27 +10,54 @@ interface Body {
   title: string;
   type?: "webseries" | "movies";
   year?: string | number;
+  mode?: "backdrop" | "logo";
   customPrompt?: string;
 }
 
-function buildPrompt(title: string, year?: string | number, custom?: string): string {
+function backdropPrompt(title: string, year?: string | number, custom?: string): string {
   if (custom && custom.trim()) return custom.trim().replace(/\{title\}/gi, title);
   const yr = year ? String(year) : "";
   const upper = title.toUpperCase();
 
-  return [
-    `Create an ULTRA-PROFESSIONAL 16:9 widescreen cinematic anime promotional banner / key-visual backdrop for the anime titled "${title}". The image must be of MAGAZINE-COVER, OFFICIAL-POSTER quality — the kind that makes viewers instantly fall in love with the show.`,
+  return `Create a 16:9 widescreen ULTRA-PROFESSIONAL official-quality anime promotional key-visual banner for the anime titled "${title}". This must look like a REAL Crunchyroll / Netflix / Aniplex official key visual — NOT AI-generic, NOT cartoon-style, NOT random characters.
 
-    `1. SUBJECT — Identify the most iconic main character(s) of "${title}" and render them in the most powerful, dramatic, fan-favorite signature pose / hero scene from the actual anime (e.g. their signature attack, signature stance, or most memorable scene). Faces sharp, eyes vivid, clean anime line-art, dynamic motion, intricate detail, highly polished official-anime production quality. Full body or upper-body composition that fills the right 55% of the frame.`,
+CRITICAL — REAL CHARACTERS:
+- Identify the ACTUAL MAIN HERO (and main heroine if the anime has one) of "${title}" from the real anime. Render them with their EXACT canonical appearance: correct hair color, hair style, eye color, signature outfit, signature weapon/accessory, signature expression. They must be instantly recognizable to any fan of "${title}".
+- Place the main HERO and main HEROINE together in the right 55% of the frame in a dynamic cinematic hero pose from a famous scene of the anime. If the anime has only one protagonist, render that single character with maximum impact. NEVER invent generic anime characters.
+- Faces sharp, eyes vivid and emotive, hair flowing with motion, clean professional anime line-art, official-anime production quality (Ufotable / MAPPA / WIT / Bones level).
 
-    `2. ENVIRONMENT — Atmospheric, mood-setting background that fits the anime's actual world (battlefield, sci-fi lab, sports stadium, fantasy realm, post-apocalyptic landscape, etc.). Volumetric light rays, particles, debris, motion streaks, deep depth of field, cinematic teal/orange or signature color grading matching the anime's tone. Subtle decorative manga-panel collage or supporting characters tastefully blended in the right edge.`,
+ENVIRONMENT:
+- Atmospheric background that matches the anime's actual world and tone (e.g. Demon Slayer = moonlit forest with red mist + Nichirin sword sparks; Dr. Stone = ruined civilization with lightning + science glow; Naruto = ninja village rooftops; Attack on Titan = broken walls + steam). Volumetric god-rays, cinematic particles, embers, debris, motion streaks, rich depth-of-field. Color grade matches the anime's signature palette.
 
-    `3. TITLE TYPOGRAPHY — On the LEFT 45% of the frame, render the anime title "${upper}" in a HUGE, BOLD, modern display font that matches the anime's genre vibe (e.g. distressed grunge for thriller, brush-stroke for sports/shounen, sharp serif for psychological, sci-fi sans for futuristic). The title must be the visual hero — clean, perfectly legible, multi-line if long, with subtle glow/stroke/shadow. Above the title, a small tagline label like "${yr ? yr + " " : ""}ANIME SERIES" or "NEW ANIME" in thin uppercase tracking. Below the title, an elegant tagline phrase (in Japanese kanji + English subtitle if it fits the style) — short, punchy, atmospheric.`,
+LEFT 45% — TITLE BLOCK:
+- Tiny tagline at top: "— ${yr || "2024"}  ANIME SERIES  •••" in thin tracked-out uppercase.
+- A short brushstroke ribbon below it carrying a punchy English tagline phrase that fits the anime's theme (one short sentence, all-caps).
+- HUGE BOLD display title "${upper}" — typography style must match the anime's genre (cracked-stone for Dr. Stone, brush-ink for samurai/shounen, sharp blade-cut serif for Demon Slayer, neon-cyber for sci-fi). Multi-line if long. Painterly texture, subtle glow, perfect kerning.
+- Below the title: the official Japanese kanji/katakana subtitle of the anime, small and elegant, with thin horizontal lines on each side.
+- Below that: a short atmospheric Japanese phrase (1-2 lines of kanji) acting as poetic subtitle.
 
-    `4. BRAND BADGES — TOP-RIGHT corner: a clean "RS ANIME" wordmark badge with a small crown icon above the "RS" letters (the official RS Anime logo). BOTTOM-LEFT: two small modern pill-shaped info badges stacked — first badge with a Telegram paper-plane icon and the text "TG :- @CARTOONFUNNY03", second badge with a globe icon and the text "WEBSITE :- RS ANIME". Pills have subtle glassy / dark translucent background with a thin colored stroke matching the accent color of the design.`,
+TOP-RIGHT — RS ANIME LOGO BADGE:
+- A compact rounded-square emblem with a small crown icon on top, the bold letters "RS" inside (white-to-cyan gradient), and the word "ANIME" beneath in clean uppercase. Subtle dotted divider under it. Glassy dark background with thin accent stroke matching the anime's color theme.
 
-    `5. STYLE & QUALITY — Award-winning anime key-visual aesthetic, 4K crisp, dramatic backlight, lens flares, cinematic colour grading, painterly highlights, professional poster composition with strict 16:9 ratio. NO watermarks, NO extra logos, NO random text, NO duplicated UI, NO blurry edges. Every element pixel-perfect, balanced, and polished. The final result must look like an OFFICIAL Netflix / Crunchyroll / Aniplex promotional key-visual for "${title}".`,
-  ].join("\n\n");
+BOTTOM-LEFT — TWO STACKED PILL BADGES:
+- Pill 1: round Telegram paper-plane icon + text "TG :- @CARTOONFUNNY03"
+- Pill 2: round globe icon + text "WEBSITE :- RS ANIME"
+- Both pills: dark glassy fill, thin accent-color stroke, soft glow, subtle corner notches/brackets like a HUD frame.
+
+QUALITY:
+- 4K crisp, dramatic backlight, cinematic lens flares, painterly highlights, perfect 16:9 composition. NO watermarks, NO duplicate logos, NO random extra text, NO blurry edges, NO mutated faces, NO extra fingers. Every element pixel-perfect, professional poster grade. Final result must be indistinguishable from an official key visual for "${title}".`;
+}
+
+function logoPrompt(title: string, custom?: string): string {
+  if (custom && custom.trim()) return custom.trim().replace(/\{title\}/gi, title);
+  const upper = title.toUpperCase();
+  return `Create a 1:1 square ULTRA-PROFESSIONAL official-style anime LOGO / title-mark for the anime "${title}". This is the title-art only, NOT a poster.
+
+- Render the title "${upper}" using the EXACT canonical official-style logo treatment of the real anime "${title}" (matching font character, color, texture, stroke, ornaments). If the real anime has an iconic logo style — replicate that signature treatment with master craftsmanship.
+- Below the English title: the official Japanese kanji/katakana of the anime in smaller elegant type.
+- Pure transparent-feel dark background (deep black or theme-colored gradient that fits the anime), centered composition, dramatic glow / particles / signature visual motif of the anime subtly behind the logo (e.g. flame for Demon Slayer, lightning for Dr. Stone, leaf for Naruto).
+- Tiny "RS ANIME" crown badge in the bottom-right corner — small, unobtrusive, elegant.
+- 4K crisp, perfect kerning, painterly texture, no extra text, no watermarks, no characters, no clutter. Logo-art only — magazine cover quality.`;
 }
 
 async function genWithLovable(prompt: string): Promise<Uint8Array> {
@@ -86,13 +112,16 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const prompt = buildPrompt(body.title, body.year, body.customPrompt);
+    const mode = body.mode === "logo" ? "logo" : "backdrop";
+    const prompt = mode === "logo"
+      ? logoPrompt(body.title, body.customPrompt)
+      : backdropPrompt(body.title, body.year, body.customPrompt);
     const bytes = await genWithLovable(prompt);
 
     const safe = body.animeId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
-    const url = await uploadToImgbb(bytes, `bd_${safe}_${Date.now()}`);
+    const url = await uploadToImgbb(bytes, `${mode}_${safe}_${Date.now()}`);
 
-    return new Response(JSON.stringify({ ok: true, url, engine: "lovable" }), {
+    return new Response(JSON.stringify({ ok: true, url, mode, engine: "lovable" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
