@@ -2215,8 +2215,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       lastTap.current = { time: 0, x: 0 };
     } else {
       lastTap.current = { time: now, x: clientX };
-      // Fire Monetag click slots (direct link + onclick popunder). Premium → no-op inside.
-      if (!isPremium) monetagDirectLink().catch(() => {});
+      // Adsterra ambient slots (premium → no-op inside).
+      if (!isPremium) loadAdsterraSlots().catch(() => {});
       // Show controls INSTANTLY on single tap — no 300ms wait
       toggleControls();
     }
