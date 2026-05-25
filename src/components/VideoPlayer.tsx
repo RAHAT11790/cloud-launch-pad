@@ -1468,7 +1468,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const _v = videoRef.current;
     if (_v && seekTarget === 0) {
       try { _v.currentTime = 0; } catch {}
-      lastKnownTime = 0;
       const onMetaReset = () => {
         try { if (pendingSeek.current === 0 || pendingSeek.current === null) _v.currentTime = 0; } catch {}
         _v.removeEventListener("loadedmetadata", onMetaReset);
