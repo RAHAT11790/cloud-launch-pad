@@ -8539,158 +8539,138 @@ ${tgBulkFooter}
 
         {activeSection === "analytics" && (() => {
           const today = new Date().toISOString().split("T")[0];
-          const todayViewers = dailyActiveUsers[today] ? Object.keys(dailyActiveUsers[today]).length : 0;
 
-          const currentViewersList: { animeId: string; title: string; viewers: { uid: string; userName: string; startedAt: number }[] }[] = [];
+          // ---- Today's logged-in users (from analytics/dailyActive/{today}) ----
+          const todayUsersMap = dailyActiveUsers[today] || {};
+          const todayUsers = Object.entries(todayUsersMap)
+            .map(([uid, data]: [string, any]) => ({
+              uid,
+              userName: data?.userName || "User",
+              lastSeen: Number(data?.lastSeen || 0),
+            }))
+            .sort((a, b) => b.lastSeen - a.lastSeen);
+          const todayUserCount = todayUsers.length;
+
+          // ---- Currently watching (live presence) ----
           let totalCurrentViewers = 0;
-          Object.entries(activeViewers).forEach(([aId, users]: [string, any]) => {
-            const viewerArr: { uid: string; userName: string; startedAt: number }[] = [];
-            Object.entries(users || {}).forEach(([uid, data]: [string, any]) => {
-              viewerArr.push({ uid, userName: data.userName || "User", startedAt: data.startedAt || 0 });
-            });
-            if (viewerArr.length > 0) {
-              const ws = webseriesData.find(w => w.id === aId);
-              const mv = moviesData.find(m => m.id === aId);
-              const cTitle = ws?.title || mv?.title || aId;
-              currentViewersList.push({ animeId: aId, title: cTitle, viewers: viewerArr });
-              totalCurrentViewers += viewerArr.length;
-            }
+          Object.values(activeViewers).forEach((users: any) => {
+            totalCurrentViewers += users ? Object.keys(users).length : 0;
           });
-          currentViewersList.sort((a, b) => b.viewers.length - a.viewers.length);
 
+          // ---- Today's per-anime view counts ----
           const contentViewStats: { animeId: string; title: string; viewCount: number; poster: string }[] = [];
+          let totalTodayViews = 0;
           Object.entries(analyticsViews).forEach(([aId, dates]: [string, any]) => {
             const todayData = dates?.[today];
             if (todayData) {
               const count = Object.keys(todayData).length;
+              totalTodayViews += count;
               const ws = webseriesData.find(w => w.id === aId);
               const mv = moviesData.find(m => m.id === aId);
-              contentViewStats.push({ animeId: aId, title: ws?.title || mv?.title || aId, viewCount: count, poster: ws?.poster || mv?.poster || "" });
-            }
-          });
-          contentViewStats.sort((a, b) => b.viewCount - a.viewCount);
-
-          // All-time stats sourced from persistent counter (analytics/totals/views)
-          // so they survive the nightly cleanup of the per-date buckets.
-          const allTimeStats: { animeId: string; title: string; totalViews: number; poster: string }[] = [];
-          Object.entries(allTimeTotals).forEach(([aId, info]: [string, any]) => {
-            const total = Number(info?.count || 0);
-            if (total > 0) {
-              const ws = webseriesData.find(w => w.id === aId);
-              const mv = moviesData.find(m => m.id === aId);
-              allTimeStats.push({
+              contentViewStats.push({
                 animeId: aId,
-                title: ws?.title || mv?.title || info?.title || aId,
-                totalViews: total,
+                title: ws?.title || mv?.title || aId,
+                viewCount: count,
                 poster: ws?.poster || mv?.poster || "",
               });
             }
           });
-          allTimeStats.sort((a, b) => b.totalViews - a.totalViews);
+          contentViewStats.sort((a, b) => b.viewCount - a.viewCount);
+          const maxViewCount = contentViewStats[0]?.viewCount || 1;
 
-          const last7Days: { date: string; count: number }[] = [];
-          for (let i = 6; i >= 0; i--) {
-            const d = new Date(); d.setDate(d.getDate() - i);
-            const dateStr = d.toISOString().split("T")[0];
-            const dayUsers = dailyActiveUsers[dateStr];
-            last7Days.push({ date: dateStr, count: dayUsers ? Object.keys(dayUsers).length : 0 });
-          }
-          const maxDayCount = Math.max(...last7Days.map(d => d.count), 1);
+          const formatTimeAgo = (ts: number) => {
+            if (!ts) return "—";
+            const s = Math.max(1, Math.floor((Date.now() - ts) / 1000));
+            if (s < 60) return `${s}s ago`;
+            const m = Math.floor(s / 60);
+            if (m < 60) return `${m}m ago`;
+            const h = Math.floor(m / 60);
+            return `${h}h ago`;
+          };
 
           return (
             <div>
-              {/* Summary Cards */}
+              {/* Top KPI cards */}
               <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="bg-gradient-to-br from-[#1A1A2E] to-[#151521] border border-purple-500/20 rounded-2xl p-4">
+                  <div className="w-10 h-10 bg-purple-500/15 rounded-xl flex items-center justify-center mb-2 text-purple-400">
+                    <Users size={18} />
+                  </div>
+                  <div className="text-2xl font-extrabold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">{todayUserCount}</div>
+                  <div className="text-[10px] text-[#D1C4E9] mt-1">Today's Users</div>
+                </div>
+                <div className="bg-gradient-to-br from-[#1A1A2E] to-[#151521] border border-blue-500/20 rounded-2xl p-4">
+                  <div className="w-10 h-10 bg-blue-500/15 rounded-xl flex items-center justify-center mb-2 text-blue-400">
+                    <Eye size={18} />
+                  </div>
+                  <div className="text-2xl font-extrabold text-blue-400">{totalTodayViews}</div>
+                  <div className="text-[10px] text-[#D1C4E9] mt-1">Today's Total Views</div>
+                </div>
                 <div className="bg-gradient-to-br from-[#1A1A2E] to-[#151521] border border-green-500/20 rounded-2xl p-4">
-                  <div className="w-10 h-10 bg-green-500/15 rounded-xl flex items-center justify-center mb-2 text-green-500">
+                  <div className="w-10 h-10 bg-green-500/15 rounded-xl flex items-center justify-center mb-2 text-green-400">
                     <Activity size={18} />
                   </div>
                   <div className="text-2xl font-extrabold text-green-400">{totalCurrentViewers}</div>
                   <div className="text-[10px] text-[#D1C4E9] mt-1">Watching Now</div>
                 </div>
-                <div className="bg-gradient-to-br from-[#1A1A2E] to-[#151521] border border-purple-500/20 rounded-2xl p-4">
-                  <div className="w-10 h-10 bg-purple-500/15 rounded-xl flex items-center justify-center mb-2 text-purple-500">
-                    <Eye size={18} />
-                  </div>
-                  <div className="text-2xl font-extrabold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">{todayViewers}</div>
-                  <div className="text-[10px] text-[#D1C4E9] mt-1">Today's Viewers</div>
-                </div>
-                <div className="bg-gradient-to-br from-[#1A1A2E] to-[#151521] border border-blue-500/20 rounded-2xl p-4">
-                  <div className="w-10 h-10 bg-blue-500/15 rounded-xl flex items-center justify-center mb-2 text-blue-500">
-                    <TrendingUp size={18} />
-                  </div>
-                  <div className="text-2xl font-extrabold text-blue-400">{contentViewStats.length}</div>
-                  <div className="text-[10px] text-[#D1C4E9] mt-1">Active Content</div>
-                </div>
               </div>
 
-              {/* Currently Watching - Live (series only, no user data) */}
+              {/* Section A — Today's Active Users */}
               <div className={`${glassCard} p-4 mb-4`}>
                 <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                  <Activity size={14} className="text-green-500 animate-pulse" /> Currently Watching (Live)
+                  <Users size={14} className="text-purple-400" /> Today's Active Users
+                  <span className="ml-auto text-[11px] bg-purple-500/15 text-purple-300 px-2 py-0.5 rounded-full font-bold">{todayUserCount}</span>
                 </h3>
-                {currentViewersList.length === 0 ? (
-                  <p className="text-[#957DAD] text-[13px] text-center py-5">No one watching right now</p>
+                {todayUsers.length === 0 ? (
+                  <p className="text-[#957DAD] text-[13px] text-center py-5">No user activity yet today</p>
                 ) : (
-                  <div className="space-y-2.5">
-                    {currentViewersList.map(item => (
-                      <div key={item.animeId} className="bg-[#1A1A2E] border border-green-500/20 rounded-xl p-3 flex items-center justify-between">
-                        <span className="text-[13px] font-semibold truncate flex-1 pr-2">{item.title}</span>
-                        <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 flex-shrink-0">
-                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                          {item.viewers.length}
-                        </span>
+                  <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                    {todayUsers.map((u, idx) => (
+                      <div key={u.uid} className="flex items-center gap-3 bg-[#1A1A2E] rounded-xl p-2.5 border border-white/5">
+                        <span className="text-[11px] text-[#957DAD] font-bold w-6 text-center">#{idx + 1}</span>
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
+                          {(u.userName || "?").trim().charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold truncate text-white">{u.userName}</p>
+                          <p className="text-[10px] text-[#957DAD]">Last seen {formatTimeAgo(u.lastSeen)}</p>
+                        </div>
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* 7-Day Trend Chart */}
+              {/* Section B — Today's Anime Views */}
               <div className={`${glassCard} p-4 mb-4`}>
                 <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                  <TrendingUp size={14} className="text-blue-500" /> Last 7 Days - Daily Viewers
-                </h3>
-                <div className="flex items-end gap-2 h-[120px]">
-                  {last7Days.map((day) => (
-                    <div key={day.date} className="flex-1 flex flex-col items-center justify-end h-full">
-                      <span className="text-[10px] text-purple-400 font-bold mb-1">{day.count}</span>
-                      <div
-                        className="w-full rounded-t-lg bg-gradient-to-t from-purple-600 to-purple-400 transition-all duration-500"
-                        style={{ height: `${Math.max((day.count / maxDayCount) * 90, 4)}px` }}
-                      />
-                      <span className="text-[9px] text-[#957DAD] mt-1.5">
-                        {new Date(day.date).toLocaleDateString("en", { weekday: "short" })}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Today's Top Content */}
-              <div className={`${glassCard} p-4 mb-4`}>
-                <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                  <BarChart3 size={14} className="text-purple-500" /> Today's Views by Content
+                  <Film size={14} className="text-pink-400" /> Today's Anime Views
+                  <span className="ml-auto text-[11px] bg-pink-500/15 text-pink-300 px-2 py-0.5 rounded-full font-bold">{contentViewStats.length}</span>
                 </h3>
                 {contentViewStats.length === 0 ? (
                   <p className="text-[#957DAD] text-[13px] text-center py-5">No views today yet</p>
                 ) : (
-                  <div className="space-y-2.5">
-                    {contentViewStats.slice(0, 20).map((item, idx) => (
+                  <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+                    {contentViewStats.map((item, idx) => (
                       <div key={item.animeId} className="flex items-center gap-3 bg-[#1A1A2E] rounded-xl p-3 border border-white/5">
                         <span className="text-[11px] text-[#957DAD] font-bold w-5">#{idx + 1}</span>
-                        {item.poster && (
+                        {item.poster ? (
                           <img src={item.poster} className="w-9 h-[52px] rounded-lg object-cover flex-shrink-0"
                             onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                        ) : (
+                          <div className="w-9 h-[52px] rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                            <Film size={14} className="text-purple-400" />
+                          </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-semibold truncate">{item.title}</p>
+                          <p className="text-[12px] font-semibold truncate text-white">{item.title}</p>
                           <div className="w-full h-1.5 bg-[#0F0F1A] rounded-full mt-1.5 overflow-hidden">
                             <div className="h-full rounded-full bg-gradient-to-r from-purple-600 to-pink-500 transition-all"
-                              style={{ width: `${Math.min(100, (item.viewCount / (contentViewStats[0]?.viewCount || 1)) * 100)}%` }} />
+                              style={{ width: `${Math.min(100, (item.viewCount / maxViewCount) * 100)}%` }} />
                           </div>
                         </div>
-                        <span className="text-sm font-bold text-purple-400 flex-shrink-0">{item.viewCount}</span>
+                        <span className="text-sm font-bold text-pink-400 flex-shrink-0 tabular-nums">{item.viewCount}</span>
                       </div>
                     ))}
                   </div>
@@ -8698,7 +8678,7 @@ ${tgBulkFooter}
               </div>
 
               <div className="text-[10px] text-[#957DAD] text-center pt-2 pb-1">
-                Showing today's activity only. All counters reset every 24 hours.
+                Showing today's activity only · resets every 24h
               </div>
             </div>
           );
