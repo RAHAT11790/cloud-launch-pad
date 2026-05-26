@@ -37,41 +37,40 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
 
   return (
     <div className={glassCard + " space-y-4"}>
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <h3 className="text-base font-bold text-white">Adsterra Ads</h3>
-        <label className="inline-flex items-center gap-2 text-xs text-white/80">
+        <label className="inline-flex items-center gap-2 text-xs text-white/80 flex-shrink-0">
           <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.target.checked)} />
           {enabled ? "Enabled" : "Disabled"}
         </label>
       </div>
-      <p className="text-xs text-white/60">
-        Paste the exact <code>&lt;script&gt;</code> snippet from your Adsterra dashboard. Premium users never see ads.
-        Anti-bypass guard auto-blocks AdBlock / VPN / custom DNS users with a warning overlay.
+      <p className="text-[11px] text-white/60 leading-relaxed">
+        Paste the exact <code className="text-white/80">&lt;script&gt;</code> snippet from your Adsterra dashboard. Premium users never see ads. Anti-bypass guard auto-blocks AdBlock / VPN / custom DNS users with a warning overlay.
       </p>
 
-      <div className="space-y-2">
-        <label className="text-xs font-semibold text-white/80">Popunder Script</label>
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-white/80 block">Popunder Script</label>
         <textarea
           value={popunder}
           onChange={(e) => setPopunder(e.target.value)}
           rows={3}
-          className={inputClass + " font-mono text-[11px]"}
+          className={inputClass + " w-full font-mono text-[11px] break-all"}
           placeholder='<script src="https://pl29545318.effectivecpmnetwork.com/.../invoke.js"></script>'
         />
       </div>
 
-      <div className="space-y-2">
-        <label className="text-xs font-semibold text-white/80">Social Bar Script</label>
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-white/80 block">Social Bar Script</label>
         <textarea
           value={socialBar}
           onChange={(e) => setSocialBar(e.target.value)}
           rows={3}
-          className={inputClass + " font-mono text-[11px]"}
+          className={inputClass + " w-full font-mono text-[11px] break-all"}
           placeholder='<script src="https://pl29545319.effectivecpmnetwork.com/.../invoke.js"></script>'
         />
       </div>
 
-      <button onClick={save} disabled={loading} className={btnPrimary}>
+      <button onClick={save} disabled={loading} className={btnPrimary + " w-full"}>
         {loading ? "Saving..." : "Save Adsterra Config"}
       </button>
     </div>
