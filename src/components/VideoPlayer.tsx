@@ -12,6 +12,7 @@ import logoImg from "@/assets/logo.png";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
+import VideoEngagement from "@/components/VideoEngagement";
 import { loadAdsterraSlots } from "@/lib/adsterraAds";
 // Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When OFF: free users get instant access, NO ad gate, NO unlock popup, NO verification flash.
@@ -2883,6 +2884,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
         </div>
+
+        {/* YouTube-style Like / Dislike / Comment / Share — only in windowed mode */}
+        {!isFullscreen && animeId && (
+          <VideoEngagement animeId={animeId} title={title} />
+        )}
 
         {/* Device limit is now enforced at login time - no overlay needed */}
 
