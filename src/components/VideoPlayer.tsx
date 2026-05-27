@@ -2912,6 +2912,244 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           <VideoEngagement animeId={animeId} title={title} />
         )}
 
+        {/* MovieBox-style watch page info (below player, edge-to-edge layout) */}
+        {!isFullscreen && !adGateActive && !deviceBlocked && !unlockBlocked && (
+          <div className="w-full px-5 pt-4 pb-2">
+            {/* Title + Info tap area */}
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenDetails) onOpenDetails();
+              }}
+              className="w-full text-left active:opacity-70"
+            >
+              <div className="flex items-start gap-2">
+                <h2 className="text-[15px] font-bold text-foreground leading-snug flex-1 truncate">
+                  {animeMeta?.title || title}
+                </h2>
+                <div className="flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-semibold text-muted-foreground flex-shrink-0 mt-1">
+                  Info <ChevronRight className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              {/* Metadata row */}
+              <div className="flex items-center gap-1.5 flex-nowrap mt-1.5 text-[12px] text-muted-foreground overflow-hidden">
+                <Tv className="w-3.5 h-3.5 text-foreground/60 flex-shrink-0" />
+                {animeMeta?.rating && (<><span className="text-foreground/25 flex-shrink-0">|</span><span className="flex items-center gap-0.5 flex-shrink-0"><Star className="w-3 h-3 text-primary fill-primary flex-shrink-0" />{animeMeta.rating}</span></>)}
+                {animeMeta?.year && (<><span className="text-foreground/25 flex-shrink-0">|</span><span className="truncate">{animeMeta.year}</span></>)}
+                {animeMeta?.language && (<><span className="text-foreground/25 flex-shrink-0">|</span><span className="truncate">{animeMeta.language}</span></>)}
+                {animeMeta?.type && (<><span className="text-foreground/25 flex-shrink-0">|</span><span className="capitalize truncate">{animeMeta.type}</span></>)}
+                {seasons && seasons.length > 0 && (<><span className="text-foreground/25 flex-shrink-0">|</span><span className="truncate">{seasons.length} season{seasons.length > 1 ? 's' : ''}</span></>)}
+              </div>
+            </button>
+
+            {/* 4 action pills */}
+            <div className="grid grid-cols-4 gap-2 mt-4">
+              <button
+                onClick={() => {
+                  if (!animeId) { toast.error("Cannot save: missing anime id"); return; }
+                  const uid = getLocalUserId();
+                  if (!uid) { toast.error("Please log in to use watchlist"); return; }
+                  if (saved) {
+                    try { remove(ref(db, `users/${uid}/watchlist/${animeId}`)); } catch {}
+                    setSaved(false);
+                    toast.success("Removed from watchlist");
+                  } else {
+                    try {
+                      set(ref(db, `users/${uid}/watchlist/${animeId}`), {
+                        id: animeId,
+                        title: animeMeta?.title || title,
+                        poster: animeMeta?.poster || poster,
+                        year: animeMeta?.year,
+                        rating: animeMeta?.rating,
+                        type: animeMeta?.type,
+                        addedAt: Date.now(),
+                      });
+                    } catch {}
+                    setSaved(true);
+                    toast.success("Saved to watchlist");
+                  }
+                }}
+                className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium border ${saved ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}
+              >
+                <Bookmark className={`w-3.5 h-3.5 flex-shrink-0 ${saved ? 'fill-primary' : ''}`} />
+                <span className="whitespace-nowrap truncate">{saved ? 'Saved' : 'Add to list'}</span>
+              </button>
+              <button
+                onClick={() => {
+                  const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+                  const u = animeId ? `${origin}/?anime=${encodeURIComponent(animeId)}` : (typeof window !== 'undefined' ? window.location.href : '');
+                  if ((navigator as any).share) (navigator as any).share({ title: animeMeta?.title || title, url: u }).catch(() => {});
+                  else { navigator.clipboard?.writeText(u); toast.success("Link copied"); }
+                }}
+                className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border border-border"
+              >
+                <Share2 className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Share</span>
+              </button>
+              <button
+                onClick={() => {
+                  // Open the existing quality picker (single-episode download).
+                  if (availableQualities.length > 1) {
+                    setBulkDownloadMode(false);
+                    setShowDownloadQualityPicker(true);
+                  } else {
+                    startDownloadWithQuality(currentQuality, src);
+                  }
+                  // Smoothly scroll to the download block below.
+                  setTimeout(() => {
+                    document.getElementById('vp-download-block')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 60);
+                }}
+                className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium border bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border"
+              >
+                <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Download</span>
+              </button>
+              <button
+                onClick={() => { window.dispatchEvent(new CustomEvent('open-downloads')); }}
+                className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border border-border"
+              >
+                <FolderDown className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="whitespace-nowrap truncate">Library</span>
+              </button>
+            </div>
+
+            {/* Resources section (Season dropdown + episode horizontal scroll with sticky "All") */}
+            {episodeList && episodeList.length > 0 && (
+              <div className="mt-5">
+                <div className="flex items-baseline gap-2 mb-3">
+                  <h3 className="text-[15px] font-bold text-foreground">Resources</h3>
+                </div>
+                {/* Inline language / season chips */}
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  {animeMeta?.language && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
+                      {animeMeta.language} dub
+                      <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                    </span>
+                  )}
+                  {seasons && seasons.length > 1 && onSeasonChange && (
+                    <select
+                      value={currentSeasonIdx ?? 0}
+                      onChange={(e) => onSeasonChange(Number(e.target.value))}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border"
+                    >
+                      {seasons.map((s, idx) => (
+                        <option key={idx} value={idx}>{getShortSeasonLabel(s.name, idx)}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Episodes horizontal scroll — "All" stays sticky on the left while episodes scroll */}
+                <div className="relative -mx-5">
+                  <div className="flex gap-2 overflow-x-auto pb-1 pl-5 pr-5 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none', touchAction: 'pan-x' }}>
+                    <button
+                      onClick={() => setShowAllEpisodes(true)}
+                      className="sticky left-0 z-10 flex-shrink-0 min-w-[56px] px-3 py-2.5 rounded-lg text-sm font-bold border shadow-[6px_0_8px_-6px_rgba(0,0,0,0.25)] bg-background border-border hover:bg-foreground/10"
+                    >
+                      All
+                    </button>
+                    {episodeList.map((ep) => {
+                      // NEW tag: show if episode was added in last 7 days.
+                      const isNew = !!(ep.createdAt && (Date.now() - ep.createdAt) < 7 * 24 * 60 * 60 * 1000);
+                      return (
+                        <button
+                          key={ep.number}
+                          onClick={ep.onClick}
+                          className={`relative flex-shrink-0 min-w-[56px] px-3 py-2.5 rounded-lg text-sm font-bold ${
+                            ep.active
+                              ? 'bg-gradient-to-br from-primary/25 to-primary/10 text-primary border border-primary/40'
+                              : 'bg-foreground/[0.06] text-foreground/85 border border-border hover:bg-foreground/10'
+                          }`}
+                        >
+                          {ep.number}
+                          {isNew && (
+                            <span className="absolute -top-1.5 -right-1.5 px-1 py-0 rounded text-[8px] font-black bg-primary text-primary-foreground tracking-wide shadow">
+                              NEW
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* For you (suggestions) */}
+            {suggestedAnime && suggestedAnime.length > 0 && (
+              <div className="mt-5">
+                <div className="flex items-baseline justify-between mb-3 pb-2 border-b border-border">
+                  <h3 className="text-[15px] font-bold text-foreground">For you</h3>
+                </div>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {suggestedAnime.map((a) => (
+                    <button key={a.id} onClick={() => onSuggestedClick?.(a)} className="group text-left">
+                      <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-foreground/5">
+                        {a.poster ? (
+                          <img src={a.poster} alt={a.title} loading="lazy" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No image</div>
+                        )}
+                        {a.language && (
+                          <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/70 text-[10px] font-semibold text-white">
+                            {a.language}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-medium text-foreground line-clamp-2 leading-tight mt-1.5">{a.title}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* All-episodes bottom sheet (opens when user taps the sticky "All" chip) */}
+        {showAllEpisodes && episodeList && episodeList.length > 0 && (
+          <div className="fixed inset-0 z-[480] bg-black/70 flex items-end" onClick={() => setShowAllEpisodes(false)}>
+            <div onClick={(e) => e.stopPropagation()} className="w-full max-h-[80vh] bg-card border-t border-border rounded-t-3xl flex flex-col">
+              <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-border/60">
+                <div>
+                  <h3 className="text-base font-bold text-foreground">All Episodes</h3>
+                  <p className="text-[11px] text-muted-foreground">{episodeList.length} episodes{seasons && seasons.length > 0 ? ` • ${seasons[currentSeasonIdx ?? 0]?.name || ''}` : ''}</p>
+                </div>
+                <button onClick={() => setShowAllEpisodes(false)} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-4 py-3">
+                <div className="grid grid-cols-5 gap-2">
+                  {episodeList.map((ep) => {
+                    const isNew = !!(ep.createdAt && (Date.now() - ep.createdAt) < 7 * 24 * 60 * 60 * 1000);
+                    return (
+                      <button
+                        key={ep.number}
+                        onClick={() => { ep.onClick(); setShowAllEpisodes(false); }}
+                        className={`relative h-12 rounded-lg text-sm font-bold border ${
+                          ep.active
+                            ? 'bg-gradient-to-br from-primary/25 to-primary/10 text-primary border-primary/40'
+                            : 'bg-foreground/[0.06] text-foreground/85 border-border hover:bg-foreground/10'
+                        }`}
+                      >
+                        {ep.number}
+                        {isNew && (
+                          <span className="absolute -top-1.5 -right-1.5 px-1 py-0 rounded text-[8px] font-black bg-primary text-primary-foreground tracking-wide shadow">
+                            NEW
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+
         {/* Device limit is now enforced at login time - no overlay needed */}
 
         {/* Ad Gate Overlay */}
