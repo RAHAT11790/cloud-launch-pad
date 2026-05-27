@@ -147,6 +147,8 @@ const VideoEngagement = ({ animeId, title }: Props) => {
     // Always use current origin so AN/RS share links work on any deployment domain.
     const origin = typeof window !== "undefined" && window.location?.origin ? window.location.origin : SITE_URL;
     const url = `${origin}/?anime=${encodeURIComponent(animeId)}`;
+    const shareData = { title: title || "Watch on RS Anime", text: title || "", url };
+
 
     try {
       if (navigator.share) {
