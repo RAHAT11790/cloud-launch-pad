@@ -5,8 +5,10 @@ import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock,
   ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages,
-  Bookmark, Tv, Star, FolderDown, Info, Grid3x3
+  Bookmark, Tv, Star, FolderDown, Info, Grid3x3, Share2
 } from "lucide-react";
+import { toast } from "sonner";
+
 
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
@@ -2988,23 +2990,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               </button>
               <button
                 onClick={() => {
-                  // Open the existing quality picker (single-episode download).
-                  if (availableQualities.length > 1) {
-                    setBulkDownloadMode(false);
-                    setShowDownloadQualityPicker(true);
-                  } else {
-                    startDownloadWithQuality(currentQuality, src);
-                  }
-                  // Smoothly scroll to the download block below.
-                  setTimeout(() => {
-                    document.getElementById('vp-download-block')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }, 60);
+                  // Scroll to the existing Download block below — it has the
+                  // full quality picker / bulk / offline UI.
+                  document.getElementById('vp-download-block')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }}
                 className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium border bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border"
               >
                 <Download className="w-3.5 h-3.5 flex-shrink-0" />
                 <span>Download</span>
               </button>
+
               <button
                 onClick={() => { window.dispatchEvent(new CustomEvent('open-downloads')); }}
                 className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border border-border"
