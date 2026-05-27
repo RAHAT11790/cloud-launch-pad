@@ -775,15 +775,8 @@ const Index = () => {
   }, [getCurrentLayer, isRoutedOverlay]);
 
   // Handle deep link: open anime detail from URL ?anime=ID (legacy query form)
-  // Wait for AnimeSalt items to finish loading before resolving — otherwise
-  // AN deep links (id `as_<slug>`) get silently dropped because only Firebase
-  // anime are in `allAnime` at first paint.
   useEffect(() => {
-    if (!pendingAnimeId) return;
-    if (allAnime.length === 0) return;
-    // If salt is still loading AND the id looks like an AN id, wait for it.
-    const looksLikeSaltId = pendingAnimeId.startsWith("as_");
-    if (looksLikeSaltId && saltLoading) return;
+    if (!pendingAnimeId || allAnime.length === 0) return;
 
     const found = allAnime.find((a) => a.id === pendingAnimeId);
     if (found) {
@@ -795,13 +788,10 @@ const Index = () => {
       if (!pathname.startsWith("/anime/") && !pathname.startsWith("/watch/")) {
         navigate(buildAnimeRoute(found.id), { replace: true });
       }
-      setPendingAnimeId(null);
-    } else if (!saltLoading) {
-      // Only give up after salt has finished loading too.
-      setPendingAnimeId(null);
     }
-  }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute, saltLoading]);
 
+    setPendingAnimeId(null);
+  }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute]);
 
   const filteredAnime = useMemo(() => {
     if (activeCategory !== "All") return allAnime.filter(a => a.category === activeCategory);
@@ -2319,30 +2309,14 @@ const Index = () => {
           seasons={playerState.anime.seasons}
           currentSeasonIdx={playerState.seasonIdx}
           onSeasonChange={handleVideoPlayerSeasonChange}
-          suggestedAnime={allAnime
-            .filter((a) => a.id !== playerState.anime.id && (!playerState.anime.category || a.category === playerState.anime.category))
-            .slice(0, 9)}
+          suggestedAnime={[]}
           onSuggestedClick={(anime) => {
             stopAllPlayback();
             navigate(buildAnimeRoute(anime.id));
             handleCardClick(anime);
           }}
-          description={playerState.anime.storyline}
-          animeMeta={{
-            title: playerState.anime.title,
-            poster: playerState.anime.poster,
-            year: playerState.anime.year,
-            rating: playerState.anime.rating,
-            language: playerState.anime.language,
-            type: playerState.anime.type,
-          }}
-          onOpenDetails={() => {
-            stopAllPlayback();
-            navigate(buildAnimeRoute(playerState.anime.id));
-          }}
           nextEpisodeSrc={playerState.nextEpisodeSrc}
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
-
         />
       </div>
     );
