@@ -2319,14 +2319,30 @@ const Index = () => {
           seasons={playerState.anime.seasons}
           currentSeasonIdx={playerState.seasonIdx}
           onSeasonChange={handleVideoPlayerSeasonChange}
-          suggestedAnime={[]}
+          suggestedAnime={allAnime
+            .filter((a) => a.id !== playerState.anime.id && (!playerState.anime.category || a.category === playerState.anime.category))
+            .slice(0, 9)}
           onSuggestedClick={(anime) => {
             stopAllPlayback();
             navigate(buildAnimeRoute(anime.id));
             handleCardClick(anime);
           }}
+          description={playerState.anime.storyline}
+          animeMeta={{
+            title: playerState.anime.title,
+            poster: playerState.anime.poster,
+            year: playerState.anime.year,
+            rating: playerState.anime.rating,
+            language: playerState.anime.language,
+            type: playerState.anime.type,
+          }}
+          onOpenDetails={() => {
+            stopAllPlayback();
+            navigate(buildAnimeRoute(playerState.anime.id));
+          }}
           nextEpisodeSrc={playerState.nextEpisodeSrc}
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
+
         />
       </div>
     );

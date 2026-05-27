@@ -3248,6 +3248,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         })()}
 
         {/* Download Button with Quality Picker + Offline Playback */}
+        <div id="vp-download-block" />
+
         {!isFullscreen && !adGateActive && !hideDownload && !isEmbedPlayback && (() => {
           // Check if this episode is already saved in IndexedDB
           const savedEpisode = downloadedEpisodes.find(d => d.subtitle === subtitle);
