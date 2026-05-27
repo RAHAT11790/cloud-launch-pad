@@ -4,8 +4,10 @@ import { useBranding } from "@/hooks/useBranding";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock,
-  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages
+  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages,
+  Bookmark, Tv, Star, FolderDown, Info, Grid3x3
 } from "lucide-react";
+
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
@@ -189,7 +191,7 @@ interface VideoPlayerProps {
   poster?: string;
   onClose: () => void;
   onNextEpisode?: () => void;
-  episodeList?: { number: number; title?: string; active: boolean; onClick: () => void }[];
+  episodeList?: { number: number; title?: string; active: boolean; onClick: () => void; link?: string; link480?: string; link720?: string; link1080?: string; link4k?: string; createdAt?: number }[];
   qualityOptions?: QualityOption[];
   audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
   animeId?: string;
@@ -205,7 +207,12 @@ interface VideoPlayerProps {
   nextEpisodeSrc?: string;
   forceEmbedMode?: boolean;
   initialSeekTime?: number;
+  // New (Stage 1) — used by the MovieBox-style below-video info area
+  description?: string;
+  animeMeta?: { title?: string; poster?: string; year?: string | number; rating?: string | number; language?: string; type?: string };
+  onOpenDetails?: () => void;
 }
+
 
 const getShortSeasonLabel = (seasonName: string | undefined, index: number) => {
   const normalized = String(seasonName || "").trim();
@@ -220,7 +227,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, description, animeMeta, onOpenDetails }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl || logoImg;
   // Removed preload anime character image - no longer needed
