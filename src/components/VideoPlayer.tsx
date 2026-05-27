@@ -486,6 +486,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
   const [bulkDownloadMode, setBulkDownloadMode] = useState(false);
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
+  // Stage 1 — MovieBox-style watch page state
+  const [saved, setSaved] = useState(false);
+  const [showAllEpisodes, setShowAllEpisodes] = useState(false);
+
+  // Subscribe to watchlist status for the current anime (logged-in users only)
+  useEffect(() => {
+    if (!animeId) { setSaved(false); return; }
+    const uid = getLocalUserId();
+    if (!uid) { setSaved(false); return; }
+    const wlRef = ref(db, `users/${uid}/watchlist/${animeId}`);
+    const unsub = onValue(wlRef, (snap) => setSaved(snap.exists()));
+    return () => unsub();
+  }, [animeId]);
+
+
   
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
