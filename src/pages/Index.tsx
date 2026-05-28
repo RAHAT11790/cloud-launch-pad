@@ -221,9 +221,25 @@ const Index = () => {
     initializeUiTheme();
   }, []);
 
-  // Check if user is logged in (must have email - no guest accounts)
+  // Ensure a guest identity exists locally so analytics / unlock flow keep working
+  // even without a real account. Guests are NEVER written to Firebase.
+  const ensureGuestLocalUser = () => {
+    try {
+      const raw = localStorage.getItem("rsanime_user");
+      let u: any = {};
+      try { u = raw ? JSON.parse(raw) : {}; } catch { u = {}; }
+      if (!u?.id) {
+        const guestId = "guest_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+        u = { id: guestId, email: "", name: "Guest", guest: true };
+        localStorage.setItem("rsanime_user", JSON.stringify(u));
+      }
+    } catch {}
+  };
+
+  // Check if user has a REAL (email-bound) account.
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     try {
+      ensureGuestLocalUser();
       const u = localStorage.getItem("rsanime_user");
       if (!u) return false;
       const parsed = JSON.parse(u);
@@ -231,10 +247,21 @@ const Index = () => {
     } catch { return false; }
   });
 
+  // Sign-in promo modal — show once for guests, dismissible.
+  const [showSignInPromo, setShowSignInPromo] = useState(() => {
+    try {
+      const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
+      if (u?.email) return false;
+      return localStorage.getItem("rs_signin_promo_seen") !== "1";
+    } catch { return false; }
+  });
+  const [showSignInPage, setShowSignInPage] = useState(false);
+
   // Keep auth-like local user state synced (Header may create user after mount)
   useEffect(() => {
     const syncLoginState = () => {
       try {
+        ensureGuestLocalUser();
         const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
         setIsLoggedIn(!!(u?.id && u?.email));
       } catch {
