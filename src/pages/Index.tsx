@@ -2088,9 +2088,19 @@ const Index = () => {
 
 
 
-  // Show login page if not logged in
-  if (!isLoggedIn) {
-    return <LoginPage onLogin={handleLogin} />;
+  // NOTE: The full LoginPage gate has been removed. Guests can browse the entire
+  // app; the sign-in promo modal (below) is the only nudge to create an account.
+  // The LoginPage itself is still reachable as an in-app overlay (Profile / promo).
+  if (showSignInPage) {
+    return (
+      <LoginPage
+        onLogin={(uid) => {
+          handleLogin(uid);
+          setShowSignInPage(false);
+          setShowSignInPromo(false);
+        }}
+      />
+    );
   }
 
   // Show maintenance page if server is under maintenance
