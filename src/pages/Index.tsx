@@ -776,22 +776,63 @@ const Index = () => {
 
   // Handle deep link: open anime detail from URL ?anime=ID (legacy query form)
   useEffect(() => {
-    if (!pendingAnimeId || allAnime.length === 0) return;
+    if (!pendingAnimeId) return;
+
+    const isSaltId = pendingAnimeId.startsWith("as_");
+    // Wait for the right data source to finish loading before deciding "not found".
+    // Salt items load asynchronously after Firebase, so we must not clear the
+    // pending id prematurely or the ANR share link silently fails.
+    if (isSaltId && saltLoading) return;
+    if (!isSaltId && loading) return;
 
     const found = allAnime.find((a) => a.id === pendingAnimeId);
-    if (found) {
-      setSelectedAnime(found);
 
-      // Legacy shared links still come in as /?anime=<id>.
-      // Immediately normalize them to the real detail route so the details
-      // overlay does not get auto-closed by the route-sync effect.
+    const normalizeRoute = (id: string) => {
       if (!pathname.startsWith("/anime/") && !pathname.startsWith("/watch/")) {
-        navigate(buildAnimeRoute(found.id), { replace: true });
+        navigate(buildAnimeRoute(id), { replace: true });
       }
+    };
+
+    if (found) {
+      if (found.source === "animesalt") {
+        // Trigger the full details-loading flow so seasons/episodes get fetched.
+        handleCardClick(found);
+      } else {
+        setSelectedAnime(found);
+        normalizeRoute(found.id);
+      }
+      setPendingAnimeId(null);
+      return;
     }
 
+    // Salt id but the catalog list doesn't contain it (e.g. not in animesaltSelected
+    // any more, or this device's salt fetch failed). Build a stub from the slug
+    // and let handleCardClick load full detail straight from the API/Firebase.
+    if (isSaltId) {
+      const slug = pendingAnimeId.slice(3);
+      const stub: AnimeItem = {
+        id: pendingAnimeId,
+        title: slug.replace(/-/g, " "),
+        poster: "",
+        backdrop: "",
+        year: "",
+        rating: "",
+        language: "",
+        category: "AnimeSalt",
+        type: "webseries",
+        storyline: "",
+        source: "animesalt",
+        slug,
+      } as AnimeItem;
+      handleCardClick(stub);
+      setPendingAnimeId(null);
+      return;
+    }
+
+    // RS id but not found — give up.
     setPendingAnimeId(null);
-  }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute, loading, saltLoading]);
 
   const filteredAnime = useMemo(() => {
     if (activeCategory !== "All") return allAnime.filter(a => a.category === activeCategory);
