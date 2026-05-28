@@ -1362,10 +1362,7 @@ const Index = () => {
       return;
     }
 
-    if (!isLoggedIn) {
-      toast.error("ভিডিও দেখতে লগইন করতে হবে");
-      return;
-    }
+    // Guests can watch — they still go through the unlock/ad-gate flow.
 
     if (!freeAccessLoaded) {
       return;
