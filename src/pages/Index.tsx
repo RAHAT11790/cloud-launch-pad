@@ -121,9 +121,10 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
     const ok = c && (c.success === true || c.embedUrl || c.allEmbeds?.length || c.links?.length || c.data);
     if (ok) return cached.data;
   }
-  // Try up to 2 times on failure (cloudflare worker / animesalt site flake)
+  // Try up to 4 times on failure (cloudflare worker / animesalt site flake)
   let lastErr: any = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const backoff = [350, 800, 1600];
+  for (let attempt = 0; attempt < 4; attempt++) {
     try {
       const data = await fn();
       const ok = data && (data.success === true || data.embedUrl || data.allEmbeds?.length || data.links?.length || data.data);
@@ -133,7 +134,7 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
       }
       lastErr = new Error("empty");
     } catch (e) { lastErr = e; }
-    if (attempt === 0) await new Promise(r => setTimeout(r, 600));
+    if (attempt < 3) await new Promise(r => setTimeout(r, backoff[attempt]));
   }
   throw lastErr || new Error("API failed");
 };
