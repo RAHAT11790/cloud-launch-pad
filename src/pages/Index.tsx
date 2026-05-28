@@ -102,6 +102,7 @@ import ProfilePage from "@/components/ProfilePage";
 import SearchPage from "@/components/SearchPage";
 import NewEpisodeReleases from "@/components/NewEpisodeReleases";
 import LoginPage from "@/components/LoginPage";
+import SignInPromoModal from "@/components/SignInPromoModal";
 import { useFirebaseData } from "@/hooks/useFirebaseData";
 import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
 import { animeSaltApi } from "@/lib/animeSaltApi";
