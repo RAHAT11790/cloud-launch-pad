@@ -102,6 +102,7 @@ import ProfilePage from "@/components/ProfilePage";
 import SearchPage from "@/components/SearchPage";
 import NewEpisodeReleases from "@/components/NewEpisodeReleases";
 import LoginPage from "@/components/LoginPage";
+import SignInPromoModal from "@/components/SignInPromoModal";
 import { useFirebaseData } from "@/hooks/useFirebaseData";
 import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
 import { animeSaltApi } from "@/lib/animeSaltApi";
@@ -121,9 +122,10 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
     const ok = c && (c.success === true || c.embedUrl || c.allEmbeds?.length || c.links?.length || c.data);
     if (ok) return cached.data;
   }
-  // Try up to 2 times on failure (cloudflare worker / animesalt site flake)
+  // Try up to 4 times on failure (cloudflare worker / animesalt site flake)
   let lastErr: any = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const backoff = [350, 800, 1600];
+  for (let attempt = 0; attempt < 4; attempt++) {
     try {
       const data = await fn();
       const ok = data && (data.success === true || data.embedUrl || data.allEmbeds?.length || data.links?.length || data.data);
@@ -133,7 +135,7 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
       }
       lastErr = new Error("empty");
     } catch (e) { lastErr = e; }
-    if (attempt === 0) await new Promise(r => setTimeout(r, 600));
+    if (attempt < 3) await new Promise(r => setTimeout(r, backoff[attempt]));
   }
   throw lastErr || new Error("API failed");
 };
@@ -220,9 +222,25 @@ const Index = () => {
     initializeUiTheme();
   }, []);
 
-  // Check if user is logged in (must have email - no guest accounts)
+  // Ensure a guest identity exists locally so analytics / unlock flow keep working
+  // even without a real account. Guests are NEVER written to Firebase.
+  const ensureGuestLocalUser = () => {
+    try {
+      const raw = localStorage.getItem("rsanime_user");
+      let u: any = {};
+      try { u = raw ? JSON.parse(raw) : {}; } catch { u = {}; }
+      if (!u?.id) {
+        const guestId = "guest_" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+        u = { id: guestId, email: "", name: "Guest", guest: true };
+        localStorage.setItem("rsanime_user", JSON.stringify(u));
+      }
+    } catch {}
+  };
+
+  // Check if user has a REAL (email-bound) account.
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     try {
+      ensureGuestLocalUser();
       const u = localStorage.getItem("rsanime_user");
       if (!u) return false;
       const parsed = JSON.parse(u);
@@ -230,10 +248,21 @@ const Index = () => {
     } catch { return false; }
   });
 
+  // Sign-in promo modal — show once for guests, dismissible.
+  const [showSignInPromo, setShowSignInPromo] = useState(() => {
+    try {
+      const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
+      if (u?.email) return false;
+      return localStorage.getItem("rs_signin_promo_seen") !== "1";
+    } catch { return false; }
+  });
+  const [showSignInPage, setShowSignInPage] = useState(false);
+
   // Keep auth-like local user state synced (Header may create user after mount)
   useEffect(() => {
     const syncLoginState = () => {
       try {
+        ensureGuestLocalUser();
         const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
         setIsLoggedIn(!!(u?.id && u?.email));
       } catch {
@@ -396,10 +425,7 @@ const Index = () => {
   const checkAndShowAdGate = useCallback(async (anime?: AnimeItem, seasonIdx?: number, epIdx?: number): Promise<boolean> => {
     // Returns true if access is granted, false if ad-gate shown
     // Device limit is enforced at login time, premium users get direct access
-    if (!isLoggedIn) {
-      toast.error("ভিডিও দেখতে লগইন করতে হবে");
-      return false;
-    }
+    // Guests are allowed — they still go through the unlock/ad-gate flow below.
 
     if (unlockBlocked) {
       toast.error("একই unlock token অপব্যবহারের কারণে এই অ্যাকাউন্ট ব্লক করা হয়েছে");
@@ -776,22 +802,63 @@ const Index = () => {
 
   // Handle deep link: open anime detail from URL ?anime=ID (legacy query form)
   useEffect(() => {
-    if (!pendingAnimeId || allAnime.length === 0) return;
+    if (!pendingAnimeId) return;
+
+    const isSaltId = pendingAnimeId.startsWith("as_");
+    // Wait for the right data source to finish loading before deciding "not found".
+    // Salt items load asynchronously after Firebase, so we must not clear the
+    // pending id prematurely or the ANR share link silently fails.
+    if (isSaltId && saltLoading) return;
+    if (!isSaltId && loading) return;
 
     const found = allAnime.find((a) => a.id === pendingAnimeId);
-    if (found) {
-      setSelectedAnime(found);
 
-      // Legacy shared links still come in as /?anime=<id>.
-      // Immediately normalize them to the real detail route so the details
-      // overlay does not get auto-closed by the route-sync effect.
+    const normalizeRoute = (id: string) => {
       if (!pathname.startsWith("/anime/") && !pathname.startsWith("/watch/")) {
-        navigate(buildAnimeRoute(found.id), { replace: true });
+        navigate(buildAnimeRoute(id), { replace: true });
       }
+    };
+
+    if (found) {
+      if (found.source === "animesalt") {
+        // Trigger the full details-loading flow so seasons/episodes get fetched.
+        handleCardClick(found);
+      } else {
+        setSelectedAnime(found);
+        normalizeRoute(found.id);
+      }
+      setPendingAnimeId(null);
+      return;
     }
 
+    // Salt id but the catalog list doesn't contain it (e.g. not in animesaltSelected
+    // any more, or this device's salt fetch failed). Build a stub from the slug
+    // and let handleCardClick load full detail straight from the API/Firebase.
+    if (isSaltId) {
+      const slug = pendingAnimeId.slice(3);
+      const stub: AnimeItem = {
+        id: pendingAnimeId,
+        title: slug.replace(/-/g, " "),
+        poster: "",
+        backdrop: "",
+        year: "",
+        rating: "",
+        language: "",
+        category: "AnimeSalt",
+        type: "webseries",
+        storyline: "",
+        source: "animesalt",
+        slug,
+      } as AnimeItem;
+      handleCardClick(stub);
+      setPendingAnimeId(null);
+      return;
+    }
+
+    // RS id but not found — give up.
     setPendingAnimeId(null);
-  }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute, loading, saltLoading]);
 
   const filteredAnime = useMemo(() => {
     if (activeCategory !== "All") return allAnime.filter(a => a.category === activeCategory);
@@ -1296,10 +1363,7 @@ const Index = () => {
       return;
     }
 
-    if (!isLoggedIn) {
-      toast.error("ভিডিও দেখতে লগইন করতে হবে");
-      return;
-    }
+    // Guests can watch — they still go through the unlock/ad-gate flow.
 
     if (!freeAccessLoaded) {
       return;
@@ -2025,9 +2089,19 @@ const Index = () => {
 
 
 
-  // Show login page if not logged in
-  if (!isLoggedIn) {
-    return <LoginPage onLogin={handleLogin} />;
+  // NOTE: The full LoginPage gate has been removed. Guests can browse the entire
+  // app; the sign-in promo modal (below) is the only nudge to create an account.
+  // The LoginPage itself is still reachable as an in-app overlay (Profile / promo).
+  if (showSignInPage) {
+    return (
+      <LoginPage
+        onLogin={(uid) => {
+          handleLogin(uid);
+          setShowSignInPage(false);
+          setShowSignInPromo(false);
+        }}
+      />
+    );
   }
 
   // Show maintenance page if server is under maintenance
@@ -2480,8 +2554,19 @@ const Index = () => {
         }))}
       />
 
+      {/* Sign-in promo for guests — dismissible, shown once per browser */}
+      <SignInPromoModal
+        open={showSignInPromo && !isLoggedIn && !playerState && !saltPlayerState}
+        onClose={() => setShowSignInPromo(false)}
+        onSignIn={() => {
+          setShowSignInPromo(false);
+          setShowSignInPage(true);
+        }}
+      />
+
     </div>
   );
 };
+
 
 export default Index;

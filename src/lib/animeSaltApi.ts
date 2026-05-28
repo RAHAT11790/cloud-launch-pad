@@ -170,19 +170,25 @@ const parseEpisodePage = (html: string) => {
 
 /** Try direct API call first, supporting both nested and top-level response formats */
 const tryDirectApi = async (proxyUrl: string, body: any): Promise<any | null> => {
-  try {
-    const res = await fetch(proxyUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data?.success) return null;
-    if (data.data) return data.data;
-    if (data.items) return { items: data.items, maxPage: data.maxPage, currentPage: data.currentPage, totalCount: data.totalCount };
-    return data;
-  } catch { return null; }
+  // 3 attempts with backoff — animesalt / cloudflare worker can be flaky.
+  const delays = [0, 500, 1200];
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i] > 0) await new Promise(r => setTimeout(r, delays[i]));
+    try {
+      const res = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!data?.success) continue;
+      if (data.data) return data.data;
+      if (data.items) return { items: data.items, maxPage: data.maxPage, currentPage: data.currentPage, totalCount: data.totalCount };
+      return data;
+    } catch { /* retry */ }
+  }
+  return null;
 };
 
 export const animeSaltApi = {
