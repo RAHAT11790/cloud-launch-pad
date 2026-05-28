@@ -424,10 +424,7 @@ const Index = () => {
   const checkAndShowAdGate = useCallback(async (anime?: AnimeItem, seasonIdx?: number, epIdx?: number): Promise<boolean> => {
     // Returns true if access is granted, false if ad-gate shown
     // Device limit is enforced at login time, premium users get direct access
-    if (!isLoggedIn) {
-      toast.error("ভিডিও দেখতে লগইন করতে হবে");
-      return false;
-    }
+    // Guests are allowed — they still go through the unlock/ad-gate flow below.
 
     if (unlockBlocked) {
       toast.error("একই unlock token অপব্যবহারের কারণে এই অ্যাকাউন্ট ব্লক করা হয়েছে");
