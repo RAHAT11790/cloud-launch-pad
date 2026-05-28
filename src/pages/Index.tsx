@@ -2554,8 +2554,19 @@ const Index = () => {
         }))}
       />
 
+      {/* Sign-in promo for guests — dismissible, shown once per browser */}
+      <SignInPromoModal
+        open={showSignInPromo && !isLoggedIn && !playerState && !saltPlayerState}
+        onClose={() => setShowSignInPromo(false)}
+        onSignIn={() => {
+          setShowSignInPromo(false);
+          setShowSignInPage(true);
+        }}
+      />
+
     </div>
   );
 };
+
 
 export default Index;
