@@ -775,23 +775,57 @@ const Index = () => {
   }, [getCurrentLayer, isRoutedOverlay]);
 
   // Handle deep link: open anime detail from URL ?anime=ID (legacy query form)
+  // For AnimeSalt shared links (as_<slug>) we must wait until the salt data
+  // has finished loading — otherwise the lookup fires too early, finds nothing,
+  // and the pending id gets cleared so the share link silently dies.
   useEffect(() => {
-    if (!pendingAnimeId || allAnime.length === 0) return;
+    if (!pendingAnimeId) return;
+    if (allAnime.length === 0) return;
+
+    const isSaltLink = pendingAnimeId.startsWith("as_");
+    if (isSaltLink && saltLoading) return; // wait for AN data
 
     const found = allAnime.find((a) => a.id === pendingAnimeId);
     if (found) {
       setSelectedAnime(found);
-
-      // Legacy shared links still come in as /?anime=<id>.
-      // Immediately normalize them to the real detail route so the details
-      // overlay does not get auto-closed by the route-sync effect.
       if (!pathname.startsWith("/anime/") && !pathname.startsWith("/watch/")) {
         navigate(buildAnimeRoute(found.id), { replace: true });
+      }
+      setPendingAnimeId(null);
+      return;
+    }
+
+    // If we're still waiting for firebase or salt to load, don't clear yet.
+    if (loading || (isSaltLink && saltLoading)) return;
+
+    // For AN links: try to construct a minimal stub from the slug so the
+    // details page still opens (it will fetch full metadata on its own path).
+    if (isSaltLink) {
+      const slug = pendingAnimeId.slice(3);
+      if (slug) {
+        const stub: AnimeItem = {
+          id: pendingAnimeId,
+          title: slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+          poster: "",
+          backdrop: "",
+          year: "",
+          rating: "",
+          language: "",
+          category: "AnimeSalt",
+          type: "webseries",
+          storyline: "",
+          source: "animesalt",
+          slug,
+        };
+        handleCardClick(stub);
+        if (!pathname.startsWith("/anime/") && !pathname.startsWith("/watch/")) {
+          navigate(buildAnimeRoute(stub.id), { replace: true });
+        }
       }
     }
 
     setPendingAnimeId(null);
-  }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute]);
+  }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute, saltLoading, loading]);
 
   const filteredAnime = useMemo(() => {
     if (activeCategory !== "All") return allAnime.filter(a => a.category === activeCategory);
