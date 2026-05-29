@@ -1184,7 +1184,7 @@ const Index = () => {
 
         if (requestId !== detailsRequestRef.current) return;
 
-        if (result.success && result.data) {
+        if (result && result.success && result.data) {
           const d = result.data;
           // Sanitize language - remove any JS code contamination
           let cleanLanguage = '';
