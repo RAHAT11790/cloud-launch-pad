@@ -1,18 +1,26 @@
 // ============================================
-// Adsterra Ads — fully sandboxed player-scoped loader.
-// Each ad slot lives inside its own iframe so any window-level listeners
-// the ad scripts install (popunders, click hijackers, etc.) stay scoped to
-// the iframe. When the player exits we remove the iframes, killing every
-// listener instantly — ads can no longer leak onto the home screen.
+// Adsterra Ads — real-script injection (player-scoped).
 //
-// Slots:
-//   • Popunder  → invisible iframe (0×0). Triggered when the user clicks
-//                 inside the player container (we forward synthetic clicks
-//                 into the iframe so the popunder script can fire its popup).
-//   • Social Bar → visible iframe fixed to the bottom of the viewport.
+// Why this rewrite:
+//   The previous sandboxed-iframe + srcdoc strategy never let Adsterra's
+//   invoke.js execute in a useful context (most snippets attach DOM nodes
+//   to the host document, set cookies, or read URL params — none of which
+//   work in a fully sandboxed iframe). On top of that the bottom-fixed
+//   social-bar iframe (z-index 2147483600, height 92px) sat above the
+//   episode list and intercepted taps on the lower episode rows.
 //
-// A configurable refresh interval recreates every iframe every N seconds so
-// the publisher gets a fresh impression on the same long viewing session.
+// New strategy:
+//   • Parse the admin-saved <script> snippet, recreate real <script>
+//     elements, and append them to a normal <div> inside <body>.
+//   • Adsterra's social-bar / popunder scripts then load and self-mount
+//     their own fixed elements as designed — when they fail (no fill /
+//     blocked / network error) NOTHING is left over to block clicks.
+//   • A MutationObserver tracks every node Adsterra adds to <body> while
+//     the player is open, so when the player closes we can rip every
+//     ad-injected node out (kills leftover social bars, popunder hooks).
+//   • Live config subscription: changes to settings/adsterra in Firebase
+//     are picked up immediately and re-mounted.
+//   • Configurable refresh interval — full teardown + re-inject every N s.
 // ============================================
 import { db, ref, get, onValue } from "@/lib/firebase";
 
@@ -20,9 +28,12 @@ declare global {
   interface Window {
     __adsterraPlayerScopeActive?: boolean;
     __adsterraPremium?: boolean;
-    __adsterraIframes?: HTMLIFrameElement[];
-    __adsterraClickForwarder?: (e: MouseEvent) => void;
+    __adsterraContainer?: HTMLDivElement | null;
+    __adsterraTrackedNodes?: Set<Node>;
+    __adsterraObserver?: MutationObserver | null;
     __adsterraRefreshTimer?: number;
+    __adsterraConfigUnsub?: (() => void) | null;
+    __adsterraLastConfigJson?: string;
   }
 }
 
@@ -33,7 +44,12 @@ export type AdsterraConfig = {
   refreshIntervalSec: number; // 0 = no refresh
 };
 
-const DEFAULT: AdsterraConfig = { enabled: true, popunder: "", socialBar: "", refreshIntervalSec: 60 };
+const DEFAULT: AdsterraConfig = {
+  enabled: true,
+  popunder: "",
+  socialBar: "",
+  refreshIntervalSec: 60,
+};
 
 let cached: AdsterraConfig | null = null;
 let cachedPromise: Promise<AdsterraConfig> | null = null;
@@ -74,105 +90,61 @@ export function setAdsterraPremium(p: boolean) {
   if (typeof window !== "undefined") window.__adsterraPremium = !!p;
 }
 
-function buildSandboxDoc(snippet: string): string {
-  // The snippet runs inside this isolated doc. transparent body so the visible
-  // social-bar slot blends with the host page.
-  return `<!doctype html><html><head><meta charset="utf-8">
-<style>
-  html,body{margin:0;padding:0;background:transparent;color:#fff;font-family:system-ui,sans-serif;overflow:hidden}
-  body{min-height:100%}
-</style></head><body>${snippet}</body></html>`;
-}
-
-function makeIframe(snippet: string, kind: "popunder" | "social"): HTMLIFrameElement {
-  const f = document.createElement("iframe");
-  f.setAttribute("data-adsterra", kind);
-  f.setAttribute("scrolling", "no");
-  f.setAttribute("frameborder", "0");
-  // Allow scripts; do NOT allow-same-origin so the iframe cannot reach into
-  // the host page's window/document.
-  f.setAttribute("sandbox", "allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms");
-  f.srcdoc = buildSandboxDoc(snippet);
-
-  if (kind === "popunder") {
-    Object.assign(f.style, {
-      position: "fixed",
-      left: "0",
-      top: "0",
-      width: "1px",
-      height: "1px",
-      opacity: "0",
-      border: "0",
-      pointerEvents: "none",
-      zIndex: "1",
-    } as Partial<CSSStyleDeclaration>);
-  } else {
-    Object.assign(f.style, {
-      position: "fixed",
-      left: "0",
-      right: "0",
-      bottom: "0",
-      width: "100%",
-      height: "92px",
-      border: "0",
-      background: "transparent",
-      zIndex: "2147483600",
-      pointerEvents: "auto",
-    } as Partial<CSSStyleDeclaration>);
+// ---------- Tracking & cleanup ----------
+function ensureContainer(): HTMLDivElement {
+  if (typeof document === "undefined") throw new Error("No document");
+  if (window.__adsterraContainer && window.__adsterraContainer.isConnected) {
+    return window.__adsterraContainer;
   }
-  return f;
+  const div = document.createElement("div");
+  div.setAttribute("data-adsterra-root", "true");
+  div.style.cssText = "position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;left:-9999px;top:-9999px";
+  document.body.appendChild(div);
+  window.__adsterraContainer = div;
+  return div;
 }
 
-function trackIframe(f: HTMLIFrameElement) {
+function startObserver() {
   if (typeof window === "undefined") return;
-  if (!window.__adsterraIframes) window.__adsterraIframes = [];
-  window.__adsterraIframes.push(f);
-}
-
-function removeAllIframes() {
-  if (typeof window === "undefined") return;
-  const list = window.__adsterraIframes || [];
-  for (const f of list.splice(0).reverse()) {
-    try { if (f.isConnected) f.remove(); } catch {}
-  }
-  window.__adsterraIframes = [];
-}
-
-function installClickForwarder() {
-  if (typeof window === "undefined") return;
-  if (window.__adsterraClickForwarder) return;
-  const forward = (e: MouseEvent) => {
+  if (window.__adsterraObserver) return;
+  if (!window.__adsterraTrackedNodes) window.__adsterraTrackedNodes = new Set();
+  const tracked = window.__adsterraTrackedNodes!;
+  const obs = new MutationObserver((mutations) => {
     if (!window.__adsterraPlayerScopeActive) return;
-    if (window.__adsterraPremium) return;
-    // Skip clicks that originate from inside an adsterra iframe (avoid loops).
-    const target = e.target as HTMLElement | null;
-    if (target?.closest?.("[data-adsterra]")) return;
-
-    const iframes = (window.__adsterraIframes || []).filter(
-      (f) => f.getAttribute("data-adsterra") === "popunder"
-    );
-    for (const f of iframes) {
-      try {
-        const doc = f.contentDocument;
-        if (!doc) continue;
-        const evt = new MouseEvent("click", { bubbles: true, cancelable: true });
-        doc.body?.dispatchEvent(evt);
-      } catch {
-        /* cross-origin / sandboxed — ignore */
-      }
+    for (const m of mutations) {
+      m.addedNodes.forEach((node) => {
+        // Skip nodes we added ourselves through the container
+        if (node === window.__adsterraContainer) return;
+        // Track only direct children of <body>, <html>, or <head> — that's
+        // where Adsterra typically attaches its fixed social bar/popunder
+        // helpers. Avoid touching unrelated app DOM.
+        const parent = (node as Node).parentNode;
+        if (parent === document.body || parent === document.documentElement || parent === document.head) {
+          tracked.add(node);
+        }
+      });
     }
-  };
-  window.__adsterraClickForwarder = forward;
-  document.addEventListener("click", forward, true);
+  });
+  obs.observe(document.documentElement, { childList: true, subtree: true });
+  window.__adsterraObserver = obs;
 }
 
-function uninstallClickForwarder() {
+function stopObserver() {
   if (typeof window === "undefined") return;
-  const fn = window.__adsterraClickForwarder;
-  if (fn) {
-    document.removeEventListener("click", fn, true);
-    window.__adsterraClickForwarder = undefined;
-  }
+  try { window.__adsterraObserver?.disconnect(); } catch {}
+  window.__adsterraObserver = null;
+}
+
+function removeTrackedNodes() {
+  if (typeof window === "undefined") return;
+  const tracked = window.__adsterraTrackedNodes;
+  if (!tracked) return;
+  tracked.forEach((node) => {
+    try {
+      if ((node as ChildNode).isConnected) (node as ChildNode).remove();
+    } catch {}
+  });
+  tracked.clear();
 }
 
 function clearRefreshTimer() {
@@ -181,6 +153,59 @@ function clearRefreshTimer() {
     window.clearInterval(window.__adsterraRefreshTimer);
     window.__adsterraRefreshTimer = undefined;
   }
+}
+
+function injectSnippet(snippet: string, container: HTMLElement) {
+  const trimmed = (snippet || "").trim();
+  if (!trimmed) return;
+  const tmp = document.createElement("div");
+  tmp.innerHTML = trimmed;
+
+  // Move non-script nodes first (Adsterra often wants a <div id="..."></div>
+  // mount point alongside the script).
+  const scripts: HTMLScriptElement[] = [];
+  Array.from(tmp.childNodes).forEach((node) => {
+    if (node.nodeType === 1 && (node as Element).tagName === "SCRIPT") {
+      scripts.push(node as HTMLScriptElement);
+    } else {
+      container.appendChild(node);
+    }
+  });
+
+  // Recreate real script elements so the browser actually executes them.
+  scripts.forEach((old) => {
+    const s = document.createElement("script");
+    Array.from(old.attributes).forEach((a) => s.setAttribute(a.name, a.value));
+    if (old.textContent) s.textContent = old.textContent;
+    s.async = true;
+    container.appendChild(s);
+  });
+}
+
+function clearContainer() {
+  if (typeof window === "undefined") return;
+  const c = window.__adsterraContainer;
+  if (c) {
+    try { c.innerHTML = ""; } catch {}
+  }
+}
+
+async function injectOnce(cfg: AdsterraConfig) {
+  if (typeof window === "undefined") return;
+  if (!window.__adsterraPlayerScopeActive) return;
+  if (window.__adsterraPremium) return;
+  if (!cfg.enabled) return;
+
+  // Full teardown of previous cycle (both our container AND anything ad
+  // scripts injected into body during the last cycle).
+  removeTrackedNodes();
+  clearContainer();
+
+  const container = ensureContainer();
+  startObserver();
+
+  if (cfg.socialBar?.trim()) injectSnippet(cfg.socialBar, container);
+  if (cfg.popunder?.trim()) injectSnippet(cfg.popunder, container);
 }
 
 export function enterAdsterraPlayerScope() {
@@ -192,29 +217,16 @@ export function exitAdsterraPlayerScope() {
   if (typeof window === "undefined") return;
   window.__adsterraPlayerScopeActive = false;
   clearRefreshTimer();
-  uninstallClickForwarder();
-  removeAllIframes();
-}
-
-async function injectOnce(cfg: AdsterraConfig) {
-  if (typeof window === "undefined") return;
-  if (!window.__adsterraPlayerScopeActive) return;
-  if (window.__adsterraPremium) return;
-  if (!cfg.enabled) return;
-
-  removeAllIframes(); // refresh = always rebuild
-
-  if (cfg.socialBar?.trim()) {
-    const f = makeIframe(cfg.socialBar, "social");
-    document.body.appendChild(f);
-    trackIframe(f);
+  stopObserver();
+  removeTrackedNodes();
+  clearContainer();
+  try { window.__adsterraContainer?.remove(); } catch {}
+  window.__adsterraContainer = null;
+  if (window.__adsterraConfigUnsub) {
+    try { window.__adsterraConfigUnsub(); } catch {}
+    window.__adsterraConfigUnsub = null;
   }
-  if (cfg.popunder?.trim()) {
-    const f = makeIframe(cfg.popunder, "popunder");
-    document.body.appendChild(f);
-    trackIframe(f);
-  }
-  installClickForwarder();
+  window.__adsterraLastConfigJson = undefined;
 }
 
 export async function loadAdsterraSlots(): Promise<void> {
@@ -223,6 +235,25 @@ export async function loadAdsterraSlots(): Promise<void> {
   if (window.__adsterraPremium) return;
 
   const cfg = await getAdsterraConfig();
+  await applyConfig(cfg);
+
+  // Live subscription so admin edits + refresh-interval changes apply
+  // immediately without closing the player.
+  if (!window.__adsterraConfigUnsub) {
+    window.__adsterraConfigUnsub = subscribeAdsterraConfig((nextCfg) => {
+      const json = JSON.stringify(nextCfg);
+      if (json === window.__adsterraLastConfigJson) return;
+      window.__adsterraLastConfigJson = json;
+      applyConfig(nextCfg);
+    });
+  }
+}
+
+async function applyConfig(cfg: AdsterraConfig) {
+  if (typeof window === "undefined") return;
+  if (!window.__adsterraPlayerScopeActive || window.__adsterraPremium) return;
+
+  window.__adsterraLastConfigJson = JSON.stringify(cfg);
   await injectOnce(cfg);
 
   clearRefreshTimer();
