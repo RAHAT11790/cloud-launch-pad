@@ -8,6 +8,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [enabled, setEnabled] = useState(true);
   const [popunder, setPopunder] = useState("");
   const [socialBar, setSocialBar] = useState("");
+  const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(60);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -16,6 +17,8 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       setEnabled(v.enabled !== false);
       setPopunder(v.popunder || "");
       setSocialBar(v.socialBar || "");
+      const n = Number(v.refreshIntervalSec);
+      setRefreshIntervalSec(Number.isFinite(n) && n >= 0 ? n : 60);
     });
     return () => u();
   }, []);
@@ -29,7 +32,12 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const save = async () => {
     setLoading(true);
     try {
-      await set(ref(db, "settings/adsterra"), { enabled, popunder: popunder.trim(), socialBar: socialBar.trim() });
+      await set(ref(db, "settings/adsterra"), {
+        enabled,
+        popunder: popunder.trim(),
+        socialBar: socialBar.trim(),
+        refreshIntervalSec: Math.max(0, Math.min(3600, Number(refreshIntervalSec) || 0)),
+      });
       toast.success("Adsterra config saved");
     } catch { toast.error("Save failed"); }
     setLoading(false);
@@ -45,7 +53,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         </label>
       </div>
       <p className="text-[11px] text-white/60 leading-relaxed">
-        Paste the exact <code className="text-white/80">&lt;script&gt;</code> snippet from your Adsterra dashboard. Premium users never see ads. Anti-bypass guard auto-blocks AdBlock / VPN / custom DNS users with a warning overlay.
+        Paste the exact <code className="text-white/80">&lt;script&gt;</code> snippet from your Adsterra dashboard. Ads run only inside the video player and are fully sandboxed in an iframe — they cannot leak onto the home screen. Premium users never see ads.
       </p>
 
       <div className="space-y-1.5">
@@ -68,6 +76,24 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
           className={inputClass + " w-full font-mono text-[11px] break-all"}
           placeholder='<script src="https://pl29545319.effectivecpmnetwork.com/.../invoke.js"></script>'
         />
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-white/80 block">
+          Ad Refresh Interval (seconds)
+        </label>
+        <input
+          type="number"
+          min={0}
+          max={3600}
+          value={refreshIntervalSec}
+          onChange={(e) => setRefreshIntervalSec(Number(e.target.value))}
+          className={inputClass + " w-full"}
+          placeholder="60"
+        />
+        <p className="text-[10px] text-white/50 leading-relaxed">
+          Reloads both ad slots every N seconds during playback for fresh impressions. Set <strong>0</strong> to disable refreshing. Recommended: <strong>60</strong>.
+        </p>
       </div>
 
       <button onClick={save} disabled={loading} className={btnPrimary + " w-full"}>
