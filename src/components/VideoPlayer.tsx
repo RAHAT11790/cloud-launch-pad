@@ -477,7 +477,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [shortenLoading, setShortenLoading] = useState(false);
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
-  const [bulkDownloadMode, setBulkDownloadMode] = useState(false);
+  const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
+  const [dlSelectedEpisodes, setDlSelectedEpisodes] = useState<Set<number>>(new Set());
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
   
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
