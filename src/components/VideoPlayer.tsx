@@ -13,7 +13,6 @@ import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurren
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
 import VideoEngagement from "@/components/VideoEngagement";
-import { loadAdsterraSlots } from "@/lib/adsterraAds";
 // Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When OFF: free users get instant access, NO ad gate, NO unlock popup, NO verification flash.
 const isShortenerEnabled = async (): Promise<boolean> => {
