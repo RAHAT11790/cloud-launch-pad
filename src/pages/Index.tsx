@@ -1386,9 +1386,8 @@ const Index = () => {
       const epSlug = src.replace("animesalt://", "");
       try {
         const result = await cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug));
-        const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result);
+        const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result || {});
         if (primarySrc) {
-          // Save to watch history for Continue Watching
           addToWatchHistory(anime, seasonIdx, epIdx, true);
           setPlayerState({
             src: primarySrc,
@@ -1405,10 +1404,12 @@ const Index = () => {
           } as any);
           setSelectedAnime(null);
         } else {
-          toast.error("Video source not found");
+          console.warn("[AN] no source for episode", epSlug, result);
+          toast.error("Episode source not available. Try another server or episode.");
         }
-      } catch {
-        toast.error("Failed to load video");
+      } catch (e) {
+        console.warn("[AN] episode load failed", epSlug, e);
+        toast.error("Failed to load episode. Please try again.");
       }
       return;
     }
