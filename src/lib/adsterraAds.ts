@@ -110,6 +110,21 @@ function clearCloseButton() {
   window.__adsterraCloseButton = null;
 }
 
+function hasVisibleAdNodes() {
+  if (typeof window === "undefined") return false;
+  const tracked = window.__adsterraTrackedNodes;
+  if (!tracked?.size) return false;
+
+  for (const node of tracked) {
+    if (!(node instanceof HTMLElement) || !node.isConnected) continue;
+    const cs = window.getComputedStyle(node);
+    if (cs.display === "none" || cs.visibility === "hidden" || cs.pointerEvents === "none") continue;
+    if (node.offsetWidth > 0 || node.offsetHeight > 0 || node.querySelector("iframe")) return true;
+  }
+
+  return false;
+}
+
 function scheduleRefresh(cfg: AdsterraConfig, baseTs: number) {
   if (typeof window === "undefined") return;
   clearRefreshTimer();
@@ -307,7 +322,6 @@ async function injectOnce(cfg: AdsterraConfig) {
 
   const container = ensureContainer();
   startObserver();
-  ensureCloseButton(cfg);
 
   const pending: Promise<void>[] = [];
   if (cfg.socialBar?.trim()) pending.push(...injectSnippet(cfg.socialBar, container));
@@ -315,6 +329,9 @@ async function injectOnce(cfg: AdsterraConfig) {
   if (pending.length) {
     await Promise.allSettled(pending);
   }
+
+  if (hasVisibleAdNodes()) ensureCloseButton(cfg);
+  else clearCloseButton();
 }
 
 async function mountAdCycle(cfg: AdsterraConfig, fromTimer = false) {
