@@ -53,7 +53,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         </label>
       </div>
       <p className="text-[11px] text-white/60 leading-relaxed">
-        Paste the exact <code className="text-white/80">&lt;script&gt;</code> snippet from your Adsterra dashboard. Ads run only inside the video player and are fully sandboxed in an iframe — they cannot leak onto the home screen. Premium users never see ads.
+        Paste the exact <code className="text-white/80">&lt;script&gt;</code> snippet from your Adsterra dashboard. Ads run only inside the video player, refresh strictly from the last successful load time, and now include a manual close button. Premium users never see ads.
       </p>
 
       <div className="space-y-1.5">
@@ -92,7 +92,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
           placeholder="60"
         />
         <p className="text-[10px] text-white/50 leading-relaxed">
-          Reloads both ad slots every N seconds during playback for fresh impressions. Set <strong>0</strong> to disable refreshing. Recommended: <strong>60</strong>.
+          Refresh starts counting after the current ad cycle finishes loading. Example: if an ad loads at 1:00 and this is <strong>120</strong>, the next cycle starts at about 3:00. Set <strong>0</strong> to disable auto refresh.
         </p>
       </div>
 
