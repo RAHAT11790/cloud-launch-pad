@@ -38,6 +38,7 @@ declare global {
     __adsterraCycleId?: number;
     __adsterraCloseButton?: HTMLButtonElement | null;
     __adsterraLastLoadAt?: number;
+    __adsterraMountPromise?: Promise<void> | null;
   }
 }
 
@@ -166,7 +167,7 @@ function ensureCloseButton(cfg: AdsterraConfig) {
     "backdrop-filter:blur(10px)",
     "-webkit-backdrop-filter:blur(10px)",
   ].join(";");
-  button.addEventListener("click", () => dismissVisibleAds(true));
+  button.addEventListener("click", () => dismissVisibleAds(false));
   document.body.appendChild(button);
   window.__adsterraCloseButton = button;
 }
@@ -233,7 +234,7 @@ function removeTrackedNodes() {
 function clearRefreshTimer() {
   if (typeof window === "undefined") return;
   if (window.__adsterraRefreshTimer) {
-    window.clearInterval(window.__adsterraRefreshTimer);
+    window.clearTimeout(window.__adsterraRefreshTimer);
     window.__adsterraRefreshTimer = undefined;
   }
 }
@@ -325,11 +326,22 @@ async function mountAdCycle(cfg: AdsterraConfig, fromTimer = false) {
   window.__adsterraActiveConfig = cfg;
   if (!fromTimer) clearRefreshTimer();
 
-  await injectOnce(cfg);
-  if (window.__adsterraCycleId !== nextCycleId) return;
+  const run = (async () => {
+    await injectOnce(cfg);
+    if (window.__adsterraCycleId !== nextCycleId) return;
 
-  window.__adsterraLastLoadAt = Date.now();
-  scheduleRefresh(cfg, window.__adsterraLastLoadAt);
+    window.__adsterraLastLoadAt = Date.now();
+    scheduleRefresh(cfg, window.__adsterraLastLoadAt);
+  })();
+
+  window.__adsterraMountPromise = run;
+  try {
+    await run;
+  } finally {
+    if (window.__adsterraMountPromise === run) {
+      window.__adsterraMountPromise = null;
+    }
+  }
 }
 
 export function enterAdsterraPlayerScope() {
@@ -352,6 +364,7 @@ export function exitAdsterraPlayerScope() {
   window.__adsterraActiveConfig = null;
   window.__adsterraCycleId = 0;
   window.__adsterraLastLoadAt = undefined;
+  window.__adsterraMountPromise = null;
   window.__adsterraLastConfigJson = undefined;
 }
 
@@ -376,6 +389,9 @@ export async function loadAdsterraSlots(): Promise<void> {
 
   if (window.__adsterraLastConfigJson === json && (window.__adsterraRefreshTimer || window.__adsterraLastLoadAt)) {
     return;
+  }
+  if (window.__adsterraMountPromise) {
+    return window.__adsterraMountPromise;
   }
 
   window.__adsterraLastConfigJson = json;
