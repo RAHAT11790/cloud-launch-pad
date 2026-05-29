@@ -2217,12 +2217,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       lastTap.current = { time: 0, x: 0 };
     } else {
       lastTap.current = { time: now, x: clientX };
-      // Adsterra ambient slots (premium → no-op inside).
-      if (!isPremium) loadAdsterraSlots().catch(() => {});
       // Show controls INSTANTLY on single tap — no 300ms wait
       toggleControls();
     }
-  }, [locked, seek, togglePlay, playing, toggleControls, isPremium]);
+  }, [locked, seek, togglePlay, playing, toggleControls]);
 
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
