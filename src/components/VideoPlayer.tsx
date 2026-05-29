@@ -2993,7 +2993,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           );
         })()}
 
-        {/* Download Button with Quality Picker + Offline Playback */}
+        {/* Download Button (single) + Multi-Episode Picker + Offline Playback */}
         {!isFullscreen && !adGateActive && !hideDownload && !isEmbedPlayback && (() => {
           // Check if this episode is already saved in IndexedDB
           const savedEpisode = downloadedEpisodes.find(d => d.subtitle === subtitle);
@@ -3015,32 +3015,70 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               .filter(Boolean);
             return `${parts.join(" - ") || "video"}.mp4`;
           };
-          const isDownloadableUrl = (u: string): boolean => isDirectDownloadCandidate(u);
           const getDownloadUrl = (u: string, quality: string, sub?: string, fallbackUrls: string[] = []): string => {
             const candidates = [...deriveServerDownloadCandidates(u), ...fallbackUrls].filter(Boolean);
             const directHttps = pickHttpsDownloadUrl(u, candidates);
             if (directHttps) return directHttps;
-
             const managedCandidate = [u, ...candidates].find((candidate) => isDirectDownloadCandidate(candidate));
             if (!managedCandidate) return "";
             return buildVideoDownloadUrl(managedCandidate, buildDownloadFileName(quality, sub)) || "";
           };
 
-          // Build a stable, unique ID per (anime + subtitle + quality) so the same
-          // episode at the same quality dedupes, and IndexedDB lookups work for
-          // offline playback (Profile → Downloads + the "Play Offline" button).
           const buildDlId = (q: string, sub: string) =>
             `${animeId || title}::${sub || "movie"}::${q || "Auto"}`
               .replace(/\s+/g, "_")
               .toLowerCase();
 
-          const startDownloadWithQuality = async (quality: string, qualitySrc: string) => {
-            const { toast } = await import("sonner");
-            const directHttpsUrl = getDownloadUrl(qualitySrc, quality, subtitle, [src]);
-            if (!directHttpsUrl) {
-              toast.error("Download not available for this episode");
-              return;
+          const pickEpUrlForQuality = (ep: any, quality: string): string => {
+            const q = quality.toLowerCase();
+            if (q.includes("4k") || q.includes("2160")) return ep.link4k || ep.link1080 || ep.link720 || ep.link480 || ep.link;
+            if (q.includes("1080")) return ep.link1080 || ep.link720 || ep.link480 || ep.link;
+            if (q.includes("720")) return ep.link720 || ep.link480 || ep.link1080 || ep.link;
+            if (q.includes("480")) return ep.link480 || ep.link720 || ep.link1080 || ep.link;
+            return ep.link || ep.link1080 || ep.link720 || ep.link480;
+          };
+
+          const hasMultiEpisodes = !!(seasons && seasons.length > 0 && seasons.some((s) => (s.episodes?.length || 0) > 0));
+          const panelSeason = seasons && seasons[downloadPanelSeasonIdx] ? seasons[downloadPanelSeasonIdx] : null;
+          const panelEpisodes = panelSeason?.episodes || [];
+
+          const openDownloadPanel = () => {
+            const initialSeasonIdx = currentSeasonIdx ?? 0;
+            setDownloadPanelSeasonIdx(initialSeasonIdx);
+            // Preselect the currently-playing episode if we can identify it
+            const initial = new Set<number>();
+            if (seasons && seasons[initialSeasonIdx]) {
+              const activeIdx = episodeList?.findIndex((e) => e.active) ?? -1;
+              if (activeIdx >= 0) initial.add(activeIdx);
             }
+            setDlSelectedEpisodes(initial);
+            setShowDownloadQualityPicker(true);
+          };
+
+          const toggleEpisode = (idx: number) => {
+            setDlSelectedEpisodes((prev) => {
+              const next = new Set(prev);
+              if (next.has(idx)) next.delete(idx); else next.add(idx);
+              return next;
+            });
+          };
+
+          const toggleAll = () => {
+            setDlSelectedEpisodes((prev) => {
+              if (prev.size === panelEpisodes.length) return new Set();
+              return new Set(panelEpisodes.map((_, i) => i));
+            });
+          };
+
+          const closePanel = () => {
+            setShowDownloadQualityPicker(false);
+            setDlSelectedEpisodes(new Set());
+          };
+
+          const startMovieDownload = async (quality: string) => {
+            const { toast } = await import("sonner");
+            const directHttpsUrl = getDownloadUrl(src, quality, subtitle, [src]);
+            if (!directHttpsUrl) { toast.error("Download not available"); return; }
             downloadManager.startDownload({
               id: buildDlId(quality, subtitle),
               url: directHttpsUrl,
@@ -3050,34 +3088,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               quality,
               fileName: buildDownloadFileName(quality, subtitle),
             });
-            setShowDownloadQualityPicker(false);
+            closePanel();
+            toast.success(`Download started${quality !== "Auto" ? ` • ${quality}` : ""}`);
           };
 
-          // Bulk: download every episode of the current season at the chosen quality
-          const startBulkDownloadWithQuality = async (quality: string) => {
-            const season = seasons && currentSeasonIdx !== undefined ? seasons[currentSeasonIdx] : null;
-            if (!season || !season.episodes?.length) {
-              const { toast } = await import("sonner");
-              toast.error("কোন এপিসোড পাওয়া যায়নি");
+          const startSelectedDownloads = async (quality: string) => {
+            const { toast } = await import("sonner");
+            if (!panelSeason || dlSelectedEpisodes.size === 0) {
+              toast.error("Select at least one episode");
               return;
             }
-            const { toast } = await import("sonner");
-            const pickEpUrl = (ep: any): string => {
-              const q = quality.toLowerCase();
-              if (q.includes("4k") || q.includes("2160")) return ep.link4k || ep.link1080 || ep.link720 || ep.link480 || ep.link;
-              if (q.includes("1080")) return ep.link1080 || ep.link720 || ep.link480 || ep.link;
-              if (q.includes("720")) return ep.link720 || ep.link480 || ep.link1080 || ep.link;
-              if (q.includes("480")) return ep.link480 || ep.link720 || ep.link1080 || ep.link;
-              return ep.link || ep.link1080 || ep.link720 || ep.link480;
-            };
-            const sortedEps = [...season.episodes].sort(
-              (a: any, b: any) => Number(a.episodeNumber || 0) - Number(b.episodeNumber || 0)
-            );
+            const orderedIdxs = Array.from(dlSelectedEpisodes).sort((a, b) => a - b);
             let queued = 0;
             let skipped = 0;
-            for (const ep of sortedEps) {
-              const epSubtitle = `${season.name} - Episode ${ep.episodeNumber}`;
-              const epUrl = getDownloadUrl(pickEpUrl(ep), quality, epSubtitle, [ep.link, ep.link480, ep.link720, ep.link1080, ep.link4k]);
+            for (const idx of orderedIdxs) {
+              const ep = panelEpisodes[idx];
+              if (!ep) { skipped++; continue; }
+              const epSubtitle = `${panelSeason.name} - Episode ${ep.episodeNumber}`;
+              const epUrl = getDownloadUrl(
+                pickEpUrlForQuality(ep, quality),
+                quality,
+                epSubtitle,
+                [ep.link, ep.link480, ep.link720, ep.link1080, ep.link4k].filter(Boolean) as string[],
+              );
               if (!epUrl) { skipped++; continue; }
               downloadManager.enqueueDownload({
                 id: buildDlId(quality, epSubtitle),
@@ -3090,10 +3123,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               });
               queued++;
             }
-            setShowDownloadQualityPicker(false);
-            setBulkDownloadMode(false);
-            if (queued === 0) toast.error("No downloadable direct links found");
-            else toast.success(`${queued} episodes queued (serial) at ${quality}${skipped ? ` • ${skipped} skipped` : ''}`);
+            closePanel();
+            if (queued === 0) toast.error("No downloadable links found");
+            else toast.success(`${queued} episode${queued > 1 ? "s" : ""} queued${quality !== "Auto" ? ` • ${quality}` : ""}${skipped ? ` • ${skipped} skipped` : ""}`);
           };
 
           const playOffline = async (episodeData?: any) => {
@@ -3107,16 +3139,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               setOfflinePlayInfo(ep);
             } else {
               const { toast } = await import("sonner");
-              toast.error("ভিডিও ফাইল পাওয়া যায়নি");
+              toast.error("Video file not found");
             }
           };
 
+          const qualityChoices = availableQualities.length > 0
+            ? availableQualities
+            : [{ label: currentQuality || "Auto", src }];
+
           return (
             <div className="mt-5 w-full max-w-md mx-auto space-y-3">
-              {/* Main Download / Play Offline Button */}
+              {/* Single download / play-offline button */}
               <div className="relative">
                 {isAlreadySaved ? (
-                  /* Already downloaded - show play offline button */
                   <button
                     onClick={() => playOffline()}
                     className="relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all bg-primary text-primary-foreground hover:scale-[1.02]"
@@ -3128,94 +3163,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   </button>
                 ) : (
                   <button
-                    onClick={async () => {
-                      if (availableQualities.length > 1) {
-                        setBulkDownloadMode(false);
-                        setShowDownloadQualityPicker(true);
-                      } else {
-                        startDownloadWithQuality(currentQuality, src);
-                      }
-                    }}
+                    onClick={openDownloadPanel}
                     className="relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all gradient-primary text-primary-foreground btn-glow hover:scale-[1.02]"
                   >
                     <Download className="w-4 h-4" />
-                    <span>Download Episode</span>
+                    <span>Download</span>
+                    {hasMultiEpisodes && (
+                      <span className="text-[10px] font-normal opacity-80">
+                        • pick episodes
+                      </span>
+                    )}
                   </button>
                 )}
               </div>
 
-              {/* Download All Episodes (only for webseries with multiple episodes) */}
-              {seasons && currentSeasonIdx !== undefined && seasons[currentSeasonIdx]?.episodes?.length > 1 && (
-                <button
-                  onClick={() => {
-                    if (availableQualities.length > 1) {
-                      setBulkDownloadMode(true);
-                      setShowDownloadQualityPicker(true);
-                    } else {
-                      startBulkDownloadWithQuality(currentQuality || "Auto");
-                    }
-                  }}
-                  className="w-full py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2 bg-secondary text-foreground border border-primary/40 hover:bg-primary/10 transition-all text-sm"
-                >
-                  <Download className="w-4 h-4 text-primary" />
-                  Download All Episodes
-                  <span className="text-[10px] opacity-70">({seasons[currentSeasonIdx].episodes.length} eps • {seasons[currentSeasonIdx].name})</span>
-                </button>
-              )}
-
-              {/* Quality Picker Dropdown */}
-              {showDownloadQualityPicker && (
-                <div className="bg-card border border-border rounded-xl p-3 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-bold text-foreground">
-                      {bulkDownloadMode ? "All Episodes — Select Quality" : "কোয়ালিটি সিলেক্ট করুন"}
-                    </p>
-                    <button
-                      onClick={() => { setShowDownloadQualityPicker(false); setBulkDownloadMode(false); }}
-                      className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {availableQualities.map((opt) => {
-                      const is4K = is4KLabel(opt.label);
-                      const locked4K = is4K && !isPremium;
-                      return (
-                        <button
-                          key={opt.label}
-                          onClick={() => {
-                            if (locked4K) return;
-                            if (bulkDownloadMode) startBulkDownloadWithQuality(opt.label);
-                            else startDownloadWithQuality(opt.label, opt.src);
-                          }}
-                          disabled={locked4K}
-                          className={`py-2.5 px-3 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                            locked4K
-                              ? "bg-secondary/50 text-muted-foreground opacity-50 cursor-not-allowed"
-                              : "bg-secondary hover:bg-primary hover:text-primary-foreground border border-border hover:border-primary"
-                          }`}
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          {opt.label}
-                          {locked4K && <Lock className="w-3 h-3" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {bulkDownloadMode && (
-                    <p className="text-[10px] text-muted-foreground mt-2 text-center">
-                      Episodes will queue one by one. Keep app open until done.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Downloaded Episodes List (inline, right here) */}
+              {/* Downloaded Episodes List (inline) */}
               {downloadedEpisodes.length > 0 && (
                 <div className="bg-card border border-border rounded-xl p-3">
                   <p className="text-xs font-bold text-foreground mb-2 flex items-center gap-1.5">
-                    <Download className="w-3.5 h-3.5 text-primary" /> ডাউনলোড করা ({downloadedEpisodes.length})
+                    <Download className="w-3.5 h-3.5 text-primary" /> Downloaded ({downloadedEpisodes.length})
                   </p>
                   <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
                     {downloadedEpisodes.map((ep) => (
@@ -3241,9 +3207,150 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                   </div>
                 </div>
               )}
+
+              {/* ============ Download Picker Modal ============ */}
+              {showDownloadQualityPicker && (
+                <div
+                  className="fixed inset-0 z-[400] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+                  onClick={closePanel}
+                >
+                  <div
+                    className="w-full max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[88vh]"
+                    onClick={(e) => e.stopPropagation()}
+                    data-player-panel="true"
+                  >
+                    {/* Header */}
+                    <div className="flex items-center justify-between p-4 border-b border-border">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-foreground truncate">Download</p>
+                        <p className="text-[11px] text-muted-foreground truncate">{title}</p>
+                      </div>
+                      <button
+                        onClick={closePanel}
+                        className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 ml-3"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Multi-episode picker */}
+                    {hasMultiEpisodes && panelSeason && (
+                      <div className="px-4 pt-3 flex flex-col gap-2 min-h-0">
+                        {/* Season tabs */}
+                        {seasons && seasons.length > 1 && (
+                          <div
+                            className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
+                            style={{ scrollbarWidth: "none", touchAction: "pan-x" }}
+                          >
+                            {seasons.map((s, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => { setDownloadPanelSeasonIdx(idx); setDlSelectedEpisodes(new Set()); }}
+                                className={`shrink-0 whitespace-nowrap px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                                  idx === downloadPanelSeasonIdx
+                                    ? "gradient-primary text-primary-foreground border-primary/40"
+                                    : "bg-secondary border-border/40 text-muted-foreground"
+                                }`}
+                              >
+                                {getShortSeasonLabel(s.name, idx)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Select-all + counter row */}
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-[11px] font-semibold text-muted-foreground">
+                            {dlSelectedEpisodes.size} / {panelEpisodes.length} selected
+                          </span>
+                          <button
+                            onClick={toggleAll}
+                            className={`text-[11px] font-bold px-3 py-1 rounded-lg border transition-all ${
+                              dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0
+                                ? "gradient-primary text-primary-foreground border-primary/40"
+                                : "bg-secondary text-foreground border-border/40 hover:border-primary/40"
+                            }`}
+                          >
+                            {dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0 ? "Clear All" : "Select All"}
+                          </button>
+                        </div>
+
+                        {/* Scrollable episode grid (fixed-height box, never expands) */}
+                        <div
+                          className="overflow-y-auto overscroll-contain border border-border/50 rounded-xl bg-background/40 p-2"
+                          style={{ maxHeight: "38vh", WebkitOverflowScrolling: "touch" }}
+                        >
+                          {panelEpisodes.length === 0 ? (
+                            <p className="text-xs text-muted-foreground text-center py-6">No episodes</p>
+                          ) : (
+                            <div className="grid grid-cols-5 gap-2">
+                              {panelEpisodes.map((ep, idx) => {
+                                const selected = dlSelectedEpisodes.has(idx);
+                                return (
+                                  <button
+                                    key={idx}
+                                    onClick={() => toggleEpisode(idx)}
+                                    className={`h-11 rounded-lg flex items-center justify-center text-sm font-bold border transition-all active:scale-95 ${
+                                      selected
+                                        ? "gradient-primary text-primary-foreground border-primary shadow-[0_0_10px_hsla(42,80%,50%,0.45)]"
+                                        : "bg-secondary border-border/40 text-foreground"
+                                    }`}
+                                  >
+                                    {ep.episodeNumber}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Quality picker + start */}
+                    <div className="p-4 border-t border-border mt-3 space-y-2">
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                        Select Quality {hasMultiEpisodes ? `• ${dlSelectedEpisodes.size} ep${dlSelectedEpisodes.size === 1 ? "" : "s"}` : ""}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {qualityChoices.map((opt) => {
+                          const is4K = is4KLabel(opt.label);
+                          const locked4K = is4K && !isPremium;
+                          const disabled = locked4K || (hasMultiEpisodes && dlSelectedEpisodes.size === 0);
+                          return (
+                            <button
+                              key={opt.label}
+                              disabled={disabled}
+                              onClick={() => {
+                                if (disabled) return;
+                                if (hasMultiEpisodes) startSelectedDownloads(opt.label);
+                                else startMovieDownload(opt.label);
+                              }}
+                              className={`py-2.5 px-3 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5 border transition-all ${
+                                disabled
+                                  ? "bg-secondary/50 text-muted-foreground opacity-50 cursor-not-allowed border-border/30"
+                                  : "gradient-primary text-primary-foreground border-primary/40 hover:scale-[1.02]"
+                              }`}
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              {opt.label}
+                              {locked4K && <Lock className="w-3 h-3" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {hasMultiEpisodes && dlSelectedEpisodes.size === 0 && (
+                        <p className="text-[10px] text-muted-foreground text-center pt-1">
+                          Pick at least one episode above
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}
+
 
         {/* Season Selector + Episode List */}
         {episodeList && episodeList.length > 0 && (
