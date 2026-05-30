@@ -43,7 +43,6 @@ import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { pickHttpsDownloadUrl, isHttpsDownloadableUrl } from "@/lib/downloadSources";
 import { buildVideoDownloadUrl } from "@/lib/videoDownload";
-import { getAdsterraConfig } from "@/lib/adsterraAds";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 // Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
@@ -474,6 +473,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [adGateActive, setAdGateActive] = useState(false);
   const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
   const [shortenLoading, setShortenLoading] = useState(false);
+  const [playerAdConfig, setPlayerAdConfig] = useState({ enabled: false, popunder: "", socialBar: "", refreshIntervalSec: 0 });
+  const [playerAdOpen, setPlayerAdOpen] = useState(false);
+  const [playerAdLoading, setPlayerAdLoading] = useState(false);
+  const [playerAdEligible, setPlayerAdEligible] = useState(false);
+  const playerAdRootRef = useRef<HTMLDivElement>(null);
+  const playerAdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playerAdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
   const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
@@ -507,6 +513,151 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
   const [unlockBlocked, setUnlockBlocked] = useState(false);
+
+  const clearPlayerAdTimers = useCallback(() => {
+    if (playerAdTimerRef.current) {
+      clearTimeout(playerAdTimerRef.current);
+      playerAdTimerRef.current = null;
+    }
+    if (playerAdTimeoutRef.current) {
+      clearTimeout(playerAdTimeoutRef.current);
+      playerAdTimeoutRef.current = null;
+    }
+  }, []);
+
+  const getPlayerAdCooldownKey = useCallback(() => {
+    const uid = getLocalUserId() || "guest";
+    return `rs_player_ad_last_seen_${uid}`;
+  }, []);
+
+  const cleanupPlayerAdDom = useCallback(() => {
+    const root = playerAdRootRef.current;
+    if (!root) return;
+    root.innerHTML = "";
+  }, []);
+
+  const schedulePlayerAdEligibility = useCallback((fromTs?: number) => {
+    clearPlayerAdTimers();
+    cleanupPlayerAdDom();
+
+    const cfg = playerAdConfig;
+    const hasSnippet = !!(cfg.popunder.trim() || cfg.socialBar.trim());
+    if (!cfg.enabled || !hasSnippet || isPremium || adGateActive) {
+      setPlayerAdEligible(false);
+      setPlayerAdOpen(false);
+      setPlayerAdLoading(false);
+      return;
+    }
+
+    const refreshMs = Math.max(0, Number(cfg.refreshIntervalSec || 0) * 1000);
+    const storageKey = getPlayerAdCooldownKey();
+    const lastSeen = fromTs ?? Number(sessionStorage.getItem(storageKey) || "0");
+    const dueIn = refreshMs <= 0 ? 0 : Math.max(0, lastSeen + refreshMs - Date.now());
+
+    if (dueIn <= 0) {
+      setPlayerAdEligible(true);
+      return;
+    }
+
+    setPlayerAdEligible(false);
+    playerAdTimerRef.current = setTimeout(() => {
+      setPlayerAdEligible(true);
+      playerAdTimerRef.current = null;
+    }, dueIn);
+  }, [adGateActive, cleanupPlayerAdDom, clearPlayerAdTimers, getPlayerAdCooldownKey, isPremium, playerAdConfig]);
+
+  const closePlayerAd = useCallback((restartCooldown = true) => {
+    clearPlayerAdTimers();
+    cleanupPlayerAdDom();
+    setPlayerAdOpen(false);
+    setPlayerAdLoading(false);
+
+    if (!restartCooldown) {
+      setPlayerAdEligible(false);
+      return;
+    }
+
+    const now = Date.now();
+    sessionStorage.setItem(getPlayerAdCooldownKey(), String(now));
+    schedulePlayerAdEligibility(now);
+  }, [cleanupPlayerAdDom, clearPlayerAdTimers, getPlayerAdCooldownKey, schedulePlayerAdEligibility]);
+
+  const injectPlayerAdSnippet = useCallback((snippet: string) => {
+    const root = playerAdRootRef.current;
+    if (!root || !snippet.trim()) return;
+
+    const temp = document.createElement("div");
+    temp.innerHTML = snippet.trim();
+    const scripts: HTMLScriptElement[] = [];
+
+    Array.from(temp.childNodes).forEach((node) => {
+      if (node.nodeType === 1 && (node as Element).tagName === "SCRIPT") {
+        scripts.push(node as HTMLScriptElement);
+      } else {
+        root.appendChild(node.cloneNode(true));
+      }
+    });
+
+    scripts.forEach((oldScript) => {
+      const script = document.createElement("script");
+      Array.from(oldScript.attributes).forEach((attr) => script.setAttribute(attr.name, attr.value));
+      if (oldScript.textContent) script.textContent = oldScript.textContent;
+      if (script.src) script.async = true;
+      root.appendChild(script);
+    });
+  }, []);
+
+  const openPlayerAd = useCallback(() => {
+    const cfg = playerAdConfig;
+    const hasSnippet = !!(cfg.popunder.trim() || cfg.socialBar.trim());
+    if (!cfg.enabled || !hasSnippet || isPremium || adGateActive || playerAdOpen || playerAdLoading || !playerAdEligible) {
+      return false;
+    }
+
+    setPlayerAdEligible(false);
+    setPlayerAdOpen(true);
+    setPlayerAdLoading(true);
+    clearPlayerAdTimers();
+    cleanupPlayerAdDom();
+
+    requestAnimationFrame(() => {
+      try {
+        if (cfg.socialBar.trim()) injectPlayerAdSnippet(cfg.socialBar);
+        if (cfg.popunder.trim()) injectPlayerAdSnippet(cfg.popunder);
+      } catch {
+        closePlayerAd(true);
+        return;
+      }
+
+      setPlayerAdLoading(false);
+      playerAdTimeoutRef.current = setTimeout(() => {
+        closePlayerAd(true);
+      }, 10000);
+    });
+
+    return true;
+  }, [adGateActive, cleanupPlayerAdDom, clearPlayerAdTimers, closePlayerAd, injectPlayerAdSnippet, isPremium, playerAdConfig, playerAdEligible, playerAdLoading, playerAdOpen]);
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/adsterra"), (snap) => {
+      const value = snap.val() || {};
+      setPlayerAdConfig({
+        enabled: value.enabled !== false,
+        popunder: typeof value.popunder === "string" ? value.popunder : "",
+        socialBar: typeof value.socialBar === "string" ? value.socialBar : "",
+        refreshIntervalSec: Number.isFinite(Number(value.refreshIntervalSec)) ? Math.max(0, Math.min(3600, Number(value.refreshIntervalSec))) : 0,
+      });
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    schedulePlayerAdEligibility();
+    return () => {
+      clearPlayerAdTimers();
+      cleanupPlayerAdDom();
+    };
+  }, [schedulePlayerAdEligibility, clearPlayerAdTimers, cleanupPlayerAdDom]);
 
   // Check IndexedDB for already downloaded episodes matching this title
   useEffect(() => {
