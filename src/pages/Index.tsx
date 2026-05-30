@@ -1720,14 +1720,15 @@ const Index = () => {
                 navigate(targetWatchRoute);
               }
               const epResult = await cachedApiCall(`ep_${ep.slug}`, () => animeSaltApi.getEpisode(ep.slug));
-              if (epResult.embedUrl) {
+              const resolved = resolveSaltEmbed(epResult);
+              if (resolved.embedUrl) {
                 const fullAnime: AnimeItem = { ...anime, seasons: buildSeasons() };
                 addToWatchHistory(anime, sIdx, eIdx, true);
                 setSaltPlayerState({
-                  embedUrl: epResult.embedUrl, cleanEmbedUrl: getCleanEmbedUrl(epResult.embedUrl),
+                  embedUrl: resolved.embedUrl, cleanEmbedUrl: getCleanEmbedUrl(resolved.embedUrl),
                   title: anime.title, subtitle: `${season.name} - Episode ${ep.number}`,
                   anime: fullAnime, seasonIdx: sIdx, epIdx: eIdx,
-                  allEmbeds: epResult.allEmbeds || [epResult.embedUrl],
+                  allEmbeds: resolved.allEmbeds,
                   currentEmbedIdx: 0, cropMode: 'contain', cropW: 0, cropH: 0, loading: false,
                 });
                 return;
