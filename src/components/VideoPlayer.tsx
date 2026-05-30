@@ -592,30 +592,110 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     schedulePlayerAdEligibility(now);
   }, [cleanupPlayerAdDom, clearPlayerAdTimers, getPlayerAdCooldownKey, schedulePlayerAdEligibility]);
 
-  const injectPlayerAdSnippet = useCallback((snippet: string) => {
-    const root = playerAdRootRef.current;
-    if (!root || !snippet.trim()) return;
-
-    const temp = document.createElement("div");
-    temp.innerHTML = snippet.trim();
-    const scripts: HTMLScriptElement[] = [];
-
-    Array.from(temp.childNodes).forEach((node) => {
-      if (node.nodeType === 1 && (node as Element).tagName === "SCRIPT") {
-        scripts.push(node as HTMLScriptElement);
-      } else {
-        root.appendChild(node.cloneNode(true));
+  const buildPlayerAdFrameDoc = useCallback((cfg: typeof playerAdConfig) => {
+    const snippets = [cfg.socialBar.trim(), cfg.popunder.trim()].filter(Boolean).join("\n");
+    return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+    <style>
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+        color: #fff;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
-    });
-
-    scripts.forEach((oldScript) => {
-      const script = document.createElement("script");
-      Array.from(oldScript.attributes).forEach((attr) => script.setAttribute(attr.name, attr.value));
-      if (oldScript.textContent) script.textContent = oldScript.textContent;
-      if (script.src) script.async = true;
-      root.appendChild(script);
-    });
+      body {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #rs-player-ad-shell {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+      #rs-player-ad-tap {
+        position: relative;
+        z-index: 1;
+        min-width: min(280px, calc(100% - 32px));
+        min-height: 120px;
+        padding: 18px 20px;
+        border: 1px solid rgba(255,255,255,0.18);
+        border-radius: 16px;
+        background: rgba(10,10,10,0.88);
+        box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        text-align: center;
+        box-sizing: border-box;
+      }
+      #rs-player-ad-tap strong {
+        font-size: 16px;
+        line-height: 1.2;
+        font-weight: 800;
+      }
+      #rs-player-ad-tap span {
+        font-size: 12px;
+        line-height: 1.4;
+        color: rgba(255,255,255,0.72);
+      }
+      #rs-player-ad-root {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+      #rs-player-ad-root iframe,
+      #rs-player-ad-root img,
+      #rs-player-ad-root div,
+      #rs-player-ad-root a {
+        max-width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="rs-player-ad-shell">
+      <button id="rs-player-ad-tap" type="button" aria-label="Continue">
+        <strong>Continue</strong>
+        <span>Tap once to load the sponsored step</span>
+      </button>
+      <div id="rs-player-ad-root">${snippets}</div>
+    </div>
+  </body>
+</html>`;
   }, []);
+
+  const mountPlayerAdFrame = useCallback((cfg: typeof playerAdConfig) => {
+    const root = playerAdRootRef.current;
+    if (!root) return false;
+
+    const frame = document.createElement("iframe");
+    frame.title = "Player ad";
+    frame.className = "h-full w-full border-0 bg-black";
+    frame.referrerPolicy = "no-referrer";
+    frame.setAttribute("sandbox", "allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms");
+    frame.setAttribute("scrolling", "no");
+    frame.srcdoc = buildPlayerAdFrameDoc(cfg);
+    frame.addEventListener("load", () => {
+      setPlayerAdLoading(false);
+    }, { once: true });
+
+    root.innerHTML = "";
+    root.appendChild(frame);
+    return true;
+  }, [buildPlayerAdFrameDoc]);
 
   const openPlayerAd = useCallback(() => {
     const cfg = playerAdConfig;
@@ -632,21 +712,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
     requestAnimationFrame(() => {
       try {
-        if (cfg.socialBar.trim()) injectPlayerAdSnippet(cfg.socialBar);
-        if (cfg.popunder.trim()) injectPlayerAdSnippet(cfg.popunder);
+        if (!mountPlayerAdFrame(cfg)) {
+          closePlayerAd(true);
+          return;
+        }
       } catch {
         closePlayerAd(true);
         return;
       }
 
-      setPlayerAdLoading(false);
       playerAdTimeoutRef.current = setTimeout(() => {
-        closePlayerAd(true);
-      }, 10000);
+        setPlayerAdLoading(false);
+        playerAdTimeoutRef.current = null;
+      }, 8000);
     });
 
     return true;
-  }, [adGateActive, cleanupPlayerAdDom, clearPlayerAdTimers, closePlayerAd, injectPlayerAdSnippet, isPremium, playerAdConfig, playerAdEligible, playerAdLoading, playerAdOpen]);
+  }, [adGateActive, cleanupPlayerAdDom, clearPlayerAdTimers, closePlayerAd, isPremium, mountPlayerAdFrame, playerAdConfig, playerAdEligible, playerAdLoading, playerAdOpen]);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/adsterra"), (snap) => {
