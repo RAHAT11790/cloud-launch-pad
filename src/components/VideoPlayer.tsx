@@ -667,10 +667,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   </head>
   <body>
     <div id="rs-player-ad-shell">
-      <button id="rs-player-ad-tap" type="button" aria-label="Continue">
-        <strong>Continue</strong>
-        <span>Tap once to load the sponsored step</span>
-      </button>
+      <div id="rs-player-ad-tap" aria-label="Sponsored step">
+        <strong>Sponsored step</strong>
+        <span>Loading inside player only</span>
+      </div>
       <div id="rs-player-ad-root">${snippets}</div>
     </div>
   </body>
