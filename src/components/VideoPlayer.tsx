@@ -11,7 +11,6 @@ import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
-import AdsterraAdManager from "@/components/AdsterraAdManager";
 import VideoEngagement from "@/components/VideoEngagement";
 // Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When OFF: free users get instant access, NO ad gate, NO unlock popup, NO verification flash.
@@ -44,6 +43,7 @@ import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { pickHttpsDownloadUrl, isHttpsDownloadableUrl } from "@/lib/downloadSources";
 import { buildVideoDownloadUrl } from "@/lib/videoDownload";
+import { getAdsterraConfig } from "@/lib/adsterraAds";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 // Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
