@@ -552,7 +552,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const refreshMs = Math.max(0, Number(cfg.refreshIntervalSec || 0) * 1000);
     const storageKey = getPlayerAdCooldownKey();
     const lastSeen = fromTs ?? Number(sessionStorage.getItem(storageKey) || "0");
-    const dueIn = refreshMs <= 0 ? 0 : Math.max(0, lastSeen + refreshMs - Date.now());
+    if (refreshMs <= 0) {
+      const eligible = lastSeen <= 0;
+      setPlayerAdEligible(eligible);
+      if (!eligible) {
+        setPlayerAdOpen(false);
+        setPlayerAdLoading(false);
+      }
+      return;
+    }
+
+    const dueIn = Math.max(0, lastSeen + refreshMs - Date.now());
 
     if (dueIn <= 0) {
       setPlayerAdEligible(true);
@@ -2349,6 +2359,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const handleVideoClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (locked) return;
+    if (playerAdOpen) return;
+
+    if (openPlayerAd()) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
     const now = Date.now();
     const clientX = "touches" in e ? e.changedTouches[0].clientX : e.clientX;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -2370,7 +2388,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       // Show controls INSTANTLY on single tap — no 300ms wait
       toggleControls();
     }
-  }, [locked, seek, togglePlay, playing, toggleControls]);
+  }, [locked, openPlayerAd, playerAdOpen, seek, togglePlay, playing, toggleControls]);
 
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -2431,7 +2449,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   return (
     <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
-      <AdsterraAdManager isPremium={isPremium} videoEl={videoRef.current} />
       {/* Close button */}
       {!isFullscreen && (
           <button onClick={stopAndClosePlayer} className="absolute top-5 right-5 z-[310] w-10 h-10 rounded-full gradient-primary flex items-center justify-center transition-all">
@@ -2561,6 +2578,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 <span className="player-loader-petal" />
                 <span className="player-loader-petal" />
                 <span className="player-loader-petal" />
+              </div>
+            </div>
+          )}
+
+          {playerAdOpen && (
+            <div className="absolute inset-0 z-[32] flex items-center justify-center bg-black/90 p-3" onClick={(e) => e.stopPropagation()}>
+              <div className="relative flex h-full max-h-full w-full max-w-full items-center justify-center overflow-hidden rounded-lg border border-border bg-background/95">
+                <button
+                  type="button"
+                  onClick={() => closePlayerAd(true)}
+                  className="absolute right-2 top-2 z-[2] flex h-8 min-w-8 items-center justify-center rounded-full bg-background/90 px-2 text-[11px] font-semibold text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                {playerAdLoading && (
+                  <div className="absolute inset-0 z-[1] flex items-center justify-center bg-background/80">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  </div>
+                )}
+                <div
+                  ref={playerAdRootRef}
+                  className="h-full w-full overflow-auto [&_iframe]:mx-auto [&_iframe]:max-h-full [&_iframe]:max-w-full [&_img]:max-h-full [&_img]:max-w-full"
+                />
               </div>
             </div>
           )}
