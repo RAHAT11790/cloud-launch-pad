@@ -1891,12 +1891,13 @@ const Index = () => {
       if (!hasAccess) return;
       let nextSrc = getEpisodeSrc(clickedEp);
       let qOpts = getEpisodeQualityOptions(clickedEp);
-      if (playerState?.anime.source === "animesalt" && String(clickedEp.link || "").startsWith("animesalt://")) {
+        if (playerState?.anime.source === "animesalt" && String(clickedEp.link || "").startsWith("animesalt://")) {
         const epSlug = String(clickedEp.link).replace("animesalt://", "");
         try {
           const epResult = await animeSaltApi.getEpisode(epSlug);
-          const embedServers = (epResult.allEmbeds || [epResult.embedUrl]).filter(Boolean);
-          nextSrc = epResult.embedUrl || nextSrc;
+            const resolved = resolveSaltEmbed(epResult);
+            const embedServers = resolved.allEmbeds.filter(Boolean);
+            nextSrc = resolved.embedUrl || nextSrc;
           qOpts = embedServers.length > 1
             ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
             : [];
@@ -1930,8 +1931,9 @@ const Index = () => {
       const epSlug = String(ep.link).replace("animesalt://", "");
       try {
         const epResult = await animeSaltApi.getEpisode(epSlug);
-        const embedServers = (epResult.allEmbeds || [epResult.embedUrl]).filter(Boolean);
-        nextSrc = epResult.embedUrl || nextSrc;
+        const resolved = resolveSaltEmbed(epResult);
+        const embedServers = resolved.allEmbeds.filter(Boolean);
+        nextSrc = resolved.embedUrl || nextSrc;
         qOpts = embedServers.length > 1
           ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
           : [];
@@ -2337,8 +2339,9 @@ const Index = () => {
                     const epSlug = String(nextEp.link).replace("animesalt://", "");
                     try {
                       const epResult = await animeSaltApi.getEpisode(epSlug);
-                      const embedServers = (epResult.allEmbeds || [epResult.embedUrl]).filter(Boolean);
-                      nextSrc = epResult.embedUrl || nextSrc;
+                      const resolved = resolveSaltEmbed(epResult);
+                      const embedServers = resolved.allEmbeds.filter(Boolean);
+                      nextSrc = resolved.embedUrl || nextSrc;
                       qOpts = embedServers.length > 1
                         ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
                         : [];
