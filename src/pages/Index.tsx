@@ -70,6 +70,23 @@ const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualit
   };
 };
 
+// Derive a playable embed URL from any AnimeSalt episode payload shape.
+// Handles older `embedUrl`/`allEmbeds` and the newer `links[]` array
+// returned by parseEpisodePage so Continue Watching + direct routes work.
+const resolveSaltEmbed = (payload: any): { embedUrl: string; allEmbeds: string[] } => {
+  const collected: string[] = [];
+  const push = (u?: string | null) => {
+    const v = String(u || "").trim();
+    if (v && !collected.includes(v)) collected.push(v);
+  };
+  push(payload?.embedUrl);
+  push(payload?.movieEmbedUrl);
+  (Array.isArray(payload?.allEmbeds) ? payload.allEmbeds : []).forEach(push);
+  (Array.isArray(payload?.links) ? payload.links : []).forEach((l: any) => push(l?.url || l?.src));
+  [payload?.streamUrl, payload?.videoUrl, payload?.directUrl, payload?.file].forEach(push);
+  return { embedUrl: collected[0] || "", allEmbeds: collected };
+};
+
 // Helper: get best available src from episode (fallback if default link is empty)
 const getEpisodeSrc = (ep?: Episode | null): string => {
   if (!ep) return "";
