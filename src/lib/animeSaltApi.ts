@@ -80,8 +80,10 @@ const isPlaybackCandidate = (value: string) => {
 
 const pickPlaybackFields = (payload: any) => {
   const rawLinks = Array.isArray(payload?.links) ? payload.links : [];
+  const rawEmbedUrls = Array.isArray(payload?.embedUrls) ? payload.embedUrls : [];
   const collected = normalizeLinkList([
     ...rawLinks,
+    ...rawEmbedUrls,
     payload?.embedUrl,
     payload?.movieEmbedUrl,
     payload?.directUrl,
@@ -97,6 +99,7 @@ const pickPlaybackFields = (payload: any) => {
 
   return {
     links: collected,
+    embedUrls: allEmbeds,
     allEmbeds,
     embedUrl: payload?.embedUrl || primary,
     movieEmbedUrl: payload?.movieEmbedUrl || primary,
