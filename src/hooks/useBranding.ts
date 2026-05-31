@@ -34,7 +34,7 @@ const DEFAULT_BRANDING: BrandingConfig = {
   footerText: "",
   footerCopyright: "",
   splashText: "",
-  loaderFrameStyle: "",
+  
   adminTitle: "",
   aboutTitle: "",
   logoUrl: "",
