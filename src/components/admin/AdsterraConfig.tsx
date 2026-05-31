@@ -53,11 +53,11 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         </label>
       </div>
       <p className="text-[11px] text-white/60 leading-relaxed">
-        Paste the exact <code className="text-white/80">&lt;script&gt;</code> snippet from your Adsterra dashboard. Ads run only inside the video player, refresh strictly from the last successful load time, and now include a manual close button. Premium users never see ads.
+        Paste the exact <code className="text-white/80">&lt;script&gt;</code> snippet from your Adsterra dashboard. Only your player-scoped direct link and push notification ads run here, and each successful ad interaction starts the refresh cooldown so users do not get spammed.
       </p>
 
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-white/80 block">Popunder Script</label>
+        <label className="text-xs font-semibold text-white/80 block">Direct Link Script</label>
         <textarea
           value={popunder}
           onChange={(e) => setPopunder(e.target.value)}
@@ -68,7 +68,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-white/80 block">Social Bar Script</label>
+        <label className="text-xs font-semibold text-white/80 block">Push Notification Script</label>
         <textarea
           value={socialBar}
           onChange={(e) => setSocialBar(e.target.value)}
