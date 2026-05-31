@@ -128,11 +128,14 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
   };
 
   return (
-    <div className={glassCard + " space-y-4"}>
+    <div className={glassCard + " space-y-4 overflow-hidden"}>
       <div className="space-y-1.5">
-        <h3 className="text-base font-bold text-white">Backdrop & Logo AI Generator</h3>
-        <p className="text-[11px] text-white/60 leading-relaxed">
-          Select one anime → preview → regenerate or save. Two engines available (Lovable AI · Flux v1).
+        <div className="flex items-center gap-2">
+          <span className="inline-flex w-7 h-7 rounded-lg bg-gradient-to-br from-fuchsia-500/30 to-amber-500/30 border border-white/10 items-center justify-center text-[13px]">🎨</span>
+          <h3 className="text-[13px] font-bold text-white tracking-wide">Backdrop & Logo AI Generator</h3>
+        </div>
+        <p className="text-[10.5px] text-white/55 leading-relaxed break-words">
+          Pick an anime → preview → regenerate or save. Two engines available — Lovable AI &amp; Flux v1.
         </p>
       </div>
 
@@ -149,7 +152,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
               <button
                 key={it.type + it.id}
                 onClick={() => setActiveId(`${it.type}:${it.id}`)}
-                className="w-full text-left bg-white/5 hover:bg-white/10 rounded-lg p-2.5 border border-white/5 flex gap-3 items-center transition"
+                className="w-full text-left bg-white/5 hover:bg-white/10 rounded-lg p-2.5 border border-white/5 flex gap-3 items-center transition min-w-0"
               >
                 {it.backdrop ? (
                   <img src={it.backdrop} alt="" className="w-20 h-[44px] object-cover rounded flex-shrink-0" />
