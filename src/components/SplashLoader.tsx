@@ -73,11 +73,11 @@ const SplashLoader = () => {
               animation: "logoPulse 2.6s ease-in-out infinite",
             }}
           />
-          {/* Logo */}
+          {/* Logo — circular to perfectly match the orbital rings */}
           <img
             src={logoSrc}
             alt={branding.splashText}
-            className="relative w-[78px] h-[78px] object-contain"
+            className="relative w-[78px] h-[78px] rounded-full object-cover ring-1 ring-white/10"
             style={{
               filter:
                 "drop-shadow(0 0 18px hsla(42,90%,55%,0.55)) drop-shadow(0 0 2px rgba(255,255,255,0.25))",
