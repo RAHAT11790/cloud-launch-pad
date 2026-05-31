@@ -1,160 +1,158 @@
 import { useEffect, useMemo, useState } from "react";
 import logoImg from "@/assets/logo.png";
-import actionBg from "@/assets/splash-action-bg.jpg";
+import fallbackBg from "@/assets/splash-action-bg.jpg";
 import { useBranding, getBrandingSync } from "@/hooks/useBranding";
 
 /**
- * Cinematic anime splash loader.
- * - Real action anime backdrop (dark overlay) — pulled from bundled asset for instant paint
- * - RGB conic spinner around the logo
- * - Branding text/emojis preserved exactly as set in Admin (no stripping)
+ * Splash loader — ultra smooth, zero-lag.
+ * - Single GPU transform (one rotating ring + one pulsing halo). No conic masks, no SVG noise.
+ * - Background image is fully controlled from Admin (branding.splashBgUrl). Bundled asset is fallback only.
+ * - Logo + background are both warmed via CacheStorage so reloads paint instantly.
  */
+
+const BG_CACHE = "rs-branding-assets-v1";
+
+async function warmAsset(url: string): Promise<string> {
+  if (!url || typeof window === "undefined") return url;
+  if (!/^https?:/i.test(url) || !("caches" in window)) return url;
+  try {
+    const cache = await window.caches.open(BG_CACHE);
+    let res = await cache.match(url);
+    if (!res) {
+      res = await fetch(url, { mode: "cors", cache: "force-cache" });
+      if (res.ok) await cache.put(url, res.clone());
+    }
+    if (res?.ok) {
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    }
+  } catch { /* fallthrough */ }
+  return url;
+}
 
 const SplashLoader = () => {
   const branding = useBranding();
-  const initialBranding = getBrandingSync();
-  const [resolvedLogo, setResolvedLogo] = useState(initialBranding.logoUrl || logoImg);
-  const logoSrc = useMemo(() => branding.logoUrl || logoImg, [branding.logoUrl]);
+  const initial = getBrandingSync();
 
-  // Use branding values verbatim (keep emojis). Only fall back when Firebase value is missing.
-  const displayName =
-    (branding.splashText || initialBranding.splashText || branding.siteName || initialBranding.siteName || "").trim();
-  const tagline = (branding.siteTagline || initialBranding.siteTagline || "").trim();
+  const logoSrc = useMemo(() => branding.logoUrl || initial.logoUrl || logoImg, [branding.logoUrl, initial.logoUrl]);
+  const bgSrc = useMemo(
+    () => branding.splashBgUrl || initial.splashBgUrl || fallbackBg,
+    [branding.splashBgUrl, initial.splashBgUrl]
+  );
+
+  const [resolvedLogo, setResolvedLogo] = useState(logoSrc);
+  const [resolvedBg, setResolvedBg] = useState(bgSrc);
+
+  const displayName = (branding.splashText || initial.splashText || branding.siteName || initial.siteName || "").trim();
+  const tagline = (branding.siteTagline || initial.siteTagline || "").trim();
 
   useEffect(() => {
     let cancelled = false;
-    let objectUrl: string | null = null;
-    const nextLogo = logoSrc || logoImg;
-    if (typeof window === "undefined") { setResolvedLogo(nextLogo); return; }
-
-    const apply = () => { if (!cancelled) setResolvedLogo(nextLogo); };
-    const preload = new Image();
-    preload.decoding = "async";
-
-    const warmWithBrowserImage = () => {
-      preload.src = nextLogo;
-      if (preload.complete) { apply(); return; }
-      preload.onload = apply;
-      preload.onerror = () => { if (!cancelled) setResolvedLogo(logoImg); };
-    };
-
-    const warmWithCacheStorage = async () => {
-      if (!("caches" in window) || !/^https?:/i.test(nextLogo)) { warmWithBrowserImage(); return; }
-      try {
-        const cache = await window.caches.open("rs-branding-assets-v1");
-        let response = await cache.match(nextLogo);
-        if (!response) {
-          response = await fetch(nextLogo, { mode: "cors", cache: "force-cache" });
-          if (response.ok) await cache.put(nextLogo, response.clone());
-        }
-        if (response?.ok) {
-          const blob = await response.blob();
-          objectUrl = URL.createObjectURL(blob);
-          if (!cancelled) setResolvedLogo(objectUrl);
-          return;
-        }
-      } catch { /* fall through */ }
-      warmWithBrowserImage();
-    };
-
-    void warmWithCacheStorage();
-    return () => {
-      cancelled = true;
-      preload.onload = null;
-      preload.onerror = null;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
+    let objUrl: string | null = null;
+    (async () => {
+      const out = await warmAsset(logoSrc);
+      if (cancelled) return;
+      if (out !== logoSrc) objUrl = out;
+      setResolvedLogo(out);
+    })();
+    return () => { cancelled = true; if (objUrl) URL.revokeObjectURL(objUrl); };
   }, [logoSrc]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objUrl: string | null = null;
+    (async () => {
+      const out = await warmAsset(bgSrc);
+      if (cancelled) return;
+      if (out !== bgSrc) objUrl = out;
+      setResolvedBg(out);
+    })();
+    return () => { cancelled = true; if (objUrl) URL.revokeObjectURL(objUrl); };
+  }, [bgSrc]);
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-black">
-      {/* Action anime background — bundled, instant paint */}
+      {/* Background image — instant paint via cached blob */}
       <img
-        src={actionBg}
+        src={resolvedBg}
         alt=""
         aria-hidden
         className="absolute inset-0 w-full h-full object-cover"
-        style={{ opacity: 0.55, filter: "saturate(1.05) contrast(1.05)" }}
+        style={{ opacity: 0.6, transform: "translateZ(0)", willChange: "transform" }}
+        loading="eager"
+        decoding="async"
       />
-      {/* Vignette + dark wash for text legibility */}
+      {/* Vignette wash for readability */}
       <div
         aria-hidden
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(70% 55% at 50% 45%, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.92) 100%)",
-        }}
-      />
-      {/* Soft animated red/blue glow accent (matches the anime backdrop) */}
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(45% 35% at 30% 70%, rgba(239,68,68,0.18) 0%, transparent 60%)," +
-            "radial-gradient(40% 30% at 75% 30%, rgba(59,130,246,0.18) 0%, transparent 60%)",
-          animation: "logoPulse 4s ease-in-out infinite",
+            "radial-gradient(70% 55% at 50% 45%, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.94) 100%)",
         }}
       />
 
       <div className="relative z-10 flex flex-col items-center px-6">
-        {/* Logo with multi-color RGB conic spinner */}
+        {/* Logo with single smooth ring (transform-only, GPU) */}
         <div className="relative w-[150px] h-[150px] flex items-center justify-center">
-          {/* Outer halo */}
+          {/* Soft halo */}
           <div
             aria-hidden
-            className="absolute inset-[-22px] rounded-full"
+            className="absolute inset-[-18px] rounded-full splash-halo"
             style={{
-              background: "radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 65%)",
-              filter: "blur(14px)",
-              animation: "logoPulse 2.4s ease-in-out infinite",
+              background: "radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 65%)",
+              filter: "blur(12px)",
             }}
           />
-          {/* RGB conic spinner */}
-          <div
-            className="absolute inset-0 rounded-full"
-            style={{
-              background:
-                "conic-gradient(from 0deg, #ef4444, #f59e0b, #84cc16, #06b6d4, #3b82f6, #a855f7, #ec4899, #ef4444)",
-              mask: "radial-gradient(circle, transparent 64px, #000 66px, #000 73px, transparent 75px)",
-              WebkitMask: "radial-gradient(circle, transparent 64px, #000 66px, #000 73px, transparent 75px)",
-              animation: "spin 2.2s linear infinite",
-              filter: "drop-shadow(0 0 12px rgba(255,255,255,0.35))",
-            }}
-          />
-          {/* Counter-rotating inner thin ring */}
-          <div
-            className="absolute inset-[12px] rounded-full"
-            style={{
-              background:
-                "conic-gradient(from 180deg, transparent 0deg, transparent 270deg, rgba(255,255,255,0.85) 340deg, transparent 360deg)",
-              mask: "radial-gradient(circle, transparent 56px, #000 57px, #000 60px, transparent 61px)",
-              WebkitMask: "radial-gradient(circle, transparent 56px, #000 57px, #000 60px, transparent 61px)",
-              animation: "spin 3.4s linear infinite reverse",
-            }}
-          />
-          {/* Logo — perfectly circular */}
+          {/* Rotating SVG ring — pure transform, no masks, no conic */}
+          <svg
+            className="absolute inset-0 splash-spin"
+            viewBox="0 0 100 100"
+            style={{ willChange: "transform", transform: "translateZ(0)" }}
+          >
+            <defs>
+              <linearGradient id="splashRing" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="rgba(255,255,255,0)" />
+                <stop offset="55%" stopColor="rgba(255,255,255,0.55)" />
+                <stop offset="100%" stopColor="#ffffff" />
+              </linearGradient>
+            </defs>
+            <circle
+              cx="50" cy="50" r="46"
+              fill="none"
+              stroke="rgba(255,255,255,0.08)"
+              strokeWidth="2"
+            />
+            <circle
+              cx="50" cy="50" r="46"
+              fill="none"
+              stroke="url(#splashRing)"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeDasharray="120 220"
+            />
+          </svg>
+          {/* Logo */}
           <img
             src={resolvedLogo}
             alt={displayName || "Logo"}
             className="relative w-[112px] h-[112px] rounded-full object-cover"
             loading="eager"
-            fetchPriority="high"
             decoding="async"
             style={{
               boxShadow:
-                "0 0 0 2px rgba(0,0,0,0.85), 0 0 0 3px rgba(255,255,255,0.18), 0 0 32px rgba(255,255,255,0.22), inset 0 0 20px rgba(0,0,0,0.55)",
+                "0 0 0 2px rgba(0,0,0,0.85), 0 0 0 3px rgba(255,255,255,0.18), 0 0 28px rgba(255,255,255,0.18), inset 0 0 18px rgba(0,0,0,0.55)",
             }}
           />
         </div>
 
-        {/* Wordmark — preserves emojis exactly as set */}
+        {/* Wordmark */}
         {displayName ? (
           <div
             className="mt-9 text-[22px] font-bold tracking-[6px] uppercase text-center text-white"
             style={{
               fontFamily: "'Russo One', 'Inter', sans-serif",
-              textShadow: "0 2px 18px rgba(0,0,0,0.85), 0 0 22px rgba(255,255,255,0.18)",
+              textShadow: "0 2px 18px rgba(0,0,0,0.85), 0 0 22px rgba(255,255,255,0.16)",
             }}
           >
             {displayName}
@@ -171,36 +169,26 @@ const SplashLoader = () => {
           </p>
         ) : null}
 
-        {/* Progress rail with RGB sweep */}
-        <div className="mt-8 w-[220px] h-[3px] rounded-full overflow-hidden bg-white/[0.10] relative">
+        {/* Progress rail — soft white sweep */}
+        <div className="mt-8 w-[220px] h-[2.5px] rounded-full overflow-hidden bg-white/[0.08]">
           <div
-            className="absolute inset-y-0 left-0 w-[50%] rounded-full"
+            className="h-full w-[40%] rounded-full splash-sweep"
             style={{
-              background:
-                "linear-gradient(90deg, transparent 0%, #ef4444 25%, #3b82f6 50%, #a855f7 75%, transparent 100%)",
-              animation: "loadingMove 1.6s cubic-bezier(0.4,0,0.2,1) infinite",
-              boxShadow: "0 0 12px rgba(255,255,255,0.45)",
+              background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.95), transparent)",
+              willChange: "transform",
             }}
           />
         </div>
-
-        {/* Status dots */}
-        <div className="mt-5 flex items-center gap-2">
-          {[
-            "#ef4444", "#3b82f6", "#a855f7",
-          ].map((c, i) => (
-            <span
-              key={i}
-              className="w-1.5 h-1.5 rounded-full"
-              style={{
-                background: c,
-                boxShadow: `0 0 8px ${c}`,
-                animation: `logoPulse 1.3s ease-in-out ${i * 0.18}s infinite`,
-              }}
-            />
-          ))}
-        </div>
       </div>
+
+      <style>{`
+        @keyframes splashSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes splashHalo { 0%,100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
+        @keyframes splashSweep { 0% { transform: translateX(-110%); } 100% { transform: translateX(360%); } }
+        .splash-spin { animation: splashSpin 2.6s linear infinite; }
+        .splash-halo { animation: splashHalo 2.6s ease-in-out infinite; }
+        .splash-sweep { animation: splashSweep 1.6s cubic-bezier(.45,.05,.25,1) infinite; }
+      `}</style>
     </div>
   );
 };
