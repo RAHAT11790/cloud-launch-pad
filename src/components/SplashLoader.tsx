@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import logoImg from "@/assets/logo.png";
 import { useBranding } from "@/hooks/useBranding";
 
@@ -10,7 +11,41 @@ import { useBranding } from "@/hooks/useBranding";
  */
 const SplashLoader = () => {
   const branding = useBranding();
-  const logoSrc = branding.logoUrl ;
+  const [resolvedLogo, setResolvedLogo] = useState(logoImg);
+  const logoSrc = useMemo(() => branding.logoUrl || logoImg, [branding.logoUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const nextLogo = logoSrc || logoImg;
+
+    if (typeof window === "undefined") {
+      setResolvedLogo(nextLogo);
+      return;
+    }
+
+    const preload = new Image();
+    preload.decoding = "async";
+    preload.src = nextLogo;
+
+    const apply = () => {
+      if (!cancelled) setResolvedLogo(nextLogo);
+    };
+
+    if (preload.complete) {
+      apply();
+    } else {
+      preload.onload = apply;
+      preload.onerror = () => {
+        if (!cancelled) setResolvedLogo(logoImg);
+      };
+    }
+
+    return () => {
+      cancelled = true;
+      preload.onload = null;
+      preload.onerror = null;
+    };
+  }, [logoSrc]);
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-[#06070b]">
@@ -75,9 +110,12 @@ const SplashLoader = () => {
           />
           {/* Logo — circular to perfectly match the orbital rings */}
           <img
-            src={logoSrc}
+            src={resolvedLogo}
             alt={branding.splashText}
             className="relative w-[78px] h-[78px] rounded-full object-cover ring-1 ring-white/10"
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
             style={{
               filter:
                 "drop-shadow(0 0 18px hsla(42,90%,55%,0.55)) drop-shadow(0 0 2px rgba(255,255,255,0.25))",
