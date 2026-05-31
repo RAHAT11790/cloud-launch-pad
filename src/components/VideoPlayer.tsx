@@ -2591,7 +2591,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               title="Player ad trigger"
               className="absolute inset-0 z-[32] h-full w-full border-0 bg-transparent opacity-0"
               referrerPolicy="no-referrer"
-              sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
+              sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-same-origin allow-modals allow-presentation"
               scrolling="no"
               srcDoc={buildPlayerAdFrameDoc(playerAdConfig)}
             />
