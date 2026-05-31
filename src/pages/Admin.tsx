@@ -10862,6 +10862,78 @@ const AnimeSaltManagerSection = ({
         </div>
       )}
 
+      {/* Episode Preloader */}
+      <div className={`${glassCard} p-4 mb-4 border border-amber-500/30`}>
+        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
+          <RefreshCw size={14} className="text-amber-400" /> 🚀 Episode Preloader
+        </h3>
+        <p className="text-[10px] text-zinc-400 mb-3">
+          প্রত্যেক এড করা সিরিজ/মুভির এপিসোড AnimeSalt থেকে রিফ্রেশ করে চেক করবে। যেগুলোর এপিসোড লোড হয়নি সেগুলোর লিস্ট দেখাবে, টেক্সট ফাইল ডাউনলোড করা যাবে, এবং এক ক্লিকে ডিলিট করা যাবে।
+        </p>
+
+        {preloading && (
+          <div className="mb-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
+            <div className="flex items-center justify-between text-[11px] mb-2">
+              <span className="text-amber-300 font-semibold">চলছে... {preloadProgress.current}/{preloadProgress.total}</span>
+              <span className="text-amber-400">{Math.round((preloadProgress.current / Math.max(preloadProgress.total, 1)) * 100)}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all"
+                style={{ width: `${(preloadProgress.current / Math.max(preloadProgress.total, 1)) * 100}%` }} />
+            </div>
+            <p className="text-[10px] text-zinc-400 mt-2 truncate">📡 {preloadProgress.currentTitle}</p>
+          </div>
+        )}
+
+        <button onClick={runEpisodePreloader} disabled={preloading || addedCount === 0}
+          className={`w-full py-2.5 rounded-xl text-[12px] font-bold flex items-center justify-center gap-2 transition-all ${
+            preloading || addedCount === 0
+              ? "bg-zinc-700/50 text-zinc-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:shadow-[0_4px_15px_rgba(245,158,11,0.4)]"
+          }`}>
+          {preloading ? <><RefreshCw size={14} className="animate-spin" /> চেক হচ্ছে...</> : <><Zap size={14} /> সব এপিসোড চেক করুন ({addedCount})</>}
+        </button>
+
+        {preloadDone && (
+          <div className="mt-3 p-3 rounded-xl bg-[#151521] border border-white/10">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[12px] font-semibold">
+                {preloadFailed.length === 0
+                  ? <span className="text-green-400">✅ সব এপিসোড ঠিকঠাক লোড হচ্ছে!</span>
+                  : <span className="text-red-400">❌ {preloadFailed.length}টি আইটেমের এপিসোড লোড হয়নি</span>}
+              </p>
+            </div>
+
+            {preloadFailed.length > 0 && (
+              <>
+                <div className="max-h-[200px] overflow-y-auto space-y-1.5 mb-3 pr-1">
+                  {preloadFailed.map((f, idx) => (
+                    <div key={f.slug} className="flex items-start gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                      <span className="text-[10px] text-red-400 font-bold flex-shrink-0">{idx + 1}.</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-semibold text-white truncate">{f.title}</p>
+                        <p className="text-[9px] text-red-300/70 truncate">{f.slug} • {f.reason}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={downloadFailedAsText}
+                    className="flex-1 py-2 rounded-lg text-[11px] font-bold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/40 transition-all flex items-center justify-center gap-1.5">
+                    <Download size={12} /> টেক্সট ফাইল
+                  </button>
+                  <button onClick={deleteAllFailed} disabled={preloadDeleting}
+                    className="flex-1 py-2 rounded-lg text-[11px] font-bold bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/40 transition-all flex items-center justify-center gap-1.5">
+                    {preloadDeleting ? <RefreshCw size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    সব ডিলিট করুন
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* AnimeSalt Custom URL Config */}
       <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
