@@ -1156,16 +1156,6 @@ const AiConfigSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
 const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
   const [config, setConfig] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const loaderFrameOptions = [
-    { value: "", label: "No frame" },
-    { value: "circle", label: "Circle" },
-    { value: "soft-square", label: "Soft Square" },
-    { value: "diamond", label: "Diamond" },
-    { value: "hex", label: "Hex" },
-    { value: "ring", label: "Double Ring" },
-    { value: "ticket", label: "Ticket" },
-    { value: "shield", label: "Shield" },
-  ];
 
   const FIELDS = [
     { key: "siteName", label: "সাইটের নাম", placeholder: "" },
