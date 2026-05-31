@@ -2203,12 +2203,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const handleVideoClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (locked) return;
-    if (playerAdMounted && playerAdEligible) {
-      handlePlayerAdInteraction();
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
 
     const now = Date.now();
     const clientX = "touches" in e ? e.changedTouches[0].clientX : e.clientX;
@@ -2231,7 +2225,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       // Show controls INSTANTLY on single tap — no 300ms wait
       toggleControls();
     }
-  }, [handlePlayerAdInteraction, locked, playerAdEligible, playerAdMounted, seek, togglePlay, playing, toggleControls]);
+  }, [locked, seek, togglePlay, playing, toggleControls]);
 
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
