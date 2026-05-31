@@ -608,6 +608,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         max-width: 100%;
       }
     </style>
+    <script>
+      (function () {
+        var fired = false;
+        var notify = function () {
+          if (fired) return;
+          fired = true;
+          try { parent.postMessage({ source: 'rs-player-ad', type: 'interaction' }, '*'); } catch (e) {}
+        };
+        window.addEventListener('click', notify, { passive: true });
+        window.addEventListener('touchstart', notify, { passive: true });
+      })();
+    </script>
   </head>
   <body>
     <div id="rs-player-ad-root">${snippets}</div>
@@ -622,6 +634,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       consumePlayerAdCycle();
     }, 220);
   }, [consumePlayerAdCycle, playerAdEligible, playerAdMounted]);
+
+  useEffect(() => {
+    const onPlayerAdMessage = (event: MessageEvent) => {
+      const data = event.data as { source?: string; type?: string } | null;
+      if (!data || data.source !== "rs-player-ad" || data.type !== "interaction") return;
+      handlePlayerAdInteraction();
+    };
+    window.addEventListener("message", onPlayerAdMessage);
+    return () => window.removeEventListener("message", onPlayerAdMessage);
+  }, [handlePlayerAdInteraction]);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/adsterra"), (snap) => {
