@@ -14,6 +14,7 @@ export interface BrandingConfig {
   footerText: string;
   footerCopyright: string;
   splashText: string;
+  loaderFrameStyle: string;
   adminTitle: string;
   aboutTitle: string;
   logoUrl: string;           // Default logo (header, splash, etc.)
@@ -33,6 +34,7 @@ const DEFAULT_BRANDING: BrandingConfig = {
   footerText: "",
   footerCopyright: "",
   splashText: "",
+  loaderFrameStyle: "",
   adminTitle: "",
   aboutTitle: "",
   logoUrl: "",
