@@ -4,6 +4,8 @@
 import { useState, useEffect } from "react";
 import { db, ref, onValue } from "@/lib/firebase";
 
+const BRANDING_CACHE_KEY = "rs_branding_cache_v1";
+
 export interface BrandingConfig {
   siteName: string;
   siteDescription: string;
@@ -47,6 +49,31 @@ const DEFAULT_BRANDING: BrandingConfig = {
 let cachedBranding: BrandingConfig | null = null;
 const listeners = new Set<(b: BrandingConfig) => void>();
 
+function readBrandingCache(): BrandingConfig | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(BRANDING_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_BRANDING, ...(parsed || {}) };
+  } catch {
+    return null;
+  }
+}
+
+function writeBrandingCache(value: BrandingConfig) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(BRANDING_CACHE_KEY, JSON.stringify(value));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+if (!cachedBranding) {
+  cachedBranding = readBrandingCache();
+}
+
 // Initialize listener once
 let initialized = false;
 function initBrandingListener() {
@@ -55,6 +82,7 @@ function initBrandingListener() {
   onValue(ref(db, "settings/branding"), (snap) => {
     const val = snap.val();
     cachedBranding = val ? { ...DEFAULT_BRANDING, ...val } : { ...DEFAULT_BRANDING };
+    writeBrandingCache(cachedBranding);
     listeners.forEach(fn => fn(cachedBranding!));
   });
 }
