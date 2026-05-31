@@ -191,15 +191,15 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-2">
             <div>
               <div className="text-[10px] uppercase tracking-wide text-white/50 mb-1.5">Type</div>
-              <div className="flex gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 {(["backdrop", "logo"] as Mode[]).map((m) => (
                   <button
                     key={m}
                     onClick={() => setMode(m)}
-                    className={`flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border ${
+                    className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
                       mode === m ? "bg-emerald-500 text-black border-emerald-400" : "bg-white/5 text-white/70 border-white/10"
                     }`}
                   >
@@ -210,10 +210,10 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-wide text-white/50 mb-1.5">Engine</div>
-              <div className="flex gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
                   onClick={() => setProvider("lovable")}
-                  className={`flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border ${
+                  className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
                     provider === "lovable" ? "bg-amber-500 text-black border-amber-400" : "bg-white/5 text-white/70 border-white/10"
                   }`}
                 >
@@ -221,7 +221,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
                 </button>
                 <button
                   onClick={() => setProvider("flux")}
-                  className={`flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border ${
+                  className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
                     provider === "flux" ? "bg-fuchsia-500 text-black border-fuchsia-400" : "bg-white/5 text-white/70 border-white/10"
                   }`}
                 >
@@ -230,6 +230,22 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
               </div>
             </div>
           </div>
+
+          {/* Engine info card */}
+          <div className="text-[10px] text-white/55 leading-relaxed bg-white/[0.04] border border-white/10 rounded-lg p-2">
+            {provider === "lovable" ? (
+              <>
+                <span className="text-amber-300 font-semibold">Lovable AI</span> · ultra-realistic, follows official character anatomy
+                closely. Credit limited (Lovable AI gateway). Best for hero backdrops.
+              </>
+            ) : (
+              <>
+                <span className="text-fuchsia-300 font-semibold">Flux v1</span> · unlimited free tier but lower character fidelity.
+                Guided with strict size + style prompt so output stays in correct aspect ratio.
+              </>
+            )}
+          </div>
+
 
           <div>
             <label className="flex items-center gap-2 text-[11px] text-white/80 mb-1.5">

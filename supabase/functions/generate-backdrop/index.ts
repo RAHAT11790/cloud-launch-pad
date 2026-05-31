@@ -96,7 +96,16 @@ async function genWithLovable(prompt: string, mode: "backdrop" | "logo", model?:
 
 async function genWithFlux(prompt: string, mode: "backdrop" | "logo"): Promise<string> {
   const ar = mode === "logo" ? "1:1" : "16:9";
-  const url = `https://r-gengpt-api.vercel.app/api/image?prompt=${encodeURIComponent(prompt)}&style=realistic&ar=${ar}`;
+  // Aggressive aspect + style guard for Flux (weaker than Lovable AI on anatomy/composition).
+  const guardedPrompt =
+    mode === "logo"
+      ? `${prompt}
+
+STRICT REQUIREMENTS: square 1:1 frame, centered title text only, NO characters, NO faces, NO bodies. Deep black gradient background. Crisp logo typography only. Match the official anime title logo style exactly.`
+      : `${prompt}
+
+STRICT REQUIREMENTS: wide cinematic 16:9 landscape composition (NOT square, NOT portrait). Subject must fill the frame, no black bars, no letterboxing. Official anime characters of the show, exact canonical hair, eyes, outfit. No deformed anatomy. Professional Crunchyroll / Netflix promotional banner quality. Ultra detailed, 4K, HDR, no watermarks, no random text.`;
+  const url = `https://r-gengpt-api.vercel.app/api/image?prompt=${encodeURIComponent(guardedPrompt)}&style=realistic&ar=${ar}`;
   const res = await fetch(url, { method: "GET" });
   if (!res.ok) throw new Error(`Flux API ${res.status}`);
   const j = await res.json();
@@ -105,6 +114,7 @@ async function genWithFlux(prompt: string, mode: "backdrop" | "logo"): Promise<s
   }
   return j.data.url as string;
 }
+
 
 async function uploadToImgbb(bytes: Uint8Array, name: string): Promise<string> {
   let lastErr: unknown;
