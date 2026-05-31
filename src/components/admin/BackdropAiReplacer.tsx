@@ -250,21 +250,24 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
           </div>
 
 
-          <div>
-            <label className="flex items-center gap-2 text-[11px] text-white/80 mb-1.5">
+          <div className="bg-white/[0.03] border border-white/10 rounded-lg p-2.5">
+            <label className="flex items-start gap-2 text-[11px] text-white/80 leading-relaxed cursor-pointer">
               <input
                 type="checkbox"
+                className="mt-0.5 shrink-0"
                 checked={usePromptOverride}
                 onChange={(e) => setUsePromptOverride(e.target.checked)}
               />
-              Custom prompt (override default — use <code className="text-white/60">{`{title}`}</code> for anime name)
+              <span className="min-w-0 break-words">
+                Custom prompt (override default) — use <code className="text-white/70 bg-white/10 px-1 rounded">{`{title}`}</code> for the anime name.
+              </span>
             </label>
             {usePromptOverride && (
               <textarea
                 value={customPrompt}
                 onChange={(e) => setCustomPrompt(e.target.value)}
                 rows={6}
-                className={inputClass + " w-full font-mono text-[10.5px] leading-relaxed"}
+                className={inputClass + " w-full font-mono text-[10.5px] leading-relaxed mt-2 resize-y"}
                 placeholder="Enter your custom prompt…"
               />
             )}
