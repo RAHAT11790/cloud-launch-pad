@@ -16,6 +16,7 @@ const SplashLoader = () => {
 
   useEffect(() => {
     let cancelled = false;
+    let objectUrl: string | null = null;
     const nextLogo = logoSrc || logoImg;
 
     if (typeof window === "undefined") {
@@ -23,27 +24,58 @@ const SplashLoader = () => {
       return;
     }
 
-    const preload = new Image();
-    preload.decoding = "async";
-    preload.src = nextLogo;
-
     const apply = () => {
       if (!cancelled) setResolvedLogo(nextLogo);
     };
 
-    if (preload.complete) {
-      apply();
-    } else {
+    const preload = new Image();
+    preload.decoding = "async";
+
+    const warmWithBrowserImage = () => {
+      preload.src = nextLogo;
+      if (preload.complete) {
+        apply();
+        return;
+      }
       preload.onload = apply;
       preload.onerror = () => {
         if (!cancelled) setResolvedLogo(logoImg);
       };
-    }
+    };
+
+    const warmWithCacheStorage = async () => {
+      if (!("caches" in window) || !/^https?:/i.test(nextLogo)) {
+        warmWithBrowserImage();
+        return;
+      }
+      try {
+        const cache = await window.caches.open("rs-branding-assets-v1");
+        let response = await cache.match(nextLogo);
+        if (!response) {
+          response = await fetch(nextLogo, { mode: "cors", cache: "force-cache" });
+          if (response.ok) {
+            await cache.put(nextLogo, response.clone());
+          }
+        }
+        if (response?.ok) {
+          const blob = await response.blob();
+          objectUrl = URL.createObjectURL(blob);
+          if (!cancelled) setResolvedLogo(objectUrl);
+          return;
+        }
+      } catch {
+        // fall through to browser preload path
+      }
+      warmWithBrowserImage();
+    };
+
+    void warmWithCacheStorage();
 
     return () => {
       cancelled = true;
       preload.onload = null;
       preload.onerror = null;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [logoSrc]);
 
