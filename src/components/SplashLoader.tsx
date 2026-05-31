@@ -4,59 +4,46 @@ import { useBranding, getBrandingSync } from "@/hooks/useBranding";
 
 /**
  * Ultra-professional splash loader.
- * - Cinematic deep-black backdrop with layered amber aurora + radial vignette
- * - Logo locked inside a glass disc with dual orbital arcs and inner pulse
- * - Wordmark uses gradient text with a subtle shimmer sweep
- * - Slim segmented progress rail with traveling highlight
- * - All branding text is hydrated instantly from localStorage cache (zero FOUC)
+ * - Pure black backdrop with a single soft gold halo (no busy aurora / grain)
+ * - Circular logo with one slim conic gold ring and inner glow
+ * - Clean wordmark in white (emoji stripped) + clearly readable tagline
+ * - Slim progress rail
  */
+
+const EMOJI_RE =
+  /[\u{1F1E6}-\u{1F1FF}\u{1F300}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE0F}\u{200D}]/gu;
+const cleanText = (s: string) => (s || "").replace(EMOJI_RE, "").replace(/\s+/g, " ").trim();
+
 const SplashLoader = () => {
   const branding = useBranding();
-  // Hydrate text synchronously from cache so there is no "empty" flash.
   const initialBranding = getBrandingSync();
-  const [resolvedLogo, setResolvedLogo] = useState(
-    initialBranding.logoUrl || logoImg
-  );
+  const [resolvedLogo, setResolvedLogo] = useState(initialBranding.logoUrl || logoImg);
   const logoSrc = useMemo(() => branding.logoUrl || logoImg, [branding.logoUrl]);
 
-  // Display text with safe fallback so first-ever visit isn't blank
-  const displayName = branding.splashText || branding.siteName || initialBranding.splashText || initialBranding.siteName || "LOADING";
-  const tagline = branding.siteTagline || initialBranding.siteTagline || "";
+  const rawName = branding.splashText || branding.siteName || initialBranding.splashText || initialBranding.siteName || "RS ANIME";
+  const rawTag = branding.siteTagline || initialBranding.siteTagline || "Premium Anime Streaming";
+  const displayName = cleanText(rawName) || "RS ANIME";
+  const tagline = cleanText(rawTag);
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl: string | null = null;
     const nextLogo = logoSrc || logoImg;
+    if (typeof window === "undefined") { setResolvedLogo(nextLogo); return; }
 
-    if (typeof window === "undefined") {
-      setResolvedLogo(nextLogo);
-      return;
-    }
-
-    const apply = () => {
-      if (!cancelled) setResolvedLogo(nextLogo);
-    };
-
+    const apply = () => { if (!cancelled) setResolvedLogo(nextLogo); };
     const preload = new Image();
     preload.decoding = "async";
 
     const warmWithBrowserImage = () => {
       preload.src = nextLogo;
-      if (preload.complete) {
-        apply();
-        return;
-      }
+      if (preload.complete) { apply(); return; }
       preload.onload = apply;
-      preload.onerror = () => {
-        if (!cancelled) setResolvedLogo(logoImg);
-      };
+      preload.onerror = () => { if (!cancelled) setResolvedLogo(logoImg); };
     };
 
     const warmWithCacheStorage = async () => {
-      if (!("caches" in window) || !/^https?:/i.test(nextLogo)) {
-        warmWithBrowserImage();
-        return;
-      }
+      if (!("caches" in window) || !/^https?:/i.test(nextLogo)) { warmWithBrowserImage(); return; }
       try {
         const cache = await window.caches.open("rs-branding-assets-v1");
         let response = await cache.match(nextLogo);
@@ -70,14 +57,11 @@ const SplashLoader = () => {
           if (!cancelled) setResolvedLogo(objectUrl);
           return;
         }
-      } catch {
-        // fall through
-      }
+      } catch { /* fall through */ }
       warmWithBrowserImage();
     };
 
     void warmWithCacheStorage();
-
     return () => {
       cancelled = true;
       preload.onload = null;
@@ -87,164 +71,98 @@ const SplashLoader = () => {
   }, [logoSrc]);
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-[#04050a]">
-      {/* Cinematic aurora backdrop */}
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-black">
+      {/* Single soft gold halo — subtle, professional */}
       <div
         aria-hidden
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(55% 45% at 50% 30%, hsla(42,90%,55%,0.22) 0%, transparent 70%)," +
-            "radial-gradient(45% 40% at 50% 85%, hsla(28,95%,50%,0.14) 0%, transparent 70%)," +
-            "radial-gradient(30% 25% at 15% 65%, hsla(38,90%,50%,0.10) 0%, transparent 70%)," +
-            "linear-gradient(180deg, #04050a 0%, #07080f 60%, #04050a 100%)",
-        }}
-      />
-
-      {/* Soft vignette */}
-      <div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none"
-        style={{ background: "radial-gradient(circle at center, transparent 50%, rgba(0,0,0,0.7) 100%)" }}
-      />
-
-      {/* Fine grain noise */}
-      <div
-        aria-hidden
-        className="absolute inset-0 opacity-[0.05] mix-blend-overlay pointer-events-none"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E\")",
+            "radial-gradient(60% 50% at 50% 42%, rgba(212,160,60,0.22) 0%, rgba(212,160,60,0.06) 35%, transparent 70%)," +
+            "radial-gradient(circle at center, transparent 55%, rgba(0,0,0,0.85) 100%)",
         }}
       />
 
       <div className="relative z-10 flex flex-col items-center px-6">
-        {/* Logo lockup */}
-        <div className="relative w-[160px] h-[160px] flex items-center justify-center">
-          {/* Outermost faint halo */}
+        {/* Logo ring */}
+        <div className="relative w-[140px] h-[140px] flex items-center justify-center">
+          {/* Soft outer glow */}
           <div
             aria-hidden
-            className="absolute inset-[-14px] rounded-full"
+            className="absolute inset-[-18px] rounded-full"
             style={{
-              background:
-                "radial-gradient(circle, hsla(42,90%,55%,0.18) 0%, transparent 65%)",
-              animation: "logoPulse 3.2s ease-in-out infinite",
-              filter: "blur(8px)",
+              background: "radial-gradient(circle, rgba(212,160,60,0.30) 0%, transparent 65%)",
+              filter: "blur(10px)",
+              animation: "logoPulse 3s ease-in-out infinite",
             }}
           />
-
-          {/* Outer slow arc */}
+          {/* Slim conic gold ring */}
           <div
             className="absolute inset-0 rounded-full"
             style={{
-              border: "1.5px solid transparent",
-              borderTopColor: "hsla(42,90%,60%,0.95)",
-              borderRightColor: "hsla(42,90%,60%,0.18)",
-              animation: "spin 2.6s linear infinite",
-              filter: "drop-shadow(0 0 10px hsla(42,90%,55%,0.45))",
-            }}
-          />
-          {/* Inner counter arc */}
-          <div
-            className="absolute inset-[14px] rounded-full"
-            style={{
-              border: "1px solid transparent",
-              borderBottomColor: "hsla(32,95%,58%,0.9)",
-              borderLeftColor: "hsla(32,95%,58%,0.15)",
-              animation: "spin 1.8s linear infinite reverse",
-            }}
-          />
-
-          {/* Glass disc behind logo */}
-          <div
-            aria-hidden
-            className="absolute inset-[22px] rounded-full"
-            style={{
               background:
-                "radial-gradient(circle at 35% 30%, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 45%, rgba(0,0,0,0.4) 100%)",
-              boxShadow:
-                "inset 0 0 24px rgba(0,0,0,0.55), 0 6px 30px hsla(42,90%,40%,0.25)",
-              backdropFilter: "blur(4px)",
+                "conic-gradient(from 0deg, rgba(212,160,60,0) 0deg, rgba(212,160,60,0) 200deg, rgba(245,200,90,0.95) 320deg, rgba(212,160,60,0) 360deg)",
+              mask: "radial-gradient(circle, transparent 62px, #000 63px, #000 70px, transparent 71px)",
+              WebkitMask: "radial-gradient(circle, transparent 62px, #000 63px, #000 70px, transparent 71px)",
+              animation: "spin 2.4s linear infinite",
             }}
           />
-
           {/* Logo */}
           <img
             src={resolvedLogo}
             alt={displayName}
-            className="relative w-[88px] h-[88px] rounded-full object-cover ring-1 ring-white/15"
+            className="relative w-[110px] h-[110px] rounded-full object-cover"
             loading="eager"
             fetchPriority="high"
             decoding="async"
             style={{
-              filter:
-                "drop-shadow(0 0 22px hsla(42,95%,55%,0.6)) drop-shadow(0 0 3px rgba(255,255,255,0.35))",
+              boxShadow:
+                "0 0 0 1px rgba(212,160,60,0.55), 0 0 28px rgba(212,160,60,0.45), inset 0 0 18px rgba(0,0,0,0.55)",
             }}
           />
         </div>
 
-        {/* Wordmark with shimmer */}
-        <div className="mt-8 relative">
-          <div
-            className="text-[24px] font-black tracking-[10px] uppercase text-center"
-            style={{
-              fontFamily: "'Russo One', sans-serif",
-              background:
-                "linear-gradient(180deg, #ffffff 0%, hsl(42 90% 72%) 55%, hsl(32 95% 50%) 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-              filter: "drop-shadow(0 2px 16px hsla(42,90%,55%,0.4))",
-            }}
-          >
-            {displayName}
-          </div>
-          {/* Shimmer sweep */}
-          <div
-            aria-hidden
-            className="absolute inset-0 pointer-events-none overflow-hidden"
-            style={{
-              background:
-                "linear-gradient(110deg, transparent 35%, rgba(255,255,255,0.35) 50%, transparent 65%)",
-              backgroundSize: "250% 100%",
-              WebkitBackgroundClip: "text",
-              backgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              animation: "loadingMove 2.6s linear infinite",
-              mixBlendMode: "screen",
-            }}
-          />
+        {/* Wordmark — clean white, no emoji */}
+        <div
+          className="mt-10 text-[22px] font-bold tracking-[8px] uppercase text-center text-white"
+          style={{
+            fontFamily: "'Russo One', 'Inter', sans-serif",
+            textShadow: "0 2px 18px rgba(212,160,60,0.45), 0 0 1px rgba(255,255,255,0.6)",
+          }}
+        >
+          {displayName}
         </div>
 
+        {/* Tagline — clearly visible */}
         {tagline ? (
-          <p className="mt-2 text-[10px] uppercase tracking-[6px] text-white/45 font-medium text-center">
+          <p className="mt-2.5 text-[11px] uppercase tracking-[5px] font-semibold text-center"
+             style={{ color: "rgba(245,210,140,0.85)" }}>
             {tagline}
           </p>
-        ) : (
-          <div className="mt-2 h-[10px]" />
-        )}
+        ) : null}
 
-        {/* Segmented progress rail */}
-        <div className="mt-7 w-[220px] h-[3px] rounded-full overflow-hidden bg-white/[0.06] relative">
+        {/* Progress rail */}
+        <div className="mt-8 w-[200px] h-[2px] rounded-full overflow-hidden bg-white/[0.08] relative">
           <div
-            className="absolute inset-y-0 left-0 w-[40%] rounded-full"
+            className="absolute inset-y-0 left-0 w-[45%] rounded-full"
             style={{
               background:
-                "linear-gradient(90deg, transparent 0%, hsl(42 95% 60%) 50%, transparent 100%)",
-              animation: "loadingMove 1.5s cubic-bezier(0.4,0,0.2,1) infinite",
-              boxShadow: "0 0 12px hsla(42,90%,55%,0.7)",
+                "linear-gradient(90deg, transparent 0%, rgba(245,200,90,1) 50%, transparent 100%)",
+              animation: "loadingMove 1.6s cubic-bezier(0.4,0,0.2,1) infinite",
+              boxShadow: "0 0 10px rgba(245,200,90,0.7)",
             }}
           />
         </div>
 
         {/* Status dots */}
-        <div className="mt-5 flex items-center gap-1.5">
+        <div className="mt-5 flex items-center gap-2">
           {[0, 1, 2].map((i) => (
             <span
               key={i}
-              className="w-1.5 h-1.5 rounded-full bg-amber-400/80"
+              className="w-1.5 h-1.5 rounded-full"
               style={{
-                animation: `logoPulse 1.4s ease-in-out ${i * 0.2}s infinite`,
+                background: "rgba(245,200,90,0.9)",
+                animation: `logoPulse 1.3s ease-in-out ${i * 0.18}s infinite`,
               }}
             />
           ))}
