@@ -1238,20 +1238,9 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
               )}
             </div>
           ))}
-          <div>
-            <label className="text-[10px] text-zinc-400 block mb-1">লোডার ফ্রেম স্টাইল</label>
-            <select
-              value={config.loaderFrameStyle || ""}
-              onChange={(e) => updateField("loaderFrameStyle", e.target.value)}
-              className={inputClass}
-            >
-              {loaderFrameOptions.map((option) => (
-                <option key={option.value || "none"} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </div>
         </div>
       </div>
+
 
       {/* Text Fields */}
       <div className={`${glassCard} p-4 mb-4`}>
