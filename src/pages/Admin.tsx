@@ -1158,19 +1158,19 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
   const [saving, setSaving] = useState(false);
 
   const FIELDS = [
-    { key: "siteName", label: "সাইটের নাম", placeholder: "RS ANIME" },
+    { key: "siteName", label: "সাইটের নাম", placeholder: "" },
     { key: "siteDescription", label: "সাইটের বিবরণ", placeholder: "Your ultimate destination..." },
     { key: "siteTagline", label: "ট্যাগলাইন", placeholder: "Premium Anime Streaming" },
-    { key: "loginTitle", label: "লগইন পেজের টাইটেল", placeholder: "RS ANIME" },
+    { key: "loginTitle", label: "লগইন পেজের টাইটেল", placeholder: "" },
     { key: "loginSubtitle", label: "লগইন সাবটাইটেল", placeholder: "Premium Anime Streaming" },
-    { key: "premiumTitle", label: "প্রিমিয়াম টাইটেল", placeholder: "RS ANIME Premium" },
+    { key: "premiumTitle", label: "প্রিমিয়াম টাইটেল", placeholder: "" },
     { key: "footerText", label: "ফুটার টেক্সট", placeholder: "Unlimited Anime Series & Movies" },
-    { key: "footerCopyright", label: "কপিরাইট টেক্সট", placeholder: "© 2026 RS ANIME..." },
-    { key: "splashText", label: "স্প্ল্যাশ স্ক্রিন টেক্সট", placeholder: "RS ANIME" },
-    { key: "adminTitle", label: "অ্যাডমিন প্যানেল টাইটেল", placeholder: "RS ANIME Admin" },
-    { key: "aboutTitle", label: "About পেজ টাইটেল", placeholder: "About RS ANIME" },
-    { key: "playerName", label: "ভিডিও প্লেয়ার টাইটেল", placeholder: "RS ANIME PLAYER" },
-    { key: "rsCardLabel", label: "RS কার্ড লেবেল", placeholder: "RS" },
+    { key: "footerCopyright", label: "কপিরাইট টেক্সট", placeholder: "" },
+    { key: "splashText", label: "স্প্ল্যাশ স্ক্রিন টেক্সট", placeholder: "" },
+    { key: "adminTitle", label: "অ্যাডমিন প্যানেল টাইটেল", placeholder: "" },
+    { key: "aboutTitle", label: "About পেজ টাইটেল", placeholder: "" },
+    { key: "playerName", label: "ভিডিও প্লেয়ার টাইটেল", placeholder: "" },
+    { key: "rsCardLabel", label: "RS কার্ড লেবেল", placeholder: "" },
     { key: "anCardLabel", label: "AnimeSalt কার্ড লেবেল", placeholder: "AN" },
   ];
 
@@ -2076,7 +2076,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [tgBulkSending, setTgBulkSending] = useState(false);
   const [tgBulkBatchSize, setTgBulkBatchSize] = useState(20);
   const [tgBulkHeader, setTgBulkHeader] = useState("🎌 𝗥𝗦 𝗔𝗡𝗜𝗠𝗘 — 𝗙𝗥𝗘𝗦𝗛 𝗗𝗥𝗢𝗣");
-  const [tgBulkFooter, setTgBulkFooter] = useState("🔗 Watch Free at RS ANIME • Daily Updates");
+  const [tgBulkFooter, setTgBulkFooter] = useState("🔗 Watch Free • Daily Updates");
   const [tgBulkSentIds, setTgBulkSentIds] = useState<Record<string, number>>({});
   const [tgBulkProgress, setTgBulkProgress] = useState<{ done: number; total: number } | null>(null);
   useEffect(() => {
@@ -4008,7 +4008,7 @@ ${tgHashtags}`;
 ▶️ <a href="${url}">Tap to Watch Now</a></blockquote>`;
     }).join("\n\n");
 
-    const headerText = escapeHtmlBasic(String(tgBulkHeader || "").replace(/<[^>]+>/g, "").trim()) || "RS ANIME • Daily Drops";
+    const headerText = escapeHtmlBasic(String(tgBulkHeader || "").replace(/<[^>]+>/g, "").trim()) || "Daily Drops";
     const caption = `✨ <b>${headerText}</b> ✨
 ━━━━━━━━━━━━━━━━━━━
 
@@ -11952,7 +11952,7 @@ const EpisodeNameRefreshSection = ({
         <List size={14} className="text-amber-400" /> এপিসোড নাম রিফ্রেশ (TMDB)
       </h3>
       <p className="text-[11px] text-zinc-400 mb-3">
-        RS ওয়েবসিরিজের এপিসোডের নাম TMDB থেকে আপডেট করবে। শুধু খালি বা জেনেরিক নাম আপডেট হবে।
+        ওয়েবসিরিজের এপিসোডের নাম TMDB থেকে আপডেট করবে। শুধু খালি বা জেনেরিক নাম আপডেট হবে।
       </p>
 
       {!refreshing && !done && (
@@ -12461,7 +12461,7 @@ const LinkCheckerSection = ({
   return (
     <div className={`${glassCard} p-4 mb-4`}>
       <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-        <Link size={14} className="text-red-400" /> লিংক চেকার (RS)
+        <Link size={14} className="text-red-400" /> লিংক চেকার
       </h3>
       <p className="text-[11px] text-zinc-400 mb-3">
         ইউজার প্লেয়ারের মতো CDN/Direct/Proxy রুটে ভিডিও চালিয়ে রিয়েল প্লেব্যাক টেস্ট করবে। যেগুলো কোনো রুটেই প্লে হবে না সেগুলোই ব্রোকেন দেখাবে।
