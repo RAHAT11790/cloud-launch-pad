@@ -9621,6 +9621,20 @@ const AutoImportSection = ({
 };
 
 // AnimeSalt Manager Section sub-component
+const normalizeAnimeSaltManagerType = (value: unknown): "series" | "movies" => {
+  const raw = String(value || "").trim().toLowerCase();
+  return raw === "movie" || raw === "movies" ? "movies" : "series";
+};
+
+const normalizeAnimeSaltManagerItem = (item: any) => ({
+  ...item,
+  slug: String(item?.slug || item?.id || "").trim(),
+  title: String(item?.title || item?.name || item?.slug || "Untitled").trim(),
+  poster: String(item?.poster || item?.image || item?.thumb || "").trim(),
+  year: String(item?.year || "").trim(),
+  type: normalizeAnimeSaltManagerType(item?.type),
+});
+
 const AnimeSaltManagerSection = ({
   glassCard, inputClass, btnPrimary, btnSecondary, categoryList, selectClass,
 }: {
@@ -9710,7 +9724,7 @@ const AnimeSaltManagerSection = ({
     try {
       const result = await animeSaltApi.browseAll();
       if (result.success && result.items) {
-        setAllItems(result.items);
+        setAllItems(result.items.map(normalizeAnimeSaltManagerItem).filter((item: any) => item.slug));
       }
     } catch (err) {
       console.error('AnimeSalt load failed:', err);
@@ -10338,13 +10352,13 @@ const AnimeSaltManagerSection = ({
     if (!urlFetchedItem) return;
     if (!addCategory) { toast.error('ক্যাটাগরি সিলেক্ট করুন!'); return; }
     // Use same addItem flow with TMDB
-    const item = {
+    const item = normalizeAnimeSaltManagerItem({
       slug: urlFetchedItem.slug,
       title: urlFetchedItem.title,
       poster: urlFetchedItem.poster,
       type: urlFetchedItem.type,
       year: urlFetchedItem.year,
-    };
+    });
     await addItem(item);
     // Also add to allItems so it shows in the grid
     setAllItems(prev => {
@@ -10364,20 +10378,35 @@ const AnimeSaltManagerSection = ({
     }
   };
 
+  const normalizedAllItems = useMemo(
+    () => allItems.map(normalizeAnimeSaltManagerItem).filter((item) => item.slug),
+    [allItems],
+  );
+
+  const addedItems = useMemo(
+    () => Object.entries(selectedItems).map(([slug, item]) => normalizeAnimeSaltManagerItem({ slug, ...item })),
+    [selectedItems],
+  );
+
   const filteredItems = useMemo(() => {
-    let items = allItems;
+    let items = filterType === 'added' ? addedItems : normalizedAllItems;
     if (filterType === 'series') items = items.filter(i => i.type === 'series');
     else if (filterType === 'movies') items = items.filter(i => i.type === 'movies');
-    else if (filterType === 'added') items = items.filter(i => isAdded(i.slug));
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      items = items.filter(i => i.title?.toLowerCase().includes(q));
+      items = items.filter((item) => {
+        const haystack = [item.title, item.slug, selectedItems[item.slug]?.title, selectedItems[item.slug]?.category]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      });
     }
     return items;
-  }, [allItems, filterType, searchQuery, selectedItems]);
+  }, [addedItems, filterType, normalizedAllItems, searchQuery, selectedItems]);
 
-  const addedCount = Object.keys(selectedItems).length;
+  const addedCount = addedItems.length;
 
   return (
     <div>
