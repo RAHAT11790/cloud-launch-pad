@@ -12,6 +12,7 @@ import logoImg from "@/assets/logo.png";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
+import AdsterraAdManager from "@/components/AdsterraAdManager";
 // Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When OFF: free users get instant access, NO ad gate, NO unlock popup, NO verification flash.
 const isShortenerEnabled = async (): Promise<boolean> => {
@@ -473,11 +474,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [adGateActive, setAdGateActive] = useState(false);
   const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
   const [shortenLoading, setShortenLoading] = useState(false);
-  const [playerAdConfig, setPlayerAdConfig] = useState({ enabled: false, popunder: "", socialBar: "", refreshIntervalSec: 0 });
-  const [playerAdEligible, setPlayerAdEligible] = useState(false);
-  const [playerAdMounted, setPlayerAdMounted] = useState(false);
-  const playerAdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const playerAdInteractionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [playerAdReady, setPlayerAdReady] = useState(false);
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
   const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
@@ -512,167 +509,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
   const [unlockBlocked, setUnlockBlocked] = useState(false);
 
-  const clearPlayerAdTimers = useCallback(() => {
-    if (playerAdTimerRef.current) {
-      clearTimeout(playerAdTimerRef.current);
-      playerAdTimerRef.current = null;
-    }
-    if (playerAdInteractionTimerRef.current) {
-      clearTimeout(playerAdInteractionTimerRef.current);
-      playerAdInteractionTimerRef.current = null;
-    }
-  }, []);
-
-  const getPlayerAdCooldownKey = useCallback(() => {
-    const uid = getLocalUserId() || "guest";
-    return `rs_player_ad_last_seen_${uid}`;
-  }, []);
-
-  const hasPlayerAdSnippet = useMemo(() => {
-    return !!(playerAdConfig.popunder.trim() || playerAdConfig.socialBar.trim());
-  }, [playerAdConfig.popunder, playerAdConfig.socialBar]);
-
-  const schedulePlayerAdEligibility = useCallback((fromTs?: number) => {
-    clearPlayerAdTimers();
-    setPlayerAdMounted(false);
-
-    const cfg = playerAdConfig;
-    if (!cfg.enabled || !hasPlayerAdSnippet || isPremium || adGateActive) {
-      setPlayerAdEligible(false);
-      return;
-    }
-
-    const refreshMs = Math.max(0, Number(cfg.refreshIntervalSec || 0) * 1000);
-    const storageKey = getPlayerAdCooldownKey();
-    const lastSeen = fromTs ?? Number(sessionStorage.getItem(storageKey) || "0");
-    if (refreshMs <= 0) {
-      const eligible = lastSeen <= 0;
-      setPlayerAdEligible(eligible);
-      return;
-    }
-
-    const dueIn = Math.max(0, lastSeen + refreshMs - Date.now());
-
-    if (dueIn <= 0) {
-      setPlayerAdEligible(true);
-      return;
-    }
-
-    setPlayerAdEligible(false);
-    playerAdTimerRef.current = setTimeout(() => {
-      setPlayerAdEligible(true);
-      playerAdTimerRef.current = null;
-    }, dueIn);
-  }, [adGateActive, clearPlayerAdTimers, getPlayerAdCooldownKey, hasPlayerAdSnippet, isPremium, playerAdConfig]);
-
-  const consumePlayerAdCycle = useCallback(() => {
-    clearPlayerAdTimers();
-    setPlayerAdMounted(false);
-    setPlayerAdEligible(false);
-
-    const now = Date.now();
-    sessionStorage.setItem(getPlayerAdCooldownKey(), String(now));
-    schedulePlayerAdEligibility(now);
-  }, [clearPlayerAdTimers, getPlayerAdCooldownKey, schedulePlayerAdEligibility]);
-
-  const buildPlayerAdFrameDoc = useCallback((cfg: typeof playerAdConfig) => {
-    const snippets = [cfg.socialBar.trim(), cfg.popunder.trim()].filter(Boolean).join("\n");
-    return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
-    <style>
-      html, body {
-        margin: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        background: transparent;
-      }
-      body {
-        position: relative;
-        background: transparent;
-      }
-      #rs-player-ad-root {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-      }
-      #rs-player-ad-root iframe,
-      #rs-player-ad-root img,
-      #rs-player-ad-root div,
-      #rs-player-ad-root a {
-        max-width: 100%;
-      }
-    </style>
-    <script>
-      (function () {
-        var fired = false;
-        var notify = function () {
-          if (fired) return;
-          fired = true;
-          try { parent.postMessage({ source: 'rs-player-ad', type: 'interaction' }, '*'); } catch (e) {}
-        };
-        window.addEventListener('click', notify, { passive: true });
-        window.addEventListener('touchstart', notify, { passive: true });
-      })();
-    </script>
-  </head>
-  <body>
-    <div id="rs-player-ad-root">${snippets}</div>
-  </body>
-</html>`;
-  }, []);
-
-  const handlePlayerAdInteraction = useCallback(() => {
-    if (!playerAdEligible || !playerAdMounted || playerAdInteractionTimerRef.current) return;
-    playerAdInteractionTimerRef.current = setTimeout(() => {
-      playerAdInteractionTimerRef.current = null;
-      consumePlayerAdCycle();
-    }, 220);
-  }, [consumePlayerAdCycle, playerAdEligible, playerAdMounted]);
-
   useEffect(() => {
-    const onPlayerAdMessage = (event: MessageEvent) => {
-      const data = event.data as { source?: string; type?: string } | null;
-      if (!data || data.source !== "rs-player-ad" || data.type !== "interaction") return;
-      handlePlayerAdInteraction();
-    };
-    window.addEventListener("message", onPlayerAdMessage);
-    return () => window.removeEventListener("message", onPlayerAdMessage);
-  }, [handlePlayerAdInteraction]);
-
-  useEffect(() => {
-    const unsub = onValue(ref(db, "settings/adsterra"), (snap) => {
-      const value = snap.val() || {};
-      setPlayerAdConfig({
-        enabled: value.enabled !== false,
-        popunder: typeof value.popunder === "string" ? value.popunder : "",
-        socialBar: typeof value.socialBar === "string" ? value.socialBar : "",
-        refreshIntervalSec: Number.isFinite(Number(value.refreshIntervalSec)) ? Math.max(0, Math.min(3600, Number(value.refreshIntervalSec))) : 0,
-      });
-    });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    schedulePlayerAdEligibility();
-    return () => {
-      clearPlayerAdTimers();
-      setPlayerAdMounted(false);
-    };
-  }, [schedulePlayerAdEligibility, clearPlayerAdTimers]);
-
-  useEffect(() => {
-    if (!playerAdEligible || !playerAdConfig.enabled || !hasPlayerAdSnippet || isPremium || adGateActive) {
-      setPlayerAdMounted(false);
-      return;
-    }
-    setPlayerAdMounted(true);
-  }, [adGateActive, hasPlayerAdSnippet, isPremium, playerAdConfig.enabled, playerAdEligible]);
+    setPlayerAdReady(!adGateActive && !unlockBlocked && !deviceBlocked);
+  }, [adGateActive, unlockBlocked, deviceBlocked]);
 
   // Check IndexedDB for already downloaded episodes matching this title
   useEffect(() => {
