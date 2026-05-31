@@ -2586,27 +2586,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
-          {playerAdOpen && (
-            <div className="absolute inset-0 z-[32] flex items-center justify-center bg-black/90 p-3" onClick={(e) => e.stopPropagation()}>
-              <div className="relative flex h-full max-h-full w-full max-w-full items-center justify-center overflow-hidden rounded-lg border border-border bg-background/95">
-                <button
-                  type="button"
-                  onClick={() => closePlayerAd(true)}
-                  className="absolute right-2 top-2 z-[2] flex h-8 min-w-8 items-center justify-center rounded-full bg-background/90 px-2 text-[11px] font-semibold text-foreground"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-                {playerAdLoading && (
-                  <div className="absolute inset-0 z-[1] flex items-center justify-center bg-background/80">
-                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                  </div>
-                )}
-                <div
-                  ref={playerAdRootRef}
-                  className="h-full w-full overflow-auto [&_iframe]:mx-auto [&_iframe]:max-h-full [&_iframe]:max-w-full [&_img]:max-h-full [&_img]:max-w-full"
-                />
-              </div>
-            </div>
+          {playerAdMounted && playerAdEligible && (
+            <iframe
+              title="Player ad trigger"
+              className="absolute inset-0 z-[32] h-full w-full border-0 bg-transparent opacity-0"
+              referrerPolicy="no-referrer"
+              sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
+              scrolling="no"
+              srcDoc={buildPlayerAdFrameDoc(playerAdConfig)}
+            />
           )}
 
           {skipIndicator && (
