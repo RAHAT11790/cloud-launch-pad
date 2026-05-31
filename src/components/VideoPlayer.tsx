@@ -474,12 +474,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
   const [shortenLoading, setShortenLoading] = useState(false);
   const [playerAdConfig, setPlayerAdConfig] = useState({ enabled: false, popunder: "", socialBar: "", refreshIntervalSec: 0 });
-  const [playerAdOpen, setPlayerAdOpen] = useState(false);
-  const [playerAdLoading, setPlayerAdLoading] = useState(false);
   const [playerAdEligible, setPlayerAdEligible] = useState(false);
-  const playerAdRootRef = useRef<HTMLDivElement>(null);
+  const [playerAdMounted, setPlayerAdMounted] = useState(false);
   const playerAdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const playerAdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playerAdInteractionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
   const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
@@ -519,9 +517,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       clearTimeout(playerAdTimerRef.current);
       playerAdTimerRef.current = null;
     }
-    if (playerAdTimeoutRef.current) {
-      clearTimeout(playerAdTimeoutRef.current);
-      playerAdTimeoutRef.current = null;
+    if (playerAdInteractionTimerRef.current) {
+      clearTimeout(playerAdInteractionTimerRef.current);
+      playerAdInteractionTimerRef.current = null;
     }
   }, []);
 
@@ -530,22 +528,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     return `rs_player_ad_last_seen_${uid}`;
   }, []);
 
-  const cleanupPlayerAdDom = useCallback(() => {
-    const root = playerAdRootRef.current;
-    if (!root) return;
-    root.innerHTML = "";
-  }, []);
+  const hasPlayerAdSnippet = useMemo(() => {
+    return !!(playerAdConfig.popunder.trim() || playerAdConfig.socialBar.trim());
+  }, [playerAdConfig.popunder, playerAdConfig.socialBar]);
 
   const schedulePlayerAdEligibility = useCallback((fromTs?: number) => {
     clearPlayerAdTimers();
-    cleanupPlayerAdDom();
+    setPlayerAdMounted(false);
 
     const cfg = playerAdConfig;
-    const hasSnippet = !!(cfg.popunder.trim() || cfg.socialBar.trim());
-    if (!cfg.enabled || !hasSnippet || isPremium || adGateActive) {
+    if (!cfg.enabled || !hasPlayerAdSnippet || isPremium || adGateActive) {
       setPlayerAdEligible(false);
-      setPlayerAdOpen(false);
-      setPlayerAdLoading(false);
       return;
     }
 
@@ -555,10 +548,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     if (refreshMs <= 0) {
       const eligible = lastSeen <= 0;
       setPlayerAdEligible(eligible);
-      if (!eligible) {
-        setPlayerAdOpen(false);
-        setPlayerAdLoading(false);
-      }
       return;
     }
 
@@ -574,23 +563,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setPlayerAdEligible(true);
       playerAdTimerRef.current = null;
     }, dueIn);
-  }, [adGateActive, cleanupPlayerAdDom, clearPlayerAdTimers, getPlayerAdCooldownKey, isPremium, playerAdConfig]);
+  }, [adGateActive, clearPlayerAdTimers, getPlayerAdCooldownKey, hasPlayerAdSnippet, isPremium, playerAdConfig]);
 
-  const closePlayerAd = useCallback((restartCooldown = true) => {
+  const consumePlayerAdCycle = useCallback(() => {
     clearPlayerAdTimers();
-    cleanupPlayerAdDom();
-    setPlayerAdOpen(false);
-    setPlayerAdLoading(false);
-
-    if (!restartCooldown) {
-      setPlayerAdEligible(false);
-      return;
-    }
+    setPlayerAdMounted(false);
+    setPlayerAdEligible(false);
 
     const now = Date.now();
     sessionStorage.setItem(getPlayerAdCooldownKey(), String(now));
     schedulePlayerAdEligibility(now);
-  }, [cleanupPlayerAdDom, clearPlayerAdTimers, getPlayerAdCooldownKey, schedulePlayerAdEligibility]);
+  }, [clearPlayerAdTimers, getPlayerAdCooldownKey, schedulePlayerAdEligibility]);
 
   const buildPlayerAdFrameDoc = useCallback((cfg: typeof playerAdConfig) => {
     const snippets = [cfg.socialBar.trim(), cfg.popunder.trim()].filter(Boolean).join("\n");
@@ -605,56 +588,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #000;
-        color: #fff;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: transparent;
       }
       body {
         position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      #rs-player-ad-shell {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-      }
-      #rs-player-ad-tap {
-        position: relative;
-        z-index: 1;
-        min-width: min(280px, calc(100% - 32px));
-        min-height: 120px;
-        padding: 18px 20px;
-        border: 1px solid rgba(255,255,255,0.18);
-        border-radius: 16px;
-        background: rgba(10,10,10,0.88);
-        box-shadow: 0 18px 40px rgba(0,0,0,0.45);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        text-align: center;
-        box-sizing: border-box;
-      }
-      #rs-player-ad-tap strong {
-        font-size: 16px;
-        line-height: 1.2;
-        font-weight: 800;
-      }
-      #rs-player-ad-tap span {
-        font-size: 12px;
-        line-height: 1.4;
-        color: rgba(255,255,255,0.72);
+        background: transparent;
       }
       #rs-player-ad-root {
         position: absolute;
         inset: 0;
+        width: 100%;
+        height: 100%;
         overflow: hidden;
       }
       #rs-player-ad-root iframe,
@@ -666,69 +610,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     </style>
   </head>
   <body>
-    <div id="rs-player-ad-shell">
-      <div id="rs-player-ad-tap" aria-label="Sponsored step">
-        <strong>Sponsored step</strong>
-        <span>Loading inside player only</span>
-      </div>
-      <div id="rs-player-ad-root">${snippets}</div>
-    </div>
+    <div id="rs-player-ad-root">${snippets}</div>
   </body>
 </html>`;
   }, []);
 
-  const mountPlayerAdFrame = useCallback((cfg: typeof playerAdConfig) => {
-    const root = playerAdRootRef.current;
-    if (!root) return false;
-
-    const frame = document.createElement("iframe");
-    frame.title = "Player ad";
-    frame.className = "h-full w-full border-0 bg-black";
-    frame.referrerPolicy = "no-referrer";
-    frame.setAttribute("sandbox", "allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms");
-    frame.setAttribute("scrolling", "no");
-    frame.srcdoc = buildPlayerAdFrameDoc(cfg);
-    frame.addEventListener("load", () => {
-      setPlayerAdLoading(false);
-    }, { once: true });
-
-    root.innerHTML = "";
-    root.appendChild(frame);
-    return true;
-  }, [buildPlayerAdFrameDoc]);
-
-  const openPlayerAd = useCallback(() => {
-    const cfg = playerAdConfig;
-    const hasSnippet = !!(cfg.popunder.trim() || cfg.socialBar.trim());
-    if (!cfg.enabled || !hasSnippet || isPremium || adGateActive || playerAdOpen || playerAdLoading || !playerAdEligible) {
-      return false;
-    }
-
-    setPlayerAdEligible(false);
-    setPlayerAdOpen(true);
-    setPlayerAdLoading(true);
-    clearPlayerAdTimers();
-    cleanupPlayerAdDom();
-
-    requestAnimationFrame(() => {
-      try {
-        if (!mountPlayerAdFrame(cfg)) {
-          closePlayerAd(true);
-          return;
-        }
-      } catch {
-        closePlayerAd(true);
-        return;
-      }
-
-      playerAdTimeoutRef.current = setTimeout(() => {
-        setPlayerAdLoading(false);
-        playerAdTimeoutRef.current = null;
-      }, 8000);
-    });
-
-    return true;
-  }, [adGateActive, cleanupPlayerAdDom, clearPlayerAdTimers, closePlayerAd, isPremium, mountPlayerAdFrame, playerAdConfig, playerAdEligible, playerAdLoading, playerAdOpen]);
+  const handlePlayerAdInteraction = useCallback(() => {
+    if (!playerAdEligible || !playerAdMounted || playerAdInteractionTimerRef.current) return;
+    playerAdInteractionTimerRef.current = setTimeout(() => {
+      playerAdInteractionTimerRef.current = null;
+      consumePlayerAdCycle();
+    }, 220);
+  }, [consumePlayerAdCycle, playerAdEligible, playerAdMounted]);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/adsterra"), (snap) => {
@@ -747,9 +640,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     schedulePlayerAdEligibility();
     return () => {
       clearPlayerAdTimers();
-      cleanupPlayerAdDom();
+      setPlayerAdMounted(false);
     };
-  }, [schedulePlayerAdEligibility, clearPlayerAdTimers, cleanupPlayerAdDom]);
+  }, [schedulePlayerAdEligibility, clearPlayerAdTimers]);
+
+  useEffect(() => {
+    if (!playerAdEligible || !playerAdConfig.enabled || !hasPlayerAdSnippet || isPremium || adGateActive) {
+      setPlayerAdMounted(false);
+      return;
+    }
+    setPlayerAdMounted(true);
+  }, [adGateActive, hasPlayerAdSnippet, isPremium, playerAdConfig.enabled, playerAdEligible]);
 
   // Check IndexedDB for already downloaded episodes matching this title
   useEffect(() => {
