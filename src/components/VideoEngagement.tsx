@@ -144,7 +144,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
   };
 
   const shareLink = async () => {
-    const url = `${SITE_URL}?anime=${encodeURIComponent(animeId)}`;
+    const url = `${SITE_URL}/anime/${encodeURIComponent(animeId)}`;
     const shareData = { title: title || "Watch", text: title || "", url };
     try {
       if (navigator.share) {
