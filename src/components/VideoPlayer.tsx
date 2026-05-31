@@ -2419,16 +2419,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             </div>
           )}
 
-          {playerAdMounted && playerAdEligible && (
-            <iframe
-              title="Player ad trigger"
-              className="absolute inset-0 z-[32] h-full w-full border-0 bg-transparent opacity-0"
-              referrerPolicy="no-referrer"
-              sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-same-origin allow-modals allow-presentation"
-              scrolling="no"
-              srcDoc={buildPlayerAdFrameDoc(playerAdConfig)}
-            />
-          )}
+          {playerAdReady && <AdsterraAdManager isPremium={isPremium} videoEl={videoRef.current} />}
+
 
           {skipIndicator && (
             <div className={`absolute top-1/2 -translate-y-1/2 skip-indicator w-16 h-16 flex items-center justify-center text-foreground text-xl font-bold ${
