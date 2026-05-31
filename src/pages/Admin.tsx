@@ -1331,10 +1331,27 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
         </div>
       </div>
 
-      {/* Save Button */}
-      <button onClick={saveAll} disabled={saving} className={`${btnPrimary} w-full !py-3 text-sm`}>
-        {saving ? <><RefreshCw size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> সব সেভ করো</>}
-      </button>
+      {/* Auto-Fill + Save Buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={async () => {
+            try {
+              const snap = await get(ref(db, "settings/branding"));
+              const val = snap.val() || {};
+              setConfig(val);
+              toast.success("✅ অটো-ফিল হয়েছে! বর্তমান সেভ করা ভ্যালু লোড হয়েছে।");
+            } catch {
+              toast.error("অটো-ফিল ব্যর্থ");
+            }
+          }}
+          className="flex-1 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 transition-all flex items-center justify-center gap-2"
+        >
+          <RefreshCw size={14} /> অটো ফিল
+        </button>
+        <button onClick={saveAll} disabled={saving} className={`${btnPrimary} flex-1 !py-3 text-sm`}>
+          {saving ? <><RefreshCw size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> সব সেভ করো</>}
+        </button>
+      </div>
     </div>
   );
 };
