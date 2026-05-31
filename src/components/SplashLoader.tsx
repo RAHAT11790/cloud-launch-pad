@@ -10,7 +10,7 @@ import { useBranding } from "@/hooks/useBranding";
  */
 const SplashLoader = () => {
   const branding = useBranding();
-  const logoSrc = branding.logoUrl || logoImg;
+  const logoSrc = branding.logoUrl ;
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-[#06070b]">
@@ -103,7 +103,7 @@ const SplashLoader = () => {
 
         {/* Tagline */}
         <p className="mt-2 text-[10px] uppercase tracking-[6px] text-white/45 font-medium">
-          Premium Streaming
+          
         </p>
 
         {/* Progress bar */}
@@ -119,7 +119,7 @@ const SplashLoader = () => {
         </div>
 
         <p className="mt-4 text-[9px] uppercase tracking-[4px] text-white/35">
-          Loading experience
+          
         </p>
       </div>
     </div>

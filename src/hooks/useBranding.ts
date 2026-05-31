@@ -24,22 +24,22 @@ export interface BrandingConfig {
 }
 
 const DEFAULT_BRANDING: BrandingConfig = {
-  siteName: "RS ANIME",
-  siteDescription: "Your ultimate destination for watching anime series and movies.",
-  siteTagline: "Premium Anime Streaming",
-  loginTitle: "RS ANIME",
-  loginSubtitle: "Premium Anime Streaming",
-  premiumTitle: "RS ANIME Premium",
-  footerText: "Unlimited Anime Series & Movies",
-  footerCopyright: "© 2026 RS ANIME. All rights reserved.",
-  splashText: "RS ANIME",
-  adminTitle: "RS ANIME Admin",
-  aboutTitle: "About RS ANIME",
+  siteName: "",
+  siteDescription: "",
+  siteTagline: "",
+  loginTitle: "",
+  loginSubtitle: "",
+  premiumTitle: "",
+  footerText: "",
+  footerCopyright: "",
+  splashText: "",
+  adminTitle: "",
+  aboutTitle: "",
   logoUrl: "",
   playerLogoUrl: "",
-  playerName: "RS ANIME PLAYER",
-  rsCardLabel: "RS",
-  anCardLabel: "AN",
+  playerName: "",
+  rsCardLabel: "",
+  anCardLabel: "",
 };
 
 let cachedBranding: BrandingConfig | null = null;

@@ -5,15 +5,15 @@
 // .env.example দেখে সব ভ্যালু সেট করুন।
 
 // --- Branding ---
-export const SITE_NAME = import.meta.env.VITE_SITE_NAME || "RS ANIME";
-export const SITE_DESCRIPTION = import.meta.env.VITE_SITE_DESCRIPTION || "Your ultimate destination for watching anime series and movies.";
-export const SITE_URL = import.meta.env.VITE_SITE_URL || "https://rsanime03.lovable.app";
-export const SITE_ICON_URL = import.meta.env.VITE_SITE_ICON_URL || "https://rsanime03.lovable.app/android-chrome-192x192.png";
+export const SITE_NAME = import.meta.env.VITE_SITE_NAME || "";
+export const SITE_DESCRIPTION = import.meta.env.VITE_SITE_DESCRIPTION || "";
+export const SITE_URL = import.meta.env.VITE_SITE_URL || "";
+export const SITE_ICON_URL = import.meta.env.VITE_SITE_ICON_URL || "";
 
 // --- Telegram ---
-export const TELEGRAM_CHANNEL = import.meta.env.VITE_TELEGRAM_CHANNEL || "@CARTOONFUNNY03";
-export const TELEGRAM_CHANNEL_URL = import.meta.env.VITE_TELEGRAM_CHANNEL_URL || "https://t.me/cartoonfunny03";
-export const TELEGRAM_ADMIN_URL = import.meta.env.VITE_TELEGRAM_ADMIN_URL || "https://t.me/rs_woner";
+export const TELEGRAM_CHANNEL = import.meta.env.VITE_TELEGRAM_CHANNEL || "";
+export const TELEGRAM_CHANNEL_URL = import.meta.env.VITE_TELEGRAM_CHANNEL_URL || "";
+export const TELEGRAM_ADMIN_URL = import.meta.env.VITE_TELEGRAM_ADMIN_URL || "";
 
 // --- TMDB ---
 export const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY || "37f4b185e3dc487e4fd3e56e2fab2307";

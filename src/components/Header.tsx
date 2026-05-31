@@ -40,7 +40,7 @@ interface HeaderProps {
 
 const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = [], onLogoClick, chatOpen }: HeaderProps) => {
   const branding = useBranding();
-  const logoSrc = branding.logoUrl || logoImg;
+  const logoSrc = branding.logoUrl ;
   const [userId, setUserId] = useState<string | undefined>(undefined);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
