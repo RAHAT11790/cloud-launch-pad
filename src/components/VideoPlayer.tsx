@@ -1804,8 +1804,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
       navigator.mediaSession.metadata = new MediaMetadata({
         title: title,
-        artist: subtitle || 'RS ANIME',
-        album: 'RS ANIME',
+        artist: subtitle || '',
+        album: '',
         artwork: [
           { src: artworkSrc, sizes: "96x96" },
           { src: artworkSrc, sizes: "192x192" },
@@ -2712,7 +2712,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 {isHlsSrc ? (
                   <button className="player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                     <Server className="w-3.5 h-3.5" />
-                    <span className="text-[10px] font-medium">RS HLS</span>
+                    <span className="text-[10px] font-medium">HLS</span>
                   </button>
                 ) : effectiveVideoServers.length > 1 && !noServerSwitch ? (
                   <div className="relative">

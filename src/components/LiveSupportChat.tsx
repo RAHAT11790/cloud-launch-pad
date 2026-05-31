@@ -189,7 +189,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
     context += `- Always return anime buttons in this exact format: [BTN:Short Name:LINK:exact_share_link]\n`;
     context += `- Match anime by exact title first. Do not give another anime's link.\n\n`;
 
-    context += `RS Catalog (${primaryItems.length}টি):\n`;
+    context += `Catalog (${primaryItems.length}টি):\n`;
     primaryItems.slice(0, 80).forEach((a) => {
       const shareLink = buildShareLink(a);
       if (a.id && shareLink) context += `- TITLE: ${a.title} | ID: ${a.id} | SHARE_LINK: ${shareLink}\n`;
@@ -568,7 +568,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
             </div>
             <p className="text-sm text-foreground font-medium">Hello! 👋</p>
             <p className="text-xs text-muted-foreground mt-1">I'm {branding.siteName} Bot, here to help you!</p>
-            <p className="text-[10px] text-primary/60 mt-2">Type @RS to talk to Admin</p>
+            <p className="text-[10px] text-primary/60 mt-2">Type @Admin to talk to Admin</p>
           </div>
         )}
         {messages.map((msg) => (
@@ -621,7 +621,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
             <Send size={16} className="text-primary-foreground" />
           </button>
         </div>
-        <p className="text-[9px] text-muted-foreground text-center mt-2">@RS লিখে Admin-কে সরাসরি মেসেজ করুন</p>
+        <p className="text-[9px] text-muted-foreground text-center mt-2">@Admin লিখে Admin-কে সরাসরি মেসেজ করুন</p>
       </div>
     </div>
   );

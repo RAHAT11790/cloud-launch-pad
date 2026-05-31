@@ -1170,7 +1170,7 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
     { key: "adminTitle", label: "অ্যাডমিন প্যানেল টাইটেল", placeholder: "" },
     { key: "aboutTitle", label: "About পেজ টাইটেল", placeholder: "" },
     { key: "playerName", label: "ভিডিও প্লেয়ার টাইটেল", placeholder: "" },
-    { key: "rsCardLabel", label: "RS কার্ড লেবেল", placeholder: "" },
+    { key: "rsCardLabel", label: "কার্ড লেবেল", placeholder: "" },
     { key: "anCardLabel", label: "AnimeSalt কার্ড লেবেল", placeholder: "AN" },
   ];
 
@@ -2110,7 +2110,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         setTgFooterLinks([
           { label: "Jᴏɪɴ Mᴀɪɴ Cʜᴀɴɴᴇʟ", url: "https://t.me/CARTOONFUNNY03", emoji: "🔰" },
           { label: "Jᴏɪɴ Cʜᴀᴛ Gʀᴏᴜᴘ", url: "https://t.me/HINDIANIME03", emoji: "🔰" },
-          { label: "Sᴜᴘᴘᴏʀᴛ & Cᴏɴᴛᴀᴄᴛ", url: "https://t.me/RS_WONER", emoji: "🔰" },
+          { label: "Sᴜᴘᴘᴏʀᴛ & Cᴏɴᴛᴀᴄᴛ", url: "https://t.me/ADMIN", emoji: "🔰" },
         ]);
       }
     });
@@ -4307,7 +4307,7 @@ ${tgBulkFooter}
       <div className="min-h-screen bg-[#0D0D1A] flex items-center justify-center p-4">
         <div className={`${glassCard} p-8 w-full max-w-[400px]`}>
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4">RS</div>
+            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4"></div>
             <h1 className="text-xl font-bold text-white">Create Admin PIN</h1>
             <p className="text-sm text-zinc-400 mt-1">Set up your admin PIN</p>
           </div>
@@ -4459,7 +4459,7 @@ ${tgBulkFooter}
           <button onClick={() => setSidebarOpen(true)} className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center hover:bg-indigo-500/20 transition-colors">
             <Menu size={18} />
           </button>
-          <span className="text-xl font-black text-indigo-500">RS</span>
+          <span className="text-xl font-black text-indigo-500"></span>
           <h1 className="text-sm font-semibold text-zinc-200">{sectionTitles[activeSection]}</h1>
         </div>
         <div className="flex items-center gap-2 relative">
@@ -6244,7 +6244,7 @@ ${tgBulkFooter}
                 </div>
                 <button onClick={() => {
                   const days = parseInt(newCodeDays) || 30;
-                  const code = "RS-" + Math.random().toString(36).substring(2, 8).toUpperCase() + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+                  const code = ""+"" + Math.random().toString(36).substring(2, 8).toUpperCase() + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
                   const codeData = {
                     code,
                     days,
@@ -9029,7 +9029,7 @@ const AdminLiveSupportSection = ({
         role: "admin",
         content: replyText.trim(),
         timestamp: Date.now(),
-        userName: "Admin (RS)",
+        userName: "Admin",
       });
       await update(ref(db, `supportChats/${selectedChat}/meta`), {
         lastMessage: `Admin: ${replyText.trim()}`,
@@ -9196,7 +9196,7 @@ const AdminCommentsSection = ({
       const replyRef = push(ref(db, `comments/${animeId}/${commentId}/replies`));
       await set(replyRef, {
         userId: "admin",
-        userName: "Admin (RS)",
+        userName: "Admin",
         text,
         timestamp: now,
       });
@@ -10773,7 +10773,7 @@ const AnimeSaltManagerSection = ({
             <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${animeSaltGlobalEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
         </div>
-        <p className="text-[10px] text-zinc-400 mt-2">বন্ধ করলে সাইটে AnimeSalt-এর সকল কন্টেন্ট হাইড হয়ে যাবে। শুধু RS কন্টেন্ট দেখাবে।</p>
+        <p className="text-[10px] text-zinc-400 mt-2">বন্ধ করলে সাইটে AnimeSalt-এর সকল কন্টেন্ট হাইড হয়ে যাবে। শুধু সাইট কন্টেন্ট দেখাবে।</p>
       </div>
 
       <div className={`${glassCard} p-4 mb-4`}>
@@ -11696,8 +11696,8 @@ const ImageRefreshSection = ({
     const allContent: { title: string; fbPath: string; searchType: string; source: string }[] = [];
 
     if (mode === "rs" || mode === "all") {
-      webseriesData.forEach(w => allContent.push({ title: w.title, fbPath: `webseries/${w.id}`, searchType: "tv", source: "RS" }));
-      moviesData.forEach(m => allContent.push({ title: m.title, fbPath: `movies/${m.id}`, searchType: "movie", source: "RS" }));
+      webseriesData.forEach(w => allContent.push({ title: w.title, fbPath: `webseries/${w.id}`, searchType: "tv", source: "" }));
+      moviesData.forEach(m => allContent.push({ title: m.title, fbPath: `movies/${m.id}`, searchType: "movie", source: "" }));
     }
 
     if (mode === "animesalt" || mode === "all") {
@@ -11775,7 +11775,7 @@ const ImageRefreshSection = ({
             {(["animesalt", "rs", "all"] as const).map(m => (
               <button key={m} onClick={() => setMode(m)}
                 className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-colors ${mode === m ? "bg-indigo-600 border-indigo-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400 hover:text-white"}`}>
-                {m === "animesalt" ? `P2 (${asCount})` : m === "rs" ? `RS (${rsCount})` : `সব (${rsCount + asCount})`}
+                {m === "animesalt" ? `P2 (${asCount})` : m === "rs" ? `Primary (${rsCount})` : `সব (${rsCount + asCount})`}
               </button>
             ))}
           </div>
@@ -11824,7 +11824,7 @@ const ImageRefreshSection = ({
   );
 };
 
-// Episode Name Refresh Section - fetch episode names from TMDB (RS only)
+// Episode Name Refresh Section - fetch episode names from TMDB 
 const EpisodeNameRefreshSection = ({
   glassCard, btnPrimary, webseriesData,
 }: {
