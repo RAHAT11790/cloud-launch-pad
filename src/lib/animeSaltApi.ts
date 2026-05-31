@@ -405,15 +405,17 @@ export const animeSaltApi = {
       tryDirectApi(proxyUrl, { action: 'browse', type: 'movies', page: 1 }),
     ]);
 
-    const sItems = seriesDirect?.items || [];
-    const mItems = moviesDirect?.items || [];
+    const sItems = (seriesDirect?.items || []).map((it: any) => ({ ...it, type: 'series' }));
+    const mItems = (moviesDirect?.items || []).map((it: any) => ({ ...it, type: 'movies' }));
     if (sItems.length || mItems.length) return { success: true, items: [...sItems, ...mItems] };
 
     const [seriesHtml, moviesHtml] = await Promise.all([
       fetchPage(`${ANIMESALT_BASE}/series/`),
       fetchPage(`${ANIMESALT_BASE}/movies/`),
     ]);
-    return { success: true, items: [...parseListPage(seriesHtml), ...parseListPage(moviesHtml)] };
+    const sParsed = parseListPage(seriesHtml).map((it) => ({ ...it, type: 'series' }));
+    const mParsed = parseListPage(moviesHtml).map((it) => ({ ...it, type: 'movies' }));
+    return { success: true, items: [...sParsed, ...mParsed] };
   },
 
   async getSeries(slug: string) {
