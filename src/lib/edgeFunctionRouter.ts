@@ -83,6 +83,24 @@ export function buildFunctionUrl(endpoint: string, config: EdgeRouterConfig): st
   return "";
 }
 
+/** Auto-fallback Supabase URL for built-in important functions */
+function supabaseFallbackUrl(fnName: string): string {
+  const base = (import.meta as any)?.env?.VITE_SUPABASE_URL || "";
+  if (!base) return "";
+  const ENABLED = new Set([
+    "telegram-post",
+    "generate-backdrop",
+    "rs-bot",
+    "video-proxy",
+    "apk-download",
+    "send-otp-email",
+    "link-share-bot",
+    "process-email-queue",
+  ]);
+  if (!ENABLED.has(fnName)) return "";
+  return `${base.replace(/\/$/, "")}/functions/v1/${fnName}`;
+}
+
 /** Get URL for a named function — checks per-function overrides first */
 export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
   // Telegram has its own dedicated Supabase URL
@@ -92,7 +110,7 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
       const val = snap.val();
       if (val?.url) return val.url;
     } catch {}
-    return "";
+    return supabaseFallbackUrl(fnName);
   }
 
   // Check per-function override from Firebase
@@ -107,7 +125,8 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
   // Check dynamic functions first
   const dynFn = Object.values(config.functions).find(f => f.name === fnName || f.endpoint === fnName);
   if (dynFn) return buildFunctionUrl(dynFn.endpoint, config);
-  return buildFunctionUrl(fnName, config);
+  const built = buildFunctionUrl(fnName, config);
+  return built || supabaseFallbackUrl(fnName);
 }
 
 /** Call a cloud function */
