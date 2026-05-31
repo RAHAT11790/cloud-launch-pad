@@ -9674,6 +9674,13 @@ const AnimeSaltManagerSection = ({
   const [refreshing, setRefreshing] = useState(false);
   const [animeSaltGlobalEnabled, setAnimeSaltGlobalEnabled] = useState(true);
 
+  // Episode preloader state
+  const [preloading, setPreloading] = useState(false);
+  const [preloadProgress, setPreloadProgress] = useState({ current: 0, total: 0, currentTitle: "" });
+  const [preloadFailed, setPreloadFailed] = useState<{ slug: string; title: string; reason: string }[]>([]);
+  const [preloadDone, setPreloadDone] = useState(false);
+  const [preloadDeleting, setPreloadDeleting] = useState(false);
+
   // Listen to global AnimeSalt enabled state
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/animeSaltEnabled"), (snap) => {
