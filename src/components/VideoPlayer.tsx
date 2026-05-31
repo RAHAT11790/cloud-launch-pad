@@ -220,7 +220,7 @@ const formatTime = (t: number) => {
 
 const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime }: VideoPlayerProps) => {
   const branding = useBranding();
-  const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl || logoImg;
+  const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
   // Removed preload anime character image - no longer needed
 
   const videoRef = useRef<HTMLVideoElement>(null);
