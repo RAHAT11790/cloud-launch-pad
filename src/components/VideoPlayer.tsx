@@ -898,7 +898,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       }
 
       const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramVerifyBotUsername"));
-      const botUsername = String(botSnap.val() || "RS_ANIME_FIND_BOT").replace(/^@/, "").trim();
+      const botUsername = String(botSnap.val() || "").replace(/^@/, "").trim();
       window.location.href = `https://t.me/${botUsername}`;
       return;
     } catch {}
@@ -1804,8 +1804,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
       navigator.mediaSession.metadata = new MediaMetadata({
         title: title,
-        artist: subtitle || '',
-        album: '',
+        artist: subtitle || branding.siteName,
+        album: branding.siteName,
         artwork: [
           { src: artworkSrc, sizes: "96x96" },
           { src: artworkSrc, sizes: "192x192" },

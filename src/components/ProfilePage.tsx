@@ -1175,7 +1175,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: Pro
             <input
               value={redeemInput}
               onChange={e => setRedeemInput(e.target.value.toUpperCase())}
-              placeholder="RS-XXXXXX-XXXX"
+              placeholder=""
               className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm font-mono tracking-widest focus:border-primary focus:outline-none transition-colors mb-3 text-center"
             />
             <button onClick={redeemCode} disabled={redeemLoading}
