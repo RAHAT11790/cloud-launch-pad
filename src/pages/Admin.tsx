@@ -10437,6 +10437,82 @@ const AnimeSaltManagerSection = ({
 
   const addedCount = addedItems.length;
 
+  // ==================== EPISODE PRELOADER ====================
+  const runEpisodePreloader = async () => {
+    const entries = Object.entries(selectedItems);
+    if (entries.length === 0) {
+      toast.error("কোনো এড করা আইটেম নেই");
+      return;
+    }
+    if (!confirm(`${entries.length}টি আইটেমের এপিসোড চেক করা হবে। কিছু সময় লাগতে পারে। শুরু করব?`)) return;
+    setPreloading(true);
+    setPreloadDone(false);
+    setPreloadFailed([]);
+    const failed: { slug: string; title: string; reason: string }[] = [];
+    let i = 0;
+    for (const [slug, data] of entries) {
+      i++;
+      const title = (data as any)?.title || slug;
+      setPreloadProgress({ current: i, total: entries.length, currentTitle: title });
+      try {
+        const isMovie = (data as any)?.type === "movies";
+        let result: any;
+        if (isMovie) {
+          result = await animeSaltApi.getMovie(slug);
+          if (!result?.success || !result?.data) result = await animeSaltApi.getSeries(slug);
+        } else {
+          result = await animeSaltApi.getSeries(slug);
+          if (!result?.success || !result?.data?.seasons?.length) result = await animeSaltApi.getMovie(slug);
+        }
+        const data2 = result?.data;
+        const hasEpisodes = !!(data2?.seasons?.length && data2.seasons.some((s: any) => s?.episodes?.length > 0));
+        const hasEmbed = !!(data2?.embedUrl || data2?.embedUrls?.length || data2?.allEmbeds?.length || data2?.links?.length);
+        if (!result?.success) failed.push({ slug, title, reason: "ফেচ ব্যর্থ" });
+        else if (!hasEpisodes && !hasEmbed) failed.push({ slug, title, reason: "কোনো এপিসোড/লিংক পাওয়া যায়নি" });
+      } catch (e: any) {
+        failed.push({ slug, title, reason: e?.message || "ফেচ এরর" });
+      }
+    }
+    setPreloadFailed(failed);
+    setPreloadDone(true);
+    setPreloading(false);
+    toast.success(`✅ চেক সম্পন্ন: ${entries.length - failed.length} OK, ${failed.length} ব্যর্থ`);
+  };
+
+  const downloadFailedAsText = () => {
+    if (preloadFailed.length === 0) return;
+    const header = `Failed AnimeSalt Episodes Report\nGenerated: ${new Date().toLocaleString()}\nTotal Failed: ${preloadFailed.length}\n${"=".repeat(50)}\n\n`;
+    const body = preloadFailed.map((f, idx) => `${idx + 1}. ${f.title}\n   Slug: ${f.slug}\n   Reason: ${f.reason}\n`).join("\n");
+    const blob = new Blob([header + body], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `failed-episodes-${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const deleteAllFailed = async () => {
+    if (preloadFailed.length === 0) return;
+    if (!confirm(`${preloadFailed.length}টি ব্যর্থ পোস্ট সম্পূর্ণভাবে ডিলিট হবে (ইউজার + অ্যাডমিন প্যানেল থেকে)। নিশ্চিত?`)) return;
+    setPreloadDeleting(true);
+    let ok = 0;
+    for (const f of preloadFailed) {
+      try {
+        await remove(ref(db, `animesaltSelected/${f.slug}`));
+        ok++;
+      } catch {}
+    }
+    setPreloadDeleting(false);
+    setPreloadFailed([]);
+    setPreloadDone(false);
+    toast.success(`✅ ${ok}টি পোস্ট ডিলিট হয়েছে!`);
+  };
+
+
+
   return (
     <div>
       {/* TMDB Selection Modal */}
