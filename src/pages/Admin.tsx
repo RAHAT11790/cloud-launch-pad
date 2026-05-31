@@ -1174,10 +1174,12 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
     { key: "anCardLabel", label: "AnimeSalt কার্ড লেবেল", placeholder: "AN" },
   ];
 
-  const LOGO_FIELDS = [
-    { key: "logoUrl", label: "ডিফল্ট লোগো URL", placeholder: "https://..." },
-    { key: "playerLogoUrl", label: "ভিডিও প্লেয়ার লোডিং লোগো URL", placeholder: "https://..." },
+  const LOGO_FIELDS: { key: string; label: string; placeholder: string; preview: "square" | "wide" }[] = [
+    { key: "logoUrl", label: "Default Logo (header + splash)", placeholder: "https://... or upload", preview: "square" },
+    { key: "splashBgUrl", label: "Splash Screen Background Image", placeholder: "https://... or upload", preview: "wide" },
   ];
+
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/branding"), (snap) => {
@@ -1190,18 +1192,36 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
     setConfig(prev => ({ ...prev, [key]: value }));
   };
 
+  const handleUpload = async (key: string, file: File | null) => {
+    if (!file) return;
+    setUploadingKey(key);
+    try {
+      const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+      const url = await uploadToImgbb(file);
+      // Update and persist immediately so the URL is saved even without clicking Save
+      setConfig(prev => {
+        const next = { ...prev, [key]: url };
+        update(ref(db, "settings/branding"), { [key]: url }).catch(() => {});
+        return next;
+      });
+      toast.success("✅ Uploaded & saved");
+    } catch (e: any) {
+      toast.error(`Upload failed: ${e?.message || e}`);
+    }
+    setUploadingKey(null);
+  };
+
   const saveAll = async () => {
     setSaving(true);
     try {
-      // Clean empty values
       const cleaned: Record<string, string> = {};
       Object.entries(config).forEach(([k, v]) => {
-        if (v && v.trim()) cleaned[k] = v.trim();
+        if (v && String(v).trim()) cleaned[k] = String(v).trim();
       });
       await set(ref(db, "settings/branding"), cleaned);
-      toast.success("✅ ব্র্যান্ডিং সেভ হয়েছে! সব জায়গায় আপডেট হবে।");
+      toast.success("✅ Branding saved — applied everywhere.");
     } catch {
-      toast.error("সেভ ব্যর্থ");
+      toast.error("Save failed");
     }
     setSaving(false);
   };
@@ -1210,34 +1230,56 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
     <div>
       <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
-          <Edit size={14} className="text-purple-400" /> 🏷️ UI+AD Branding
+          <Edit size={14} className="text-purple-400" /> 🏷️ UI + Branding
         </h3>
         <p className="text-[10px] text-zinc-400 mb-4">
-          সাইটের সব নাম, লোগো এখান থেকে বদলানো যাবে। কোডে কিছু এডিট করা লাগবে না।
+          All site names and logos are managed from here — no code edits needed.
         </p>
       </div>
 
-      {/* Logo URLs */}
+      {/* Logo / Image Settings */}
       <div className={`${glassCard} p-4 mb-4`}>
-        <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">🎨 লোগো সেটিংস</h4>
-        <div className="space-y-3">
-          {LOGO_FIELDS.map(({ key, label, placeholder }) => (
-            <div key={key}>
-              <label className="text-[10px] text-zinc-400 block mb-1">{label}</label>
-              <input
-                value={config[key] || ""}
-                onChange={(e) => updateField(key, e.target.value)}
-                placeholder={placeholder}
-                className={inputClass}
-              />
-              {config[key] && (
-                <div className="mt-2 flex items-center gap-2">
-                  <img src={config[key]} alt="preview" className="w-10 h-10 rounded-lg object-contain bg-zinc-800" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  <span className="text-[9px] text-green-400">✓ Preview</span>
+        <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">🎨 Logo & Image Settings</h4>
+        <div className="space-y-4">
+          {LOGO_FIELDS.map(({ key, label, placeholder, preview }) => {
+            const val = config[key] || "";
+            const isUploading = uploadingKey === key;
+            return (
+              <div key={key} className="bg-zinc-900/40 border border-zinc-700/40 rounded-xl p-3">
+                <label className="text-[11px] text-zinc-300 font-medium block mb-2">{label}</label>
+                <div className="flex gap-2">
+                  <input
+                    value={val}
+                    onChange={(e) => updateField(key, e.target.value)}
+                    placeholder={placeholder}
+                    className={`${inputClass} flex-1 min-w-0`}
+                  />
+                  <label className={`${btnPrimary} !px-3 !py-2 cursor-pointer flex items-center gap-1.5 shrink-0 ${isUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                    {isUploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                    <span className="text-[11px]">{isUploading ? "..." : "Upload"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleUpload(key, e.target.files?.[0] || null)}
+                    />
+                  </label>
                 </div>
-              )}
-            </div>
-          ))}
+                {val && (
+                  <div className="mt-2.5">
+                    <img
+                      src={val}
+                      alt="preview"
+                      className={preview === "wide"
+                        ? "w-full max-h-32 object-cover rounded-lg bg-zinc-800 border border-zinc-700/40"
+                        : "w-14 h-14 rounded-lg object-cover bg-zinc-800 border border-zinc-700/40"}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
