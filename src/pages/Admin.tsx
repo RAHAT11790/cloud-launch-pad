@@ -6799,6 +6799,28 @@ ${tgBulkFooter}
                   </div>
                 </div>
                 <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs text-zinc-400">Status</label>
+                    <label className="flex items-center gap-1.5 text-[10px] text-zinc-500 cursor-pointer">
+                      <input type="checkbox" checked={tgStatusAuto} onChange={e => setTgStatusAuto(e.target.checked)} className="accent-emerald-500" />
+                      Auto (IMDb match)
+                    </label>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => { setTgStatusAuto(false); setTgStatus("ongoing"); }}
+                      className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgStatus === "ongoing" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                      🟢 Oɴɢᴏɪɴɢ
+                    </button>
+                    <button type="button" onClick={() => { setTgStatusAuto(false); setTgStatus("complete"); }}
+                      className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgStatus === "complete" ? "bg-blue-600 border-blue-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                      ✅ Cᴏᴍᴘʟᴇᴛᴇ
+                    </button>
+                  </div>
+                  {tgStatusAuto && (
+                    <p className="text-[10px] text-zinc-500 mt-1.5">Auto: {tgNewEpAdded || "?"} / {tgTotalEpisodes || "?"} → <span className={tgStatus === "complete" ? "text-blue-400" : "text-emerald-400"}>{tgStatus}</span></p>
+                  )}
+                </div>
+                <div>
                   <label className="block text-xs text-zinc-400 mb-1.5">Hashtags</label>
                   <input value={tgHashtags} onChange={e => setTgHashtags(e.target.value)} onBlur={() => { try { set(ref(db, "admin/tgHashtags"), tgHashtags); } catch {} }} className={inputClass} placeholder="#anime #official" />
                 </div>
