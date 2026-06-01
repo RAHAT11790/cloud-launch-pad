@@ -3075,7 +3075,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     setSeriesForm({
       tmdbId: data.tmdbId || "", title: data.title || "", logo: data.logo || "", poster: data.poster || "",
       backdrop: data.backdrop || "", trailer: data.trailer || "", year: data.year || "", rating: data.rating || "",
-        language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "", visibility: data.visibility || "public",
+        language: data.language || "Hindi", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "", visibility: data.visibility || "public",
         weeklyEnabled: data.weeklyEnabled === true, weeklyEveryDays: Math.max(1, Number(data.weeklyEveryDays) || 7), weeklyDaysSinceLast: 0,
         telegramCustomButtonText: data.telegramCustomButton?.text || "",
         telegramCustomButtonUrl: data.telegramCustomButton?.url || "",
@@ -3240,7 +3240,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     setMovieForm({
       tmdbId: data.tmdbId || "", title: data.title || "", logo: data.logo || "", poster: data.poster || "",
       backdrop: data.backdrop || "", trailer: data.trailer || "", year: data.year || "", rating: data.rating || "",
-      language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "",
+      language: data.language || "Hindi", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "",
       movieLink: data.movieLink || "", downloadLink: data.downloadLink || "",
       movieLink480: data.movieLink480 || "", movieLink720: data.movieLink720 || "",
       movieLink1080: data.movieLink1080 || "", movieLink4k: data.movieLink4k || "", visibility: data.visibility || "public",
@@ -4931,7 +4931,7 @@ ${tgBulkFooter}
                       </div>
                       <div className="mb-4">
                         <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Language</label>
-                        <select value={seriesForm.language || "English"} onChange={e => setSeriesForm({ ...seriesForm, language: e.target.value })} className={selectClass}>
+                        <select value={seriesForm.language || "Hindi"} onChange={e => setSeriesForm({ ...seriesForm, language: e.target.value })} className={selectClass}>
                           {languageOptions.map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
                       </div>
@@ -5827,7 +5827,7 @@ ${tgBulkFooter}
                       </div>
                       <div className="mb-4">
                         <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Language</label>
-                        <select value={movieForm.language || "English"} onChange={e => setMovieForm({ ...movieForm, language: e.target.value })} className={selectClass}>
+                        <select value={movieForm.language || "Hindi"} onChange={e => setMovieForm({ ...movieForm, language: e.target.value })} className={selectClass}>
                           {languageOptions.map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
                       </div>
