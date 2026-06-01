@@ -2161,6 +2161,19 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [tgFooterLinks, setTgFooterLinks] = useState<{ label: string; url: string; emoji: string }[]>([]);
   const [tgHashtags, setTgHashtags] = useState("#ɪᴄғᴀɴɪᴍᴇ #ᴀɴɪᴍᴇ #ᴏғғɪᴄɪᴀʟ");
 
+  // Auto-derive Ongoing/Complete from total vs latest added episode (live)
+  useEffect(() => {
+    if (!tgStatusAuto) return;
+    const total = parseInt(String(tgTotalEpisodes).replace(/[^\d]/g, ""), 10);
+    const parts = String(tgNewEpAdded || "").split("-").map(v => parseInt(v.replace(/[^\d]/g, ""), 10));
+    const latest = parts.filter(n => !isNaN(n)).pop();
+    if (!isFinite(total) || total <= 0 || latest === undefined || isNaN(latest)) {
+      setTgStatus("ongoing");
+      return;
+    }
+    setTgStatus(latest >= total ? "complete" : "ongoing");
+  }, [tgStatusAuto, tgTotalEpisodes, tgNewEpAdded]);
+
   // Load saved TG footer links from Firebase
   useEffect(() => {
     const unsub = onValue(ref(db, "admin/tgFooterLinks"), (snap) => {
