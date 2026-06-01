@@ -3947,6 +3947,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 │ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> ${tgQuality}
 │ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ ${tgRating}/10
 │ ✦ <b>Gᴇɴʀᴇs :</b> ${tgGenres}
+│ ✦ <b>Sᴛᴀᴛᴜs :</b> ${tgStatus === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢"}
 └──────────────────
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
 📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
