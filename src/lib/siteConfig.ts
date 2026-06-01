@@ -7,7 +7,7 @@
 // --- Branding ---
 export const SITE_NAME = import.meta.env.VITE_SITE_NAME || "";
 export const SITE_DESCRIPTION = import.meta.env.VITE_SITE_DESCRIPTION || "";
-export const SITE_URL = import.meta.env.VITE_SITE_URL || "";
+export const SITE_URL = import.meta.env.VITE_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "https://rsanime03.lovable.app");
 export const SITE_ICON_URL = import.meta.env.VITE_SITE_ICON_URL || "";
 
 // --- Telegram ---
