@@ -2150,6 +2150,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const tgDropdownRef = useRef<HTMLDivElement>(null);
   const [tgDubType, setTgDubType] = useState<"official" | "fandub">("official");
   const [tgLanguages, setTgLanguages] = useState("Hindi");
+  const [tgStatus, setTgStatus] = useState<"ongoing" | "complete">("ongoing");
+  const [tgStatusAuto, setTgStatusAuto] = useState(true);
   const [tgRating, setTgRating] = useState("8.5");
   const [tgGenres, setTgGenres] = useState("Animation, Action & Adventure, Sci-Fi & Fantasy");
   const [tgImdbId, setTgImdbId] = useState("");
