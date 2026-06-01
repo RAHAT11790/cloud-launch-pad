@@ -6910,6 +6910,7 @@ ${tgBulkFooter}
 │ ✦ Qᴜᴀʟɪᴛʏ : ${tgQuality}
 │ ✦ Rᴀᴛɪɴɢ : ⭐ ${tgRating}/10
 │ ✦ Gᴇɴʀᴇs : ${tgGenres}
+│ ✦ Sᴛᴀᴛᴜs : ${tgStatus === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢"}
 └──────────────────
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
 📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
