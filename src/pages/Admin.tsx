@@ -1158,6 +1158,7 @@ const AiConfigSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
 const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
   const [config, setConfig] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
 
   const FIELDS = [
     { key: "siteName", label: "সাইটের নাম", placeholder: "ICF ANIME" },
@@ -1178,7 +1179,7 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
 
   const LOGO_FIELDS = [
     { key: "logoUrl", label: "ডিফল্ট লোগো URL", placeholder: "https://..." },
-    { key: "playerLogoUrl", label: "ভিডিও প্লেয়ার লোডিং লোগো URL", placeholder: "https://..." },
+    { key: "splashBgUrl", label: "স্প্ল্যাশ ব্যাকগ্রাউন্ড URL", placeholder: "https://..." },
   ];
 
   useEffect(() => {
@@ -1190,6 +1191,20 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
 
   const updateField = (key: string, value: string) => {
     setConfig(prev => ({ ...prev, [key]: value }));
+  };
+
+  const uploadImageForField = async (key: string, file?: File | null) => {
+    if (!file) return;
+    setUploadingKey(key);
+    try {
+      const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+      const url = await uploadToImgbb(file);
+      setConfig(prev => ({ ...prev, [key]: url }));
+      toast.success("✅ ছবি আপলোড হয়েছে!");
+    } catch {
+      toast.error("Upload failed");
+    }
+    setUploadingKey(null);
   };
 
   const saveAll = async () => {
@@ -1226,12 +1241,18 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
           {LOGO_FIELDS.map(({ key, label, placeholder }) => (
             <div key={key}>
               <label className="text-[10px] text-zinc-400 block mb-1">{label}</label>
-              <input
-                value={config[key] || ""}
-                onChange={(e) => updateField(key, e.target.value)}
-                placeholder={placeholder}
-                className={inputClass}
-              />
+              <div className="flex gap-2">
+                <input
+                  value={config[key] || ""}
+                  onChange={(e) => updateField(key, e.target.value)}
+                  placeholder={placeholder}
+                  className={`${inputClass} flex-1`}
+                />
+                <label className="px-3 py-2 rounded-lg bg-[#151521] border border-white/10 text-[#D1C4E9] cursor-pointer flex items-center gap-1 text-[11px]">
+                  {uploadingKey === key ? <Loader2 size={12} className="animate-spin" /> : <Image size={12} />}
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadImageForField(key, e.target.files?.[0])} />
+                </label>
+              </div>
               {config[key] && (
                 <div className="mt-2 flex items-center gap-2">
                   <img src={config[key]} alt="preview" className="w-10 h-10 rounded-lg object-contain bg-zinc-800" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -8689,10 +8710,11 @@ ${addedP}
         {/* ==================== VIDEO SERVERS ==================== */}
         {activeSection === "video-servers" && (() => {
           const VideoServersSection = () => {
-            const [servers, setServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
+            const [servers, setServers] = useState<{ name: string; domain: string; premiumOnly?: boolean; isDefault?: boolean }[]>([]);
             const [vsLoading, setVsLoading] = useState(true);
             const [newName, setNewName] = useState("");
             const [newDomain, setNewDomain] = useState("");
+            const [newPremiumOnly, setNewPremiumOnly] = useState(false);
 
             useEffect(() => {
               const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
@@ -8710,22 +8732,33 @@ ${addedP}
               return () => unsub();
             }, []);
 
-            const saveServers = async (updated: { name: string; domain: string; locked?: boolean }[]) => {
+            const saveServers = async (updated: { name: string; domain: string; premiumOnly?: boolean; isDefault?: boolean }[]) => {
               await set(ref(db, "settings/videoServers"), updated);
               toast.success("✅ Server list saved!");
             };
 
             const addServer = () => {
               if (!newDomain.trim()) { toast.error("Enter domain!"); return; }
-              const updated = [...servers, { name: newName.trim() || `Server ${servers.length + 1}`, domain: newDomain.trim(), locked: false }];
+              const updated = [...servers, {
+                name: newName.trim() || `Server ${servers.length + 1}`,
+                domain: newDomain.trim(),
+                premiumOnly: newPremiumOnly,
+                isDefault: servers.length === 0,
+              }];
               saveServers(updated);
               setNewName("");
               setNewDomain("");
+              setNewPremiumOnly(false);
             };
 
-            const toggleLocked = (idx: number) => {
+            const togglePremiumOnly = (idx: number) => {
               const updated = [...servers];
-              updated[idx] = { ...updated[idx], locked: !updated[idx].locked };
+              updated[idx] = { ...updated[idx], premiumOnly: !updated[idx].premiumOnly };
+              saveServers(updated);
+            };
+
+            const setDefaultServer = (idx: number) => {
+              const updated = servers.map((srv, i) => ({ ...srv, isDefault: i === idx }));
               saveServers(updated);
             };
 
@@ -8766,14 +8799,19 @@ ${addedP}
                           <div className="flex-1 min-w-0">
                             <span className="text-[12px] font-medium block truncate flex items-center gap-1">
                               {srv.name}
-                              {srv.locked && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md font-bold">PREMIUM</span>}
+                                {srv.isDefault && <span className="text-[9px] px-1.5 py-0.5 bg-cyan-500/20 text-cyan-300 rounded-md font-bold">DEFAULT</span>}
+                                {srv.premiumOnly ? <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md font-bold">PREMIUM</span> : <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-md font-bold">FREE</span>}
                             </span>
                             <span className="text-[10px] text-zinc-500 block truncate">{srv.domain}</span>
                           </div>
                           <div className="flex items-center gap-1">
-                            <button onClick={() => toggleLocked(idx)} title={srv.locked ? "Unlock (make free)" : "Lock (premium only)"}
-                              className={`p-1 rounded ${srv.locked ? "text-amber-400 hover:text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}>
-                              {srv.locked ? <Lock size={13} /> : <Unlock size={13} />}
+                              <button onClick={() => setDefaultServer(idx)} title="Set default server"
+                                className={`p-1 rounded ${srv.isDefault ? "text-cyan-400 hover:text-cyan-300" : "text-zinc-500 hover:text-cyan-300"}`}>
+                                <Star size={13} fill={srv.isDefault ? 'currentColor' : 'none'} />
+                              </button>
+                              <button onClick={() => togglePremiumOnly(idx)} title={srv.premiumOnly ? "Unlock (make free)" : "Lock (premium only)"}
+                                className={`p-1 rounded ${srv.premiumOnly ? "text-amber-400 hover:text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}>
+                                {srv.premiumOnly ? <Lock size={13} /> : <Unlock size={13} />}
                             </button>
                             <button onClick={() => moveServer(idx, -1)} disabled={idx === 0} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
                               <ChevronLeft size={12} />
@@ -8794,6 +8832,13 @@ ${addedP}
                     <p className="text-[11px] text-zinc-400 font-medium">➕ নতুন সার্ভার যোগ করুন</p>
                     <input value={newName} onChange={e => setNewName(e.target.value)} className={inputClass} placeholder="সার্ভারের নাম (যেমন: Server 1)" />
                     <input value={newDomain} onChange={e => setNewDomain(e.target.value)} className={inputClass} placeholder="ডোমেইন (যেমন: https://example.com)" />
+                    <button
+                      type="button"
+                      onClick={() => setNewPremiumOnly(v => !v)}
+                      className={`w-full py-2 rounded-lg text-[12px] font-semibold border transition-all ${newPremiumOnly ? "bg-amber-500/20 border-amber-500/40 text-amber-300" : "bg-[#141422] border-white/8 text-zinc-400"}`}
+                    >
+                      {newPremiumOnly ? "👑 Premium Only" : "🆓 Free Server"}
+                    </button>
                     <button onClick={addServer} className={`${btnPrimary} w-full py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2`}>
                       <Plus size={14} /> সার্ভার যোগ করুন
                     </button>
@@ -8805,6 +8850,7 @@ ${addedP}
                   <ul className="text-[11px] text-zinc-400 space-y-1.5 list-disc list-inside">
                     <li>কমপক্ষে ২টি সার্ভার থাকলে প্লেয়ারে "Server" বাটন দেখাবে</li>
                     <li>সার্ভার চেঞ্জ করলে শুধু ডোমেইন বদলাবে, চ্যানেল/ফাইল আইডি একই থাকবে</li>
+                    <li>DEFAULT সার্ভার অটো সিলেক্ট হবে, PREMIUM সার্ভার শুধু প্রিমিয়াম ইউজার দেখবে</li>
                     <li>উদাহরণ: <code className="text-cyan-400">https://s1.example.com</code>/8866/file.mkv → <code className="text-cyan-400">https://s2.example.com</code>/8866/file.mkv</li>
                   </ul>
                 </div>
