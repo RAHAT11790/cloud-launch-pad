@@ -13,7 +13,7 @@ import {
   Menu, X, MoreVertical, RefreshCw, Plus, Download, Trash2, Edit, Eye, EyeOff,
   Shield, LogOut, Search, Save, ChevronDown, Send, Link, ChevronLeft, ChevronRight,
   Lock, Unlock, KeyRound, AlertTriangle, Power, Settings, MessageCircle, Reply, BarChart3, Activity, TrendingUp, Check, List, Star, Pin,
-  Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail, Sparkles, Bot, CalendarDays
+  Upload, Loader2, CheckCircle, XCircle, Clock, Image, Mail, Sparkles, Bot, CalendarDays, ArrowUp, ArrowDown
 } from "lucide-react";
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
@@ -28,6 +28,8 @@ import BackdropAiReplacer from "@/components/admin/BackdropAiReplacer";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseCleanupSection from "@/components/admin/FirebaseCleanup";
 import WeeklyEpisodeManager from "@/components/admin/WeeklyEpisodeManager";
+import type { AudioLanguage } from "@/data/animeData";
+
 
 type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "fb-cleanup" | "adsterra" | "backdrop-ai";
 
@@ -772,7 +774,7 @@ const TelegramGlobalButtonConfig = ({ glassCard, inputClass, btnPrimary }: { gla
         </div>
         <div>
           <label className="text-[10px] text-zinc-400 mb-1 block">Button URL</label>
-          <input type="text" value={url} onChange={e => setUrl(e.target.value)} className={inputClass} placeholder="https://rsanime03.lovable.app" />
+          <input type="text" value={url} onChange={e => setUrl(e.target.value)} className={inputClass} placeholder="https://icfanime03.lovable.app" />
         </div>
         <button onClick={save} disabled={saving} className={`${btnPrimary} w-full py-2 text-xs flex items-center justify-center gap-2`}>
           <Save size={12} /> {saving ? "Saving..." : "Save Global Button"}
@@ -1158,28 +1160,26 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
   const [saving, setSaving] = useState(false);
 
   const FIELDS = [
-    { key: "siteName", label: "সাইটের নাম", placeholder: "" },
+    { key: "siteName", label: "সাইটের নাম", placeholder: "ICF ANIME" },
     { key: "siteDescription", label: "সাইটের বিবরণ", placeholder: "Your ultimate destination..." },
     { key: "siteTagline", label: "ট্যাগলাইন", placeholder: "Premium Anime Streaming" },
-    { key: "loginTitle", label: "লগইন পেজের টাইটেল", placeholder: "" },
+    { key: "loginTitle", label: "লগইন পেজের টাইটেল", placeholder: "ICF ANIME" },
     { key: "loginSubtitle", label: "লগইন সাবটাইটেল", placeholder: "Premium Anime Streaming" },
-    { key: "premiumTitle", label: "প্রিমিয়াম টাইটেল", placeholder: "" },
+    { key: "premiumTitle", label: "প্রিমিয়াম টাইটেল", placeholder: "ICF ANIME Premium" },
     { key: "footerText", label: "ফুটার টেক্সট", placeholder: "Unlimited Anime Series & Movies" },
-    { key: "footerCopyright", label: "কপিরাইট টেক্সট", placeholder: "" },
-    { key: "splashText", label: "স্প্ল্যাশ স্ক্রিন টেক্সট", placeholder: "" },
-    { key: "adminTitle", label: "অ্যাডমিন প্যানেল টাইটেল", placeholder: "" },
-    { key: "aboutTitle", label: "About পেজ টাইটেল", placeholder: "" },
-    { key: "playerName", label: "ভিডিও প্লেয়ার টাইটেল", placeholder: "" },
-    { key: "rsCardLabel", label: "কার্ড লেবেল", placeholder: "" },
+    { key: "footerCopyright", label: "কপিরাইট টেক্সট", placeholder: "© 2026 ICF ANIME..." },
+    { key: "splashText", label: "স্প্ল্যাশ স্ক্রিন টেক্সট", placeholder: "ICF ANIME" },
+    { key: "adminTitle", label: "অ্যাডমিন প্যানেল টাইটেল", placeholder: "ICF ANIME Admin" },
+    { key: "aboutTitle", label: "About পেজ টাইটেল", placeholder: "About ICF ANIME" },
+    { key: "playerName", label: "ভিডিও প্লেয়ার টাইটেল", placeholder: "ICF ANIME PLAYER" },
+    { key: "rsCardLabel", label: "RS কার্ড লেবেল", placeholder: "RS" },
     { key: "anCardLabel", label: "AnimeSalt কার্ড লেবেল", placeholder: "AN" },
   ];
 
-  const LOGO_FIELDS: { key: string; label: string; placeholder: string; preview: "square" | "wide" }[] = [
-    { key: "logoUrl", label: "Default Logo (header + splash)", placeholder: "https://... or upload", preview: "square" },
-    { key: "splashBgUrl", label: "Splash Screen Background Image", placeholder: "https://... or upload", preview: "wide" },
+  const LOGO_FIELDS = [
+    { key: "logoUrl", label: "ডিফল্ট লোগো URL", placeholder: "https://..." },
+    { key: "playerLogoUrl", label: "ভিডিও প্লেয়ার লোডিং লোগো URL", placeholder: "https://..." },
   ];
-
-  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onValue(ref(db, "settings/branding"), (snap) => {
@@ -1192,36 +1192,18 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
     setConfig(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleUpload = async (key: string, file: File | null) => {
-    if (!file) return;
-    setUploadingKey(key);
-    try {
-      const { uploadToImgbb } = await import("@/lib/imgbbUpload");
-      const url = await uploadToImgbb(file);
-      // Update and persist immediately so the URL is saved even without clicking Save
-      setConfig(prev => {
-        const next = { ...prev, [key]: url };
-        update(ref(db, "settings/branding"), { [key]: url }).catch(() => {});
-        return next;
-      });
-      toast.success("✅ Uploaded & saved");
-    } catch (e: any) {
-      toast.error(`Upload failed: ${e?.message || e}`);
-    }
-    setUploadingKey(null);
-  };
-
   const saveAll = async () => {
     setSaving(true);
     try {
+      // Clean empty values
       const cleaned: Record<string, string> = {};
       Object.entries(config).forEach(([k, v]) => {
-        if (v && String(v).trim()) cleaned[k] = String(v).trim();
+        if (v && v.trim()) cleaned[k] = v.trim();
       });
       await set(ref(db, "settings/branding"), cleaned);
-      toast.success("✅ Branding saved — applied everywhere.");
+      toast.success("✅ ব্র্যান্ডিং সেভ হয়েছে! সব জায়গায় আপডেট হবে।");
     } catch {
-      toast.error("Save failed");
+      toast.error("সেভ ব্যর্থ");
     }
     setSaving(false);
   };
@@ -1230,59 +1212,36 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
     <div>
       <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
-          <Edit size={14} className="text-purple-400" /> 🏷️ UI + Branding
+          <Edit size={14} className="text-purple-400" /> 🏷️ UI+AD Branding
         </h3>
         <p className="text-[10px] text-zinc-400 mb-4">
-          All site names and logos are managed from here — no code edits needed.
+          সাইটের সব নাম, লোগো এখান থেকে বদলানো যাবে। কোডে কিছু এডিট করা লাগবে না।
         </p>
       </div>
 
-      {/* Logo / Image Settings */}
+      {/* Logo URLs */}
       <div className={`${glassCard} p-4 mb-4`}>
-        <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">🎨 Logo & Image Settings</h4>
-        <div className="space-y-4">
-          {LOGO_FIELDS.map(({ key, label, placeholder, preview }) => {
-            const val = config[key] || "";
-            const isUploading = uploadingKey === key;
-            return (
-              <div key={key} className="bg-zinc-900/40 border border-zinc-700/40 rounded-xl p-3">
-                <label className="text-[11px] text-zinc-300 font-medium block mb-2">{label}</label>
-                <div className="flex gap-2">
-                  <input
-                    value={val}
-                    onChange={(e) => updateField(key, e.target.value)}
-                    placeholder={placeholder}
-                    className={`${inputClass} flex-1 min-w-0`}
-                  />
-                  <label className={`${btnPrimary} !px-3 !py-2 cursor-pointer flex items-center gap-1.5 shrink-0 ${isUploading ? 'opacity-60 pointer-events-none' : ''}`}>
-                    {isUploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-                    <span className="text-[11px]">{isUploading ? "..." : "Upload"}</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => handleUpload(key, e.target.files?.[0] || null)}
-                    />
-                  </label>
+        <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">🎨 লোগো সেটিংস</h4>
+        <div className="space-y-3">
+          {LOGO_FIELDS.map(({ key, label, placeholder }) => (
+            <div key={key}>
+              <label className="text-[10px] text-zinc-400 block mb-1">{label}</label>
+              <input
+                value={config[key] || ""}
+                onChange={(e) => updateField(key, e.target.value)}
+                placeholder={placeholder}
+                className={inputClass}
+              />
+              {config[key] && (
+                <div className="mt-2 flex items-center gap-2">
+                  <img src={config[key]} alt="preview" className="w-10 h-10 rounded-lg object-contain bg-zinc-800" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <span className="text-[9px] text-green-400">✓ Preview</span>
                 </div>
-                {val && (
-                  <div className="mt-2.5">
-                    <img
-                      src={val}
-                      alt="preview"
-                      className={preview === "wide"
-                        ? "w-full max-h-32 object-cover rounded-lg bg-zinc-800 border border-zinc-700/40"
-                        : "w-14 h-14 rounded-lg object-cover bg-zinc-800 border border-zinc-700/40"}
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              )}
+            </div>
+          ))}
         </div>
       </div>
-
 
       {/* Text Fields */}
       <div className={`${glassCard} p-4 mb-4`}>
@@ -1314,7 +1273,7 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
             <input
               value={config["userApkUrl"] || ""}
               onChange={(e) => updateField("userApkUrl", e.target.value)}
-              placeholder="https://example.com/rsanime-user.apk"
+              placeholder="https://example.com/icfanime-user.apk"
               className={inputClass}
             />
             {config["userApkUrl"] && (
@@ -1334,7 +1293,7 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
             <input
               value={config["adminApkUrl"] || ""}
               onChange={(e) => updateField("adminApkUrl", e.target.value)}
-              placeholder="https://example.com/rsanime-admin.apk"
+              placeholder="https://example.com/icfanime-admin.apk"
               className={inputClass}
             />
             {config["adminApkUrl"] && (
@@ -1352,27 +1311,10 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
         </div>
       </div>
 
-      {/* Auto-Fill + Save Buttons */}
-      <div className="flex gap-2">
-        <button
-          onClick={async () => {
-            try {
-              const snap = await get(ref(db, "settings/branding"));
-              const val = snap.val() || {};
-              setConfig(val);
-              toast.success("✅ অটো-ফিল হয়েছে! বর্তমান সেভ করা ভ্যালু লোড হয়েছে।");
-            } catch {
-              toast.error("অটো-ফিল ব্যর্থ");
-            }
-          }}
-          className="flex-1 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 transition-all flex items-center justify-center gap-2"
-        >
-          <RefreshCw size={14} /> অটো ফিল
-        </button>
-        <button onClick={saveAll} disabled={saving} className={`${btnPrimary} flex-1 !py-3 text-sm`}>
-          {saving ? <><RefreshCw size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> সব সেভ করো</>}
-        </button>
-      </div>
+      {/* Save Button */}
+      <button onClick={saveAll} disabled={saving} className={`${btnPrimary} w-full !py-3 text-sm`}>
+        {saving ? <><RefreshCw size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> সব সেভ করো</>}
+      </button>
     </div>
   );
 };
@@ -1995,6 +1937,12 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [seriesSearch, setSeriesSearch] = useState("");
   const [seriesResults, setSeriesResults] = useState<any[]>([]);
   const [seriesEditId, setSeriesEditId] = useState("");
+  const [audioLangs, setAudioLangs] = useState<AudioLanguage[]>([]);
+  const [activeLangId, setActiveLangId] = useState<string>("");
+  const [showAddLang, setShowAddLang] = useState(false);
+  const [newLangName, setNewLangName] = useState("");
+  const [editingLangId, setEditingLangId] = useState<string>("");
+  const [editingLangName, setEditingLangName] = useState<string>("");
 
   // Movie form
   const [movieForm, setMovieForm] = useState<any>(null);
@@ -2112,7 +2060,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [tgPosterUrl, setTgPosterUrl] = useState("");
   const [tgButtonLink, setTgButtonLink] = useState("");
   const [tgButtons, setTgButtons] = useState<{ name: string; url: string }[]>([]);
-  const [tgDefaultButtonName, setTgDefaultButtonName] = useState("📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥");
+  const [tgDefaultButtonName, setTgDefaultButtonName] = useState("‣ 𝗪𝗔𝗧𝗖𝗛 & 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗 ⎙");
   // Currently-selected anime (for per-anime button persistence)
   const [tgSelectedAnimeId, setTgSelectedAnimeId] = useState<string>("");
   // Auto-save per-anime telegram custom buttons whenever the admin edits them
@@ -2136,7 +2084,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [tgBulkSending, setTgBulkSending] = useState(false);
   const [tgBulkBatchSize, setTgBulkBatchSize] = useState(20);
   const [tgBulkHeader, setTgBulkHeader] = useState("🎌 𝗥𝗦 𝗔𝗡𝗜𝗠𝗘 — 𝗙𝗥𝗘𝗦𝗛 𝗗𝗥𝗢𝗣");
-  const [tgBulkFooter, setTgBulkFooter] = useState("🔗 Watch Free • Daily Updates");
+  const [tgBulkFooter, setTgBulkFooter] = useState("🔗 Watch Free at ICF ANIME • Daily Updates");
   const [tgBulkSentIds, setTgBulkSentIds] = useState<Record<string, number>>({});
   const [tgBulkProgress, setTgBulkProgress] = useState<{ done: number; total: number } | null>(null);
   useEffect(() => {
@@ -2148,31 +2096,20 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [tgDropdownOpen, setTgDropdownOpen] = useState(false);
   const [tgContentSearch, setTgContentSearch] = useState("");
   const tgDropdownRef = useRef<HTMLDivElement>(null);
-  const [tgDubType, setTgDubType] = useState<"official" | "fandub">("official");
+  const [tgDubType, setTgDubType] = useState<"official" | "fandub" | "none">("official");
   const [tgLanguages, setTgLanguages] = useState("Hindi");
-  const [tgStatus, setTgStatus] = useState<"ongoing" | "complete">("ongoing");
-  const [tgStatusAuto, setTgStatusAuto] = useState(true);
   const [tgRating, setTgRating] = useState("8.5");
   const [tgGenres, setTgGenres] = useState("Animation, Action & Adventure, Sci-Fi & Fantasy");
   const [tgImdbId, setTgImdbId] = useState("");
   const [tgImdbLoading, setTgImdbLoading] = useState(false);
   const [tgSeasonEpLabel, setTgSeasonEpLabel] = useState("#all");
+  // Status + content-type (movie/series) — controls caption layout
+  const [tgStatus, setTgStatus] = useState<"upcoming" | "ongoing" | "complete" | "finished">("ongoing");
+  const [tgContentType, setTgContentType] = useState<"series" | "movie">("series");
+  const [tgMovieNumber, setTgMovieNumber] = useState("");
   // Telegram footer links (admin-managed)
   const [tgFooterLinks, setTgFooterLinks] = useState<{ label: string; url: string; emoji: string }[]>([]);
   const [tgHashtags, setTgHashtags] = useState("#ɪᴄғᴀɴɪᴍᴇ #ᴀɴɪᴍᴇ #ᴏғғɪᴄɪᴀʟ");
-
-  // Auto-derive Ongoing/Complete from total vs latest added episode (live)
-  useEffect(() => {
-    if (!tgStatusAuto) return;
-    const total = parseInt(String(tgTotalEpisodes).replace(/[^\d]/g, ""), 10);
-    const parts = String(tgNewEpAdded || "").split("-").map(v => parseInt(v.replace(/[^\d]/g, ""), 10));
-    const latest = parts.filter(n => !isNaN(n)).pop();
-    if (!isFinite(total) || total <= 0 || latest === undefined || isNaN(latest)) {
-      setTgStatus("ongoing");
-      return;
-    }
-    setTgStatus(latest >= total ? "complete" : "ongoing");
-  }, [tgStatusAuto, tgTotalEpisodes, tgNewEpAdded]);
 
   // Load saved TG footer links from Firebase
   useEffect(() => {
@@ -2185,7 +2122,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         setTgFooterLinks([
           { label: "Jᴏɪɴ Mᴀɪɴ Cʜᴀɴɴᴇʟ", url: "https://t.me/CARTOONFUNNY03", emoji: "🔰" },
           { label: "Jᴏɪɴ Cʜᴀᴛ Gʀᴏᴜᴘ", url: "https://t.me/HINDIANIME03", emoji: "🔰" },
-          { label: "Sᴜᴘᴘᴏʀᴛ & Cᴏɴᴛᴀᴄᴛ", url: "https://t.me/ADMIN", emoji: "🔰" },
+          { label: "Sᴜᴘᴘᴏʀᴛ & Cᴏɴᴛᴀᴄᴛ", url: "https://t.me/RS_WONER", emoji: "🔰" },
         ]);
       }
     });
@@ -2321,9 +2258,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
      const seasonText = String(seasonValue ?? "").trim() || "01";
      const startText = String(start ?? "").trim() || "01";
      const endText = String(end ?? "").trim();
-     return endText && endText !== startText
-       ? `Sᴇᴀsᴏɴ #${seasonText} • Eᴘɪsᴏᴅᴇ #${startText}-${endText} Aᴅᴅᴇᴅ`
-       : `Sᴇᴀsᴏɴ #${seasonText} • Eᴘɪsᴏᴅᴇ #${startText} Aᴅᴅᴇᴅ`;
+      return endText && endText !== startText
+        ? `Sᴇᴀsᴏɴ ${seasonText} • Eᴘɪsᴏᴅᴇ ${startText}-${endText} Aᴅᴅᴇᴅ`
+        : `Sᴇᴀsᴏɴ ${seasonText} • Eᴘɪsᴏᴅᴇ ${startText} Aᴅᴅᴇᴅ`;
    }, []);
 
 
@@ -2986,7 +2923,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         tmdbId: data.id, title: data.name || "", logo: logoUrl, poster: data.poster_path ? TMDB_IMG_BASE + "original" + data.poster_path : "",
         backdrop: data.backdrop_path ? TMDB_IMG_BASE + "original" + data.backdrop_path : "", trailer: trailerUrl,
         year: data.first_air_date?.split("-")[0] || "", rating: data.vote_average?.toFixed(1) || "",
-        language: "Hindi", category: autoCategory, dubType: "official", storyline: data.overview || "", visibility: "public", weeklyEnabled: false, weeklyEveryDays: 7
+        language: "English", category: autoCategory, dubType: "official", storyline: data.overview || "", visibility: "public", weeklyEnabled: false, weeklyEveryDays: 7
       });
       if (autoCategory) toast.info(`অটো ক্যাটাগরি: ${autoCategory}`);
       setSeriesCast(cast);
@@ -3029,15 +2966,126 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   // Ref to store last saved series ID (for Save+Notify on new series)
   const lastSavedSeriesIdRef = useRef<string>("");
 
+  // ============== Audio Languages helpers ==============
+  const _newLangId = () => `lang_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const _normalizeSeasons = (s: any): Season[] => {
+    const arr = Array.isArray(s) ? s : (s ? Object.values(s) : []);
+    return (arr as any[]).map((season: any) => ({
+      ...season,
+      episodes: Array.isArray(season?.episodes)
+        ? season.episodes
+        : (season?.episodes ? Object.values(season.episodes) as any[] : []),
+    })) as Season[];
+  };
+  const snapshotActiveLang = (langs: AudioLanguage[], activeId: string, seasons: Season[]): AudioLanguage[] => {
+    if (!activeId) return langs;
+    return langs.map(l => l.id === activeId ? { ...l, seasons: seasons as any } : l);
+  };
+  const switchLang = (id: string) => {
+    if (id === activeLangId) return;
+    const synced = snapshotActiveLang(audioLangs, activeLangId, seasonsData);
+    setAudioLangs(synced);
+    setActiveLangId(id);
+    const target = synced.find(l => l.id === id);
+    setSeasonsData(_normalizeSeasons(target?.seasons));
+    setExpandedSeasons({});
+  };
+  const addLang = (rawName: string) => {
+    const nm = rawName.trim();
+    if (!nm) { toast.error("Enter a language name"); return; }
+    if (audioLangs.some(l => l.name.toLowerCase() === nm.toLowerCase())) {
+      toast.error("Language already exists"); return;
+    }
+    const synced = snapshotActiveLang(audioLangs, activeLangId, seasonsData);
+    const id = _newLangId();
+    const lang: AudioLanguage = { id, name: nm, isDefault: synced.length === 0, dubType: "official", seasons: [], createdAt: Date.now(), order: synced.length };
+    setAudioLangs([...synced, lang]);
+    setActiveLangId(id);
+    setSeasonsData([]);
+    setExpandedSeasons({});
+    setNewLangName(""); setShowAddLang(false);
+    toast.success(`Added "${nm}"`);
+  };
+  const renameLang = (id: string, name: string) => {
+    setAudioLangs(prev => prev.map(l => l.id === id ? { ...l, name } : l));
+  };
+  const setDefaultLang = (id: string) => {
+    setAudioLangs(prev => prev.map(l => ({ ...l, isDefault: l.id === id })));
+    toast.success("Default language set");
+  };
+  const setLangDubType = (id: string, dt: "official" | "fandub") => {
+    setAudioLangs(prev => prev.map(l => l.id === id ? { ...l, dubType: dt } : l));
+  };
+  const moveLang = (id: string, dir: -1 | 1) => {
+    setAudioLangs(prev => {
+      const idx = prev.findIndex(l => l.id === id);
+      if (idx < 0) return prev;
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+      return next.map((l, i) => ({ ...l, order: i }));
+    });
+  };
+  const deleteLang = (id: string) => {
+    if (!confirm("Delete this language and all its seasons/episodes?")) return;
+    let next = audioLangs.filter(l => l.id !== id);
+    if (next.length && !next.some(l => l.isDefault)) next = next.map((l, i) => ({ ...l, isDefault: i === 0 }));
+    next = next.map((l, i) => ({ ...l, order: i }));
+    setAudioLangs(next);
+    if (activeLangId === id) {
+      const nxt = next[0];
+      setActiveLangId(nxt?.id || "");
+      setSeasonsData(_normalizeSeasons(nxt?.seasons));
+      setExpandedSeasons({});
+    }
+  };
+
+  // Build Telegram audio-line: primary language first (from item.language),
+  // followed by names from the audio-language manager in user order.
+  const buildTgAudioLine = (item: any): string => {
+    const primary = String(item?.language || "Hindi").trim();
+    const raw = item?.audioLanguages;
+    const arr: AudioLanguage[] = Array.isArray(raw) ? raw : (raw ? Object.values(raw) as any : []);
+    const sorted = [...arr].sort((a: any, b: any) => (a?.order ?? 0) - (b?.order ?? 0));
+    const names = sorted.map((l: any) => String(l?.name || "").trim()).filter(Boolean);
+    const others = names.filter((n) => n.toLowerCase() !== primary.toLowerCase());
+    return [primary, ...others].join(" | ");
+  };
+
+  const tgDubTag = (dt: typeof tgDubType): string => {
+    if (dt === "fandub") return " #ғᴀɴᴅᴜʙ";
+    if (dt === "official") return " #ᴏғғɪᴄɪᴀʟ";
+    return "";
+  };
+
+  // Insert the dub hashtag right after the first language, before the " | " separator.
+  const tgAudioWithDub = (langs: string, dt: typeof tgDubType): string => {
+    if (langs.includes("#")) return langs; // already tagged
+    const tag = tgDubTag(dt);
+    if (!tag) return langs;
+    const sep = " | ";
+    const idx = langs.indexOf(sep);
+    return idx === -1 ? langs + tag : langs.slice(0, idx) + tag + langs.slice(idx);
+  };
+
+  const coerceDubType = (v: any): "official" | "fandub" | "none" =>
+    v === "fandub" ? "fandub" : v === "none" ? "none" : "official";
+
   const saveSeries = () => {
     if (!seriesForm) return;
     if (!seriesForm.title) { toast.error("Please enter title"); return; }
     if (!seriesForm.category) { toast.error("Please select category"); return; }
 
-    const data = {
+    const syncedLangs = snapshotActiveLang(audioLangs, activeLangId, seasonsData);
+    const defaultLang = syncedLangs.find(l => l.isDefault) || syncedLangs[0];
+    const rootSeasons = defaultLang ? ((defaultLang.seasons as Season[]) || []) : seasonsData;
+
+    const data: any = {
       ...seriesForm,
       cast: seriesCast,
-      seasons: seasonsData,
+      seasons: rootSeasons,
+      audioLanguages: syncedLangs,
       type: "webseries",
       weeklyEnabled: seriesForm.weeklyEnabled === true,
       weeklyEveryDays: Math.max(1, Number(seriesForm.weeklyEveryDays) || 7),
@@ -3063,6 +3111,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         toast.success(seriesEditId ? "Series updated!" : "Series saved!");
         // Weekly EP feature removed — no sync needed
         setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list");
+        setAudioLangs([]); setActiveLangId("");
       })
       .catch(err => toast.error("Error: " + err.message));
   };
@@ -3075,13 +3124,34 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     setSeriesForm({
       tmdbId: data.tmdbId || "", title: data.title || "", logo: data.logo || "", poster: data.poster || "",
       backdrop: data.backdrop || "", trailer: data.trailer || "", year: data.year || "", rating: data.rating || "",
-        language: data.language || "Hindi", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "", visibility: data.visibility || "public",
+        language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "", visibility: data.visibility || "public",
         weeklyEnabled: data.weeklyEnabled === true, weeklyEveryDays: Math.max(1, Number(data.weeklyEveryDays) || 7), weeklyDaysSinceLast: 0,
         telegramCustomButtonText: data.telegramCustomButton?.text || "",
         telegramCustomButtonUrl: data.telegramCustomButton?.url || "",
     });
     setSeriesCast(data.cast || []);
-    const loadedSeasons = data.seasons || [];
+    // Load audio languages (each lang has its own seasons). Fallback: bootstrap one from data.seasons + data.language.
+    const rawLangs = data.audioLanguages;
+    const loadedLangs: AudioLanguage[] = Array.isArray(rawLangs)
+      ? rawLangs
+      : (rawLangs ? Object.values(rawLangs) as AudioLanguage[] : []);
+    const rootSeasons = _normalizeSeasons(data.seasons);
+    let langsToSet: AudioLanguage[];
+    let activeId: string;
+    let loadedSeasons: Season[];
+    if (loadedLangs.length) {
+      langsToSet = loadedLangs.map(l => ({ ...l, seasons: _normalizeSeasons((l as any).seasons) }));
+      const def = langsToSet.find(l => l.isDefault) || langsToSet[0];
+      activeId = def.id;
+      loadedSeasons = (def.seasons as Season[]) || [];
+    } else {
+      const id = _newLangId();
+      langsToSet = [{ id, name: data.language || "English", isDefault: true, seasons: rootSeasons, createdAt: Date.now() }];
+      activeId = id;
+      loadedSeasons = rootSeasons;
+    }
+    setAudioLangs(langsToSet);
+    setActiveLangId(activeId);
     setSeasonsData(loadedSeasons);
     // Auto-expand only the LATEST (running) season; collapse earlier finished seasons
     {
@@ -3190,7 +3260,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         tmdbId: data.id, title: data.title || "", logo: logoUrl, poster: data.poster_path ? TMDB_IMG_BASE + "original" + data.poster_path : "",
         backdrop: data.backdrop_path ? TMDB_IMG_BASE + "original" + data.backdrop_path : "", trailer: trailerUrl,
         year: data.release_date?.split("-")[0] || "", rating: data.vote_average?.toFixed(1) || "",
-        language: "Hindi", category: autoCategory, dubType: "official", storyline: data.overview || "", movieLink: "", downloadLink: "", visibility: "public"
+        language: "English", category: autoCategory, dubType: "official", storyline: data.overview || "", movieLink: "", downloadLink: "", visibility: "public"
       });
       if (autoCategory) toast.info(`অটো ক্যাটাগরি: ${autoCategory}`);
       setMovieCast(cast);
@@ -3240,7 +3310,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     setMovieForm({
       tmdbId: data.tmdbId || "", title: data.title || "", logo: data.logo || "", poster: data.poster || "",
       backdrop: data.backdrop || "", trailer: data.trailer || "", year: data.year || "", rating: data.rating || "",
-      language: data.language || "Hindi", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "",
+      language: data.language || "English", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "",
       movieLink: data.movieLink || "", downloadLink: data.downloadLink || "",
       movieLink480: data.movieLink480 || "", movieLink720: data.movieLink720 || "",
       movieLink1080: data.movieLink1080 || "", movieLink4k: data.movieLink4k || "", visibility: data.visibility || "public",
@@ -3934,23 +4004,38 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     if (!tgChannelId.trim()) { toast.error("Enter channel ID(s)"); return; }
     setTgSending(true);
     try {
-      // Build footer links HTML
+      // Footer links — label on one line, raw URL on the next (no hyperlinked text)
       const footerLinksHtml = tgFooterLinks.map(l =>
-        `๏ ${l.emoji} <a href="${l.url}">${l.label}</a> ${l.emoji}`
+        `๏ ${l.emoji} ${l.label} ${l.emoji}\n   ${l.url}`
       ).join("\n");
+
+      const statusMap: Record<string, string> = {
+        upcoming: "Uᴘᴄᴏᴍɪɴɢ 🔜",
+        ongoing: "Oɴɢᴏɪɴɢ 🟢",
+        complete: "Cᴏᴍᴘʟᴇᴛᴇ ✅",
+        finished: "Fɪɴɪsʜᴇᴅ 🏁",
+      };
+      const isMovie = tgContentType === "movie";
+      const movieNum = (tgMovieNumber || "").trim();
+      const movieLabel = movieNum ? `Mᴏᴠɪᴇ | ${movieNum}` : "Mᴏᴠɪᴇ";
+      const typeBlock = isMovie
+        ? `│ ✦ <b>Tʏᴘᴇ :</b> ${movieLabel}`
+        : `│ ✦ <b>Sᴇᴀsᴏɴ :</b> ${tgSeason || 'N/A'}\n│ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> ${tgTotalEpisodes || 'N/A'}`;
+      const addedLine = isMovie
+        ? `📌 ${movieLabel} Aᴅᴅᴇᴅ`
+        : `📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?])).replace(/^📌\s*/, '')}`;
 
       const caption = `♨️ <b>Tɪᴛᴇʟ;-</b> ${tgTitle}
 ┌──────────────────
-│ ✦ <b>Sᴇᴀsᴏɴ :</b> ${tgSeason || 'N/A'}
-│ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> ${tgTotalEpisodes || 'N/A'}
-│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${tgLanguages} ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}
+${typeBlock}
+│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${tgAudioWithDub(tgLanguages, tgDubType)}
 │ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> ${tgQuality}
 │ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ ${tgRating}/10
+│ ✦ <b>Sᴛᴀᴛᴜs :</b> ${statusMap[tgStatus] || statusMap.ongoing}
 │ ✦ <b>Gᴇɴʀᴇs :</b> ${tgGenres}
-│ ✦ <b>Sᴛᴀᴛᴜs :</b> ${tgStatus === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢"}
 └──────────────────
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
-📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
+${addedLine}
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
 ${footerLinksHtml}
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
@@ -3969,7 +4054,7 @@ ${tgHashtags}`;
       // Build inline keyboard buttons array
       const inlineButtons: { text: string; url: string }[] = [];
       if (tgButtonLink) {
-        inlineButtons.push({ text: tgDefaultButtonName || "📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥", url: tgButtonLink });
+        inlineButtons.push({ text: tgDefaultButtonName || "‣ 𝗪𝗔𝗧𝗖𝗛 & 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗 ⎙", url: tgButtonLink });
       }
       tgButtons.forEach(btn => {
         if (btn.name.trim() && btn.url.trim()) {
@@ -4084,7 +4169,7 @@ ${tgHashtags}`;
 ▶️ <a href="${url}">Tap to Watch Now</a></blockquote>`;
     }).join("\n\n");
 
-    const headerText = escapeHtmlBasic(String(tgBulkHeader || "").replace(/<[^>]+>/g, "").trim()) || "Daily Drops";
+    const headerText = escapeHtmlBasic(String(tgBulkHeader || "").replace(/<[^>]+>/g, "").trim()) || "ICF ANIME • Daily Drops";
     const caption = `✨ <b>${headerText}</b> ✨
 ━━━━━━━━━━━━━━━━━━━
 
@@ -4289,10 +4374,8 @@ ${tgBulkFooter}
     // Auto-set dub type from content
     if (cType === "webseries") {
       const ws = webseriesData.find(s => s.id === cId);
-      setTgDubType(ws?.dubType === "fandub" ? "fandub" : "official");
-      // Auto-set language from content
-      if (ws?.language) setTgLanguages(ws.language);
-      // Auto-fetch exact genres/rating from TMDB/AniList if tmdbId available
+      setTgDubType(coerceDubType(ws?.dubType));
+      if (ws) setTgLanguages(buildTgAudioLine(ws));
       if (ws?.tmdbId) {
         setTgImdbId(String(ws.tmdbId));
         const { genres, rating } = await resolveTelegramGenresAndRating(String(ws.tmdbId), ws.title || release.title || "");
@@ -4304,8 +4387,8 @@ ${tgBulkFooter}
       }
     } else if (cType === "movie") {
       const mv = moviesData.find(m => m.id === cId);
-      setTgDubType(mv?.dubType === "fandub" ? "fandub" : "official");
-      if (mv?.language) setTgLanguages(mv.language);
+      setTgDubType(coerceDubType(mv?.dubType));
+      if (mv) setTgLanguages(buildTgAudioLine(mv));
       if (mv?.tmdbId) {
         setTgImdbId(String(mv.tmdbId));
         const { genres, rating } = await resolveTelegramGenresAndRating(String(mv.tmdbId), mv.title || release.title || "");
@@ -4383,7 +4466,7 @@ ${tgBulkFooter}
       <div className="min-h-screen bg-[#0D0D1A] flex items-center justify-center p-4">
         <div className={`${glassCard} p-8 w-full max-w-[400px]`}>
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4"></div>
+            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4">ICF</div>
             <h1 className="text-xl font-bold text-white">Create Admin PIN</h1>
             <p className="text-sm text-zinc-400 mt-1">Set up your admin PIN</p>
           </div>
@@ -4535,7 +4618,7 @@ ${tgBulkFooter}
           <button onClick={() => setSidebarOpen(true)} className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center hover:bg-indigo-500/20 transition-colors">
             <Menu size={18} />
           </button>
-          <span className="text-xl font-black text-indigo-500"></span>
+          <span className="text-xl font-black text-indigo-500">ICF</span>
           <h1 className="text-sm font-semibold text-zinc-200">{sectionTitles[activeSection]}</h1>
         </div>
         <div className="flex items-center gap-2 relative">
@@ -4797,7 +4880,7 @@ ${tgBulkFooter}
               <button onClick={() => setSeriesTab("ws-add")} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-add" ? "bg-indigo-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
                 Add New
               </button>
-              <button onClick={() => { setSeriesTab("ws-manual"); setSeriesEditId(""); setSeriesForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official", weeklyEnabled: false, weeklyEveryDays: 7, weeklyDaysSinceLast: 0 }); setSeasonsData([{ name: "Season 1", seasonNumber: 1, episodes: [] }]); setSeriesCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
+              <button onClick={() => { const initSeasons = [{ name: "Season 1", seasonNumber: 1, episodes: [] as any[] }]; const lid = _newLangId(); setSeriesTab("ws-manual"); setSeriesEditId(""); setSeriesForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official", weeklyEnabled: false, weeklyEveryDays: 7, weeklyDaysSinceLast: 0 }); setSeasonsData(initSeasons); setSeriesCast([]); setAudioLangs([{ id: lid, name: "Hindi", isDefault: true, seasons: initSeasons, createdAt: Date.now() }]); setActiveLangId(lid); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
                 Manual
               </button>
               {/* Weekly EP feature removed */}
@@ -4931,7 +5014,7 @@ ${tgBulkFooter}
                       </div>
                       <div className="mb-4">
                         <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Language</label>
-                        <select value={seriesForm.language || "Hindi"} onChange={e => setSeriesForm({ ...seriesForm, language: e.target.value })} className={selectClass}>
+                        <select value={seriesForm.language || "English"} onChange={e => setSeriesForm({ ...seriesForm, language: e.target.value })} className={selectClass}>
                           {languageOptions.map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
                       </div>
@@ -4952,6 +5035,10 @@ ${tgBulkFooter}
                           <button type="button" onClick={() => setSeriesForm({ ...seriesForm, dubType: "fandub" })}
                             className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${seriesForm.dubType === "fandub" ? "bg-orange-600 border-orange-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
                             𝐅𝐚𝐧𝐝𝐮𝐛
+                          </button>
+                          <button type="button" onClick={() => setSeriesForm({ ...seriesForm, dubType: "none" })}
+                            className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${seriesForm.dubType === "none" ? "bg-zinc-600 border-zinc-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                            𝐍𝐨𝐧𝐞
                           </button>
                         </div>
                       </div>
@@ -4979,7 +5066,97 @@ ${tgBulkFooter}
                       )}
                     </div>
 
+                    {/* 🎙️ Audio Languages tab bar — sits directly above Seasons & Episodes. Selecting a tab loads that language's seasons into the editor below. */}
+                    <div className={`${glassCard} p-3 mb-3`}>
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="text-[13px] font-semibold flex items-center gap-1.5">🎙️ Audio Language</div>
+                        <button onClick={() => setShowAddLang(v => !v)} className={`${btnSecondary} px-3 py-1.5 text-[11px]`}>
+                          <Plus size={11} className="mr-1" /> Language
+                        </button>
+                      </div>
+                      {showAddLang && (
+                        <div className="flex gap-2 mb-2">
+                          <input
+                            autoFocus
+                            value={newLangName}
+                            onChange={e => setNewLangName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') addLang(newLangName);
+                              if (e.key === 'Escape') { setShowAddLang(false); setNewLangName(''); }
+                            }}
+                            placeholder="Language name (e.g. Hindi, English, Japanese, Bengali)"
+                            className={`${inputClass} flex-1 text-[11px]`}
+                          />
+                          <button onClick={() => addLang(newLangName)} className={`${btnPrimary} px-3 py-1.5 text-[11px]`}>Add</button>
+                          <button onClick={() => { setShowAddLang(false); setNewLangName(''); }} className="px-2.5 py-1.5 rounded-lg bg-zinc-700/60 text-zinc-200 text-[11px]"><X size={11} /></button>
+                        </div>
+                      )}
+                      {audioLangs.length === 0 ? (
+                        <p className="text-[10px] text-zinc-500 text-center py-2">No languages yet. Click <strong>+ Language</strong> to add one.</p>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          {audioLangs.map((l, idx) => {
+                            const isActive = l.id === activeLangId;
+                            return (
+                              <div key={l.id} className={`flex items-center gap-1 rounded-lg border transition-all px-1 ${isActive ? 'bg-emerald-500/25 border-emerald-400/60' : 'bg-black/30 border-white/10 hover:border-emerald-500/30'}`}>
+                                <div className="flex flex-col">
+                                  <button onClick={() => moveLang(l.id, -1)} disabled={idx === 0} title="Move up" className="p-0.5 text-zinc-500 hover:text-emerald-300 disabled:opacity-20"><ArrowUp size={9} /></button>
+                                  <button onClick={() => moveLang(l.id, 1)} disabled={idx === audioLangs.length - 1} title="Move down" className="p-0.5 text-zinc-500 hover:text-emerald-300 disabled:opacity-20"><ArrowDown size={9} /></button>
+                                </div>
+                                {editingLangId === l.id ? (
+                                  <input
+                                    autoFocus
+                                    value={editingLangName}
+                                    onChange={e => setEditingLangName(e.target.value)}
+                                    onBlur={() => {
+                                      const nm = editingLangName.trim();
+                                      if (nm) renameLang(l.id, nm);
+                                      setEditingLangId(""); setEditingLangName("");
+                                    }}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        const nm = editingLangName.trim();
+                                        if (nm) renameLang(l.id, nm);
+                                        setEditingLangId(""); setEditingLangName("");
+                                      } else if (e.key === 'Escape') {
+                                        setEditingLangId(""); setEditingLangName("");
+                                      }
+                                    }}
+                                    className="flex-1 px-1.5 py-1.5 text-[11px] font-semibold bg-black/40 border border-emerald-500/50 rounded text-white outline-none"
+                                  />
+                                ) : (
+                                  <button onClick={() => switchLang(l.id)} className="flex-1 pl-1 pr-1.5 py-1.5 text-[11px] font-semibold text-white whitespace-nowrap text-left">
+                                    {l.name}
+                                    {l.isDefault && <span className="ml-1 text-[8px] font-bold text-amber-300 bg-amber-500/20 px-1 py-0.5 rounded">DEFAULT</span>}
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => { setEditingLangId(l.id); setEditingLangName(l.name); }}
+                                  title="Rename language"
+                                  className="p-1 text-zinc-500 hover:text-emerald-300"
+                                >
+                                  <Edit size={10} />
+                                </button>
+                                <button onClick={() => setDefaultLang(l.id)} title="Set as default" className={`p-1 ${l.isDefault ? 'text-amber-300' : 'text-zinc-500 hover:text-amber-300'}`}>
+                                  <Star size={10} fill={l.isDefault ? 'currentColor' : 'none'} />
+                                </button>
+                                <button onClick={() => deleteLang(l.id)} title="Delete language" className="p-1 pr-2 text-zinc-500 hover:text-red-400">
+                                  <Trash2 size={10} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {audioLangs.length > 0 && activeLangId && (
+                        <p className="text-[10px] text-emerald-300/70 mt-2">
+                          Editing seasons & episodes for: <strong className="text-emerald-200">{audioLangs.find(l => l.id === activeLangId)?.name}</strong>
+                        </p>
+                      )}
+                    </div>
+
                     <div id="seasons-episodes-section" className={`${glassCard} p-4 mb-4 scroll-mt-4`}>
+
                       <div className="flex justify-between items-center mb-3.5">
                         <div className="text-base font-semibold flex items-center gap-2.5">📋 Seasons & Episodes</div>
                         <div className="flex gap-1.5 items-center">
@@ -5302,6 +5479,11 @@ ${tgBulkFooter}
                       return <InlineUrlChanger />;
                     })()}
 
+                    {/* 🎙️ Audio Languages tab bar now rendered just above Seasons & Episodes */}
+
+
+
+
                     {/* Export JSON for current series */}
                     {seasonsData.length > 0 && (
                       <div className={`${glassCard} p-4 mb-4`}>
@@ -5556,8 +5738,8 @@ ${tgBulkFooter}
                       } catch {
                         setTgTotalEpisodes(String(season?.episodes?.length || 0));
                       }
-                      setTgDubType(ctxForm.dubType === "fandub" ? "fandub" : "official");
-                      if (ctxForm.language) setTgLanguages(ctxForm.language);
+                      setTgDubType(coerceDubType(ctxForm.dubType));
+                      setTgLanguages(buildTgAudioLine(ctxForm));
                       if (ctxForm.category) setTgGenres(ctxForm.category);
                       if (ctxForm.rating) setTgRating(String(ctxForm.rating));
                       if (ctxForm.tmdbId) {
@@ -5655,8 +5837,8 @@ ${tgBulkFooter}
                               setTgPosterUrl(backdrop.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
                               if (ws.rating) setTgRating(String(ws.rating));
                               if (ws.category) setTgGenres(ws.category);
-                              if (ws.language) setTgLanguages(ws.language);
-                              setTgDubType(ws.dubType === "fandub" ? "fandub" : "official");
+                              setTgLanguages(buildTgAudioLine(ws));
+                              setTgDubType(coerceDubType(ws.dubType));
                               setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(seriesId)}`);
                               setTgSelectedAnimeId(String(seriesId));
                               (async () => {
@@ -5827,7 +6009,7 @@ ${tgBulkFooter}
                       </div>
                       <div className="mb-4">
                         <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Language</label>
-                        <select value={movieForm.language || "Hindi"} onChange={e => setMovieForm({ ...movieForm, language: e.target.value })} className={selectClass}>
+                        <select value={movieForm.language || "English"} onChange={e => setMovieForm({ ...movieForm, language: e.target.value })} className={selectClass}>
                           {languageOptions.map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
                       </div>
@@ -5848,6 +6030,10 @@ ${tgBulkFooter}
                           <button type="button" onClick={() => setMovieForm({ ...movieForm, dubType: "fandub" })}
                             className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${movieForm.dubType === "fandub" ? "bg-orange-600 border-orange-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
                             𝐅𝐚𝐧𝐝𝐮𝐛
+                          </button>
+                          <button type="button" onClick={() => setMovieForm({ ...movieForm, dubType: "none" })}
+                            className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${movieForm.dubType === "none" ? "bg-zinc-600 border-zinc-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                            𝐍𝐨𝐧𝐞
                           </button>
                         </div>
                       </div>
@@ -6320,7 +6506,7 @@ ${tgBulkFooter}
                 </div>
                 <button onClick={() => {
                   const days = parseInt(newCodeDays) || 30;
-                  const code = ""+"" + Math.random().toString(36).substring(2, 8).toUpperCase() + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+                  const code = "RS-" + Math.random().toString(36).substring(2, 8).toUpperCase() + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
                   const codeData = {
                     code,
                     days,
@@ -6672,6 +6858,7 @@ ${tgBulkFooter}
                           return (
                           <div key={`${r.type}_${r.id}`} className={`flex items-center gap-2.5 p-2 cursor-pointer hover:bg-blue-500/20 rounded-lg m-1 ${tgSelectedRelease === r.id ? "bg-blue-500/30" : ""}`}
                             onClick={async () => {
+                              setTgContentType(r.type === "movie" ? "movie" : "series");
                               if (matching) {
                                 fillTelegramFromRelease(matching.id);
                               } else {
@@ -6686,8 +6873,8 @@ ${tgBulkFooter}
                                   setTgPosterUrl(backdrop.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
                                   if ((fullData as any).rating) setTgRating(String((fullData as any).rating));
                                   if ((fullData as any).category) setTgGenres((fullData as any).category);
-                                  if ((fullData as any).language) setTgLanguages((fullData as any).language);
-                                  setTgDubType((fullData as any).dubType === "fandub" ? "fandub" : "official");
+                                  setTgLanguages(buildTgAudioLine(fullData));
+                                  setTgDubType(coerceDubType((fullData as any).dubType));
                                   setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(r.id)}`);
                                   setTgSelectedAnimeId(String(r.id));
                                   try {
@@ -6747,6 +6934,44 @@ ${tgBulkFooter}
                     </button>
                   </div>
                 </div>
+                {/* Content Type (Movie / Series) */}
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5">কন্টেন্ট টাইপ</label>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setTgContentType("series")}
+                      className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgContentType === "series" ? "bg-blue-600 border-blue-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                      📺 Series
+                    </button>
+                    <button type="button" onClick={() => setTgContentType("movie")}
+                      className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgContentType === "movie" ? "bg-purple-600 border-purple-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                      🎬 Movie
+                    </button>
+                  </div>
+                </div>
+                {/* Movie number — only for movies */}
+                {tgContentType === "movie" && (
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5">মুভি নাম্বার (ঐচ্ছিক)</label>
+                    <input value={tgMovieNumber} onChange={e => setTgMovieNumber(e.target.value)} className={inputClass} placeholder="01" />
+                  </div>
+                )}
+                {/* Status */}
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5">স্ট্যাটাস</label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {([
+                      { v: "upcoming", l: "🔜 Upcoming", c: "bg-amber-600 border-amber-500" },
+                      { v: "ongoing", l: "🟢 Ongoing", c: "bg-green-600 border-green-500" },
+                      { v: "complete", l: "✅ Complete", c: "bg-blue-600 border-blue-500" },
+                      { v: "finished", l: "🏁 Finished", c: "bg-zinc-600 border-zinc-500" },
+                    ] as const).map(s => (
+                      <button key={s.v} type="button" onClick={() => setTgStatus(s.v)}
+                        className={`py-2 rounded-lg text-[10px] font-semibold border transition-all ${tgStatus === s.v ? `${s.c} text-white` : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                        {s.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-zinc-400 mb-1.5">সিজন</label>
@@ -6796,29 +7021,11 @@ ${tgBulkFooter}
                       className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgDubType === "fandub" ? "bg-orange-600 border-orange-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
                       𝐅𝐚𝐧𝐝𝐮𝐛
                     </button>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs text-zinc-400">Status</label>
-                    <label className="flex items-center gap-1.5 text-[10px] text-zinc-500 cursor-pointer">
-                      <input type="checkbox" checked={tgStatusAuto} onChange={e => setTgStatusAuto(e.target.checked)} className="accent-emerald-500" />
-                      Auto (IMDb match)
-                    </label>
-                  </div>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => { setTgStatusAuto(false); setTgStatus("ongoing"); }}
-                      className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgStatus === "ongoing" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
-                      🟢 Oɴɢᴏɪɴɢ
-                    </button>
-                    <button type="button" onClick={() => { setTgStatusAuto(false); setTgStatus("complete"); }}
-                      className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgStatus === "complete" ? "bg-blue-600 border-blue-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
-                      ✅ Cᴏᴍᴘʟᴇᴛᴇ
+                    <button type="button" onClick={() => setTgDubType("none")}
+                      className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgDubType === "none" ? "bg-zinc-600 border-zinc-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
+                      𝐍𝐨𝐧𝐞
                     </button>
                   </div>
-                  {tgStatusAuto && (
-                    <p className="text-[10px] text-zinc-500 mt-1.5">Auto: {tgNewEpAdded || "?"} / {tgTotalEpisodes || "?"} → <span className={tgStatus === "complete" ? "text-blue-400" : "text-emerald-400"}>{tgStatus}</span></p>
-                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-zinc-400 mb-1.5">Hashtags</label>
@@ -6835,7 +7042,7 @@ ${tgBulkFooter}
                 {tgButtonLink && (
                   <div>
                     <label className="block text-xs text-zinc-400 mb-1.5">ডিফল্ট বাটন নাম</label>
-                    <input value={tgDefaultButtonName} onChange={e => setTgDefaultButtonName(e.target.value)} className={inputClass} placeholder="📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥" />
+                    <input value={tgDefaultButtonName} onChange={e => setTgDefaultButtonName(e.target.value)} className={inputClass} placeholder="‣ 𝗪𝗔𝗧𝗖𝗛 & 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗 ⎙" />
                   </div>
                 )}
                 {/* Extra buttons */}
@@ -6924,25 +7131,41 @@ ${tgBulkFooter}
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 )}
                 <div className="font-mono text-[11px] text-zinc-300 whitespace-pre-line leading-relaxed">
-{`♨️ Tɪᴛᴇʟ;- ${tgTitle || '{title}'}
+{(() => {
+  const statusPreviewMap: Record<string, string> = {
+    upcoming: "Uᴘᴄᴏᴍɪɴɢ 🔜",
+    ongoing: "Oɴɢᴏɪɴɢ 🟢",
+    complete: "Cᴏᴍᴘʟᴇᴛᴇ ✅",
+    finished: "Fɪɴɪsʜᴇᴅ 🏁",
+  };
+  const isMovieP = tgContentType === "movie";
+  const mNumP = (tgMovieNumber || "").trim();
+  const mLabelP = mNumP ? `Mᴏᴠɪᴇ | ${mNumP}` : "Mᴏᴠɪᴇ";
+  const typeBlockP = isMovieP
+    ? `│ ✦ Tʏᴘᴇ : ${mLabelP}`
+    : `│ ✦ Sᴇᴀsᴏɴ : ${tgSeason || '{season}'}\n│ ✦ Eᴘɪsᴏᴅᴇs : ${tgTotalEpisodes || '{total}'}`;
+  const addedP = isMovieP
+    ? `📌 ${mLabelP} Aᴅᴅᴇᴅ`
+    : formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]));
+  return `♨️ Tɪᴛᴇʟ;- ${tgTitle || '{title}'}
 ┌──────────────────
-│ ✦ Sᴇᴀsᴏɴ : ${tgSeason || '{season}'}
-│ ✦ Eᴘɪsᴏᴅᴇs : ${tgTotalEpisodes || '{total}'}
-│ ✦ Aᴜᴅɪᴏ : 🎧 ${tgLanguages} ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}
+${typeBlockP}
+│ ✦ Aᴜᴅɪᴏ : 🎧 ${tgAudioWithDub(tgLanguages, tgDubType)}
 │ ✦ Qᴜᴀʟɪᴛʏ : ${tgQuality}
 │ ✦ Rᴀᴛɪɴɢ : ⭐ ${tgRating}/10
+│ ✦ Sᴛᴀᴛᴜs : ${statusPreviewMap[tgStatus] || statusPreviewMap.ongoing}
 │ ✦ Gᴇɴʀᴇs : ${tgGenres}
-│ ✦ Sᴛᴀᴛᴜs : ${tgStatus === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢"}
 └──────────────────
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
-📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
-▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰`}
+${addedP}
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰`;
+})()}
 {tgFooterLinks.map(l => `\n๏ ${l.emoji} ${l.label} ${l.emoji}\n   ${l.url}`).join("")}
 {`\n▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n${tgHashtags}`}
                 </div>
                 {tgButtonLink && (
                   <div className="mt-3 bg-blue-500/20 border border-blue-500/40 rounded-lg py-2.5 text-center text-[12px] font-bold text-blue-300">
-                    {tgDefaultButtonName || "📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥"}
+                    {tgDefaultButtonName || "‣ 𝗪𝗔𝗧𝗖𝗛 & 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗 ⎙"}
                   </div>
                 )}
                 {tgButtons.filter(b => b.name.trim()).map((btn, i) => (
@@ -9128,7 +9351,7 @@ const AdminLiveSupportSection = ({
         role: "admin",
         content: replyText.trim(),
         timestamp: Date.now(),
-        userName: "Admin",
+        userName: "Admin (RS)",
       });
       await update(ref(db, `supportChats/${selectedChat}/meta`), {
         lastMessage: `Admin: ${replyText.trim()}`,
@@ -9295,7 +9518,7 @@ const AdminCommentsSection = ({
       const replyRef = push(ref(db, `comments/${animeId}/${commentId}/replies`));
       await set(replyRef, {
         userId: "admin",
-        userName: "Admin",
+        userName: "Admin (RS)",
         text,
         timestamp: now,
       });
@@ -9720,20 +9943,6 @@ const AutoImportSection = ({
 };
 
 // AnimeSalt Manager Section sub-component
-const normalizeAnimeSaltManagerType = (value: unknown): "series" | "movies" => {
-  const raw = String(value || "").trim().toLowerCase();
-  return raw === "movie" || raw === "movies" ? "movies" : "series";
-};
-
-const normalizeAnimeSaltManagerItem = (item: any) => ({
-  ...item,
-  slug: String(item?.slug || item?.id || "").trim(),
-  title: String(item?.title || item?.name || item?.slug || "Untitled").trim(),
-  poster: String(item?.poster || item?.image || item?.thumb || "").trim(),
-  year: String(item?.year || "").trim(),
-  type: normalizeAnimeSaltManagerType(item?.type),
-});
-
 const AnimeSaltManagerSection = ({
   glassCard, inputClass, btnPrimary, btnSecondary, categoryList, selectClass,
 }: {
@@ -9750,13 +9959,6 @@ const AnimeSaltManagerSection = ({
   const [removingSlug, setRemovingSlug] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [animeSaltGlobalEnabled, setAnimeSaltGlobalEnabled] = useState(true);
-
-  // Episode preloader state
-  const [preloading, setPreloading] = useState(false);
-  const [preloadProgress, setPreloadProgress] = useState({ current: 0, total: 0, currentTitle: "" });
-  const [preloadFailed, setPreloadFailed] = useState<{ slug: string; title: string; reason: string }[]>([]);
-  const [preloadDone, setPreloadDone] = useState(false);
-  const [preloadDeleting, setPreloadDeleting] = useState(false);
 
   // Listen to global AnimeSalt enabled state
   useEffect(() => {
@@ -9830,7 +10032,7 @@ const AnimeSaltManagerSection = ({
     try {
       const result = await animeSaltApi.browseAll();
       if (result.success && result.items) {
-        setAllItems(result.items.map(normalizeAnimeSaltManagerItem).filter((item: any) => item.slug));
+        setAllItems(result.items);
       }
     } catch (err) {
       console.error('AnimeSalt load failed:', err);
@@ -10458,13 +10660,13 @@ const AnimeSaltManagerSection = ({
     if (!urlFetchedItem) return;
     if (!addCategory) { toast.error('ক্যাটাগরি সিলেক্ট করুন!'); return; }
     // Use same addItem flow with TMDB
-    const item = normalizeAnimeSaltManagerItem({
+    const item = {
       slug: urlFetchedItem.slug,
       title: urlFetchedItem.title,
       poster: urlFetchedItem.poster,
       type: urlFetchedItem.type,
       year: urlFetchedItem.year,
-    });
+    };
     await addItem(item);
     // Also add to allItems so it shows in the grid
     setAllItems(prev => {
@@ -10484,111 +10686,20 @@ const AnimeSaltManagerSection = ({
     }
   };
 
-  const normalizedAllItems = useMemo(
-    () => allItems.map(normalizeAnimeSaltManagerItem).filter((item) => item.slug),
-    [allItems],
-  );
-
-  const addedItems = useMemo(
-    () => Object.entries(selectedItems).map(([slug, item]) => normalizeAnimeSaltManagerItem({ slug, ...item })),
-    [selectedItems],
-  );
-
   const filteredItems = useMemo(() => {
-    let items = filterType === 'added' ? addedItems : normalizedAllItems;
+    let items = allItems;
     if (filterType === 'series') items = items.filter(i => i.type === 'series');
     else if (filterType === 'movies') items = items.filter(i => i.type === 'movies');
+    else if (filterType === 'added') items = items.filter(i => isAdded(i.slug));
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      items = items.filter((item) => {
-        const haystack = [item.title, item.slug, selectedItems[item.slug]?.title, selectedItems[item.slug]?.category]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        return haystack.includes(q);
-      });
+      items = items.filter(i => i.title?.toLowerCase().includes(q));
     }
     return items;
-  }, [addedItems, filterType, normalizedAllItems, searchQuery, selectedItems]);
+  }, [allItems, filterType, searchQuery, selectedItems]);
 
-  const addedCount = addedItems.length;
-
-  // ==================== EPISODE PRELOADER ====================
-  const runEpisodePreloader = async () => {
-    const entries = Object.entries(selectedItems);
-    if (entries.length === 0) {
-      toast.error("কোনো এড করা আইটেম নেই");
-      return;
-    }
-    if (!confirm(`${entries.length}টি আইটেমের এপিসোড চেক করা হবে। কিছু সময় লাগতে পারে। শুরু করব?`)) return;
-    setPreloading(true);
-    setPreloadDone(false);
-    setPreloadFailed([]);
-    const failed: { slug: string; title: string; reason: string }[] = [];
-    let i = 0;
-    for (const [slug, data] of entries) {
-      i++;
-      const title = (data as any)?.title || slug;
-      setPreloadProgress({ current: i, total: entries.length, currentTitle: title });
-      try {
-        const isMovie = (data as any)?.type === "movies";
-        let result: any;
-        if (isMovie) {
-          result = await animeSaltApi.getMovie(slug);
-          if (!result?.success || !result?.data) result = await animeSaltApi.getSeries(slug);
-        } else {
-          result = await animeSaltApi.getSeries(slug);
-          if (!result?.success || !result?.data?.seasons?.length) result = await animeSaltApi.getMovie(slug);
-        }
-        const data2 = result?.data;
-        const hasEpisodes = !!(data2?.seasons?.length && data2.seasons.some((s: any) => s?.episodes?.length > 0));
-        const hasEmbed = !!(data2?.embedUrl || data2?.embedUrls?.length || data2?.allEmbeds?.length || data2?.links?.length);
-        if (!result?.success) failed.push({ slug, title, reason: "ফেচ ব্যর্থ" });
-        else if (!hasEpisodes && !hasEmbed) failed.push({ slug, title, reason: "কোনো এপিসোড/লিংক পাওয়া যায়নি" });
-      } catch (e: any) {
-        failed.push({ slug, title, reason: e?.message || "ফেচ এরর" });
-      }
-    }
-    setPreloadFailed(failed);
-    setPreloadDone(true);
-    setPreloading(false);
-    toast.success(`✅ চেক সম্পন্ন: ${entries.length - failed.length} OK, ${failed.length} ব্যর্থ`);
-  };
-
-  const downloadFailedAsText = () => {
-    if (preloadFailed.length === 0) return;
-    const header = `Failed AnimeSalt Episodes Report\nGenerated: ${new Date().toLocaleString()}\nTotal Failed: ${preloadFailed.length}\n${"=".repeat(50)}\n\n`;
-    const body = preloadFailed.map((f, idx) => `${idx + 1}. ${f.title}\n   Slug: ${f.slug}\n   Reason: ${f.reason}\n`).join("\n");
-    const blob = new Blob([header + body], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `failed-episodes-${Date.now()}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const deleteAllFailed = async () => {
-    if (preloadFailed.length === 0) return;
-    if (!confirm(`${preloadFailed.length}টি ব্যর্থ পোস্ট সম্পূর্ণভাবে ডিলিট হবে (ইউজার + অ্যাডমিন প্যানেল থেকে)। নিশ্চিত?`)) return;
-    setPreloadDeleting(true);
-    let ok = 0;
-    for (const f of preloadFailed) {
-      try {
-        await remove(ref(db, `animesaltSelected/${f.slug}`));
-        ok++;
-      } catch {}
-    }
-    setPreloadDeleting(false);
-    setPreloadFailed([]);
-    setPreloadDone(false);
-    toast.success(`✅ ${ok}টি পোস্ট ডিলিট হয়েছে!`);
-  };
-
-
+  const addedCount = Object.keys(selectedItems).length;
 
   return (
     <div>
@@ -10939,78 +11050,6 @@ const AnimeSaltManagerSection = ({
         </div>
       )}
 
-      {/* Episode Preloader */}
-      <div className={`${glassCard} p-4 mb-4 border border-amber-500/30`}>
-        <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
-          <RefreshCw size={14} className="text-amber-400" /> 🚀 Episode Preloader
-        </h3>
-        <p className="text-[10px] text-zinc-400 mb-3">
-          প্রত্যেক এড করা সিরিজ/মুভির এপিসোড AnimeSalt থেকে রিফ্রেশ করে চেক করবে। যেগুলোর এপিসোড লোড হয়নি সেগুলোর লিস্ট দেখাবে, টেক্সট ফাইল ডাউনলোড করা যাবে, এবং এক ক্লিকে ডিলিট করা যাবে।
-        </p>
-
-        {preloading && (
-          <div className="mb-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
-            <div className="flex items-center justify-between text-[11px] mb-2">
-              <span className="text-amber-300 font-semibold">চলছে... {preloadProgress.current}/{preloadProgress.total}</span>
-              <span className="text-amber-400">{Math.round((preloadProgress.current / Math.max(preloadProgress.total, 1)) * 100)}%</span>
-            </div>
-            <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all"
-                style={{ width: `${(preloadProgress.current / Math.max(preloadProgress.total, 1)) * 100}%` }} />
-            </div>
-            <p className="text-[10px] text-zinc-400 mt-2 truncate">📡 {preloadProgress.currentTitle}</p>
-          </div>
-        )}
-
-        <button onClick={runEpisodePreloader} disabled={preloading || addedCount === 0}
-          className={`w-full py-2.5 rounded-xl text-[12px] font-bold flex items-center justify-center gap-2 transition-all ${
-            preloading || addedCount === 0
-              ? "bg-zinc-700/50 text-zinc-500 cursor-not-allowed"
-              : "bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:shadow-[0_4px_15px_rgba(245,158,11,0.4)]"
-          }`}>
-          {preloading ? <><RefreshCw size={14} className="animate-spin" /> চেক হচ্ছে...</> : <><Zap size={14} /> সব এপিসোড চেক করুন ({addedCount})</>}
-        </button>
-
-        {preloadDone && (
-          <div className="mt-3 p-3 rounded-xl bg-[#151521] border border-white/10">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[12px] font-semibold">
-                {preloadFailed.length === 0
-                  ? <span className="text-green-400">✅ সব এপিসোড ঠিকঠাক লোড হচ্ছে!</span>
-                  : <span className="text-red-400">❌ {preloadFailed.length}টি আইটেমের এপিসোড লোড হয়নি</span>}
-              </p>
-            </div>
-
-            {preloadFailed.length > 0 && (
-              <>
-                <div className="max-h-[200px] overflow-y-auto space-y-1.5 mb-3 pr-1">
-                  {preloadFailed.map((f, idx) => (
-                    <div key={f.slug} className="flex items-start gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                      <span className="text-[10px] text-red-400 font-bold flex-shrink-0">{idx + 1}.</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-semibold text-white truncate">{f.title}</p>
-                        <p className="text-[9px] text-red-300/70 truncate">{f.slug} • {f.reason}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={downloadFailedAsText}
-                    className="flex-1 py-2 rounded-lg text-[11px] font-bold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/40 transition-all flex items-center justify-center gap-1.5">
-                    <Download size={12} /> টেক্সট ফাইল
-                  </button>
-                  <button onClick={deleteAllFailed} disabled={preloadDeleting}
-                    className="flex-1 py-2 rounded-lg text-[11px] font-bold bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/40 transition-all flex items-center justify-center gap-1.5">
-                    {preloadDeleting ? <RefreshCw size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                    সব ডিলিট করুন
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* AnimeSalt Custom URL Config */}
       <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -11056,7 +11095,7 @@ const AnimeSaltManagerSection = ({
             <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${animeSaltGlobalEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
         </div>
-        <p className="text-[10px] text-zinc-400 mt-2">বন্ধ করলে সাইটে AnimeSalt-এর সকল কন্টেন্ট হাইড হয়ে যাবে। শুধু সাইট কন্টেন্ট দেখাবে।</p>
+        <p className="text-[10px] text-zinc-400 mt-2">বন্ধ করলে সাইটে AnimeSalt-এর সকল কন্টেন্ট হাইড হয়ে যাবে। শুধু RS কন্টেন্ট দেখাবে।</p>
       </div>
 
       <div className={`${glassCard} p-4 mb-4`}>
@@ -11979,8 +12018,8 @@ const ImageRefreshSection = ({
     const allContent: { title: string; fbPath: string; searchType: string; source: string }[] = [];
 
     if (mode === "rs" || mode === "all") {
-      webseriesData.forEach(w => allContent.push({ title: w.title, fbPath: `webseries/${w.id}`, searchType: "tv", source: "" }));
-      moviesData.forEach(m => allContent.push({ title: m.title, fbPath: `movies/${m.id}`, searchType: "movie", source: "" }));
+      webseriesData.forEach(w => allContent.push({ title: w.title, fbPath: `webseries/${w.id}`, searchType: "tv", source: "RS" }));
+      moviesData.forEach(m => allContent.push({ title: m.title, fbPath: `movies/${m.id}`, searchType: "movie", source: "RS" }));
     }
 
     if (mode === "animesalt" || mode === "all") {
@@ -12058,7 +12097,7 @@ const ImageRefreshSection = ({
             {(["animesalt", "rs", "all"] as const).map(m => (
               <button key={m} onClick={() => setMode(m)}
                 className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-colors ${mode === m ? "bg-indigo-600 border-indigo-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400 hover:text-white"}`}>
-                {m === "animesalt" ? `P2 (${asCount})` : m === "rs" ? `Primary (${rsCount})` : `সব (${rsCount + asCount})`}
+                {m === "animesalt" ? `P2 (${asCount})` : m === "rs" ? `RS (${rsCount})` : `সব (${rsCount + asCount})`}
               </button>
             ))}
           </div>
@@ -12107,7 +12146,7 @@ const ImageRefreshSection = ({
   );
 };
 
-// Episode Name Refresh Section - fetch episode names from TMDB 
+// Episode Name Refresh Section - fetch episode names from TMDB (RS only)
 const EpisodeNameRefreshSection = ({
   glassCard, btnPrimary, webseriesData,
 }: {
@@ -12235,7 +12274,7 @@ const EpisodeNameRefreshSection = ({
         <List size={14} className="text-amber-400" /> এপিসোড নাম রিফ্রেশ (TMDB)
       </h3>
       <p className="text-[11px] text-zinc-400 mb-3">
-        ওয়েবসিরিজের এপিসোডের নাম TMDB থেকে আপডেট করবে। শুধু খালি বা জেনেরিক নাম আপডেট হবে।
+        RS ওয়েবসিরিজের এপিসোডের নাম TMDB থেকে আপডেট করবে। শুধু খালি বা জেনেরিক নাম আপডেট হবে।
       </p>
 
       {!refreshing && !done && (
@@ -12744,7 +12783,7 @@ const LinkCheckerSection = ({
   return (
     <div className={`${glassCard} p-4 mb-4`}>
       <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-        <Link size={14} className="text-red-400" /> লিংক চেকার
+        <Link size={14} className="text-red-400" /> লিংক চেকার (RS)
       </h3>
       <p className="text-[11px] text-zinc-400 mb-3">
         ইউজার প্লেয়ারের মতো CDN/Direct/Proxy রুটে ভিডিও চালিয়ে রিয়েল প্লেব্যাক টেস্ট করবে। যেগুলো কোনো রুটেই প্লে হবে না সেগুলোই ব্রোকেন দেখাবে।

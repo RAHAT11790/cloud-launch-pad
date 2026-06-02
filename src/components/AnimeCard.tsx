@@ -4,6 +4,7 @@ import type { AnimeItem } from "@/data/animeData";
 import { db, ref, set, remove, onValue } from "@/lib/firebase";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
 import { useBranding } from "@/hooks/useBranding";
+import { getStoredUser, isGuestUser, hasGuestWatchlistItem, setGuestWatchlistItemNotify, removeGuestWatchlistItemNotify, subscribeGuestWatchlist } from "@/lib/guestSession";
 
 interface AnimeCardProps {
   anime: AnimeItem;
@@ -14,14 +15,17 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const branding = useBranding();
 
-  const getUserId = (): string | null => {
-    try { const u = localStorage.getItem("rsanime_user"); if (u) return JSON.parse(u).id; } catch {} return null;
-  };
+  const getUserId = (): string | null => getStoredUser()?.id || null;
 
   const userId = getUserId();
 
   useEffect(() => {
     if (!userId) return;
+    if (isGuestUser()) {
+      setIsInWatchlist(hasGuestWatchlistItem(anime.id));
+      const unsub = subscribeGuestWatchlist(() => setIsInWatchlist(hasGuestWatchlistItem(anime.id)));
+      return () => unsub();
+    }
     const wlRef = ref(db, `users/${userId}/watchlist/${anime.id}`);
     const unsub = onValue(wlRef, (snap) => setIsInWatchlist(snap.exists()));
     return () => unsub();
@@ -31,12 +35,15 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
     e.stopPropagation();
     if (!userId) return;
     if (isInWatchlist) {
-      remove(ref(db, `users/${userId}/watchlist/${anime.id}`));
+      if (isGuestUser()) removeGuestWatchlistItemNotify(anime.id);
+      else remove(ref(db, `users/${userId}/watchlist/${anime.id}`));
     } else {
-      set(ref(db, `users/${userId}/watchlist/${anime.id}`), {
+      const item = {
         id: anime.id, title: anime.title, poster: anime.poster,
         year: anime.year, rating: anime.rating, type: anime.type, addedAt: Date.now(),
-      });
+      };
+      if (isGuestUser()) setGuestWatchlistItemNotify(anime.id, item);
+      else set(ref(db, `users/${userId}/watchlist/${anime.id}`), item);
     }
   };
 
@@ -46,7 +53,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
       onClick={() => onClick(anime)}
       style={{ boxShadow: "var(--neu-shadow-sm)" }}
     >
-      <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover transition-transform duration-400 hover:scale-110" loading="lazy" />
+      <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="eager" decoding="async" />
       <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 40%, transparent 70%)" }} />
       <button
         className={`absolute top-1.5 left-1.5 w-7 h-7 rounded-full flex items-center justify-center transition-all hover:scale-110 z-10 ${
@@ -58,8 +65,12 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
         <Heart className={`w-3.5 h-3.5 ${isInWatchlist ? "fill-white text-white" : "text-foreground"}`} />
       </button>
       <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
-        <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold text-primary-foreground" style={{ boxShadow: "0 2px 8px hsla(42,80%,50%,0.3)" }}>
-          {anime.year}
+        <span
+          className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold text-primary-foreground uppercase tracking-wide max-w-[96px] truncate"
+          style={{ boxShadow: "0 2px 8px hsla(42,80%,50%,0.3)" }}
+          title={anime.langLabel || anime.year}
+        >
+          {anime.langLabel || anime.year}
         </span>
         <span
           className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${
