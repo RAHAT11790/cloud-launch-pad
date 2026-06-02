@@ -35,6 +35,8 @@ export interface DownloadQueueSnapshot {
 type DownloadParams = {
   id: string;
   url: string;
+  urls?: string[];
+  fallbackUrl?: string;
   title: string;
   subtitle?: string;
   poster?: string;
