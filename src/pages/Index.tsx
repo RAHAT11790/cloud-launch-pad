@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
-import type { Episode } from "@/data/animeData";
+import type { Episode, AudioLanguage } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
@@ -1926,6 +1926,85 @@ const Index = () => {
     },
   }));
 
+  const playerAudioLanguages = useMemo<AudioLanguage[]>(() => {
+    const langs = playerState?.anime.audioLanguages;
+    if (!langs) return [];
+    return (Array.isArray(langs) ? langs : Object.values(langs)) as AudioLanguage[];
+  }, [playerState?.anime.audioLanguages]);
+
+  const playerActiveLangId = useMemo(() => {
+    if (!playerState?.anime) return undefined;
+    if (playerState.anime.preferredLangId && playerAudioLanguages.some((l) => l.id === playerState.anime.preferredLangId)) {
+      return playerState.anime.preferredLangId;
+    }
+    return playerAudioLanguages.find((l) => l.isDefault)?.id || playerAudioLanguages[0]?.id;
+  }, [playerState?.anime, playerAudioLanguages]);
+
+  const handlePlayerLanguageChange = useCallback(async (langId: string) => {
+    const current = playerStateRef.current;
+    if (!current?.anime) return;
+    const lang = playerAudioLanguages.find((item) => item.id === langId);
+    if (!lang) return;
+
+    const nextAnime = {
+      ...current.anime,
+      preferredLangId: lang.id,
+      langLabel: lang.name,
+      language: lang.name || current.anime.language,
+      seasons: lang.seasons && lang.seasons.length ? lang.seasons : current.anime.seasons,
+      movieLink: lang.movieLink || current.anime.movieLink,
+      movieLink480: lang.movieLink480 || current.anime.movieLink480,
+      movieLink720: lang.movieLink720 || current.anime.movieLink720,
+      movieLink1080: lang.movieLink1080 || current.anime.movieLink1080,
+      movieLink4k: lang.movieLink4k || current.anime.movieLink4k,
+    };
+
+    if (nextAnime.type === "movie") {
+      const nextSrc = getMovieSrc(nextAnime);
+      const nextState = {
+        ...current,
+        anime: nextAnime,
+        src: nextSrc,
+        title: nextAnime.title,
+        subtitle: "Movie",
+        qualityOptions: [
+          !isInvalidPlaybackUrl(nextAnime.movieLink480) ? { label: "480p", src: nextAnime.movieLink480! } : null,
+          !isInvalidPlaybackUrl(nextAnime.movieLink720) ? { label: "720p", src: nextAnime.movieLink720! } : null,
+          !isInvalidPlaybackUrl(nextAnime.movieLink1080) ? { label: "1080p", src: nextAnime.movieLink1080! } : null,
+          !isInvalidPlaybackUrl(nextAnime.movieLink4k) ? { label: "4K", src: nextAnime.movieLink4k! } : null,
+        ].filter(Boolean) as { label: string; src: string }[],
+      };
+      playerStateRef.current = nextState;
+      setPlayerState(nextState);
+      return;
+    }
+
+    const seasonIdx = Math.min(current.seasonIdx ?? 0, Math.max((nextAnime.seasons?.length || 1) - 1, 0));
+    const season = nextAnime.seasons?.[seasonIdx];
+    if (!season?.episodes?.length) return;
+    const epIdx = Math.min(current.epIdx ?? 0, Math.max(season.episodes.length - 1, 0));
+    const targetEp = season.episodes[epIdx];
+    const hasAccess = await checkAndShowAdGate(nextAnime, seasonIdx, epIdx);
+    if (!hasAccess) return;
+
+    const nextSrc = getEpisodeSrc(targetEp);
+    const nextState = {
+      ...current,
+      anime: nextAnime,
+      src: nextSrc,
+      title: nextAnime.title,
+      subtitle: `${season.name} - Episode ${targetEp.episodeNumber}`,
+      seasonIdx,
+      epIdx,
+      qualityOptions: getEpisodeQualityOptions(targetEp),
+      audioTracks: targetEp.audioTracks,
+      nextEpisodeSrc: getEpisodeSrc(season.episodes[epIdx + 1] as Episode),
+    };
+    playerStateRef.current = nextState;
+    setPlayerState(nextState);
+    navigate(buildWatchRoute(nextAnime.id, seasonIdx, epIdx), { replace: true });
+  }, [buildWatchRoute, checkAndShowAdGate, navigate, playerAudioLanguages]);
+
   const handleVideoPlayerSeasonChange = useCallback(async (newSeasonIdx: number) => {
     if (!playerState?.anime.seasons) return;
     const season = playerState.anime.seasons[newSeasonIdx];
@@ -2374,7 +2453,7 @@ const Index = () => {
           seasons={playerState.anime.seasons}
           currentSeasonIdx={playerState.seasonIdx}
           onSeasonChange={handleVideoPlayerSeasonChange}
-          suggestedAnime={[]}
+          suggestedAnime={suggestedAnime}
           onSuggestedClick={(anime) => {
             stopAllPlayback();
             navigate(buildAnimeRoute(anime.id));
@@ -2382,6 +2461,9 @@ const Index = () => {
           }}
           nextEpisodeSrc={playerState.nextEpisodeSrc}
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
+          audioLanguages={playerAudioLanguages}
+          activeLangId={playerActiveLangId}
+          onLanguageChange={handlePlayerLanguageChange}
         />
       </div>
     );
