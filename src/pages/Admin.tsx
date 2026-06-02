@@ -5004,7 +5004,7 @@ ${tgBulkFooter}
                           <div className="flex gap-2">
                             <input value={seriesForm[field] || ""} onChange={e => setSeriesForm({ ...seriesForm, [field]: e.target.value })}
                               className={`${inputClass} flex-1`} placeholder={`${field}...`} />
-                            {(field === "poster" || field === "backdrop") && (
+                            {(field === "poster" || field === "backdrop" || field === "logo") && (
                               <label className={`${btnSecondary} !px-3 cursor-pointer flex items-center gap-1`}>
                                 <Image size={14} />
                                 <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
@@ -5999,7 +5999,7 @@ ${tgBulkFooter}
                           <div className="flex gap-2">
                             <input value={movieForm[field] || ""} onChange={e => setMovieForm({ ...movieForm, [field]: e.target.value })}
                               className={`${inputClass} flex-1`} placeholder={`${field}...`} />
-                            {(field === "poster" || field === "backdrop") && (
+                            {(field === "poster" || field === "backdrop" || field === "logo") && (
                               <label className={`${btnSecondary} !px-3 cursor-pointer flex items-center gap-1`}>
                                 <Image size={14} />
                                 <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
