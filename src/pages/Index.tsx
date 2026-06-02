@@ -2329,7 +2329,7 @@ const Index = () => {
           poster={playerState.anime.poster}
           onClose={hardCloseToHome}
           qualityOptions={playerState.qualityOptions}
-          audioTracks={playerState.audioTracks}
+          audioTracks={(playerState.audioTracks || []).map((t: any) => ({ label: t.label || t.language, src: t.link || t.src, language: t.language }))}
           animeId={playerState.anime.id}
           initialSeekTime={playerState.resumeTime}
           onSaveProgress={saveVideoProgress}
