@@ -31,8 +31,26 @@ export interface Episode {
 
 export interface Season {
   name: string;
+  seasonNumber?: number;
   episodes: Episode[];
 }
+
+export interface AudioLanguage {
+  id: string;
+  name: string;
+  isDefault?: boolean;
+  dubType?: "official" | "fandub" | "none";
+  seasons?: Season[];
+  movieLink?: string;
+  movieLink480?: string;
+  movieLink720?: string;
+  movieLink1080?: string;
+  movieLink4k?: string;
+  createdAt?: number;
+  order?: number;
+}
+
+
 
 export interface AnimeItem {
   id: string;
@@ -56,8 +74,13 @@ export interface AnimeItem {
   updatedAt?: number;
   source?: "firebase" | "animesalt" | "moviebox";
   slug?: string;
-  dubType?: "official" | "fandub";
+  dubType?: "official" | "fandub" | "none";
+  audioLanguages?: AudioLanguage[];
+  // Virtual language-card fields (set when the item was expanded from an audioLanguages entry)
+  langLabel?: string;
+  preferredLangId?: string;
 }
+
 
 export const categories = ["Action", "Romance", "Fantasy", "Sci-Fi", "Horror", "Comedy"];
 
