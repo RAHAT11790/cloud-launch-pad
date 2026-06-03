@@ -1176,7 +1176,6 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
 
   const LOGO_FIELDS: { key: string; label: string; placeholder: string; preview: "square" | "wide" }[] = [
     { key: "logoUrl", label: "Default Logo (header + splash)", placeholder: "https://... or upload", preview: "square" },
-    { key: "splashBgUrl", label: "Splash Screen Background Image", placeholder: "https://... or upload", preview: "wide" },
   ];
 
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);

@@ -20,7 +20,7 @@ export interface BrandingConfig {
   adminTitle: string;
   aboutTitle: string;
   logoUrl: string;           // Default logo (header, splash, etc.)
-  splashBgUrl: string;       // Splash screen background image
+  splashBgUrl?: string;      // Deprecated — splash no longer renders a background image
   playerLogoUrl: string;     // (legacy) Video player loading logo
   playerName: string;        // Video player title (e.g. "RS ANIME PLAYER")
   rsCardLabel: string;       // RS source card label
@@ -41,7 +41,6 @@ const DEFAULT_BRANDING: BrandingConfig = {
   adminTitle: "",
   aboutTitle: "",
   logoUrl: "",
-  splashBgUrl: "",
   playerLogoUrl: "",
   playerName: "",
   rsCardLabel: "",

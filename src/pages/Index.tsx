@@ -2089,10 +2089,8 @@ const Index = () => {
 
 
 
-  // Show login page if not logged in
-  if (!isLoggedIn) {
-    return <LoginPage onLogin={handleLogin} />;
-  }
+  // Login wall removed — guests browse freely with localStorage-only state.
+  // LoginPage now opens as an on-demand overlay (from Header / Profile).
 
   // Show maintenance page if server is under maintenance
   if (maintenance?.active) {

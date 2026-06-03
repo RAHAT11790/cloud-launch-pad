@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import logoImg from "@/assets/logo.png";
-import fallbackBg from "@/assets/splash-action-bg.jpg";
 import { useBranding, getBrandingSync } from "@/hooks/useBranding";
 
 /**
- * Splash loader — ultra smooth, zero-lag.
- * - Single GPU transform (one rotating ring + one pulsing halo). No conic masks, no SVG noise.
- * - Background image is fully controlled from Admin (branding.splashBgUrl). Bundled asset is fallback only.
- * - Logo + background are both warmed via CacheStorage so reloads paint instantly.
+ * Splash loader — clean, premium, zero-lag.
+ * - Pure dark backdrop (no admin-uploaded background image — controlled here).
+ * - Single GPU transform ring + soft halo. No conic, no SVG noise.
+ * - Logo is warmed via CacheStorage for instant repaint.
  */
 
 const BG_CACHE = "rs-branding-assets-v1";
@@ -35,13 +34,7 @@ const SplashLoader = () => {
   const initial = getBrandingSync();
 
   const logoSrc = useMemo(() => branding.logoUrl || initial.logoUrl || logoImg, [branding.logoUrl, initial.logoUrl]);
-  const bgSrc = useMemo(
-    () => branding.splashBgUrl || initial.splashBgUrl || fallbackBg,
-    [branding.splashBgUrl, initial.splashBgUrl]
-  );
-
   const [resolvedLogo, setResolvedLogo] = useState(logoSrc);
-  const [resolvedBg, setResolvedBg] = useState(bgSrc);
 
   const displayName = (branding.splashText || initial.splashText || branding.siteName || initial.siteName || "").trim();
   const tagline = (branding.siteTagline || initial.siteTagline || "").trim();
@@ -58,42 +51,31 @@ const SplashLoader = () => {
     return () => { cancelled = true; if (objUrl) URL.revokeObjectURL(objUrl); };
   }, [logoSrc]);
 
-  useEffect(() => {
-    let cancelled = false;
-    let objUrl: string | null = null;
-    (async () => {
-      const out = await warmAsset(bgSrc);
-      if (cancelled) return;
-      if (out !== bgSrc) objUrl = out;
-      setResolvedBg(out);
-    })();
-    return () => { cancelled = true; if (objUrl) URL.revokeObjectURL(objUrl); };
-  }, [bgSrc]);
-
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-black">
-      {/* Background image — instant paint via cached blob */}
-      <img
-        src={resolvedBg}
-        alt=""
-        aria-hidden
-        className="absolute inset-0 w-full h-full object-cover"
-        style={{ opacity: 0.6, transform: "translateZ(0)", willChange: "transform" }}
-        loading="eager"
-        decoding="async"
-      />
-      {/* Vignette wash for readability */}
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden">
+      {/* Pure dark backdrop with subtle radial wash */}
       <div
         aria-hidden
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(70% 55% at 50% 45%, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.94) 100%)",
+            "radial-gradient(60% 50% at 50% 40%, #1a1a22 0%, #0b0b10 55%, #050507 100%)",
         }}
+      />
+      {/* Soft ambient blobs for depth (transform-only, GPU friendly) */}
+      <div
+        aria-hidden
+        className="absolute -top-20 -left-20 w-[300px] h-[300px] rounded-full splash-blob-a"
+        style={{ background: "radial-gradient(circle, rgba(120,90,255,0.18), transparent 70%)", filter: "blur(40px)" }}
+      />
+      <div
+        aria-hidden
+        className="absolute -bottom-24 -right-16 w-[320px] h-[320px] rounded-full splash-blob-b"
+        style={{ background: "radial-gradient(circle, rgba(255,90,160,0.16), transparent 70%)", filter: "blur(46px)" }}
       />
 
       <div className="relative z-10 flex flex-col items-center px-6">
-        {/* Logo with single smooth ring (transform-only, GPU) */}
+        {/* Logo with single smooth ring */}
         <div className="relative w-[150px] h-[150px] flex items-center justify-center">
           {/* Soft halo */}
           <div
@@ -104,7 +86,7 @@ const SplashLoader = () => {
               filter: "blur(12px)",
             }}
           />
-          {/* Rotating SVG ring — pure transform, no masks, no conic */}
+          {/* Rotating SVG ring */}
           <svg
             className="absolute inset-0 splash-spin"
             viewBox="0 0 100 100"
@@ -117,20 +99,8 @@ const SplashLoader = () => {
                 <stop offset="100%" stopColor="#ffffff" />
               </linearGradient>
             </defs>
-            <circle
-              cx="50" cy="50" r="46"
-              fill="none"
-              stroke="rgba(255,255,255,0.08)"
-              strokeWidth="2"
-            />
-            <circle
-              cx="50" cy="50" r="46"
-              fill="none"
-              stroke="url(#splashRing)"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeDasharray="120 220"
-            />
+            <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2" />
+            <circle cx="50" cy="50" r="46" fill="none" stroke="url(#splashRing)" strokeWidth="2.4" strokeLinecap="round" strokeDasharray="120 220" />
           </svg>
           {/* Logo */}
           <img
@@ -146,7 +116,6 @@ const SplashLoader = () => {
           />
         </div>
 
-        {/* Wordmark */}
         {displayName ? (
           <div
             className="mt-9 text-[22px] font-bold tracking-[6px] uppercase text-center text-white"
@@ -159,7 +128,6 @@ const SplashLoader = () => {
           </div>
         ) : null}
 
-        {/* Tagline */}
         {tagline ? (
           <p
             className="mt-2.5 text-[11px] uppercase tracking-[5px] font-semibold text-center"
@@ -169,7 +137,7 @@ const SplashLoader = () => {
           </p>
         ) : null}
 
-        {/* Progress rail — soft white sweep */}
+        {/* Progress rail */}
         <div className="mt-8 w-[220px] h-[2.5px] rounded-full overflow-hidden bg-white/[0.08]">
           <div
             className="h-full w-[40%] rounded-full splash-sweep"
@@ -185,9 +153,13 @@ const SplashLoader = () => {
         @keyframes splashSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes splashHalo { 0%,100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
         @keyframes splashSweep { 0% { transform: translateX(-110%); } 100% { transform: translateX(360%); } }
+        @keyframes blobA { 0%,100% { transform: translate(0,0); } 50% { transform: translate(30px,20px); } }
+        @keyframes blobB { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-25px,-18px); } }
         .splash-spin { animation: splashSpin 2.6s linear infinite; }
         .splash-halo { animation: splashHalo 2.6s ease-in-out infinite; }
         .splash-sweep { animation: splashSweep 1.6s cubic-bezier(.45,.05,.25,1) infinite; }
+        .splash-blob-a { animation: blobA 8s ease-in-out infinite; }
+        .splash-blob-b { animation: blobB 9s ease-in-out infinite; }
       `}</style>
     </div>
   );
