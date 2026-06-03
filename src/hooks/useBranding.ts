@@ -37,6 +37,7 @@ const DEFAULT_BRANDING: BrandingConfig = {
   adminTitle: "RS ANIME Admin",
   aboutTitle: "About RS ANIME",
   logoUrl: "",
+  splashBgUrl: "",
   playerLogoUrl: "",
   playerName: "RS ANIME PLAYER",
   rsCardLabel: "RS",
