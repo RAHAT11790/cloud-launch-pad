@@ -5,6 +5,8 @@ import { getDeviceFingerprint, getDeviceId, getDeviceInfo } from "@/lib/premiumD
 
 const UNLOCK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const DEFAULT_FREE_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
+const AD_GATE_COOLDOWN_MS = 5 * 60 * 1000;
+const AD_GATE_LAST_SHOWN_KEY = "rs_ad_gate_last_shown_at";
 
 // Get configurable unlock duration from Firebase (cached)
 let _cachedDurationMs: number | null = null;
@@ -141,6 +143,24 @@ export const getCurrentDeviceFreeAccessExpiry = (snap: FreeAccessRecord | null |
 
   return 0;
 };
+
+export const markAdGateShownNow = (): void => {
+  try {
+    localStorage.setItem(AD_GATE_LAST_SHOWN_KEY, String(Date.now()));
+  } catch {}
+};
+
+export const getRemainingAdGateCooldownMs = (): number => {
+  try {
+    const lastShownAt = Number(localStorage.getItem(AD_GATE_LAST_SHOWN_KEY) || 0);
+    if (!lastShownAt) return 0;
+    return Math.max(0, lastShownAt + AD_GATE_COOLDOWN_MS - Date.now());
+  } catch {
+    return 0;
+  }
+};
+
+export const isAdGateCooldownActive = (): boolean => getRemainingAdGateCooldownMs() > 0;
 
 /** Shorten via dedicated shortener URL, legacy functionUrl, or generic site+apiKey */
 async function shortenWithService(svc: AdService, callbackUrl: string): Promise<string | null> {
