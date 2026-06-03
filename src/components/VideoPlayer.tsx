@@ -888,8 +888,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
       navigator.mediaSession.metadata = new MediaMetadata({
         title: title,
-        artist: subtitle || 'ICF ANIME',
-        album: 'ICF ANIME',
+        artist: subtitle || 'RS ANIME',
+        album: 'RS ANIME',
         artwork: [
           { src: artworkSrc, sizes: "96x96" },
           { src: artworkSrc, sizes: "192x192" },

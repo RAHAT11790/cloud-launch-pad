@@ -91,12 +91,12 @@ const AccessTimer = () => {
       } else {
         setPaused(false);
         if (maint?.lastPauseDuration && maint?.lastResumedAt) {
-          const appliedKey = `icfanime_pause_applied_${maint.lastResumedAt}`;
+          const appliedKey = `rsanime_pause_applied_${maint.lastResumedAt}`;
           if (!localStorage.getItem(appliedKey)) {
-            const expiry = localStorage.getItem("icfanime_ad_access");
+            const expiry = localStorage.getItem("rsanime_ad_access");
             if (expiry) {
               const newExpiry = parseInt(expiry) + maint.lastPauseDuration;
-              localStorage.setItem("icfanime_ad_access", newExpiry.toString());
+              localStorage.setItem("rsanime_ad_access", newExpiry.toString());
             }
             localStorage.setItem(appliedKey, "true");
           }
@@ -151,7 +151,7 @@ const AccessTimer = () => {
         return;
       }
       // Priority 2: UID-based free access from Firebase (cross-device, persistent)
-      const localExpiry = parseInt(localStorage.getItem("icfanime_ad_access") || "0");
+      const localExpiry = parseInt(localStorage.getItem("rsanime_ad_access") || "0");
       const effectiveExpiry = Math.max(userFreeExpiry, localExpiry);
       if (effectiveExpiry <= Date.now()) {
         setHasAccess(false); setTimeLeft(null); return;
@@ -988,7 +988,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
                 <button
                   onClick={() => {
                     const expiry = Date.now() + 24 * 60 * 60 * 1000;
-                    localStorage.setItem("icfanime_ad_access", expiry.toString());
+                    localStorage.setItem("rsanime_ad_access", expiry.toString());
                     toast.success("🎁 Free Access activated (24h)");
                   }}
                   className="w-full py-2.5 rounded-lg text-sm font-bold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 transition-all"
@@ -997,7 +997,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
                 </button>
                 <button
                   onClick={() => {
-                    localStorage.removeItem("icfanime_ad_access");
+                    localStorage.removeItem("rsanime_ad_access");
                     toast.success("Free access cleared");
                   }}
                   className="w-full py-2.5 rounded-lg text-sm font-bold bg-white/5 hover:bg-white/10 text-foreground border border-white/10 transition-all"
@@ -1192,7 +1192,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
             <input
               value={redeemInput}
               onChange={e => setRedeemInput(e.target.value.toUpperCase())}
-              placeholder="ICF-XXXXXX-XXXX"
+              placeholder="RS-XXXXXX-XXXX"
               className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm font-mono tracking-widest focus:border-primary focus:outline-none transition-colors mb-3 text-center"
             />
             <button onClick={redeemCode} disabled={redeemLoading}
@@ -1575,7 +1575,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
           </span>
         )}
         <p className="text-sm text-secondary-foreground">
-          {(() => { try { const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}"); return u.email || "guest@icfanime.com"; } catch { return "guest@icfanime.com"; } })()}
+          {(() => { try { const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}"); return u.email || "guest@rsanime.com"; } catch { return "guest@rsanime.com"; } })()}
         </p>
       </div>
 
@@ -1912,7 +1912,7 @@ const ChangePasswordPanel = ({ onBack }: { onBack: () => void }) => {
             otp: code,
             siteName: branding.siteName || SITE_NAME,
             logoUrl: branding.logoUrl || "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png",
-            siteUrl: "https://icfanime03.lovable.app",
+            siteUrl: "https://rsanime03.lovable.app",
             telegramUrl: TELEGRAM_ADMIN_URL,
           }),
         });

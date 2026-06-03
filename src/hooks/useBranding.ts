@@ -18,26 +18,26 @@ export interface BrandingConfig {
   aboutTitle: string;
   logoUrl: string;           // Default logo (header, splash, etc.)
   playerLogoUrl: string;     // Video player loading logo
-  playerName: string;        // Video player title (e.g. "ICF ANIME PLAYER")
+  playerName: string;        // Video player title (e.g. "RS ANIME PLAYER")
   rsCardLabel: string;       // RS source card label
   anCardLabel: string;       // AnimeSalt source card label
 }
 
 const DEFAULT_BRANDING: BrandingConfig = {
-  siteName: "ICF ANIME",
+  siteName: "RS ANIME",
   siteDescription: "Your ultimate destination for watching anime series and movies.",
   siteTagline: "Premium Anime Streaming",
-  loginTitle: "ICF ANIME",
+  loginTitle: "RS ANIME",
   loginSubtitle: "Premium Anime Streaming",
-  premiumTitle: "ICF ANIME Premium",
+  premiumTitle: "RS ANIME Premium",
   footerText: "Unlimited Anime Series & Movies",
-  footerCopyright: "© 2026 ICF ANIME. All rights reserved.",
-  splashText: "ICF ANIME",
-  adminTitle: "ICF ANIME Admin",
-  aboutTitle: "About ICF ANIME",
+  footerCopyright: "© 2026 RS ANIME. All rights reserved.",
+  splashText: "RS ANIME",
+  adminTitle: "RS ANIME Admin",
+  aboutTitle: "About RS ANIME",
   logoUrl: "",
   playerLogoUrl: "",
-  playerName: "ICF ANIME PLAYER",
+  playerName: "RS ANIME PLAYER",
   rsCardLabel: "RS",
   anCardLabel: "AN",
 };

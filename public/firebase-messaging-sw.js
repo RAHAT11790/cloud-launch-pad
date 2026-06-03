@@ -4,10 +4,10 @@ importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-com
 
 firebase.initializeApp({
   apiKey: "AIzaSyDb_p53UKDapQurh8IspiIP6bLC4ykkCNs",
-  authDomain: "icf-anime-site.firebaseapp.com",
-  databaseURL: "https://icf-anime-site-default-rtdb.firebaseio.com",
-  projectId: "icf-anime-site",
-  storageBucket: "icf-anime-site.firebasestorage.app",
+  authDomain: "rs-anime-site.firebaseapp.com",
+  databaseURL: "https://rs-anime-site-default-rtdb.firebaseio.com",
+  projectId: "rs-anime-site",
+  storageBucket: "rs-anime-site.firebasestorage.app",
   messagingSenderId: "729299302684",
   appId: "1:729299302684:web:7b628477427b81065aa2d9",
 });
@@ -15,14 +15,14 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 const brandIcon = 'https://i.ibb.co/1GqwqHYY/IMG-20260325-154221-905.jpg';
 // Main published domain — always use this for notification clicks
-const MAIN_DOMAIN = 'https://icfanime.vercel.app';
+const MAIN_DOMAIN = 'https://rsanime03.lovable.app';
 
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
   const notification = payload.notification || {};
   const data = payload.data || {};
   
-  const notifTitle = notification.title || data.title || 'ICF ANIME';
+  const notifTitle = notification.title || data.title || 'RS ANIME';
   const notifBody = notification.body || data.body || '';
   const notifImage = notification.image || data.image || undefined;
   const notifIcon = notification.icon || data.icon || brandIcon;
@@ -52,7 +52,7 @@ self.addEventListener('push', (event) => {
       const payload = event.data.json();
       if (!payload.notification && payload.data) {
         const data = payload.data;
-        const title = data.title || 'ICF ANIME';
+        const title = data.title || 'RS ANIME';
         const contentTag = data.contentId || data.type || 'general';
         const options = {
           body: data.body || '',

@@ -234,7 +234,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
     const isTinyMessage = normalizedText.split(" ").filter(Boolean).length <= 3;
     const buildLocalReply = () => {
       if (isGreeting && isTinyMessage) {
-        return `আসসালামু আলাইকুম ${userName || "ভাই"}! 👋\nআমি ICF AI। anime, episode, premium, ID/password—যা জানতে চান লিখুন।`;
+        return `আসসালামু আলাইকুম ${userName || "ভাই"}! 👋\nআমি RS AI। anime, episode, premium, ID/password—যা জানতে চান লিখুন।`;
       }
 
       if (!userContext) return "";
@@ -494,7 +494,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
                 return last.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase()).slice(0, 25);
               } catch { return "Link"; }
             })();
-            // Internal ICF Anime link → use onAnimeSelect for in-app navigation
+            // Internal RS Anime link → use onAnimeSelect for in-app navigation
             const animeKey = getInternalAnimeKey(url);
             if (animeKey && isInternalSiteUrl(url)) {
               textParts.push(
@@ -582,7 +582,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
             }`}
             style={msg.role !== "user" ? { boxShadow: "var(--neu-shadow-sm)" } : { boxShadow: "0 3px 10px hsla(42,80%,50%,0.3)" }}>
               {msg.role === "admin" && (
-                <span className="text-[10px] font-bold text-green-700 block mb-1">🛡️ Admin (ICF)</span>
+                <span className="text-[10px] font-bold text-green-700 block mb-1">🛡️ Admin (RS)</span>
               )}
               {renderMessageContent(msg.content)}
               <span className="text-[9px] opacity-40 mt-1 block text-right">

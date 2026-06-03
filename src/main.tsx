@@ -18,7 +18,7 @@ try {
   }
 } catch {}
 
-// Bootstrap guest session on app start (ICF parity)
+// Bootstrap guest session on app start (RS parity)
 try { ensureGuestUser(); } catch {}
 // Run periodic trim (history weekly, watchlist monthly) — fire-and-forget
 try { runResetRulesIfDue(); } catch {}

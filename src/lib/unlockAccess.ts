@@ -92,7 +92,7 @@ const randomToken = () => `${Math.random().toString(36).slice(2)}${Date.now().to
 
 export const getLocalUserId = (): string | null => {
   try {
-    const raw = localStorage.getItem("rsanime_user") || localStorage.getItem("icfanime_user");
+    const raw = localStorage.getItem("rsanime_user") || localStorage.getItem("rsanime_user");
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return parsed?.id || null;
@@ -547,7 +547,7 @@ export async function claimAccessCode(code: string): Promise<{
 }
 
 /* ============================================================ */
-/* ICF VideoPlayer compatibility shims (appended)                */
+/* RS VideoPlayer compatibility shims (appended)                */
 /* ============================================================ */
 import { getAccountId as __getAccountId } from "@/lib/accountScope";
 import { getDeviceId as __getDeviceId2 } from "@/lib/premiumDevice";

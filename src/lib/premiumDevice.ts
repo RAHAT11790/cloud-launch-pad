@@ -11,7 +11,7 @@ type PremiumDeviceEntry = {
 };
 
 const DEVICE_ID_KEY = "rs_device_id";
-const SESSION_KEYS_TO_CLEAR = ["rsanime_user", "icfanime_user", "rs_display_name", "rs_profile_photo", "rs_photo_url"];
+const SESSION_KEYS_TO_CLEAR = ["rsanime_user", "rsanime_user", "rs_display_name", "rs_profile_photo", "rs_photo_url"];
 
 const hashText = (input: string): string => {
   let hash = 0;

@@ -76,7 +76,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
           className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground"
           style={{ textShadow: "0 1px 2px rgba(0,0,0,0.35)" }}
         >
-          ICF
+          RS
         </span>
       </div>
       <div className="absolute bottom-0 left-0 right-0 p-2">

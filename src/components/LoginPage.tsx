@@ -265,8 +265,8 @@ const LoginPage = ({ onLogin, onCancel }: LoginPageProps) => {
             otp, 
             siteName: branding.siteName || SITE_NAME,
             logoUrl: branding.logoUrl || "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png",
-            siteUrl: "https://icfanime03.lovable.app",
-            telegramUrl: "https://t.me/icf_unknown",
+            siteUrl: "https://rsanime03.lovable.app",
+            telegramUrl: "https://t.me/rs_unknown",
           }),
         });
         if (!res.ok) throw new Error("Email sending failed");

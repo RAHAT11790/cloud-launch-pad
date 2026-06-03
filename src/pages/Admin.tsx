@@ -774,7 +774,7 @@ const TelegramGlobalButtonConfig = ({ glassCard, inputClass, btnPrimary }: { gla
         </div>
         <div>
           <label className="text-[10px] text-zinc-400 mb-1 block">Button URL</label>
-          <input type="text" value={url} onChange={e => setUrl(e.target.value)} className={inputClass} placeholder="https://icfanime03.lovable.app" />
+          <input type="text" value={url} onChange={e => setUrl(e.target.value)} className={inputClass} placeholder="https://rsanime03.lovable.app" />
         </div>
         <button onClick={save} disabled={saving} className={`${btnPrimary} w-full py-2 text-xs flex items-center justify-center gap-2`}>
           <Save size={12} /> {saving ? "Saving..." : "Save Global Button"}
@@ -1160,18 +1160,18 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
   const [saving, setSaving] = useState(false);
 
   const FIELDS = [
-    { key: "siteName", label: "সাইটের নাম", placeholder: "ICF ANIME" },
+    { key: "siteName", label: "সাইটের নাম", placeholder: "RS ANIME" },
     { key: "siteDescription", label: "সাইটের বিবরণ", placeholder: "Your ultimate destination..." },
     { key: "siteTagline", label: "ট্যাগলাইন", placeholder: "Premium Anime Streaming" },
-    { key: "loginTitle", label: "লগইন পেজের টাইটেল", placeholder: "ICF ANIME" },
+    { key: "loginTitle", label: "লগইন পেজের টাইটেল", placeholder: "RS ANIME" },
     { key: "loginSubtitle", label: "লগইন সাবটাইটেল", placeholder: "Premium Anime Streaming" },
-    { key: "premiumTitle", label: "প্রিমিয়াম টাইটেল", placeholder: "ICF ANIME Premium" },
+    { key: "premiumTitle", label: "প্রিমিয়াম টাইটেল", placeholder: "RS ANIME Premium" },
     { key: "footerText", label: "ফুটার টেক্সট", placeholder: "Unlimited Anime Series & Movies" },
-    { key: "footerCopyright", label: "কপিরাইট টেক্সট", placeholder: "© 2026 ICF ANIME..." },
-    { key: "splashText", label: "স্প্ল্যাশ স্ক্রিন টেক্সট", placeholder: "ICF ANIME" },
-    { key: "adminTitle", label: "অ্যাডমিন প্যানেল টাইটেল", placeholder: "ICF ANIME Admin" },
-    { key: "aboutTitle", label: "About পেজ টাইটেল", placeholder: "About ICF ANIME" },
-    { key: "playerName", label: "ভিডিও প্লেয়ার টাইটেল", placeholder: "ICF ANIME PLAYER" },
+    { key: "footerCopyright", label: "কপিরাইট টেক্সট", placeholder: "© 2026 RS ANIME..." },
+    { key: "splashText", label: "স্প্ল্যাশ স্ক্রিন টেক্সট", placeholder: "RS ANIME" },
+    { key: "adminTitle", label: "অ্যাডমিন প্যানেল টাইটেল", placeholder: "RS ANIME Admin" },
+    { key: "aboutTitle", label: "About পেজ টাইটেল", placeholder: "About RS ANIME" },
+    { key: "playerName", label: "ভিডিও প্লেয়ার টাইটেল", placeholder: "RS ANIME PLAYER" },
     { key: "rsCardLabel", label: "RS কার্ড লেবেল", placeholder: "RS" },
     { key: "anCardLabel", label: "AnimeSalt কার্ড লেবেল", placeholder: "AN" },
   ];
@@ -1273,7 +1273,7 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
             <input
               value={config["userApkUrl"] || ""}
               onChange={(e) => updateField("userApkUrl", e.target.value)}
-              placeholder="https://example.com/icfanime-user.apk"
+              placeholder="https://example.com/rsanime-user.apk"
               className={inputClass}
             />
             {config["userApkUrl"] && (
@@ -1293,7 +1293,7 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
             <input
               value={config["adminApkUrl"] || ""}
               onChange={(e) => updateField("adminApkUrl", e.target.value)}
-              placeholder="https://example.com/icfanime-admin.apk"
+              placeholder="https://example.com/rsanime-admin.apk"
               className={inputClass}
             />
             {config["adminApkUrl"] && (
@@ -2086,7 +2086,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [tgBulkSending, setTgBulkSending] = useState(false);
   const [tgBulkBatchSize, setTgBulkBatchSize] = useState(20);
   const [tgBulkHeader, setTgBulkHeader] = useState("🎌 𝗥𝗦 𝗔𝗡𝗜𝗠𝗘 — 𝗙𝗥𝗘𝗦𝗛 𝗗𝗥𝗢𝗣");
-  const [tgBulkFooter, setTgBulkFooter] = useState("🔗 Watch Free at ICF ANIME • Daily Updates");
+  const [tgBulkFooter, setTgBulkFooter] = useState("🔗 Watch Free at RS ANIME • Daily Updates");
   const [tgBulkSentIds, setTgBulkSentIds] = useState<Record<string, number>>({});
   const [tgBulkProgress, setTgBulkProgress] = useState<{ done: number; total: number } | null>(null);
   useEffect(() => {
@@ -4227,7 +4227,7 @@ ${tgHashtags}`;
 ▶️ <a href="${url}">Tap to Watch Now</a></blockquote>`;
     }).join("\n\n");
 
-    const headerText = escapeHtmlBasic(String(tgBulkHeader || "").replace(/<[^>]+>/g, "").trim()) || "ICF ANIME • Daily Drops";
+    const headerText = escapeHtmlBasic(String(tgBulkHeader || "").replace(/<[^>]+>/g, "").trim()) || "RS ANIME • Daily Drops";
     const caption = `✨ <b>${headerText}</b> ✨
 ━━━━━━━━━━━━━━━━━━━
 
@@ -4524,7 +4524,7 @@ ${tgBulkFooter}
       <div className="min-h-screen bg-[#0D0D1A] flex items-center justify-center p-4">
         <div className={`${glassCard} p-8 w-full max-w-[400px]`}>
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4">ICF</div>
+            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4">RS</div>
             <h1 className="text-xl font-bold text-white">Create Admin PIN</h1>
             <p className="text-sm text-zinc-400 mt-1">Set up your admin PIN</p>
           </div>
@@ -4676,7 +4676,7 @@ ${tgBulkFooter}
           <button onClick={() => setSidebarOpen(true)} className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center hover:bg-indigo-500/20 transition-colors">
             <Menu size={18} />
           </button>
-          <span className="text-xl font-black text-indigo-500">ICF</span>
+          <span className="text-xl font-black text-indigo-500">RS</span>
           <h1 className="text-sm font-semibold text-zinc-200">{sectionTitles[activeSection]}</h1>
         </div>
         <div className="flex items-center gap-2 relative">

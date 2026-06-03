@@ -2622,7 +2622,7 @@ const Index = () => {
             <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
             <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5 z-10">
               <span className="gradient-primary px-1.5 py-[1px] rounded text-[8px] font-bold uppercase tracking-wide max-w-[80px] truncate" title={anime.langLabel || anime.language}>{anime.langLabel || anime.language}</span>
-              <span className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground">ICF</span>
+              <span className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground">RS</span>
             </div>
             {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
             <div className="absolute bottom-0 left-0 right-0 p-2">
@@ -2656,7 +2656,7 @@ const Index = () => {
             <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
             <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5 z-10">
               <span className="gradient-primary px-1.5 py-[1px] rounded text-[8px] font-bold uppercase tracking-wide max-w-[80px] truncate" title={anime.langLabel || anime.language}>{anime.langLabel || anime.language}</span>
-              <span className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground">ICF</span>
+              <span className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground">RS</span>
             </div>
             {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
             <div className="absolute bottom-0 left-0 right-0 p-2">
@@ -2690,7 +2690,7 @@ const Index = () => {
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
                   <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5 z-10">
                     <span className="gradient-primary px-1.5 py-[1px] rounded text-[8px] font-bold uppercase tracking-wide max-w-[80px] truncate" title={anime.langLabel || anime.language}>{anime.langLabel || anime.language}</span>
-                    <span className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground">ICF</span>
+                    <span className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground">RS</span>
                   </div>
                   <div className="absolute bottom-0 left-0 right-0 p-2">
                     <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>

@@ -1,5 +1,5 @@
 // IndexedDB-based local video storage - NO data goes to any server/database
-const DB_NAME = "icfanime_downloads";
+const DB_NAME = "rsanime_downloads";
 const DB_VERSION = 1;
 const STORE_NAME = "videos";
 
