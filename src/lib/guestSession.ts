@@ -18,7 +18,7 @@
 import { db, ref, get, set, remove } from "@/lib/firebase";
 
 export const GUEST_ID = "guest";
-export const GUEST_EMAIL = "ICFanimeguest@gmail.com";
+export const GUEST_EMAIL = "RSanimeguest@gmail.com";
 export const GUEST_NAME = "Guest";
 
 const USER_KEY = "rsanime_user";

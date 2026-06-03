@@ -70,7 +70,7 @@ export const clearLocalAccountSession = (): void => {
     try {
       localStorage.setItem(
         "rsanime_user",
-        JSON.stringify({ id: "guest", email: "ICFanimeguest@gmail.com", name: "Guest", isGuest: true })
+        JSON.stringify({ id: "guest", email: "RSanimeguest@gmail.com", name: "Guest", isGuest: true })
       );
     } catch {}
   }
