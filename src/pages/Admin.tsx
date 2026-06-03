@@ -658,6 +658,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
       </div>
 
       <AdServicesSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+      <AdGateCooldownConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
     </div>
   );
 };
