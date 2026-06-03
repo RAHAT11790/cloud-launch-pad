@@ -155,19 +155,32 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       <div className="flex items-center gap-1.5">
         <ThemeToggle />
         <NotificationPanel userId={userId} onOpenContent={onOpenContent} />
-        <button
-          onClick={onProfileClick}
-          className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center transition-all hover:scale-110"
-          style={{ boxShadow: "var(--neu-shadow-sm)" }}
-        >
-          {profilePhoto ? (
-            <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full gradient-primary flex items-center justify-center">
-              <User className="w-4 h-4 text-primary-foreground" />
-            </div>
-          )}
-        </button>
+        {userId ? (
+          <button
+            onClick={onProfileClick}
+            className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center transition-all hover:scale-110"
+            style={{ boxShadow: "var(--neu-shadow-sm)" }}
+            aria-label="Open profile"
+          >
+            {profilePhoto ? (
+              <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full gradient-primary flex items-center justify-center">
+                <User className="w-4 h-4 text-primary-foreground" />
+              </div>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={onProfileClick}
+            className="h-9 px-3.5 rounded-full bg-primary text-primary-foreground text-[12px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95"
+            style={{ boxShadow: "0 4px 14px hsl(var(--primary) / 0.35)" }}
+            aria-label="Sign in"
+          >
+            <User className="w-3.5 h-3.5" />
+            Login
+          </button>
+        )}
       </div>
     </header>
   );

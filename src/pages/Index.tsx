@@ -2076,7 +2076,7 @@ const Index = () => {
     } else {
       onDone();
     }
-  }, [activePage, showProfile, queueStripTransform, restorePageScroll]);
+  }, [activePage, showProfile, queueStripTransform, restorePageScroll, isLoggedIn]);
 
   // Set initial position without animation
   useLayoutEffect(() => {
