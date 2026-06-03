@@ -4,10 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
 <meta name="referrer" content="no-referrer" />
-<title>RS ANIME Player</title>
+<title>ICF ANIME Player</title>
 <style>
   /* ============================================================
-     RS ANIME — bare embed video page.
+     ICF ANIME — bare embed video page.
      Renders ONLY the video. All UI/controls live in the parent
      (VideoPlayer.tsx) and drive this page via postMessage.
      ============================================================ */
@@ -36,7 +36,7 @@
   video::-webkit-media-controls-enclosure,
   video::-webkit-media-controls-panel { display: none !important; }
 
-  /* Branded loading shimmer (matches RS ANIME splash) */
+  /* Branded loading shimmer (matches ICF ANIME splash) */
   #loader {
     position: fixed; inset: 0;
     display: flex; flex-direction: column;
@@ -50,7 +50,7 @@
   .ring {
     width: 56px; height: 56px;
     border: 3px solid rgba(255,255,255,.12);
-    border-top-color: #ef4444; /* RS ANIME accent red */
+    border-top-color: #ef4444; /* ICF ANIME accent red */
     border-radius: 50%;
     animation: spin .9s linear infinite;
   }
@@ -78,7 +78,7 @@
 
   <div id="loader">
     <div class="ring"></div>
-    <div class="brand">RS ANIME</div>
+    <div class="brand">ICF ANIME</div>
   </div>
 
   <div id="err">😔 Server is not responding right now.<br>Try again later.</div>

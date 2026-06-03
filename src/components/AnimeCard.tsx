@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Star, Heart } from "lucide-react";
+import { Heart } from "lucide-react";
 import type { AnimeItem } from "@/data/animeData";
 import { db, ref, set, remove, onValue } from "@/lib/firebase";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
@@ -49,7 +49,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
 
   return (
     <div
-      className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card min-w-[120px] max-w-[140px] flex-shrink-0"
+      className="relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer poster-hover bg-card min-w-[120px] max-w-[140px] flex-shrink-0"
       onClick={() => onClick(anime)}
       style={{ boxShadow: "var(--neu-shadow-sm)" }}
     >
@@ -64,31 +64,24 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
       >
         <Heart className={`w-3.5 h-3.5 ${isInWatchlist ? "fill-white text-white" : "text-foreground"}`} />
       </button>
-      <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
+      <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5 z-10">
         <span
-          className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold text-primary-foreground uppercase tracking-wide max-w-[96px] truncate"
+          className="gradient-primary px-1.5 py-[1px] rounded text-[8px] font-bold text-primary-foreground uppercase tracking-wide max-w-[80px] truncate"
           style={{ boxShadow: "0 2px 8px hsla(42,80%,50%,0.3)" }}
-          title={anime.langLabel || anime.year}
+          title={anime.langLabel || anime.language}
         >
-          {anime.langLabel || anime.year}
+          {anime.langLabel || anime.language}
         </span>
         <span
-          className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${
-            anime.source === "animesalt"
-              ? "bg-accent/85 text-accent-foreground"
-              : "bg-primary/85 text-primary-foreground"
-          }`}
+          className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground"
           style={{ textShadow: "0 1px 2px rgba(0,0,0,0.35)" }}
         >
-          {anime.source === "animesalt" ? branding.anCardLabel : branding.rsCardLabel}
+          ICF
         </span>
       </div>
       <div className="absolute bottom-0 left-0 right-0 p-2">
         <p className="text-[10px] font-semibold leading-tight line-clamp-2 text-white" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9)" }}>
           {anime.title}
-        </p>
-        <p className="text-[8px] text-white/80 flex items-center gap-1 mt-1">
-          <Star className="w-2 h-2 text-primary" /> {anime.rating}
         </p>
       </div>
     </div>

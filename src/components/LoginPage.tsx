@@ -10,6 +10,7 @@ import { useBranding } from "@/hooks/useBranding";
 
 interface LoginPageProps {
   onLogin: (userId: string) => void;
+  onCancel?: () => void;
 }
 
 const PARTICLE_SEEDS = Array.from({ length: 20 }, (_, i) => ({
@@ -51,7 +52,7 @@ const StaticFloatingParticles = () => {
   );
 };
 
-const LoginPage = ({ onLogin }: LoginPageProps) => {
+const LoginPage = ({ onLogin, onCancel }: LoginPageProps) => {
   const SESSION_STARTED_AT_KEY = "rs_session_started_at";
   const branding = useBranding();
   const logoSrc = branding.logoUrl || logoImg;
@@ -264,8 +265,8 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             otp, 
             siteName: branding.siteName || SITE_NAME,
             logoUrl: branding.logoUrl || "https://i.ibb.co.com/gLc93Bc3/android-chrome-512x512.png",
-            siteUrl: "https://rsanime03.lovable.app",
-            telegramUrl: "https://t.me/rs_woner",
+            siteUrl: "https://icfanime03.lovable.app",
+            telegramUrl: "https://t.me/icf_unknown",
           }),
         });
         if (!res.ok) throw new Error("Email sending failed");
@@ -743,6 +744,16 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       </div>
 
       <StaticFloatingParticles />
+
+      {onCancel && (
+        <button
+          onClick={onCancel}
+          className="absolute top-4 left-4 z-[10000] flex items-center gap-1.5 px-3 py-2 rounded-full bg-background/70 backdrop-blur text-foreground text-sm font-medium border border-border hover:bg-background"
+          aria-label="Back"
+        >
+          ← Back
+        </button>
+      )}
 
       {/* TV Frame / Main Card */}
       <AnimatePresence>

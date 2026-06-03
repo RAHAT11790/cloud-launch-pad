@@ -1,6 +1,27 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { ensureGuestUser, runResetRulesIfDue } from "@/lib/guestSession";
+
+try {
+  const url = new URL(window.location.href);
+  const animeId = url.searchParams.get("anime")?.trim();
+  if (url.pathname === "/" && animeId) {
+    sessionStorage.setItem("rs_directWatchShare", animeId);
+    window.history.replaceState({}, "", `/watch/${encodeURIComponent(animeId)}`);
+  } else if (url.pathname.startsWith("/anime/")) {
+    const routeAnimeId = decodeURIComponent(url.pathname.split("/anime/")[1]?.split("/")[0] || "").trim();
+    if (routeAnimeId) {
+      sessionStorage.setItem("rs_directWatchShare", routeAnimeId);
+      window.history.replaceState({}, "", `/watch/${encodeURIComponent(routeAnimeId)}${url.search}`);
+    }
+  }
+} catch {}
+
+// Bootstrap guest session on app start (ICF parity)
+try { ensureGuestUser(); } catch {}
+// Run periodic trim (history weekly, watchlist monthly) — fire-and-forget
+try { runResetRulesIfDue(); } catch {}
 
 // Theme
 const savedTheme = localStorage.getItem("rs_theme");

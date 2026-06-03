@@ -1158,7 +1158,6 @@ const AiConfigSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
 const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
   const [config, setConfig] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
 
   const FIELDS = [
     { key: "siteName", label: "সাইটের নাম", placeholder: "ICF ANIME" },
@@ -1179,7 +1178,7 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
 
   const LOGO_FIELDS = [
     { key: "logoUrl", label: "ডিফল্ট লোগো URL", placeholder: "https://..." },
-    { key: "splashBgUrl", label: "স্প্ল্যাশ ব্যাকগ্রাউন্ড URL", placeholder: "https://..." },
+    { key: "playerLogoUrl", label: "ভিডিও প্লেয়ার লোডিং লোগো URL", placeholder: "https://..." },
   ];
 
   useEffect(() => {
@@ -1191,20 +1190,6 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
 
   const updateField = (key: string, value: string) => {
     setConfig(prev => ({ ...prev, [key]: value }));
-  };
-
-  const uploadImageForField = async (key: string, file?: File | null) => {
-    if (!file) return;
-    setUploadingKey(key);
-    try {
-      const { uploadToImgbb } = await import("@/lib/imgbbUpload");
-      const url = await uploadToImgbb(file);
-      setConfig(prev => ({ ...prev, [key]: url }));
-      toast.success("✅ ছবি আপলোড হয়েছে!");
-    } catch {
-      toast.error("Upload failed");
-    }
-    setUploadingKey(null);
   };
 
   const saveAll = async () => {
@@ -1241,18 +1226,12 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
           {LOGO_FIELDS.map(({ key, label, placeholder }) => (
             <div key={key}>
               <label className="text-[10px] text-zinc-400 block mb-1">{label}</label>
-              <div className="flex gap-2">
-                <input
-                  value={config[key] || ""}
-                  onChange={(e) => updateField(key, e.target.value)}
-                  placeholder={placeholder}
-                  className={`${inputClass} flex-1`}
-                />
-                <label className="px-3 py-2 rounded-lg bg-[#151521] border border-white/10 text-[#D1C4E9] cursor-pointer flex items-center gap-1 text-[11px]">
-                  {uploadingKey === key ? <Loader2 size={12} className="animate-spin" /> : <Image size={12} />}
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadImageForField(key, e.target.files?.[0])} />
-                </label>
-              </div>
+              <input
+                value={config[key] || ""}
+                onChange={(e) => updateField(key, e.target.value)}
+                placeholder={placeholder}
+                className={inputClass}
+              />
               {config[key] && (
                 <div className="mt-2 flex items-center gap-2">
                   <img src={config[key]} alt="preview" className="w-10 h-10 rounded-lg object-contain bg-zinc-800" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -1988,6 +1967,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
   // New release form
   const [releaseContent, setReleaseContent] = useState("");
+  const [releaseLanguage, setReleaseLanguage] = useState("");
+  const [releaseLanguages, setReleaseLanguages] = useState<{ id: string; name: string; seasons?: any[] }[]>([]);
   const [releaseSeason, setReleaseSeason] = useState("");
   const [releaseEpisode, setReleaseEpisode] = useState("");
   const [releaseEpisodeEnd, setReleaseEpisodeEnd] = useState("");
@@ -3452,20 +3433,63 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const handleReleaseContentChange = async (value: string) => {
     setReleaseContent(value);
     setReleaseSeason(""); setReleaseEpisode(""); setReleaseSeasons([]); setReleaseEpisodes([]);
+    setReleaseLanguage(""); setReleaseLanguages([]);
     if (!value) { setShowSeasonEpisode(false); return; }
     const [contentId, contentType] = value.split("|");
+    // Build a list of available audio languages for this content. A series
+    // can have multiple dubs; each dub has its own seasons. If there are no
+    // explicit audioLanguages, fall back to the content's default language.
+    const buildLangs = (content: any) => {
+      const raw = content?.audioLanguages;
+      const arr: any[] = Array.isArray(raw) ? raw : (raw ? Object.values(raw) : []);
+      const langs = arr
+        .filter(Boolean)
+        .map((l: any) => ({ id: String(l?.id || l?.name || ""), name: String(l?.name || "").trim(), seasons: l?.seasons }))
+        .filter((l) => !!l.name);
+      if (langs.length) return langs;
+      const def = String(content?.language || "").trim();
+      return def ? [{ id: "default", name: def }] : [];
+    };
     if (contentType === "webseries") {
       const series = webseriesData.find(s => s.id === contentId);
+      if (series) {
+        const langs = buildLangs(series);
+        setReleaseLanguages(langs);
+        if (langs.length === 1) setReleaseLanguage(langs[0].name);
+      }
       if (series?.seasons?.length > 0) {
         setReleaseSeasons(series.seasons.map((s: any, i: number) => ({ index: i, name: s.name || `Season ${i + 1}` })));
         setShowSeasonEpisode(true);
       } else { toast.error("This series has no seasons"); setShowSeasonEpisode(false); }
     } else if (contentType === "movie") {
+      const movie = moviesData.find(m => m.id === contentId);
+      if (movie) {
+        const langs = buildLangs(movie);
+        setReleaseLanguages(langs);
+        if (langs.length === 1) setReleaseLanguage(langs[0].name);
+      }
       setReleaseSeasons([{ index: 0, name: "Movie" }]);
       setReleaseEpisodes([{ index: 0, name: "Complete Movie" }]);
       setReleaseSeason("0"); setReleaseEpisode("0");
       setShowSeasonEpisode(true);
     }
+  };
+
+  const handleReleaseLanguageChange = (value: string) => {
+    setReleaseLanguage(value);
+    setReleaseSeason(""); setReleaseEpisode(""); setReleaseEpisodes([]);
+    if (!releaseContent) return;
+    const [contentId, contentType] = releaseContent.split("|");
+    if (contentType !== "webseries") return;
+    const series = webseriesData.find(s => s.id === contentId);
+    if (!series) return;
+    // If the chosen language has its own seasons, use them; otherwise fall
+    // back to the series-level seasons.
+    const lang = releaseLanguages.find(l => l.name.toLowerCase() === String(value || "").toLowerCase());
+    const seasons = (lang?.seasons && Array.isArray(lang.seasons) && lang.seasons.length)
+      ? lang.seasons
+      : (series.seasons || []);
+    setReleaseSeasons(seasons.map((s: any, i: number) => ({ index: i, name: s.name || `Season ${i + 1}` })));
   };
 
   const handleReleaseSeasonChange = (value: string) => {
@@ -3477,8 +3501,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       toast.error("AnimeSalt কন্টেন্ট New Release এ সাপোর্ট করা হয় না"); return;
     } else if (contentType === "webseries") {
       const series = webseriesData.find(s => s.id === contentId);
-      if (series?.seasons?.[parseInt(value)]) {
-        const season = series.seasons[parseInt(value)];
+      const lang = releaseLanguages.find(l => l.name.toLowerCase() === String(releaseLanguage || "").toLowerCase());
+      const langSeasons = (lang?.seasons && Array.isArray(lang.seasons) && lang.seasons.length) ? lang.seasons : null;
+      const sourceSeasons = langSeasons || series?.seasons || [];
+      const season = sourceSeasons[parseInt(value)];
+      if (season) {
         if (season.episodes?.length > 0) {
           setReleaseEpisodes(season.episodes.map((ep: any, i: number) => ({ index: i, name: `Episode ${ep.episodeNumber || i + 1}` })));
         } else { toast.error("No episodes in this season"); }
@@ -3493,12 +3520,18 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     if (!releaseContent || releaseSeason === "" || releaseEpisode === "") {
       toast.error("Please select content, season and episode"); return;
     }
+    if (releaseLanguages.length > 0 && !releaseLanguage) {
+      toast.error("Please select an audio language"); return;
+    }
     const [contentId, contentType] = releaseContent.split("|");
     let content: any; let episodeInfo: any = {};
     if (contentType === "webseries") {
       content = webseriesData.find(s => s.id === contentId);
-      if (content?.seasons?.[parseInt(releaseSeason)]) {
-        const season = content.seasons[parseInt(releaseSeason)];
+      const langEntry = releaseLanguages.find(l => l.name.toLowerCase() === String(releaseLanguage || "").toLowerCase());
+      const langSeasons = (langEntry?.seasons && Array.isArray(langEntry.seasons) && langEntry.seasons.length) ? langEntry.seasons : null;
+      const sourceSeasons = langSeasons || content?.seasons || [];
+      if (sourceSeasons[parseInt(releaseSeason)]) {
+        const season = sourceSeasons[parseInt(releaseSeason)];
         const episode = season.episodes?.[parseInt(releaseEpisode)];
         episodeInfo = {
           seasonNumber: parseInt(releaseSeason) + 1,
@@ -3512,13 +3545,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     }
     if (!content) { toast.error("Content not found"); return; }
 
+    const langEntryFinal = releaseLanguages.find(l => l.name.toLowerCase() === String(releaseLanguage || "").toLowerCase());
     const newRelease = {
       contentId, contentType, title: content.title, poster: content.poster || "",
       year: content.year || "N/A", rating: content.rating || "N/A",
       visibility: content.visibility || "public",
       episodeInfo, timestamp: Date.now(), active: true,
       weeklyEnabled: content.weeklyEnabled === true,
-      weeklyEveryDays: Math.max(1, Number(content.weeklyEveryDays) || 7)
+      weeklyEveryDays: Math.max(1, Number(content.weeklyEveryDays) || 7),
+      language: releaseLanguage || "",
+      audioLanguageId: langEntryFinal?.id || "",
     };
     try {
       await set(push(ref(db, "newEpisodeReleases")), newRelease);
@@ -3559,6 +3595,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       }
       toast.success("In-app notification sent to users");
       setReleaseContent(""); setShowSeasonEpisode(false);
+      setReleaseLanguage(""); setReleaseLanguages([]);
       
       // FCM push removed — in-app notifications above are sufficient
     } catch (err: any) { toast.error("Error: " + err.message); }
@@ -5004,7 +5041,7 @@ ${tgBulkFooter}
                           <div className="flex gap-2">
                             <input value={seriesForm[field] || ""} onChange={e => setSeriesForm({ ...seriesForm, [field]: e.target.value })}
                               className={`${inputClass} flex-1`} placeholder={`${field}...`} />
-                            {(field === "poster" || field === "backdrop" || field === "logo") && (
+                            {(field === "poster" || field === "backdrop") && (
                               <label className={`${btnSecondary} !px-3 cursor-pointer flex items-center gap-1`}>
                                 <Image size={14} />
                                 <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
@@ -5999,7 +6036,7 @@ ${tgBulkFooter}
                           <div className="flex gap-2">
                             <input value={movieForm[field] || ""} onChange={e => setMovieForm({ ...movieForm, [field]: e.target.value })}
                               className={`${inputClass} flex-1`} placeholder={`${field}...`} />
-                            {(field === "poster" || field === "backdrop" || field === "logo") && (
+                            {(field === "poster" || field === "backdrop") && (
                               <label className={`${btnSecondary} !px-3 cursor-pointer flex items-center gap-1`}>
                                 <Image size={14} />
                                 <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
@@ -6348,6 +6385,24 @@ ${tgBulkFooter}
               </div>
               {showSeasonEpisode && (
                 <>
+                  {releaseLanguages.length > 0 && (
+                    <div className="mb-4">
+                      <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Audio Language</label>
+                      <select
+                        value={releaseLanguage}
+                        onChange={e => handleReleaseLanguageChange(e.target.value)}
+                        className={selectClass}
+                      >
+                        <option value="">Select Audio Language</option>
+                        {releaseLanguages.map((l) => (
+                          <option key={l.id || l.name} value={l.name}>{l.name}</option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-[#957DAD] mt-1">
+                        এই language-এর জন্য আলাদা new release card show হবে। অন্য language select করলে show হবে না।
+                      </p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="mb-4">
                       <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Season</label>
@@ -8710,11 +8765,10 @@ ${addedP}
         {/* ==================== VIDEO SERVERS ==================== */}
         {activeSection === "video-servers" && (() => {
           const VideoServersSection = () => {
-            const [servers, setServers] = useState<{ name: string; domain: string; premiumOnly?: boolean; isDefault?: boolean }[]>([]);
+            const [servers, setServers] = useState<{ name: string; domain: string; locked?: boolean }[]>([]);
             const [vsLoading, setVsLoading] = useState(true);
             const [newName, setNewName] = useState("");
             const [newDomain, setNewDomain] = useState("");
-            const [newPremiumOnly, setNewPremiumOnly] = useState(false);
 
             useEffect(() => {
               const unsub = onValue(ref(db, "settings/videoServers"), (snap) => {
@@ -8732,33 +8786,22 @@ ${addedP}
               return () => unsub();
             }, []);
 
-            const saveServers = async (updated: { name: string; domain: string; premiumOnly?: boolean; isDefault?: boolean }[]) => {
+            const saveServers = async (updated: { name: string; domain: string; locked?: boolean }[]) => {
               await set(ref(db, "settings/videoServers"), updated);
               toast.success("✅ Server list saved!");
             };
 
             const addServer = () => {
               if (!newDomain.trim()) { toast.error("Enter domain!"); return; }
-              const updated = [...servers, {
-                name: newName.trim() || `Server ${servers.length + 1}`,
-                domain: newDomain.trim(),
-                premiumOnly: newPremiumOnly,
-                isDefault: servers.length === 0,
-              }];
+              const updated = [...servers, { name: newName.trim() || `Server ${servers.length + 1}`, domain: newDomain.trim(), locked: false }];
               saveServers(updated);
               setNewName("");
               setNewDomain("");
-              setNewPremiumOnly(false);
             };
 
-            const togglePremiumOnly = (idx: number) => {
+            const toggleLocked = (idx: number) => {
               const updated = [...servers];
-              updated[idx] = { ...updated[idx], premiumOnly: !updated[idx].premiumOnly };
-              saveServers(updated);
-            };
-
-            const setDefaultServer = (idx: number) => {
-              const updated = servers.map((srv, i) => ({ ...srv, isDefault: i === idx }));
+              updated[idx] = { ...updated[idx], locked: !updated[idx].locked };
               saveServers(updated);
             };
 
@@ -8799,19 +8842,14 @@ ${addedP}
                           <div className="flex-1 min-w-0">
                             <span className="text-[12px] font-medium block truncate flex items-center gap-1">
                               {srv.name}
-                                {srv.isDefault && <span className="text-[9px] px-1.5 py-0.5 bg-cyan-500/20 text-cyan-300 rounded-md font-bold">DEFAULT</span>}
-                                {srv.premiumOnly ? <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md font-bold">PREMIUM</span> : <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-md font-bold">FREE</span>}
+                              {srv.locked && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md font-bold">PREMIUM</span>}
                             </span>
                             <span className="text-[10px] text-zinc-500 block truncate">{srv.domain}</span>
                           </div>
                           <div className="flex items-center gap-1">
-                              <button onClick={() => setDefaultServer(idx)} title="Set default server"
-                                className={`p-1 rounded ${srv.isDefault ? "text-cyan-400 hover:text-cyan-300" : "text-zinc-500 hover:text-cyan-300"}`}>
-                                <Star size={13} fill={srv.isDefault ? 'currentColor' : 'none'} />
-                              </button>
-                              <button onClick={() => togglePremiumOnly(idx)} title={srv.premiumOnly ? "Unlock (make free)" : "Lock (premium only)"}
-                                className={`p-1 rounded ${srv.premiumOnly ? "text-amber-400 hover:text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}>
-                                {srv.premiumOnly ? <Lock size={13} /> : <Unlock size={13} />}
+                            <button onClick={() => toggleLocked(idx)} title={srv.locked ? "Unlock (make free)" : "Lock (premium only)"}
+                              className={`p-1 rounded ${srv.locked ? "text-amber-400 hover:text-amber-300" : "text-zinc-500 hover:text-zinc-300"}`}>
+                              {srv.locked ? <Lock size={13} /> : <Unlock size={13} />}
                             </button>
                             <button onClick={() => moveServer(idx, -1)} disabled={idx === 0} className="text-zinc-400 hover:text-white p-1 disabled:opacity-30">
                               <ChevronLeft size={12} />
@@ -8832,13 +8870,6 @@ ${addedP}
                     <p className="text-[11px] text-zinc-400 font-medium">➕ নতুন সার্ভার যোগ করুন</p>
                     <input value={newName} onChange={e => setNewName(e.target.value)} className={inputClass} placeholder="সার্ভারের নাম (যেমন: Server 1)" />
                     <input value={newDomain} onChange={e => setNewDomain(e.target.value)} className={inputClass} placeholder="ডোমেইন (যেমন: https://example.com)" />
-                    <button
-                      type="button"
-                      onClick={() => setNewPremiumOnly(v => !v)}
-                      className={`w-full py-2 rounded-lg text-[12px] font-semibold border transition-all ${newPremiumOnly ? "bg-amber-500/20 border-amber-500/40 text-amber-300" : "bg-[#141422] border-white/8 text-zinc-400"}`}
-                    >
-                      {newPremiumOnly ? "👑 Premium Only" : "🆓 Free Server"}
-                    </button>
                     <button onClick={addServer} className={`${btnPrimary} w-full py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2`}>
                       <Plus size={14} /> সার্ভার যোগ করুন
                     </button>
@@ -8850,7 +8881,6 @@ ${addedP}
                   <ul className="text-[11px] text-zinc-400 space-y-1.5 list-disc list-inside">
                     <li>কমপক্ষে ২টি সার্ভার থাকলে প্লেয়ারে "Server" বাটন দেখাবে</li>
                     <li>সার্ভার চেঞ্জ করলে শুধু ডোমেইন বদলাবে, চ্যানেল/ফাইল আইডি একই থাকবে</li>
-                    <li>DEFAULT সার্ভার অটো সিলেক্ট হবে, PREMIUM সার্ভার শুধু প্রিমিয়াম ইউজার দেখবে</li>
                     <li>উদাহরণ: <code className="text-cyan-400">https://s1.example.com</code>/8866/file.mkv → <code className="text-cyan-400">https://s2.example.com</code>/8866/file.mkv</li>
                   </ul>
                 </div>

@@ -45,11 +45,11 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
   const [aiStatus, setAiStatus] = useState<"checking" | "ready" | "offline">("checking");
   const [logoFailed, setLogoFailed] = useState(false);
   const [userId, setUserId] = useState("");
-  const [userName, setUserName] = useState("");
+  const [userName, setUserName] = useState("Guest");
   const [userContext, setUserContext] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const cooldownUntilRef = useRef(0);
-  const logoSrc = !logoFailed && branding.logoUrl ? branding.logoUrl : "";
+  const logoSrc = !logoFailed && branding.logoUrl ? branding.logoUrl : logoImg;
 
   useEffect(() => {
     try {
@@ -189,7 +189,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
     context += `- Always return anime buttons in this exact format: [BTN:Short Name:LINK:exact_share_link]\n`;
     context += `- Match anime by exact title first. Do not give another anime's link.\n\n`;
 
-    context += `Catalog (${primaryItems.length}টি):\n`;
+    context += `RS Catalog (${primaryItems.length}টি):\n`;
     primaryItems.slice(0, 80).forEach((a) => {
       const shareLink = buildShareLink(a);
       if (a.id && shareLink) context += `- TITLE: ${a.title} | ID: ${a.id} | SHARE_LINK: ${shareLink}\n`;
@@ -234,7 +234,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
     const isTinyMessage = normalizedText.split(" ").filter(Boolean).length <= 3;
     const buildLocalReply = () => {
       if (isGreeting && isTinyMessage) {
-        return `আসসালামু আলাইকুম ${userName}! 👋\nআমি AI। anime, episode, premium, ID/password—যা জানতে চান লিখুন।`;
+        return `আসসালামু আলাইকুম ${userName || "ভাই"}! 👋\nআমি ICF AI। anime, episode, premium, ID/password—যা জানতে চান লিখুন।`;
       }
 
       if (!userContext) return "";
@@ -272,7 +272,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
     const userMsg: ChatMessage = { id: `u_${Date.now()}`, role: "user", content: text, timestamp: Date.now() };
     setMessages(prev => [...prev, userMsg]);
 
-    if (text.includes("@Admin") || text.includes("@admin") || text.includes("@Admin")) {
+    if (text.includes("@RS") || text.includes("@rs") || text.includes("@Rs")) {
       const cleanMsg = text.replace(/@[Rr][Ss]/g, "").trim();
       try {
         const msgRef = push(ref(db, `supportChats/${userId}/messages`));
@@ -366,7 +366,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
         role: "assistant",
         content: isRateLimit
           ? "⏳ Too many requests right now. Please try again in 15 seconds."
-          : "⚠️ সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করুন। সরাসরি Admin-এর কাছে পৌঁছাতে @Admin লিখে মেসেজ করুন।",
+          : "⚠️ সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করুন। সরাসরি Admin-এর কাছে পৌঁছাতে @RS লিখে মেসেজ করুন।",
         timestamp: Date.now(),
       };
       setMessages(prev => [...prev, errMsg]);
@@ -494,7 +494,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
                 return last.replace(/[-_]/g, " ").replace(/\b\w/g, c => c.toUpperCase()).slice(0, 25);
               } catch { return "Link"; }
             })();
-            // Internal RS Anime link → use onAnimeSelect for in-app navigation
+            // Internal ICF Anime link → use onAnimeSelect for in-app navigation
             const animeKey = getInternalAnimeKey(url);
             if (animeKey && isInternalSiteUrl(url)) {
               textParts.push(
@@ -568,7 +568,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
             </div>
             <p className="text-sm text-foreground font-medium">Hello! 👋</p>
             <p className="text-xs text-muted-foreground mt-1">I'm {branding.siteName} Bot, here to help you!</p>
-            <p className="text-[10px] text-primary/60 mt-2">Type @Admin to talk to Admin</p>
+            <p className="text-[10px] text-primary/60 mt-2">Type @RS to talk to Admin</p>
           </div>
         )}
         {messages.map((msg) => (
@@ -582,7 +582,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
             }`}
             style={msg.role !== "user" ? { boxShadow: "var(--neu-shadow-sm)" } : { boxShadow: "0 3px 10px hsla(42,80%,50%,0.3)" }}>
               {msg.role === "admin" && (
-                <span className="text-[10px] font-bold text-green-700 block mb-1">🛡️ Admin (RS)</span>
+                <span className="text-[10px] font-bold text-green-700 block mb-1">🛡️ Admin (ICF)</span>
               )}
               {renderMessageContent(msg.content)}
               <span className="text-[9px] opacity-40 mt-1 block text-right">
@@ -621,7 +621,7 @@ const LiveSupportChat = ({ getAnimeList, isOpen, onClose, onAnimeSelect }: LiveS
             <Send size={16} className="text-primary-foreground" />
           </button>
         </div>
-        <p className="text-[9px] text-muted-foreground text-center mt-2">@Admin লিখে Admin-কে সরাসরি মেসেজ করুন</p>
+        <p className="text-[9px] text-muted-foreground text-center mt-2">@RS লিখে Admin-কে সরাসরি মেসেজ করুন</p>
       </div>
     </div>
   );

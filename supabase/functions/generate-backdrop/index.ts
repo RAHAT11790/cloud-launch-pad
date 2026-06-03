@@ -1,15 +1,12 @@
-// Backdrop / Logo generator — dual provider:
-//   provider="lovable" → Lovable AI Gateway (default: openai/gpt-image-2)
-//   provider="flux"    → r-gengpt-api.vercel.app (Flux v1.0)
-//
-// Returns { ok, url, mode, engine } — caller decides whether to save to DB.
+// Generate anime backdrop / logo via Hugging Face Inference API.
+// Model: black-forest-labs/FLUX.1-schnell (free, high quality, fast).
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
+const HF_API_KEY = Deno.env.get("HUGGINGFACE_API_KEY") || "";
+const HF_MODELS = [
+  "black-forest-labs/FLUX.1-schnell",
+  "stabilityai/stable-diffusion-xl-base-1.0",
+];
 const IMGBB_KEYS = ["d5c0bce7c98c54d813bf285ffe453689"];
 
 interface Body {
@@ -19,102 +16,61 @@ interface Body {
   year?: string | number;
   mode?: "backdrop" | "logo";
   customPrompt?: string;
-  provider?: "lovable" | "flux";
-  model?: string;
 }
 
-function defaultBackdropPrompt(title: string, year?: string | number): string {
+function backdropPrompt(title: string, year?: string | number, custom?: string): string {
+  if (custom && custom.trim()) return custom.trim().replace(/\{title\}/gi, title);
   const yr = year ? String(year) : "";
-  return `CREATE A PROFESSIONAL 16:9 CINEMATIC ANIME PROMOTIONAL BANNER FOR "${title}" (${yr}) IN ULTRA DETAILED 4K HDR QUALITY.
-
-Use ONLY the OFFICIAL canonical main characters of "${title}" — exact signature hairstyle, eye design, official outfit, accessories, weapons. Characters must be instantly recognizable to anime fans. Do NOT invent characters or use generic anime faces. Hero protagonist on the right 55% of frame; supporting cast in official hierarchy.
-
-Background inspired by official key visuals of "${title}": signature environment, atmospheric particles, HDR rim lighting, cinematic fog, dynamic motion effects. Match the anime's signature color palette and mood (action: red/blue/orange; fantasy: gold/purple; sci-fi: cyan/neon; dark: red/black/purple).
-
-Style: Netflix / Crunchyroll / official anime promotional banner quality, magazine cover composition, sharp focus, perfect hand anatomy, glossy expressive eyes, no deformed faces, no watermarks, no random text. Ultra detailed, 4K resolution, HDR, premium finish.
-
-The final result must look like an OFFICIAL anime poster remastered into a premium cinematic banner.`;
+  return `Official Netflix / Crunchyroll style 16:9 cinematic anime KEY VISUAL banner for "${title}" (${yr}). The real canonical main protagonist of "${title}" rendered with exact signature hair, eye color, outfit, weapon and accessories — instantly recognizable to fans. Heroic dynamic pose pulled from a famous scene. Photorealistic anime shading, glossy expressive eyes, perfect hand anatomy, rim lighting, anamorphic lens flare, atmospheric particles, cinematic HDR color grade matching the anime's signature palette. Character on right 55% of frame, signature environment of the anime behind. Painterly yet razor sharp, magazine cover quality, studio-grade composition. No deformed faces, no extra fingers, no text watermarks, no generic AI faces.`;
 }
 
-function defaultLogoPrompt(title: string): string {
+function logoPrompt(title: string, custom?: string): string {
+  if (custom && custom.trim()) return custom.trim().replace(/\{title\}/gi, title);
   const upper = title.toUpperCase();
-  return `Official anime TITLE LOGO for "${title}", square 1:1. Title "${upper}" rendered in the canonical official logo treatment of the real anime (matching font, colors, glow, ornaments). Japanese kanji of the title below in small elegant typography. Deep black radial gradient background with atmospheric particles. High resolution, perfect kerning, crisp edges, no foreground characters, no extra text.`;
+  return `Official anime TITLE LOGO / title-mark for "${title}", square 1:1, the title "${upper}" rendered in the exact canonical official logo treatment of the real anime (matching font, colors, texture, ornaments, glow, slashes or effects as the real official logo). Japanese kanji of the title below in small elegant typography. Deep black or theme-colored radial gradient background with subtle signature motif and atmospheric particles. High resolution, perfect kerning, painterly micro-texture, crisp edges, no foreground characters, no clutter, no extra text.`;
 }
 
-function buildPrompt(body: Body): string {
-  if (body.customPrompt && body.customPrompt.trim()) {
-    return body.customPrompt
-      .replace(/\{title\}/gi, body.title)
-      .replace(/\[WRITE ANIME NAME HERE\]/gi, body.title);
+async function genWithHuggingFace(prompt: string, mode: "backdrop" | "logo"): Promise<Uint8Array> {
+  if (!HF_API_KEY) throw new Error("HUGGINGFACE_API_KEY missing");
+  const params = mode === "logo"
+    ? { width: 1024, height: 1024, num_inference_steps: 4, guidance_scale: 0.0 }
+    : { width: 1344, height: 768, num_inference_steps: 4, guidance_scale: 0.0 };
+
+  let lastErr: unknown;
+  for (const model of HF_MODELS) {
+    try {
+      const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${HF_API_KEY}`,
+          "Content-Type": "application/json",
+          Accept: "image/png",
+          "x-wait-for-model": "true",
+        },
+        body: JSON.stringify({
+          inputs: prompt,
+          parameters: params,
+          options: { wait_for_model: true },
+        }),
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        if (res.status === 429) throw new Error("RATE_LIMIT");
+        if (res.status === 402 || res.status === 403) throw new Error("HF quota exhausted — check your Hugging Face token");
+        throw new Error(`HF ${model} ${res.status}: ${t.slice(0, 200)}`);
+      }
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.startsWith("image/")) {
+        const t = await res.text().catch(() => "");
+        throw new Error(`HF ${model}: unexpected content-type ${ct} ${t.slice(0, 150)}`);
+      }
+      const buf = new Uint8Array(await res.arrayBuffer());
+      if (buf.byteLength < 1000) throw new Error(`HF ${model}: image too small`);
+      return buf;
+    } catch (e) { lastErr = e; console.error(`[generate-backdrop] HF ${model} failed:`, (e as Error).message); }
   }
-  return body.mode === "logo" ? defaultLogoPrompt(body.title) : defaultBackdropPrompt(body.title, body.year);
+  throw lastErr instanceof Error ? lastErr : new Error("HF: all models failed");
 }
-
-async function genWithLovable(prompt: string, mode: "backdrop" | "logo", model?: string): Promise<Uint8Array> {
-  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-  const chosen = model || "openai/gpt-image-2";
-
-  let body: Record<string, unknown>;
-  if (chosen.startsWith("google/")) {
-    body = {
-      model: chosen,
-      messages: [{ role: "user", content: prompt }],
-      modalities: ["image", "text"],
-    };
-  } else {
-    body = {
-      model: chosen,
-      prompt,
-      size: mode === "logo" ? "1024x1024" : "1536x1024",
-      quality: "medium",
-      n: 1,
-    };
-  }
-
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    if (res.status === 429) throw new Error("RATE_LIMIT");
-    if (res.status === 402) throw new Error("PAYMENT_REQUIRED — Lovable AI credits exhausted");
-    throw new Error(`Lovable AI ${res.status}: ${t.slice(0, 220)}`);
-  }
-  const j = await res.json();
-  const b64 = j?.data?.[0]?.b64_json;
-  if (!b64) throw new Error("Lovable AI: no image data in response");
-  const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-  if (bin.byteLength < 1000) throw new Error("Lovable AI: image too small");
-  return bin;
-}
-
-async function genWithFlux(prompt: string, mode: "backdrop" | "logo"): Promise<string> {
-  const ar = mode === "logo" ? "1:1" : "16:9";
-  // Aggressive aspect + style guard for Flux (weaker than Lovable AI on anatomy/composition).
-  const guardedPrompt =
-    mode === "logo"
-      ? `${prompt}
-
-STRICT REQUIREMENTS: square 1:1 frame, centered title text only, NO characters, NO faces, NO bodies. Deep black gradient background. Crisp logo typography only. Match the official anime title logo style exactly.`
-      : `${prompt}
-
-STRICT REQUIREMENTS: wide cinematic 16:9 landscape composition (NOT square, NOT portrait). Subject must fill the frame, no black bars, no letterboxing. Official anime characters of the show, exact canonical hair, eyes, outfit. No deformed anatomy. Professional Crunchyroll / Netflix promotional banner quality. Ultra detailed, 4K, HDR, no watermarks, no random text.`;
-  const url = `https://r-gengpt-api.vercel.app/api/image?prompt=${encodeURIComponent(guardedPrompt)}&style=realistic&ar=${ar}`;
-  const res = await fetch(url, { method: "GET" });
-  if (!res.ok) throw new Error(`Flux API ${res.status}`);
-  const j = await res.json();
-  if (j?.status !== "success" || !j?.data?.url) {
-    throw new Error(`Flux API: ${j?.message || "no url returned"}`);
-  }
-  return j.data.url as string;
-}
-
 
 async function uploadToImgbb(bytes: Uint8Array, name: string): Promise<string> {
   let lastErr: unknown;
@@ -137,11 +93,6 @@ async function uploadToImgbb(bytes: Uint8Array, name: string): Promise<string> {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method === "GET") {
-    return new Response(JSON.stringify({ ok: true, service: "generate-backdrop", providers: ["lovable", "flux"] }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
   try {
     const body = (await req.json()) as Body;
     if (!body?.title || !body?.animeId) {
@@ -150,26 +101,21 @@ Deno.serve(async (req) => {
       });
     }
     const mode = body.mode === "logo" ? "logo" : "backdrop";
-    const provider = body.provider === "flux" ? "flux" : "lovable";
-    const prompt = buildPrompt({ ...body, mode });
+    const prompt = mode === "logo"
+      ? logoPrompt(body.title, body.customPrompt)
+      : backdropPrompt(body.title, body.year, body.customPrompt);
+    const bytes = await genWithHuggingFace(prompt, mode);
 
     const safe = body.animeId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
-    let url: string;
+    const url = await uploadToImgbb(bytes, `${mode}_${safe}_${Date.now()}`);
 
-    if (provider === "flux") {
-      url = await genWithFlux(prompt, mode);
-    } else {
-      const bytes = await genWithLovable(prompt, mode, body.model);
-      url = await uploadToImgbb(bytes, `${mode}_${safe}_${Date.now()}`);
-    }
-
-    return new Response(JSON.stringify({ ok: true, url, mode, engine: provider }), {
+    return new Response(JSON.stringify({ ok: true, url, mode, engine: "huggingface" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
     const msg = String(e?.message || e);
-    console.error("[generate-backdrop]", msg);
-    const status = msg === "RATE_LIMIT" ? 429 : msg.includes("PAYMENT_REQUIRED") ? 402 : 500;
+    console.error("[generate-backdrop] error:", msg);
+    const status = msg === "RATE_LIMIT" ? 429 : msg.includes("quota") ? 402 : 500;
     return new Response(JSON.stringify({ error: msg }), {
       status, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

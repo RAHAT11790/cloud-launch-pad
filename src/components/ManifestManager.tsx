@@ -32,7 +32,7 @@ export default function ManifestManager() {
     const isAdminRoute = location.pathname.startsWith("/admin");
     const isUserAppRoute = location.pathname.startsWith("/app");
     const appName = isAdminRoute ? `${branding.siteName} Admin` : branding.siteName;
-    const iconUrl = toAbsoluteUrl(branding.logoUrl) || "";
+    const iconUrl = toAbsoluteUrl(branding.logoUrl) || "/android-chrome-512x512.png";
     const startUrl = isAdminRoute ? "/admin?source=homescreen" : "/?source=homescreen";
     const scope = isAdminRoute ? "/admin" : "/";
     const manifest = {
@@ -40,7 +40,7 @@ export default function ManifestManager() {
       name: appName,
       short_name: appName,
       description: isAdminRoute
-        ? branding.siteName
+        ? `${branding.siteName} admin panel`
         : branding.siteDescription,
       start_url: startUrl,
       scope,

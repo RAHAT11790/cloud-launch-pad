@@ -41,7 +41,7 @@ const Unlock = () => {
 
       const consume = await consumeUnlockTokenForCurrentUser(token);
       if (!consume.ok) {
-        localStorage.removeItem("rsanime_ad_access");
+        localStorage.removeItem("icfanime_ad_access");
         setStatus("denied");
         setTimeout(() => navigate("/", { replace: true }), 900);
         return;
@@ -65,7 +65,7 @@ const Unlock = () => {
       }
 
       const expiry = Date.now() + durationMs;
-      localStorage.setItem("rsanime_ad_access", expiry.toString());
+      localStorage.setItem("icfanime_ad_access", expiry.toString());
       setPrizeHours(hours);
       setPrizeMinutes(minutes);
       setStatus("success");

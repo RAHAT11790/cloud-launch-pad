@@ -36,11 +36,13 @@ interface HeaderProps {
   animeTitles?: string[];
   onLogoClick?: () => void;
   chatOpen?: boolean;
+  onLoginClick?: () => void;
+  isGuest?: boolean;
 }
 
-const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = [], onLogoClick, chatOpen }: HeaderProps) => {
+const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = [], onLogoClick, chatOpen, onLoginClick, isGuest }: HeaderProps) => {
   const branding = useBranding();
-  const logoSrc = branding.logoUrl ;
+  const logoSrc = branding.logoUrl || logoImg;
   const [userId, setUserId] = useState<string | undefined>(undefined);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
@@ -155,19 +157,29 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       <div className="flex items-center gap-1.5">
         <ThemeToggle />
         <NotificationPanel userId={userId} onOpenContent={onOpenContent} />
-        <button
-          onClick={onProfileClick}
-          className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center transition-all hover:scale-110"
-          style={{ boxShadow: "var(--neu-shadow-sm)" }}
-        >
-          {profilePhoto ? (
-            <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full gradient-primary flex items-center justify-center">
-              <User className="w-4 h-4 text-primary-foreground" />
-            </div>
-          )}
-        </button>
+        {isGuest && onLoginClick ? (
+          <button
+            onClick={onLoginClick}
+            className="px-3 h-9 rounded-full text-xs font-semibold gradient-primary text-primary-foreground transition-all hover:scale-105 active:scale-95"
+            style={{ boxShadow: "var(--neu-shadow-sm)" }}
+          >
+            Login
+          </button>
+        ) : (
+          <button
+            onClick={onProfileClick}
+            className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center transition-all hover:scale-110"
+            style={{ boxShadow: "var(--neu-shadow-sm)" }}
+          >
+            {profilePhoto ? (
+              <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full gradient-primary flex items-center justify-center">
+                <User className="w-4 h-4 text-primary-foreground" />
+              </div>
+            )}
+          </button>
+        )}
       </div>
     </header>
   );

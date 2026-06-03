@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/admin/(.*)", "destination": "/index.html" },
+    { "source": "/watch/(.*)", "destination": "/index.html" },
+    { "source": "/anime/(.*)", "destination": "/index.html" },
+    { "source": "/unlock", "destination": "/index.html" },
+    { "source": "/unlock-required", "destination": "/index.html" },
+    { "source": "/search", "destination": "/index.html" },
+    { "source": "/notifications", "destination": "/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "cleanUrls": true,
+  "trailingSlash": false
+}

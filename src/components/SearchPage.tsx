@@ -117,16 +117,16 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
               </div>
               <div className="grid grid-cols-3 gap-2.5">
                 {historyAnime.map((anime) => (
-                  <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" style={{ boxShadow: "var(--neu-shadow-sm)" }} onClick={() => handleCardClick(anime)}>
-                    <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+                  <div key={anime.id} className="relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer poster-hover bg-card" style={{ boxShadow: "var(--neu-shadow-sm)" }} onClick={() => handleCardClick(anime)}>
+                    <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="eager" decoding="async" />
                     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 40%, transparent 70%)" }} />
                     <button onClick={(e) => handleRemoveHistory(e, anime.id)}
                       className="absolute top-1 right-1 w-5 h-5 rounded-full bg-white/80 flex items-center justify-center hover:bg-destructive transition-colors z-10">
                       <X className="w-3 h-3" />
                     </button>
                     <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 z-10">
-                      <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold text-primary-foreground">{anime.year}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${anime.source === "animesalt" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{anime.source === "animesalt" ? "AN" : "RS"}</span>
+                      <span className="gradient-primary px-1.5 py-[1px] rounded text-[8px] font-bold text-primary-foreground uppercase tracking-wide max-w-[80px] truncate" title={anime.langLabel || anime.language}>{anime.langLabel || anime.language}</span>
+                      <span className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground">ICF</span>
                     </div>
                     <div className="absolute bottom-0 left-0 right-0 p-2">
                       <p className="text-[11px] font-semibold leading-tight line-clamp-2 text-white">{anime.title}</p>
@@ -159,12 +159,12 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
         <div className="grid grid-cols-3 gap-2.5">
           {results.map((anime) => (
             <div key={anime.id} className="w-full">
-              <div className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" style={{ boxShadow: "var(--neu-shadow-sm)" }} onClick={() => handleCardClick(anime)}>
-                <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+              <div className="relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer poster-hover bg-card" style={{ boxShadow: "var(--neu-shadow-sm)" }} onClick={() => handleCardClick(anime)}>
+                <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="eager" decoding="async" />
                 <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 40%, transparent 70%)" }} />
-                <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
-                  <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold text-primary-foreground">{anime.year}</span>
-                  <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${anime.source === "animesalt" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{anime.source === "animesalt" ? "AN" : "RS"}</span>
+                <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5 z-10">
+                  <span className="gradient-primary px-1.5 py-[1px] rounded text-[8px] font-bold text-primary-foreground uppercase tracking-wide max-w-[80px] truncate" title={anime.langLabel || anime.language}>{anime.langLabel || anime.language}</span>
+                  <span className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground">ICF</span>
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 p-2">
                   <p className="text-[11px] font-semibold leading-tight line-clamp-2 text-white">{anime.title}</p>

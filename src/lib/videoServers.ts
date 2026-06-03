@@ -44,7 +44,7 @@ function normaliseServers(val: any): VideoServer[] {
       id: String(idx),
       name: String(s.name || `Server ${idx + 1}`),
       domain: normalizeServerDomain(String(s.domain)),
-      premiumOnly: !!(s.premiumOnly ?? s.locked),
+      premiumOnly: !!s.premiumOnly,
       isDefault: !!s.isDefault,
     }));
 }

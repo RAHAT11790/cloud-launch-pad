@@ -1,13 +1,13 @@
 import { useEffect } from "react";
 import { useBranding } from "@/hooks/useBranding";
-import { SITE_URL } from "@/lib/siteConfig";
+import { SITE_URL, SITE_ICON_URL } from "@/lib/siteConfig";
 
 /** Updates OG/meta tags dynamically from Firebase branding config */
 const DynamicMeta = () => {
   const branding = useBranding();
 
   useEffect(() => {
-    const logoUrl = branding.logoUrl || "";
+    const logoUrl = branding.logoUrl || SITE_ICON_URL;
 
     // Title
     document.title = branding.siteName;
