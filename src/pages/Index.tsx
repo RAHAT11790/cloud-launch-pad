@@ -2037,8 +2037,11 @@ const Index = () => {
     // Each page has its own scroll container now — no need to restore window scroll
   }, []);
 
+  const [showLogin, setShowLogin] = useState(false);
+
   const handleNavigate = useCallback((page: string) => {
     if (page === "profile") {
+      if (!isLoggedIn) { setShowLogin(true); return; }
       void import("@/components/ProfilePage");
       setShowProfile(true);
       return;
@@ -2448,6 +2451,22 @@ const Index = () => {
           <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
         )}
       </AnimatePresence>
+
+      {/* On-demand login overlay (no more login wall on first visit) */}
+      {showLogin && (
+        <div className="fixed inset-0 z-[400]">
+          <LoginPage
+            onLogin={(uid) => { handleLogin(uid); setShowLogin(false); }}
+          />
+          <button
+            onClick={() => setShowLogin(false)}
+            aria-label="Close"
+            className="fixed top-4 right-4 z-[410] w-10 h-10 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/80 transition"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <AnimatePresence>
         {selectedAnime && (
