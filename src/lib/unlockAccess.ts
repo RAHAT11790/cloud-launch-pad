@@ -1,12 +1,20 @@
-import { db, ref, set, get, runTransaction, update } from "@/lib/firebase";
+import { db, ref, set, get, runTransaction, update, onValue } from "@/lib/firebase";
 import { SITE_URL } from "@/lib/siteConfig";
 import { getUnlockBlockExpiry } from "@/lib/unlockBlock";
 import { getDeviceFingerprint, getDeviceId, getDeviceInfo } from "@/lib/premiumDevice";
 
 const UNLOCK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const DEFAULT_FREE_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
-const AD_GATE_COOLDOWN_MS = 5 * 60 * 1000;
 const AD_GATE_LAST_SHOWN_KEY = "rs_ad_gate_last_shown_at";
+
+// Admin-configurable cooldown (minutes). 0 = no cooldown (every play shows ad gate).
+let _adGateCooldownMs = 0;
+try {
+  onValue(ref(db, "settings/adGateCooldownMinutes"), (snap) => {
+    const mins = Number(snap.val());
+    _adGateCooldownMs = Number.isFinite(mins) && mins > 0 ? mins * 60 * 1000 : 0;
+  });
+} catch {}
 
 // Get configurable unlock duration from Firebase (cached)
 let _cachedDurationMs: number | null = null;
