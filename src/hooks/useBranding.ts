@@ -17,6 +17,7 @@ export interface BrandingConfig {
   adminTitle: string;
   aboutTitle: string;
   logoUrl: string;           // Default logo (header, splash, etc.)
+  splashBgUrl: string;       // Splash screen background image
   playerLogoUrl: string;     // Video player loading logo
   playerName: string;        // Video player title (e.g. "RS ANIME PLAYER")
   rsCardLabel: string;       // RS source card label
