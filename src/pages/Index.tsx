@@ -159,7 +159,7 @@ import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
 // FCM removed — push notifications no longer used
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
-import { getCurrentDeviceFreeAccessExpiry } from "@/lib/unlockAccess";
+import { getCurrentDeviceFreeAccessExpiry, isAdGateCooldownActive, markAdGateShownNow } from "@/lib/unlockAccess";
 // Unlock gate toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When false: no flash, no redirect, no toast — players play instantly for everyone.
 const isShortenerEnabled = async (): Promise<boolean> => {
@@ -427,11 +427,14 @@ const Index = () => {
 
     if (hasFreeAccess()) return true;
 
+    if (isAdGateCooldownActive()) return true;
+
     // If admin disabled the shortener system entirely, free users get instant access (no ad-gate).
     const shortenerOn = await isShortenerEnabled();
     if (!shortenerOn) return true;
 
     if (anime) {
+      markAdGateShownNow();
       redirectToUnlockRequired(anime, seasonIdx, epIdx);
     }
     return false;
