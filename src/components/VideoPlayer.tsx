@@ -473,7 +473,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [adGateActive, setAdGateActive] = useState(false);
   const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
   const [shortenLoading, setShortenLoading] = useState(false);
-  const [playerAdReady, setPlayerAdReady] = useState(false);
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
   const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
@@ -507,10 +506,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
   const [unlockBlocked, setUnlockBlocked] = useState(false);
-
-  useEffect(() => {
-    setPlayerAdReady(!adGateActive && !unlockBlocked && !deviceBlocked);
-  }, [adGateActive, unlockBlocked, deviceBlocked]);
 
   // Check IndexedDB for already downloaded episodes matching this title
   useEffect(() => {
