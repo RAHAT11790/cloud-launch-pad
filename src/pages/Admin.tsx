@@ -663,6 +663,49 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
   );
 };
 
+// ==================== AD GATE COOLDOWN CONFIG ====================
+const AdGateCooldownConfig = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
+  const [minutes, setMinutes] = useState<number>(0);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    const r = ref(db, "settings/adGateCooldownMinutes");
+    const unsub = onValue(r, (snap) => {
+      const v = Number(snap.val());
+      setMinutes(Number.isFinite(v) && v >= 0 ? v : 0);
+    });
+    return () => unsub();
+  }, []);
+  const save = async () => {
+    setSaving(true);
+    try {
+      await set(ref(db, "settings/adGateCooldownMinutes"), Math.max(0, Number(minutes) || 0));
+      toast.success("Ad gate cooldown saved");
+    } catch (e: any) { toast.error(e?.message || "Save failed"); }
+    finally { setSaving(false); }
+  };
+  return (
+    <div className={`${glassCard} p-4 mb-4`}>
+      <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+        <Clock size={14} className="text-amber-400" /> Ad Gate Cooldown
+      </h3>
+      <p className="text-[11px] text-zinc-400 mb-3">
+        Minimum gap (in minutes) between two ad gates for the same user. Set to <b>0</b> to show the ad gate every time the user starts a video.
+      </p>
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <label className="text-[10px] text-zinc-400 mb-1 block">Cooldown (minutes)</label>
+          <input type="number" min={0} max={1440} value={minutes}
+            onChange={e => setMinutes(Math.max(0, Number(e.target.value) || 0))}
+            className={inputClass} />
+        </div>
+        <button onClick={save} disabled={saving} className={`${btnPrimary} px-4 py-2 text-xs flex items-center justify-center gap-2`}>
+          <Save size={12} /> {saving ? "..." : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ==================== TELEGRAM POST FREE-ACCESS CONFIG ====================
 const TelegramFreeAccessConfig = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
   const [enabled, setEnabled] = useState(false);
