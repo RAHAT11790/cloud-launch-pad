@@ -13,7 +13,6 @@ import PrivacyPolicyPage from "./PrivacyPolicyPage";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { Progress } from "@/components/ui/progress";
 import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
-import { isGuestUser, getGuestWatchHistory, getGuestWatchlist, subscribeGuestHistory, subscribeGuestWatchlist, removeGuestWatchlistItemNotify } from "@/lib/guestSession";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -69,7 +68,6 @@ interface ProfilePageProps {
   allAnime?: AnimeItem[];
   onCardClick?: (anime: AnimeItem) => void;
   onLogout?: () => void;
-  onLoginClick?: () => void;
 }
 
 const MAX_PHOTO_SIZE = 2 * 1024 * 1024;
@@ -441,7 +439,7 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
   );
 };
 
-const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLoginClick }: ProfilePageProps) => {
+const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: ProfilePageProps) => {
   const brandingCfg = useBranding();
   const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy">("main");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(() => {
@@ -464,7 +462,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   // Watchlist & History from Firebase
   const [watchlist, setWatchlist] = useState<any[]>([]);
   const [watchHistory, setWatchHistory] = useState<any[]>([]);
-  const [historyLangFilter, setHistoryLangFilter] = useState<string>("");
   const [isPremium, setIsPremium] = useState(false);
   const [premiumExpiry, setPremiumExpiry] = useState<number | null>(null);
   const [premiumMaxDevices, setPremiumMaxDevices] = useState(1);
@@ -541,18 +538,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     onClose();
   }, [onLogout, onClose]);
 
-  // Guest mode: load watchlist & history from localStorage
   useEffect(() => {
-    if (!isGuestUser()) return;
-    const unsubH = subscribeGuestHistory((items) => setWatchHistory(items));
-    const unsubW = subscribeGuestWatchlist((items) => setWatchlist(items));
-    setWatchHistory(getGuestWatchHistory());
-    setWatchlist(getGuestWatchlist());
-    return () => { unsubH(); unsubW(); };
-  }, []);
-
-  useEffect(() => {
-    if (!userId || isGuestUser()) return;
+    if (!userId) return;
     const premRef = ref(db, `users/${userId}/premium`);
     const unsubPremium = onValue(premRef, (snap) => {
       const data = snap.val();
@@ -718,10 +705,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   };
 
   const removeFromWatchlist = (itemId: string) => {
-    if (isGuestUser()) {
-      removeGuestWatchlistItemNotify(itemId);
-      return;
-    }
     if (!userId) return;
     remove(ref(db, `users/${userId}/watchlist/${itemId}`));
   };
@@ -1192,7 +1175,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
             <input
               value={redeemInput}
               onChange={e => setRedeemInput(e.target.value.toUpperCase())}
-              placeholder="RS-XXXXXX-XXXX"
+              placeholder=""
               className="w-full py-3 px-4 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground text-sm font-mono tracking-widest focus:border-primary focus:outline-none transition-colors mb-3 text-center"
             />
             <button onClick={redeemCode} disabled={redeemLoading}
@@ -1486,34 +1469,21 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
             {profilePhoto ? (
               <div className="relative">
                 <img src={profilePhoto} alt="Profile" className="w-[100px] h-[100px] rounded-full object-cover border-4 border-primary/30 shadow-[0_10px_40px_hsla(355,85%,55%,0.3)]" />
-                {!isGuestUser() && (
-                  <button onClick={removePhoto} className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-destructive flex items-center justify-center">
-                    <X className="w-3 h-3 text-white" />
-                  </button>
-                )}
+                <button onClick={removePhoto} className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-destructive flex items-center justify-center">
+                  <X className="w-3 h-3 text-white" />
+                </button>
               </div>
             ) : (
               <div className="w-[100px] h-[100px] rounded-full gradient-primary flex items-center justify-center text-[42px] font-extrabold shadow-[0_10px_40px_hsla(355,85%,55%,0.4)] border-4 border-foreground/10">
                 {initial}
               </div>
             )}
-            <button
-              onClick={() => {
-                if (isGuestUser()) {
-                  toast.error("Login required to upload profile picture");
-                  return;
-                }
-                fileRef.current?.click();
-              }}
-              className={`absolute bottom-0 right-0 w-8 h-8 rounded-full flex items-center justify-center shadow-lg ${isGuestUser() ? "bg-foreground/30" : "bg-primary"}`}
-            >
-              {isGuestUser() ? <Lock className="w-3.5 h-3.5 text-primary-foreground" /> : <Camera className="w-4 h-4 text-primary-foreground" />}
+            <button onClick={() => fileRef.current?.click()} className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg">
+              <Camera className="w-4 h-4 text-primary-foreground" />
             </button>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={isGuestUser()} />
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
           </div>
-          <p className="text-[10px] text-muted-foreground mt-2">
-            {isGuestUser() ? "Login required for profile picture" : "Max 2MB • JPG, PNG, WebP"}
-          </p>
+          <p className="text-[10px] text-muted-foreground mt-2">Max 2MB • JPG, PNG, WebP</p>
         </div>
         <div className="mb-6">
           <label className="text-xs text-muted-foreground mb-2 block">Display Name</label>
@@ -1524,17 +1494,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
           <Save className="w-4 h-4" /> Save Changes
         </button>
 
-        {/* Change/Set Password Button - login users only */}
-        <button
-          onClick={() => {
-            if (isGuestUser()) {
-              toast.error("Login required to set a password");
-              return;
-            }
-            setActivePanel("change-password");
-          }}
-          className={`w-full py-3 rounded-xl border text-foreground font-medium flex items-center justify-center gap-2 transition-all text-sm ${isGuestUser() ? "bg-foreground/5 border-foreground/10 opacity-70" : "bg-foreground/10 border-foreground/10 hover:border-primary"}`}>
-          <Lock className="w-4 h-4 text-primary" /> {isGuestUser() ? "Password Settings (Login required)" : "পাসওয়ার্ড সেটিংস"}
+        {/* Change/Set Password Button - show for all users */}
+        <button onClick={() => setActivePanel("change-password")}
+          className="w-full py-3 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground font-medium flex items-center justify-center gap-2 transition-all hover:border-primary text-sm">
+          <Lock className="w-4 h-4 text-primary" /> পাসওয়ার্ড সেটিংস
         </button>
       </motion.div>
     );
@@ -1585,35 +1548,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
       {/* Watch History */}
       <div className="mb-7">
         <h3 className="text-base font-bold mb-3 flex items-center category-bar">Watch History</h3>
-        {(() => {
-          // Build the audio-language filter pills row purely from the history items.
-          // It does NOT touch the global language selector — it just filters this list.
-          const langSet = new Map<string, string>();
-          watchHistory.forEach((it: any) => {
-            const n = String(it?.language || it?.langLabel || "").trim();
-            if (!n) return;
-            const k = n.toLowerCase();
-            if (!langSet.has(k)) langSet.set(k, n);
-          });
-          const langs = Array.from(langSet.values());
-          if (langs.length <= 1) return null;
-          return (
-            <div data-no-swipe="true" className="flex gap-1.5 overflow-x-auto pb-2 mb-2 no-scrollbar" style={{ touchAction: "pan-x pan-y" }}>
-              <button
-                onClick={() => setHistoryLangFilter("")}
-                className={`flex-shrink-0 px-3 py-1 rounded-full text-[10px] font-semibold transition-all whitespace-nowrap ${historyLangFilter === "" ? "gradient-primary text-primary-foreground" : "bg-card text-muted-foreground"}`}
-              >All</button>
-              {langs.map((lang) => {
-                const active = lang.toLowerCase() === historyLangFilter.toLowerCase();
-                return (
-                  <button key={lang} onClick={() => setHistoryLangFilter(lang)}
-                    className={`flex-shrink-0 px-3 py-1 rounded-full text-[10px] font-semibold transition-all whitespace-nowrap ${active ? "gradient-primary text-primary-foreground" : "bg-card text-muted-foreground"}`}
-                  >{lang}</button>
-                );
-              })}
-            </div>
-          );
-        })()}
         {watchHistory.length === 0 ? (
           <div className="text-center py-8">
             <History className="w-10 h-10 text-muted-foreground/50 mx-auto mb-2.5" />
@@ -1621,24 +1555,12 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
           </div>
         ) : (
           <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
-            {watchHistory
-              .filter((it: any) => {
-                if (!historyLangFilter) return true;
-                const n = String(it?.language || it?.langLabel || "").trim().toLowerCase();
-                return n === historyLangFilter.toLowerCase();
-              })
-              .slice(0, 20)
-              .map((item: any) => (
+            {watchHistory.slice(0, 20).map((item: any) => (
               <div key={item.id} onClick={() => handleAnimeClick(item)}
                 className="flex-shrink-0 w-[100px] cursor-pointer">
-                <div className="relative aspect-[2/3] rounded-md overflow-hidden bg-card mb-1">
-                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="eager" decoding="async" />
+                <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
+                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 50%)" }} />
-                  {(item.language || item.langLabel) && (
-                    <span className="absolute top-1 right-1 gradient-primary px-1.5 py-[1px] rounded text-[7px] font-bold uppercase tracking-wide max-w-[70px] truncate z-10" title={item.language || item.langLabel}>
-                      {item.language || item.langLabel}
-                    </span>
-                  )}
                   <div className="absolute bottom-1 left-1 right-1">
                     <p className="text-[9px] font-semibold leading-tight line-clamp-2">{item.title}</p>
                     {item.episodeInfo && (
@@ -1667,18 +1589,13 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
             {watchlist.map((item: any) => (
               <div key={item.id} onClick={() => handleAnimeClick(item)}
                 className="flex-shrink-0 w-[100px] cursor-pointer relative">
-                <div className="relative aspect-[2/3] rounded-md overflow-hidden bg-card mb-1">
-                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="eager" decoding="async" />
+                <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
+                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 50%)" }} />
                   <button onClick={(e) => { e.stopPropagation(); removeFromWatchlist(item.id); }}
                     className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive/80 flex items-center justify-center">
                     <X className="w-3 h-3 text-white" />
                   </button>
-                  {(item.language || item.langLabel) && (
-                    <span className="absolute top-1 left-1 gradient-primary px-1.5 py-[1px] rounded text-[7px] font-bold uppercase tracking-wide max-w-[70px] truncate z-10" title={item.language || item.langLabel}>
-                      {item.language || item.langLabel}
-                    </span>
-                  )}
                   <div className="absolute bottom-1 left-1 right-1">
                     <p className="text-[9px] font-semibold leading-tight line-clamp-2">{item.title}</p>
                   </div>
@@ -1710,25 +1627,18 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
 
       {/* Menu Items */}
       <div className="flex flex-col gap-2">
-        <div onClick={() => {
-            if (isGuestUser()) {
-              toast.error("Login required to access Premium");
-              onLoginClick?.(); onClose();
-              return;
-            }
-            setActivePanel("premium");
-          }}
+        <div onClick={() => setActivePanel("premium")}
           className={`flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:translate-x-1 rounded-xl ${isPremium ? (isPremiumExpiringSoon ? "border border-destructive/50 bg-destructive/10 animate-pulse" : "premium-card-glow") : "glass-card border-foreground/20 bg-gradient-to-r from-foreground/5 to-transparent hover:border-primary"}`}
           style={isPremiumExpiringSoon ? { boxShadow: "0 0 24px hsla(0,84%,60%,0.25)" } : undefined}>
           <Crown className="w-5 h-5" style={isPremium ? { color: "hsl(45,90%,55%)" } : { color: "hsl(var(--primary))" }} />
           <div className="flex-1">
-            <span className={`text-[13px] font-medium ${isPremium ? "premium-text" : ""}`}>{isPremium ? "Premium Active ✨" : isGuestUser() ? "Premium (Login required)" : "Get Premium"}</span>
+            <span className={`text-[13px] font-medium ${isPremium ? "premium-text" : ""}`}>{isPremium ? "Premium Active ✨" : "Get Premium"}</span>
             {isPremium && premiumExpiry && (
               <p className={`text-[10px] ${isPremiumExpiringSoon ? "text-destructive" : "text-muted-foreground"}`}>Expires: {new Date(premiumExpiry).toLocaleDateString()} • {premiumDeviceCount}/{premiumMaxDevices} devices • {premiumDaysLeft} day{premiumDaysLeft === 1 ? "" : "s"} left</p>
             )}
-            {!isPremium && !isGuestUser() && <p className="text-[10px] text-muted-foreground">Buy premium with bKash</p>}
+            {!isPremium && <p className="text-[10px] text-muted-foreground">Buy premium with bKash</p>}
           </div>
-          {isGuestUser() ? <Lock className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3 h-3 text-muted-foreground" />}
+          <ChevronRight className="w-3 h-3 text-muted-foreground" />
         </div>
         <div onClick={() => setActivePanel("settings")}
           className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:border-primary hover:translate-x-1 rounded-xl">
@@ -1742,23 +1652,12 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
           <span className="flex-1 text-[13px] font-medium">Edit Profile</span>
           <ChevronRight className="w-3 h-3 text-muted-foreground" />
         </div>
-        {isGuestUser() ? (
-          <div
-            onClick={() => { onLoginClick?.(); onClose(); }}
-            className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:translate-x-1 rounded-xl bg-primary/10 border-primary/30"
-          >
-            <User className="w-5 h-5 text-primary" />
-            <span className="flex-1 text-[13px] font-semibold text-primary">Login / Register</span>
-            <ChevronRight className="w-3 h-3 text-primary" />
-          </div>
-        ) : (
-          <div onClick={handleDeleteThisPhoneLogin}
-            className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:bg-accent/20 border-accent/30 bg-accent/15 rounded-xl">
-            <LogOut className="w-5 h-5" />
-            <span className="flex-1 text-[13px] font-medium">Logout</span>
-            <ChevronRight className="w-3 h-3 text-muted-foreground" />
-          </div>
-        )}
+        <div onClick={handleDeleteThisPhoneLogin}
+          className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:bg-accent/20 border-accent/30 bg-accent/15 rounded-xl">
+          <LogOut className="w-5 h-5" />
+          <span className="flex-1 text-[13px] font-medium">Logout</span>
+          <ChevronRight className="w-3 h-3 text-muted-foreground" />
+        </div>
 
         {/* Telegram Join Button */}
         <a

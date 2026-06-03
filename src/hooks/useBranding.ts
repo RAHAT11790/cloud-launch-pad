@@ -4,6 +4,8 @@
 import { useState, useEffect } from "react";
 import { db, ref, onValue } from "@/lib/firebase";
 
+const BRANDING_CACHE_KEY = "rs_branding_cache_v1";
+
 export interface BrandingConfig {
   siteName: string;
   siteDescription: string;
@@ -14,38 +16,65 @@ export interface BrandingConfig {
   footerText: string;
   footerCopyright: string;
   splashText: string;
+  
   adminTitle: string;
   aboutTitle: string;
   logoUrl: string;           // Default logo (header, splash, etc.)
   splashBgUrl: string;       // Splash screen background image
-  playerLogoUrl: string;     // Video player loading logo
+  playerLogoUrl: string;     // (legacy) Video player loading logo
   playerName: string;        // Video player title (e.g. "RS ANIME PLAYER")
   rsCardLabel: string;       // RS source card label
   anCardLabel: string;       // AnimeSalt source card label
 }
 
 const DEFAULT_BRANDING: BrandingConfig = {
-  siteName: "RS ANIME",
-  siteDescription: "Your ultimate destination for watching anime series and movies.",
-  siteTagline: "Premium Anime Streaming",
-  loginTitle: "RS ANIME",
-  loginSubtitle: "Premium Anime Streaming",
-  premiumTitle: "RS ANIME Premium",
-  footerText: "Unlimited Anime Series & Movies",
-  footerCopyright: "© 2026 RS ANIME. All rights reserved.",
-  splashText: "RS ANIME",
-  adminTitle: "RS ANIME Admin",
-  aboutTitle: "About RS ANIME",
+  siteName: "",
+  siteDescription: "",
+  siteTagline: "",
+  loginTitle: "",
+  loginSubtitle: "",
+  premiumTitle: "",
+  footerText: "",
+  footerCopyright: "",
+  splashText: "",
+  
+  adminTitle: "",
+  aboutTitle: "",
   logoUrl: "",
   splashBgUrl: "",
   playerLogoUrl: "",
-  playerName: "RS ANIME PLAYER",
-  rsCardLabel: "RS",
-  anCardLabel: "AN",
+  playerName: "",
+  rsCardLabel: "",
+  anCardLabel: "",
 };
 
 let cachedBranding: BrandingConfig | null = null;
 const listeners = new Set<(b: BrandingConfig) => void>();
+
+function readBrandingCache(): BrandingConfig | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(BRANDING_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_BRANDING, ...(parsed || {}) };
+  } catch {
+    return null;
+  }
+}
+
+function writeBrandingCache(value: BrandingConfig) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(BRANDING_CACHE_KEY, JSON.stringify(value));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+if (!cachedBranding) {
+  cachedBranding = readBrandingCache();
+}
 
 // Initialize listener once
 let initialized = false;
@@ -55,6 +84,7 @@ function initBrandingListener() {
   onValue(ref(db, "settings/branding"), (snap) => {
     const val = snap.val();
     cachedBranding = val ? { ...DEFAULT_BRANDING, ...val } : { ...DEFAULT_BRANDING };
+    writeBrandingCache(cachedBranding);
     listeners.forEach(fn => fn(cachedBranding!));
   });
 }

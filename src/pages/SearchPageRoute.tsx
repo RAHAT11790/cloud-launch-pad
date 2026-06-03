@@ -2,21 +2,22 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import SearchPage from "@/components/SearchPage";
 import { useFirebaseData } from "@/hooks/useFirebaseData";
+import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
 import type { AnimeItem } from "@/data/animeData";
 
 const SearchPageRoute = () => {
   const navigate = useNavigate();
   const { allAnime: firebaseAnime } = useFirebaseData();
+  const { items: animeSaltItems } = useSelectedAnimeSalt();
 
-  // AnimeSalt ("anime still") content is intentionally excluded from search.
   const allAnime = useMemo(() => {
-    const combined = [...firebaseAnime];
+    const combined = [...firebaseAnime, ...animeSaltItems];
     combined.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
     return combined;
-  }, [firebaseAnime]);
+  }, [firebaseAnime, animeSaltItems]);
 
   const handleCardClick = (anime: AnimeItem) => {
-    navigate(`/watch/${encodeURIComponent(anime.id)}`);
+    navigate(`/anime/${encodeURIComponent(anime.id)}`);
   };
 
   const handleClose = () => {

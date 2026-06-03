@@ -218,10 +218,10 @@ div[style*="z-index: 2147483647"],
   }
 
   .poster-hover {
-    transition: none;
+    transition: transform 0.4s ease, box-shadow 0.4s ease;
   }
   .poster-hover:hover {
-    transform: none;
+    transform: scale(1.05) translateY(-6px);
     box-shadow: 8px 8px 20px #b8bec7, -8px -8px 20px #ffffff;
     z-index: 10;
   }
@@ -289,10 +289,6 @@ div[style*="z-index: 2147483647"],
     will-change: transform;
   }
 
-  .player-loader-shell--force-motion {
-    animation: petalSpin 1s steps(12, end) infinite !important;
-  }
-
   .player-loader-petal {
     position: absolute;
     left: 50%;
@@ -322,14 +318,6 @@ div[style*="z-index: 2147483647"],
 
   @keyframes petalSpin {
     to { transform: rotate(360deg); }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .player-loader-shell,
-    .player-loader-shell--force-motion {
-      animation-duration: 1s !important;
-      animation-iteration-count: infinite !important;
-    }
   }
 
   .skip-indicator {
@@ -486,15 +474,17 @@ div[style*="z-index: 2147483647"],
   overscroll-behavior: auto;
 }
 
-/* Keep posters painted during scroll; content-visibility caused black/blank cards on mobile. */
+/* Off-screen content skipping — massive win on long lists */
 .cv-auto {
-  content-visibility: visible;
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 280px;
 }
 
 /* Layout containment for cards — paint isolation prevents cascading reflows */
 .anime-card,
 [data-anime-card] {
   contain: layout style paint;
+  transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
 }
@@ -528,8 +518,8 @@ video, iframe[title="player"] {
 }
 :fullscreen video, :fullscreen iframe { width: 100% !important; height: 100% !important; }
 
-/* Images must stay visible while scrolling; avoid browser lazy-paint blanking. */
-img { content-visibility: visible; }
+/* Image perf — async decode + lazy paint */
+img { content-visibility: auto; }
 
 /* ============================================================
    ANDROID TV MODE — zero animations, D-pad focus rings,
@@ -546,12 +536,6 @@ html.tv-mode *::after {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   scroll-behavior: auto !important;
-}
-
-html.tv-mode .player-loader-shell,
-html.tv-mode .player-loader-shell--force-motion {
-  animation: petalSpin 1s steps(12, end) infinite !important;
-  will-change: transform !important;
 }
 
 /* Strong focus ring for D-pad navigation */

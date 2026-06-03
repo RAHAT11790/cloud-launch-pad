@@ -1,35 +1,10 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
-import type { Episode, AudioLanguage, AnimeItem, Season } from "@/data/animeData";
+import type { Episode } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
-import { Lock, ExternalLink } from "lucide-react";
+import SplashLoader from "@/components/SplashLoader";
+import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
-
-const AppDataLoader = () => (
-  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-transparent pointer-events-auto" aria-live="polite" aria-busy="true">
-    <div className="flex flex-col items-center gap-3 px-6 py-5 drop-shadow-[0_4px_18px_hsl(var(--background)/0.95)]">
-      <div className="player-loader-shell player-loader-shell--force-motion">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <span key={i} className="player-loader-petal" />
-        ))}
-      </div>
-      <p className="text-xs font-semibold text-foreground/95 tracking-wide drop-shadow-[0_2px_8px_hsl(var(--background)/0.95)]">Loading app...</p>
-    </div>
-  </div>
-);
-
-const WatchPageLoader = () => (
-  <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black" aria-live="polite" aria-busy="true">
-    <div className="flex flex-col items-center gap-3 px-6 py-5">
-      <div className="player-loader-shell player-loader-shell--force-motion">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <span key={i} className="player-loader-petal" />
-        ))}
-      </div>
-      <p className="text-xs font-semibold text-white/90 tracking-wide drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">Loading player...</p>
-    </div>
-  </div>
-);
 
 const isInvalidPlaybackUrl = (url?: string | null) => {
   const normalized = String(url || "").trim().toLowerCase().split("?")[0].split("#")[0];
@@ -95,6 +70,23 @@ const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualit
   };
 };
 
+// Derive a playable embed URL from any AnimeSalt episode payload shape.
+// Handles older `embedUrl`/`allEmbeds` and the newer `links[]` array
+// returned by parseEpisodePage so Continue Watching + direct routes work.
+const resolveSaltEmbed = (payload: any): { embedUrl: string; allEmbeds: string[] } => {
+  const collected: string[] = [];
+  const push = (u?: string | null) => {
+    const v = String(u || "").trim();
+    if (v && !collected.includes(v)) collected.push(v);
+  };
+  push(payload?.embedUrl);
+  push(payload?.movieEmbedUrl);
+  (Array.isArray(payload?.allEmbeds) ? payload.allEmbeds : []).forEach(push);
+  (Array.isArray(payload?.links) ? payload.links : []).forEach((l: any) => push(l?.url || l?.src));
+  [payload?.streamUrl, payload?.videoUrl, payload?.directUrl, payload?.file].forEach(push);
+  return { embedUrl: collected[0] || "", allEmbeds: collected };
+};
+
 // Helper: get best available src from episode (fallback if default link is empty)
 const getEpisodeSrc = (ep?: Episode | null): string => {
   if (!ep) return "";
@@ -120,15 +112,15 @@ import BottomNav from "@/components/BottomNav";
 import HeroSlider from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
-// AnimeDetails overlay removed — replaced by direct-to-player navigation.
+import AnimeDetails from "@/components/AnimeDetails";
 import VideoPlayer from "@/components/VideoPlayer";
 import NotificationsPage from "@/pages/NotificationsPage";
 import ProfilePage from "@/components/ProfilePage";
 import SearchPage from "@/components/SearchPage";
 import NewEpisodeReleases from "@/components/NewEpisodeReleases";
 import LoginPage from "@/components/LoginPage";
-import { loadFirebaseAnimeById, useFirebaseData } from "@/hooks/useFirebaseData";
-import { mapSelectedAnimeSaltItem, useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
+import { useFirebaseData } from "@/hooks/useFirebaseData";
+import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
 import { animeSaltApi } from "@/lib/animeSaltApi";
 import LiveSupportChat from "@/components/LiveSupportChat";
 import LiveTvPage from "@/components/LiveTvPage";
@@ -163,19 +155,8 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
   throw lastErr || new Error("API failed");
 };
 import { db, ref, set, onValue, get } from "@/lib/firebase";
-
+import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
-import {
-  ensureGuestUser,
-  getStoredUser,
-  isGuestUser,
-  runResetRulesIfDue,
-  getGuestWatchHistory,
-  setGuestHistoryItemNotify,
-  updateGuestHistoryItemNotify,
-  subscribeGuestHistory,
-} from "@/lib/guestSession";
-import { getAccountId, notifyAccountChanged } from "@/lib/accountScope";
 // FCM removed — push notifications no longer used
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import { getCurrentDeviceFreeAccessExpiry } from "@/lib/unlockAccess";
@@ -206,7 +187,7 @@ const Index = () => {
   const isNotificationsRoute = pathname === "/notifications";
   const isAnimeRoute = !!animeRouteMatch;
   const isWatchRoute = !!watchRouteMatch;
-  const isRoutedOverlay = isSearchRoute || isNotificationsRoute || isWatchRoute;
+  const isRoutedOverlay = isSearchRoute || isNotificationsRoute || isAnimeRoute || isWatchRoute;
   const animeRouteId = animeRouteMatch?.params.animeId ? decodeURIComponent(animeRouteMatch.params.animeId) : null;
   const watchRouteAnimeId = watchRouteMatch?.params.animeId ? decodeURIComponent(watchRouteMatch.params.animeId) : null;
   const { webseries, movies, allAnime: firebaseAnime, categories, loading } = useFirebaseData();
@@ -223,123 +204,24 @@ const Index = () => {
     return () => unsub();
   }, []);
 
-  // AnimeSalt ("anime still") content is hidden from the public site.
-  // It remains accessible from the admin panel via its own hooks/views.
-  // Keep the variable for backwards compatibility with the rest of this file.
-  const activeSaltItems = useMemo<AnimeItem[]>(() => [], []);
-  void animeSaltEnabled; void animeSaltItems;
-
-  // Language selector — single shared selection across home & series pages.
-  // Default is "Hindi" so by default cards show Hindi-dubbed versions when they exist.
-  const [selectedLanguage, setSelectedLanguage] = useState<string>(() => {
-    try { return localStorage.getItem("rs_selected_language") || "Hindi"; } catch { return "Hindi"; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem("rs_selected_language", selectedLanguage); } catch {}
-  }, [selectedLanguage]);
-
-  // Helper: read audioLanguages off an item as an array regardless of storage shape.
-  const readLangs = (item: AnimeItem): AudioLanguage[] => {
-    const raw: any = (item as any).audioLanguages;
-    const langs: AudioLanguage[] = Array.isArray(raw)
-      ? raw
-      : (raw ? (Object.values(raw) as AudioLanguage[]) : []);
-    return langs.filter(Boolean);
-  };
-
-  // Apply selected language to a list of items.
-  // - Items WITH audioLanguages: only kept if one entry matches the selected
-  //   name (case-insensitive). The item is remapped to that language's
-  //   seasons/movieLink so the card → watch flow opens directly in that language.
-  // - Items WITHOUT audioLanguages: treated as having a single default
-  //   language equal to the item's `language` field (the default the admin
-  //   selected at upload time). Only kept if that default matches selection.
-  // In both cases the card's `langLabel` is set so it displays the language
-  // name in place of the year.
-  // Map a single item to a specific language variant. Returns null if the
-  // language is not available. Used for both list-filtering and direct
-  // lookups (continue-watching, new-release click) where we need to play in
-  // a specific language regardless of the homepage selection.
-  const mapAnimeToLanguage = useCallback((item: AnimeItem, langName: string): AnimeItem | null => {
-    const target = String(langName || "").trim().toLowerCase();
-    if (!target) return { ...item, langLabel: item.language };
-    const langs = readLangs(item);
-    if (!langs.length) {
-      const defaultName = String(item.language || "").trim();
-      if (defaultName.toLowerCase() !== target) return null;
-      return { ...item, langLabel: defaultName };
-    }
-    const match = langs.find((l) => String(l?.name || "").trim().toLowerCase() === target);
-    if (!match) return null;
-    return {
-      ...item,
-      language: match.name || item.language,
-      langLabel: match.name,
-      preferredLangId: match.id,
-      seasons: Array.isArray(match.seasons) && match.seasons.length ? (match.seasons as Season[]) : item.seasons,
-      movieLink: match.movieLink || item.movieLink,
-      movieLink480: match.movieLink480 || item.movieLink480,
-      movieLink720: match.movieLink720 || item.movieLink720,
-      movieLink1080: match.movieLink1080 || item.movieLink1080,
-      movieLink4k: match.movieLink4k || item.movieLink4k,
-      audioLanguages: item.audioLanguages,
-    };
-  }, []);
-
-  const applyLangSelection = useCallback((items: AnimeItem[], langName: string): AnimeItem[] => {
-    const out: AnimeItem[] = [];
-    for (const item of items) {
-      const mapped = mapAnimeToLanguage(item, langName);
-      if (mapped) out.push(mapped);
-    }
-    return out;
-  }, [mapAnimeToLanguage]);
-
-  // Build the unique list of audio language names available across all items.
-  // Sorted so the default ("Hindi") shows first, then alphabetical.
-  const availableLanguages = useMemo(() => {
-    const set = new Map<string, string>(); // lower → display
-    [...firebaseAnime, ...activeSaltItems].forEach((item) => {
-      const langs = readLangs(item);
-      if (langs.length) {
-        langs.forEach((l) => {
-          const name = String(l?.name || "").trim();
-          if (!name) return;
-          const key = name.toLowerCase();
-          if (!set.has(key)) set.set(key, name);
-        });
-      } else {
-        const name = String(item.language || "").trim();
-        if (!name) return;
-        const key = name.toLowerCase();
-        if (!set.has(key)) set.set(key, name);
-      }
-    });
-    const names = Array.from(set.values());
-    names.sort((a, b) => {
-      if (a.toLowerCase() === "hindi") return -1;
-      if (b.toLowerCase() === "hindi") return 1;
-      return a.localeCompare(b);
-    });
-    return names;
-  }, [firebaseAnime, activeSaltItems]);
+  // Merge AnimeSalt items into main data lists (only when enabled)
+  const activeSaltItems = useMemo(() => animeSaltEnabled ? animeSaltItems : [], [animeSaltEnabled, animeSaltItems]);
 
   const allAnime = useMemo(() => {
-    const combined = applyLangSelection([...firebaseAnime, ...activeSaltItems], selectedLanguage);
+    const combined = [...firebaseAnime, ...activeSaltItems];
     combined.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
     return combined;
-  }, [firebaseAnime, activeSaltItems, applyLangSelection, selectedLanguage]);
+  }, [firebaseAnime, activeSaltItems]);
 
   const allSeries = useMemo(() => {
-    // AnimeSalt content is hidden from the public site, so we only show Firebase webseries.
-    return applyLangSelection([...webseries], selectedLanguage);
-  }, [webseries, applyLangSelection, selectedLanguage]);
+    const saltSeries = activeSaltItems.filter(i => i.type === 'webseries');
+    return [...webseries, ...saltSeries];
+  }, [webseries, activeSaltItems]);
 
   const allMovies = useMemo(() => {
-    return applyLangSelection([...movies], selectedLanguage);
-  }, [movies, applyLangSelection, selectedLanguage]);
-
-  
+    const saltMovies = activeSaltItems.filter(i => i.type === 'movie');
+    return [...movies, ...saltMovies];
+  }, [movies, activeSaltItems]);
   
   // Maintenance mode check
   const [maintenance, setMaintenance] = useState<any>(null);
@@ -355,28 +237,25 @@ const Index = () => {
     initializeUiTheme();
   }, []);
 
-  useEffect(() => {
-    ensureGuestUser();
-    runResetRulesIfDue().catch(() => {});
-  }, []);
-
+  // Check if user is logged in (must have email - no guest accounts)
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    ensureGuestUser();
-    return !!getStoredUser();
-  });
-  const [isGuest, setIsGuest] = useState(() => isGuestUser());
-  const [activeAccountId, setActiveAccountId] = useState<string>(() => {
-    try { return getAccountId(); } catch { return ""; }
+    try {
+      const u = localStorage.getItem("rsanime_user");
+      if (!u) return false;
+      const parsed = JSON.parse(u);
+      return !!(parsed.id && parsed.email);
+    } catch { return false; }
   });
 
   // Keep auth-like local user state synced (Header may create user after mount)
   useEffect(() => {
     const syncLoginState = () => {
-      const u = getStoredUser();
-      setIsLoggedIn(!!u);
-      setIsGuest(isGuestUser(u));
-      const newId = getAccountId();
-      setActiveAccountId((prev) => (prev === newId ? prev : newId));
+      try {
+        const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
+        setIsLoggedIn(!!(u?.id && u?.email));
+      } catch {
+        setIsLoggedIn(false);
+      }
     };
 
     syncLoginState();
@@ -392,13 +271,10 @@ const Index = () => {
   // Ad-gate state for AnimeSalt player
   const [saltAdGateActive, setSaltAdGateActive] = useState(false);
   const [globalFreeAccess, setGlobalFreeAccess] = useState(false);
-  const [globalFreeAccessLoaded, setGlobalFreeAccessLoaded] = useState(false);
-  const [unlockGateEnabled, setUnlockGateEnabled] = useState<boolean | null>(null);
   const [saltIsPremium, setSaltIsPremium] = useState<boolean | null>(null);
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false);
   const [unlockBlocked, setUnlockBlocked] = useState(false);
-  const [showLogin, setShowLogin] = useState(false);
 
   // Device limit enforcement for already logged-in users
   const [deviceLimitWarning, setDeviceLimitWarning] = useState<{
@@ -412,25 +288,14 @@ const Index = () => {
     const unsub = onValue(ref(db, "globalFreeAccess"), (snap) => {
       const data = snap.val();
       setGlobalFreeAccess(!!(data?.active && data?.expiresAt > Date.now()));
-      setGlobalFreeAccessLoaded(true);
     });
     return () => unsub();
   }, []);
-
-  // Listen for unlock gate toggle (admin can disable the whole shortener flow)
-  useEffect(() => {
-    const unsub = onValue(ref(db, "settings/unlockGateEnabled"), (snap) => {
-      const v = snap.val();
-      setUnlockGateEnabled(v === false ? false : true);
-    });
-    return () => unsub();
-  }, []);
-
 
   // Force-logout if account was deleted by admin (guest cleanup, etc.)
   useEffect(() => {
     let uid = "";
-    try { uid = getStoredUser()?.id || ""; } catch {}
+    try { uid = JSON.parse(localStorage.getItem("rsanime_user") || "{}").id || ""; } catch {}
     if (!uid) return;
     const unsub = onValue(ref(db, `users/${uid}`), (snap) => {
       const data = snap.val();
@@ -440,14 +305,12 @@ const Index = () => {
       if (!wasExplicitlyDeleted && !wasSessionRevoked) return;
 
       try {
+        localStorage.removeItem("rsanime_user");
         localStorage.removeItem("rs_display_name");
         localStorage.removeItem("rs_profile_photo");
         localStorage.removeItem("rs_session_started_at");
       } catch {}
-      ensureGuestUser();
-      notifyAccountChanged();
-      setIsLoggedIn(true);
-      setIsGuest(true);
+      setIsLoggedIn(false);
       setSelectedAnime(null);
       setPlayerState(null);
       setSaltPlayerState(null);
@@ -459,7 +322,7 @@ const Index = () => {
   // Check premium status - re-run when login state changes
   useEffect(() => {
     try {
-      const u = getStoredUser();
+      const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
       if (!u.id) { setSaltIsPremium(false); return; }
       const unsub = onValue(ref(db, `users/${u.id}/premium`), (snap) => {
         const data = snap.val();
@@ -471,7 +334,7 @@ const Index = () => {
   }, [isLoggedIn]);
 
   useEffect(() => {
-    if (!isLoggedIn || isGuest) {
+    if (!isLoggedIn) {
       setUserFreeAccessExpiresAt(0);
       setFreeAccessLoaded(true);
       setUnlockBlocked(false);
@@ -480,7 +343,7 @@ const Index = () => {
 
     let uid = "";
     try {
-      uid = getStoredUser()?.id || "";
+      uid = JSON.parse(localStorage.getItem("rsanime_user") || "{}").id || "";
     } catch {
       uid = "";
     }
@@ -509,8 +372,6 @@ const Index = () => {
     });
 
     const unsubBlocked = onValue(ref(db, `users/${uid}/security/unlockBlocked`), (snap) => {
-      // Guest is a shared account — never propagate one device's block to others.
-      if (isGuest) { setUnlockBlocked(false); return; }
       setUnlockBlocked(isUnlockBlockActive(snap.val()));
     });
 
@@ -519,7 +380,7 @@ const Index = () => {
       unsubAccess();
       unsubBlocked();
     };
-  }, [isLoggedIn, isGuest]);
+  }, [isLoggedIn]);
 
   // Device-limit popup inside the app is intentionally disabled.
   // Premium device limits are enforced only during login.
@@ -590,6 +451,9 @@ const Index = () => {
   const [selectedAnime, setSelectedAnime] = useState<AnimeItem | null>(null);
   const [customPostDetail, setCustomPostDetail] = useState<{ title: string; backdrop: string; description: string } | null>(null);
   const [pendingAnimeId, setPendingAnimeId] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("anime");
+    if (fromUrl) return fromUrl;
     // Restore from sessionStorage on refresh
     try { return sessionStorage.getItem("rs_selectedAnimeId"); } catch { return null; }
   });
@@ -599,7 +463,7 @@ const Index = () => {
   });
   const [chatOpen, setChatOpen] = useState(false);
 
-  const buildAnimeRoute = useCallback((animeId: string) => `/watch/${encodeURIComponent(animeId)}`, []);
+  const buildAnimeRoute = useCallback((animeId: string) => `/anime/${encodeURIComponent(animeId)}`, []);
   const buildWatchRoute = useCallback((animeId: string, seasonIdx?: number, epIdx?: number) => {
     const params = new URLSearchParams();
     if (seasonIdx !== undefined) params.set("s", String(seasonIdx));
@@ -624,7 +488,6 @@ const Index = () => {
   }, []);
   const hardCloseToHome = useCallback(() => {
     stopAllPlayback();
-    setPlayerOpening(false);
     setPlayerState(null);
     setSaltPlayerState(null);
     setSelectedAnime(null);
@@ -634,7 +497,6 @@ const Index = () => {
   }, [navigate, stopAllPlayback]);
   const closeRouteLayer = useCallback((fallback: string = "/") => {
     stopAllPlayback();
-    setPlayerOpening(false);
     if (window.history.length > 1) navigate(-1);
     else navigate(fallback, { replace: true });
   }, [navigate, stopAllPlayback]);
@@ -665,7 +527,6 @@ const Index = () => {
     audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
     nextEpisodeSrc?: string;
     resumeTime?: number;
-    activeLangId?: string;
   } | null>(() => {
     try {
       const saved = sessionStorage.getItem("rs_playerState");
@@ -673,20 +534,8 @@ const Index = () => {
     } catch {}
     return null;
   });
-  const [playerOpening, setPlayerOpening] = useState(() => {
-    try { return window.location.pathname.startsWith("/watch/"); } catch { return false; }
-  });
   const playerStateRef = useRef(playerState);
   useEffect(() => { playerStateRef.current = playerState; }, [playerState]);
-  useEffect(() => {
-    if (playerState) setPlayerOpening(false);
-  }, [playerState]);
-  useEffect(() => {
-    if (isWatchRoute && !playerState) setPlayerOpening(true);
-    else if (!isWatchRoute && !playerState) setPlayerOpening(false);
-  }, [isWatchRoute, playerState]);
-
-
 
   // AnimeSalt iframe player state
   const [saltPlayerState, setSaltPlayerState] = useState<{
@@ -842,30 +691,19 @@ const Index = () => {
   // Continue watching data (per-account, NOT per-device)
   const [continueWatching, setContinueWatching] = useState<any[]>([]);
 
-  // Load continue watching from the active account.
+  // Load continue watching from Firebase - per ACCOUNT
   useEffect(() => {
     if (!isLoggedIn) return;
-    if (isGuest) {
-      const unsub = subscribeGuestHistory((items) => {
-        const withProgress = items.filter((i: any) => {
-          if (i.id?.startsWith("as_")) return true;
-          return i.currentTime && i.duration && (i.currentTime / i.duration) < 0.95;
-        });
-        setContinueWatching(withProgress);
-      });
-      return () => unsub();
-    }
     try {
-      const u = getStoredUser();
-      if (!u?.id) return;
+      const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
+      if (!u.id) return;
       const whRef = ref(db, `users/${u.id}/watchHistory`);
       const unsub = onValue(whRef, (snapshot) => {
         const data = snapshot.val() || {};
-        const items = Object.values(data)
-          .flatMap((v: any) => (v && typeof v === "object" && !v.id ? Object.values(v) : [v]))
-          .filter((v: any) => v && typeof v === "object" && v.id) as any[];
+        // Skip legacy per-device nested keys (objects without `id` field)
+        const items = Object.values(data).filter((v: any) => v && typeof v === "object" && v.id) as any[];
         const withProgress = items.filter((i: any) => {
-          if (i.id?.startsWith("as_")) return true;
+          if (i.id?.startsWith('as_')) return true;
           return i.currentTime && i.duration && (i.currentTime / i.duration) < 0.95;
         });
         withProgress.sort((a: any, b: any) => (b.watchedAt || 0) - (a.watchedAt || 0));
@@ -873,7 +711,7 @@ const Index = () => {
       });
       return () => unsub();
     } catch {}
-  }, [isLoggedIn, isGuest, activeAccountId]);
+  }, [isLoggedIn]);
   // FCM token registration & forceNotifPrompt removed — push notifications fully disabled
   // Back button handler
   const getCurrentLayer = useCallback(() => {
@@ -911,17 +749,12 @@ const Index = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const animeId = params.get("anime");
-    if (animeId && location.pathname !== "/") setPendingAnimeId(animeId);
-  }, [location.pathname, location.search]);
-
-  useLayoutEffect(() => {
-    if (!isAnimeRoute || !animeRouteId) return;
-    try { sessionStorage.setItem("rs_directWatchShare", animeRouteId); } catch {}
-    navigate(`/watch/${encodeURIComponent(animeRouteId)}${location.search}`, { replace: true });
-  }, [animeRouteId, isAnimeRoute, location.search, navigate]);
+    if (animeId) setPendingAnimeId(animeId);
+  }, [location.search]);
 
   useEffect(() => {
     if (isAnimeRoute && animeRouteId) {
+      if (selectedAnime?.id !== animeRouteId) setPendingAnimeId(animeRouteId);
       return;
     }
     if (!isWatchRoute && selectedAnime) {
@@ -959,18 +792,65 @@ const Index = () => {
   }, [getCurrentLayer, isRoutedOverlay]);
 
   // Handle deep link: open anime detail from URL ?anime=ID (legacy query form)
+  // For AnimeSalt shared links (as_<slug>) we must wait until the salt data
+  // has finished loading — otherwise the lookup fires too early, finds nothing,
+  // and the pending id gets cleared so the share link silently dies.
   useEffect(() => {
-    if (!pendingAnimeId || allAnime.length === 0) return;
+    if (!pendingAnimeId) return;
+    if (allAnime.length === 0) return;
+
+    const isSaltLink = pendingAnimeId.startsWith("as_");
+    if (isSaltLink && saltLoading) return; // wait for AN data
 
     const found = allAnime.find((a) => a.id === pendingAnimeId);
     if (found) {
-      // Legacy Telegram links arrive as /?anime=ID. Keep the home splash natural,
-      // then let handlePlay move to /watch/... before the 3-second watch overlay starts.
-      autoPlayAnime(found);
+      // AnimeSalt items need hydration (seasons/episodes are fetched lazily).
+      // Without this, deep-links from /search or shared URLs show an empty detail
+      // page because we set the bare stub directly. Always go through handleCardClick
+      // for AN so the loader runs and episodes actually load.
+      if (found.source === "animesalt") {
+        handleCardClick(found);
+      } else {
+        setSelectedAnime(found);
+      }
+      if (!pathname.startsWith("/anime/") && !pathname.startsWith("/watch/")) {
+        navigate(buildAnimeRoute(found.id), { replace: true });
+      }
+      setPendingAnimeId(null);
+      return;
+    }
+
+    // If we're still waiting for firebase or salt to load, don't clear yet.
+    if (loading || (isSaltLink && saltLoading)) return;
+
+    // For AN links: try to construct a minimal stub from the slug so the
+    // details page still opens (it will fetch full metadata on its own path).
+    if (isSaltLink) {
+      const slug = pendingAnimeId.slice(3);
+      if (slug) {
+        const stub: AnimeItem = {
+          id: pendingAnimeId,
+          title: slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+          poster: "",
+          backdrop: "",
+          year: "",
+          rating: "",
+          language: "",
+          category: "AnimeSalt",
+          type: "webseries",
+          storyline: "",
+          source: "animesalt",
+          slug,
+        };
+        handleCardClick(stub);
+        if (!pathname.startsWith("/anime/") && !pathname.startsWith("/watch/")) {
+          navigate(buildAnimeRoute(stub.id), { replace: true });
+        }
+      }
     }
 
     setPendingAnimeId(null);
-  }, [pendingAnimeId, allAnime]);
+  }, [pendingAnimeId, allAnime, pathname, navigate, buildAnimeRoute, saltLoading, loading]);
 
   const filteredAnime = useMemo(() => {
     if (activeCategory !== "All") return allAnime.filter(a => a.category === activeCategory);
@@ -1220,23 +1100,6 @@ const Index = () => {
     return Array.from(bestByTitle.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [animeSaltItems]);
 
-  // Auto-play the first available episode/movie (skip details overlay).
-  // Falls back to the details page only if nothing is playable yet.
-  const autoPlayAnime = (a: AnimeItem) => {
-    if (a.type === "webseries" && a.seasons && a.seasons.length > 0) {
-      const s0 = a.seasons[0];
-      if (s0?.episodes && s0.episodes.length > 0) {
-        handlePlay(a, 0, 0);
-        return;
-      }
-    }
-    if (a.movieLink || a.type === "movie") {
-      handlePlay(a);
-      return;
-    }
-    setSelectedAnime(a);
-  };
-
   const handleCardClick = async (anime: AnimeItem) => {
     // Cancel any stale in-flight AnimeSalt details requests when switching content
     detailsRequestRef.current += 1;
@@ -1266,7 +1129,7 @@ const Index = () => {
       const cachedDetails = detailsCacheRef.current.get(anime.id);
       if (cachedDetails) {
         dismissDetailsLoadingToast();
-        autoPlayAnime(cachedDetails);
+        setSelectedAnime(cachedDetails);
         return;
       }
 
@@ -1320,7 +1183,7 @@ const Index = () => {
             })),
           };
           detailsCacheRef.current.set(anime.id, fullAnime);
-          autoPlayAnime(fullAnime);
+          setSelectedAnime(fullAnime);
           dismissDetailsLoadingToast();
           return;
         }
@@ -1346,7 +1209,7 @@ const Index = () => {
 
         if (requestId !== detailsRequestRef.current) return;
 
-        if (result.success && result.data) {
+        if (result && result.success && result.data) {
           const d = result.data;
           // Sanitize language - remove any JS code contamination
           let cleanLanguage = '';
@@ -1453,7 +1316,7 @@ const Index = () => {
 
           if (requestId !== detailsRequestRef.current) return;
           detailsCacheRef.current.set(anime.id, fullAnime);
-          autoPlayAnime(fullAnime);
+          setSelectedAnime(fullAnime);
         } else {
           // API didn't return data — show anime with metadata from Firebase
           const fallbackAnime: AnimeItem = {
@@ -1465,7 +1328,7 @@ const Index = () => {
             language: anime.language || '',
           };
           detailsCacheRef.current.set(anime.id, fallbackAnime);
-          autoPlayAnime(fallbackAnime);
+          setSelectedAnime(fallbackAnime);
         }
       } catch {
         if (requestId === detailsRequestRef.current) {
@@ -1474,7 +1337,7 @@ const Index = () => {
             ...anime,
             storyline: anime.storyline || '',
           };
-          autoPlayAnime(fallbackAnime);
+          setSelectedAnime(fallbackAnime);
         }
       } finally {
         if (detailsLoadingToastRef.current === toastId) dismissDetailsLoadingToast();
@@ -1483,7 +1346,7 @@ const Index = () => {
     }
 
     dismissDetailsLoadingToast();
-    autoPlayAnime(anime);
+    setSelectedAnime(anime);
   };
 
   const handlePlay = async (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => {
@@ -1501,28 +1364,20 @@ const Index = () => {
       return;
     }
 
-    setPlayerOpening(true);
     stopAllPlayback();
     const targetWatchRoute = buildWatchRoute(anime.id, seasonIdx, epIdx);
     if (location.pathname !== targetWatchRoute || location.search !== new URL(targetWatchRoute, window.location.origin).search) {
       navigate(targetWatchRoute);
     }
 
-    const fromDirectShare = (() => {
-      try { return sessionStorage.getItem("rs_directWatchShare") === anime.id || location.pathname.startsWith("/watch/"); } catch { return location.pathname.startsWith("/watch/"); }
-    })();
-
-    if (!fromDirectShare && !hasFreeAccess() && !saltIsPremium) {
-      // If admin disabled the unlock gate entirely, skip redirect and play directly.
-      // Prefer cached subscription value to avoid race conditions on deep links.
-      const shortenerOn = unlockGateEnabled === null ? await isShortenerEnabled() : unlockGateEnabled;
+    if (!hasFreeAccess() && !saltIsPremium) {
+      // If admin disabled the unlock gate entirely, skip redirect and play directly
+      const shortenerOn = await isShortenerEnabled();
       if (shortenerOn) {
-        setPlayerOpening(false);
         redirectToUnlockRequired(anime, seasonIdx, epIdx);
         return;
       }
     }
-
 
     dismissDetailsLoadingToast();
 
@@ -1530,10 +1385,6 @@ const Index = () => {
     let subtitle = "";
     let qualityOptions: { label: string; src: string }[] = [];
     let audioTracks: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[] | undefined;
-    if (anime.type === "webseries" && anime.seasons?.length && (seasonIdx === undefined || epIdx === undefined)) {
-      seasonIdx = 0;
-      epIdx = 0;
-    }
     if (anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined) {
       const season = anime.seasons[seasonIdx];
       const episode = season.episodes[epIdx];
@@ -1555,14 +1406,13 @@ const Index = () => {
 
     // Handle AnimeSalt video - check ad-gate first
     if (src.startsWith("animesalt://")) {
-      const hasAccess = fromDirectShare || await checkAndShowAdGate(anime, seasonIdx, epIdx);
+      const hasAccess = await checkAndShowAdGate(anime, seasonIdx, epIdx);
       if (!hasAccess) return;
       const epSlug = src.replace("animesalt://", "");
       try {
         const result = await cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug));
-        const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result);
+        const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result || {});
         if (primarySrc) {
-          // Save to watch history for Continue Watching
           addToWatchHistory(anime, seasonIdx, epIdx, true);
           setPlayerState({
             src: primarySrc,
@@ -1578,22 +1428,20 @@ const Index = () => {
                 : undefined,
           } as any);
           setSelectedAnime(null);
-          try { sessionStorage.removeItem("rs_directWatchShare"); } catch {}
-          setPlayerOpening(false);
         } else {
-          setPlayerOpening(false);
-          toast.error("Video source not found");
+          console.warn("[AN] no source for episode", epSlug, result);
+          toast.error("Episode source not available. Try another server or episode.");
         }
-      } catch {
-        setPlayerOpening(false);
-        toast.error("Failed to load video");
+      } catch (e) {
+        console.warn("[AN] episode load failed", epSlug, e);
+        toast.error("Failed to load episode. Please try again.");
       }
       return;
     }
 
     // Handle AnimeSalt movie playback
     if (src.startsWith("animesalt_movie://")) {
-      const hasAccess = fromDirectShare || await checkAndShowAdGate(anime, seasonIdx, epIdx);
+      const hasAccess = await checkAndShowAdGate(anime, seasonIdx, epIdx);
       if (!hasAccess) return;
       const movieSlug = src.replace("animesalt_movie://", "");
       try {
@@ -1609,21 +1457,16 @@ const Index = () => {
             qualityOptions: sourceOptions,
           } as any);
           setSelectedAnime(null);
-          try { sessionStorage.removeItem("rs_directWatchShare"); } catch {}
-          setPlayerOpening(false);
         } else {
-          setPlayerOpening(false);
           toast.error("Movie source not found");
         }
       } catch {
-        setPlayerOpening(false);
         toast.error("Failed to load movie");
       }
       return;
     }
 
     if (src) {
-      try { sessionStorage.removeItem("rs_directWatchShare"); } catch {}
       addToWatchHistory(anime, seasonIdx, epIdx);
       setPlayerState({
         src,
@@ -1634,16 +1477,12 @@ const Index = () => {
         epIdx,
         qualityOptions,
         audioTracks,
-        activeLangId: (anime as any).preferredLangId,
         nextEpisodeSrc:
           anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined
             ? getEpisodeSrc(anime.seasons[seasonIdx]?.episodes?.[epIdx + 1] as Episode)
             : undefined,
       });
       setSelectedAnime(null);
-      setPlayerOpening(false);
-    } else {
-      setPlayerOpening(false);
     }
   };
 
@@ -1653,69 +1492,21 @@ const Index = () => {
       if (playerStateRef.current) setPlayerState(null);
       return;
     }
-    if (!watchRouteAnimeId || !freeAccessLoaded) {
-      setPlayerOpening(true);
-      return;
-    }
+    if (!watchRouteAnimeId || allAnime.length === 0 || !freeAccessLoaded) return;
 
     const params = new URLSearchParams(location.search);
-    let nextSeasonIdx = params.get("s") !== null ? Number(params.get("s")) : undefined;
-    let nextEpIdx = params.get("e") !== null ? Number(params.get("e")) : undefined;
-    let cancelled = false;
+    const nextSeasonIdx = params.get("s") !== null ? Number(params.get("s")) : undefined;
+    const nextEpIdx = params.get("e") !== null ? Number(params.get("e")) : undefined;
+    const targetAnime = allAnime.find((item) => item.id === watchRouteAnimeId);
+    if (!targetAnime) return;
 
-    const openWatchRoute = async () => {
-      let targetAnime = allAnime.find((item) => item.id === watchRouteAnimeId) || null;
+    const current = playerStateRef.current;
+    const sameAnime = current?.anime.id === watchRouteAnimeId;
+    const sameSeason = (current?.seasonIdx ?? undefined) === nextSeasonIdx;
+    const sameEpisode = (current?.epIdx ?? undefined) === nextEpIdx;
+    if (sameAnime && sameSeason && sameEpisode && current) return;
 
-      if (!targetAnime) {
-        targetAnime = await loadFirebaseAnimeById(watchRouteAnimeId);
-      }
-
-      if (!targetAnime && watchRouteAnimeId.startsWith("as_")) {
-        try {
-          const slug = watchRouteAnimeId.replace(/^as_/, "");
-          const snap = await get(ref(db, `animesaltSelected/${slug}`));
-          if (snap.exists()) targetAnime = mapSelectedAnimeSaltItem(slug, snap.val());
-        } catch {}
-      }
-
-      if (cancelled) return;
-      if (!targetAnime) {
-        setPlayerOpening(false);
-        return;
-      }
-
-      if (targetAnime.source === "animesalt" && (!targetAnime.seasons?.length && !targetAnime.movieLink)) {
-        handleCardClick(targetAnime);
-        return;
-      }
-
-      if (targetAnime.type === "webseries" && targetAnime.seasons?.length && (nextSeasonIdx === undefined || nextEpIdx === undefined)) {
-        nextSeasonIdx = 0;
-        nextEpIdx = 0;
-      }
-
-      const current = playerStateRef.current;
-      const sameAnime = current?.anime.id === watchRouteAnimeId;
-      const sameSeason = (current?.seasonIdx ?? undefined) === nextSeasonIdx;
-      const sameEpisode = (current?.epIdx ?? undefined) === nextEpIdx;
-      if (sameAnime && sameSeason && sameEpisode && current) {
-        const nextLangs = (targetAnime as any).audioLanguages;
-        const currentLangs = (current.anime as any).audioLanguages;
-        const nextLangKey = JSON.stringify((Array.isArray(nextLangs) ? nextLangs : Object.values(nextLangs || {})).map((l: any) => `${l?.id}:${l?.name}:${l?.isDefault ? 1 : 0}:${Array.isArray(l?.seasons) ? l.seasons.length : Object.keys(l?.seasons || {}).length}`));
-        const currentLangKey = JSON.stringify((Array.isArray(currentLangs) ? currentLangs : Object.values(currentLangs || {})).map((l: any) => `${l?.id}:${l?.name}:${l?.isDefault ? 1 : 0}:${Array.isArray(l?.seasons) ? l.seasons.length : Object.keys(l?.seasons || {}).length}`));
-        if (nextLangKey !== currentLangKey) {
-          const hydratedState = { ...current, anime: targetAnime };
-          playerStateRef.current = hydratedState;
-          setPlayerState(hydratedState);
-        }
-        return;
-      }
-
-      void handlePlay(targetAnime, nextSeasonIdx, nextEpIdx);
-    };
-
-    void openWatchRoute();
-    return () => { cancelled = true; };
+    void handlePlay(targetAnime, nextSeasonIdx, nextEpIdx);
   }, [allAnime, freeAccessLoaded, isWatchRoute, location.search, watchRouteAnimeId]);
 
   useEffect(() => {
@@ -1744,9 +1535,9 @@ const Index = () => {
 
   const addToWatchHistory = (anime: AnimeItem, seasonIdx?: number, epIdx?: number, preserveProgress = false) => {
     try {
-      const user = getStoredUser();
-      if (!user?.id) return;
-      const userId = user.id;
+      const user = localStorage.getItem("rsanime_user");
+      if (!user) return;
+      const userId = JSON.parse(user).id;
       if (!userId) return;
 
       const historyItem: any = {
@@ -1757,29 +1548,22 @@ const Index = () => {
         year: anime.year,
         rating: anime.rating,
         type: anime.type,
-        language: anime.langLabel || anime.language || "",
         watchedAt: Date.now(),
       };
 
       if (seasonIdx !== undefined && epIdx !== undefined && anime.seasons) {
         const season = anime.seasons[seasonIdx];
-        const ep = season?.episodes?.[epIdx];
-        if (season && ep) {
-          historyItem.episodeInfo = {
-            season: seasonIdx + 1,
-            episode: epIdx + 1,
-            seasonName: season.name,
-            episodeNumber: ep.episodeNumber,
-            seasonIdx,
-            epIdx,
-          };
-        }
+        historyItem.episodeInfo = {
+          season: seasonIdx + 1,
+          episode: epIdx + 1,
+          seasonName: season.name,
+          episodeNumber: season.episodes[epIdx].episodeNumber,
+          seasonIdx,
+          epIdx,
+        };
       }
 
-      if (isGuestUser(user)) {
-        if (preserveProgress) updateGuestHistoryItemNotify(anime.id, historyItem);
-        else setGuestHistoryItemNotify(anime.id, historyItem);
-      } else if (preserveProgress) {
+      if (preserveProgress) {
         import("@/lib/firebase").then(({ update }) => {
           update(ref(db, `users/${userId}/watchHistory/${anime.id}`), historyItem).catch(() => {});
         });
@@ -1795,20 +1579,16 @@ const Index = () => {
   const saveVideoProgress = useCallback((currentTime: number, duration: number) => {
     if (!playerState) return;
     try {
-      const user = getStoredUser();
-      if (!user?.id) return;
-      const userId = user.id;
+      const user = localStorage.getItem("rsanime_user");
+      if (!user) return;
+      const userId = JSON.parse(user).id;
       if (!userId || !playerState.anime.id) return;
 
       const updates: any = { currentTime, duration, watchedAt: Date.now() };
-      if (isGuestUser(user)) {
-        updateGuestHistoryItemNotify(playerState.anime.id, updates);
-      } else {
-        const histRef = ref(db, `users/${userId}/watchHistory/${playerState.anime.id}`);
-        import("@/lib/firebase").then(({ update }) => {
-          update(histRef, updates).catch(() => {});
-        });
-      }
+      const histRef = ref(db, `users/${userId}/watchHistory/${playerState.anime.id}`);
+      import("@/lib/firebase").then(({ update }) => {
+        update(histRef, updates).catch(() => {});
+      });
     } catch {}
   }, [playerState]);
 
@@ -1819,30 +1599,11 @@ const Index = () => {
     }
 
     const preferredSource = item.source || "firebase";
-    // Look up in the UNFILTERED firebase list first so that the entry resolves
-    // even when the currently-selected homepage language differs from the
-    // language the user previously watched in. Then remap that base anime to
-    // the language stored on the history item — so clicking continue-watching
-    // always opens the exact language the user was watching last time,
-    // regardless of the homepage language pill selection.
-    const baseFromFirebase =
-      firebaseAnime.find(a => a.id === item.id && (a.source || "firebase") === preferredSource) ||
-      firebaseAnime.find(a => a.id === item.id);
-    const baseFromActive =
+    const anime =
       allAnime.find(a => a.id === item.id && (a.source || "firebase") === preferredSource) ||
+      allAnime.find(a => a.id === item.id && (a.source || "firebase") === "firebase") ||
       allAnime.find(a => a.id === item.id);
-    const base = baseFromFirebase || baseFromActive;
-    if (!base) return;
-    const watchedLang = String(item.language || item.langLabel || "").trim();
-    let anime: AnimeItem = base;
-    if (watchedLang && (base.source || "firebase") !== "animesalt") {
-      const mapped = mapAnimeToLanguage(base, watchedLang);
-      if (mapped) anime = mapped;
-    } else if ((base.source || "firebase") !== "animesalt" && baseFromActive) {
-      // Fall back to the language-filtered variant so existing single-language
-      // history entries continue to play correctly.
-      anime = baseFromActive;
-    }
+    if (!anime) return;
 
     // AnimeSalt source: directly play the last watched episode
     if (anime.source === "animesalt") {
@@ -1903,15 +1664,16 @@ const Index = () => {
                 navigate(targetWatchRoute);
               }
               const epResult = await cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug));
-              if (epResult.embedUrl) {
+              const resolved = resolveSaltEmbed(epResult);
+              if (resolved.embedUrl) {
                 addToWatchHistory(anime, sIdx, eIdx, true);
                 setSaltPlayerState({
-                  embedUrl: epResult.embedUrl,
-                  cleanEmbedUrl: getCleanEmbedUrl(epResult.embedUrl),
+                  embedUrl: resolved.embedUrl,
+                  cleanEmbedUrl: getCleanEmbedUrl(resolved.embedUrl),
                   title: anime.title,
                   subtitle: `${cSeason.name} - Episode ${cEp.episodeNumber || cEp.number || eIdx + 1}`,
                   anime: fullAnime, seasonIdx: sIdx, epIdx: eIdx,
-                  allEmbeds: epResult.allEmbeds || [epResult.embedUrl],
+                  allEmbeds: resolved.allEmbeds,
                   currentEmbedIdx: 0, cropMode: 'contain', cropW: 0, cropH: 0, loading: false,
                 });
                 return;
@@ -1966,14 +1728,15 @@ const Index = () => {
                 navigate(targetWatchRoute);
               }
               const epResult = await cachedApiCall(`ep_${ep.slug}`, () => animeSaltApi.getEpisode(ep.slug));
-              if (epResult.embedUrl) {
+              const resolved = resolveSaltEmbed(epResult);
+              if (resolved.embedUrl) {
                 const fullAnime: AnimeItem = { ...anime, seasons: buildSeasons() };
                 addToWatchHistory(anime, sIdx, eIdx, true);
                 setSaltPlayerState({
-                  embedUrl: epResult.embedUrl, cleanEmbedUrl: getCleanEmbedUrl(epResult.embedUrl),
+                  embedUrl: resolved.embedUrl, cleanEmbedUrl: getCleanEmbedUrl(resolved.embedUrl),
                   title: anime.title, subtitle: `${season.name} - Episode ${ep.number}`,
                   anime: fullAnime, seasonIdx: sIdx, epIdx: eIdx,
-                  allEmbeds: epResult.allEmbeds || [epResult.embedUrl],
+                  allEmbeds: resolved.allEmbeds,
                   currentEmbedIdx: 0, cropMode: 'contain', cropW: 0, cropH: 0, loading: false,
                 });
                 return;
@@ -2076,47 +1839,6 @@ const Index = () => {
     }
   };
 
-  // Click on a "New Episode Release" card → play the exact episode in the
-  // language the release was tagged with. Falls back to the homepage-language
-  // mapped variant when the release has no explicit language, then to the
-  // standard details flow if playback metadata is missing.
-  const handleReleaseClick = (release: any) => {
-    const base = firebaseAnime.find(a => a.id === release?.contentId);
-    if (!base) return;
-    const desiredLang = String(release?.language || "").trim();
-    let anime: AnimeItem | null = null;
-    if (desiredLang) {
-      anime = mapAnimeToLanguage(base, desiredLang);
-    }
-    if (!anime) anime = mapAnimeToLanguage(base, selectedLanguage) || base;
-
-    const epInfo = release?.episodeInfo || {};
-    const seasonNumber = release?.season ?? epInfo.seasonNumber;
-    const episodeNumber = release?.episode ?? epInfo.episodeNumber;
-
-    if (anime.type === "webseries" && anime.seasons?.length && seasonNumber && episodeNumber) {
-      const seasonIdx = Math.max(0, Number(seasonNumber) - 1);
-      // Find the episode index that matches the saved episodeNumber.
-      const season = anime.seasons[seasonIdx];
-      let epIdx = 0;
-      if (season?.episodes?.length) {
-        const found = season.episodes.findIndex(
-          (e) => Number(e?.episodeNumber) === Number(episodeNumber)
-        );
-        epIdx = found >= 0 ? found : Math.min(Number(episodeNumber) - 1, season.episodes.length - 1);
-      }
-      handlePlay(anime, seasonIdx, epIdx);
-      return;
-    }
-
-    if (anime.movieLink) {
-      handlePlay(anime);
-      return;
-    }
-
-    handleCardClick(anime);
-  };
-
   const handleHeroInfo = (index: number) => {
     const slide = heroSlides[index];
     if (!slide) return;
@@ -2130,190 +1852,66 @@ const Index = () => {
 
   const handleLogin = (userId: string) => {
     setIsLoggedIn(true);
-    setIsGuest(false);
-    setShowLogin(false);
-    try { setActiveAccountId(getAccountId()); } catch {}
-    notifyAccountChanged();
   };
 
   const handleLogout = async () => {
     try {
-      const u = getStoredUser();
+      const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
       if (u?.id) {
         const { unregisterCurrentDevice } = await import("@/lib/premiumDevice");
         await unregisterCurrentDevice(u.id);
       }
     } catch {}
+    localStorage.removeItem("rsanime_user");
     localStorage.removeItem("rs_display_name");
     localStorage.removeItem("rs_profile_photo");
     localStorage.removeItem("rs_session_started_at");
-    ensureGuestUser();
-    notifyAccountChanged();
-    setIsLoggedIn(true);
-    setIsGuest(true);
-    try { setActiveAccountId(getAccountId()); } catch {}
+    setIsLoggedIn(false);
   };
 
   const handleLogoutAllDevices = async () => {
     try {
-      const u = getStoredUser();
+      const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
       if (u?.id) {
         const { logoutAllDevices } = await import("@/lib/premiumDevice");
         await logoutAllDevices(u.id);
       }
     } catch {}
 
+    localStorage.removeItem("rsanime_user");
     localStorage.removeItem("rs_display_name");
     localStorage.removeItem("rs_profile_photo");
     localStorage.removeItem("rs_session_started_at");
     setDeviceLimitWarning(null);
     setUserFreeAccessExpiresAt(0);
-    ensureGuestUser();
-    notifyAccountChanged();
-    setIsLoggedIn(true);
-    setIsGuest(true);
-    try { setActiveAccountId(getAccountId()); } catch {}
+    setIsLoggedIn(false);
     toast.success("All devices logged out. Please log in again.");
   };
 
-
-  // ─── Audio-language switching at the player level ───
-  // Build the "view anime" that swaps seasons + movie links to the selected
-  // language track. Falls back to the original anime data if no language is
-  // selected or that track has no seasons/movie data yet.
-  const playerAudioLanguages: AudioLanguage[] = useMemo(() => {
-    if (!playerState?.anime) return [];
-    const raw: any = (playerState.anime as any).audioLanguages;
-    if (!raw) return [];
-    return (Array.isArray(raw) ? raw : Object.values(raw)) as AudioLanguage[];
-  }, [playerState?.anime]);
-
-  const playerActiveLang: AudioLanguage | undefined = useMemo(() => {
-    if (!playerAudioLanguages.length) return undefined;
-    return (
-      playerAudioLanguages.find((l) => l.id === playerState?.activeLangId) ||
-      playerAudioLanguages.find((l) => l.isDefault) ||
-      playerAudioLanguages[0]
-    );
-  }, [playerAudioLanguages, playerState?.activeLangId]);
-
-  const playerView: AnimeItem | null = useMemo(() => {
-    if (!playerState?.anime) return null;
-    const base = playerState.anime;
-    if (!playerActiveLang) return base;
-    const langSeasons: Season[] = Array.isArray(playerActiveLang.seasons)
-      ? (playerActiveLang.seasons as Season[])
-      : [];
-    return {
-      ...base,
-      language: playerActiveLang.name || base.language,
-      seasons: langSeasons,
-      movieLink: playerActiveLang.movieLink || "",
-      movieLink480: playerActiveLang.movieLink480 || undefined,
-      movieLink720: playerActiveLang.movieLink720 || undefined,
-      movieLink1080: playerActiveLang.movieLink1080 || undefined,
-      movieLink4k: playerActiveLang.movieLink4k || undefined,
-    };
-  }, [playerState?.anime, playerActiveLang]);
-
-  const handleLanguageChange = useCallback(async (newLangId: string) => {
-    if (!playerState) return;
-    const lang = playerAudioLanguages.find((l) => l.id === newLangId);
-    if (!lang) return;
-
-    const base = playerState.anime;
-    const baseId = String(base.id).split("__l_")[0];
-    const newSeasons: Season[] = Array.isArray(lang.seasons) ? (lang.seasons as Season[]) : [];
-    const swappedAnime: AnimeItem = {
-      ...base,
-      id: `${baseId}__l_${newLangId}`,
-      language: lang.name || base.language,
-      seasons: newSeasons,
-      movieLink: lang.movieLink || "",
-      movieLink480: lang.movieLink480 || undefined,
-      movieLink720: lang.movieLink720 || undefined,
-      movieLink1080: lang.movieLink1080 || undefined,
-      movieLink4k: lang.movieLink4k || undefined,
-      langLabel: lang.name,
-      preferredLangId: newLangId,
-    };
-
-    // Movie: switch to the language's movie link immediately.
-    if (base.type === "movie") {
-      const src = getMovieSrc(swappedAnime);
-      const qOpts: { label: string; src: string }[] = [];
-      if (!isInvalidPlaybackUrl(swappedAnime.movieLink480)) qOpts.push({ label: "480p", src: swappedAnime.movieLink480! });
-      if (!isInvalidPlaybackUrl(swappedAnime.movieLink720)) qOpts.push({ label: "720p", src: swappedAnime.movieLink720! });
-      if (!isInvalidPlaybackUrl(swappedAnime.movieLink1080)) qOpts.push({ label: "1080p", src: swappedAnime.movieLink1080! });
-      if (!isInvalidPlaybackUrl(swappedAnime.movieLink4k)) qOpts.push({ label: "4K", src: swappedAnime.movieLink4k! });
-      const nextState = {
-        ...playerState,
-        anime: swappedAnime,
-        activeLangId: newLangId,
-        src: src || playerState.src,
-        subtitle: "Movie",
-        qualityOptions: qOpts.length ? qOpts : undefined,
-        nextEpisodeSrc: undefined,
-      };
-      playerStateRef.current = nextState;
-      setPlayerState(nextState);
-      navigate(buildWatchRoute(swappedAnime.id), { replace: true });
-      return;
-    }
-
-    // Series: auto-play first season's first episode of the newly selected language.
-    const season = newSeasons[0];
-    const ep = season?.episodes?.[0];
-    if (!season || !ep) {
-      const nextState = { ...playerState, anime: swappedAnime, activeLangId: newLangId };
-      playerStateRef.current = nextState;
-      setPlayerState(nextState);
-      return;
-    }
-    const nextSrc = getEpisodeSrc(ep);
-    const qOpts = getEpisodeQualityOptions(ep);
-    addToWatchHistory(swappedAnime, 0, 0);
-    const nextState = {
-      ...playerState,
-      anime: swappedAnime,
-      activeLangId: newLangId,
-      src: nextSrc,
-      subtitle: `${season.name} - Episode ${ep.episodeNumber}`,
-      seasonIdx: 0,
-      epIdx: 0,
-      qualityOptions: qOpts.length > 0 ? qOpts : undefined,
-      nextEpisodeSrc: getEpisodeSrc(season.episodes[1]),
-    };
-    playerStateRef.current = nextState;
-    setPlayerState(nextState);
-    navigate(buildWatchRoute(swappedAnime.id, 0, 0), { replace: true });
-  }, [playerState, playerAudioLanguages, navigate, buildWatchRoute]);
-
-
-  const currentEpisodeList = playerView?.seasons?.[playerState?.seasonIdx ?? 0]?.episodes?.map((ep, i) => ({
+  const currentEpisodeList = playerState?.anime.seasons?.[playerState.seasonIdx ?? 0]?.episodes.map((ep, i) => ({
     number: ep.episodeNumber,
     title: ep.title,
     active: i === (playerState?.epIdx ?? 0),
     onClick: async () => {
-      const season = playerView!.seasons![playerState!.seasonIdx ?? 0];
-      const clickedEp = season?.episodes?.[i];
-      if (!clickedEp) return;
+      const season = playerState!.anime.seasons![playerState!.seasonIdx ?? 0];
+      const clickedEp = season.episodes[i];
       const hasAccess = await checkAndShowAdGate(playerState!.anime, playerState!.seasonIdx, i);
       if (!hasAccess) return;
       let nextSrc = getEpisodeSrc(clickedEp);
       let qOpts = getEpisodeQualityOptions(clickedEp);
-      if (playerState?.anime.source === "animesalt" && String(clickedEp.link || "").startsWith("animesalt://")) {
+        if (playerState?.anime.source === "animesalt" && String(clickedEp.link || "").startsWith("animesalt://")) {
         const epSlug = String(clickedEp.link).replace("animesalt://", "");
         try {
           const epResult = await animeSaltApi.getEpisode(epSlug);
-          const embedServers = (epResult.allEmbeds || [epResult.embedUrl]).filter(Boolean);
-          nextSrc = epResult.embedUrl || nextSrc;
+            const resolved = resolveSaltEmbed(epResult);
+            const embedServers = resolved.allEmbeds.filter(Boolean);
+            nextSrc = resolved.embedUrl || nextSrc;
           qOpts = embedServers.length > 1
             ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
             : [];
         } catch {}
       }
-      addToWatchHistory(playerView!, playerState!.seasonIdx, i);
+      addToWatchHistory(playerState!.anime, playerState!.seasonIdx, i);
       const nextState = {
         ...playerState!,
         src: nextSrc,
@@ -2329,76 +1927,64 @@ const Index = () => {
   }));
 
   const handleVideoPlayerSeasonChange = useCallback(async (newSeasonIdx: number) => {
-    if (!playerView?.seasons) return;
-    const season = playerView.seasons[newSeasonIdx];
-    if (!season) return;
-    // Switch season selection only — do NOT auto-play any episode of the new season.
-    // The currently playing episode keeps playing until the user manually clicks one.
+    if (!playerState?.anime.seasons) return;
+    const season = playerState.anime.seasons[newSeasonIdx];
+    if (!season?.episodes?.length) return;
+    const ep = season.episodes[0];
+    const hasAccess = await checkAndShowAdGate(playerState.anime, newSeasonIdx, 0);
+    if (!hasAccess) return;
+    let nextSrc = getEpisodeSrc(ep);
+    let qOpts: { label: string; src: string }[] = getEpisodeQualityOptions(ep);
+    if (playerState.anime.source === "animesalt" && String(ep.link || "").startsWith("animesalt://")) {
+      const epSlug = String(ep.link).replace("animesalt://", "");
+      try {
+        const epResult = await animeSaltApi.getEpisode(epSlug);
+        const resolved = resolveSaltEmbed(epResult);
+        const embedServers = resolved.allEmbeds.filter(Boolean);
+        nextSrc = resolved.embedUrl || nextSrc;
+        qOpts = embedServers.length > 1
+          ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
+          : [];
+      } catch {}
+    }
+    addToWatchHistory(playerState.anime, newSeasonIdx, 0);
     const nextState = {
-      ...playerState!,
+      ...playerState,
+      src: nextSrc,
+      subtitle: `${season.name} - Episode ${ep.episodeNumber}`,
       seasonIdx: newSeasonIdx,
+      epIdx: 0,
+      qualityOptions: qOpts.length > 0 ? qOpts : undefined,
+      nextEpisodeSrc: undefined,
     };
     playerStateRef.current = nextState;
     setPlayerState(nextState);
-  }, [playerState, playerView]);
+    navigate(buildWatchRoute(playerState.anime.id, newSeasonIdx, 0), { replace: true });
+  }, [checkAndShowAdGate, playerState, navigate, buildWatchRoute]);
 
-  // Suggested anime ("For you"): score by storyline similarity (Jaccard word
-  // overlap on storyline tokens). Anything ≥40% overlap is considered related;
-  // when storyline is missing on the current anime we fall back to
-  // category/language/type matching so the section is never empty.
+  // Suggested anime: prioritize same category, then same language, excluding current
   const suggestedAnime = useMemo(() => {
     const current = playerState?.anime || saltPlayerState?.anime;
     if (!current) return [];
-
-    const STOPWORDS = new Set([
-      "the","a","an","and","or","but","of","in","on","at","to","for","with","is","are","was","were",
-      "be","been","being","by","as","it","its","this","that","these","those","from","into","than",
-      "then","so","not","no","yes","he","she","they","them","his","her","their","who","whom","which",
-      "what","when","where","why","how","will","would","can","could","should","has","have","had","do",
-      "does","did","one","two","also","just","up","out","about","over","after","before","because",
-      "while","until","again","more","most","some","any","all","each","every","such","very","much","many",
-    ]);
-    const tokenize = (s?: string) => {
-      const text = String(s || "").toLowerCase();
-      const tokens = text.match(/[a-z0-9]{3,}/g) || [];
-      return new Set(tokens.filter((t) => !STOPWORDS.has(t)));
-    };
-
-    const currentTokens = tokenize(current.storyline);
     const currentCategory = (current.category || "").toLowerCase().trim();
     const currentLanguage = (current.language || "").toLowerCase().trim();
-    const hasStoryline = currentTokens.size >= 6;
-
-    const candidates = allAnime.filter((a) => a.id !== current.id);
-    const scored = candidates.map((a) => {
+    
+    const candidates = allAnime.filter(a => a.id !== current.id);
+    
+    // Score each candidate: category match = 10, language match = 3
+    const scored = candidates.map(a => {
       let score = 0;
-      let similarity = 0;
-      if (hasStoryline) {
-        const t = tokenize(a.storyline);
-        if (t.size > 0) {
-          let inter = 0;
-          for (const w of t) if (currentTokens.has(w)) inter++;
-          const union = currentTokens.size + t.size - inter;
-          similarity = union > 0 ? inter / union : 0;
-          // Threshold ~ Jaccard 0.18 ≈ ~40% one-sided overlap.
-          if (similarity >= 0.18) score += 50 + Math.round(similarity * 100);
-        }
-      }
       const cat = (a.category || "").toLowerCase().trim();
       const lang = (a.language || "").toLowerCase().trim();
       if (currentCategory && cat === currentCategory) score += 10;
       if (currentLanguage && lang === currentLanguage) score += 3;
+      // Bonus for same type (movie/webseries)
       if (a.type === current.type) score += 1;
-      return { anime: a, score, similarity };
+      return { anime: a, score };
     });
-
-    scored.sort((a, b) => b.score - a.score || b.similarity - a.similarity);
-    const related = scored.filter((s) => s.score > 0);
-    // If storyline matched anything, return ALL storyline-related items
-    // (no 8-item cap) so users see every related series.
-    const storylineMatches = related.filter((s) => s.similarity >= 0.18);
-    if (storylineMatches.length > 0) return storylineMatches.map((s) => s.anime);
-    return related.slice(0, 12).map((s) => s.anime);
+    
+    scored.sort((a, b) => b.score - a.score || Math.random() - 0.5);
+    return scored.filter(s => s.score > 0).slice(0, 8).map(s => s.anime);
   }, [playerState?.anime, saltPlayerState?.anime, allAnime]);
 
   useEffect(() => {
@@ -2503,9 +2089,9 @@ const Index = () => {
 
 
 
-  // Show login page if not logged in, or when guest user explicitly opens login
-  if (!isLoggedIn || (showLogin && isGuest)) {
-    return <LoginPage onLogin={handleLogin} onCancel={showLogin ? () => setShowLogin(false) : undefined} />;
+  // Show login page if not logged in
+  if (!isLoggedIn) {
+    return <LoginPage onLogin={handleLogin} />;
   }
 
   // Show maintenance page if server is under maintenance
@@ -2564,46 +2150,13 @@ const Index = () => {
     );
   }
 
-  if ((loading || (saltLoading && allAnime.length === 0)) && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute && !isWatchRoute) {
-    return <AppDataLoader />;
+  if (loading && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute) {
+    return <SplashLoader />;
   }
-
-
-
-  const LanguagePills = ({ className = "" }: { className?: string }) => {
-    if (!availableLanguages.length) return null;
-    return (
-      <div data-no-swipe="true" className={`flex gap-2 overflow-x-auto px-4 py-2 no-scrollbar relative z-20 bg-background ${className}`} style={{ touchAction: "pan-x pan-y" }}>
-        {availableLanguages.map((lang) => {
-          const active = lang.toLowerCase() === selectedLanguage.toLowerCase();
-          return (
-            <button
-              key={lang}
-              onClick={() => setSelectedLanguage(lang)}
-              className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
-                active ? "gradient-primary text-primary-foreground -translate-y-0.5" : "bg-card text-muted-foreground"
-              }`}
-              style={active
-                ? { boxShadow: "0 4px 15px hsla(42,80%,50%,0.35)" }
-                : { boxShadow: "var(--neu-shadow-sm)" }}
-            >
-              {lang}
-            </button>
-          );
-        })}
-      </div>
-    );
-  };
 
   const getPageContent_series = () => (
     <div className="pt-[65px] pb-24 px-4">
       <h2 className="text-xl font-bold mb-3 flex items-center category-bar">Anime Series</h2>
-      {availableLanguages.length > 0 && (
-        <div className="-mx-4 mb-4 relative z-20 bg-background">
-          <p className="px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Language</p>
-          <LanguagePills />
-        </div>
-      )}
       <div className="flex gap-2 mb-4">
         {(["all", "official", "fandub"] as const).map(dt => (
           <button key={dt} onClick={() => setDubFilter(dt)}
@@ -2617,13 +2170,10 @@ const Index = () => {
       </div>
       <div className="grid grid-cols-3 gap-2.5">
         {filteredSeries.map((anime) => (
-          <div key={anime.id} className="relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="eager" decoding="async" />
+          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
             <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-            <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5 z-10">
-              <span className="gradient-primary px-1.5 py-[1px] rounded text-[8px] font-bold uppercase tracking-wide max-w-[80px] truncate" title={anime.langLabel || anime.language}>{anime.langLabel || anime.language}</span>
-              <span className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground">RS</span>
-            </div>
+            <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
             {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
             <div className="absolute bottom-0 left-0 right-0 p-2">
               <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
@@ -2651,13 +2201,10 @@ const Index = () => {
       </div>
       <div className="grid grid-cols-3 gap-2.5">
         {filteredMovies.map((anime) => (
-          <div key={anime.id} className="relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="eager" decoding="async" />
+          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
             <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-            <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5 z-10">
-              <span className="gradient-primary px-1.5 py-[1px] rounded text-[8px] font-bold uppercase tracking-wide max-w-[80px] truncate" title={anime.langLabel || anime.language}>{anime.langLabel || anime.language}</span>
-              <span className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground">RS</span>
-            </div>
+            <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
             {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
             <div className="absolute bottom-0 left-0 right-0 p-2">
               <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
@@ -2673,25 +2220,16 @@ const Index = () => {
     <>
       <HeroSlider slides={heroSlides} onPlay={handleHeroPlay} onInfo={handleHeroInfo} />
       <CategoryPills active={activeCategory} onSelect={setActiveCategory} categories={categories} />
-      {availableLanguages.length > 0 && (
-        <div className="pt-1 pb-3 relative z-20 bg-background">
-          <p className="px-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Language</p>
-          <LanguagePills />
-        </div>
-      )}
       {activeCategory !== "All" ? (
         <div className="px-4 pb-6">
           <h2 className="text-base font-bold mb-3 flex items-center category-bar">{activeCategory}</h2>
           {filteredAnime.length > 0 ? (
             <div className="grid grid-cols-3 gap-2.5">
               {filteredAnime.map((anime) => (
-                <div key={anime.id} className="relative aspect-[2/3] rounded-md overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-                  <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="eager" decoding="async" />
+                <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+                  <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                  <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5 z-10">
-                    <span className="gradient-primary px-1.5 py-[1px] rounded text-[8px] font-bold uppercase tracking-wide max-w-[80px] truncate" title={anime.langLabel || anime.language}>{anime.langLabel || anime.language}</span>
-                    <span className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground">RS</span>
-                  </div>
+                  <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
                   <div className="absolute bottom-0 left-0 right-0 p-2">
                     <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
                   </div>
@@ -2711,14 +2249,9 @@ const Index = () => {
                 {continueWatching.slice(0, 10).map((item: any) => (
                   <div key={item.id} onClick={() => handleContinueWatching(item)}
                     className="flex-shrink-0 w-[130px] cursor-pointer">
-                    <div className="relative aspect-[2/3] rounded-md overflow-hidden bg-card mb-1">
-                      <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="eager" decoding="async" />
+                    <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card mb-1">
+                      <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
                       <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                      {(item.language || item.langLabel) && (
-                        <span className="absolute top-1 right-1 gradient-primary px-1.5 py-[1px] rounded text-[8px] font-bold uppercase tracking-wide max-w-[80px] truncate z-10" title={item.language || item.langLabel}>
-                          {item.language || item.langLabel}
-                        </span>
-                      )}
                       {item.currentTime && item.duration && (
                         <div className="absolute bottom-0 left-0 right-0 h-1 bg-foreground/20">
                           <div className="h-full bg-primary rounded-r" style={{ width: `${Math.min((item.currentTime / item.duration) * 100, 100)}%` }} />
@@ -2739,12 +2272,7 @@ const Index = () => {
             </div>
           )}
 
-          <NewEpisodeReleases
-            allAnime={allAnime}
-            onCardClick={handleCardClick}
-            selectedLanguage={selectedLanguage}
-            onReleaseClick={(release) => handleReleaseClick(release)}
-          />
+          <NewEpisodeReleases allAnime={allAnime} onCardClick={handleCardClick} />
           {trendingSeries.length > 0 && (
             <AnimeSection title="🔥 Trending Anime Series" items={trendingSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("series")} />
           )}
@@ -2757,7 +2285,23 @@ const Index = () => {
             <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
           ))}
 
-          {/* AnimeSalt-sourced "ALL ANIME" grid removed — AnimeSalt content is hidden site-wide. */}
+          {allAnimeSaltUnique.length > 0 && (
+            <div className="px-4 mb-6">
+              <h3 className="text-base font-bold mb-3 flex items-center category-bar">🔥 ALL ANIME</h3>
+              <div className="grid grid-cols-3 gap-2.5">
+                {allAnimeSaltUnique.slice(0, allAnimeVisibleCount).map((anime) => (
+                  <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+                    <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+                    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+                    {anime.year && <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>}
+                    <div className="absolute bottom-0 left-0 right-0 p-2">
+                      <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
       <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
@@ -2777,7 +2321,7 @@ const Index = () => {
   // home UI no longer renders, eliminating leaks and CPU drain.
   if (playerState) {
     return (
-      <div className="fixed inset-0 z-[100] bg-black">
+      <div className="fixed inset-0 z-[100] bg-black animate-in fade-in duration-150">
         <VideoPlayer
           src={playerState.src}
           title={playerState.title}
@@ -2785,19 +2329,16 @@ const Index = () => {
           poster={playerState.anime.poster}
           onClose={hardCloseToHome}
           qualityOptions={playerState.qualityOptions}
-          audioTracks={playerState.audioTracks?.map((t: any) => ({ label: t.label, src: t.src || t.link, language: t.language }))}
+          audioTracks={playerState.audioTracks}
           animeId={playerState.anime.id}
           initialSeekTime={playerState.resumeTime}
           onSaveProgress={saveVideoProgress}
           onNextEpisode={
             playerState.anime.type === "webseries" && playerState.seasonIdx !== undefined && playerState.epIdx !== undefined
               ? async () => {
-                  const seasonsRef = playerView?.seasons || playerState.anime.seasons;
-                  const season = seasonsRef?.[playerState.seasonIdx!];
-                  if (!season?.episodes?.length) return;
+                  const season = playerState.anime.seasons![playerState.seasonIdx!];
                   const nextIdx = (playerState.epIdx! + 1) % season.episodes.length;
                   const nextEp = season.episodes[nextIdx];
-                  if (!nextEp) return;
                   const hasAccess = await checkAndShowAdGate(playerState.anime, playerState.seasonIdx, nextIdx);
                   if (!hasAccess) return;
                   let nextSrc = getEpisodeSrc(nextEp);
@@ -2806,14 +2347,15 @@ const Index = () => {
                     const epSlug = String(nextEp.link).replace("animesalt://", "");
                     try {
                       const epResult = await animeSaltApi.getEpisode(epSlug);
-                      const embedServers = (epResult.allEmbeds || [epResult.embedUrl]).filter(Boolean);
-                      nextSrc = epResult.embedUrl || nextSrc;
+                      const resolved = resolveSaltEmbed(epResult);
+                      const embedServers = resolved.allEmbeds.filter(Boolean);
+                      nextSrc = resolved.embedUrl || nextSrc;
                       qOpts = embedServers.length > 1
                         ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
                         : [];
                     } catch {}
                   }
-                  addToWatchHistory(playerView || playerState.anime, playerState.seasonIdx, nextIdx);
+                  addToWatchHistory(playerState.anime, playerState.seasonIdx, nextIdx);
                   const nextState = {
                     ...playerState,
                     src: nextSrc,
@@ -2829,46 +2371,25 @@ const Index = () => {
               : undefined
           }
           episodeList={currentEpisodeList}
-          seasons={playerView?.seasons || playerState.anime.seasons}
+          seasons={playerState.anime.seasons}
           currentSeasonIdx={playerState.seasonIdx}
           onSeasonChange={handleVideoPlayerSeasonChange}
-          audioLanguages={playerAudioLanguages}
-          activeLangId={playerActiveLang?.id}
-          onLanguageChange={handleLanguageChange}
-          suggestedAnime={suggestedAnime}
+          suggestedAnime={[]}
           onSuggestedClick={(anime) => {
             stopAllPlayback();
             navigate(buildAnimeRoute(anime.id));
             handleCardClick(anime);
           }}
-          description={playerState.anime.storyline || ""}
-          animeMeta={{
-            title: playerState.anime.title,
-            poster: playerState.anime.poster,
-            year: playerState.anime.year,
-            rating: playerState.anime.rating,
-            language: playerView?.language || playerState.anime.language,
-            type: playerState.anime.type,
-          }}
           nextEpisodeSrc={playerState.nextEpisodeSrc}
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
         />
       </div>
-
     );
-  }
-
-  if (isWatchRoute) {
-    return <WatchPageLoader />;
-  }
-
-  if (playerOpening) {
-    return <AppDataLoader />;
   }
 
   return (
     <div className="min-h-screen bg-background" style={customBgImage ? { backgroundImage: `url(${customBgImage})`, backgroundSize: 'cover', backgroundAttachment: 'fixed', backgroundPosition: 'center' } : undefined}>
-      <Header onSearchClick={() => navigate("/search")} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} isGuest={isGuest} onLoginClick={() => setShowLogin(true)} />
+      <Header onSearchClick={() => navigate("/search")} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
       <main
         className="relative overflow-hidden"
         style={{ height: "calc(100vh - 65px)", marginTop: 0, touchAction: "pan-y pinch-zoom" }}
@@ -2879,7 +2400,8 @@ const Index = () => {
           height: "100%",
           transform: `translate3d(-${activePageIdx * 100}vw, 0, 0)`,
           transition: "none",
-          willChange: "auto",
+          willChange: "transform",
+          backfaceVisibility: "hidden",
         }}>
           {MAIN_PAGE_ORDER.map((page) => (
             <div
@@ -2891,6 +2413,8 @@ const Index = () => {
                 flexShrink: 0,
                 overflowY: "auto",
                 overflowX: "hidden",
+                backfaceVisibility: "hidden",
+                transform: "translateZ(0)",
                 WebkitOverflowScrolling: "touch",
               }}
             >
@@ -2923,11 +2447,15 @@ const Index = () => {
 
       <AnimatePresence>
         {showProfile && (
-          <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
+          <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
         )}
       </AnimatePresence>
 
-      {/* AnimeDetails overlay removed — every entry point now goes directly to the player. */}
+      <AnimatePresence>
+        {selectedAnime && (
+          <AnimeDetails anime={selectedAnime} onClose={() => closeRouteLayer("/")} onPlay={handlePlay} />
+        )}
+      </AnimatePresence>
 
       {/* Custom Post Detail View */}
       <AnimatePresence>
@@ -3011,7 +2539,7 @@ const Index = () => {
           source: a.source || "firebase",
           id: a.id,
           slug: a.slug,
-          shareLink: `${window.location.origin}/watch/${encodeURIComponent(a.id)}`,
+          shareLink: `${window.location.origin}/anime/${encodeURIComponent(a.id)}`,
           seasonCount: a.seasons?.length,
           episodeCount: a.seasons?.reduce((sum, s) => sum + (s.episodes?.length || 0), 0),
         }))}

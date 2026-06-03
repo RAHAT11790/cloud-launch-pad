@@ -92,7 +92,7 @@ const randomToken = () => `${Math.random().toString(36).slice(2)}${Date.now().to
 
 export const getLocalUserId = (): string | null => {
   try {
-    const raw = localStorage.getItem("rsanime_user") || localStorage.getItem("rsanime_user");
+    const raw = localStorage.getItem("rsanime_user");
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return parsed?.id || null;
@@ -545,35 +545,3 @@ export async function claimAccessCode(code: string): Promise<{
     return { ok: false, error: e?.message || "network_error" };
   }
 }
-
-/* ============================================================ */
-/* RS VideoPlayer compatibility shims (appended)                */
-/* ============================================================ */
-import { getAccountId as __getAccountId } from "@/lib/accountScope";
-import { getDeviceId as __getDeviceId2 } from "@/lib/premiumDevice";
-
-const __FREE_ACCESS_BASE_KEY = "rsanime_ad_access";
-function __freeAccessKey(accountId?: string) {
-  return `${__FREE_ACCESS_BASE_KEY}::${accountId ?? __getAccountId()}`;
-}
-
-export function getLocalFreeAccessExpiry(accountId?: string): number | null {
-  try {
-    const raw = localStorage.getItem(__freeAccessKey(accountId));
-    if (!raw) return null;
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : null;
-  } catch { return null; }
-}
-export function setLocalFreeAccessExpiry(expiry: number, accountId?: string) {
-  try { localStorage.setItem(__freeAccessKey(accountId), String(expiry)); } catch {}
-}
-export function clearLocalFreeAccess(accountId?: string) {
-  try { localStorage.removeItem(__freeAccessKey(accountId)); } catch {}
-}
-export const isFreeAccessGrantValidForCurrentBrowser = (grant: any, accountId: string = __getAccountId()): boolean => {
-  if (!grant?.active || Number(grant.expiresAt || 0) <= Date.now()) return false;
-  if (grant.accountId && grant.accountId !== accountId) return false;
-  if (!grant.deviceId || grant.deviceId !== __getDeviceId2()) return false;
-  return true;
-};

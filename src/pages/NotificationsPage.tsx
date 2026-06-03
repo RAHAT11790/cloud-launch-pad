@@ -63,7 +63,7 @@ const NotificationsPage = () => {
   const openNotification = (notif: NotifItem) => {
     if (!notif.read && userId) set(ref(db, `notifications/${userId}/${notif.id}/read`), true);
     if (notif.contentId) {
-      navigate(`/watch/${encodeURIComponent(notif.contentId)}`);
+      navigate(`/anime/${encodeURIComponent(notif.contentId)}`);
     } else {
       handleBack();
     }

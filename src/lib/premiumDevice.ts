@@ -1,6 +1,4 @@
 import { db, ref, get, set, update, remove } from "@/lib/firebase";
-import { ensureGuestUser } from "@/lib/guestSession";
-
 
 type PremiumDeviceEntry = {
   name?: string;
@@ -11,7 +9,7 @@ type PremiumDeviceEntry = {
 };
 
 const DEVICE_ID_KEY = "rs_device_id";
-const SESSION_KEYS_TO_CLEAR = ["rsanime_user", "rsanime_user", "rs_display_name", "rs_profile_photo", "rs_photo_url"];
+const SESSION_KEYS_TO_CLEAR = ["rsanime_user", "rs_display_name", "rs_profile_photo", "rs_photo_url"];
 
 const hashText = (input: string): string => {
   let hash = 0;
@@ -64,19 +62,7 @@ export const clearLocalAccountSession = (): void => {
   try {
     SESSION_KEYS_TO_CLEAR.forEach((key) => localStorage.removeItem(key));
   } catch {}
-  // After clearing the real user session, immediately bootstrap a guest
-  // identity so the app never runs without an `rsanime_user` record.
-  try { ensureGuestUser(); } catch {
-    try {
-      localStorage.setItem(
-        "rsanime_user",
-        JSON.stringify({ id: "guest", email: "RSanimeguest@gmail.com", name: "Guest", isGuest: true })
-      );
-    } catch {}
-  }
 };
-
-
 
 export const getDeviceInfo = (): { type: string; name: string } => {
   const ua = navigator.userAgent;

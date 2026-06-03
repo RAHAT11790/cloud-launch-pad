@@ -25,9 +25,17 @@ interface SaltPlayerProps {
   getCleanEmbedUrl: (url: string) => string;
   animeSaltApi: any;
   addToWatchHistory: (anime: AnimeItem, seasonIdx?: number, epIdx?: number, preserveProgress?: boolean) => void;
+  onRequireUnlock?: (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => Promise<boolean>;
   suggestedAnime?: AnimeItem[];
   onSuggestedClick?: (anime: AnimeItem) => void;
 }
+
+const getShortSeasonLabel = (seasonName: string | undefined, index: number) => {
+  const normalized = String(seasonName || "").trim();
+  const explicitSeasonNumber = normalized.match(/season\s*(\d+)/i)?.[1];
+  if (explicitSeasonNumber) return `Season ${explicitSeasonNumber}`;
+  return `Season ${index + 1}`;
+};
 
 const CROP_PRESETS = [
   { label: "16:9", w: 16, h: 9 },
@@ -36,7 +44,7 @@ const CROP_PRESETS = [
   { label: "21:9", w: 21, h: 9 },
 ];
 
-export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCleanEmbedUrl, animeSaltApi, addToWatchHistory, suggestedAnime, onSuggestedClick }: SaltPlayerProps) {
+export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCleanEmbedUrl, animeSaltApi, addToWatchHistory, onRequireUnlock, suggestedAnime, onSuggestedClick }: SaltPlayerProps) {
   const [epSearch, setEpSearch] = useState("");
   const [selectedSeasonIdx, setSelectedSeasonIdx] = useState<number>(saltPlayerState.seasonIdx ?? 0);
   const [showCropPanel, setShowCropPanel] = useState(false);
@@ -147,7 +155,7 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
       setCustomW("");
       setCustomH("");
     } else {
-      toast.error("সঠিক Width ও Height দিন");
+      toast.error("Enter valid Width and Height");
     }
   }, [customW, customH, applyCrop]);
 
@@ -212,6 +220,10 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   const handleEpisodeClick = async (ep: any, season: any, sIdx: number, eIdx: number) => {
     const epSrc = ep.link;
     if (epSrc?.startsWith("animesalt://")) {
+      if (saltPlayerState.anime && onRequireUnlock) {
+        const hasAccess = await onRequireUnlock(saltPlayerState.anime, sIdx, eIdx);
+        if (!hasAccess) return;
+      }
       const epSlug = epSrc.replace("animesalt://", "");
       try {
         const result = await animeSaltApi.getEpisode(epSlug);
@@ -413,10 +425,13 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
           <iframe
             src={saltPlayerState.cleanEmbedUrl || saltPlayerState.embedUrl}
             className={`${isFullscreen ? 'w-full h-full' : 'absolute inset-0 w-full h-full'} border-0`}
-            style={getIframeStyle()}
+            style={{ ...getIframeStyle(), pointerEvents: 'none' }}
             allow="autoplay; encrypted-media; picture-in-picture"
             referrerPolicy="no-referrer"
+            sandbox="allow-scripts allow-same-origin allow-presentation"
           />
+          {/* Transparent overlay — blocks remote iframe's native controls so only our controls open */}
+          <div className="absolute inset-0 z-10" style={{ background: 'transparent' }} />
         </div>
       </div>
 
@@ -428,22 +443,30 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
             <>
               {/* Season selector */}
               {saltPlayerState.anime.seasons.length > 1 && (
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">{saltPlayerState.anime.seasons.length} Seasons</span>
-                  <div className="flex flex-wrap gap-1.5 flex-1">
-                    {saltPlayerState.anime.seasons.map((s, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setSelectedSeasonIdx(idx)}
-                        className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                          idx === selectedSeasonIdx
-                            ? 'gradient-primary text-primary-foreground border-primary/30 shadow-[0_2px_12px_hsla(170,75%,45%,0.25)]'
-                            : 'bg-secondary border-border/40 text-muted-foreground hover:border-primary/30'
-                        }`}
-                      >
-                        {s.name}
-                      </button>
-                    ))}
+                <div className="mb-3">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+                    {saltPlayerState.anime.seasons.length} Seasons
+                  </p>
+                  <div
+                    className="flex gap-2 overflow-x-auto scrollbar-hide pb-1"
+                    style={{ touchAction: "pan-x" }}
+                  >
+                    {saltPlayerState.anime.seasons.map((s, idx) => {
+                      const active = idx === selectedSeasonIdx;
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => setSelectedSeasonIdx(idx)}
+                          className={`flex-shrink-0 min-w-[110px] px-4 py-2 rounded-xl text-xs font-semibold border whitespace-nowrap transition-all ${
+                            active
+                              ? 'gradient-primary text-primary-foreground border-primary/40 shadow-[0_2px_12px_hsla(170,75%,45%,0.3)]'
+                              : 'bg-secondary border-border/40 text-muted-foreground hover:border-primary/30 hover:text-foreground'
+                          }`}
+                        >
+                          {getShortSeasonLabel(s.name, idx)}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -492,7 +515,7 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
                       })}
                     </div>
                     {episodes.length === 0 && (
-                      <p className="text-xs text-muted-foreground text-center py-4">কোনো এপিসোড পাওয়া যায়নি</p>
+                      <p className="text-xs text-muted-foreground text-center py-4">No episodes found</p>
                     )}
                   </>
                 );

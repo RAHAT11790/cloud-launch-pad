@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback, useMemo, forwardRef } from "react";
-import { X, Play, Heart, Star, BookOpen, List, ArrowLeft, MessageCircle, Send, Trash2, Share2, Check, Reply, ChevronDown, ChevronUp, Languages } from "lucide-react";
-import type { AnimeItem, AudioLanguage } from "@/data/animeData";
-
+import { useState, useEffect, useCallback, forwardRef } from "react";
+import { X, Play, Heart, Star, BookOpen, List, ArrowLeft, MessageCircle, Send, Trash2, Share2, Check, Reply, ChevronDown, ChevronUp } from "lucide-react";
+import type { AnimeItem } from "@/data/animeData";
 import { motion } from "framer-motion";
 import { db, ref, set, remove, onValue, push } from "@/lib/firebase";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
@@ -44,39 +43,6 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
   // Active "NEW" ranges from admin's notification publishing (per season)
   // Map: seasonNumber -> array of { start, end, ts }
   const [newRanges, setNewRanges] = useState<Record<number, { start: number; end: number; ts: number }[]>>({});
-
-  // ───── Per-series audio language switching ─────
-  const audioLanguages: AudioLanguage[] = useMemo(
-    () => (Array.isArray(anime.audioLanguages) ? anime.audioLanguages : Object.values(anime.audioLanguages || {})) as AudioLanguage[],
-    [anime.audioLanguages]
-  );
-  const defaultLangId = useMemo(() => {
-    if (!audioLanguages.length) return "";
-    return (audioLanguages.find((l) => l.isDefault) || audioLanguages[0]).id;
-  }, [audioLanguages]);
-  const [activeLangId, setActiveLangId] = useState<string>(defaultLangId);
-  useEffect(() => { setActiveLangId(defaultLangId); }, [defaultLangId]);
-  const [showLangMenu, setShowLangMenu] = useState(false);
-  const activeLang = useMemo(
-    () => audioLanguages.find((l) => l.id === activeLangId),
-    [audioLanguages, activeLangId]
-  );
-
-  // The view-anime: when an audio language is active, swap seasons / movie links / language label.
-  const view: AnimeItem = useMemo(() => {
-    if (!activeLang) return anime;
-    return {
-      ...anime,
-      language: activeLang.name || anime.language,
-      seasons: activeLang.seasons && activeLang.seasons.length ? activeLang.seasons : anime.seasons,
-      movieLink: activeLang.movieLink || anime.movieLink,
-      movieLink480: activeLang.movieLink480 || anime.movieLink480,
-      movieLink720: activeLang.movieLink720 || anime.movieLink720,
-      movieLink1080: activeLang.movieLink1080 || anime.movieLink1080,
-      movieLink4k: activeLang.movieLink4k || anime.movieLink4k,
-    };
-  }, [anime, activeLang]);
-
 
   useEffect(() => {
     const r = ref(db, "newEpisodeReleases");
@@ -261,7 +227,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
               <Star className="w-3 h-3" /> {anime.rating}
             </span>
             <span>{anime.year}</span>
-            <span>{view.language}</span>
+            <span>{anime.language}</span>
             <span className="bg-foreground/15 px-2.5 py-1 rounded text-[10px] backdrop-blur-[10px]">
               {anime.type === "webseries" ? "Series" : "Movie"}
             </span>
@@ -288,7 +254,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
         <div className="flex gap-2.5 mb-5">
           <button
             onClick={() => {
-              if (view.type === "webseries" && view.seasons) { onPlay(view, 0, 0); } else { onPlay(view); }
+              if (anime.type === "webseries" && anime.seasons) { onPlay(anime, 0, 0); } else { onPlay(anime); }
             }}
             className="flex-1 py-3 rounded-xl gradient-primary font-bold text-sm flex items-center justify-center gap-2 btn-glow">
             {anime.type === "webseries" ? <><List className="w-4 h-4" /> Watch</> : <><Play className="w-4 h-4" /> Play</>}
@@ -335,49 +301,10 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
           <p className="text-[13px] leading-relaxed text-secondary-foreground">{anime.storyline}</p>
         </div>
 
-        {/* Audio language switcher (only when admin has added languages) */}
-        {audioLanguages.length > 0 && (
-          <div className="glass-card p-3 mb-4 rounded-xl">
-            <button
-              onClick={() => setShowLangMenu((v) => !v)}
-              className="w-full flex items-center justify-between gap-2 text-left"
-            >
-              <span className="flex items-center gap-2 text-[13px] font-semibold">
-                <Languages className="w-4 h-4 text-primary" />
-                Audio:&nbsp;
-                <span className="text-primary">{activeLang?.name || view.language}</span>
-                {activeLang?.isDefault && (
-                  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">DEFAULT</span>
-                )}
-              </span>
-              <ChevronDown className={`w-4 h-4 transition-transform ${showLangMenu ? "rotate-180" : ""}`} />
-            </button>
-            {showLangMenu && (
-              <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                {audioLanguages.map((l) => (
-                  <button
-                    key={l.id}
-                    onClick={() => { setActiveLangId(l.id); setShowLangMenu(false); }}
-                    className={`px-3 py-2 rounded-lg text-[12px] font-semibold border transition-all ${
-                      l.id === activeLangId
-                        ? "bg-primary/20 border-primary text-primary"
-                        : "bg-secondary/60 border-border/40 hover:border-primary/50"
-                    }`}
-                  >
-                    {l.name}
-                    {l.isDefault && <span className="ml-1 text-[8px] text-amber-300">★</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Episode List for webseries */}
-        {view.type === "webseries" && view.seasons && (
+        {anime.type === "webseries" && anime.seasons && (
           <div className="mb-5 space-y-4">
-            {view.seasons.map((season, sIdx) => {
-
+            {anime.seasons.map((season, sIdx) => {
               const NEW_WINDOW_MS = 36 * 60 * 60 * 1000;
               const now = Date.now();
               const animeUpdated = Number((anime as any).updatedAt || 0);
@@ -402,7 +329,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
                     return (
                     <button
                       key={eIdx}
-                      onClick={() => onPlay(view, sIdx, eIdx)}
+                      onClick={() => onPlay(anime, sIdx, eIdx)}
                       className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-secondary/60 border border-border/30 hover:border-primary hover:bg-primary/10 transition-all group relative"
                     >
                       {/* Thumbnail */}

@@ -21,25 +21,14 @@ interface EpisodeRelease {
   active?: boolean;
   weeklyEnabled?: boolean;
   weeklyEveryDays?: number;
-  language?: string;
-  audioLanguageId?: string;
-  episodeInfo?: {
-    seasonNumber?: number;
-    episodeNumber?: number;
-    episodeNumberEnd?: number;
-    seasonName?: string;
-    type?: string;
-  };
 }
 
 interface NewEpisodeReleasesProps {
   allAnime: AnimeItem[];
   onCardClick: (anime: AnimeItem) => void;
-  selectedLanguage?: string;
-  onReleaseClick?: (release: EpisodeRelease) => void;
 }
 
-const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>(({ allAnime, onCardClick, selectedLanguage, onReleaseClick }, _ref) => {
+const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>(({ allAnime, onCardClick }, _ref) => {
   const [releases, setReleases] = useState<EpisodeRelease[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [tick, setTick] = useState(0);
@@ -70,31 +59,13 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     return () => clearInterval(t);
   }, []);
 
-  // Filter active releases within 36h - only RS Anime content (no AnimeSalt).
-  // Also filter by the currently selected language: a release tagged with a
-  // language only shows when that language is selected. Releases without a
-  // language tag (legacy data) remain visible for backward compatibility.
+  // Filter active releases within 36h - only RS Anime content (no AnimeSalt)
   const allAnimeIds = useMemo(() => new Set(allAnime.map(a => a.id)), [allAnime]);
-  const targetLang = (selectedLanguage || "").trim().toLowerCase();
-  const activeReleases = useMemo(() => {
-    const list = releases.filter(
-      (r) => r.active !== false && Date.now() - r.timestamp < NEW_RELEASE_TTL_MS
-        && (r as any).contentType !== "animesalt"
-        && allAnimeIds.has(r.contentId)
-    );
-    if (!targetLang) return list;
-    // Group by contentId so the same anime never appears more than once per language.
-    const byContent = new Map<string, EpisodeRelease>();
-    for (const r of list) {
-      const relLang = String(r.language || "").trim().toLowerCase();
-      if (relLang && relLang !== targetLang) continue;
-      const existing = byContent.get(r.contentId);
-      if (!existing || (r.timestamp || 0) > (existing.timestamp || 0)) {
-        byContent.set(r.contentId, r);
-      }
-    }
-    return Array.from(byContent.values()).sort((a, b) => b.timestamp - a.timestamp);
-  }, [releases, allAnimeIds, tick, targetLang]);
+  const activeReleases = useMemo(() => releases.filter(
+    (r) => r.active !== false && Date.now() - r.timestamp < NEW_RELEASE_TTL_MS
+      && (r as any).contentType !== "animesalt"
+      && allAnimeIds.has(r.contentId)
+  ), [releases, allAnimeIds, tick]);
 
   if (activeReleases.length === 0) return null;
 
@@ -113,7 +84,6 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
   };
 
   const handleClick = (release: EpisodeRelease) => {
-    if (onReleaseClick) { onReleaseClick(release); return; }
     const content = getContent(release.contentId);
     if (content) onCardClick(content);
   };
@@ -139,12 +109,8 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             const content = getContent(release.contentId);
             const poster = content?.poster || release.poster || "";
             const title = content?.title || release.title || "Unknown";
-            const langLabel = release.language || (content as any)?.langLabel || content?.language || "";
-            const epInfo = release.episodeInfo || {};
-            const seasonNum = release.season ?? epInfo.seasonNumber;
-            const epNum = release.episode ?? epInfo.episodeNumber;
-            const epNumEnd = epInfo.episodeNumberEnd;
-            const seasonNameLabel = release.seasonName || epInfo.seasonName;
+            const year = content?.year || release.year || "N/A";
+            const rating = content?.rating || release.rating || "N/A";
 
             return (
               <div
@@ -152,28 +118,29 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                 className="relative flex-shrink-0 w-[120px] cursor-pointer group"
                 onClick={() => handleClick(release)}
               >
-                <div className="relative aspect-[2/3] rounded-md overflow-hidden bg-card">
+                <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card">
                   {/* NEW badge */}
                   <div className="absolute top-1.5 left-1.5 z-10 bg-gradient-to-r from-accent to-pink-500 text-white text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
                     <Zap className="w-2.5 h-2.5" /> NEW
                   </div>
-                  <img src={poster} alt={title} className="w-full h-full object-cover" loading="eager" decoding="async" />
+                  <img src={poster} alt={title} className="w-full h-full object-cover" loading="lazy" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                  <div className="absolute top-1 right-1 flex flex-col items-end gap-0.5 z-10">
-                    <span className="gradient-primary px-1.5 py-[1px] rounded text-[8px] font-bold uppercase tracking-wide max-w-[80px] truncate" title={langLabel}>{langLabel}</span>
-                    <span className="px-1 py-[1px] rounded text-[7px] font-black tracking-wider bg-primary/85 text-primary-foreground">RS</span>
+                  <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
+                    <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{year}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${content?.source === "animesalt" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{content?.source === "animesalt" ? "AN" : "RS"}</span>
                   </div>
                   <div className="absolute bottom-0 left-0 right-0 p-2">
                     <p className="text-[11px] font-semibold leading-tight line-clamp-2" style={getAnimeTitleStyle(title)}>{title}</p>
-                    {(seasonNum || epNum || seasonNameLabel) && (
-                      <p className="text-[9px] text-accent mt-0.5 truncate">
-                        {seasonNameLabel || (seasonNum ? `Season ${seasonNum}` : "")}
-                        {(seasonNameLabel || seasonNum) && epNum ? " • " : ""}
-                        {epNum ? `Ep ${epNum}${epNumEnd && epNumEnd !== epNum ? `-${epNumEnd}` : ""}` : ""}
+                    {(release.season || release.episode) && (
+                      <p className="text-[9px] text-accent mt-0.5">
+                        {release.seasonName || (release.season ? `Season ${release.season}` : "")}
+                        {release.season && release.episode ? " • " : ""}
+                        {release.episode ? `Episode ${release.episode}` : ""}
                       </p>
                     )}
                     <p className="text-[10px] text-muted-foreground mt-0.5">
-                      <span className="text-[8px]">{timeAgo(release.timestamp)}</span>
+                      ⭐ {rating}
+                      <span className="ml-1.5 text-[8px]">{timeAgo(release.timestamp)}</span>
                     </p>
                   </div>
                 </div>
@@ -208,9 +175,6 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                 {activeReleases.map((release) => {
                   const content = getContent(release.contentId);
                   if (!content) return null;
-                  const epInfo = release.episodeInfo || {};
-                  const seasonNameLabel = release.seasonName || epInfo.seasonName;
-                  const epNum = release.episode ?? epInfo.episodeNumber;
                   return (
                     <div
                       key={release.id}
@@ -220,9 +184,9 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                       <img src={content.poster} alt={content.title} className="w-[60px] h-[80px] rounded-lg object-cover flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-semibold mb-1" style={getAnimeTitleStyle(content.title)}>{content.title}</h4>
-                        {(seasonNameLabel || epNum) && (
+                        {(release.seasonName || release.episode) && (
                           <p className="text-xs text-muted-foreground mb-1">
-                            {seasonNameLabel || "New Season"} • Episode {epNum || "New"}
+                            {release.seasonName || "New Season"} • Episode {release.episode || "New"}
                           </p>
                         )}
                         <span className="text-[10px] text-primary/70">{timeAgo(release.timestamp)}</span>
