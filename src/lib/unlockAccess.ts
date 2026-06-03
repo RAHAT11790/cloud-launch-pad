@@ -159,10 +159,11 @@ export const markAdGateShownNow = (): void => {
 };
 
 export const getRemainingAdGateCooldownMs = (): number => {
+  if (_adGateCooldownMs <= 0) return 0;
   try {
     const lastShownAt = Number(localStorage.getItem(AD_GATE_LAST_SHOWN_KEY) || 0);
     if (!lastShownAt) return 0;
-    return Math.max(0, lastShownAt + AD_GATE_COOLDOWN_MS - Date.now());
+    return Math.max(0, lastShownAt + _adGateCooldownMs - Date.now());
   } catch {
     return 0;
   }
