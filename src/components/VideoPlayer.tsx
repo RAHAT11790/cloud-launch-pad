@@ -9,7 +9,7 @@ import {
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
-import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, type AdService } from "@/lib/unlockAccess";
+import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, isAdGateCooldownActive, markAdGateShownNow, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
@@ -707,10 +707,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       setAdGateActive(false);
       return;
     }
+    if (isAdGateCooldownActive()) {
+      setAdGateActive(false);
+      return;
+    }
     // Shortener master toggle: if admin disabled it, give free users instant access
     isShortenerEnabled().then((on) => {
       if (!on) { setAdGateActive(false); return; }
       // No access - block video and show ad gate
+      markAdGateShownNow();
       setAdGateActive(true);
       if (videoRef.current) {
         videoRef.current.pause();
