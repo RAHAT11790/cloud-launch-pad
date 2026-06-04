@@ -67,6 +67,23 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
       && allAnimeIds.has(r.contentId)
   ), [releases, allAnimeIds, tick]);
 
+  // Helpers — releases may store episode info either at the top level
+  // (r.episode / r.season) or nested under r.episodeInfo with optional
+  // episodeNumberEnd for ranges added via the admin's multi-range publisher.
+  const getEpStart = (r: any): number | undefined => {
+    const v = r?.episode ?? r?.episodeInfo?.episodeNumber;
+    return typeof v === "number" && v > 0 ? v : undefined;
+  };
+  const getEpEnd = (r: any): number | undefined => {
+    const v = r?.episodeInfo?.episodeNumberEnd ?? r?.episode ?? r?.episodeInfo?.episodeNumber;
+    return typeof v === "number" && v > 0 ? v : undefined;
+  };
+  const getSeason = (r: any): number | undefined => {
+    const v = r?.season ?? r?.episodeInfo?.seasonNumber;
+    return typeof v === "number" && v > 0 ? v : undefined;
+  };
+  const getSeasonName = (r: any): string | undefined => r?.seasonName ?? r?.episodeInfo?.seasonName;
+
   // Group releases by contentId so multiple new-episode entries for the same anime
   // collapse to one card showing a range (e.g. "EP 1-13").
   const groupedReleases = useMemo(() => {
@@ -79,12 +96,14 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     const groups = Array.from(byContent.values()).map((arr) => {
       arr.sort((a, b) => b.timestamp - a.timestamp);
       const latest = arr[0];
-      const eps = arr.map((x) => x.episode).filter((n): n is number => typeof n === "number" && n > 0);
+      const starts = arr.map(getEpStart).filter((n): n is number => typeof n === "number");
+      const ends = arr.map(getEpEnd).filter((n): n is number => typeof n === "number");
+      const all = [...starts, ...ends];
       return {
         latest,
         all: arr,
-        minEp: eps.length ? Math.min(...eps) : undefined,
-        maxEp: eps.length ? Math.max(...eps) : undefined,
+        minEp: all.length ? Math.min(...all) : undefined,
+        maxEp: all.length ? Math.max(...all) : undefined,
       };
     });
     groups.sort((a, b) => b.latest.timestamp - a.latest.timestamp);
