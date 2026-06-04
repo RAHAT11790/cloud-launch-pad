@@ -37,12 +37,13 @@ export function useAnimeSaltData() {
               backdrop: item.poster?.replace('/w342/', '/w1280/').replace('/w500/', '/w1280/') || '',
               year: item.year || '',
               rating: '',
-              language: '',
+              language: item.language || '',
               category: 'AnimeSalt',
               type: item.type === 'movies' ? 'movie' as const : 'webseries' as const,
               storyline: '',
               source: 'animesalt' as const,
               slug: item.slug,
+              episodeCount: typeof item.episodeCount === 'number' ? item.episodeCount : undefined,
             }));
 
           setItems(converted);
