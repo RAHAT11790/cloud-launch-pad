@@ -1600,7 +1600,17 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
 
       {/* Watchlist */}
       <div className="mb-7">
-        <h3 className="text-base font-bold mb-3 flex items-center category-bar">My Watchlist</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-bold flex items-center category-bar">My Watchlist</h3>
+          {watchlist.length > 0 && (
+            <button
+              onClick={() => setViewAllMode("watchlist")}
+              className="text-xs text-primary flex items-center gap-1 hover:underline"
+            >
+              View All <ChevronRight className="w-3 h-3" />
+            </button>
+          )}
+        </div>
         {watchlist.length === 0 ? (
           <div className="text-center py-8">
             <Bookmark className="w-10 h-10 text-muted-foreground/50 mx-auto mb-2.5" />
@@ -1608,7 +1618,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
           </div>
         ) : (
           <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
-            {watchlist.map((item: any) => (
+            {watchlist.slice(0, 10).map((item: any) => (
               <div key={item.id} onClick={() => handleAnimeClick(item)}
                 className="flex-shrink-0 w-[100px] cursor-pointer relative">
                 <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
@@ -1627,6 +1637,81 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
           </div>
         )}
       </div>
+
+      {/* View All Overlay (full grid of history or watchlist) */}
+      <AnimatePresence>
+        {viewAllMode && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[400] bg-background flex flex-col"
+          >
+            <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b border-border/40 bg-background/95 backdrop-blur">
+              <button
+                onClick={() => setViewAllMode(null)}
+                className="w-9 h-9 rounded-full bg-secondary/60 flex items-center justify-center hover:bg-secondary"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <div className="flex-1">
+                <h2 className="text-base font-bold">
+                  {viewAllMode === "history" ? "Watch History" : "My Watchlist"}
+                </h2>
+                <p className="text-[11px] text-muted-foreground">
+                  {viewAllMode === "history"
+                    ? `${watchHistory.length} items · last 30 days`
+                    : `${watchlist.length} items`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3">
+              {(viewAllMode === "history" ? watchHistory : watchlist).length === 0 ? (
+                <div className="text-center py-16">
+                  {viewAllMode === "history"
+                    ? <History className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
+                    : <Bookmark className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />}
+                  <p className="text-sm text-muted-foreground">
+                    {viewAllMode === "history" ? "No watch history yet" : "No items in watchlist"}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  {(viewAllMode === "history" ? watchHistory : watchlist).map((item: any) => (
+                    <div
+                      key={item.id}
+                      onClick={() => { setViewAllMode(null); handleAnimeClick(item); }}
+                      className="cursor-pointer relative"
+                    >
+                      <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
+                        <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                        <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, transparent 55%)" }} />
+                        {viewAllMode === "watchlist" && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); removeFromWatchlist(item.id); }}
+                            className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-destructive/80 flex items-center justify-center"
+                          >
+                            <X className="w-3 h-3 text-white" />
+                          </button>
+                        )}
+                        <div className="absolute bottom-1.5 left-1.5 right-1.5">
+                          <p className="text-[10px] font-semibold leading-tight line-clamp-2 text-white">{item.title}</p>
+                          {viewAllMode === "history" && item.episodeInfo && (
+                            <p className="text-[9px] text-primary mt-0.5">
+                              S{item.episodeInfo.season} E{item.episodeInfo.episodeNumber || item.episodeInfo.episode}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Device warning */}
       {deviceExceeded && deviceCheckDone && (
