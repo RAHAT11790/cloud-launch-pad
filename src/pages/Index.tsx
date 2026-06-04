@@ -1033,6 +1033,25 @@ const Index = () => {
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     
+    const buildEpInfo = (item: any) => {
+      if (item.type === "movie") return "Movie";
+      if (!item.seasons || item.seasons.length === 0) return "";
+      const total = item.seasons.reduce((s: number, ss: any) => s + ((ss.episodes || []).length), 0);
+      if (total === 0) return "";
+      return item.seasons.length > 1 ? `${item.seasons.length}S · ${total} EP` : `${total} EP`;
+    };
+    const buildLangInfo = (item: any) => {
+      const set = new Set<string>();
+      const push = (raw?: string) => { if (!raw) return; String(raw).split(/[,/|]+/).forEach((s) => { const t = s.trim(); if (t) set.add(t); }); };
+      push(item.language);
+      (item.seasons || []).forEach((s: any) => (s.episodes || []).forEach((ep: any) => (ep.audioTracks || []).forEach((at: any) => push(at.language || at.label))));
+      const arr = Array.from(set).filter(Boolean);
+      if (arr.length === 0) return "";
+      if (arr.length === 1) return arr[0];
+      if (arr.length === 2) return arr.join(" · ");
+      return "Multi";
+    };
+
     const randomSlides = shuffled.slice(0, Math.min(6, shuffled.length)).map(item => ({
       id: item.id,
       title: item.title,
@@ -1043,6 +1062,8 @@ const Index = () => {
       type: item.type,
       isCustom: false,
       description: "",
+      episodeInfo: buildEpInfo(item),
+      languageInfo: buildLangInfo(item),
     }));
 
     // Prepend pinned posts (always first, no duplicates)
