@@ -2450,7 +2450,7 @@ const Index = () => {
 
       <AnimatePresence>
         {showProfile && (
-          <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} />
+          <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
         )}
       </AnimatePresence>
 
