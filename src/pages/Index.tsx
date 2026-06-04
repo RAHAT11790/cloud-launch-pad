@@ -2494,7 +2494,6 @@ const Index = () => {
           seasons={playerState.anime.seasons}
           currentSeasonIdx={playerState.seasonIdx}
           onSeasonChange={handleVideoPlayerSeasonChange}
-          suggestedAnime={[]}
           onSuggestedClick={(anime) => {
             stopAllPlayback();
             navigate(buildAnimeRoute(anime.id));
