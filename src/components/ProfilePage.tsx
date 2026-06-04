@@ -1659,12 +1659,21 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
           <span className="flex-1 text-[13px] font-medium">Edit Profile</span>
           <ChevronRight className="w-3 h-3 text-muted-foreground" />
         </div>
-        <div onClick={handleDeleteThisPhoneLogin}
-          className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:bg-accent/20 border-accent/30 bg-accent/15 rounded-xl">
-          <LogOut className="w-5 h-5" />
-          <span className="flex-1 text-[13px] font-medium">Logout</span>
-          <ChevronRight className="w-3 h-3 text-muted-foreground" />
-        </div>
+        {isGuestUser ? (
+          <div onClick={() => { onClose(); onLoginClick?.(); }}
+            className="flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:translate-x-1 rounded-xl bg-gradient-to-r from-primary to-primary/70 text-primary-foreground shadow-lg">
+            <User className="w-5 h-5" />
+            <span className="flex-1 text-[13px] font-bold">Login / Sign Up</span>
+            <ChevronRight className="w-3 h-3 opacity-80" />
+          </div>
+        ) : (
+          <div onClick={handleDeleteThisPhoneLogin}
+            className="glass-card flex items-center gap-3.5 px-4 py-4 cursor-pointer transition-all hover:bg-accent/20 border-accent/30 bg-accent/15 rounded-xl">
+            <LogOut className="w-5 h-5" />
+            <span className="flex-1 text-[13px] font-medium">Logout</span>
+            <ChevronRight className="w-3 h-3 text-muted-foreground" />
+          </div>
+        )}
 
         {/* Telegram Join Button */}
         <a
