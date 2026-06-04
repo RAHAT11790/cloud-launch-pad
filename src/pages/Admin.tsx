@@ -4344,7 +4344,7 @@ ${tgBulkFooter}
       const ws = webseriesData.find(s => s.id === cId);
       setTgDubType(ws?.dubType === "fandub" ? "fandub" : "official");
       // Auto-set language from content
-      if (ws?.language) setTgLanguages(ws.language);
+      if (ws?.language) setTgLanguages(String(ws.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
       // Auto-fetch exact genres/rating from TMDB/AniList if tmdbId available
       if (ws?.tmdbId) {
         setTgImdbId(String(ws.tmdbId));
@@ -4358,7 +4358,7 @@ ${tgBulkFooter}
     } else if (cType === "movie") {
       const mv = moviesData.find(m => m.id === cId);
       setTgDubType(mv?.dubType === "fandub" ? "fandub" : "official");
-      if (mv?.language) setTgLanguages(mv.language);
+      if (mv?.language) setTgLanguages(String(mv.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
       if (mv?.tmdbId) {
         setTgImdbId(String(mv.tmdbId));
         const { genres, rating } = await resolveTelegramGenresAndRating(String(mv.tmdbId), mv.title || release.title || "");
