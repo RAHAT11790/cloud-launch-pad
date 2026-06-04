@@ -68,12 +68,18 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   // ---- Episode / season count ----
   const epInfo = (() => {
     if (anime.type === "movie") return "Movie";
-    if (!anime.seasons || anime.seasons.length === 0) return "";
-    const total = anime.seasons.reduce((sum: number, s: any) => sum + ((s.episodes || []).length), 0);
-    if (total === 0) return "";
-    return anime.seasons.length > 1
-      ? `${anime.seasons.length}S · ${total} EP`
-      : `${total} EP`;
+    if (anime.seasons && anime.seasons.length > 0) {
+      const total = anime.seasons.reduce((sum: number, s: any) => sum + ((s.episodes || []).length), 0);
+      if (total > 0) {
+        return anime.seasons.length > 1
+          ? `${anime.seasons.length}S · ${total} EP`
+          : `${total} EP`;
+      }
+    }
+    if (typeof (anime as any).episodeCount === "number" && (anime as any).episodeCount > 0) {
+      return `${(anime as any).episodeCount} EP`;
+    }
+    return "";
   })();
 
   return (
