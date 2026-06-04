@@ -112,6 +112,19 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             const year = content?.year || release.year || "N/A";
             const rating = content?.rating || release.rating || "N/A";
 
+            // Fallback: if admin didn't set episode/season on the release, use latest from content seasons
+            let epNum: number | undefined = release.episode;
+            let snNum: number | undefined = release.season;
+            let snName: string | undefined = release.seasonName;
+            if ((!epNum || !snNum) && content?.seasons && content.seasons.length > 0) {
+              const lastSeasonIdx = content.seasons.length - 1;
+              const lastSeason: any = content.seasons[lastSeasonIdx];
+              const lastEp = lastSeason?.episodes?.[lastSeason.episodes.length - 1];
+              if (!snNum) snNum = lastSeasonIdx + 1;
+              if (!snName) snName = lastSeason?.name;
+              if (!epNum && lastEp) epNum = lastEp.episodeNumber || lastEp.number || lastSeason.episodes.length;
+            }
+
             return (
               <div
                 key={release.id}
@@ -129,18 +142,19 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                     <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{year}</span>
                     <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${content?.source === "animesalt" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{content?.source === "animesalt" ? "AN" : "RS"}</span>
                   </div>
+
+                  {/* Prominent Episode badge */}
+                  {epNum ? (
+                    <div className="absolute bottom-[64px] left-1.5 z-10 bg-primary text-primary-foreground text-[10px] font-black px-2 py-0.5 rounded shadow-lg">
+                      {snNum && snNum > 1 ? `S${snNum} · EP ${epNum}` : `EP ${epNum}`}
+                    </div>
+                  ) : null}
+
                   <div className="absolute bottom-0 left-0 right-0 p-2">
                     <p className="text-[11px] font-semibold leading-tight line-clamp-2" style={getAnimeTitleStyle(title)}>{title}</p>
-                    {(release.season || release.episode) && (
-                      <p className="text-[9px] text-accent mt-0.5">
-                        {release.seasonName || (release.season ? `Season ${release.season}` : "")}
-                        {release.season && release.episode ? " • " : ""}
-                        {release.episode ? `Episode ${release.episode}` : ""}
-                      </p>
-                    )}
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      ⭐ {rating}
-                      <span className="ml-1.5 text-[8px]">{timeAgo(release.timestamp)}</span>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                      <span>⭐ {rating}</span>
+                      <span className="text-[8px] opacity-80">· {timeAgo(release.timestamp)}</span>
                     </p>
                   </div>
                 </div>
