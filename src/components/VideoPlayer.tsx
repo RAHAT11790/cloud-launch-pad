@@ -684,6 +684,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   useEffect(() => {
     if (isPremium === null) return; // still loading premium status
     if (!freeAccessLoaded) return; // wait for Firebase freeAccess snapshot — prevents unlock-button flash
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const uid = getLocalUserId();
     if (!uid) {
@@ -719,12 +721,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         videoRef.current.src = '';
       }
       setShortenLoading(true);
+      timeoutId = setTimeout(() => {
+        if (cancelled) return;
+        setShortenLoading(false);
+        setAdGateActive(false);
+      }, 2000);
       createUnlockLinksForAllServices().then((result) => {
+        if (cancelled) return;
+        if (timeoutId) clearTimeout(timeoutId);
         setShortenLoading(false);
         if (result.ok && result.links.length > 0) setAdLinks(result.links);
         else setAdGateActive(false);
-      }).catch(() => { setShortenLoading(false); setAdGateActive(false); });
+      }).catch(() => {
+        if (cancelled) return;
+        if (timeoutId) clearTimeout(timeoutId);
+        setShortenLoading(false);
+        setAdGateActive(false);
+      });
     });
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
 
   const handleOpenAdLink = useCallback(async (url: string, _service?: AdService) => {
@@ -768,6 +787,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   // Restore watch position (per-account)
   useEffect(() => {
     if (!animeId) return;
+    pendingSeek.current = typeof initialSeekTime === "number" ? Math.max(0, initialSeekTime) : 0;
     if (typeof initialSeekTime === "number" && initialSeekTime > 0) {
       pendingSeek.current = initialSeekTime;
     }
@@ -784,10 +804,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             const resumeFrom = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : data.currentTime;
             if (resumeFrom && data.duration && (resumeFrom / data.duration) < 0.95) {
               pendingSeek.current = resumeFrom;
-              const v = videoRef.current;
-              if (v && v.duration > 0) {
-                v.currentTime = resumeFrom;
-              }
             }
           }
         });
