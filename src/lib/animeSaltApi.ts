@@ -202,10 +202,29 @@ const fetchPage = async (url: string): Promise<string> => {
   throw new Error('No HTML returned from AnimeSalt proxy');
 };
 
-const parseListPage = (html: string): { slug: string; title: string; poster: string; type: string; year: string }[] => {
+const parseListPage = (html: string): { slug: string; title: string; poster: string; type: string; year: string; language?: string; episodeCount?: number }[] => {
   const doc = parseHtml(html);
-  const items: { slug: string; title: string; poster: string; type: string; year: string }[] = [];
+  const items: { slug: string; title: string; poster: string; type: string; year: string; language?: string; episodeCount?: number }[] = [];
   const seen = new Set<string>();
+
+  const extractLangFromText = (txt: string): string | undefined => {
+    if (!txt) return undefined;
+    // Look for known language labels (Hindi/English/Multi/Dual/Sub/Dub/Japanese/Tamil/Telugu/Bengali/Korean/Spanish)
+    const langs: string[] = [];
+    const dict = ["Hindi", "English", "Bengali", "Tamil", "Telugu", "Japanese", "Korean", "Spanish", "Multi Audio", "Multi", "Dual Audio", "Dual", "Sub", "Dub"];
+    for (const l of dict) {
+      const re = new RegExp(`\\b${l.replace(/ /g, "\\s")}\\b`, "i");
+      if (re.test(txt)) langs.push(l);
+    }
+    if (langs.length === 0) return undefined;
+    if (langs.length === 1) return langs[0];
+    return "Multi";
+  };
+  const extractEpCount = (txt: string): number | undefined => {
+    if (!txt) return undefined;
+    const m = txt.match(/(\d{1,3})\s*(?:ep(?:isode)?s?|EP)\b/i);
+    return m ? Number(m[1]) : undefined;
+  };
 
   doc.querySelectorAll('a[href*="/series/"], a[href*="/movies/"]').forEach((anchor) => {
     const href = toAbsoluteUrl(anchor.getAttribute('href'));
@@ -223,9 +242,17 @@ const parseListPage = (html: string): { slug: string; title: string; poster: str
     const poster =
       getAttr(card, ['img'], 'data-src') ||
       getAttr(card, ['img'], 'src');
-    const year = ((card.textContent || '').match(/(?:19|20)\d{2}/) || [])[0] || '';
+    const cardText = (card.textContent || '');
+    const year = (cardText.match(/(?:19|20)\d{2}/) || [])[0] || '';
+    // Look in dedicated badge/label nodes first, fallback to full card text
+    const labelText = (
+      getText(card, ['.lang', '.language', '.audio', '.dub', '.quality', '.badge', '.label', '.tag']) ||
+      ''
+    );
+    const language = extractLangFromText(labelText) || extractLangFromText(title) || extractLangFromText(cardText);
+    const episodeCount = extractEpCount(labelText) || extractEpCount(cardText);
 
-    items.push({ slug, title, poster, type: match[1], year });
+    items.push({ slug, title, poster, type: match[1], year, language, episodeCount });
     seen.add(slug);
   });
 
