@@ -228,9 +228,12 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                 </button>
               </div>
               <div className="overflow-y-auto max-h-[60vh] p-5 space-y-2.5">
-                {activeReleases.map((release) => {
+                {groupedReleases.map(({ latest: release, minEp, maxEp }) => {
                   const content = getContent(release.contentId);
                   if (!content) return null;
+                  const epStr = minEp && maxEp && minEp !== maxEp
+                    ? `Episode ${minEp}-${maxEp}`
+                    : release.episode ? `Episode ${release.episode}` : "New";
                   return (
                     <div
                       key={release.id}
@@ -240,11 +243,9 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                       <img src={content.poster} alt={content.title} className="w-[60px] h-[80px] rounded-lg object-cover flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-semibold mb-1" style={getAnimeTitleStyle(content.title)}>{content.title}</h4>
-                        {(release.seasonName || release.episode) && (
-                          <p className="text-xs text-muted-foreground mb-1">
-                            {release.seasonName || "New Season"} • Episode {release.episode || "New"}
-                          </p>
-                        )}
+                        <p className="text-xs text-muted-foreground mb-1">
+                          {release.seasonName || (release.season ? `Season ${release.season}` : "New Season")} • {epStr}
+                        </p>
                         <span className="text-[10px] text-primary/70">{timeAgo(release.timestamp)}</span>
                       </div>
                     </div>
