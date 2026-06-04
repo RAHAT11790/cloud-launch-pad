@@ -933,6 +933,17 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   Continue with Google
                 </motion.button>
 
+                {/* Continue as Guest */}
+                <motion.button
+                  type="button"
+                  onClick={() => onGuest?.()}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full mt-3 py-3 rounded-xl bg-transparent border border-dashed border-foreground/20 text-foreground/80 font-medium text-sm flex items-center justify-center gap-2 hover:bg-foreground/5 hover:text-foreground transition-all relative z-10"
+                >
+                  Continue as Guest
+                </motion.button>
+
                 {/* Footer Links */}
                 {!isRegister && (
                   <motion.div className="text-center mt-4 relative z-10"
