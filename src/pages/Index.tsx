@@ -691,8 +691,10 @@ const Index = () => {
     return URL.createObjectURL(blob);
   }, []);
 
-  // Continue watching data (per-account, NOT per-device)
-  const [continueWatching, setContinueWatching] = useState<any[]>([]);
+  // Continue watching data (per-account, NOT per-device). Seeded from localStorage cache for instant render.
+  const [continueWatching, setContinueWatching] = useState<any[]>(() => {
+    try { return JSON.parse(localStorage.getItem("rs_continueCache") || "[]"); } catch { return []; }
+  });
 
   // Load continue watching from Firebase - per ACCOUNT
   useEffect(() => {
