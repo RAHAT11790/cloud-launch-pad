@@ -237,6 +237,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const rafId = useRef<number>(0);
   const progressRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
+  const suggestedRowRef = useRef<HTMLDivElement>(null);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -2322,6 +2323,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     : cropIndex === 2
       ? (isFullscreen ? "scaleX(1.42) scaleY(1.14)" : "scaleX(1.28) scaleY(1.08)")
       : "scale(1)";
+
+  useEffect(() => {
+    const row = suggestedRowRef.current;
+    if (!row || isFullscreen || !suggestedAnime || suggestedAnime.length < 4) return;
+
+    let direction = 1;
+    const timer = window.setInterval(() => {
+      const maxScroll = row.scrollWidth - row.clientWidth;
+      if (maxScroll <= 8) return;
+      const atEnd = row.scrollLeft >= maxScroll - 8;
+      const atStart = row.scrollLeft <= 8;
+      if (atEnd) direction = -1;
+      if (atStart) direction = 1;
+      row.scrollBy({ left: direction * 120, behavior: "smooth" });
+    }, 2200);
+
+    return () => window.clearInterval(timer);
+  }, [isFullscreen, suggestedAnime]);
 
   return (
     <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
