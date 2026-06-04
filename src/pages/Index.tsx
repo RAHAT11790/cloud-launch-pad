@@ -2011,6 +2011,7 @@ const Index = () => {
         src: nextSrc,
         subtitle: `${season.name} - Episode ${clickedEp.episodeNumber}`,
         epIdx: i,
+        resumeTime: 0,
         qualityOptions: qOpts.length > 0 ? qOpts : undefined,
         nextEpisodeSrc: undefined,
       };
@@ -2048,6 +2049,7 @@ const Index = () => {
       subtitle: `${season.name} - Episode ${ep.episodeNumber}`,
       seasonIdx: newSeasonIdx,
       epIdx: 0,
+      resumeTime: 0,
       qualityOptions: qOpts.length > 0 ? qOpts : undefined,
       nextEpisodeSrc: undefined,
     };
@@ -2478,6 +2480,7 @@ const Index = () => {
                     src: nextSrc,
                     subtitle: `${season.name} - Episode ${nextEp.episodeNumber}`,
                     epIdx: nextIdx,
+                     resumeTime: 0,
                     qualityOptions: qOpts.length > 0 ? qOpts : undefined,
                     nextEpisodeSrc: undefined,
                   };
@@ -2499,6 +2502,20 @@ const Index = () => {
           }}
           nextEpisodeSrc={playerState.nextEpisodeSrc}
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
+          shareLink={buildShareLink(playerState.anime.id, playerState.seasonIdx, playerState.epIdx)}
+          onInfoClick={() => {
+            stopAllPlayback();
+            setPlayerState(null);
+            navigate(buildAnimeRoute(playerState.anime.id));
+            handleCardClick(playerState.anime);
+          }}
+          onLibraryClick={() => {
+            stopAllPlayback();
+            setPlayerState(null);
+            setShowProfile(true);
+            navigate("/", { replace: true });
+          }}
+          suggestedAnime={suggestedAnime}
         />
       </div>
     );
