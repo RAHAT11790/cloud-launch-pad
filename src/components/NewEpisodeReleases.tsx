@@ -129,7 +129,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
         </div>
 
         <div data-no-swipe="true" className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide" style={{ touchAction: "pan-x pan-y" }}>
-          {activeReleases.slice(0, 10).map((release) => {
+          {groupedReleases.slice(0, 10).map(({ latest: release, minEp, maxEp }) => {
             const content = getContent(release.contentId);
             const poster = content?.poster || release.poster || "";
             const title = content?.title || release.title || "Unknown";
@@ -149,43 +149,61 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
               if (!epNum && lastEp) epNum = lastEp.episodeNumber || lastEp.number || lastSeason.episodes.length;
             }
 
+            // Build episode label with range support
+            const epLabel = (() => {
+              const hi = maxEp ?? epNum;
+              const lo = minEp ?? epNum;
+              if (!hi) return null;
+              const epStr = lo && hi && lo !== hi ? `EP ${lo}-${hi}` : `EP ${hi}`;
+              return snNum && snNum > 1 ? `S${snNum} · ${epStr}` : epStr;
+            })();
+
             return (
               <div
                 key={release.id}
-                className="relative flex-shrink-0 w-[120px] cursor-pointer group"
+                className="relative flex-shrink-0 w-[124px] cursor-pointer group"
                 onClick={() => handleClick(release)}
               >
-                <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card">
+                <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card shadow-md transition-transform group-hover:scale-[1.03]">
                   {/* NEW badge */}
-                  <div className="absolute top-1.5 left-1.5 z-10 bg-gradient-to-r from-accent to-pink-500 text-white text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                  <div className="absolute top-1.5 left-1.5 z-10 bg-gradient-to-r from-accent to-pink-500 text-white text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow">
                     <Zap className="w-2.5 h-2.5" /> NEW
                   </div>
                   <img src={poster} alt={title} className="w-full h-full object-cover" loading="lazy" />
-                  <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+                  <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.35) 45%, transparent 75%)" }} />
                   <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
                     <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{year}</span>
                     <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${content?.source === "animesalt" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{content?.source === "animesalt" ? "AN" : "RS"}</span>
                   </div>
 
-                  {/* Prominent Episode badge */}
-                  {epNum ? (
-                    <div className="absolute bottom-[64px] left-1.5 z-10 bg-primary text-primary-foreground text-[10px] font-black px-2 py-0.5 rounded shadow-lg">
-                      {snNum && snNum > 1 ? `S${snNum} · EP ${epNum}` : `EP ${epNum}`}
-                    </div>
-                  ) : null}
-
+                  {/* Bottom info bar — title + rating left, EP badge bottom-right corner */}
                   <div className="absolute bottom-0 left-0 right-0 p-2">
-                    <p className="text-[11px] font-semibold leading-tight line-clamp-2" style={getAnimeTitleStyle(title)}>{title}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                      <span>⭐ {rating}</span>
-                      <span className="text-[8px] opacity-80">· {timeAgo(release.timestamp)}</span>
+                    <p className="text-[11px] font-semibold leading-tight line-clamp-2 text-white pr-1" style={{ ...getAnimeTitleStyle(title), textShadow: "0 2px 6px rgba(0,0,0,0.9)" }}>
+                      {title}
                     </p>
+                    <div className="flex items-end justify-between mt-1 gap-1">
+                      <div className="flex flex-col">
+                        <p className="text-[9px] text-white/85 flex items-center gap-1">
+                          <span>⭐ {rating}</span>
+                          <span className="opacity-70">· {timeAgo(release.timestamp)}</span>
+                        </p>
+                      </div>
+                      {epLabel && (
+                        <span
+                          className="shrink-0 px-1.5 py-[2px] rounded-md text-[9px] font-black tracking-tight bg-gradient-to-r from-primary to-amber-500 text-primary-foreground shadow-md"
+                          style={{ textShadow: "0 1px 1px rgba(0,0,0,0.25)" }}
+                        >
+                          {epLabel}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             );
           })}
         </div>
+
       </div>
 
       {/* View All Modal */}
