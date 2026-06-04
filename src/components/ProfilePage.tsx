@@ -68,6 +68,7 @@ interface ProfilePageProps {
   allAnime?: AnimeItem[];
   onCardClick?: (anime: AnimeItem) => void;
   onLogout?: () => void;
+  onLoginClick?: () => void;
 }
 
 const MAX_PHOTO_SIZE = 2 * 1024 * 1024;
