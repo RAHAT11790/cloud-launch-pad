@@ -885,7 +885,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           switchServer(nextIdx);
         }
       }
-    }, 5000);
+    }, 2500);
 
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
