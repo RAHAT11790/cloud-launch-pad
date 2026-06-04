@@ -67,7 +67,31 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
       && allAnimeIds.has(r.contentId)
   ), [releases, allAnimeIds, tick]);
 
-  if (activeReleases.length === 0) return null;
+  // Group releases by contentId so multiple new-episode entries for the same anime
+  // collapse to one card showing a range (e.g. "EP 1-13").
+  const groupedReleases = useMemo(() => {
+    const byContent = new Map<string, EpisodeRelease[]>();
+    activeReleases.forEach((r) => {
+      const arr = byContent.get(r.contentId) || [];
+      arr.push(r);
+      byContent.set(r.contentId, arr);
+    });
+    const groups = Array.from(byContent.values()).map((arr) => {
+      arr.sort((a, b) => b.timestamp - a.timestamp);
+      const latest = arr[0];
+      const eps = arr.map((x) => x.episode).filter((n): n is number => typeof n === "number" && n > 0);
+      return {
+        latest,
+        all: arr,
+        minEp: eps.length ? Math.min(...eps) : undefined,
+        maxEp: eps.length ? Math.max(...eps) : undefined,
+      };
+    });
+    groups.sort((a, b) => b.latest.timestamp - a.latest.timestamp);
+    return groups;
+  }, [activeReleases]);
+
+  if (groupedReleases.length === 0) return null;
 
   const getContent = (contentId: string) => allAnime.find((a) => a.id === contentId);
 
