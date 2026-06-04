@@ -1901,10 +1901,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const onWaiting = () => {
       if (subtitleSwitchingUntilRef.current > Date.now()) return;
       if (waitingTimer) clearTimeout(waitingTimer);
-      // Longer debounce — avoid flashing loader on tiny network hiccups during smooth playback
+      // Short debounce — show loader quickly on real stalls but stay calm on micro-hiccups
       waitingTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
-      }, 1200);
+      }, 400);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
