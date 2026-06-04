@@ -703,14 +703,20 @@ const Index = () => {
       const whRef = ref(db, `users/${u.id}/watchHistory`);
       const unsub = onValue(whRef, (snapshot) => {
         const data = snapshot.val() || {};
+        const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+        const now = Date.now();
         // Skip legacy per-device nested keys (objects without `id` field)
         const items = Object.values(data).filter((v: any) => v && typeof v === "object" && v.id) as any[];
         const withProgress = items.filter((i: any) => {
+          // Respect 30-day retention window
+          if (i.watchedAt && now - i.watchedAt > THIRTY_DAYS) return false;
           if (i.id?.startsWith('as_')) return true;
           return i.currentTime && i.duration && (i.currentTime / i.duration) < 0.95;
         });
         withProgress.sort((a: any, b: any) => (b.watchedAt || 0) - (a.watchedAt || 0));
         setContinueWatching(withProgress);
+        // Mirror to localStorage so guests/offline still see the list
+        try { localStorage.setItem("rs_continueCache", JSON.stringify(withProgress.slice(0, 50))); } catch {}
       });
       return () => unsub();
     } catch {}
