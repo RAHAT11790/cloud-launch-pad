@@ -5618,7 +5618,7 @@ ${tgBulkFooter}
                         setTgTotalEpisodes(String(season?.episodes?.length || 0));
                       }
                       setTgDubType(ctxForm.dubType === "fandub" ? "fandub" : "official");
-                      if (ctxForm.language) setTgLanguages(ctxForm.language);
+                      if (ctxForm.language) setTgLanguages(String(ctxForm.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
                       if (ctxForm.category) setTgGenres(ctxForm.category);
                       if (ctxForm.rating) setTgRating(String(ctxForm.rating));
                       if (ctxForm.tmdbId) {
@@ -5638,7 +5638,7 @@ ${tgBulkFooter}
                         if (ep.link4k) quals.push("4K");
                       }));
                       if (quals.length > 0) setTgQuality([...new Set(quals)].join(","));
-                      setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(ctxSeriesId)}`);
+                      setTgButtonLink(buildEpisodeShareUrl(ctxSeriesId, parseInt(wsNotifySeason), parseInt(wsNotifyEpisode)));
                       setTgSelectedAnimeId(String(ctxSeriesId));
                       // Load any saved per-anime custom buttons
                       try {
@@ -5716,9 +5716,9 @@ ${tgBulkFooter}
                               setTgPosterUrl(backdrop.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
                               if (ws.rating) setTgRating(String(ws.rating));
                               if (ws.category) setTgGenres(ws.category);
-                              if (ws.language) setTgLanguages(ws.language);
+                              if (ws.language) setTgLanguages(String(ws.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
                               setTgDubType(ws.dubType === "fandub" ? "fandub" : "official");
-                              setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(seriesId)}`);
+                              setTgButtonLink(buildEpisodeShareUrl(seriesId));
                               setTgSelectedAnimeId(String(seriesId));
                               (async () => {
                                 try {
@@ -6747,9 +6747,9 @@ ${tgBulkFooter}
                                   setTgPosterUrl(backdrop.replace('/original/', '/w1280/').replace('/w780/', '/w1280/'));
                                   if ((fullData as any).rating) setTgRating(String((fullData as any).rating));
                                   if ((fullData as any).category) setTgGenres((fullData as any).category);
-                                  if ((fullData as any).language) setTgLanguages((fullData as any).language);
+                                  if ((fullData as any).language) setTgLanguages(String((fullData as any).language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
                                   setTgDubType((fullData as any).dubType === "fandub" ? "fandub" : "official");
-                                  setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(r.id)}`);
+                                  setTgButtonLink(buildEpisodeShareUrl(r.id));
                                   setTgSelectedAnimeId(String(r.id));
                                   try {
                                     const safeId = String(r.id).replace(/[^a-zA-Z0-9_-]/g, "_");
