@@ -4311,9 +4311,11 @@ ${tgBulkFooter}
     } else {
       setTgTotalEpisodes("Movie");
     }
-    // Set button link with deep link to the specific anime
+    // Set button link with deep link to the exact episode when available
     const animeId = release.contentId || release.id;
-    setTgButtonLink(`${SITE_URL}?anime=${encodeURIComponent(animeId)}`);
+    const shareSeasonIdx = release.episodeInfo?.type === "movie" ? undefined : Math.max(0, Number(release.episodeInfo?.seasonNumber || 1) - 1);
+    const shareEpIdx = release.episodeInfo?.type === "movie" ? undefined : Math.max(0, Number(release.episodeInfo?.episodeNumber || 1) - 1);
+    setTgButtonLink(buildEpisodeShareUrl(animeId, shareSeasonIdx, shareEpIdx));
     setTgSelectedAnimeId(String(animeId));
     // Load saved per-anime custom buttons (if any)
     try {
