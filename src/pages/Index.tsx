@@ -2270,28 +2270,51 @@ const Index = () => {
             <div className="px-4 mb-5">
               <h3 className="text-base font-bold mb-3 flex items-center category-bar">Continue Watching</h3>
               <div data-no-swipe="true" className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide" style={{ touchAction: "pan-x pan-y" }}>
-                {continueWatching.slice(0, 10).map((item: any) => (
-                  <div key={item.id} onClick={() => handleContinueWatching(item)}
-                    className="flex-shrink-0 w-[130px] cursor-pointer">
-                    <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card mb-1">
-                      <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
-                      <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                      {item.currentTime && item.duration && (
-                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-foreground/20">
-                          <div className="h-full bg-primary rounded-r" style={{ width: `${Math.min((item.currentTime / item.duration) * 100, 100)}%` }} />
-                        </div>
-                      )}
-                      <div className="absolute bottom-1 left-1.5 right-1.5 pb-1">
-                        <p className="text-[10px] font-semibold leading-tight line-clamp-2">{item.title}</p>
-                        {item.episodeInfo && (
-                          <p className="text-[8px] text-primary mt-0.5">
-                            S{item.episodeInfo.season} E{item.episodeInfo.episodeNumber || item.episodeInfo.episode}
-                          </p>
+                {continueWatching.slice(0, 10).map((item: any) => {
+                  const pct = (item.currentTime && item.duration) ? Math.min(100, Math.round((item.currentTime / item.duration) * 100)) : 0;
+                  const sn = item.episodeInfo?.season;
+                  const ep = item.episodeInfo?.episodeNumber || item.episodeInfo?.episode;
+                  const wt = item.watchedAt || item.updatedAt;
+                  let agoLabel = "";
+                  if (wt) {
+                    const d = Date.now() - wt;
+                    const m = Math.floor(d / 60000);
+                    if (m < 1) agoLabel = "now";
+                    else if (m < 60) agoLabel = `${m}m`;
+                    else if (m < 1440) agoLabel = `${Math.floor(m / 60)}h`;
+                    else agoLabel = `${Math.floor(m / 1440)}d`;
+                  }
+                  const isAn = String(item.id || "").startsWith("as_");
+                  return (
+                    <div key={item.id} onClick={() => handleContinueWatching(item)}
+                      className="flex-shrink-0 w-[130px] cursor-pointer">
+                      <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card mb-1">
+                        <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                        <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
+                        <span className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider z-10 ${isAn ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{isAn ? "AN" : "RS"}</span>
+                        {agoLabel && (
+                          <span className="absolute top-1.5 left-1.5 bg-black/65 text-white text-[8px] font-semibold px-1.5 py-0.5 rounded backdrop-blur-sm z-10">{agoLabel} ago</span>
                         )}
+                        {pct > 0 && (
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-foreground/25">
+                            <div className="h-full bg-primary rounded-r" style={{ width: `${pct}%` }} />
+                          </div>
+                        )}
+                        <div className="absolute bottom-1.5 left-1.5 right-1.5">
+                          <p className="text-[10px] font-semibold leading-tight line-clamp-2 text-white" style={{ textShadow: "0 2px 6px rgba(0,0,0,0.9)" }}>{item.title}</p>
+                          <div className="flex items-center justify-between mt-0.5">
+                            {(sn || ep) ? (
+                              <p className="text-[8px] text-primary font-bold">
+                                {sn ? `S${sn} ` : ""}{ep ? `EP ${ep}` : ""}
+                              </p>
+                            ) : <span className="text-[8px] text-white/60">Resume</span>}
+                            {pct > 0 && <span className="text-[8px] text-white/70 font-semibold">{pct}%</span>}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
