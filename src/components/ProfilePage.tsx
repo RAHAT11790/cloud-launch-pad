@@ -1559,7 +1559,17 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
 
       {/* Watch History */}
       <div className="mb-7">
-        <h3 className="text-base font-bold mb-3 flex items-center category-bar">Watch History</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-bold flex items-center category-bar">Watch History</h3>
+          {watchHistory.length > 0 && (
+            <button
+              onClick={() => setViewAllMode("history")}
+              className="text-xs text-primary flex items-center gap-1 hover:underline"
+            >
+              View All <ChevronRight className="w-3 h-3" />
+            </button>
+          )}
+        </div>
         {watchHistory.length === 0 ? (
           <div className="text-center py-8">
             <History className="w-10 h-10 text-muted-foreground/50 mx-auto mb-2.5" />
@@ -1567,7 +1577,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
           </div>
         ) : (
           <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide">
-            {watchHistory.slice(0, 20).map((item: any) => (
+            {watchHistory.slice(0, 10).map((item: any) => (
               <div key={item.id} onClick={() => handleAnimeClick(item)}
                 className="flex-shrink-0 w-[100px] cursor-pointer">
                 <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
