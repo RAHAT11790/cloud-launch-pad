@@ -3485,16 +3485,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
         {/* Suggested Videos */}
         {lightweightMode && suggestedAnime && suggestedAnime.length > 0 && onSuggestedClick && (
-          <div className="mt-4 bg-background rounded-xl p-4">
+          <div className="mt-4 bg-background rounded-xl p-4 overflow-hidden">
             <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5 text-foreground">
-              <Play className="w-3.5 h-3.5 text-primary" /> Suggested for you
+              <Play className="w-3.5 h-3.5 text-primary" /> For You
             </h3>
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="flex gap-2.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none", touchAction: "pan-x" }}>
               {suggestedAnime.map((anime) => (
                 <div
                   key={anime.id}
                   onClick={() => onSuggestedClick(anime)}
-                  className="w-full cursor-pointer group"
+                  className="w-[108px] shrink-0 cursor-pointer group"
                 >
                   <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card mb-1.5">
                     <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
