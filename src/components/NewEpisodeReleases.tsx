@@ -250,9 +250,10 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                 {groupedReleases.map(({ latest: release, minEp, maxEp }) => {
                   const content = getContent(release.contentId);
                   if (!content) return null;
+                  const fallbackEp = getEpStart(release);
                   const epStr = minEp && maxEp && minEp !== maxEp
                     ? `Episode ${minEp}-${maxEp}`
-                    : release.episode ? `Episode ${release.episode}` : "New";
+                    : fallbackEp ? `Episode ${fallbackEp}` : "New";
                   return (
                     <div
                       key={release.id}
