@@ -580,7 +580,11 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
       setWatchlist(Object.values(wlData));
 
       const whData = whSnap.val() || {};
-      const items = Object.values(whData).filter((v: any) => v && typeof v === "object" && v.id) as any[];
+      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      const items = (Object.values(whData)
+        .filter((v: any) => v && typeof v === "object" && v.id) as any[])
+        .filter((i: any) => !i.watchedAt || (now - i.watchedAt) <= THIRTY_DAYS);
       items.sort((a: any, b: any) => (b.watchedAt || 0) - (a.watchedAt || 0));
       setWatchHistory(items);
     }).catch(() => {});
