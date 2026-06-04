@@ -10,6 +10,7 @@ import { useBranding } from "@/hooks/useBranding";
 
 interface LoginPageProps {
   onLogin: (userId: string) => void;
+  onGuest?: () => void;
 }
 
 const PARTICLE_SEEDS = Array.from({ length: 20 }, (_, i) => ({
