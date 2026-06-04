@@ -3508,7 +3508,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5 text-foreground">
               <Play className="w-3.5 h-3.5 text-primary" /> For You
             </h3>
-            <div className="flex gap-2.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none", touchAction: "pan-x" }}>
+            <div ref={suggestedRowRef} className="flex gap-2.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none", touchAction: "pan-x" }}>
               {suggestedAnime.map((anime) => (
                 <div
                   key={anime.id}
