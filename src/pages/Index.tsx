@@ -482,6 +482,9 @@ const Index = () => {
     const qs = params.toString();
     return `/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
   }, []);
+  const buildShareLink = useCallback((animeId: string, seasonIdx?: number, epIdx?: number) => {
+    return buildEpisodeDeepLink(animeId, seasonIdx, epIdx);
+  }, []);
   const stopAllPlayback = useCallback(() => {
     try {
       document.querySelectorAll("video, audio").forEach((node) => {
@@ -1548,6 +1551,23 @@ const Index = () => {
 
     void handlePlay(targetAnime, nextSeasonIdx, nextEpIdx);
   }, [allAnime, freeAccessLoaded, isWatchRoute, location.search, watchRouteAnimeId]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const legacyAnimeId = params.get("anime");
+    const legacySeason = params.get("s");
+    const legacyEpisode = params.get("e");
+    if (!legacyAnimeId) return;
+
+    if (legacySeason !== null || legacyEpisode !== null) {
+      const sIdx = legacySeason !== null ? Number(legacySeason) : undefined;
+      const eIdx = legacyEpisode !== null ? Number(legacyEpisode) : undefined;
+      navigate(buildWatchRoute(legacyAnimeId, sIdx, eIdx), { replace: true });
+      return;
+    }
+
+    navigate(buildAnimeRoute(legacyAnimeId), { replace: true });
+  }, [location.search, navigate, buildAnimeRoute, buildWatchRoute]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
