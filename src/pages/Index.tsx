@@ -6,6 +6,14 @@ import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
 
+const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: number) => {
+  const params = new URLSearchParams();
+  if (seasonIdx !== undefined) params.set("s", String(seasonIdx));
+  if (epIdx !== undefined) params.set("e", String(epIdx));
+  const qs = params.toString();
+  return `${window.location.origin}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
+};
+
 const isInvalidPlaybackUrl = (url?: string | null) => {
   const normalized = String(url || "").trim().toLowerCase().split("?")[0].split("#")[0];
   if (!normalized) return true;
@@ -1617,10 +1625,44 @@ const Index = () => {
       if (!userId || !playerState.anime.id) return;
 
       const updates: any = { currentTime, duration, watchedAt: Date.now() };
+      if (playerState.seasonIdx !== undefined && playerState.epIdx !== undefined && playerState.anime.seasons) {
+        const season = playerState.anime.seasons[playerState.seasonIdx];
+        const episode = season?.episodes?.[playerState.epIdx];
+        if (season && episode) {
+          updates.episodeInfo = {
+            season: playerState.seasonIdx + 1,
+            episode: playerState.epIdx + 1,
+            seasonName: season.name,
+            episodeNumber: episode.episodeNumber,
+            seasonIdx: playerState.seasonIdx,
+            epIdx: playerState.epIdx,
+          };
+        }
+      }
       const histRef = ref(db, `users/${userId}/watchHistory/${playerState.anime.id}`);
       import("@/lib/firebase").then(({ update }) => {
         update(histRef, updates).catch(() => {});
       });
+
+      try {
+        const raw = localStorage.getItem("rs_continueCache");
+        const cached = raw ? JSON.parse(raw) : [];
+        const nextItem = {
+          id: playerState.anime.id,
+          source: playerState.anime.source || "firebase",
+          title: playerState.anime.title,
+          poster: playerState.anime.poster,
+          year: playerState.anime.year,
+          rating: playerState.anime.rating,
+          type: playerState.anime.type,
+          watchedAt: Date.now(),
+          currentTime,
+          duration,
+          episodeInfo: updates.episodeInfo,
+        };
+        const nextCache = [nextItem, ...(Array.isArray(cached) ? cached.filter((item: any) => item?.id !== playerState.anime.id) : [])].slice(0, 50);
+        localStorage.setItem("rs_continueCache", JSON.stringify(nextCache));
+      } catch {}
     } catch {}
   }, [playerState]);
 
