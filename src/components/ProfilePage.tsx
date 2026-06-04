@@ -440,7 +440,13 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
   );
 };
 
-const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout }: ProfilePageProps) => {
+const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLoginClick }: ProfilePageProps) => {
+  const isGuestUser = (() => {
+    try {
+      const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
+      return !(u?.id && u?.email);
+    } catch { return true; }
+  })();
   const brandingCfg = useBranding();
   const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy">("main");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(() => {
