@@ -264,7 +264,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-semibold mb-1" style={getAnimeTitleStyle(content.title)}>{content.title}</h4>
                         <p className="text-xs text-muted-foreground mb-1">
-                          {release.seasonName || (release.season ? `Season ${release.season}` : "New Season")} • {epStr}
+                          {getSeasonName(release) || (getSeason(release) ? `Season ${getSeason(release)}` : "New Season")} • {epStr}
                         </p>
                         <span className="text-[10px] text-primary/70">{timeAgo(release.timestamp)}</span>
                       </div>
