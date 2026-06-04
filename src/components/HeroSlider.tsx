@@ -168,6 +168,16 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
                 <span className="bg-white/20 text-white px-2.5 py-1 rounded-md text-[10px] font-bold backdrop-blur-sm">
                   {slide.type === "webseries" ? "Series" : "Movie"}
                 </span>
+                {slide.episodeInfo && (
+                  <span className="bg-primary/85 text-primary-foreground px-2.5 py-1 rounded-md text-[10px] font-bold backdrop-blur-sm">
+                    {slide.episodeInfo}
+                  </span>
+                )}
+                {slide.languageInfo && (
+                  <span className="bg-black/55 text-white px-2.5 py-1 rounded-md text-[10px] font-bold backdrop-blur-sm">
+                    {slide.languageInfo}
+                  </span>
+                )}
               </motion.div>
             ) : slide.description ? (
               <motion.p
