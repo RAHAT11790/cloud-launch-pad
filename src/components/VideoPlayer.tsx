@@ -2278,6 +2278,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const lightweightMode = !isFullscreen;
+  const handleShare = useCallback(async () => {
+    const targetUrl = shareLink || window.location.href;
+    const shareData = { title, text: subtitle || title, url: targetUrl };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch {}
+
+    try {
+      await navigator.clipboard.writeText(targetUrl);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = targetUrl;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+  }, [shareLink, subtitle, title]);
   // Crop scale tuned to fully eliminate the small black side-bars left by AN's
   // letterboxed iframe. Slightly higher than before in both windowed + fullscreen.
   const embedTransform = cropIndex === 1
