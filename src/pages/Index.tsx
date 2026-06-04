@@ -2459,6 +2459,7 @@ const Index = () => {
         <div className="fixed inset-0 z-[400]">
           <LoginPage
             onLogin={(uid) => { handleLogin(uid); setShowLogin(false); }}
+            onGuest={() => setShowLogin(false)}
           />
           <button
             onClick={() => setShowLogin(false)}
