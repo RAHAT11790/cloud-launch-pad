@@ -15,6 +15,8 @@ export interface HeroSlide {
   description?: string;
   titleColor?: string;
   titleFont?: string;
+  episodeInfo?: string;  // e.g. "12 EP", "3S · 36 EP", "Movie"
+  languageInfo?: string; // e.g. "Hindi", "Multi"
 }
 
 interface HeroSliderProps {
