@@ -2044,7 +2044,6 @@ const Index = () => {
 
   const handleNavigate = useCallback((page: string) => {
     if (page === "profile") {
-      if (!isLoggedIn) { setShowLogin(true); return; }
       void import("@/components/ProfilePage");
       setShowProfile(true);
       return;
