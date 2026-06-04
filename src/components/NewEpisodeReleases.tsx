@@ -156,9 +156,9 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             const rating = content?.rating || release.rating || "N/A";
 
             // Fallback: if admin didn't set episode/season on the release, use latest from content seasons
-            let epNum: number | undefined = release.episode;
-            let snNum: number | undefined = release.season;
-            let snName: string | undefined = release.seasonName;
+            let epNum: number | undefined = getEpStart(release);
+            let snNum: number | undefined = getSeason(release);
+            let snName: string | undefined = getSeasonName(release);
             if ((!epNum || !snNum) && content?.seasons && content.seasons.length > 0) {
               const lastSeasonIdx = content.seasons.length - 1;
               const lastSeason: any = content.seasons[lastSeasonIdx];
