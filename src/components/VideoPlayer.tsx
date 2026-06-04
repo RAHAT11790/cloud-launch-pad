@@ -1511,7 +1511,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     }
 
     const visibleFor = Date.now() - loaderShownAtRef.current;
-    const MIN_VISIBLE = 1200; // anti-flicker: hold for 1.2s so canplay↔waiting cycles don't blink controls
+    const MIN_VISIBLE = 250; // ultra-fast: drop spinner as soon as canplay fires (was 1200ms)
     if (visibleFor >= MIN_VISIBLE) {
       setShowFixedLoader(false);
     } else {
