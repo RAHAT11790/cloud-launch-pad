@@ -40,6 +40,42 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
     }
   };
 
+  // ---- Compute language label (handles both RS and AnimeSalt; merges audio tracks) ----
+  const languageLabel = (() => {
+    const set = new Set<string>();
+    const push = (raw?: string) => {
+      if (!raw) return;
+      String(raw).split(/[,/|]+/).forEach((s) => {
+        const t = s.trim();
+        if (t) set.add(t);
+      });
+    };
+    push(anime.language);
+    if (anime.seasons) {
+      anime.seasons.forEach((s: any) => {
+        (s.episodes || []).forEach((ep: any) => {
+          (ep.audioTracks || []).forEach((at: any) => push(at.language || at.label));
+        });
+      });
+    }
+    const arr = Array.from(set).filter(Boolean);
+    if (arr.length === 0) return "";
+    if (arr.length === 1) return arr[0];
+    if (arr.length === 2) return arr.join(" · ");
+    return "Multi";
+  })();
+
+  // ---- Episode / season count ----
+  const epInfo = (() => {
+    if (anime.type === "movie") return "Movie";
+    if (!anime.seasons || anime.seasons.length === 0) return "";
+    const total = anime.seasons.reduce((sum: number, s: any) => sum + ((s.episodes || []).length), 0);
+    if (total === 0) return "";
+    return anime.seasons.length > 1
+      ? `${anime.seasons.length}S · ${total} EP`
+      : `${total} EP`;
+  })();
+
   return (
     <div
       className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card min-w-[120px] max-w-[140px] flex-shrink-0"
@@ -47,7 +83,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
       style={{ boxShadow: "var(--neu-shadow-sm)" }}
     >
       <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover transition-transform duration-400 hover:scale-110" loading="lazy" />
-      <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 40%, transparent 70%)" }} />
+      <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
       <button
         className={`absolute top-1.5 left-1.5 w-7 h-7 rounded-full flex items-center justify-center transition-all hover:scale-110 z-10 ${
           isInWatchlist ? "bg-primary" : "bg-white/80 hover:bg-primary"
@@ -58,9 +94,14 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
         <Heart className={`w-3.5 h-3.5 ${isInWatchlist ? "fill-white text-white" : "text-foreground"}`} />
       </button>
       <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
-        <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold text-primary-foreground" style={{ boxShadow: "0 2px 8px hsla(42,80%,50%,0.3)" }}>
-          {anime.year}
-        </span>
+        {languageLabel && (
+          <span
+            className="px-1.5 py-0.5 rounded-md text-[8px] font-bold bg-black/75 text-white backdrop-blur-sm"
+            style={{ textShadow: "0 1px 2px rgba(0,0,0,0.6)" }}
+          >
+            {languageLabel}
+          </span>
+        )}
         <span
           className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${
             anime.source === "animesalt"
@@ -76,9 +117,17 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
         <p className="text-[10px] font-semibold leading-tight line-clamp-2 text-white" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9)" }}>
           {anime.title}
         </p>
-        <p className="text-[8px] text-white/80 flex items-center gap-1 mt-1">
-          <Star className="w-2 h-2 text-primary" /> {anime.rating}
-        </p>
+        <div className="flex items-center justify-between mt-1 gap-1">
+          <p className="text-[8px] text-white/85 flex items-center gap-1">
+            <Star className="w-2 h-2 text-primary" /> {anime.rating}
+            <span className="opacity-60">· {anime.year}</span>
+          </p>
+          {epInfo && (
+            <span className="text-[8px] font-semibold text-white bg-white/15 backdrop-blur-sm px-1.5 py-0.5 rounded">
+              {epInfo}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
