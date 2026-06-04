@@ -52,7 +52,7 @@ const StaticFloatingParticles = () => {
   );
 };
 
-const LoginPage = ({ onLogin }: LoginPageProps) => {
+const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const SESSION_STARTED_AT_KEY = "rs_session_started_at";
   const branding = useBranding();
   const logoSrc = branding.logoUrl || logoImg;
