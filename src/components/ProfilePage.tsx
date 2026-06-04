@@ -469,6 +469,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   // Watchlist & History from Firebase
   const [watchlist, setWatchlist] = useState<any[]>([]);
   const [watchHistory, setWatchHistory] = useState<any[]>([]);
+  const [viewAllMode, setViewAllMode] = useState<null | "history" | "watchlist">(null);
   const [isPremium, setIsPremium] = useState(false);
   const [premiumExpiry, setPremiumExpiry] = useState<number | null>(null);
   const [premiumMaxDevices, setPremiumMaxDevices] = useState(1);
