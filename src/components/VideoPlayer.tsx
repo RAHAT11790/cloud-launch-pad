@@ -2446,7 +2446,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           className={`relative bg-black overflow-hidden ${
             isFullscreen 
               ? "w-screen h-screen rounded-none" 
-              : "w-full rounded-xl aspect-video"
+              : "w-full rounded-none aspect-video"
           }`}
           style={{ filter: `brightness(${brightness})`, margin: isFullscreen ? 0 : undefined }}
           onContextMenu={(e) => e.preventDefault()}
