@@ -1720,7 +1720,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
             <AlertTriangle className="w-4 h-4 text-destructive mt-0.5" />
             <div className="flex-1">
               <p className="text-xs font-semibold text-foreground">আপনার আইডিটি এই ফোনে লগইন করা আছে, কিন্তু এই ফোন প্রিমিয়াম প্লের জন্য অনুমোদিত নয়।</p>
-              <p className="text-[11px] text-muted-foreground mt-1">চাইলে নিচের বাটন থেকে এই ফোন থেকে আইডি ডিলিট করে অটো লগআউট করতে পারবেন।</p>
+              <p className="text-xs font-semibold text-foreground">Your account is logged in on this phone, but this device is not approved for premium playback.</p>
+              <p className="text-[11px] text-muted-foreground mt-1">You can remove this phone login below and automatically sign out from this device.</p>
               <button
                 onClick={handleDeleteThisPhoneLogin}
                 className="mt-2 rounded-lg bg-destructive/20 px-3 py-1.5 text-[11px] font-semibold text-destructive hover:bg-destructive/30 transition-colors"
