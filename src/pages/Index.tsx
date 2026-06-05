@@ -134,6 +134,7 @@ import LiveSupportChat from "@/components/LiveSupportChat";
 import LiveTvPage from "@/components/LiveTvPage";
 import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
+import { guestStore } from "@/lib/guestStore";
 
 // Session cache for API responses to speed up continue watching
 const apiCache = new Map<string, { data: any; ts: number }>();
@@ -420,11 +421,8 @@ const Index = () => {
 
   const checkAndShowAdGate = useCallback(async (anime?: AnimeItem, seasonIdx?: number, epIdx?: number): Promise<boolean> => {
     // Returns true if access is granted, false if ad-gate shown
-    // Device limit is enforced at login time, premium users get direct access
-    if (!isLoggedIn) {
-      toast.error("ভিডিও দেখতে লগইন করতে হবে");
-      return false;
-    }
+    // Guest playback is allowed. Account-level unlock gating applies only to logged-in users.
+    if (!isLoggedIn) return true;
 
     if (unlockBlocked) {
       toast.error("একই unlock token অপব্যবহারের কারণে এই অ্যাকাউন্ট ব্লক করা হয়েছে");
@@ -1596,9 +1594,7 @@ const Index = () => {
   const addToWatchHistory = (anime: AnimeItem, seasonIdx?: number, epIdx?: number, preserveProgress = false) => {
     try {
       const user = localStorage.getItem("rsanime_user");
-      if (!user) return;
-      const userId = JSON.parse(user).id;
-      if (!userId) return;
+      const userId = user ? JSON.parse(user).id : null;
 
       const historyItem: any = {
         id: anime.id,
@@ -1623,6 +1619,29 @@ const Index = () => {
         };
       }
 
+      try {
+        guestStore.continue.upsert({
+          animeId: anime.id,
+          seasonIdx,
+          epIdx,
+          position: 0,
+          duration: 0,
+          title: anime.title,
+          poster: anime.poster,
+          updatedAt: Date.now(),
+        });
+
+        const raw = localStorage.getItem("rs_continueCache");
+        const cached = raw ? JSON.parse(raw) : [];
+        const nextCache = [
+          { ...historyItem, currentTime: 0, duration: 0 },
+          ...(Array.isArray(cached) ? cached.filter((item: any) => item?.id !== anime.id) : []),
+        ].slice(0, 50);
+        localStorage.setItem("rs_continueCache", JSON.stringify(nextCache));
+      } catch {}
+
+      if (!userId) return;
+
       if (preserveProgress) {
         import("@/lib/firebase").then(({ update }) => {
           update(ref(db, `users/${userId}/watchHistory/${anime.id}`), historyItem).catch(() => {});
@@ -1640,9 +1659,8 @@ const Index = () => {
     if (!playerState) return;
     try {
       const user = localStorage.getItem("rsanime_user");
-      if (!user) return;
-      const userId = JSON.parse(user).id;
-      if (!userId || !playerState.anime.id) return;
+      const userId = user ? JSON.parse(user).id : null;
+      if (!playerState.anime.id) return;
 
       const updates: any = { currentTime, duration, watchedAt: Date.now() };
       if (playerState.seasonIdx !== undefined && playerState.epIdx !== undefined && playerState.anime.seasons) {
@@ -1659,10 +1677,12 @@ const Index = () => {
           };
         }
       }
-      const histRef = ref(db, `users/${userId}/watchHistory/${playerState.anime.id}`);
-      import("@/lib/firebase").then(({ update }) => {
-        update(histRef, updates).catch(() => {});
-      });
+      if (userId) {
+        const histRef = ref(db, `users/${userId}/watchHistory/${playerState.anime.id}`);
+        import("@/lib/firebase").then(({ update }) => {
+          update(histRef, updates).catch(() => {});
+        });
+      }
 
       try {
         const raw = localStorage.getItem("rs_continueCache");
@@ -1682,6 +1702,16 @@ const Index = () => {
         };
         const nextCache = [nextItem, ...(Array.isArray(cached) ? cached.filter((item: any) => item?.id !== playerState.anime.id) : [])].slice(0, 50);
         localStorage.setItem("rs_continueCache", JSON.stringify(nextCache));
+        guestStore.continue.upsert({
+          animeId: playerState.anime.id,
+          seasonIdx: playerState.seasonIdx,
+          epIdx: playerState.epIdx,
+          position: currentTime,
+          duration,
+          title: playerState.anime.title,
+          poster: playerState.anime.poster,
+          updatedAt: Date.now(),
+        });
       } catch {}
     } catch {}
   }, [playerState]);
