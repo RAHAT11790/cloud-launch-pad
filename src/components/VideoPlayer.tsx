@@ -764,10 +764,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       // No access - block video and show ad gate
       markAdGateShownNow();
       setAdGateActive(true);
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.src = '';
-      }
       setShortenLoading(true);
       timeoutId = setTimeout(() => {
         if (cancelled) return;
@@ -793,6 +789,64 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
+
+  const handleToggleWatchlist = useCallback(() => {
+    if (!animeId) {
+      toast.error("Cannot save this item right now.");
+      return;
+    }
+
+    const payload = {
+      id: animeId,
+      title,
+      poster,
+      addedAt: Date.now(),
+    };
+
+    if (isGuest()) {
+      const nowSaved = guestStore.watchlist.toggle(payload);
+      setSaved(nowSaved);
+      toast.success(nowSaved ? "Saved to My List" : "Removed from My List");
+      return;
+    }
+
+    const uid = getLocalUserId();
+    if (!uid) {
+      const nowSaved = guestStore.watchlist.toggle(payload);
+      setSaved(nowSaved);
+      return;
+    }
+
+    if (saved) {
+      remove(ref(db, `users/${uid}/watchlist/${animeId}`)).catch(() => {});
+      setSaved(false);
+      toast.success("Removed from My List");
+      return;
+    }
+
+    set(ref(db, `users/${uid}/watchlist/${animeId}`), payload).catch(() => {});
+    setSaved(true);
+    toast.success("Saved to My List");
+  }, [animeId, poster, saved, title]);
+
+  const handleShare = useCallback(async () => {
+    const url = shareLink || (typeof window !== "undefined" ? window.location.href : "");
+    const shareData = { title, text: title, url };
+    try {
+      if ((navigator as any).share && (!(navigator as any).canShare || (navigator as any).canShare(shareData))) {
+        await (navigator as any).share(shareData);
+        return;
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
+    }
+    try {
+      await navigator.clipboard?.writeText(url);
+      toast.success("Link copied");
+    } catch {
+      toast.error("Sharing is not supported on this device.");
+    }
+  }, [shareLink, title]);
 
   const handleOpenAdLink = useCallback(async (url: string, _service?: AdService) => {
     const { openExternalBrowser, openTelegramDeepLink } = await import("@/lib/openExternal");
