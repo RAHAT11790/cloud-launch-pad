@@ -3083,9 +3083,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 </div>
                 <div className="relative -mx-5">
                   <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pl-5 pr-5">
-                    <button className="sticky left-0 z-10 flex-shrink-0 min-w-[56px] px-3 py-2.5 rounded-lg text-sm font-bold border shadow-[6px_0_8px_-6px_rgba(0,0,0,0.25)] bg-background border-border">
-                      All
-                    </button>
                     {episodeList.map((ep) => (
                       <button key={ep.number} onClick={ep.onClick} className={`flex-shrink-0 min-w-[56px] px-3 py-2.5 rounded-lg text-sm font-bold transition-colors ${ep.active ? 'bg-gradient-to-br from-primary/25 to-primary/10 text-primary border border-primary/40' : 'bg-foreground/[0.06] text-foreground/85 border border-border hover:bg-foreground/10'}`}>
                         {ep.number}
