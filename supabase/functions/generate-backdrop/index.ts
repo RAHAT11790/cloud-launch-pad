@@ -23,17 +23,68 @@ interface Body {
   model?: string;
 }
 
-function defaultBackdropPrompt(title: string, year?: string | number): string {
-  const yr = year ? String(year) : "";
-  return `CREATE A PROFESSIONAL 16:9 CINEMATIC ANIME PROMOTIONAL BANNER FOR "${title}" (${yr}) IN ULTRA DETAILED 4K HDR QUALITY.
+function defaultBackdropPrompt(title: string, _year?: string | number): string {
+  return `Create a ULTRA PROFESSIONAL 16:9 anime promotional banner in TRUE ANIME KEY VISUAL style with cinematic thumbnail composition.
 
-Use ONLY the OFFICIAL canonical main characters of "${title}" — exact signature hairstyle, eye design, official outfit, accessories, weapons. Characters must be instantly recognizable to anime fans. Do NOT invent characters or use generic anime faces. Hero protagonist on the right 55% of frame; supporting cast in official hierarchy.
+Anime Name: ${title}
 
-Background inspired by official key visuals of "${title}": signature environment, atmospheric particles, HDR rim lighting, cinematic fog, dynamic motion effects. Match the anime's signature color palette and mood (action: red/blue/orange; fantasy: gold/purple; sci-fi: cyan/neon; dark: red/black/purple).
+IMPORTANT:
+- DO NOT invent new characters.
+- DO NOT redesign the anime characters.
+- Use the ORIGINAL OFFICIAL ANIME CHARACTERS from "${title}".
+- Characters must look exactly like their original anime/manga appearance.
+- Keep original hairstyle, eyes, clothes, face shape, personality, aura, powers, and proportions.
+- The characters should instantly be recognizable to anime fans.
+- This is NOT fanart redesign. This is an OFFICIAL-STYLE ANIME PROMOTIONAL POSTER.
 
-Style: Netflix / Crunchyroll / official anime promotional banner quality, magazine cover composition, sharp focus, perfect hand anatomy, glossy expressive eyes, no deformed faces, no watermarks, no random text. Ultra detailed, 4K resolution, HDR, premium finish.
+VISUAL STYLE:
+- Modern cinematic anime banner, official key visual mixed with premium YouTube thumbnail style
+- High contrast anime lighting, ultra detailed anime rendering, HDR, 4K quality
+- Sharp anime linework, dynamic composition, professional color grading, beautiful glow
+- Premium typography, anime studio quality, clean polished details
+- No blurry faces, no distorted anatomy, no extra fingers, no low quality textures
 
-The final result must look like an OFFICIAL anime poster remastered into a premium cinematic banner.`;
+LAYOUT (16:9 widescreen):
+- LEFT SIDE: Large stylized anime title text, Japanese subtitle text, tagline/slogan, social branding section
+- RIGHT SIDE: Main anime character artwork, supporting characters layered behind, cinematic action scene, anime-themed background
+
+CHARACTER POSITIONING:
+- Main protagonist center/right focus
+- Secondary characters layered in background, cinematic depth, motion and energy, anime-accurate expressions
+
+BACKGROUND (match original anime mood):
+- Action → explosions, energy, destruction, speed effects
+- Romance → soft lighting, emotional atmosphere
+- Dark → shadows, neon, cinematic contrast
+- Sports → stadium lights, motion blur, action effects
+- Fantasy → magic particles, glowing skies, epic scenery
+
+TEXT DESIGN:
+- BIG bold anime title "${title}" in aggressive modern typography (brushstroke / neon / sharp-edge style fonts)
+- Text integrated naturally into composition
+- Japanese typography under the title
+- Make title look official and cinematic
+
+BRANDING:
+- TOP RIGHT: small premium "RS ANIME" logo with crown, minimal and elegant
+- BOTTOM LEFT: Telegram icon + "TG :- @CARTOONFUNNY03", Website icon + "WEBSITE :- RS ANIME"
+- Use glowing UI bars/shapes around branding — stylish but not distracting
+
+COLOR:
+- Match original anime mood, rich cinematic colors, deep blacks, strong highlights, anime-accurate palette, vibrant glow
+
+EXTRA EFFECTS:
+- Particles, energy aura, rain/smoke/fire/lightning depending on anime, depth of field, motion blur, floating debris, cinematic atmosphere
+
+STRICT — DO NOT include any year, release date, or numerical date anywhere in the artwork.
+
+FINAL RESULT:
+- Must look like an official Netflix/Crunchyroll anime promotional banner
+- Highly click-worthy viral anime thumbnail quality
+- Professional anime marketing artwork
+- Anime fans should instantly recognize the anime
+- Preserve original anime identity completely
+- Visual style should match the reference "CAPTAIN TSUBASA" banner layout (big brushstroke title left, hero character right, RS ANIME crown logo top-right, TG + WEBSITE chips bottom-left)`;
 }
 
 function defaultLogoPrompt(title: string): string {
