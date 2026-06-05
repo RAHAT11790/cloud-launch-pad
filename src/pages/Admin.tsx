@@ -1221,7 +1221,7 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
     { key: "splashText", label: "Splash screen text", placeholder: "" },
     { key: "adminTitle", label: "Admin panel title", placeholder: "" },
     { key: "aboutTitle", label: "About page title", placeholder: "" },
-    { key: "playerName", label: "Video player title", placeholder: "" },
+    // playerName removed — player no longer renders a header title
     { key: "rsCardLabel", label: "Card label", placeholder: "" },
     { key: "anCardLabel", label: "AnimeSalt card label", placeholder: "AN" },
   ];
