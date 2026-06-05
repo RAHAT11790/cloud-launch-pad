@@ -66,7 +66,7 @@ const UnlockRequired = () => {
       .then((result) => {
         if (!mounted) return;
         if (result.ok) setLinks(result.links);
-        else toast.error("Unlock link তৈরি করা যায়নি");
+        else toast.error("Failed to create unlock link");
       })
       .finally(() => {
         if (mounted) setLoading(false);
@@ -94,7 +94,7 @@ const UnlockRequired = () => {
           return;
         }
         setOpeningService(null);
-        toast.error("Telegram verify link তৈরি করা যায়নি");
+        toast.error("Failed to create Telegram verify link");
       }, 950);
       return;
     }
@@ -109,7 +109,7 @@ const UnlockRequired = () => {
     try {
       const result = await claimAccessCode(code);
       if (result.ok) {
-        toast.success(lang === "bn" ? "অ্যাক্সেস আনলক হয়েছে" : "Access unlocked");
+        toast.success(lang === "bn" ? "Access unlocked" : "Access unlocked");
         resumePlayback();
         return;
       }
