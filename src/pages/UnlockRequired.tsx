@@ -22,7 +22,7 @@ const PENDING_KEY = "rs_pendingUnlockPlayback";
 
 const UnlockRequired = () => {
   const navigate = useNavigate();
-  const [lang, setLang] = useState<"bn" | "en">("bn");
+  const [lang, setLang] = useState<"bn" | "en">("en");
   const [loading, setLoading] = useState(true);
   const [links, setLinks] = useState<UnlockLink[]>([]);
   const [accessCode, setAccessCode] = useState("");
@@ -152,7 +152,7 @@ const UnlockRequired = () => {
     claim: "Unlock with token",
     loading: "Preparing unlock buttons...",
     back: "Back to home",
-    lang: "বাং",
+    lang: "BN",
   }, [lang]);
 
   return (
