@@ -91,12 +91,12 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
   const switchProvider = async (provider: "cloudflare" | "supabase") => {
     const url = provider === "cloudflare" ? cfUrl : sbUrl;
     if (!url) {
-      toast.error(`${provider === "cloudflare" ? "Cloudflare" : "Supabase"} URL সেট করো আগে!`);
+      toast.error(`Set the ${provider === "cloudflare" ? "Cloudflare" : "Supabase"} URL first.`);
       return;
     }
     setActiveProvider(provider);
     await update(ref(db, "settings/fcmProvider"), { active: provider, url });
-    toast.success(`🔔 FCM Provider: ${provider === "cloudflare" ? "☁️ Cloudflare" : "🟢 Supabase"} চালু হয়েছে!`);
+    toast.success(`🔔 FCM Provider: ${provider === "cloudflare" ? "☁️ Cloudflare" : "🟢 Supabase"} enabled.`);
   };
 
   const saveCfUrl = async () => {
@@ -105,7 +105,7 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
     const updates: Record<string, any> = { cloudflareUrl: url };
     if (activeProvider === "cloudflare") updates.url = url;
     await update(ref(db, "settings/fcmProvider"), updates);
-    toast.success("✅ Cloudflare FCM URL সেভ হয়েছে!");
+    toast.success("✅ Cloudflare FCM URL saved.");
   };
 
   const saveSbUrl = async () => {
@@ -114,12 +114,12 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
     const updates: Record<string, any> = { supabaseUrl: url };
     if (activeProvider === "supabase") updates.url = url;
     await update(ref(db, "settings/fcmProvider"), updates);
-    toast.success("✅ Supabase FCM URL সেভ হয়েছে!");
+    toast.success("✅ Supabase FCM URL saved.");
   };
 
   const testProvider = async (provider: "cloudflare" | "supabase") => {
     const url = provider === "cloudflare" ? cfUrl : sbUrl;
-    if (!url) { toast.error("URL দাও আগে!"); return; }
+    if (!url) { toast.error("Enter a URL first."); return; }
     setTesting(provider);
     const start = Date.now();
     try {
