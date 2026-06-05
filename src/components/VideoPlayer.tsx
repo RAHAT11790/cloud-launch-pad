@@ -4,7 +4,7 @@ import { useBranding } from "@/hooks/useBranding";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock,
-  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages
+  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages, Info, Star, Tv, Share2, Bookmark, FolderDown
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
@@ -12,6 +12,7 @@ import logoImg from "@/assets/logo.png";
 import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, isAdGateCooldownActive, markAdGateShownNow, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
+import { guestStore, isGuest } from "@/lib/guestStore";
 // Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When OFF: free users get instant access, NO ad gate, NO unlock popup, NO verification flash.
 const isShortenerEnabled = async (): Promise<boolean> => {
