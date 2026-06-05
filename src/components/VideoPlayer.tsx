@@ -512,7 +512,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [unlockBlocked, setUnlockBlocked] = useState(false);
 
   useEffect(() => {
-    const unsub = downloadManager.subscribe(setActiveDownloads);
+    const unsub = downloadManager.subscribe((snapshot) => {
+      setActiveDownloads(new Map(snapshot.downloads));
+    });
     return () => unsub?.();
   }, []);
 
@@ -2324,6 +2326,30 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const panelBaseStyle = { WebkitOverflowScrolling: "touch" as const, overscrollBehavior: "contain" as const, touchAction: "pan-y" as const };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const lightweightMode = !isFullscreen;
+  const episodeGridCount = episodeList?.length ?? 0;
+  const visibleEpisodeButtons = episodeList ?? [];
+  const handleShare = useCallback(async () => {
+    const targetUrl = shareLink || window.location.href;
+    const shareData = { title, text: subtitle || title, url: targetUrl };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch {}
+
+    try {
+      await navigator.clipboard.writeText(targetUrl);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = targetUrl;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+  }, [shareLink, subtitle, title]);
   // Crop scale tuned to fully eliminate the small black side-bars left by AN's
   // letterboxed iframe. Slightly higher than before in both windowed + fullscreen.
   const embedTransform = cropIndex === 1
@@ -2331,6 +2357,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     : cropIndex === 2
       ? (isFullscreen ? "scaleX(1.42) scaleY(1.14)" : "scaleX(1.28) scaleY(1.08)")
       : "scale(1)";
+
+  const suggestedRowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const row = suggestedRowRef.current;
+    if (!row || isFullscreen || !suggestedAnime || suggestedAnime.length < 4) return;
+
+    let direction = 1;
+    const timer = window.setInterval(() => {
+      const maxScroll = row.scrollWidth - row.clientWidth;
+      if (maxScroll <= 8) return;
+      const atEnd = row.scrollLeft >= maxScroll - 8;
+      const atStart = row.scrollLeft <= 8;
+      if (atEnd) direction = -1;
+      if (atStart) direction = 1;
+      row.scrollBy({ left: direction * 120, behavior: "smooth" });
+    }, 2200);
+
+    return () => window.clearInterval(timer);
+  }, [isFullscreen, suggestedAnime]);
 
   return (
     <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
