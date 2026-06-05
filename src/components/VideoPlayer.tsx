@@ -2438,19 +2438,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         </button>
       )}
 
-      <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full px-5 pb-6 pt-7'}`}>
-        {!isFullscreen && (
-          <div className="text-center mb-2.5 pt-1">
-            <h1 className="text-2xl font-extrabold text-primary text-glow tracking-wider">{branding.playerName || "RS ANIME PLAYER"}</h1>
-          </div>
-        )}
-
-        {!isFullscreen && (
-          <div className="text-center mb-5 px-8">
-            <p className="text-lg font-semibold text-foreground">{title}</p>
-            {subtitle && <p className="text-sm text-secondary-foreground">{subtitle}</p>}
-          </div>
-        )}
+      <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full px-0 pb-6 pt-3'}`}>
 
         {/* Video Container - will-change for GPU compositing */}
         <div
