@@ -2389,58 +2389,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
       <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full px-5 pb-6 pt-7'}`}>
         {!isFullscreen && (
-          <div className="mb-4 space-y-4 pt-1 pr-12">
-            <div className="pl-1">
-              <h1 className="text-2xl font-black uppercase tracking-wide text-primary text-glow">{branding.playerName}</h1>
-            </div>
+          <div className="text-center mb-2.5 pt-1">
+            <h1 className="text-2xl font-extrabold text-primary text-glow tracking-wider">{branding.playerName || "RS ANIME PLAYER"}</h1>
+          </div>
+        )}
 
-            <div className="player-glass rounded-[28px] px-4 py-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[2rem] font-extrabold leading-none text-foreground">{title}</p>
-                  {subtitle && <p className="mt-2 text-lg leading-none text-secondary-foreground">{subtitle}</p>}
-                </div>
-                {onInfoClick && (
-                  <button
-                    onClick={onInfoClick}
-                    className="player-touch-button shrink-0 rounded-full px-4 py-3 text-sm font-bold text-secondary-foreground transition-all"
-                  >
-                    Info
-                  </button>
-                )}
-              </div>
-
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                {onLibraryClick && (
-                  <button
-                    onClick={onLibraryClick}
-                    className="player-touch-button min-h-[68px] rounded-[22px] px-4 py-4 text-lg font-extrabold text-secondary-foreground transition-all"
-                  >
-                    Library
-                  </button>
-                )}
-                <button
-                  onClick={handleShare}
-                  className="player-touch-button min-h-[68px] rounded-[22px] px-4 py-4 text-lg font-extrabold text-secondary-foreground transition-all"
-                >
-                  Share
-                </button>
-                <button
-                  onClick={() => videoContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                  className="player-touch-button min-h-[68px] rounded-[22px] px-4 py-4 text-lg font-extrabold text-secondary-foreground transition-all"
-                >
-                  Player
-                </button>
-                {seasons && seasons.length > 0 && (
-                  <button
-                    onClick={() => document.getElementById("player-episode-strip")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                    className="player-touch-button min-h-[68px] rounded-[22px] px-4 py-4 text-lg font-extrabold text-secondary-foreground transition-all"
-                  >
-                    Episodes
-                  </button>
-                )}
-              </div>
-            </div>
+        {!isFullscreen && (
+          <div className="text-center mb-5 px-8">
+            <p className="text-lg font-semibold text-foreground">{title}</p>
+            {subtitle && <p className="text-sm text-secondary-foreground">{subtitle}</p>}
           </div>
         )}
 
@@ -3519,25 +3476,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               </div>
             )}
 
-            <div className="flex items-center justify-between gap-3 px-1">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Episodes</p>
-                <p className="mt-1 text-sm font-medium text-muted-foreground">{episodeGridCount} added</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-5 gap-3 pb-2">
-              {visibleEpisodeButtons.map((ep) => (
+            <div className="grid grid-cols-5 gap-2 pb-2">
+              {episodeList.map((ep) => (
                 <button
                   key={ep.number}
                   onClick={ep.onClick}
-                  className={`w-full aspect-square rounded-[18px] flex items-center justify-center transition-all border text-center ${
+                  className={`w-full h-12 rounded-xl flex items-center justify-center transition-all border text-center ${
                     ep.active
-                      ? "gradient-primary border-primary/40 text-primary-foreground shadow-[0_0_18px_hsl(var(--primary)/0.35)]"
-                      : "player-touch-button border-border/40 hover:border-primary/30 text-foreground"
+                      ? "gradient-primary border-primary/40 text-primary-foreground shadow-[0_0_12px_hsla(170,75%,45%,0.3)]"
+                      : "bg-secondary/70 border-border/40 hover:border-primary/30 text-foreground"
                   }`}
                 >
-                  <span className="text-2xl font-extrabold leading-none">{ep.number}</span>
+                  <span className="text-sm font-bold">{ep.number}</span>
                 </button>
               ))}
             </div>
@@ -3546,18 +3496,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
         {/* Suggested Videos */}
         {lightweightMode && suggestedAnime && suggestedAnime.length > 0 && onSuggestedClick && (
-          <div className="mt-4 overflow-hidden rounded-[24px] px-1">
+          <div className="mt-4 bg-background rounded-xl p-4">
             <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5 text-foreground">
-              <Play className="w-3.5 h-3.5 text-primary" /> For You
+              <Play className="w-3.5 h-3.5 text-primary" /> Suggested for you
             </h3>
-            <div ref={suggestedRowRef} className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none", touchAction: "pan-x" }}>
+            <div className="grid grid-cols-3 gap-2.5">
               {suggestedAnime.map((anime) => (
                 <div
                   key={anime.id}
                   onClick={() => onSuggestedClick(anime)}
-                  className="w-[114px] shrink-0 cursor-pointer group"
+                  className="w-full cursor-pointer group"
                 >
-                  <div className="relative aspect-[2/3] rounded-[20px] overflow-hidden bg-card mb-1.5">
+                  <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card mb-1.5">
                     <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.2) 40%, transparent 70%)" }} />
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
