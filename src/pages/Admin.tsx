@@ -257,13 +257,13 @@ const TelegramProviderSection = ({ glassCard, inputClass, btnPrimary, btnSeconda
     const url = tgUrlInput.trim();
     await set(ref(db, "settings/telegramProvider"), { url });
     setTgUrl(url);
-    toast.success("✅ Telegram Supabase URL সেভ হয়েছে!");
+    toast.success("✅ Telegram Supabase URL saved.");
     if (url) testTg(url);
   };
 
   const testTg = async (urlOverride?: string) => {
     const url = urlOverride || tgUrl;
-    if (!url) { toast.error("URL দাও আগে"); return; }
+    if (!url) { toast.error("Enter a URL first."); return; }
     setTesting(true);
     setTestResult(null);
     const start = Date.now();
@@ -285,7 +285,7 @@ const TelegramProviderSection = ({ glassCard, inputClass, btnPrimary, btnSeconda
         <Send size={14} className="text-blue-400" /> 📨 Telegram Supabase URL
       </h3>
       <p className="text-[10px] text-zinc-400 mb-3">
-        Supabase-এ telegram-post ফাংশন ডিপ্লয় করে URL এখানে দাও। টেলিগ্রাম পোস্ট ও বাটন এডিট সব এই URL দিয়ে হবে।
+        Deploy the telegram-post function and paste its URL here. Telegram post publishing and button edits will use this URL.
       </p>
       <div className="flex gap-2">
         <input value={tgUrlInput} onChange={(e) => setTgUrlInput(e.target.value)}
@@ -321,7 +321,7 @@ const TelegramWebhookSection = ({ glassCard, inputClass, btnPrimary, btnSecondar
   }, []);
 
   const callTgAction = async (action: string, extra: Record<string, unknown> = {}) => {
-    if (!tgUrl) { toast.error("আগে Telegram Supabase URL সেট করো!"); return null; }
+    if (!tgUrl) { toast.error("Set the Telegram Supabase URL first."); return null; }
     setLoading(true);
     try {
       const res = await fetch(tgUrl, {
@@ -343,13 +343,13 @@ const TelegramWebhookSection = ({ glassCard, inputClass, btnPrimary, btnSecondar
   };
 
   const setWebhook = async () => {
-    if (!tgUrl) { toast.error("আগে Telegram Supabase URL সেট করো!"); return; }
+    if (!tgUrl) { toast.error("Set the Telegram Supabase URL first."); return; }
     // Webhook URL = same supabase function URL but with webhook action
     // We need to set webhook to a URL that posts back to our function with action=webhook
     const webhookUrl = tgUrl;
     const data = await callTgAction("set-webhook", { webhookUrl });
     if (data?.ok) {
-      toast.success("✅ Webhook সেট হয়েছে!");
+      toast.success("✅ Webhook set successfully.");
       checkWebhook();
     } else {
       toast.error(`❌ ${data?.description || data?.error || "Failed"}`);
@@ -359,7 +359,7 @@ const TelegramWebhookSection = ({ glassCard, inputClass, btnPrimary, btnSecondar
   const deleteWebhook = async () => {
     const data = await callTgAction("delete-webhook");
     if (data?.ok) {
-      toast.success("✅ Webhook ডিলিট হয়েছে!");
+      toast.success("✅ Webhook deleted.");
       setWebhookStatus(null);
     } else {
       toast.error(`❌ ${data?.description || data?.error || "Failed"}`);
@@ -423,7 +423,7 @@ const TelegramWebhookSection = ({ glassCard, inputClass, btnPrimary, btnSecondar
 
       {!tgUrl && (
         <p className="mt-2 text-[10px] text-yellow-400">
-          ⚠️ আগে উপরে "Telegram Supabase URL" সেট করো!
+          ⚠️ Set the "Telegram Supabase URL" above first.
         </p>
       )}
     </div>
@@ -471,7 +471,7 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
   };
 
   const testUrl = async () => {
-    if (!otpUrl) { toast.error("URL সেট করো আগে!"); return; }
+    if (!otpUrl) { toast.error("Set the URL first."); return; }
     setTesting(true);
     setTestResult(null);
     const start = Date.now();
@@ -488,9 +488,9 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
   };
 
   const clearLogs = async () => {
-    if (!confirm("সব পাসওয়ার্ড রিসেট লগ মুছে ফেলবে?")) return;
+    if (!confirm("Delete all password reset logs?")) return;
     await remove(ref(db, "passwordResets"));
-    toast.success("লগ মুছে ফেলা হয়েছে");
+    toast.success("Logs cleared.");
   };
 
   return (
@@ -503,7 +503,7 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
           <Link size={14} className="text-cyan-400" /> OTP Email Function URL
         </h3>
         <p className="text-[10px] text-zinc-500">
-          Supabase Edge Function (send-otp-email) এর URL দিন। ভবিষ্যতে অন্য প্ল্যাটফর্মে ডিপ্লয় করলে নতুন URL দিলেই কাজ করবে।
+          Enter the send-otp-email function URL here. If you later deploy on another platform, updating this URL will be enough.
         </p>
         <div className="flex gap-2">
           <input value={otpUrlInput} onChange={e => setOtpUrlInput(e.target.value)}
