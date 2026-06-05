@@ -2800,7 +2800,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 {/* Progress bar - GPU accelerated with will-change */}
                 <div
                   ref={progressBarRef}
-                  className="w-full h-6 flex items-center cursor-pointer mb-2 relative"
+                  className="w-full h-6 flex items-center cursor-pointer mb-2 relative touch-none"
                   onClick={(e) => { e.stopPropagation(); handleProgressClick(e); }}
                   onTouchStart={handleProgressTouchStart}
                   onTouchMove={handleProgressTouchMove}
