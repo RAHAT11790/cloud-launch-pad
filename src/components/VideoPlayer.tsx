@@ -3639,7 +3639,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
           {/* Other downloaded episodes navigation */}
           {downloadedEpisodes.length > 1 && (
             <div className="bg-card border-t border-border/30 p-3 max-h-[180px] overflow-y-auto">
-              <p className="text-xs font-bold text-foreground mb-2">অন্যান্য ডাউনলোড</p>
+              <p className="text-xs font-bold text-foreground mb-2">Other downloads</p>
               <div className="space-y-1">
                 {downloadedEpisodes.filter(ep => ep.id !== offlinePlayInfo.id).map((ep) => (
                   <button
