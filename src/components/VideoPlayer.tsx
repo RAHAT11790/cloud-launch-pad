@@ -1210,10 +1210,32 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      backBufferLength: 90,
-      maxBufferLength: 60,
-      maxMaxBufferLength: 180,
-      startLevel: -1,
+      // Ultra-fast start: skip Hls.js's initial bandwidth probe and assume a
+      // healthy bitrate so playback begins on the first fragment instead of
+      // waiting ~3-5s for the bandwidth test to finish.
+      testBandwidth: false,
+      abrEwmaDefaultEstimate: 5_000_000,
+      // Smaller buffers → faster first frame & faster seek response. The big
+      // 180s buffer here was forcing the player to fetch ~3 minutes of video
+      // before signalling canplay on slow connections.
+      backBufferLength: 30,
+      maxBufferLength: 20,
+      maxMaxBufferLength: 60,
+      maxBufferSize: 60 * 1000 * 1000,
+      // Start at the lowest quality so the very first fragment lands in <1s,
+      // then ABR climbs to the best level the user's bandwidth supports.
+      startLevel: 0,
+      startFragPrefetch: true,
+      // Aggressive but bounded retries so a single dead fragment never stalls
+      // playback for tens of seconds.
+      manifestLoadingTimeOut: 8000,
+      manifestLoadingMaxRetry: 2,
+      manifestLoadingRetryDelay: 500,
+      levelLoadingTimeOut: 8000,
+      levelLoadingMaxRetry: 3,
+      fragLoadingTimeOut: 15000,
+      fragLoadingMaxRetry: 4,
+      fragLoadingRetryDelay: 500,
       capLevelToPlayerSize: false,
       // Keep subtitle handling inside our custom overlay so the native track UI
       // does not silently hide cues on Android Chrome.
