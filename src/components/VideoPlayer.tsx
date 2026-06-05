@@ -482,6 +482,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
   const [dlSelectedEpisodes, setDlSelectedEpisodes] = useState<Set<number>>(new Set());
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
+  const [saved, setSaved] = useState(() => (animeId ? guestStore.watchlist.has(animeId) : false));
+  const [bottomTab, setBottomTab] = useState<"foryou" | "comments">("foryou");
+  const [commentCount, setCommentCount] = useState(0);
   
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
@@ -511,6 +514,42 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
   const [unlockBlocked, setUnlockBlocked] = useState(false);
+
+  const animeMeta = useMemo(() => {
+    const match = title.match(/^(.*?)(?:\s*[—-]\s*(.+))?$/);
+    return {
+      title,
+      poster,
+      rating: undefined as string | number | undefined,
+      year: undefined as string | number | undefined,
+      language: undefined as string | undefined,
+      type: undefined as string | undefined,
+      subtitleLabel: match?.[2] || subtitle,
+    };
+  }, [poster, subtitle, title]);
+
+  const currentLangLabel = useMemo(() => {
+    const explicit = propAudioTracks?.[0]?.language || propAudioTracks?.[0]?.label;
+    if (explicit) return explicit;
+    return "Default";
+  }, [propAudioTracks]);
+
+  useEffect(() => {
+    if (!animeId) return;
+    if (isGuest()) {
+      setSaved(guestStore.watchlist.has(animeId));
+      return;
+    }
+    const uid = getLocalUserId();
+    if (!uid) {
+      setSaved(guestStore.watchlist.has(animeId));
+      return;
+    }
+    const unsub = onValue(ref(db, `users/${uid}/watchlist/${animeId}`), (snap) => {
+      setSaved(snap.exists());
+    });
+    return () => unsub();
+  }, [animeId]);
 
   useEffect(() => {
     const unsub = downloadManager.subscribe((snapshot) => {
