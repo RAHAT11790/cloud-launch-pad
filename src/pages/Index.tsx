@@ -1713,7 +1713,7 @@ const Index = () => {
 
   const handleContinueWatching = async (item: any) => {
     if (unlockBlocked) {
-      toast.error("এই অ্যাকাউন্ট token misuse এর কারণে ভিডিও অ্যাক্সেস ব্লক");
+      toast.error("This account is blocked due to token misuse.");
       return;
     }
 
