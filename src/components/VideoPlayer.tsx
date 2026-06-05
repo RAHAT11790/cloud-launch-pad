@@ -2317,6 +2317,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const lightweightMode = !isFullscreen;
+  const episodeGridCount = episodeList?.length ?? 0;
+  const visibleEpisodeButtons = episodeList?.slice(0, 15) ?? [];
   const handleShare = useCallback(async () => {
     const targetUrl = shareLink || window.location.href;
     const shareData = { title, text: subtitle || title, url: targetUrl };
@@ -2373,54 +2375,54 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         </button>
       )}
 
-      <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full p-5'}`}>
+      <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full px-5 pb-6 pt-7'}`}>
         {!isFullscreen && (
-          <div className="mb-4 space-y-3 pt-1 pr-12">
-            <div className="text-center">
-              <h1 className="text-2xl font-extrabold text-primary tracking-wider">{branding.playerName}</h1>
+          <div className="mb-4 space-y-4 pt-1 pr-12">
+            <div className="pl-1">
+              <h1 className="text-2xl font-black uppercase tracking-wide text-primary text-glow">{branding.playerName}</h1>
             </div>
 
-            <div className="rounded-2xl border border-border/50 bg-card/70 px-4 py-3 backdrop-blur-sm">
+            <div className="player-glass rounded-[28px] px-4 py-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-lg font-semibold leading-tight text-foreground">{title}</p>
-                  {subtitle && <p className="mt-1 text-sm text-secondary-foreground">{subtitle}</p>}
+                  <p className="text-[2rem] font-extrabold leading-none text-foreground">{title}</p>
+                  {subtitle && <p className="mt-2 text-lg leading-none text-secondary-foreground">{subtitle}</p>}
                 </div>
                 {onInfoClick && (
                   <button
                     onClick={onInfoClick}
-                    className="shrink-0 rounded-full bg-secondary px-3 py-1.5 text-xs font-semibold text-secondary-foreground transition-all hover:bg-secondary/80"
+                    className="player-touch-button shrink-0 rounded-full px-4 py-3 text-sm font-bold text-secondary-foreground transition-all"
                   >
                     Info
                   </button>
                 )}
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="mt-5 grid grid-cols-2 gap-3">
                 {onLibraryClick && (
                   <button
                     onClick={onLibraryClick}
-                    className="rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground transition-all hover:bg-secondary/80"
+                    className="player-touch-button min-h-[68px] rounded-[22px] px-4 py-4 text-lg font-extrabold text-secondary-foreground transition-all"
                   >
                     Library
                   </button>
                 )}
                 <button
                   onClick={handleShare}
-                  className="rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground transition-all hover:bg-secondary/80"
+                  className="player-touch-button min-h-[68px] rounded-[22px] px-4 py-4 text-lg font-extrabold text-secondary-foreground transition-all"
                 >
                   Share
                 </button>
                 <button
                   onClick={() => videoContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                  className="rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground transition-all hover:bg-secondary/80"
+                  className="player-touch-button min-h-[68px] rounded-[22px] px-4 py-4 text-lg font-extrabold text-secondary-foreground transition-all"
                 >
                   Player
                 </button>
                 {seasons && seasons.length > 0 && (
                   <button
                     onClick={() => document.getElementById("player-episode-strip")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                    className="rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground transition-all hover:bg-secondary/80"
+                    className="player-touch-button min-h-[68px] rounded-[22px] px-4 py-4 text-lg font-extrabold text-secondary-foreground transition-all"
                   >
                     Episodes
                   </button>
