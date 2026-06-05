@@ -825,6 +825,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
+    if (isDirectPlaybackUrl(trimmed) && !/\.m3u8(\?|#|$)/i.test(trimmed)) {
+      return trimmed;
+    }
     // Old iframe server flow is disabled for episode/video switching speed.
     // Everything non-direct is routed through the fast stream proxy path instead.
     if (shouldForceDirectProxy(trimmed) && BUILTIN_STREAM_PROXY) {
@@ -882,11 +885,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     failedSrcsRef.current.clear();
     retryAttemptsRef.current.clear();
 
-    // Fast swap — just change src, browser handles the rest. No removeAttribute/double-load.
+    // Fast swap — just change src, browser handles the rest. Avoid forcing a
+    // fresh load() here because it restarts the pipeline and adds seconds.
     setCurrentSrc(resolved);
     try {
-      v.src = resolved;
-      v.load();
+      if (v.src !== resolved) v.src = resolved;
       if (savedTime > 0) {
         const onMeta = () => { try { v.currentTime = savedTime; } catch {} v.removeEventListener("loadedmetadata", onMeta); };
         v.addEventListener("loadedmetadata", onMeta);
@@ -1505,6 +1508,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
     setManualServerSelected(false);
+    retryAttemptsRef.current.clear();
     setVideoError(false);
     failedSrcsRef.current.clear();
     const seekTarget = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : 0;
@@ -1840,7 +1844,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         onNextEpisode();
       }
     };
-    const MAX_RETRIES = 2;
+    const MAX_RETRIES = 1;
     const onError = () => {
       const errSrc = currentSrc;
       const prev = retryAttemptsRef.current.get(errSrc) || 0;
