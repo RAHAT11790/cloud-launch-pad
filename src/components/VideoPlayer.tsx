@@ -2206,7 +2206,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const isSeeking = useRef(false);
 
   const handleProgressTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    e.preventDefault();
     e.stopPropagation();
     isSeeking.current = true;
     const v = videoRef.current;
@@ -2214,11 +2213,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     v.currentTime = getSafeSeekTime(v, pct * v.duration);
+    if (progressRef.current && v.duration > 0) {
+      progressRef.current.style.width = `${pct * 100}%`;
+    }
     resetHideTimer();
   }, [getSafeSeekTime, resetHideTimer]);
 
   const handleProgressTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    e.preventDefault();
     e.stopPropagation();
     if (!isSeeking.current) return;
     const v = videoRef.current;
@@ -2228,7 +2229,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     const target = getSafeSeekTime(v, pct * v.duration);
     v.currentTime = target;
 
-    // Update progress bar immediately
     if (progressRef.current && v.duration > 0) {
       progressRef.current.style.width = `${(target / v.duration) * 100}%`;
     }
@@ -2238,7 +2238,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   }, [getSafeSeekTime]);
 
   const handleProgressTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    e.preventDefault();
     e.stopPropagation();
     isSeeking.current = false;
     resetHideTimer();
