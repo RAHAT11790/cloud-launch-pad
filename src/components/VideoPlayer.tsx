@@ -3388,65 +3388,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
             : [{ label: currentQuality || "Auto", src }];
 
           return (
-            <div className="mt-5 w-full max-w-md mx-auto space-y-3">
-              {/* Single download / play-offline button */}
-              <div className="relative">
-                {isAlreadySaved ? (
-                  <button
-                    onClick={() => playOffline()}
-                    className="relative w-full rounded-[24px] px-5 py-5 text-[1.05rem] font-extrabold flex items-center justify-center gap-3 transition-all bg-primary text-primary-foreground hover:scale-[1.02]"
-                  >
-                    <Play className="w-4 h-4" /> Play Offline
-                    {savedEpisode?.quality && savedEpisode.quality !== "Auto" && (
-                      <span className="text-sm opacity-80">• {savedEpisode.quality}</span>
-                    )}
-                  </button>
-                ) : (
-                  <button
-                    onClick={openDownloadPanel}
-                    className="relative w-full rounded-[24px] px-5 py-5 text-[1.05rem] font-extrabold flex items-center justify-center gap-3 transition-all gradient-primary text-primary-foreground btn-glow hover:scale-[1.02]"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Download</span>
-                    {hasMultiEpisodes && (
-                      <span className="text-base font-medium opacity-80">
-                        • pick episodes
-                      </span>
-                    )}
-                  </button>
-                )}
-              </div>
+            <div className="w-full max-w-md mx-auto">
+              {/* Inline Download button + downloaded list removed (Download triggered from top action row) */}
 
-              {/* Downloaded Episodes List (inline) */}
-              {downloadedEpisodes.length > 0 && (
-                <div className="bg-card border border-border rounded-xl p-3">
-                  <p className="text-xs font-bold text-foreground mb-2 flex items-center gap-1.5">
-                    <Download className="w-3.5 h-3.5 text-primary" /> Downloaded ({downloadedEpisodes.length})
-                  </p>
-                  <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-                    {downloadedEpisodes.map((ep) => (
-                      <button
-                        key={ep.id}
-                        onClick={() => playOffline(ep)}
-                        className={`w-full flex items-center gap-2.5 p-2 rounded-lg transition-all hover:bg-primary/10 ${
-                          ep.subtitle === subtitle ? "bg-primary/15 border border-primary/30" : "bg-secondary/50"
-                        }`}
-                      >
-                        {ep.poster && (
-                          <img src={ep.poster} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" />
-                        )}
-                        <div className="flex-1 min-w-0 text-left">
-                          <p className="text-[11px] font-semibold text-foreground truncate">{ep.subtitle || ep.title}</p>
-                          <p className="text-[9px] text-muted-foreground">
-                            {ep.quality && ep.quality !== "Auto" ? ep.quality : ""} • {(ep.size / (1024 * 1024)).toFixed(1)} MB
-                          </p>
-                        </div>
-                        <Play className="w-4 h-4 text-primary flex-shrink-0" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+
 
               {/* ============ Download Picker Modal ============ */}
               {showDownloadQualityPicker && (
