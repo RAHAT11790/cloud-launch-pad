@@ -1509,7 +1509,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
         {/* Change/Set Password Button - show for all users */}
         <button onClick={() => setActivePanel("change-password")}
           className="w-full py-3 rounded-xl bg-foreground/10 border border-foreground/10 text-foreground font-medium flex items-center justify-center gap-2 transition-all hover:border-primary text-sm">
-          <Lock className="w-4 h-4 text-primary" /> পাসওয়ার্ড সেটিংস
+          <Lock className="w-4 h-4 text-primary" /> Password settings
         </button>
       </motion.div>
     );
@@ -1719,7 +1719,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
           <div className="flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 text-destructive mt-0.5" />
             <div className="flex-1">
-              <p className="text-xs font-semibold text-foreground">আপনার আইডিটি এই ফোনে লগইন করা আছে, কিন্তু এই ফোন প্রিমিয়াম প্লের জন্য অনুমোদিত নয়।</p>
               <p className="text-xs font-semibold text-foreground">Your account is logged in on this phone, but this device is not approved for premium playback.</p>
               <p className="text-[11px] text-muted-foreground mt-1">You can remove this phone login below and automatically sign out from this device.</p>
               <button
