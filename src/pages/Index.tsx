@@ -1392,12 +1392,7 @@ const Index = () => {
 
   const handlePlay = async (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => {
     if (unlockBlocked) {
-      toast.error("এই অ্যাকাউন্ট token misuse এর কারণে ভিডিও অ্যাক্সেস ব্লক");
-      return;
-    }
-
-    if (!isLoggedIn) {
-      toast.error("ভিডিও দেখতে লগইন করতে হবে");
+      toast.error("This account is blocked due to token misuse.");
       return;
     }
 
