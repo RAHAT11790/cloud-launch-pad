@@ -1337,7 +1337,7 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
 
       {/* Text Fields */}
       <div className={`${glassCard} p-4 mb-4`}>
-        <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">📝 নাম সেটিংস</h4>
+        <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">📝 Name settings</h4>
         <div className="space-y-3">
           {FIELDS.map(({ key, label, placeholder }) => (
             <div key={key}>
@@ -1355,13 +1355,13 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
 
       {/* APK Download URLs */}
       <div className={`${glassCard} p-4 mb-4`}>
-        <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">📦 APK ডাউনলোড লিঙ্ক</h4>
+        <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">📦 APK download links</h4>
         <p className="text-[10px] text-zinc-400 mb-3">
-          User APK লিঙ্ক ইউজার প্যানেলে দেখাবে। Admin APK লিঙ্ক শুধু এই অ্যাডমিন প্যানেলে দেখাবে। দুটো আলাদা ভার্সন।
+          The User APK link appears in the user panel. The Admin APK link appears only in this admin panel. Keep them as separate versions.
         </p>
         <div className="space-y-3">
           <div>
-            <label className="text-[10px] text-zinc-400 block mb-1">User App APK URL (ইউজার প্যানেলে দেখাবে)</label>
+            <label className="text-[10px] text-zinc-400 block mb-1">User App APK URL (shown in the user panel)</label>
             <input
               value={config["userApkUrl"] || ""}
               onChange={(e) => updateField("userApkUrl", e.target.value)}
@@ -1381,7 +1381,7 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
             )}
           </div>
           <div>
-            <label className="text-[10px] text-zinc-400 block mb-1">Admin App APK URL (শুধু অ্যাডমিন প্যানেলে দেখাবে)</label>
+            <label className="text-[10px] text-zinc-400 block mb-1">Admin App APK URL (shown only in the admin panel)</label>
             <input
               value={config["adminApkUrl"] || ""}
               onChange={(e) => updateField("adminApkUrl", e.target.value)}
@@ -1411,17 +1411,17 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
               const snap = await get(ref(db, "settings/branding"));
               const val = snap.val() || {};
               setConfig(val);
-              toast.success("✅ অটো-ফিল হয়েছে! বর্তমান সেভ করা ভ্যালু লোড হয়েছে।");
+              toast.success("✅ Auto-fill complete. Current saved values have been loaded.");
             } catch {
-              toast.error("অটো-ফিল ব্যর্থ");
+              toast.error("Auto-fill failed");
             }
           }}
           className="flex-1 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 transition-all flex items-center justify-center gap-2"
         >
-          <RefreshCw size={14} /> অটো ফিল
+          <RefreshCw size={14} /> Auto fill
         </button>
         <button onClick={saveAll} disabled={saving} className={`${btnPrimary} flex-1 !py-3 text-sm`}>
-          {saving ? <><RefreshCw size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> সব সেভ করো</>}
+          {saving ? <><RefreshCw size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> Save all</>}
         </button>
       </div>
     </div>
