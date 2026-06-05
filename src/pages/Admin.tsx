@@ -1186,17 +1186,17 @@ const AiConfigSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
 
         <div className="flex gap-2">
           <button onClick={save} className={`${btnPrimary} !px-4 !py-2 flex-1`}>
-            <Save size={14} /> সেভ করো
+            <Save size={14} /> Save
           </button>
           <button onClick={testAi} disabled={testing || !aiUrlInput.trim()}
             className={`${btnPrimary} !px-4 !py-2 bg-cyan-700 hover:bg-cyan-600`}>
-            {testing ? <RefreshCw size={14} className="animate-spin" /> : <Activity size={14} />} টেস্ট
+            {testing ? <RefreshCw size={14} className="animate-spin" /> : <Activity size={14} />} Test
           </button>
         </div>
 
         {testResult && (
           <div className={`mt-3 p-2.5 rounded-lg text-xs font-medium ${testResult.alive ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
-            {testResult.alive ? `✅ AI কাজ করছে (${testResult.latency}ms)` : `❌ AI রেসপন্স করছে না`}
+            {testResult.alive ? `✅ AI is responding (${testResult.latency}ms)` : `❌ AI is not responding`}
           </div>
         )}
       </div>
@@ -1210,20 +1210,20 @@ const BrandingSection = ({ glassCard, inputClass, btnPrimary }: { glassCard: str
   const [saving, setSaving] = useState(false);
 
   const FIELDS = [
-    { key: "siteName", label: "সাইটের নাম", placeholder: "" },
-    { key: "siteDescription", label: "সাইটের বিবরণ", placeholder: "Your ultimate destination..." },
-    { key: "siteTagline", label: "ট্যাগলাইন", placeholder: "Premium Anime Streaming" },
-    { key: "loginTitle", label: "লগইন পেজের টাইটেল", placeholder: "" },
-    { key: "loginSubtitle", label: "লগইন সাবটাইটেল", placeholder: "Premium Anime Streaming" },
-    { key: "premiumTitle", label: "প্রিমিয়াম টাইটেল", placeholder: "" },
-    { key: "footerText", label: "ফুটার টেক্সট", placeholder: "Unlimited Anime Series & Movies" },
-    { key: "footerCopyright", label: "কপিরাইট টেক্সট", placeholder: "" },
-    { key: "splashText", label: "স্প্ল্যাশ স্ক্রিন টেক্সট", placeholder: "" },
-    { key: "adminTitle", label: "অ্যাডমিন প্যানেল টাইটেল", placeholder: "" },
-    { key: "aboutTitle", label: "About পেজ টাইটেল", placeholder: "" },
-    { key: "playerName", label: "ভিডিও প্লেয়ার টাইটেল", placeholder: "" },
-    { key: "rsCardLabel", label: "কার্ড লেবেল", placeholder: "" },
-    { key: "anCardLabel", label: "AnimeSalt কার্ড লেবেল", placeholder: "AN" },
+    { key: "siteName", label: "Site name", placeholder: "" },
+    { key: "siteDescription", label: "Site description", placeholder: "Your ultimate destination..." },
+    { key: "siteTagline", label: "Tagline", placeholder: "Premium Anime Streaming" },
+    { key: "loginTitle", label: "Login page title", placeholder: "" },
+    { key: "loginSubtitle", label: "Login subtitle", placeholder: "Premium Anime Streaming" },
+    { key: "premiumTitle", label: "Premium title", placeholder: "" },
+    { key: "footerText", label: "Footer text", placeholder: "Unlimited Anime Series & Movies" },
+    { key: "footerCopyright", label: "Copyright text", placeholder: "" },
+    { key: "splashText", label: "Splash screen text", placeholder: "" },
+    { key: "adminTitle", label: "Admin panel title", placeholder: "" },
+    { key: "aboutTitle", label: "About page title", placeholder: "" },
+    { key: "playerName", label: "Video player title", placeholder: "" },
+    { key: "rsCardLabel", label: "Card label", placeholder: "" },
+    { key: "anCardLabel", label: "AnimeSalt card label", placeholder: "AN" },
   ];
 
   const LOGO_FIELDS: { key: string; label: string; placeholder: string; preview: "square" | "wide" }[] = [
