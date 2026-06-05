@@ -425,7 +425,7 @@ const Index = () => {
     if (!isLoggedIn) return true;
 
     if (unlockBlocked) {
-      toast.error("একই unlock token অপব্যবহারের কারণে এই অ্যাকাউন্ট ব্লক করা হয়েছে");
+      toast.error("This account is blocked because the same unlock token was misused.");
       return false;
     }
 
