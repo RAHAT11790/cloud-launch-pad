@@ -3451,7 +3451,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
         )}
 
         {/* Suggested Videos */}
-        {lightweightMode && suggestedAnime && suggestedAnime.length > 0 && onSuggestedClick && (
+        {!isFullscreen && suggestedAnime && suggestedAnime.length > 0 && onSuggestedClick && (
           <div className="mt-4 bg-background rounded-xl p-4">
             <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5 text-foreground">
               <Play className="w-3.5 h-3.5 text-primary" /> Suggested for you
