@@ -3281,22 +3281,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 {isAlreadySaved ? (
                   <button
                     onClick={() => playOffline()}
-                    className="relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all bg-primary text-primary-foreground hover:scale-[1.02]"
+                    className="relative w-full rounded-[24px] px-5 py-5 text-[1.05rem] font-extrabold flex items-center justify-center gap-3 transition-all bg-primary text-primary-foreground hover:scale-[1.02]"
                   >
                     <Play className="w-4 h-4" /> Play Offline
                     {savedEpisode?.quality && savedEpisode.quality !== "Auto" && (
-                      <span className="text-[10px] opacity-80">• {savedEpisode.quality}</span>
+                      <span className="text-sm opacity-80">• {savedEpisode.quality}</span>
                     )}
                   </button>
                 ) : (
                   <button
                     onClick={openDownloadPanel}
-                    className="relative w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all gradient-primary text-primary-foreground btn-glow hover:scale-[1.02]"
+                    className="relative w-full rounded-[24px] px-5 py-5 text-[1.05rem] font-extrabold flex items-center justify-center gap-3 transition-all gradient-primary text-primary-foreground btn-glow hover:scale-[1.02]"
                   >
                     <Download className="w-4 h-4" />
                     <span>Download</span>
                     {hasMultiEpisodes && (
-                      <span className="text-[10px] font-normal opacity-80">
+                      <span className="text-base font-medium opacity-80">
                         • pick episodes
                       </span>
                     )}
