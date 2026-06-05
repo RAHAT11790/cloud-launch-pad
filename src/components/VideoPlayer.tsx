@@ -503,12 +503,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
   const [nextEpCountdown, setNextEpCountdown] = useState(0);
   const nextEpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const nextEpCancelledRef = useRef(false);
+  const [activeDownloads, setActiveDownloads] = useState<Map<string, any>>(new Map());
   const [globalFreeAccess, setGlobalFreeAccess] = useState<boolean>(false);
   const [deviceBlocked, setDeviceBlocked] = useState(false);
   const [deviceBlockInfo, setDeviceBlockInfo] = useState<{ maxDevices: number; currentCount: number } | null>(null);
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
   const [unlockBlocked, setUnlockBlocked] = useState(false);
+
+  useEffect(() => {
+    const unsub = downloadManager.subscribe(setActiveDownloads);
+    return () => unsub?.();
+  }, []);
 
   // Check IndexedDB for already downloaded episodes matching this title
   useEffect(() => {
@@ -529,7 +535,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
     };
     refresh();
     return () => { cancelled = true; };
-  }, [title]);
+  }, [title, activeDownloads]);
 
   // Listen for global free access from Firebase
   useEffect(() => {
