@@ -5900,15 +5900,15 @@ ${tgBulkFooter}
                         </select>
                       </div>
                       <div className="mb-4">
-                        <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">ডাব টাইপ</label>
+                        <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Dub Type</label>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => setMovieForm({ ...movieForm, dubType: "official" })}
                             className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${(movieForm.dubType || "official") === "official" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
-                            𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥𝐝𝐮𝐛
+                            Official Dub
                           </button>
                           <button type="button" onClick={() => setMovieForm({ ...movieForm, dubType: "fandub" })}
                             className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${movieForm.dubType === "fandub" ? "bg-orange-600 border-orange-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
-                            𝐅𝐚𝐧𝐝𝐮𝐛
+                            Fandub
                           </button>
                         </div>
                       </div>
