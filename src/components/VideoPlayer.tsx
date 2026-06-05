@@ -3481,7 +3481,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
         {/* Season Selector + Episode List */}
         {episodeList && episodeList.length > 0 && (
-          <div id="player-episode-strip" className="mt-4 bg-background rounded-xl p-4">
+          <div id="player-episode-strip" className="mt-4 space-y-3">
             {/* Season selector */}
             {seasons && seasons.length > 1 && onSeasonChange && (
               <div className="mb-3">
@@ -3507,19 +3507,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               </div>
             )}
 
-            {/* Horizontal episode scroll */}
-            <div className="grid grid-cols-5 gap-2 pb-2">
-              {episodeList.map((ep) => (
+            <div className="flex items-center justify-between gap-3 px-1">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Episodes</p>
+                <p className="mt-1 text-sm font-medium text-muted-foreground">{episodeGridCount} added</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-5 gap-3 pb-2">
+              {visibleEpisodeButtons.map((ep) => (
                 <button
                   key={ep.number}
                   onClick={ep.onClick}
-                  className={`w-full h-12 rounded-xl flex items-center justify-center transition-all border text-center ${
+                  className={`w-full aspect-square rounded-[18px] flex items-center justify-center transition-all border text-center ${
                     ep.active
-                      ? "gradient-primary border-primary/40 text-primary-foreground shadow-[0_0_12px_hsla(170,75%,45%,0.3)]"
-                      : "bg-secondary/70 border-border/40 hover:border-primary/30 text-foreground"
+                      ? "gradient-primary border-primary/40 text-primary-foreground shadow-[0_0_18px_hsl(var(--primary)/0.35)]"
+                      : "player-touch-button border-border/40 hover:border-primary/30 text-foreground"
                   }`}
                 >
-                  <span className="text-sm font-bold">{ep.number}</span>
+                  <span className="text-2xl font-extrabold leading-none">{ep.number}</span>
                 </button>
               ))}
             </div>
@@ -3528,18 +3534,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
         {/* Suggested Videos */}
         {lightweightMode && suggestedAnime && suggestedAnime.length > 0 && onSuggestedClick && (
-          <div className="mt-4 bg-background rounded-xl p-4 overflow-hidden">
+          <div className="mt-4 overflow-hidden rounded-[24px] px-1">
             <h3 className="text-sm font-bold mb-3 flex items-center gap-1.5 text-foreground">
               <Play className="w-3.5 h-3.5 text-primary" /> For You
             </h3>
-            <div ref={suggestedRowRef} className="flex gap-2.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none", touchAction: "pan-x" }}>
+            <div ref={suggestedRowRef} className="flex gap-3 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none", touchAction: "pan-x" }}>
               {suggestedAnime.map((anime) => (
                 <div
                   key={anime.id}
                   onClick={() => onSuggestedClick(anime)}
-                  className="w-[108px] shrink-0 cursor-pointer group"
+                  className="w-[114px] shrink-0 cursor-pointer group"
                 >
-                  <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card mb-1.5">
+                  <div className="relative aspect-[2/3] rounded-[20px] overflow-hidden bg-card mb-1.5">
                     <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.2) 40%, transparent 70%)" }} />
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
