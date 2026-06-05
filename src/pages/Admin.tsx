@@ -1525,7 +1525,7 @@ const ForceNotifToggle = ({ glassCard }: { glassCard: string }) => {
   const toggle = async () => {
     const next = !enabled;
     await set(ref(db, "settings/forceNotifPrompt"), next);
-    toast.success(next ? "✅ সব ইউজারকে নোটিফিকেশন প্রম্পট দেখাবে" : "⏸ প্রম্পট বন্ধ করা হয়েছে");
+    toast.success(next ? "✅ Notification prompts will be shown to all users" : "⏸ Notification prompt disabled");
   };
 
   return (
@@ -1533,17 +1533,17 @@ const ForceNotifToggle = ({ glassCard }: { glassCard: string }) => {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className={`w-2.5 h-2.5 rounded-full ${enabled ? "bg-green-500 animate-pulse" : "bg-zinc-600"}`} />
-          <span className="text-xs font-medium">{enabled ? "অ্যাক্টিভ" : "বন্ধ"}</span>
+          <span className="text-xs font-medium">{enabled ? "Active" : "Off"}</span>
         </div>
         <button onClick={toggle}
           className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${enabled ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "bg-green-500/20 text-green-400 hover:bg-green-500/30"}`}>
-          {enabled ? "বন্ধ করুন" : "চালু করুন"}
+          {enabled ? "Disable" : "Enable"}
         </button>
       </div>
       <div className="grid grid-cols-2 gap-2 mt-2">
         <div className="bg-zinc-800/50 rounded-lg p-2.5 text-center">
           <p className="text-lg font-bold text-green-400">{totalUsers}</p>
-          <p className="text-[10px] text-zinc-400">ইউজার (টোকেন আছে)</p>
+          <p className="text-[10px] text-zinc-400">Users with tokens</p>
         </div>
         <div className="bg-zinc-800/50 rounded-lg p-2.5 text-center">
           <p className="text-lg font-bold text-blue-400">{totalTokens}</p>
