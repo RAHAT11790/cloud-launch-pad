@@ -8,7 +8,7 @@ interface AboutPageProps {
 }
 
 const AboutPage = ({ onBack, siteName }: AboutPageProps) => {
-  const [lang, setLang] = useState<"bn" | "en">("bn");
+  const [lang, setLang] = useState<"bn" | "en">("en");
 
   const content = {
     bn: {
@@ -67,7 +67,7 @@ const AboutPage = ({ onBack, siteName }: AboutPageProps) => {
             onClick={() => setLang("bn")}
             className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${lang === "bn" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
           >
-            বাংলা
+            BN
           </button>
           <button
             onClick={() => setLang("en")}
