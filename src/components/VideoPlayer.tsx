@@ -3599,7 +3599,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         {!isFullscreen && showInfoSheet && (
           <div
             className="fixed left-0 right-0 bottom-0 z-[40] overflow-y-auto overscroll-contain border-t border-white/10 bg-black text-white"
-            style={{ top: playerHeightPx }}
+            style={{ top: sheetTopPx || playerHeightPx }}
             data-player-panel="true"
           >
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
@@ -3663,7 +3663,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         {!isFullscreen && showLibrarySheet && (
           <div
             className="fixed left-0 right-0 bottom-0 z-[40] overflow-y-auto overscroll-contain border-t border-white/10 bg-black text-white"
-            style={{ top: playerHeightPx }}
+            style={{ top: sheetTopPx || playerHeightPx }}
             data-player-panel="true"
           >
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
@@ -3704,7 +3704,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         {!isFullscreen && showLanguageSheet && (
           <div
             className="fixed left-0 right-0 bottom-0 z-[40] overflow-y-auto overscroll-contain border-t border-white/10 bg-black text-white"
-            style={{ top: playerHeightPx }}
+            style={{ top: sheetTopPx || playerHeightPx }}
             data-player-panel="true"
           >
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
