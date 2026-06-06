@@ -3956,114 +3956,111 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
             : (preferredDownloadQuality || qualityChoices[0] || "");
 
           return (
-            <div className="w-full max-w-md mx-auto">
-              {/* Inline Download button + downloaded list removed (Download triggered from top action row) */}
-
-
-
-              {/* ============ Download Picker Modal ============ */}
+            <div className="w-full">
+              {/* ============ Download Picker Overlay ============ */}
               {showDownloadQualityPicker && (
-                <div ref={downloadPanelRef} className="w-full border-t border-white/8 bg-black text-white" data-player-panel="true">
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-white/10">
-                        <div className="min-w-0">
-                          <p className="text-[18px] font-bold tracking-tight text-white truncate">Download</p>
-                        </div>
-                      <button
-                        onClick={closePanel}
-                        className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95 flex-shrink-0 ml-3"
-                      >
-                        <X className="w-6 h-6" />
-                      </button>
-                    </div>
+                <div
+                  ref={downloadPanelRef}
+                  className="fixed left-0 right-0 bottom-0 z-[40] overflow-y-auto overscroll-contain border-t border-white/10 bg-black text-white flex flex-col"
+                  style={{ top: playerHeightPx }}
+                  data-player-panel="true"
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
+                    <p className="text-[15px] font-bold tracking-tight text-white truncate">Download</p>
+                    <button
+                      onClick={closePanel}
+                      className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95 flex-shrink-0 ml-3"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
 
-                    {/* Multi-episode picker */}
-                      <div className="px-4 pt-4 pb-2 flex flex-col gap-3 min-h-0">
-                        <div className="rounded-[14px] border border-white/10 bg-white/[0.05] p-4">
-                          <div className="flex items-center gap-2 mb-3">
-                            <h4 className="text-[13px] font-bold text-white">Resources</h4>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button onClick={() => { openInlineSheet("language", "download"); }} className="h-14 rounded-[10px] border border-white/10 bg-white/[0.07] px-3 text-left text-base text-white flex items-center justify-between">
-                              <span className="truncate">{currentDownloadLanguageLabel}</span>
-                              <ChevronDown className="w-5 h-5 text-white/55" />
-                            </button>
-                            {hasMultiEpisodes ? (
-                              <button onClick={() => { openInlineSheet("season", "download"); }} className="h-14 rounded-[10px] border border-white/10 bg-white/[0.07] px-3 text-left text-base text-white flex items-center justify-between">
-                                <span className="truncate">{getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx)}</span>
-                                <ChevronDown className="w-5 h-5 text-white/55" />
-                              </button>
-                            ) : (
-                              <div className="h-14 rounded-[10px] border border-white/10 bg-white/[0.07] px-3 text-left text-base text-white/70 flex items-center">Movie</div>
-                            )}
-                          </div>
-                          <div className="mt-3 border-t border-white/10 pt-3">
-                            <div className="grid grid-cols-3 gap-3">
-                              {qualityChoices.map((label) => {
-                                const is4K = is4KLabel(label);
-                                const locked4K = is4K && !isPremium;
-                                return (
-                                  <button
-                                    key={label}
-                                    disabled={locked4K}
-                                    onClick={() => {
-                                      if (locked4K) return;
-                                      setSelectedDownloadQuality(label);
-                                    }}
-                                    className={`h-12 rounded-[10px] text-base font-semibold border transition-all ${locked4K ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : 'bg-white/[0.07] text-white border-white/10'} ${label === activeQuality ? 'bg-primary/20 text-primary border-primary/40' : ''}`}
-                                  >
-                                    {label}
-                                  </button>
-                                );
-                              }).slice(0, 4)}
-                            </div>
-                          </div>
-                        </div>
-
-                        {hasMultiEpisodes && panelSeason && (
-                          <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: '38vh', WebkitOverflowScrolling: 'touch' }}>
-                            <div className="space-y-4">
-                              {panelEpisodes.map((ep) => {
-                                const selected = dlSelectedEpisodes.has(ep.index);
-                                const qualityUrl = activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
-                                return (
-                                  <button key={`${downloadPanelSeasonIdx}-${ep.index}`} onClick={() => toggleEpisode(ep.index)} className="w-full flex items-start gap-3 text-left">
-                                    <span className={`mt-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 ${selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
-                                      <Check className="w-3.5 h-3.5" />
-                                    </span>
-                                    <span className="min-w-0 flex-1">
-                                      <span className="block text-[18px] font-medium text-white">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
-                                      <span className="block text-[12px] text-white/55 mt-1 truncate">{qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} link`}</span>
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                </div>
+                  {/* Picker body */}
+                  <div className="px-3 pt-3 pb-2 flex flex-col gap-2.5 min-h-0 flex-1">
+                    <div className="rounded-[10px] border border-white/10 bg-white/[0.05] p-3">
+                      <h4 className="text-[11px] font-bold text-white/80 uppercase tracking-wider mb-2">Resources</h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => { openInlineSheet("language", "download"); }} className="h-10 rounded-[8px] border border-white/10 bg-white/[0.07] px-2.5 text-left text-[12px] text-white flex items-center justify-between">
+                          <span className="truncate">{currentDownloadLanguageLabel}</span>
+                          <ChevronDown className="w-4 h-4 text-white/55 shrink-0" />
+                        </button>
+                        {hasMultiEpisodes ? (
+                          <button onClick={() => { openInlineSheet("season", "download"); }} className="h-10 rounded-[8px] border border-white/10 bg-white/[0.07] px-2.5 text-left text-[12px] text-white flex items-center justify-between">
+                            <span className="truncate">{getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx)}</span>
+                            <ChevronDown className="w-4 h-4 text-white/55 shrink-0" />
+                          </button>
+                        ) : (
+                          <div className="h-10 rounded-[8px] border border-white/10 bg-white/[0.07] px-2.5 text-left text-[12px] text-white/70 flex items-center">Movie</div>
                         )}
                       </div>
-
-                    <div className="p-4 border-t border-white/10 mt-auto">
-                      <div className="flex items-center gap-3">
-                        <button onClick={toggleAll} className={`flex items-center gap-2 text-[12px] ${dlSelectedEpisodes.size === downloadEpisodes.length && downloadEpisodes.length > 0 ? 'text-white' : 'text-white/55'}`}>
-                          <span className={`flex h-6 w-6 items-center justify-center rounded-full border-2 ${dlSelectedEpisodes.size === downloadEpisodes.length && downloadEpisodes.length > 0 ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}><Check className="w-3.5 h-3.5" /></span>
-                          <span>Select All</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            const preferred = activeQuality || preferredDownloadQuality || qualityChoices[0];
-                            if (!preferred) return;
-                            if (hasMultiEpisodes) startSelectedDownloads(preferred);
-                            else startMovieDownload(preferred);
-                          }}
-                          className="flex-1 h-14 rounded-[12px] bg-gradient-to-r from-cyan-500 to-green-400 text-black text-[18px] font-semibold flex items-center justify-center gap-2"
-                        >
-                          <Download className="w-5 h-5" />
-                          <span>{activeQuality ? `Download - ${activeQuality}` : 'Download'}</span>
-                        </button>
+                      <div className="mt-2.5 border-t border-white/10 pt-2.5">
+                        <div className="grid grid-cols-4 gap-2">
+                          {qualityChoices.map((label) => {
+                            const is4K = is4KLabel(label);
+                            const locked4K = is4K && !isPremium;
+                            return (
+                              <button
+                                key={label}
+                                disabled={locked4K}
+                                onClick={() => {
+                                  if (locked4K) return;
+                                  setSelectedDownloadQuality(label);
+                                }}
+                                className={`h-9 rounded-[8px] text-[12px] font-semibold border transition-all ${locked4K ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : 'bg-white/[0.07] text-white border-white/10'} ${label === activeQuality ? 'bg-primary/20 text-primary border-primary/40' : ''}`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          }).slice(0, 4)}
+                        </div>
                       </div>
                     </div>
+
+                    {hasMultiEpisodes && panelSeason && (
+                      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+                        <div className="space-y-2.5">
+                          {panelEpisodes.map((ep) => {
+                            const selected = dlSelectedEpisodes.has(ep.index);
+                            const qualityUrl = activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
+                            return (
+                              <button key={`${downloadPanelSeasonIdx}-${ep.index}`} onClick={() => toggleEpisode(ep.index)} className="w-full flex items-start gap-2.5 text-left">
+                                <span className={`mt-1 flex h-5 w-5 items-center justify-center rounded-full border-2 ${selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
+                                  <Check className="w-3 h-3" />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-[13px] font-medium text-white">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
+                                  <span className="block text-[11px] text-white/55 mt-0.5 truncate">{qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} link`}</span>
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  <div className="p-3 border-t border-white/10 bg-black">
+                    <div className="flex items-center gap-2.5">
+                      <button onClick={toggleAll} className={`flex items-center gap-1.5 text-[11px] ${dlSelectedEpisodes.size === downloadEpisodes.length && downloadEpisodes.length > 0 ? 'text-white' : 'text-white/55'}`}>
+                        <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${dlSelectedEpisodes.size === downloadEpisodes.length && downloadEpisodes.length > 0 ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}><Check className="w-3 h-3" /></span>
+                        <span>All</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          const preferred = activeQuality || preferredDownloadQuality || qualityChoices[0];
+                          if (!preferred) return;
+                          if (hasMultiEpisodes) startSelectedDownloads(preferred);
+                          else startMovieDownload(preferred);
+                        }}
+                        className="flex-1 h-10 rounded-[10px] bg-gradient-to-r from-cyan-500 to-green-400 text-black text-[13px] font-semibold flex items-center justify-center gap-1.5 px-3"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span className="truncate">{activeQuality ? `Download • ${activeQuality}` : 'Download'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           );
