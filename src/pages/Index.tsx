@@ -2543,10 +2543,7 @@ const Index = () => {
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
           shareLink={buildShareLink(playerState.anime.id, playerState.seasonIdx, playerState.epIdx)}
           onLibraryClick={() => {
-            stopAllPlayback();
-            setPlayerState(null);
-            setShowProfile(true);
-            navigate("/", { replace: true });
+            setPlayerInlineSheet("library");
           }}
           suggestedAnime={suggestedAnime}
         />
