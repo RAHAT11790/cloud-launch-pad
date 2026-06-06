@@ -3428,7 +3428,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
             </div>
 
             {episodeList && episodeList.length > 0 && (
-              <div ref={playerSheetAnchorRef} className="mt-5">
+              <div className="mt-5">
                 <div className="flex items-baseline gap-2 mb-3">
                   <h3 className="text-[15px] font-bold text-foreground">Resources</h3>
                 </div>
@@ -3561,11 +3561,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         )}
 
         {!isFullscreen && showInfoSheet && (
-          <div
-            className="fixed left-0 right-0 bottom-0 z-[40] overflow-y-auto overscroll-contain border-t border-white/10 bg-black text-white"
-            style={{ top: resolvedSheetTop }}
-            data-player-panel="true"
-          >
+          <div className="mt-5 border-t border-white/10 bg-black text-white" data-player-panel="true">
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
               <h3 className="text-[15px] font-bold tracking-tight">More details</h3>
               <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
@@ -3625,11 +3621,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 {/* Add to list & Share now act as direct toggles — no inline sheet */}
 
         {!isFullscreen && showLibrarySheet && (
-          <div
-            className="fixed left-0 right-0 bottom-0 z-[40] overflow-y-auto overscroll-contain border-t border-white/10 bg-black text-white"
-            style={{ top: resolvedSheetTop }}
-            data-player-panel="true"
-          >
+          <div className="mt-5 border-t border-white/10 bg-black text-white" data-player-panel="true">
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
               <h3 className="text-[15px] font-bold tracking-tight">My list</h3>
               <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
@@ -3666,11 +3658,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         )}
 
         {!isFullscreen && showLanguageSheet && (
-          <div
-            className="fixed left-0 right-0 bottom-0 z-[40] overflow-y-auto overscroll-contain border-t border-white/10 bg-black text-white"
-            style={{ top: resolvedSheetTop }}
-            data-player-panel="true"
-          >
+          <div className="mt-5 border-t border-white/10 bg-black text-white" data-player-panel="true">
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
               <h3 className="text-[15px] font-bold tracking-tight">Select language</h3>
               <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
@@ -3717,11 +3705,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         )}
 
         {!isFullscreen && showSeasonSheet && !!seasons?.length && (
-          <div
-            className="fixed left-0 right-0 bottom-0 z-[40] overflow-y-auto overscroll-contain border-t border-white/10 bg-black text-white"
-            style={{ top: resolvedSheetTop }}
-            data-player-panel="true"
-          >
+          <div className="mt-5 border-t border-white/10 bg-black text-white" data-player-panel="true">
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
               <h3 className="text-[15px] font-bold tracking-tight">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
               <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
