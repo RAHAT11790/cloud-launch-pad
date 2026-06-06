@@ -1551,6 +1551,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       // Switch HLS.js audio rendition (preserves time + playing state automatically)
       hlsRef.current.audioTrack = track.hlsAudioIndex;
       setCurrentAudioTrack(track.label);
+      setSelectedLanguageLabel(track.label || track.language || "");
     } else if (track.nativeIndex !== undefined) {
       // Switch native audio track
       const audioTracks = (v as any).audioTracks;
@@ -1560,6 +1561,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         }
       }
       setCurrentAudioTrack(track.label);
+      setSelectedLanguageLabel(track.label || track.language || "");
     } else if (track.src) {
       // Pick quality-matched audio URL based on current quality selection
       let audioUrl = track.src;
@@ -1575,6 +1577,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       activeSourceBaseRef.current = finalAudioUrl;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
+      setSelectedLanguageLabel(track.label || track.language || "");
     // Restore playback position after source change
       const restoreTime = () => {
         if (v.duration > 0) {
@@ -1605,6 +1608,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     sourceBaseRef.current = defaultRawSrc;
     activeSourceBaseRef.current = defaultRawSrc;
     setCurrentAudioTrack("Default");
+    setSelectedLanguageLabel(propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || "Default");
     setShowAudioPanel(false);
 
     const finalDefaultSrc = manualServerSelected ? applyServerDomain(defaultRawSrc, activeServerIndex) : defaultRawSrc;
@@ -1624,7 +1628,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       setCurrentSrc(finalResolvedSrc);
     }
 
-  }, [currentSrc, resolvePlaybackSrc, src, manualServerSelected, activeServerIndex, applyServerDomain]);
+  }, [currentSrc, propAudioTracks, resolvePlaybackSrc, src, manualServerSelected, activeServerIndex, applyServerDomain]);
 
   useEffect(() => {
     if (!playbackRouteReady) return;
