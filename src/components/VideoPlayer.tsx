@@ -286,7 +286,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const progressRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
   const downloadPanelRef = useRef<HTMLDivElement>(null);
-  const playerSheetAnchorRef = useRef<HTMLDivElement>(null);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -316,7 +315,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const sourceBaseRef = useRef(src);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
-  const [playerHeightPx, setPlayerHeightPx] = useState<number>(0);
   const [shareFallback, setShareFallback] = useState<{ url: string; title: string } | null>(null);
 
   // ===== AN iframe minimal overlay auto-hide =====
@@ -578,8 +576,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
   const [unlockBlocked, setUnlockBlocked] = useState(false);
-  const [sheetTopPx, setSheetTopPx] = useState<number>(0);
-
   const activeEpisodeIdx = useMemo(() => {
     const idx = episodeList?.findIndex((episode) => episode.active) ?? -1;
     return idx >= 0 ? idx : 0;
@@ -861,42 +857,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       setCommentCount(data && typeof data === "object" ? Object.keys(data).length : 0);
     });
   }, [animeId]);
-
-  // Track the video container's rendered height so inline overlays can cover
-  // exactly the area below the player (regardless of aspect ratio / orientation).
-  useEffect(() => {
-    const videoEl = videoContainerRef.current;
-    const anchorEl = playerSheetAnchorRef.current;
-    if (!videoEl || typeof ResizeObserver === "undefined") return;
-    const measure = () => {
-      const videoRect = videoEl.getBoundingClientRect();
-      setPlayerHeightPx(Math.round(videoRect.height));
-      const fallbackTop = Math.round(videoRect.bottom + 14);
-      const anchorTop = anchorEl ? Math.round(anchorEl.getBoundingClientRect().top) : fallbackTop;
-      setSheetTopPx(Math.max(0, anchorTop));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(videoEl);
-    if (anchorEl) ro.observe(anchorEl);
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
-    };
-  }, []);
-
-  const resolvedSheetTop = useMemo(() => {
-    const baseTop = sheetTopPx || playerHeightPx;
-    if (typeof window === "undefined") return baseTop;
-    const maxVisibleTop = Math.max(120, window.innerHeight - 220);
-    return Math.min(Math.max(baseTop, 88), maxVisibleTop);
-  }, [playerHeightPx, sheetTopPx]);
-
-  // Lock body scroll while an overlay is open so the player stays anchored.
-  // (No scrollIntoView needed — the overlays are fixed to the player edge.)
 
   const closeInlineSheets = useCallback(() => {
     setShowInfoSheet(false);
