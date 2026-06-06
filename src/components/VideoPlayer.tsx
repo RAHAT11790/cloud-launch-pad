@@ -3725,7 +3725,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         )}
 
         {!isFullscreen && showLanguageSheet && (
-          <div className="w-full bg-black text-white">
+          <div className="w-full border-t border-white/8 bg-black text-white">
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <h3 className="text-[18px] font-bold tracking-tight">Select language</h3>
               <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
@@ -3743,9 +3743,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                     onClick={() => {
                       if (track) switchAudioTrack({ language: track.language, label: track.label, src: track.link, src480: track.link480, src720: track.link720, src1080: track.link1080, src4k: track.link4k });
                       else setSelectedLanguageLabel(label);
-                      if (sheetOrigin === "download") openInlineSheet("download", "download");
-                      else if (sheetOrigin === "share") openInlineSheet("share", "share");
-                      else closeInlineSheets();
+                      if (sheetOrigin === "download") {
+                        setShowLanguageSheet(false);
+                        setShowDownloadQualityPicker(true);
+                        return;
+                      }
+                      if (sheetOrigin === "share") {
+                        setShowLanguageSheet(false);
+                        setShowShareSheet(true);
+                        return;
+                      }
+                      closeInlineSheets();
                     }}
                     className={`w-full rounded-[14px] px-4 py-5 text-center text-[16px] font-semibold transition-all active:scale-[0.99] ${
                       active
@@ -3762,7 +3770,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         )}
 
         {!isFullscreen && showSeasonSheet && !!seasons?.length && (
-          <div className="w-full bg-black text-white">
+          <div className="w-full border-t border-white/8 bg-black text-white">
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <h3 className="text-[18px] font-bold tracking-tight">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
               <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
@@ -3782,14 +3790,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       if (sheetOrigin === "share") {
                         setSharePanelSeasonIdx(idx);
                         setSharePanelEpisodeIdx(0);
-                        openInlineSheet("share", "share");
+                        setShowSeasonSheet(false);
+                        setShowShareSheet(true);
                         return;
                       }
                       setDownloadPanelSeasonIdx(idx);
-                      onSeasonChange?.(idx);
                       setDlSelectedEpisodes(new Set([0]));
-                      if (sheetOrigin === "download") openInlineSheet("download", "download");
-                      else closeInlineSheets();
+                      if (sheetOrigin === "download") {
+                        setShowSeasonSheet(false);
+                        setShowDownloadQualityPicker(true);
+                        return;
+                      }
+                      onSeasonChange?.(idx);
+                      closeInlineSheets();
                     }}
                     className={`w-full rounded-[14px] px-4 py-5 text-center text-[16px] font-semibold transition-all active:scale-[0.99] ${
                       active
