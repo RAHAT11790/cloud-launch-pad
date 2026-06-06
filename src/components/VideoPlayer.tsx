@@ -3272,7 +3272,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                   </button>
                   {seasons && seasons.length > 0 && (
                     <button onClick={() => setShowSeasonSheet(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
-                      {seasons[currentSeasonIdx ?? 0]?.name || `Season ${(currentSeasonIdx ?? 0) + 1}`}
+                      {activeSeasonLabel}
                       <ChevronDown className="w-3.5 h-3.5" />
                     </button>
                   )}
