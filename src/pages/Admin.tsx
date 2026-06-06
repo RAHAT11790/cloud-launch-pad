@@ -3037,7 +3037,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         tmdbId: data.id, title: data.name || "", logo: logoUrl, poster: data.poster_path ? TMDB_IMG_BASE + "original" + data.poster_path : "",
         backdrop: data.backdrop_path ? TMDB_IMG_BASE + "original" + data.backdrop_path : "", trailer: trailerUrl,
         year: data.first_air_date?.split("-")[0] || "", rating: data.vote_average?.toFixed(1) || "",
-        language: "Hindi", category: autoCategory, dubType: "official", storyline: data.overview || "", visibility: "public", weeklyEnabled: false, weeklyEveryDays: 7, audioTracks: []
+        language: "Hindi", baseLanguage: "Hindi", selectedAdminLanguage: "Hindi", availableLanguages: ["Hindi"], category: autoCategory, dubType: "official", storyline: data.overview || "", visibility: "public", weeklyEnabled: false, weeklyEveryDays: 7, audioTracks: []
       });
       if (autoCategory) toast.info(`অটো ক্যাটাগরি: ${autoCategory}`);
       setSeriesCast(cast);
@@ -3086,11 +3086,12 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     if (!seriesForm.title) { toast.error("Please enter title"); return; }
     if (!seriesForm.category) { toast.error("Please select category"); return; }
 
-    const data = {
-      ...seriesForm,
+      const syncedForm = syncSeriesLanguageSummary(seriesForm, seasonsData);
+      const data = {
+      ...syncedForm,
       cast: seriesCast,
-      audioTracks: Array.isArray(seriesForm.audioTracks)
-        ? seriesForm.audioTracks.filter((track: any) => String(track?.label || track?.language || track?.link || "").trim())
+      audioTracks: Array.isArray(syncedForm.audioTracks)
+        ? syncedForm.audioTracks.filter((track: any) => String(track?.label || track?.language || track?.link || "").trim())
         : [],
       seasons: seasonsData,
       type: "webseries",
@@ -3130,7 +3131,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     setSeriesForm({
       tmdbId: data.tmdbId || "", title: data.title || "", logo: data.logo || "", poster: data.poster || "",
       backdrop: data.backdrop || "", trailer: data.trailer || "", year: data.year || "", rating: data.rating || "",
-        language: data.language || "Hindi", category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "", visibility: data.visibility || "public",
+        language: data.language || "Hindi", baseLanguage: data.baseLanguage || data.language || "Hindi", selectedAdminLanguage: data.selectedAdminLanguage || data.baseLanguage || data.language || "Hindi", availableLanguages: Array.isArray(data.availableLanguages) ? data.availableLanguages : [], category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "", visibility: data.visibility || "public",
         weeklyEnabled: data.weeklyEnabled === true, weeklyEveryDays: Math.max(1, Number(data.weeklyEveryDays) || 7), weeklyDaysSinceLast: 0,
         telegramCustomButtonText: data.telegramCustomButton?.text || "",
         telegramCustomButtonUrl: data.telegramCustomButton?.url || "",
