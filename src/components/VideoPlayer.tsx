@@ -211,6 +211,14 @@ interface VideoPlayerProps {
   onLibraryClick?: () => void;
 }
 
+type DownloadEpisodeOption = {
+  index: number;
+  episodeNumber: number;
+  title: string;
+  metaText: string;
+  qualityLinks: Record<string, string>;
+};
+
 const getShortSeasonLabel = (seasonName: string | undefined, index: number) => {
   const normalized = String(seasonName || "").trim();
   const explicitSeasonNumber = normalized.match(/season\s*(\d+)/i)?.[1];
