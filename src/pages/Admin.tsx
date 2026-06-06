@@ -5957,6 +5957,52 @@ ${tgBulkFooter}
                           {languageOptions.map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
                       </div>
+                      <div className="mb-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-xs text-cyan-300 font-medium">Movie Language Links</label>
+                          <button type="button" onClick={() => setMovieForm({ ...movieForm, audioTracks: [...(movieForm.audioTracks || []), buildEmptyAudioTrack()] })} className="text-[10px] text-cyan-300 hover:text-cyan-200 flex items-center gap-1">
+                            <Plus size={10} /> Add Language
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          {((movieForm.audioTracks || []) as any[]).map((track, index) => (
+                            <div key={`movie-audio-${index}`} className="rounded-lg border border-white/10 bg-black/20 p-2.5">
+                              <div className="flex gap-2 mb-2">
+                                <input value={track.label || ""} onChange={e => setMovieForm((prev: any) => {
+                                  const next = [...(prev.audioTracks || [])];
+                                  next[index] = { ...next[index], label: e.target.value };
+                                  return { ...prev, audioTracks: next };
+                                })} className={`${inputClass} flex-1 !py-1.5 !text-[10px]`} placeholder="Label (Hindi dub)" />
+                                <input value={track.language || ""} onChange={e => setMovieForm((prev: any) => {
+                                  const next = [...(prev.audioTracks || [])];
+                                  next[index] = { ...next[index], language: e.target.value };
+                                  return { ...prev, audioTracks: next };
+                                })} className={`${inputClass} w-24 !py-1.5 !text-[10px]`} placeholder="Language" />
+                                <button type="button" onClick={() => setMovieForm((prev: any) => ({ ...prev, audioTracks: (prev.audioTracks || []).filter((_: any, i: number) => i !== index) }))} className="text-red-400 hover:text-red-300 p-1"><Trash2 size={10} /></button>
+                              </div>
+                              <input value={track.link || ""} onChange={e => setMovieForm((prev: any) => {
+                                const next = [...(prev.audioTracks || [])];
+                                next[index] = { ...next[index], link: e.target.value };
+                                return { ...prev, audioTracks: next };
+                              })} className={`${inputClass} w-full !py-1.5 !text-[10px] mb-2`} placeholder="Default language link" />
+                              <div className="grid grid-cols-2 gap-1">
+                                {[
+                                  ["link480", "480p"],
+                                  ["link720", "720p"],
+                                  ["link1080", "1080p"],
+                                  ["link4k", "4K"],
+                                ].map(([field, label]) => (
+                                  <input key={field} value={track[field] || ""} onChange={e => setMovieForm((prev: any) => {
+                                    const next = [...(prev.audioTracks || [])];
+                                    next[index] = { ...next[index], [field]: e.target.value };
+                                    return { ...prev, audioTracks: next };
+                                  })} className={`${inputClass} !py-1 !text-[9px]`} placeholder={`${label} link`} />
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                       <div className="mb-4">
                         <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Category</label>
                         <select value={movieForm.category || ""} onChange={e => setMovieForm({ ...movieForm, category: e.target.value })} className={selectClass}>
