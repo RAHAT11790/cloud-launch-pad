@@ -549,15 +549,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     if (selectedLanguageLabel) return selectedLanguageLabel;
     const explicit = propAudioTracks?.[0]?.language || propAudioTracks?.[0]?.label;
     if (explicit) return explicit;
-    const fallback = String(anime?.language || "").trim();
+    const fallback = String(anime?.language || "")
+      .split(/[,/|]/)
+      .map((item) => item.trim())
+      .filter(Boolean)[0] || "";
     if (fallback) return fallback;
     return "Unknown";
   }, [anime?.language, propAudioTracks, selectedLanguageLabel]);
 
   const languageOptions = useMemo(() => {
     const labels = new Set<string>();
-    const animeLanguage = String(anime?.language || "").trim();
-    if (animeLanguage) labels.add(animeLanguage);
+    String(anime?.language || "")
+      .split(/[,/|]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .forEach((label) => labels.add(label));
     if (propAudioTracks?.length) {
       propAudioTracks.forEach((track) => {
         const label = String(track.label || track.language || "").trim();
