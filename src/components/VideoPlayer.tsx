@@ -226,6 +226,14 @@ const getShortSeasonLabel = (seasonName: string | undefined, index: number) => {
   return `Season ${String(index + 1).padStart(2, "0")}`;
 };
 
+const splitLanguageTokens = (value: string | undefined | null) =>
+  String(value || "")
+    .split(/[,/|]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const getPrimaryLanguageToken = (value: string | undefined | null) => splitLanguageTokens(value)[0] || "";
+
 const formatTime = (t: number) => {
   const m = Math.floor(t / 60);
   const s = Math.floor(t % 60);
