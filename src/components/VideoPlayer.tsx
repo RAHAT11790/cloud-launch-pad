@@ -726,6 +726,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, [currentSeasonIdx]);
 
   useEffect(() => {
+    if (!showDownloadQualityPicker) return;
+    const initialSeasonIdx = currentSeasonIdx ?? 0;
+    setDownloadPanelSeasonIdx(initialSeasonIdx);
+    const activeIdx = episodeList?.findIndex((episode) => episode.active) ?? -1;
+    setDlSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
+  }, [currentSeasonIdx, episodeList, showDownloadQualityPicker]);
+
+  useEffect(() => {
     const unsub = downloadManager.subscribe((snapshot) => {
       setActiveDownloads(new Map(snapshot.downloads));
     });
