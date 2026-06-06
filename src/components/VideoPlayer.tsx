@@ -528,7 +528,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const [shortenLoading, setShortenLoading] = useState(false);
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
-  const [showInfoSheet, setShowInfoSheet] = useState(false);
+  const [showInfoSheet, setShowInfoSheet] = useState(true);
   const [showLanguageSheet, setShowLanguageSheet] = useState(false);
   const [showSeasonSheet, setShowSeasonSheet] = useState(false);
   const [showShareSheet, setShowShareSheet] = useState(false);
@@ -759,19 +759,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       || "";
   }, [availableDownloadQualities]);
 
-  const shareSeason = useMemo(() => {
-    return seasons?.[sharePanelSeasonIdx] || null;
-  }, [seasons, sharePanelSeasonIdx]);
+  const shareFallbackData = useMemo(() => {
+    const seasonIdx = sharePanelSeasonIdx ?? currentSeasonIdx ?? 0;
+    const epIdx = sharePanelEpisodeIdx ?? activeEpisodeIdx;
+    const episodeAware = !!buildShareLinkForEpisode;
+    const url = episodeAware
+      ? buildShareLinkForEpisode?.(seasonIdx, epIdx) || shareLink || (typeof window !== "undefined" ? window.location.href : "")
+      : shareLink || (typeof window !== "undefined" ? window.location.href : "");
+    const titleText = episodeAware
+      ? `${title} • S${String(seasonIdx + 1).padStart(2, "0")} E${String(epIdx + 1).padStart(2, "0")}`
+      : title;
+    const encodedUrl = encodeURIComponent(url);
+    const encodedText = encodeURIComponent(titleText);
 
-  const shareEpisodes = useMemo(() => {
-    if (!shareSeason?.episodes?.length) return [];
-    return shareSeason.episodes.map((episode, index) => ({
-      index,
-      number: episode.episodeNumber || index + 1,
-      title: episode.title || `Episode ${episode.episodeNumber || index + 1}`,
-      active: index === activeEpisodeIdx && sharePanelSeasonIdx === (currentSeasonIdx ?? 0),
-    }));
-  }, [activeEpisodeIdx, currentSeasonIdx, sharePanelSeasonIdx, shareSeason]);
+    return {
+      title: titleText,
+      url,
+      telegram: `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`,
+      whatsapp: `https://wa.me/?text=${encodeURIComponent(`${titleText} ${url}`)}`,
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+    };
+  }, [activeEpisodeIdx, buildShareLinkForEpisode, currentSeasonIdx, shareLink, sharePanelEpisodeIdx, sharePanelSeasonIdx, title]);
 
   useEffect(() => {
     if (!animeId) return;
@@ -1178,14 +1186,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, [animeId, poster, saved, title]);
 
   const handleShare = useCallback(async (seasonIdx?: number, epIdx?: number) => {
-    const hasEpisodeContext = seasonIdx !== undefined || epIdx !== undefined;
+    const resolvedSeasonIdx = seasonIdx ?? currentSeasonIdx ?? 0;
+    const resolvedEpisodeIdx = epIdx ?? activeEpisodeIdx;
+    const hasEpisodeContext = seasonIdx !== undefined || epIdx !== undefined || !!buildShareLinkForEpisode;
     const url = hasEpisodeContext
-      ? buildShareLinkForEpisode?.(seasonIdx, epIdx) || shareLink || (typeof window !== "undefined" ? window.location.href : "")
+      ? buildShareLinkForEpisode?.(resolvedSeasonIdx, resolvedEpisodeIdx) || shareLink || (typeof window !== "undefined" ? window.location.href : "")
       : shareLink || (typeof window !== "undefined" ? window.location.href : "");
     const shareTitle = hasEpisodeContext
-      ? `${title} • S${String((seasonIdx ?? 0) + 1).padStart(2, "0")} E${String((epIdx ?? 0) + 1).padStart(2, "0")}`
+      ? `${title} • S${String(resolvedSeasonIdx + 1).padStart(2, "0")} E${String(resolvedEpisodeIdx + 1).padStart(2, "0")}`
       : title;
     const shareData = { title: shareTitle, text: shareTitle, url };
+    setSharePanelSeasonIdx(resolvedSeasonIdx);
+    setSharePanelEpisodeIdx(resolvedEpisodeIdx);
     try {
       if ((navigator as any).share && (!(navigator as any).canShare || (navigator as any).canShare(shareData))) {
         await (navigator as any).share(shareData);
@@ -1194,13 +1206,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     } catch (err: any) {
       if (err?.name === "AbortError") return;
     }
-    try {
-      await navigator.clipboard?.writeText(url);
-      toast.success(hasEpisodeContext ? "Episode link copied" : "Link copied");
-    } catch {
-      toast.error("Sharing is not supported on this device.");
-    }
-  }, [buildShareLinkForEpisode, shareLink, title]);
+    openInlineSheet("share");
+  }, [activeEpisodeIdx, buildShareLinkForEpisode, currentSeasonIdx, openInlineSheet, shareLink, title]);
 
   const handleOpenAdLink = useCallback(async (url: string, _service?: AdService) => {
     const { openExternalBrowser, openTelegramDeepLink } = await import("@/lib/openExternal");
