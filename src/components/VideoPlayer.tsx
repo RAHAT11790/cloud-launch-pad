@@ -187,6 +187,7 @@ interface VideoPlayerProps {
   title: string;
   subtitle?: string;
   poster?: string;
+  anime?: AnimeItem;
   onClose: () => void;
   onNextEpisode?: () => void;
   episodeList?: { number: number; title?: string; active: boolean; onClick: () => void }[];
@@ -223,7 +224,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, onInfoClick, onLibraryClick }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, onInfoClick, onLibraryClick }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
   // Removed preload anime character image - no longer needed
