@@ -316,6 +316,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const sourceBaseRef = useRef(src);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
+  const [playerHeightPx, setPlayerHeightPx] = useState<number>(0);
+  const [shareFallback, setShareFallback] = useState<{ url: string; title: string } | null>(null);
 
   // ===== AN iframe minimal overlay auto-hide =====
   // Buttons start visible, then auto-hide after 3s. Tapping the iframe area
