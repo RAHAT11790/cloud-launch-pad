@@ -58,6 +58,7 @@ export interface AnimeItem {
   slug?: string;
   dubType?: "official" | "fandub";
   episodeCount?: number;
+  audioTracks?: AudioTrack[];
   cast?: { name: string; character?: string; photo: string }[];
 }
 

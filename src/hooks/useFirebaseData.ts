@@ -47,6 +47,15 @@ export function useFirebaseData() {
           type: "webseries",
           storyline: item.storyline || "",
           cast: Array.isArray(item.cast) ? item.cast : item.cast ? Object.values(item.cast) : undefined,
+          audioTracks: item.audioTracks ? Object.values(item.audioTracks).map((at: any) => ({
+            language: at.language || "",
+            label: at.label || at.language || "",
+            link: at.link || "",
+            link480: at.link480 || undefined,
+            link720: at.link720 || undefined,
+            link1080: at.link1080 || undefined,
+            link4k: at.link4k || undefined,
+          })) : undefined,
           dubType: item.dubType || "official",
           seasons: item.seasons
             ? Object.values(item.seasons).map((s: any) => ({
@@ -105,6 +114,15 @@ export function useFirebaseData() {
           type: "movie",
           storyline: item.storyline || "",
           cast: Array.isArray(item.cast) ? item.cast : item.cast ? Object.values(item.cast) : undefined,
+          audioTracks: item.audioTracks ? Object.values(item.audioTracks).map((at: any) => ({
+            language: at.language || "",
+            label: at.label || at.language || "",
+            link: at.link || "",
+            link480: at.link480 || undefined,
+            link720: at.link720 || undefined,
+            link1080: at.link1080 || undefined,
+            link4k: at.link4k || undefined,
+          })) : undefined,
           dubType: item.dubType || "official",
           movieLink: item.movieLink || "",
           movieLink480: item.movieLink480 || undefined,

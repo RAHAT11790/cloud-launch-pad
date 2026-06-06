@@ -105,6 +105,15 @@ const getMovieSrc = (anime: AnimeItem): string => {
   return [anime.movieLink, anime.movieLink480, anime.movieLink720, anime.movieLink1080, anime.movieLink4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
 };
 
+const getMovieQualityOptions = (anime: AnimeItem): { label: string; src: string }[] => {
+  const qualityOptions: { label: string; src: string }[] = [];
+  if (!isInvalidPlaybackUrl(anime.movieLink480)) qualityOptions.push({ label: "480p", src: anime.movieLink480! });
+  if (!isInvalidPlaybackUrl(anime.movieLink720)) qualityOptions.push({ label: "720p", src: anime.movieLink720! });
+  if (!isInvalidPlaybackUrl(anime.movieLink1080)) qualityOptions.push({ label: "1080p", src: anime.movieLink1080! });
+  if (!isInvalidPlaybackUrl(anime.movieLink4k)) qualityOptions.push({ label: "4K", src: anime.movieLink4k! });
+  return qualityOptions;
+};
+
 const getEpisodeQualityOptions = (ep: Episode): { label: string; src: string }[] => {
   const qualityOptions: { label: string; src: string }[] = [];
   if (!isInvalidPlaybackUrl(ep.link480)) qualityOptions.push({ label: "480p", src: ep.link480! });
@@ -1434,10 +1443,8 @@ const Index = () => {
       } else if (anime.movieLink) {
         src = getMovieSrc(anime);
       subtitle = "Movie";
-        if (!isInvalidPlaybackUrl(anime.movieLink480)) qualityOptions.push({ label: "480p", src: anime.movieLink480! });
-        if (!isInvalidPlaybackUrl(anime.movieLink720)) qualityOptions.push({ label: "720p", src: anime.movieLink720! });
-        if (!isInvalidPlaybackUrl(anime.movieLink1080)) qualityOptions.push({ label: "1080p", src: anime.movieLink1080! });
-        if (!isInvalidPlaybackUrl(anime.movieLink4k)) qualityOptions.push({ label: "4K", src: anime.movieLink4k! });
+        qualityOptions = getMovieQualityOptions(anime);
+        if (anime.audioTracks?.length) audioTracks = anime.audioTracks;
     }
 
     // Handle AnimeSalt video - check ad-gate first
@@ -1928,12 +1935,9 @@ const Index = () => {
           title: anime.title,
           subtitle: "Movie",
           anime,
-          qualityOptions: [
-            !isInvalidPlaybackUrl(anime.movieLink480) ? { label: "480p", src: anime.movieLink480! } : null,
-            !isInvalidPlaybackUrl(anime.movieLink720) ? { label: "720p", src: anime.movieLink720! } : null,
-            !isInvalidPlaybackUrl(anime.movieLink1080) ? { label: "1080p", src: anime.movieLink1080! } : null,
-            !isInvalidPlaybackUrl(anime.movieLink4k) ? { label: "4K", src: anime.movieLink4k! } : null,
-          ].filter(Boolean) as { label: string; src: string }[],
+          audioTracks: anime.audioTracks,
+          qualityOptions: getMovieQualityOptions(anime),
+          resumeTime: item.currentTime || 0,
         });
         setSelectedAnime(null);
       }
@@ -2037,6 +2041,7 @@ const Index = () => {
         subtitle: `${season.name} - Episode ${clickedEp.episodeNumber}`,
         epIdx: i,
         resumeTime: 0,
+        audioTracks: clickedEp.audioTracks,
         qualityOptions: qOpts.length > 0 ? qOpts : undefined,
         nextEpisodeSrc: undefined,
       };
@@ -2075,6 +2080,7 @@ const Index = () => {
       seasonIdx: newSeasonIdx,
       epIdx: 0,
       resumeTime: 0,
+      audioTracks: ep.audioTracks,
       qualityOptions: qOpts.length > 0 ? qOpts : undefined,
       nextEpisodeSrc: undefined,
     };
@@ -2512,6 +2518,7 @@ const Index = () => {
                     subtitle: `${season.name} - Episode ${nextEp.episodeNumber}`,
                     epIdx: nextIdx,
                      resumeTime: 0,
+                     audioTracks: nextEp.audioTracks,
                     qualityOptions: qOpts.length > 0 ? qOpts : undefined,
                     nextEpisodeSrc: undefined,
                   };
