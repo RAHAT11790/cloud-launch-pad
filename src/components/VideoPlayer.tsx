@@ -1155,33 +1155,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     toast.success("Saved to My List");
   }, [animeId, poster, saved, title]);
 
-  const handleShare = useCallback(async () => {
-    const url = shareLink || (typeof window !== "undefined" ? window.location.href : "");
-    const shareData = { title, text: title, url };
-    try {
-      if ((navigator as any).share && (!(navigator as any).canShare || (navigator as any).canShare(shareData))) {
-        await (navigator as any).share(shareData);
-        return;
-      }
-    } catch (err: any) {
-      if (err?.name === "AbortError") return;
-    }
-    try {
-      await navigator.clipboard?.writeText(url);
-      toast.success("Link copied");
-    } catch {
-      toast.error("Sharing is not supported on this device.");
-    }
-  }, [shareLink, title]);
-
-  const handleEpisodeShare = useCallback(async (seasonIdx?: number, epIdx?: number) => {
-    const url = buildShareLinkForEpisode?.(seasonIdx, epIdx)
-      || shareLink
-      || (typeof window !== "undefined" ? window.location.href : "");
-    const epTitle = seasonIdx !== undefined && epIdx !== undefined
-      ? `${title} • S${String(seasonIdx + 1).padStart(2, "0")} E${String(epIdx + 1).padStart(2, "0")}`
+  const handleShare = useCallback(async (seasonIdx?: number, epIdx?: number) => {
+    const hasEpisodeContext = seasonIdx !== undefined || epIdx !== undefined;
+    const url = hasEpisodeContext
+      ? buildShareLinkForEpisode?.(seasonIdx, epIdx) || shareLink || (typeof window !== "undefined" ? window.location.href : "")
+      : shareLink || (typeof window !== "undefined" ? window.location.href : "");
+    const shareTitle = hasEpisodeContext
+      ? `${title} • S${String((seasonIdx ?? 0) + 1).padStart(2, "0")} E${String((epIdx ?? 0) + 1).padStart(2, "0")}`
       : title;
-    const shareData = { title: epTitle, text: epTitle, url };
+    const shareData = { title: shareTitle, text: shareTitle, url };
     try {
       if ((navigator as any).share && (!(navigator as any).canShare || (navigator as any).canShare(shareData))) {
         await (navigator as any).share(shareData);
@@ -1192,7 +1174,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     }
     try {
       await navigator.clipboard?.writeText(url);
-      toast.success("Episode link copied");
+      toast.success(hasEpisodeContext ? "Episode link copied" : "Link copied");
     } catch {
       toast.error("Sharing is not supported on this device.");
     }
