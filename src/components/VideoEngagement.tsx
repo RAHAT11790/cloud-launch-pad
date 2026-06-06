@@ -62,6 +62,14 @@ interface CommentItem {
   ts: number;
 }
 
+const normalizeComment = (id: string, value: any): CommentItem => ({
+  id,
+  uid: String(value?.userId || value?.uid || ""),
+  userName: String(value?.userName || "User"),
+  text: String(value?.text || ""),
+  ts: Number(value?.timestamp || value?.ts || 0),
+});
+
 const VideoEngagement = ({ animeId, title }: Props) => {
   const user = useMemo(() => getLocalUser(), []);
   const [comments, setComments] = useState<CommentItem[]>([]);
@@ -73,13 +81,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
     if (!animeId) return;
     return onValue(ref(db, `comments/${animeId}`), (snap) => {
       const raw = snap.val() || {};
-      const list: CommentItem[] = Object.entries(raw).map(([id, v]: [string, any]) => ({
-        id,
-        uid: String(v?.userId || v?.uid || ""),
-        userName: String(v?.userName || "User"),
-        text: String(v?.text || ""),
-        ts: Number(v?.timestamp || v?.ts || 0),
-      }));
+      const list: CommentItem[] = Object.entries(raw).map(([id, v]: [string, any]) => normalizeComment(id, v));
       list.sort((a, b) => b.ts - a.ts);
       setComments(list);
     });
@@ -121,8 +123,8 @@ const VideoEngagement = ({ animeId, title }: Props) => {
   };
 
   return (
-      <div className="w-full px-0">
-        <div className="rounded-[12px] border border-border/70 bg-card/55 px-3 py-3">
+      <div className="w-full max-w-full min-w-0 overflow-hidden px-0">
+        <div className="w-full max-w-full min-w-0 rounded-[12px] border border-border/70 bg-card/55 px-3 py-3 overflow-hidden">
           <div className="mb-3 flex items-center gap-2">
             <MessageCircle className="h-4 w-4 text-primary" strokeWidth={2} />
             <div>
@@ -165,7 +167,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
           </div>
 
           <div className="mt-3 border-t border-border/60 pt-3">
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full gradient-primary text-xs font-bold text-primary-foreground">
                 {(user?.name || "?").trim().charAt(0).toUpperCase()}
               </div>
@@ -183,7 +185,7 @@ const VideoEngagement = ({ animeId, title }: Props) => {
                 placeholder={user ? `Comment on ${title || "this anime"}...` : "Log in to comment"}
                 disabled={!user || sending}
                 maxLength={500}
-                className="flex-1 rounded-full bg-secondary/60 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+                className="min-w-0 flex-1 rounded-full bg-secondary/60 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
               />
               <button
                 onClick={postComment}
