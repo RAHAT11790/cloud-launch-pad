@@ -3781,7 +3781,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       </div>
                     </div>
                   </div>
-                </div>
               )}
             </div>
           );
