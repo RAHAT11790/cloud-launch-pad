@@ -720,6 +720,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       || "";
   }, [availableDownloadQualities]);
 
+  const shareSeason = useMemo(() => {
+    return seasons?.[sharePanelSeasonIdx] || null;
+  }, [seasons, sharePanelSeasonIdx]);
+
+  const shareEpisodes = useMemo(() => {
+    if (!shareSeason?.episodes?.length) return [];
+    return shareSeason.episodes.map((episode, index) => ({
+      index,
+      number: episode.episodeNumber || index + 1,
+      title: episode.title || `Episode ${episode.episodeNumber || index + 1}`,
+      active: index === activeEpisodeIdx && sharePanelSeasonIdx === (currentSeasonIdx ?? 0),
+    }));
+  }, [activeEpisodeIdx, currentSeasonIdx, sharePanelSeasonIdx, shareSeason]);
+
   useEffect(() => {
     if (!animeId) return;
     if (isGuest()) {
@@ -2146,13 +2160,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
   const scheduleHideTimer = useCallback(() => {
     clearHideTimer();
-    if (adGateActive || showSettings || showAudioPanel || showQualityPanel || showServerPanel || showCcPanel || showDownloadQualityPicker || showInfoSheet || showLanguageSheet || showSeasonSheet) return;
+    if (adGateActive || showSettings || showAudioPanel || showQualityPanel || showServerPanel || showCcPanel || showDownloadQualityPicker || showInfoSheet || showLanguageSheet || showSeasonSheet || showShareSheet || showAddToListSheet || showLibrarySheet) return;
     // Keep controls visible while a video error is showing — user must reach the server switcher
     if (videoError) return;
     hideTimer.current = setTimeout(() => {
       setShowControls(false);
     }, locked ? 2200 : 3800);
-  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showCcPanel, showDownloadQualityPicker, showInfoSheet, showLanguageSheet, showLibrarySheet, showSeasonSheet, showQualityPanel, showServerPanel, showSettings, videoError]);
+  }, [adGateActive, clearHideTimer, locked, showAddToListSheet, showAudioPanel, showCcPanel, showDownloadQualityPicker, showInfoSheet, showLanguageSheet, showLibrarySheet, showSeasonSheet, showQualityPanel, showServerPanel, showSettings, showShareSheet, videoError]);
 
   const resetHideTimer = useCallback(() => {
     setShowControls(true);
