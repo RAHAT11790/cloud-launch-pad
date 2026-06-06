@@ -10,6 +10,7 @@ import Unlock from "./pages/Unlock";
 import UnlockRequired from "./pages/UnlockRequired";
 import DynamicMeta from "./components/DynamicMeta";
 import ManifestManager from "./components/ManifestManager";
+import DownloadProgressOverlay from "./components/DownloadProgressOverlay";
 
 
 const Admin = lazy(() => import("./pages/Admin"));
@@ -46,6 +47,7 @@ const App = () => (
         
         <Toaster />
         <Sonner />
+        <DownloadProgressOverlay />
         <Routes>
           <Route path="/admin" element={<Suspense fallback={<RouteFallback />}><Admin /></Suspense>} />
           <Route path="/unlock" element={<Unlock />} />
