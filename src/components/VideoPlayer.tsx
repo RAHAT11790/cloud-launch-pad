@@ -3361,7 +3361,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
               </div>
             )}
 
-            {!showInfoSheet && !showLanguageSheet && !showSeasonSheet && !showLibrarySheet && !showDownloadQualityPicker && ((suggestedAnime && suggestedAnime.length > 0) || animeId) && (
+            {!inlineSheetOpen && ((suggestedAnime && suggestedAnime.length > 0) || animeId) && (
               <div className="mt-5">
                 <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
                   <button onClick={() => setBottomTab("foryou")} className={`text-[13px] font-bold px-3 py-1.5 rounded-full transition-colors ${bottomTab === "foryou" ? "bg-primary text-primary-foreground" : "bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/10"}`}>
