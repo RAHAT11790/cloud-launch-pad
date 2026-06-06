@@ -535,10 +535,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, [poster, subtitle, title]);
 
   const currentLangLabel = useMemo(() => {
+    if (selectedLanguageLabel) return selectedLanguageLabel;
     const explicit = propAudioTracks?.[0]?.language || propAudioTracks?.[0]?.label;
     if (explicit) return explicit;
     return "Default";
-  }, [propAudioTracks]);
+  }, [propAudioTracks, selectedLanguageLabel]);
+
+  const languageOptions = useMemo(() => {
+    const labels = new Set<string>();
+    if (propAudioTracks?.length) {
+      propAudioTracks.forEach((track) => {
+        const label = String(track.label || track.language || "").trim();
+        if (label) labels.add(label);
+      });
+    }
+    if (labels.size === 0) labels.add(currentLangLabel || "Default");
+    return Array.from(labels);
+  }, [currentLangLabel, propAudioTracks]);
+
+  const infoCast = useMemo(() => {
+    if (!anime?.cast?.length) return [];
+    return anime.cast.filter((person) => person?.name || person?.character || person?.photo).slice(0, 12);
+  }, [anime]);
 
   useEffect(() => {
     if (!animeId) return;
