@@ -110,6 +110,27 @@ class DownloadManager {
     this.pump();
   }
 
+  private async fetchTotalSize(url: string): Promise<number> {
+    try {
+      // Try HEAD first (cheap, no body)
+      const head = await fetch(url, { method: "HEAD", mode: "cors" });
+      const len = head.headers.get("content-length");
+      if (len && Number(len) > 0) return Number(len);
+    } catch {}
+    try {
+      // Fallback: GET with Range bytes=0-0 to read Content-Range
+      const r = await fetch(url, { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" });
+      const range = r.headers.get("content-range");
+      if (range) {
+        const m = /\/(\d+)\s*$/.exec(range);
+        if (m) return Number(m[1]);
+      }
+      const len = r.headers.get("content-length");
+      if (len && Number(len) > 0) return Number(len);
+    } catch {}
+    return 0;
+  }
+
   private startItem(id: string) {
     const item = this.downloads.get(id);
     if (!item || item.status === "cancelled") {
@@ -128,6 +149,16 @@ class DownloadManager {
     });
     this.emit();
 
+    // Probe true file size in background and update UI when known.
+    if (item.url) {
+      this.fetchTotalSize(item.url).then((bytes) => {
+        if (bytes > 0) {
+          const mb = bytes / (1024 * 1024);
+          this.update(id, { totalMB: mb });
+        }
+      }).catch(() => {});
+    }
+
     this.triggerTimer = window.setTimeout(() => {
       const latest = this.downloads.get(id);
       if (!latest || latest.status !== "downloading") return;
@@ -137,9 +168,12 @@ class DownloadManager {
         return;
       }
 
-      this.update(id, { percent: 72, loadedMB: 0.8, totalMB: 1 });
+      const t = latest.totalMB > 1 ? latest.totalMB : 1;
+      this.update(id, { percent: 72, loadedMB: t * 0.72, totalMB: t });
       this.finishTimer = window.setTimeout(() => {
-        this.settleActive("complete", { percent: 100, loadedMB: 1, totalMB: 1 });
+        const final = this.downloads.get(id);
+        const fT = final && final.totalMB > 1 ? final.totalMB : 1;
+        this.settleActive("complete", { percent: 100, loadedMB: fT, totalMB: fT });
       }, 900);
     }, 220);
   }
