@@ -829,18 +829,7 @@ const Index = () => {
 
     const found = allAnime.find((a) => a.id === pendingAnimeId);
     if (found) {
-      // AnimeSalt items need hydration (seasons/episodes are fetched lazily).
-      // Without this, deep-links from /search or shared URLs show an empty detail
-      // page because we set the bare stub directly. Always go through handleCardClick
-      // for AN so the loader runs and episodes actually load.
-      if (found.source === "animesalt") {
-        handleCardClick(found);
-      } else {
-        setSelectedAnime(found);
-      }
-      if (!pathname.startsWith("/anime/") && !pathname.startsWith("/watch/")) {
-        navigate(buildAnimeRoute(found.id), { replace: true });
-      }
+      handleCardClick(found);
       setPendingAnimeId(null);
       return;
     }
@@ -868,9 +857,6 @@ const Index = () => {
           slug,
         };
         handleCardClick(stub);
-        if (!pathname.startsWith("/anime/") && !pathname.startsWith("/watch/")) {
-          navigate(buildAnimeRoute(stub.id), { replace: true });
-        }
       }
     }
 
