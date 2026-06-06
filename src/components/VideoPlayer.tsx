@@ -3415,7 +3415,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
             </button>
 
             <div className="grid grid-cols-4 gap-2 mt-4">
-              <button onClick={() => openInlineSheet("addToList")} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium transition-colors border ${saved || showAddToListSheet ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+              <button onClick={() => { closeInlineSheets(); handleToggleWatchlist(); }} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium transition-colors border ${saved ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
                 <Bookmark className={`w-3.5 h-3.5 flex-shrink-0 ${saved ? 'fill-primary' : ''}`} />
                 <span className="whitespace-nowrap truncate">{saved ? 'Saved' : 'Add to list'}</span>
               </button>
