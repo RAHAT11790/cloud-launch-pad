@@ -1854,13 +1854,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
   const scheduleHideTimer = useCallback(() => {
     clearHideTimer();
-    if (adGateActive || showSettings || showAudioPanel || showQualityPanel || showServerPanel || showCcPanel || showDownloadQualityPicker) return;
+    if (adGateActive || showSettings || showAudioPanel || showQualityPanel || showServerPanel || showCcPanel || showDownloadQualityPicker || showInfoSheet || showLanguageSheet || showSeasonSheet) return;
     // Keep controls visible while a video error is showing — user must reach the server switcher
     if (videoError) return;
     hideTimer.current = setTimeout(() => {
       setShowControls(false);
     }, locked ? 2200 : 3800);
-  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showCcPanel, showDownloadQualityPicker, showQualityPanel, showServerPanel, showSettings, videoError]);
+  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showCcPanel, showDownloadQualityPicker, showInfoSheet, showLanguageSheet, showSeasonSheet, showQualityPanel, showServerPanel, showSettings, videoError]);
 
   const resetHideTimer = useCallback(() => {
     setShowControls(true);
@@ -2647,10 +2647,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
               Sits at top-right and does NOT cover the iframe so AN's controls remain tappable. */}
           {isEmbedPlayback && !locked && (
             <div
-              className={`absolute top-2 right-2 z-30 flex items-center gap-2 transition-opacity duration-200 ${showAnOverlay ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+              className={`absolute top-2 inset-x-2 z-30 flex items-center justify-between transition-opacity duration-200 ${showAnOverlay ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
               onMouseEnter={() => { if (anOverlayTimer.current) clearTimeout(anOverlayTimer.current); }}
               onMouseLeave={scheduleAnOverlayHide}
             >
+              <button onClick={(e) => { e.stopPropagation(); stopAndClosePlayer(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center bg-black/70 backdrop-blur" aria-label="Back">
+                <ArrowLeft className="w-4 h-4 text-white" />
+              </button>
+              <div className="flex items-center gap-2">
               {availableQualities.length > 1 && (
                 <div className="relative">
                   <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-touch-button h-8 px-2.5 rounded-full flex items-center justify-center gap-1 bg-black/70 backdrop-blur ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
@@ -2680,6 +2684,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
               >
                 {isFullscreen ? <Minimize className="w-4 h-4 text-white" /> : <Maximize className="w-4 h-4 text-white" />}
               </button>
+              </div>
             </div>
           )}
 
