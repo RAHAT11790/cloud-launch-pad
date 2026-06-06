@@ -3421,21 +3421,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
               </div>
             </button>
 
-            <div className="grid grid-cols-4 gap-2 mt-4">
-              <button onClick={() => { closeInlineSheets(); handleToggleWatchlist(); }} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium transition-colors border ${saved ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
-                <Bookmark className={`w-3.5 h-3.5 flex-shrink-0 ${saved ? 'fill-primary' : ''}`} />
-                <span className="whitespace-nowrap truncate">{saved ? 'Saved' : 'Add to list'}</span>
+            <div className="grid grid-cols-4 gap-1.5 mt-3">
+              <button onClick={() => { closeInlineSheets(); handleToggleWatchlist(); }} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium transition-colors border ${saved ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+                <Bookmark className={`w-3 h-3 flex-shrink-0 ${saved ? 'fill-primary' : ''}`} />
+                <span className="whitespace-nowrap truncate">{saved ? 'Saved' : 'Add'}</span>
               </button>
-              <button onClick={() => { void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx); }} className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium border transition-colors bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border">
-                <Share2 className="w-3.5 h-3.5 flex-shrink-0" />
+              <button onClick={() => { void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx); }} className="flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium border transition-colors bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border">
+                <Share2 className="w-3 h-3 flex-shrink-0" />
                 <span>Share</span>
               </button>
-              <button onClick={() => openInlineSheet("download", "download")} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-[10px] text-[11px] font-medium border active:scale-95 transition-all ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
-                <Download className="w-3.5 h-3.5 flex-shrink-0" />
-                <span>Download</span>
+              <button onClick={() => openInlineSheet("download", "download")} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium border active:scale-95 transition-all ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+                <Download className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate">Download</span>
               </button>
-              <button onClick={() => openInlineSheet("library")} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-[10px] text-[11px] font-medium border active:scale-95 transition-all ${showLibrarySheet ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
-                <FolderDown className="w-3.5 h-3.5 flex-shrink-0" />
+              <button onClick={() => openInlineSheet("library")} className={`flex items-center justify-center gap-1 py-2 px-1 rounded-full text-[10px] font-medium border active:scale-95 transition-all ${showLibrarySheet ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+                <FolderDown className="w-3 h-3 flex-shrink-0" />
                 <span className="whitespace-nowrap truncate">Library</span>
               </button>
             </div>
