@@ -3864,7 +3864,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
             return `${parts.join(" - ") || "video"}.mp4`;
           };
           const getDownloadUrl = (u: string, quality: string, sub?: string, fallbackUrls: string[] = []): string => {
-            const candidates = [...deriveServerDownloadCandidates(u), ...fallbackUrls].filter(Boolean);
+            const candidates = [...deriveServerDownloadCandidates(u), ...fallbackUrls]
+              .filter(Boolean)
+              .filter((candidate) => !String(candidate).includes("/functions/v1/video-proxy?"));
             const directHttps = pickHttpsDownloadUrl(u, candidates);
             if (directHttps) return directHttps;
             const managedCandidate = [u, ...candidates].find((candidate) => isDirectDownloadCandidate(candidate));
