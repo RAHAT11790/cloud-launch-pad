@@ -3731,15 +3731,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         )}
 
         {!isFullscreen && showSeasonSheet && !!seasons?.length && (
-          <div className="w-full border-t border-white/8 bg-black text-white">
-            <div className="flex items-center justify-between px-5 pt-5 pb-3">
-              <h3 className="text-[18px] font-bold tracking-tight">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
-              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
-                <X className="w-6 h-6" />
+          <div
+            className="fixed left-0 right-0 bottom-0 z-[40] overflow-y-auto overscroll-contain border-t border-white/10 bg-black text-white"
+            style={{ top: playerHeightPx }}
+            data-player-panel="true"
+          >
+            <div className="flex items-center justify-between px-4 pt-3 pb-2">
+              <h3 className="text-[15px] font-bold tracking-tight">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
+              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-5 h-5" />
               </button>
             </div>
             <div className="h-px bg-white/10" />
-            <div className="px-4 pt-4 pb-8 space-y-3">
+            <div className="px-3 pt-3 pb-6 space-y-2">
               {seasons.map((_, idx) => {
                 const label = getShortSeasonLabel(seasons[idx]?.name, idx);
                 const activeSeasonIndex = sheetOrigin === "share" ? sharePanelSeasonIdx : (currentSeasonIdx ?? 0);
@@ -3765,7 +3769,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       onSeasonChange?.(idx);
                       closeInlineSheets();
                     }}
-                    className={`w-full rounded-[14px] px-4 py-5 text-center text-[16px] font-semibold transition-all active:scale-[0.99] ${
+                    className={`w-full rounded-[10px] px-3 py-3 text-center text-[13px] font-semibold transition-all active:scale-[0.99] ${
                       active
                         ? 'bg-gradient-to-r from-cyan-500/25 via-teal-500/20 to-emerald-500/25 text-cyan-300'
                         : 'bg-white/[0.07] text-white/85 hover:bg-white/[0.1]'
