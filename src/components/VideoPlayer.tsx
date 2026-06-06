@@ -3208,32 +3208,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                     </button>
                   </div>
                   <div className="flex items-center gap-1 justify-end flex-nowrap min-w-0 overflow-x-auto scrollbar-hide pl-1">
-                    <button onClick={(e) => { e.stopPropagation(); setShowInfoSheet(true); setShowLanguageSheet(false); setShowSeasonSheet(false); setShowShareSheet(false); setShowLibrarySheet(false); setShowDownloadQualityPicker(false); }} className={`player-control-chip shrink-0 flex h-6 items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold transition-all ${showInfoSheet ? 'gradient-primary text-white' : ''}`}>
-                      <Info className="w-3 h-3" />
-                      <span>Info</span>
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); openInlineSheet("language"); }} className={`player-control-chip shrink-0 flex h-6 items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold transition-all ${showLanguageSheet ? 'gradient-primary text-white' : ''}`}>
-                      <Languages className="w-3 h-3" />
-                      <span>{currentLangLabel}</span>
-                    </button>
-                    {!!seasons?.length && (
-                      <button onClick={(e) => { e.stopPropagation(); openInlineSheet("season"); }} className={`player-control-chip shrink-0 flex h-6 items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold transition-all ${showSeasonSheet ? 'gradient-primary text-white' : ''}`}>
-                        <Tv className="w-3 h-3" />
-                        <span>{activeSeasonLabel}</span>
-                      </button>
-                    )}
-                    <button onClick={(e) => { e.stopPropagation(); void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx); }} className={`player-control-chip shrink-0 flex h-6 items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold transition-all ${showShareSheet ? 'gradient-primary text-white' : ''}`}>
-                      <Share2 className="w-3 h-3" />
-                      <span>Share</span>
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); openInlineSheet("download", "download"); }} className={`player-control-chip shrink-0 flex h-6 items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold transition-all ${showDownloadQualityPicker ? 'gradient-primary text-white' : ''}`}>
-                      <Download className="w-3 h-3" />
-                      <span>Download</span>
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); openInlineSheet("library"); }} className={`player-control-chip shrink-0 flex h-6 items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold transition-all ${showLibrarySheet ? 'gradient-primary text-white' : ''}`}>
-                      <FolderDown className="w-3 h-3" />
-                      <span>List</span>
-                    </button>
                     <span className="player-control-chip text-[10px] px-2 py-0.5 rounded shrink-0 leading-none">{playbackRate}x</span>
                     {availableQualities.length > 1 && (
                       <div className="relative shrink-0">
