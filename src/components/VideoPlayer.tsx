@@ -863,13 +863,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     }
   }, [availableDownloadQualities, preferredDownloadQuality, selectedDownloadQuality]);
 
+  // Track the video container's rendered height so inline overlays can cover
+  // exactly the area below the player (regardless of aspect ratio / orientation).
   useEffect(() => {
-    if (!(showInfoSheet || showLanguageSheet || showSeasonSheet || showShareSheet || showAddToListSheet || showLibrarySheet || showDownloadQualityPicker)) return;
-    const id = requestAnimationFrame(() => {
-      (playerSheetAnchorRef.current || downloadPanelRef.current)?.scrollIntoView({ behavior: "auto", block: "start" });
-    });
-    return () => cancelAnimationFrame(id);
-  }, [showAddToListSheet, showDownloadQualityPicker, showInfoSheet, showLanguageSheet, showLibrarySheet, showSeasonSheet, showShareSheet]);
+    const el = videoContainerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => setPlayerHeightPx(Math.round(el.getBoundingClientRect().height));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, []);
+
+  // Lock body scroll while an overlay is open so the player stays anchored.
+  // (No scrollIntoView needed — the overlays are fixed to the player edge.)
 
   const closeInlineSheets = useCallback(() => {
     setShowInfoSheet(false);
