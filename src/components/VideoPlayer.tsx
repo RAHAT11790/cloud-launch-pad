@@ -44,7 +44,6 @@ const PROXY_SERVER_LIMIT = 3;
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { pickHttpsDownloadUrl, isHttpsDownloadableUrl } from "@/lib/downloadSources";
-import { buildVideoDownloadUrl } from "@/lib/videoDownload";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 // Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
@@ -598,14 +597,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     if (selectedLanguageLabel) return selectedLanguageLabel;
     const explicit = propAudioTracks?.[0]?.language || propAudioTracks?.[0]?.label;
     if (explicit) return getPrimaryLanguageToken(explicit) || explicit;
-    const fallback = getPrimaryLanguageToken(anime?.language);
+    const fallback = getPrimaryLanguageToken(anime?.baseLanguage || anime?.language);
     if (fallback) return fallback;
     return "Unknown";
-  }, [anime?.language, propAudioTracks, selectedLanguageLabel]);
+  }, [anime?.baseLanguage, anime?.language, propAudioTracks, selectedLanguageLabel]);
 
   const languageOptions = useMemo(() => {
     const labels = new Set<string>();
-    splitLanguageTokens(anime?.language).forEach((label) => labels.add(label));
+    splitLanguageTokens(anime?.baseLanguage || anime?.language).forEach((label) => labels.add(label));
+    (anime?.availableLanguages || []).forEach((label) => labels.add(label));
     if (propAudioTracks?.length) {
       propAudioTracks.forEach((track) => {
         splitLanguageTokens(String(track.label || track.language || "")).forEach((label) => labels.add(label));
@@ -613,12 +613,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     }
     if (labels.size === 0 && currentLangLabel) labels.add(currentLangLabel);
     return Array.from(labels);
-  }, [anime?.language, currentLangLabel, propAudioTracks]);
+  }, [anime?.availableLanguages, anime?.baseLanguage, anime?.language, currentLangLabel, propAudioTracks]);
 
   const activeSeasonLabel = useMemo(() => getShortSeasonLabel(seasons?.[currentSeasonIdx ?? 0]?.name, currentSeasonIdx ?? 0), [currentSeasonIdx, seasons]);
 
   const normalizedLanguageTracks = useMemo(() => {
-    const fallbackLanguage = String(anime?.language || "").trim() || currentLangLabel;
+    const fallbackLanguage = String(anime?.baseLanguage || anime?.language || "").trim() || currentLangLabel;
     const baseTrack = {
       language: fallbackLanguage,
       label: fallbackLanguage,
@@ -628,7 +628,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       link1080: anime?.movieLink1080,
       link4k: anime?.movieLink4k,
     };
-    const pool = propAudioTracks?.length ? propAudioTracks : [baseTrack];
+    const pool = [baseTrack, ...(propAudioTracks || [])];
     const unique = new Map<string, typeof baseTrack>();
     pool.forEach((track) => {
       const label = getPrimaryLanguageToken(track.label || track.language || fallbackLanguage) || fallbackLanguage;
@@ -644,7 +644,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       });
     });
     return Array.from(unique.values());
-  }, [anime?.language, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, currentLangLabel, propAudioTracks, src]);
+  }, [anime?.baseLanguage, anime?.language, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, currentLangLabel, propAudioTracks, src]);
 
   const activeLanguageTrack = useMemo(() => {
     const selectedKey = currentLangLabel.trim().toLowerCase();
@@ -824,8 +824,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, [animeId, saved]);
 
   useEffect(() => {
-    setSelectedLanguageLabel(propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || "");
-  }, [propAudioTracks, src]);
+    setSelectedLanguageLabel(getPrimaryLanguageToken(anime?.baseLanguage || anime?.language) || propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || "");
+  }, [anime?.baseLanguage, anime?.language, propAudioTracks, src]);
 
   useEffect(() => {
     if (!normalizedLanguageTracks.length) {
