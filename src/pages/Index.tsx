@@ -2540,7 +2540,12 @@ const Index = () => {
           nextEpisodeSrc={playerState.nextEpisodeSrc}
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
           shareLink={buildShareLink(playerState.anime.id, playerState.seasonIdx, playerState.epIdx)}
-          onLibraryClick={() => undefined}
+          onLibraryClick={(animeId) => {
+            if (!animeId) return;
+            const targetAnime = allAnime.find((item) => item.id === animeId);
+            if (!targetAnime) return;
+            void handleCardClick(targetAnime);
+          }}
           suggestedAnime={suggestedAnime}
         />
       </div>
