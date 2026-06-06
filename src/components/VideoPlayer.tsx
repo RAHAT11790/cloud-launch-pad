@@ -781,6 +781,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, [currentSeasonIdx]);
 
   useEffect(() => {
+    setSharePanelSeasonIdx(currentSeasonIdx ?? 0);
+  }, [currentSeasonIdx]);
+
+  useEffect(() => {
+    setSharePanelEpisodeIdx(activeEpisodeIdx);
+  }, [activeEpisodeIdx]);
+
+  useEffect(() => {
     if (!showDownloadQualityPicker) return;
     const initialSeasonIdx = currentSeasonIdx ?? 0;
     setDownloadPanelSeasonIdx(initialSeasonIdx);
@@ -808,14 +816,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, [showDownloadQualityPicker]);
 
   const closeInlineSheets = useCallback(() => {
-    closeInlineSheets();
+    setShowInfoSheet(false);
+    setShowLanguageSheet(false);
+    setShowSeasonSheet(false);
+    setShowShareSheet(false);
+    setShowAddToListSheet(false);
+    setShowLibrarySheet(false);
+    setShowDownloadQualityPicker(false);
     setSheetOrigin("resource");
   }, []);
 
-  const openInlineSheet = useCallback((sheet: "info" | "language" | "season" | "download" | "library", origin: "resource" | "download" = "resource") => {
+  const openInlineSheet = useCallback((sheet: "info" | "language" | "season" | "download" | "library" | "share" | "addToList", origin: "resource" | "download" = "resource") => {
     setShowInfoSheet(sheet === "info");
     setShowLanguageSheet(sheet === "language");
     setShowSeasonSheet(sheet === "season");
+    setShowShareSheet(sheet === "share");
+    setShowAddToListSheet(sheet === "addToList");
     setShowLibrarySheet(sheet === "library");
     setShowDownloadQualityPicker(sheet === "download");
     setSheetOrigin(origin);
@@ -827,7 +843,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     closeInlineSheets();
   }, [closeInlineSheets]);
 
-  const inlineSheetOpen = showInfoSheet || showLanguageSheet || showSeasonSheet || showLibrarySheet || showDownloadQualityPicker;
+  const inlineSheetOpen = showInfoSheet || showLanguageSheet || showSeasonSheet || showShareSheet || showAddToListSheet || showLibrarySheet || showDownloadQualityPicker;
 
   useEffect(() => {
     const unsub = downloadManager.subscribe((snapshot) => {
