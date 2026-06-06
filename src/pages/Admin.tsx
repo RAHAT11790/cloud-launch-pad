@@ -3058,14 +3058,15 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
               episodes: Array(epCount).fill(null).map((_, i) => ({
                 episodeNumber: i + 1,
                 title: episodes[i]?.name || `Episode ${i + 1}`,
-                link: ""
+                link: "",
+                audioTracks: []
               }))
             });
           } catch {
             newSeasons.push({
               name: season.name, seasonNumber: season.season_number,
               episodes: Array(season.episode_count).fill(null).map((_, i) => ({
-                episodeNumber: i + 1, title: `Episode ${i + 1}`, link: ""
+                episodeNumber: i + 1, title: `Episode ${i + 1}`, link: "", audioTracks: []
               }))
             });
           }
