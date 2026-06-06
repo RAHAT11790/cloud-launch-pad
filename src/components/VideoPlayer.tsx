@@ -667,8 +667,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, [currentDownloadLanguageLabel, normalizedLanguageTracks]);
 
   const movieQualityLinks = useMemo(() => {
+    const fallbackTrack = normalizedLanguageTracks[0] || null;
     return collectDownloadQualityLinks(
-      activeLanguageTrack,
+      fallbackTrack,
       {
         link: anime?.movieLink || src,
         link480: anime?.movieLink480,
@@ -677,7 +678,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         link4k: anime?.movieLink4k,
       },
     );
-  }, [activeLanguageTrack, anime?.movieLink, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, src]);
+  }, [anime?.movieLink, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, normalizedLanguageTracks, src]);
 
   const infoCast = useMemo(() => {
     if (!anime?.cast?.length) return [];
