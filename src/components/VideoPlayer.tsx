@@ -3500,7 +3500,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                   </div>
                 )}
 
-                {bottomTab === "comments" && animeId && <VideoEngagement animeId={animeId} title={title} />}
+                {bottomTab === "comments" && animeId && (
+                  <div className="min-w-0 overflow-hidden">
+                    <VideoEngagement animeId={animeId} title={title} />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -3900,7 +3904,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
             for (const idx of orderedIdxs) {
               const ep = panelEpisodes.find((episode) => episode.index === idx);
               if (!ep) { skipped++; continue; }
-              const epSubtitle = `${activeSeasonLabel} - Episode ${ep.episodeNumber}`;
+              const seasonLabel = getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx);
+              const epSubtitle = `${seasonLabel} - Episode ${ep.episodeNumber}`;
               const epUrl = getDownloadUrl(
                 pickEpUrlForQuality(ep, quality),
                 quality,
@@ -4018,7 +4023,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                                 </span>
                                 <span className="min-w-0 flex-1">
                                   <span className="block text-[13px] font-medium text-white">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
-                                  <span className="block text-[11px] text-white/55 mt-0.5 truncate">{qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} link`}</span>
+                                  <span className="block text-[11px] text-white/55 mt-0.5 truncate">{qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} file`}</span>
                                 </span>
                               </button>
                             );
@@ -4030,8 +4035,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
                   <div className="p-3 border-t border-white/10 bg-black">
                     <div className="flex items-center gap-2.5">
-                      <button onClick={toggleAll} className={`flex items-center gap-1.5 text-[11px] ${dlSelectedEpisodes.size === downloadEpisodes.length && downloadEpisodes.length > 0 ? 'text-white' : 'text-white/55'}`}>
-                        <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${dlSelectedEpisodes.size === downloadEpisodes.length && downloadEpisodes.length > 0 ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}><Check className="w-3 h-3" /></span>
+                      <button onClick={toggleAll} className={`flex items-center gap-1.5 text-[11px] ${dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0 ? 'text-white' : 'text-white/55'}`}>
+                        <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0 ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}><Check className="w-3 h-3" /></span>
                         <span>All</span>
                       </button>
                       <button
