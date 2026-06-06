@@ -3058,10 +3058,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         </div>
 
         {!isFullscreen && !adGateActive && !deviceBlocked && !unlockBlocked && (
-          <div className="w-full px-5 pt-5 pb-2">
+          <div className="w-full px-5 pt-4 pb-2">
             <button
               type="button"
-              onClick={() => onInfoClick?.()}
+              onClick={() => setShowInfoSheet(true)}
               className="w-full text-left active:opacity-80 transition-opacity"
             >
               <div className="flex items-start gap-2">
@@ -3090,7 +3090,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                 <Share2 className="w-3.5 h-3.5 flex-shrink-0" />
                 <span>Share</span>
               </button>
-              <button onClick={() => setShowDownloadQualityPicker(true)} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium border active:scale-95 transition-all ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+              <button onClick={() => setShowDownloadQualityPicker(true)} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-[10px] text-[11px] font-medium border active:scale-95 transition-all ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
                 <Download className="w-3.5 h-3.5 flex-shrink-0" />
                 <span>Download</span>
               </button>
@@ -3106,12 +3106,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                   <h3 className="text-[15px] font-bold text-foreground">Resources</h3>
                 </div>
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
-                  <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
+                  <button onClick={() => setShowLanguageSheet(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
                     {currentLangLabel}
                     <ChevronDown className="w-3.5 h-3.5" />
                   </button>
                   {seasons && seasons.length > 0 && (
-                    <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
+                    <button onClick={() => setShowSeasonSheet(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
                       {seasons[currentSeasonIdx ?? 0]?.name || `Season ${(currentSeasonIdx ?? 0) + 1}`}
                       <ChevronDown className="w-3.5 h-3.5" />
                     </button>
