@@ -4070,6 +4070,57 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
       </div>
 
+      {/* ============ Share Fallback Menu ============ */}
+      {shareFallback && (() => {
+        const u = encodeURIComponent(shareFallback.url);
+        const t = encodeURIComponent(shareFallback.title);
+        const targets = [
+          { name: "WhatsApp", color: "from-green-500 to-emerald-500", href: `https://api.whatsapp.com/send?text=${t}%20${u}` },
+          { name: "Telegram", color: "from-sky-500 to-blue-500", href: `https://t.me/share/url?url=${u}&text=${t}` },
+          { name: "Facebook", color: "from-blue-600 to-indigo-600", href: `https://www.facebook.com/sharer/sharer.php?u=${u}` },
+          { name: "X / Twitter", color: "from-slate-700 to-black", href: `https://twitter.com/intent/tweet?url=${u}&text=${t}` },
+          { name: "Messenger", color: "from-blue-500 to-purple-500", href: `https://www.facebook.com/dialog/send?link=${u}&app_id=140586622674265&redirect_uri=${u}` },
+          { name: "Email", color: "from-amber-500 to-orange-500", href: `mailto:?subject=${t}&body=${u}` },
+        ];
+        return (
+          <div className="fixed inset-0 z-[600] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShareFallback(null)}>
+            <div className="w-full sm:max-w-sm bg-zinc-950 border-t sm:border border-white/10 rounded-t-2xl sm:rounded-2xl p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-[14px] font-bold text-white">Share to</h3>
+                <button onClick={() => setShareFallback(null)} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-[11px] text-white/55 truncate">{shareFallback.title}</p>
+              <div className="grid grid-cols-3 gap-2.5">
+                {targets.map((t) => (
+                  <a
+                    key={t.name}
+                    href={t.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setTimeout(() => setShareFallback(null), 50)}
+                    className={`flex flex-col items-center justify-center gap-1.5 rounded-[10px] bg-gradient-to-br ${t.color} text-white text-[11px] font-semibold py-3 active:scale-95`}
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span>{t.name}</span>
+                  </a>
+                ))}
+              </div>
+              <button
+                onClick={async () => {
+                  try { await navigator.clipboard?.writeText(shareFallback.url); toast.success("Link copied"); } catch { toast.error("Copy failed"); }
+                  setShareFallback(null);
+                }}
+                className="w-full h-10 rounded-[10px] bg-white/[0.08] text-white text-[12px] font-semibold border border-white/10 active:scale-[0.98]"
+              >
+                Copy link
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Offline Video Player Overlay */}
       {offlinePlaySrc && offlinePlayInfo && (
         <div className="fixed inset-0 z-[500] bg-black flex flex-col">
