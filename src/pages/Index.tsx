@@ -2549,7 +2549,7 @@ const Index = () => {
             if (!targetAnime) return;
             void handleCardClick(targetAnime);
           }}
-          suggestedAnime={suggestedAnime}
+          suggestedAnime={suggestedAnimeImmediate}
         />
       </div>
     );
