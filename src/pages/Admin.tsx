@@ -3634,6 +3634,98 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     link4k: "",
   }), []);
 
+  const normalizeLanguageValue = useCallback((value?: string | null) => String(value || "").trim(), []);
+
+  const getCardLanguageLabel = useCallback((languages: string[]) => {
+    const cleaned = Array.from(new Set(languages.map((item) => normalizeLanguageValue(item)).filter(Boolean)));
+    if (cleaned.length === 0) return "Hindi";
+    if (cleaned.length === 1) return cleaned[0];
+    if (cleaned.length === 2) return "Dual";
+    return "Multiple";
+  }, [normalizeLanguageValue]);
+
+  const getEpisodeTrackForLanguage = useCallback((episode: any, language: string) => {
+    const key = normalizeLanguageValue(language).toLowerCase();
+    return ((episode?.audioTracks || []) as any[]).find((track) => {
+      const label = normalizeLanguageValue(track?.label || track?.language).toLowerCase();
+      return !!label && label === key;
+    });
+  }, [normalizeLanguageValue]);
+
+  const ensureEpisodeTrackForLanguage = useCallback((episode: any, language: string) => {
+    const existing = getEpisodeTrackForLanguage(episode, language);
+    if (existing) return existing;
+    const normalized = normalizeLanguageValue(language);
+    const created = buildEmptyAudioTrack();
+    created.language = normalized;
+    created.label = normalized;
+    if (!Array.isArray(episode.audioTracks)) episode.audioTracks = [];
+    episode.audioTracks.push(created);
+    return created;
+  }, [buildEmptyAudioTrack, getEpisodeTrackForLanguage, normalizeLanguageValue]);
+
+  const buildLanguageSummaryFromTracks = useCallback((tracks?: any[]) => {
+    const langs = Array.from(new Set(((tracks || []) as any[])
+      .map((track) => normalizeLanguageValue(track?.label || track?.language))
+      .filter(Boolean)));
+    return {
+      list: langs,
+      label: getCardLanguageLabel(langs),
+    };
+  }, [getCardLanguageLabel, normalizeLanguageValue]);
+
+  const syncSeriesLanguageSummary = useCallback((form: any, seasons: any[]) => {
+    const seasonLanguages = new Set<string>();
+    (seasons || []).forEach((season: any) => {
+      (season?.episodes || []).forEach((ep: any) => {
+        ((ep?.audioTracks || []) as any[]).forEach((track) => {
+          const value = normalizeLanguageValue(track?.label || track?.language);
+          if (value) seasonLanguages.add(value);
+        });
+      });
+    });
+
+    const ordered = Array.from(seasonLanguages);
+    const selectedBase = normalizeLanguageValue(form?.selectedAdminLanguage);
+    const fallbackBase = normalizeLanguageValue(form?.baseLanguage || form?.language || ordered[0] || "Hindi");
+    const resolvedBase = selectedBase || fallbackBase || "Hindi";
+
+    return {
+      ...form,
+      baseLanguage: resolvedBase,
+      selectedAdminLanguage: ordered.includes(resolvedBase) ? resolvedBase : (ordered[0] || resolvedBase),
+      availableLanguages: ordered,
+      language: getCardLanguageLabel(ordered.length ? ordered : [resolvedBase]),
+      audioTracks: ordered.map((lang) => ({ language: lang, label: lang, link: "" })),
+    };
+  }, [getCardLanguageLabel, normalizeLanguageValue]);
+
+  const updateSeriesEpisodeLanguageLink = useCallback((sIdx: number, eIdx: number, field: string, value: string, language?: string) => {
+    setSeasonsData((prev) => {
+      const copy = [...prev];
+      const season = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
+      const episode = { ...season.episodes[eIdx] } as any;
+      const targetLanguage = normalizeLanguageValue(language || seriesForm?.selectedAdminLanguage || seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
+
+      if (targetLanguage.toLowerCase() === normalizeLanguageValue(seriesForm?.baseLanguage || seriesForm?.language || "Hindi").toLowerCase()) {
+        episode[field] = value;
+      } else {
+        const track = ensureEpisodeTrackForLanguage(episode, targetLanguage);
+        track[field] = value;
+      }
+
+      season.episodes[eIdx] = episode;
+      copy[sIdx] = season;
+      return copy;
+    });
+  }, [ensureEpisodeTrackForLanguage, normalizeLanguageValue, seriesForm]);
+
+  const ensureSeriesLanguageTab = useCallback((language: string) => {
+    const normalized = normalizeLanguageValue(language);
+    if (!normalized) return;
+    setSeriesForm((prev: any) => syncSeriesLanguageSummary({ ...(prev || {}), selectedAdminLanguage: normalized }, seasonsData));
+  }, [normalizeLanguageValue, seasonsData, syncSeriesLanguageSummary]);
+
   // Season/Episode helpers
   const addSeason = (name = "", episodeCount = 1) => {
     setSeasonsData(prev => [...prev, {
