@@ -576,6 +576,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, [animeId]);
 
   useEffect(() => {
+    setSelectedLanguageLabel(propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || "");
+  }, [propAudioTracks, src]);
+
+  useEffect(() => {
     const unsub = downloadManager.subscribe((snapshot) => {
       setActiveDownloads(new Map(snapshot.downloads));
     });
