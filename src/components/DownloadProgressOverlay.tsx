@@ -8,7 +8,11 @@ const STORAGE_KEY = "rs_download_overlay_pos";
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-const formatMb = (value: number) => `${value.toFixed(value >= 100 ? 0 : 1)} MB`;
+const formatMb = (value: number) => {
+  if (!value || value <= 0) return "0 MB";
+  if (value >= 1024) return `${(value / 1024).toFixed(2)} GB`;
+  return `${value.toFixed(value >= 100 ? 0 : 1)} MB`;
+};
 
 export default function DownloadProgressOverlay() {
   const [snapshot, setSnapshot] = useState<DownloadQueueSnapshot>(() => downloadManager.getSnapshotState());
