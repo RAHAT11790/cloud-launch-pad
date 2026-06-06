@@ -59,6 +59,24 @@ class DownloadManager {
   private triggerTimer: number | null = null;
   private finishTimer: number | null = null;
 
+  private isProxyDownloadUrl(url: string) {
+    return /\/functions\/v1\/video-proxy\?/i.test(String(url || ""));
+  }
+
+  private async fetchContentLength(url: string, init?: RequestInit): Promise<number> {
+    try {
+      const response = await fetch(url, init);
+      const len = response.headers.get("content-length");
+      if (len && Number(len) > 0) return Number(len);
+      const range = response.headers.get("content-range");
+      if (range) {
+        const match = /\/(\d+)\s*$/.exec(range);
+        if (match && Number(match[1]) > 0) return Number(match[1]);
+      }
+    } catch {}
+    return 0;
+  }
+
   private getSnapshot(): DownloadQueueSnapshot {
     const values = Array.from(this.downloads.values());
     return {
@@ -113,26 +131,21 @@ class DownloadManager {
   private async fetchTotalSize(url: string): Promise<number> {
     const candidate = String(url || "").trim();
     if (!candidate) return 0;
-    try {
-      // Try HEAD first (cheap, no body)
-      const head = await fetch(candidate, { method: "HEAD", mode: "cors" });
-      const len = head.headers.get("content-length");
-      if (len && Number(len) > 0) return Number(len);
-      const disposition = head.headers.get("content-disposition") || "";
-      const sizeHint = /size=(\d+)/i.exec(disposition)?.[1];
-      if (sizeHint && Number(sizeHint) > 0) return Number(sizeHint);
-    } catch {}
-    try {
-      // Fallback: GET with Range bytes=0-0 to read Content-Range
-      const r = await fetch(candidate, { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" });
-      const range = r.headers.get("content-range");
-      if (range) {
-        const m = /\/(\d+)\s*$/.exec(range);
-        if (m) return Number(m[1]);
-      }
-      const len = r.headers.get("content-length");
-      if (len && Number(len) > 0) return Number(len);
-    } catch {}
+    const probePlans: RequestInit[] = this.isProxyDownloadUrl(candidate)
+      ? [
+          { method: "HEAD" },
+          { method: "GET", headers: { Range: "bytes=0-0" } },
+        ]
+      : [
+          { method: "HEAD", mode: "cors" },
+          { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" },
+          { method: "GET", mode: "cors" },
+        ];
+
+    for (const init of probePlans) {
+      const length = await this.fetchContentLength(candidate, init);
+      if (length > 0) return length;
+    }
     return 0;
   }
 
