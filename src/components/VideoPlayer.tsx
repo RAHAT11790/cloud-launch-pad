@@ -3476,7 +3476,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
           <div className="w-full bg-black text-white">
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <h3 className="text-[20px] font-bold tracking-tight">More details</h3>
-              <button onClick={closeInlineSheets} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
+              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -3534,7 +3534,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
           <div className="w-full border-t border-border bg-background">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <h3 className="text-[15px] font-bold text-foreground">My list</h3>
-              <button onClick={closeInlineSheets} className="h-10 w-10 flex items-center justify-center rounded-full bg-foreground/[0.06] text-foreground/80">
+              <button onClick={handleInlineSheetClose} className="h-10 w-10 flex items-center justify-center rounded-full bg-foreground/[0.06] text-foreground/80">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -3567,7 +3567,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
           <div className="w-full bg-black text-white">
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <h3 className="text-[18px] font-bold tracking-tight">Select language</h3>
-              <button onClick={closeInlineSheets} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
+              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -3603,7 +3603,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
           <div className="w-full bg-black text-white">
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <h3 className="text-[18px] font-bold tracking-tight">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
-              <button onClick={closeInlineSheets} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
+              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
                 <X className="w-6 h-6" />
               </button>
             </div>
