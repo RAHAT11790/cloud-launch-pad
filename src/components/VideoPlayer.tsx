@@ -505,7 +505,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const [showShareSheet, setShowShareSheet] = useState(false);
   const [showAddToListSheet, setShowAddToListSheet] = useState(false);
   const [showLibrarySheet, setShowLibrarySheet] = useState(false);
-  const [sheetOrigin, setSheetOrigin] = useState<"resource" | "download">("resource");
+  const [sheetOrigin, setSheetOrigin] = useState<"resource" | "download" | "share">("resource");
   const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
   const [sharePanelSeasonIdx, setSharePanelSeasonIdx] = useState<number>(currentSeasonIdx ?? 0);
   const [sharePanelEpisodeIdx, setSharePanelEpisodeIdx] = useState<number>(0);
@@ -840,7 +840,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     setSheetOrigin("resource");
   }, []);
 
-  const openInlineSheet = useCallback((sheet: "info" | "language" | "season" | "download" | "library" | "share" | "addToList", origin: "resource" | "download" = "resource") => {
+  const openInlineSheet = useCallback((sheet: "info" | "language" | "season" | "download" | "library" | "share" | "addToList", origin: "resource" | "download" | "share" = "resource") => {
     setShowInfoSheet(sheet === "info");
     setShowLanguageSheet(sheet === "language");
     setShowSeasonSheet(sheet === "season");
