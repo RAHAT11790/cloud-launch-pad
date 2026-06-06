@@ -5308,7 +5308,48 @@ ${tgBulkFooter}
                                       <Trash2 size={12} />
                                     </button>
                                   </div>
-                                  <div className="space-y-2.5">
+                                    <div className="space-y-2.5">
+                                      {(() => {
+                                        const selectedAdminLanguage = normalizeLanguageValue(seriesForm?.selectedAdminLanguage || seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
+                                        const baseLanguage = normalizeLanguageValue(seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
+                                        const currentTrack = selectedAdminLanguage.toLowerCase() === baseLanguage.toLowerCase()
+                                          ? null
+                                          : getEpisodeTrackForLanguage(ep, selectedAdminLanguage);
+                                        const currentLanguageFields = {
+                                          link: currentTrack?.link ?? ep.link ?? "",
+                                          link480: currentTrack?.link480 ?? ep.link480 ?? "",
+                                          link720: currentTrack?.link720 ?? ep.link720 ?? "",
+                                          link1080: currentTrack?.link1080 ?? ep.link1080 ?? "",
+                                          link4k: currentTrack?.link4k ?? ep.link4k ?? "",
+                                        };
+                                        return (
+                                          <div className="rounded-lg border border-cyan-500/15 bg-cyan-500/5 px-2.5 py-2">
+                                            <p className="text-[10px] font-semibold text-cyan-300">Language: {selectedAdminLanguage}</p>
+                                            <p className="mt-0.5 text-[9px] text-cyan-100/60">
+                                              {selectedAdminLanguage.toLowerCase() === baseLanguage.toLowerCase() ? "This is the base language." : "This language has its own separate episode links."}
+                                            </p>
+                                            {selectedAdminLanguage.toLowerCase() !== baseLanguage.toLowerCase() && !currentTrack && (
+                                              <p className="mt-1 text-[9px] text-white/50">No links yet for this language. Add them below.</p>
+                                            )}
+                                            <div className="mt-2 space-y-2.5">
+                                              <div>
+                                                <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Default</span>
+                                                <textarea value={currentLanguageFields.link} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, "link", e.target.value, selectedAdminLanguage)}
+                                                  className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder="Default link" rows={2} />
+                                              </div>
+                                              {["link480", "link720", "link1080", "link4k"].map(q => (
+                                                <div key={`${selectedAdminLanguage}-${q}`}>
+                                                  <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">
+                                                    {q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"}
+                                                  </span>
+                                                  <textarea value={(currentLanguageFields as any)[q] || ""} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, q, e.target.value, selectedAdminLanguage)}
+                                                    className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder={`${q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"} link (optional)`} rows={2} />
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
                                     <div>
                                       <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Default</span>
                                       <textarea value={ep.link} onChange={e => updateEpisodeLink(sIdx, eIdx, e.target.value)}
