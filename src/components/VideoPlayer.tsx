@@ -759,27 +759,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       || "";
   }, [availableDownloadQualities]);
 
-  const shareFallbackData = useMemo(() => {
-    const seasonIdx = sharePanelSeasonIdx ?? currentSeasonIdx ?? 0;
-    const epIdx = sharePanelEpisodeIdx ?? activeEpisodeIdx;
-    const episodeAware = !!buildShareLinkForEpisode;
-    const url = episodeAware
-      ? buildShareLinkForEpisode?.(seasonIdx, epIdx) || shareLink || (typeof window !== "undefined" ? window.location.href : "")
-      : shareLink || (typeof window !== "undefined" ? window.location.href : "");
-    const titleText = episodeAware
-      ? `${title} • S${String(seasonIdx + 1).padStart(2, "0")} E${String(epIdx + 1).padStart(2, "0")}`
-      : title;
-    const encodedUrl = encodeURIComponent(url);
-    const encodedText = encodeURIComponent(titleText);
+  const shareSeason = useMemo(() => {
+    return seasons?.[sharePanelSeasonIdx] || null;
+  }, [seasons, sharePanelSeasonIdx]);
 
-    return {
-      title: titleText,
-      url,
-      telegram: `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`,
-      whatsapp: `https://wa.me/?text=${encodeURIComponent(`${titleText} ${url}`)}`,
-      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
-    };
-  }, [activeEpisodeIdx, buildShareLinkForEpisode, currentSeasonIdx, shareLink, sharePanelEpisodeIdx, sharePanelSeasonIdx, title]);
+  const shareEpisodes = useMemo(() => {
+    if (!shareSeason?.episodes?.length) return [];
+    return shareSeason.episodes.map((episode, index) => ({
+      index,
+      number: episode.episodeNumber || index + 1,
+      title: episode.title || `Episode ${episode.episodeNumber || index + 1}`,
+      active: index === activeEpisodeIdx && sharePanelSeasonIdx === (currentSeasonIdx ?? 0),
+    }));
+  }, [activeEpisodeIdx, currentSeasonIdx, sharePanelSeasonIdx, shareSeason]);
 
   useEffect(() => {
     if (!animeId) return;
@@ -1186,18 +1178,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, [animeId, poster, saved, title]);
 
   const handleShare = useCallback(async (seasonIdx?: number, epIdx?: number) => {
-    const resolvedSeasonIdx = seasonIdx ?? currentSeasonIdx ?? 0;
-    const resolvedEpisodeIdx = epIdx ?? activeEpisodeIdx;
-    const hasEpisodeContext = seasonIdx !== undefined || epIdx !== undefined || !!buildShareLinkForEpisode;
+    const hasEpisodeContext = seasonIdx !== undefined || epIdx !== undefined;
     const url = hasEpisodeContext
-      ? buildShareLinkForEpisode?.(resolvedSeasonIdx, resolvedEpisodeIdx) || shareLink || (typeof window !== "undefined" ? window.location.href : "")
+      ? buildShareLinkForEpisode?.(seasonIdx, epIdx) || shareLink || (typeof window !== "undefined" ? window.location.href : "")
       : shareLink || (typeof window !== "undefined" ? window.location.href : "");
     const shareTitle = hasEpisodeContext
-      ? `${title} • S${String(resolvedSeasonIdx + 1).padStart(2, "0")} E${String(resolvedEpisodeIdx + 1).padStart(2, "0")}`
+      ? `${title} • S${String((seasonIdx ?? 0) + 1).padStart(2, "0")} E${String((epIdx ?? 0) + 1).padStart(2, "0")}`
       : title;
     const shareData = { title: shareTitle, text: shareTitle, url };
-    setSharePanelSeasonIdx(resolvedSeasonIdx);
-    setSharePanelEpisodeIdx(resolvedEpisodeIdx);
     try {
       if ((navigator as any).share && (!(navigator as any).canShare || (navigator as any).canShare(shareData))) {
         await (navigator as any).share(shareData);
@@ -1206,8 +1194,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     } catch (err: any) {
       if (err?.name === "AbortError") return;
     }
-    openInlineSheet("share");
-  }, [activeEpisodeIdx, buildShareLinkForEpisode, currentSeasonIdx, openInlineSheet, shareLink, title]);
+    try {
+      await navigator.clipboard?.writeText(url);
+      toast.success(hasEpisodeContext ? "Episode link copied" : "Link copied");
+    } catch {
+      toast.error("Sharing is not supported on this device.");
+    }
+  }, [buildShareLinkForEpisode, shareLink, title]);
 
   const handleOpenAdLink = useCallback(async (url: string, _service?: AdService) => {
     const { openExternalBrowser, openTelegramDeepLink } = await import("@/lib/openExternal");
@@ -3207,7 +3200,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
                   </div>
-                  <div className="flex items-center gap-1 justify-end flex-nowrap min-w-0 overflow-x-auto scrollbar-hide pl-1">
+                  <div className="flex items-center gap-1 justify-end flex-nowrap min-w-0">
                     <span className="player-control-chip text-[10px] px-2 py-0.5 rounded shrink-0 leading-none">{playbackRate}x</span>
                     {availableQualities.length > 1 && (
                       <div className="relative shrink-0">
@@ -3398,45 +3391,85 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         </div>
 
         {!isFullscreen && !adGateActive && !deviceBlocked && !unlockBlocked && (
-          <div className="w-full bg-black text-white">
-            <div ref={playerSheetAnchorRef} className="h-px w-full" />
+          <div className="w-full px-5 pt-4 pb-2">
+            <button
+              type="button"
+              onClick={() => openInlineSheet("info")}
+              className="w-full text-left active:opacity-80 transition-opacity"
+            >
+              <div className="flex items-start gap-2">
+                <h2 className="text-[15px] font-bold text-foreground leading-snug flex-1 truncate">{animeMeta.title}</h2>
+                <div className="flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-semibold text-muted-foreground flex-shrink-0 mt-1">
+                  Info <ChevronRight className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 flex-nowrap mt-1.5 text-[12px] text-muted-foreground overflow-hidden">
+                <Tv className="w-3.5 h-3.5 text-foreground/60 flex-shrink-0" />
+                <span className="text-foreground/25 flex-shrink-0">|</span>
+                <span className="flex items-center gap-0.5 flex-shrink-0"><Star className="w-3 h-3 text-primary fill-primary flex-shrink-0" />9.0</span>
+                {currentLangLabel ? <><span className="text-foreground/25 flex-shrink-0">|</span><span className="truncate">{currentLangLabel}</span></> : null}
+                <span className="text-foreground/25 flex-shrink-0">|</span>
+                <span className="truncate capitalize">{seasons && seasons.length > 0 ? "Webseries" : "Movie"}</span>
+                {seasons && seasons.length > 0 ? <><span className="text-foreground/25 flex-shrink-0">|</span><span className="truncate">{seasons.length} season{seasons.length > 1 ? "s" : ""}</span></> : null}
+              </div>
+            </button>
 
-            {!inlineSheetOpen && (
-              <div className="px-3 pt-3 pb-1">
-                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide -mx-1 px-1">
-                  <button onClick={() => openInlineSheet("info")} className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-full bg-white/8 hover:bg-white/12 text-[12px] font-semibold text-white/90 transition-colors">
-                    <Info className="w-3.5 h-3.5" /><span>Info</span>
+            <div className="grid grid-cols-4 gap-2 mt-4">
+              <button onClick={() => { closeInlineSheets(); handleToggleWatchlist(); }} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium transition-colors border ${saved ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+                <Bookmark className={`w-3.5 h-3.5 flex-shrink-0 ${saved ? 'fill-primary' : ''}`} />
+                <span className="whitespace-nowrap truncate">{saved ? 'Saved' : 'Add to list'}</span>
+              </button>
+              <button onClick={() => { void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx); }} className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium border transition-colors bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border">
+                <Share2 className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Share</span>
+              </button>
+              <button onClick={() => openInlineSheet("download", "download")} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-[10px] text-[11px] font-medium border active:scale-95 transition-all ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+                <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Download</span>
+              </button>
+              <button onClick={() => openInlineSheet("library")} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-[10px] text-[11px] font-medium border active:scale-95 transition-all ${showLibrarySheet ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+                <FolderDown className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="whitespace-nowrap truncate">Library</span>
+              </button>
+            </div>
+
+            {episodeList && episodeList.length > 0 && (
+              <div ref={playerSheetAnchorRef} className="mt-5">
+                <div className="flex items-baseline gap-2 mb-3">
+                  <h3 className="text-[15px] font-bold text-foreground">Resources</h3>
+                </div>
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <button onClick={() => openInlineSheet("language")} className="inline-flex min-w-[116px] items-center justify-between gap-1.5 px-3 py-2 rounded-[10px] text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
+                    {currentLangLabel}
+                    <ChevronDown className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={() => openInlineSheet("language")} className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-full bg-white/8 hover:bg-white/12 text-[12px] font-semibold text-white/90 transition-colors">
-                    <Languages className="w-3.5 h-3.5" /><span>{currentLangLabel}</span>
-                  </button>
-                  {!!seasons?.length && (
-                    <button onClick={() => openInlineSheet("season")} className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-full bg-white/8 hover:bg-white/12 text-[12px] font-semibold text-white/90 transition-colors">
-                      <Tv className="w-3.5 h-3.5" /><span>{activeSeasonLabel}</span>
+                  {seasons && seasons.length > 0 && (
+                    <button onClick={() => openInlineSheet("season")} className="inline-flex min-w-[140px] items-center justify-between gap-1.5 px-3 py-2 rounded-[10px] text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
+                      {activeSeasonLabel}
+                      <ChevronDown className="w-3.5 h-3.5" />
                     </button>
                   )}
-                  <button onClick={() => void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx)} className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-full bg-white/8 hover:bg-white/12 text-[12px] font-semibold text-white/90 transition-colors">
-                    <Share2 className="w-3.5 h-3.5" /><span>Share</span>
-                  </button>
-                  <button onClick={() => openInlineSheet("download", "download")} className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-full bg-white/8 hover:bg-white/12 text-[12px] font-semibold text-white/90 transition-colors">
-                    <Download className="w-3.5 h-3.5" /><span>Download</span>
-                  </button>
-                  <button onClick={() => { closeInlineSheets(); handleToggleWatchlist(); }} className={`shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] font-semibold transition-colors ${saved ? 'bg-primary text-primary-foreground' : 'bg-white/8 hover:bg-white/12 text-white/90'}`}>
-                    <FolderDown className="w-3.5 h-3.5" /><span>{saved ? 'Saved' : 'Add to list'}</span>
-                  </button>
+                </div>
+                <div className="relative -mx-5">
+                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pl-5 pr-5">
+                    {episodeList.map((ep) => (
+                      <button key={ep.number} onClick={ep.onClick} className={`flex-shrink-0 min-w-[56px] px-3 py-2.5 rounded-lg text-sm font-bold transition-colors ${ep.active ? 'bg-gradient-to-br from-primary/25 to-primary/10 text-primary border border-primary/40' : 'bg-foreground/[0.06] text-foreground/85 border border-border hover:bg-foreground/10'}`}>
+                        {ep.number}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
 
-
             {!inlineSheetOpen && ((suggestedAnime && suggestedAnime.length > 0) || animeId) && (
-              <div className="px-4 pt-4 pb-2">
+              <div className="mt-5">
                 <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
-                  <button onClick={() => setBottomTab("foryou")} className={`text-[12px] font-bold px-3 py-1.5 rounded-full transition-colors ${bottomTab === "foryou" ? "bg-primary text-primary-foreground" : "bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/10"}`}>
+                  <button onClick={() => setBottomTab("foryou")} className={`text-[13px] font-bold px-3 py-1.5 rounded-full transition-colors ${bottomTab === "foryou" ? "bg-primary text-primary-foreground" : "bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/10"}`}>
                     For you
                   </button>
                   {animeId && (
-                    <button onClick={() => setBottomTab("comments")} className={`text-[12px] font-bold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1.5 ${bottomTab === "comments" ? "bg-primary text-primary-foreground" : "bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/10"}`}>
+                    <button onClick={() => setBottomTab("comments")} className={`text-[13px] font-bold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1.5 ${bottomTab === "comments" ? "bg-primary text-primary-foreground" : "bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/10"}`}>
                       <span>Comments</span>
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${bottomTab === "comments" ? "bg-primary-foreground/20" : "bg-primary/15 text-primary"}`}>{commentCount}</span>
                     </button>
@@ -3536,21 +3569,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
         {!isFullscreen && showInfoSheet && (
           <div className="w-full border-t border-white/8 bg-black text-white">
-            <div className="flex items-center justify-between px-4 pt-4 pb-2.5">
-              <h3 className="text-[16px] font-bold tracking-tight">More details</h3>
-              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
-                <X className="w-5 h-5" />
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <h3 className="text-[20px] font-bold tracking-tight">More details</h3>
+              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-6 h-6" />
               </button>
             </div>
             <div className="h-px bg-white/10 mx-0" />
-            <div className="px-4 pt-3 pb-5 space-y-4">
+            <div className="px-5 pt-4 pb-7 space-y-5">
               <div className="flex items-start gap-3">
-                <div className="w-[62px] h-[86px] shrink-0 overflow-hidden rounded-[10px] bg-white/5">
+                <div className="w-[76px] h-[104px] shrink-0 overflow-hidden rounded-[10px] bg-white/5">
                   {anime?.poster ? <img src={anime.poster} alt={anime?.title || title} className="w-full h-full object-cover" loading="lazy" /> : null}
                 </div>
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <h4 className="text-[17px] font-extrabold leading-tight">{anime?.title || title}</h4>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-white/70">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <h4 className="text-[18px] font-extrabold leading-tight">{anime?.title || title}</h4>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-white/70">
                     {infoMetaItems.map((item, i) => (
                       <span key={item} className="flex items-center gap-2">
                         {i > 0 && <span className="text-white/30">|</span>}
@@ -3567,35 +3600,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                 </div>
               </div>
 
-              {episodeList && episodeList.length > 0 && (
-                <div className="space-y-2">
-                  <div className="relative -mx-4">
-                    <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pl-4 pr-4">
-                      {episodeList.map((ep) => (
-                        <button key={ep.number} onClick={ep.onClick} className={`flex-shrink-0 min-w-[48px] px-3 py-2 rounded-[10px] text-[12px] font-bold transition-colors ${ep.active ? 'bg-gradient-to-br from-primary/25 to-primary/10 text-primary border border-primary/40' : 'bg-white/[0.06] text-white/85 border border-white/10 hover:bg-white/[0.1]'}`}>
-                          {ep.number}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                <h5 className="text-[13px] font-bold">Info</h5>
-                <p className="text-[12px] leading-5 text-white/72">{anime?.storyline || 'No storyline available yet.'}</p>
+              <div className="space-y-2">
+                <h5 className="text-[16px] font-bold">Info</h5>
+                <p className="text-[13px] leading-6 text-white/75">{anime?.storyline || 'No storyline available yet.'}</p>
               </div>
 
               {!!infoCast.length && (
-                <div className="space-y-2.5">
-                  <h5 className="text-[13px] font-bold">Starring</h5>
-                  <div className="grid grid-cols-4 gap-2">
+                <div className="space-y-3">
+                  <h5 className="text-[18px] font-extrabold">Starring ({anime?.cast?.length || infoCast.length})</h5>
+                  <div className="grid grid-cols-4 gap-3">
                     {infoCast.map((person, index) => (
                       <div key={`${person.name}-${index}`} className="min-w-0">
                         <div className="aspect-[3/4] overflow-hidden rounded-[10px] bg-white/[0.06]">
                           {person.photo ? <img src={person.photo} alt={person.name} className="w-full h-full object-cover" loading="lazy" /> : null}
                         </div>
-                        <p className="mt-1.5 text-[11px] font-semibold text-white line-clamp-2">{person.name}</p>
+                        <p className="mt-2 text-[13px] font-semibold text-white line-clamp-2">{person.name}</p>
+                        {person.character ? <p className="mt-0.5 text-[12px] leading-4 text-white/60 line-clamp-2">{person.character}</p> : null}
                       </div>
                     ))}
                   </div>
@@ -3607,36 +3627,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
 {/* Add to list & Share now act as direct toggles — no inline sheet */}
 
-        {!isFullscreen && showShareSheet && (
-          <div className="w-full border-t border-white/8 bg-black text-white">
-            <div className="flex items-center justify-between px-4 pt-4 pb-2.5">
-              <h3 className="text-[16px] font-bold tracking-tight">Share</h3>
-              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="h-px bg-white/10" />
-            <div className="px-4 pt-3 pb-5 space-y-3">
-              <p className="text-[11px] text-white/60 truncate">{shareFallbackData.title}</p>
-              <div className="grid grid-cols-3 gap-2">
-                <a href={shareFallbackData.telegram} target="_blank" rel="noreferrer" className="flex h-11 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.06] text-[11px] font-semibold text-white/90">Telegram</a>
-                <a href={shareFallbackData.whatsapp} target="_blank" rel="noreferrer" className="flex h-11 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.06] text-[11px] font-semibold text-white/90">WhatsApp</a>
-                <a href={shareFallbackData.facebook} target="_blank" rel="noreferrer" className="flex h-11 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.06] text-[11px] font-semibold text-white/90">Facebook</a>
-              </div>
-            </div>
-          </div>
-        )}
-
         {!isFullscreen && showLibrarySheet && (
           <div className="w-full bg-black text-white">
-            <div className="flex items-center justify-between px-4 pt-4 pb-2.5">
-              <h3 className="text-[16px] font-bold tracking-tight">My list</h3>
-              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
-                <X className="w-5 h-5" />
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <h3 className="text-[18px] font-bold tracking-tight">My list</h3>
+              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-6 h-6" />
               </button>
             </div>
             <div className="h-px bg-white/10" />
-            <div className="px-4 pt-3 pb-5">
+            <div className="px-4 pt-4 pb-8">
               {watchlistItems.length === 0 ? (
                 <div className="rounded-[14px] bg-white/[0.05] px-4 py-8 text-center text-sm text-white/60">
                   No items in your list yet.
@@ -3666,14 +3666,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
         {!isFullscreen && showLanguageSheet && (
           <div className="w-full border-t border-white/8 bg-black text-white">
-            <div className="flex items-center justify-between px-4 pt-4 pb-2.5">
-              <h3 className="text-[16px] font-bold tracking-tight">Select language</h3>
-              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
-                <X className="w-5 h-5" />
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <h3 className="text-[18px] font-bold tracking-tight">Select language</h3>
+              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-6 h-6" />
               </button>
             </div>
             <div className="h-px bg-white/10" />
-            <div className="px-4 pt-3 pb-5 space-y-2">
+            <div className="px-4 pt-4 pb-8 space-y-3">
               {downloadLanguageChoices.map((label) => {
                 const active = label === (sheetOrigin === "download" ? currentDownloadLanguageLabel : currentLangLabel);
                 const track = normalizedLanguageTracks.find((item) => item.label === label);
@@ -3697,7 +3697,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       }
                       closeInlineSheets();
                     }}
-                    className={`w-full rounded-[12px] px-4 py-3 text-center text-[13px] font-semibold transition-all active:scale-[0.99] ${
+                    className={`w-full rounded-[14px] px-4 py-5 text-center text-[16px] font-semibold transition-all active:scale-[0.99] ${
                       active
                         ? 'bg-gradient-to-r from-cyan-500/25 via-teal-500/20 to-emerald-500/25 text-cyan-300'
                         : 'bg-white/[0.07] text-white/85 hover:bg-white/[0.1]'
@@ -3713,14 +3713,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
         {!isFullscreen && showSeasonSheet && !!seasons?.length && (
           <div className="w-full border-t border-white/8 bg-black text-white">
-            <div className="flex items-center justify-between px-4 pt-4 pb-2.5">
-              <h3 className="text-[16px] font-bold tracking-tight">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
-              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
-                <X className="w-5 h-5" />
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <h3 className="text-[18px] font-bold tracking-tight">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
+              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-6 h-6" />
               </button>
             </div>
             <div className="h-px bg-white/10" />
-            <div className="px-4 pt-3 pb-5 space-y-2">
+            <div className="px-4 pt-4 pb-8 space-y-3">
               {seasons.map((_, idx) => {
                 const label = getShortSeasonLabel(seasons[idx]?.name, idx);
                 const activeSeasonIndex = sheetOrigin === "share" ? sharePanelSeasonIdx : (currentSeasonIdx ?? 0);
@@ -3746,7 +3746,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       onSeasonChange?.(idx);
                       closeInlineSheets();
                     }}
-                    className={`w-full rounded-[12px] px-4 py-3 text-center text-[13px] font-semibold transition-all active:scale-[0.99] ${
+                    className={`w-full rounded-[14px] px-4 py-5 text-center text-[16px] font-semibold transition-all active:scale-[0.99] ${
                       active
                         ? 'bg-gradient-to-r from-cyan-500/25 via-teal-500/20 to-emerald-500/25 text-cyan-300'
                         : 'bg-white/[0.07] text-white/85 hover:bg-white/[0.1]'
@@ -3955,50 +3955,27 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                     </div>
 
                     {/* Multi-episode picker */}
-                      <div className="px-4 pt-3 pb-2 flex flex-col gap-3 min-h-0">
-                        <div className="rounded-[12px] border border-white/10 bg-white/[0.05] p-3">
+                      <div className="px-4 pt-4 pb-2 flex flex-col gap-3 min-h-0">
+                        <div className="rounded-[14px] border border-white/10 bg-white/[0.05] p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <h4 className="text-[13px] font-bold text-white">Resources</h4>
+                          </div>
                           <div className="grid grid-cols-2 gap-2">
-                            <div className="rounded-[10px] border border-white/10 bg-white/[0.07] px-3 py-2.5">
-                              <p className="text-[10px] text-white/45">Language</p>
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                {downloadLanguageChoices.map((label) => (
-                                  <button
-                                    key={`download-lang-${label}`}
-                                    onClick={() => setSelectedDownloadLanguageLabel(label)}
-                                    className={`min-w-[68px] rounded-[9px] px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${label === currentDownloadLanguageLabel ? 'bg-primary/20 text-primary border border-primary/35' : 'bg-white/[0.06] text-white/78 border border-white/8'}`}
-                                  >
-                                    {label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            <div className="rounded-[10px] border border-white/10 bg-white/[0.07] px-3 py-2.5">
-                              <p className="text-[10px] text-white/45">{hasMultiEpisodes ? 'Season' : 'Type'}</p>
-                              {hasMultiEpisodes ? (
-                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                  {(seasons || []).map((season, idx) => {
-                                    const label = getShortSeasonLabel(season?.name, idx);
-                                    return (
-                                      <button
-                                        key={`download-season-${idx}`}
-                                        onClick={() => {
-                                          setDownloadPanelSeasonIdx(idx);
-                                          setDlSelectedEpisodes(new Set([0]));
-                                        }}
-                                        className={`rounded-[9px] px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${idx === downloadPanelSeasonIdx ? 'bg-primary/20 text-primary border border-primary/35' : 'bg-white/[0.06] text-white/78 border border-white/8'}`}
-                                      >
-                                        {label}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              ) : (
-                                <p className="mt-2 text-[12px] font-semibold text-white/75">Movie</p>
-                              )}
-                            </div>
+                            <button onClick={() => { openInlineSheet("language", "download"); }} className="h-14 rounded-[10px] border border-white/10 bg-white/[0.07] px-3 text-left text-base text-white flex items-center justify-between">
+                              <span className="truncate">{currentDownloadLanguageLabel}</span>
+                              <ChevronDown className="w-5 h-5 text-white/55" />
+                            </button>
+                            {hasMultiEpisodes ? (
+                              <button onClick={() => { openInlineSheet("season", "download"); }} className="h-14 rounded-[10px] border border-white/10 bg-white/[0.07] px-3 text-left text-base text-white flex items-center justify-between">
+                                <span className="truncate">{getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx)}</span>
+                                <ChevronDown className="w-5 h-5 text-white/55" />
+                              </button>
+                            ) : (
+                              <div className="h-14 rounded-[10px] border border-white/10 bg-white/[0.07] px-3 text-left text-base text-white/70 flex items-center">Movie</div>
+                            )}
                           </div>
                           <div className="mt-3 border-t border-white/10 pt-3">
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-3 gap-3">
                               {qualityChoices.map((label) => {
                                 const is4K = is4KLabel(label);
                                 const locked4K = is4K && !isPremium;
@@ -4010,7 +3987,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                                       if (locked4K) return;
                                       setSelectedDownloadQuality(label);
                                     }}
-                                    className={`h-10 rounded-[10px] text-[12px] font-semibold border transition-all ${locked4K ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : 'bg-white/[0.07] text-white border-white/10'} ${label === activeQuality ? 'bg-primary/20 text-primary border-primary/40' : ''}`}
+                                    className={`h-12 rounded-[10px] text-base font-semibold border transition-all ${locked4K ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : 'bg-white/[0.07] text-white border-white/10'} ${label === activeQuality ? 'bg-primary/20 text-primary border-primary/40' : ''}`}
                                   >
                                     {label}
                                   </button>
@@ -4021,19 +3998,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                         </div>
 
                         {hasMultiEpisodes && panelSeason && (
-                          <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: '34vh', WebkitOverflowScrolling: 'touch' }}>
+                          <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: '38vh', WebkitOverflowScrolling: 'touch' }}>
                             <div className="space-y-4">
                               {panelEpisodes.map((ep) => {
                                 const selected = dlSelectedEpisodes.has(ep.index);
                                 const qualityUrl = activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
                                 return (
-                                  <button key={`${downloadPanelSeasonIdx}-${ep.index}`} onClick={() => toggleEpisode(ep.index)} className="w-full flex items-start gap-3 rounded-[10px] border border-white/8 bg-white/[0.03] px-2.5 py-2 text-left">
-                                    <span className={`mt-1 flex h-5 w-5 items-center justify-center rounded-full border-2 ${selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
+                                  <button key={`${downloadPanelSeasonIdx}-${ep.index}`} onClick={() => toggleEpisode(ep.index)} className="w-full flex items-start gap-3 text-left">
+                                    <span className={`mt-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 ${selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
                                       <Check className="w-3.5 h-3.5" />
                                     </span>
                                     <span className="min-w-0 flex-1">
-                                      <span className="block text-[13px] font-medium text-white">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
-                                      <span className="block text-[11px] text-white/55 mt-0.5 truncate">{qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} link`}</span>
+                                      <span className="block text-[18px] font-medium text-white">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
+                                      <span className="block text-[12px] text-white/55 mt-1 truncate">{qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} link`}</span>
                                     </span>
                                   </button>
                                 );
@@ -4056,9 +4033,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                             if (hasMultiEpisodes) startSelectedDownloads(preferred);
                             else startMovieDownload(preferred);
                           }}
-                          className="flex-1 h-11 rounded-[12px] bg-gradient-to-r from-cyan-500 to-green-400 text-black text-[13px] font-semibold flex items-center justify-center gap-2"
+                          className="flex-1 h-14 rounded-[12px] bg-gradient-to-r from-cyan-500 to-green-400 text-black text-[18px] font-semibold flex items-center justify-center gap-2"
                         >
-                          <Download className="w-4 h-4" />
+                          <Download className="w-5 h-5" />
                           <span>{activeQuality ? `Download - ${activeQuality}` : 'Download'}</span>
                         </button>
                       </div>
