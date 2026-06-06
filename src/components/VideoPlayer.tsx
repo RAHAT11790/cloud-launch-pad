@@ -3508,21 +3508,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
         {!isFullscreen && showInfoSheet && (
           <div className="w-full border-t border-white/8 bg-black text-white">
-            <div className="flex items-center justify-between px-5 pt-5 pb-3">
-              <h3 className="text-[20px] font-bold tracking-tight">More details</h3>
-              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
-                <X className="w-6 h-6" />
+            <div className="flex items-center justify-between px-4 pt-4 pb-2.5">
+              <h3 className="text-[16px] font-bold tracking-tight">More details</h3>
+              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-5 h-5" />
               </button>
             </div>
             <div className="h-px bg-white/10 mx-0" />
-            <div className="px-5 pt-4 pb-7 space-y-5">
+            <div className="px-4 pt-3 pb-5 space-y-4">
               <div className="flex items-start gap-3">
-                <div className="w-[76px] h-[104px] shrink-0 overflow-hidden rounded-[10px] bg-white/5">
+                <div className="w-[62px] h-[86px] shrink-0 overflow-hidden rounded-[10px] bg-white/5">
                   {anime?.poster ? <img src={anime.poster} alt={anime?.title || title} className="w-full h-full object-cover" loading="lazy" /> : null}
                 </div>
-                <div className="min-w-0 flex-1 space-y-2">
-                  <h4 className="text-[18px] font-extrabold leading-tight">{anime?.title || title}</h4>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-white/70">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <h4 className="text-[17px] font-extrabold leading-tight">{anime?.title || title}</h4>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-white/70">
                     {infoMetaItems.map((item, i) => (
                       <span key={item} className="flex items-center gap-2">
                         {i > 0 && <span className="text-white/30">|</span>}
@@ -3539,22 +3539,65 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <h5 className="text-[16px] font-bold">Info</h5>
-                <p className="text-[13px] leading-6 text-white/75">{anime?.storyline || 'No storyline available yet.'}</p>
+              <div className="grid grid-cols-4 gap-2">
+                <button onClick={() => { closeInlineSheets(); handleToggleWatchlist(); }} className={`flex h-10 items-center justify-center gap-1.5 rounded-[10px] border px-2 text-[11px] font-medium transition-colors ${saved ? 'bg-primary/15 text-primary border-primary/30' : 'bg-white/[0.06] text-white/85 hover:bg-white/[0.1] border-white/10'}`}>
+                  <Bookmark className={`w-3.5 h-3.5 flex-shrink-0 ${saved ? 'fill-primary' : ''}`} />
+                  <span className="truncate">{saved ? 'Saved' : 'List'}</span>
+                </button>
+                <button onClick={() => { void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx); }} className="flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-white/10 bg-white/[0.06] px-2 text-[11px] font-medium text-white/85 hover:bg-white/[0.1]">
+                  <Share2 className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>Share</span>
+                </button>
+                <button onClick={() => openInlineSheet("download", "download")} className={`flex h-10 items-center justify-center gap-1.5 rounded-[10px] border px-2 text-[11px] font-medium transition-all ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-white/[0.06] text-white/85 hover:bg-white/[0.1] border-white/10'}`}>
+                  <Download className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>Download</span>
+                </button>
+                <button onClick={() => openInlineSheet("library")} className={`flex h-10 items-center justify-center gap-1.5 rounded-[10px] border px-2 text-[11px] font-medium transition-all ${showLibrarySheet ? 'bg-primary/15 text-primary border-primary/30' : 'bg-white/[0.06] text-white/85 hover:bg-white/[0.1] border-white/10'}`}>
+                  <FolderDown className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="truncate">Library</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => openInlineSheet("language")} className="inline-flex h-10 items-center justify-between gap-2 rounded-[10px] border border-white/10 bg-white/[0.06] px-3 text-[11px] font-semibold text-white/85">
+                  <span className="truncate">{currentLangLabel}</span>
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => openInlineSheet("season")} className="inline-flex h-10 items-center justify-between gap-2 rounded-[10px] border border-white/10 bg-white/[0.06] px-3 text-[11px] font-semibold text-white/85">
+                  <span className="truncate">{activeSeasonLabel}</span>
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {episodeList && episodeList.length > 0 && (
+                <div className="space-y-2">
+                  <div className="relative -mx-4">
+                    <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pl-4 pr-4">
+                      {episodeList.map((ep) => (
+                        <button key={ep.number} onClick={ep.onClick} className={`flex-shrink-0 min-w-[48px] px-3 py-2 rounded-[10px] text-[12px] font-bold transition-colors ${ep.active ? 'bg-gradient-to-br from-primary/25 to-primary/10 text-primary border border-primary/40' : 'bg-white/[0.06] text-white/85 border border-white/10 hover:bg-white/[0.1]'}`}>
+                          {ep.number}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <h5 className="text-[13px] font-bold">Info</h5>
+                <p className="text-[12px] leading-5 text-white/72">{anime?.storyline || 'No storyline available yet.'}</p>
               </div>
 
               {!!infoCast.length && (
-                <div className="space-y-3">
-                  <h5 className="text-[18px] font-extrabold">Starring ({anime?.cast?.length || infoCast.length})</h5>
-                  <div className="grid grid-cols-4 gap-3">
+                <div className="space-y-2.5">
+                  <h5 className="text-[13px] font-bold">Starring</h5>
+                  <div className="grid grid-cols-4 gap-2">
                     {infoCast.map((person, index) => (
                       <div key={`${person.name}-${index}`} className="min-w-0">
                         <div className="aspect-[3/4] overflow-hidden rounded-[10px] bg-white/[0.06]">
                           {person.photo ? <img src={person.photo} alt={person.name} className="w-full h-full object-cover" loading="lazy" /> : null}
                         </div>
-                        <p className="mt-2 text-[13px] font-semibold text-white line-clamp-2">{person.name}</p>
-                        {person.character ? <p className="mt-0.5 text-[12px] leading-4 text-white/60 line-clamp-2">{person.character}</p> : null}
+                        <p className="mt-1.5 text-[11px] font-semibold text-white line-clamp-2">{person.name}</p>
                       </div>
                     ))}
                   </div>
@@ -3566,16 +3609,36 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
 {/* Add to list & Share now act as direct toggles — no inline sheet */}
 
-        {!isFullscreen && showLibrarySheet && (
-          <div className="w-full bg-black text-white">
-            <div className="flex items-center justify-between px-5 pt-5 pb-3">
-              <h3 className="text-[18px] font-bold tracking-tight">My list</h3>
-              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
-                <X className="w-6 h-6" />
+        {!isFullscreen && showShareSheet && (
+          <div className="w-full border-t border-white/8 bg-black text-white">
+            <div className="flex items-center justify-between px-4 pt-4 pb-2.5">
+              <h3 className="text-[16px] font-bold tracking-tight">Share</h3>
+              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-5 h-5" />
               </button>
             </div>
             <div className="h-px bg-white/10" />
-            <div className="px-4 pt-4 pb-8">
+            <div className="px-4 pt-3 pb-5 space-y-3">
+              <p className="text-[11px] text-white/60 truncate">{shareFallbackData.title}</p>
+              <div className="grid grid-cols-3 gap-2">
+                <a href={shareFallbackData.telegram} target="_blank" rel="noreferrer" className="flex h-11 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.06] text-[11px] font-semibold text-white/90">Telegram</a>
+                <a href={shareFallbackData.whatsapp} target="_blank" rel="noreferrer" className="flex h-11 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.06] text-[11px] font-semibold text-white/90">WhatsApp</a>
+                <a href={shareFallbackData.facebook} target="_blank" rel="noreferrer" className="flex h-11 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.06] text-[11px] font-semibold text-white/90">Facebook</a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isFullscreen && showLibrarySheet && (
+          <div className="w-full bg-black text-white">
+            <div className="flex items-center justify-between px-4 pt-4 pb-2.5">
+              <h3 className="text-[16px] font-bold tracking-tight">My list</h3>
+              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="h-px bg-white/10" />
+            <div className="px-4 pt-3 pb-5">
               {watchlistItems.length === 0 ? (
                 <div className="rounded-[14px] bg-white/[0.05] px-4 py-8 text-center text-sm text-white/60">
                   No items in your list yet.
@@ -3605,14 +3668,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
         {!isFullscreen && showLanguageSheet && (
           <div className="w-full border-t border-white/8 bg-black text-white">
-            <div className="flex items-center justify-between px-5 pt-5 pb-3">
-              <h3 className="text-[18px] font-bold tracking-tight">Select language</h3>
-              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
-                <X className="w-6 h-6" />
+            <div className="flex items-center justify-between px-4 pt-4 pb-2.5">
+              <h3 className="text-[16px] font-bold tracking-tight">Select language</h3>
+              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-5 h-5" />
               </button>
             </div>
             <div className="h-px bg-white/10" />
-            <div className="px-4 pt-4 pb-8 space-y-3">
+            <div className="px-4 pt-3 pb-5 space-y-2">
               {downloadLanguageChoices.map((label) => {
                 const active = label === (sheetOrigin === "download" ? currentDownloadLanguageLabel : currentLangLabel);
                 const track = normalizedLanguageTracks.find((item) => item.label === label);
@@ -3636,7 +3699,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       }
                       closeInlineSheets();
                     }}
-                    className={`w-full rounded-[14px] px-4 py-5 text-center text-[16px] font-semibold transition-all active:scale-[0.99] ${
+                    className={`w-full rounded-[12px] px-4 py-3 text-center text-[13px] font-semibold transition-all active:scale-[0.99] ${
                       active
                         ? 'bg-gradient-to-r from-cyan-500/25 via-teal-500/20 to-emerald-500/25 text-cyan-300'
                         : 'bg-white/[0.07] text-white/85 hover:bg-white/[0.1]'
@@ -3652,14 +3715,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
         {!isFullscreen && showSeasonSheet && !!seasons?.length && (
           <div className="w-full border-t border-white/8 bg-black text-white">
-            <div className="flex items-center justify-between px-5 pt-5 pb-3">
-              <h3 className="text-[18px] font-bold tracking-tight">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
-              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
-                <X className="w-6 h-6" />
+            <div className="flex items-center justify-between px-4 pt-4 pb-2.5">
+              <h3 className="text-[16px] font-bold tracking-tight">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
+              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-5 h-5" />
               </button>
             </div>
             <div className="h-px bg-white/10" />
-            <div className="px-4 pt-4 pb-8 space-y-3">
+            <div className="px-4 pt-3 pb-5 space-y-2">
               {seasons.map((_, idx) => {
                 const label = getShortSeasonLabel(seasons[idx]?.name, idx);
                 const activeSeasonIndex = sheetOrigin === "share" ? sharePanelSeasonIdx : (currentSeasonIdx ?? 0);
@@ -3685,7 +3748,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       onSeasonChange?.(idx);
                       closeInlineSheets();
                     }}
-                    className={`w-full rounded-[14px] px-4 py-5 text-center text-[16px] font-semibold transition-all active:scale-[0.99] ${
+                    className={`w-full rounded-[12px] px-4 py-3 text-center text-[13px] font-semibold transition-all active:scale-[0.99] ${
                       active
                         ? 'bg-gradient-to-r from-cyan-500/25 via-teal-500/20 to-emerald-500/25 text-cyan-300'
                         : 'bg-white/[0.07] text-white/85 hover:bg-white/[0.1]'
