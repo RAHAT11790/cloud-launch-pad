@@ -578,6 +578,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
   const [unlockBlocked, setUnlockBlocked] = useState(false);
+  const [sheetTopPx, setSheetTopPx] = useState<number>(0);
 
   const activeEpisodeIdx = useMemo(() => {
     const idx = episodeList?.findIndex((episode) => episode.active) ?? -1;
@@ -863,17 +864,38 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     }
   }, [availableDownloadQualities, preferredDownloadQuality, selectedDownloadQuality]);
 
+  useEffect(() => {
+    if (!animeId) return;
+    return onValue(ref(db, `comments/${animeId}`), (snap) => {
+      const data = snap.val();
+      setCommentCount(data && typeof data === "object" ? Object.keys(data).length : 0);
+    });
+  }, [animeId]);
+
   // Track the video container's rendered height so inline overlays can cover
   // exactly the area below the player (regardless of aspect ratio / orientation).
   useEffect(() => {
-    const el = videoContainerRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const measure = () => setPlayerHeightPx(Math.round(el.getBoundingClientRect().height));
+    const videoEl = videoContainerRef.current;
+    const anchorEl = playerSheetAnchorRef.current;
+    if (!videoEl || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      const videoRect = videoEl.getBoundingClientRect();
+      setPlayerHeightPx(Math.round(videoRect.height));
+      const fallbackTop = Math.round(videoRect.bottom + 14);
+      const anchorTop = anchorEl ? Math.round(anchorEl.getBoundingClientRect().top) : fallbackTop;
+      setSheetTopPx(Math.max(0, anchorTop));
+    };
     measure();
     const ro = new ResizeObserver(measure);
-    ro.observe(el);
+    ro.observe(videoEl);
+    if (anchorEl) ro.observe(anchorEl);
     window.addEventListener("resize", measure);
-    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
   }, []);
 
   // Lock body scroll while an overlay is open so the player stays anchored.
