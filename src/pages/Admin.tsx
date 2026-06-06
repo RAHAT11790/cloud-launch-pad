@@ -3667,7 +3667,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     setSeasonsData(prev => {
       const copy = [...prev];
       const s = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
-      s.episodes.push({ episodeNumber: num, title: epTitle, link: "", link480: "", link720: "", link1080: "", link4k: "" });
+      s.episodes.push({ episodeNumber: num, title: epTitle, link: "", link480: "", link720: "", link1080: "", link4k: "", audioTracks: [] });
       copy[sIdx] = s;
       return copy;
     });
@@ -3740,6 +3740,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         link720: ep.link720 || '',
         link1080: ep.link1080 || '',
         link4k: ep.link4k || '',
+        audioTracks: Array.isArray(ep.audioTracks) ? ep.audioTracks : ep.audioTracks ? Object.values(ep.audioTracks) : [],
       }));
 
       const newSeason: Season = {
@@ -3816,6 +3817,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         link720: ep.link720 || '',
         link1080: ep.link1080 || '',
         link4k: ep.link4k || '',
+        audioTracks: Array.isArray(ep.audioTracks) ? ep.audioTracks : ep.audioTracks ? Object.values(ep.audioTracks) : [],
       }));
       setSeasonsData(prev => {
         const copy = [...prev];
