@@ -3089,6 +3089,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     const data = {
       ...seriesForm,
       cast: seriesCast,
+      audioTracks: Array.isArray(seriesForm.audioTracks)
+        ? seriesForm.audioTracks.filter((track: any) => String(track?.label || track?.language || track?.link || "").trim())
+        : [],
       seasons: seasonsData,
       type: "webseries",
       weeklyEnabled: seriesForm.weeklyEnabled === true,
@@ -3263,6 +3266,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     const data = {
       ...movieForm,
       cast: movieCast,
+      audioTracks: Array.isArray(movieForm.audioTracks)
+        ? movieForm.audioTracks.filter((track: any) => String(track?.label || track?.language || track?.link || "").trim())
+        : [],
       type: "movie",
       visibility: movieForm.visibility === "private" ? "private" : "public",
       telegramCustomButton: (movieForm.telegramCustomButtonText && movieForm.telegramCustomButtonUrl)
