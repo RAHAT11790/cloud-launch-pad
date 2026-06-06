@@ -4,7 +4,7 @@ import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
-  SkipForward, SkipBack, Settings, X, Lock, Unlock,
+  SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
   ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages, Info, Star, Tv, Share2, Bookmark, FolderDown
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
