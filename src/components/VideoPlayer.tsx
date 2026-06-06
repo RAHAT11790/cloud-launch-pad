@@ -3825,7 +3825,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
               {/* ============ Download Picker Modal ============ */}
               {showDownloadQualityPicker && (
-                <div className="w-full border-t border-border bg-background" data-player-panel="true">
+                <div ref={downloadPanelRef} className="w-full border-t border-border bg-background" data-player-panel="true">
                     {/* Header */}
                     <div className="flex items-center justify-between p-4 border-b border-border">
                         <div className="min-w-0">
