@@ -1753,8 +1753,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
     sourceBaseRef.current = defaultRawSrc;
     activeSourceBaseRef.current = defaultRawSrc;
+    const fallbackLanguage = propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || anime?.language || "Unknown";
     setCurrentAudioTrack("Default");
-    setSelectedLanguageLabel(propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || "Default");
+    setSelectedLanguageLabel(fallbackLanguage);
     setShowAudioPanel(false);
 
     const finalDefaultSrc = manualServerSelected ? applyServerDomain(defaultRawSrc, activeServerIndex) : defaultRawSrc;
@@ -1774,7 +1775,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       setCurrentSrc(finalResolvedSrc);
     }
 
-  }, [currentSrc, propAudioTracks, resolvePlaybackSrc, src, manualServerSelected, activeServerIndex, applyServerDomain]);
+  }, [activeServerIndex, anime?.language, applyServerDomain, currentSrc, manualServerSelected, propAudioTracks, resolvePlaybackSrc, src]);
 
   useEffect(() => {
     if (!playbackRouteReady) return;
