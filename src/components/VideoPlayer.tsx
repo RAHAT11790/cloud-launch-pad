@@ -1142,6 +1142,30 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     }
   }, [shareLink, title]);
 
+  const handleEpisodeShare = useCallback(async (seasonIdx?: number, epIdx?: number) => {
+    const url = buildShareLinkForEpisode?.(seasonIdx, epIdx)
+      || shareLink
+      || (typeof window !== "undefined" ? window.location.href : "");
+    const epTitle = seasonIdx !== undefined && epIdx !== undefined
+      ? `${title} • S${String(seasonIdx + 1).padStart(2, "0")} E${String(epIdx + 1).padStart(2, "0")}`
+      : title;
+    const shareData = { title: epTitle, text: epTitle, url };
+    try {
+      if ((navigator as any).share && (!(navigator as any).canShare || (navigator as any).canShare(shareData))) {
+        await (navigator as any).share(shareData);
+        return;
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
+    }
+    try {
+      await navigator.clipboard?.writeText(url);
+      toast.success("Episode link copied");
+    } catch {
+      toast.error("Sharing is not supported on this device.");
+    }
+  }, [buildShareLinkForEpisode, shareLink, title]);
+
   const handleOpenAdLink = useCallback(async (url: string, _service?: AdService) => {
     const { openExternalBrowser, openTelegramDeepLink } = await import("@/lib/openExternal");
     try {
