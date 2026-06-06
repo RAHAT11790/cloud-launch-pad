@@ -479,7 +479,6 @@ const Index = () => {
     try { return sessionStorage.getItem("rs_uiLayer") === "profile"; } catch { return false; }
   });
   const [chatOpen, setChatOpen] = useState(false);
-  const [playerInlineSheet, setPlayerInlineSheet] = useState<"library" | null>(null);
 
   const buildAnimeRoute = useCallback((animeId: string) => `/anime/${encodeURIComponent(animeId)}`, []);
   const buildWatchRoute = useCallback((animeId: string, seasonIdx?: number, epIdx?: number) => {
@@ -518,7 +517,6 @@ const Index = () => {
     setPlayerState(null);
     setSaltPlayerState(null);
     setSelectedAnime(null);
-    setPlayerInlineSheet(null);
     setShowProfile(false);
     setCustomPostDetail(null);
     navigate("/", { replace: true });
@@ -2542,9 +2540,7 @@ const Index = () => {
           nextEpisodeSrc={playerState.nextEpisodeSrc}
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
           shareLink={buildShareLink(playerState.anime.id, playerState.seasonIdx, playerState.epIdx)}
-          onLibraryClick={() => {
-            setPlayerInlineSheet("library");
-          }}
+          onLibraryClick={() => undefined}
           suggestedAnime={suggestedAnime}
         />
       </div>
