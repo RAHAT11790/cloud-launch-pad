@@ -2631,12 +2631,6 @@ const Index = () => {
         </div>
       )}
 
-      <AnimatePresence>
-        {selectedAnime && (
-          <AnimeDetails anime={selectedAnime} onClose={() => closeRouteLayer("/")} onPlay={handlePlay} />
-        )}
-      </AnimatePresence>
-
       {/* Custom Post Detail View */}
       <AnimatePresence>
         {customPostDetail && (
