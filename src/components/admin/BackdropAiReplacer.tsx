@@ -105,6 +105,11 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       toast.success(`Preview ready (${data.engine})`);
     } catch (e: any) {
       const msg = e?.message || String(e);
+      if (provider === "lovable" && /(404|FunctionsHttpError|Failed to send a request|non-2xx|Edge Function returned a non-2xx status code)/i.test(msg)) {
+        setProvider("flux");
+        toast.info("Lovable AI generator unavailable. Switched to Flux automatically.");
+        return;
+      }
       toast.error(
         msg.includes("PAYMENT") ? "Lovable AI credits exhausted — try Flux v1" :
         msg.includes("RATE") ? "Rate limited — try again shortly" : msg
