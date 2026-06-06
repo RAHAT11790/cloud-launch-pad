@@ -556,26 +556,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const currentLangLabel = useMemo(() => {
     if (selectedLanguageLabel) return selectedLanguageLabel;
     const explicit = propAudioTracks?.[0]?.language || propAudioTracks?.[0]?.label;
-    if (explicit) return explicit;
-    const fallback = String(anime?.language || "")
-      .split(/[,/|]/)
-      .map((item) => item.trim())
-      .filter(Boolean)[0] || "";
+    if (explicit) return getPrimaryLanguageToken(explicit) || explicit;
+    const fallback = getPrimaryLanguageToken(anime?.language);
     if (fallback) return fallback;
     return "Unknown";
   }, [anime?.language, propAudioTracks, selectedLanguageLabel]);
 
   const languageOptions = useMemo(() => {
     const labels = new Set<string>();
-    String(anime?.language || "")
-      .split(/[,/|]/)
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .forEach((label) => labels.add(label));
+    splitLanguageTokens(anime?.language).forEach((label) => labels.add(label));
     if (propAudioTracks?.length) {
       propAudioTracks.forEach((track) => {
-        const label = String(track.label || track.language || "").trim();
-        if (label) labels.add(label);
+        splitLanguageTokens(String(track.label || track.language || "")).forEach((label) => labels.add(label));
       });
     }
     if (labels.size === 0 && currentLangLabel) labels.add(currentLangLabel);
@@ -613,10 +605,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     const pool = propAudioTracks?.length ? propAudioTracks : [baseTrack];
     const unique = new Map<string, typeof baseTrack>();
     pool.forEach((track) => {
-      const label = String(track.label || track.language || fallbackLanguage).trim();
+      const label = getPrimaryLanguageToken(track.label || track.language || fallbackLanguage) || fallbackLanguage;
       if (!label || unique.has(label.toLowerCase())) return;
       unique.set(label.toLowerCase(), {
-        language: String(track.language || label).trim() || label,
+        language: getPrimaryLanguageToken(track.language || label) || label,
         label,
         link: String(track.link || src || "").trim(),
         link480: track.link480,
