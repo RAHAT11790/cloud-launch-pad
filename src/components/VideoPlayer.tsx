@@ -3110,7 +3110,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
                 {bottomTab === "foryou" && suggestedAnime && suggestedAnime.length > 0 && (
                   <div className="grid grid-cols-3 gap-2.5">
-                    {suggestedAnime.slice(0, 9).map((anime) => (
+                    {suggestedAnime.slice(0, 15).map((anime) => (
                       <button key={anime.id} onClick={() => onSuggestedClick?.(anime)} className="group text-left">
                         <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-foreground/5">
                           {anime.poster ? (
