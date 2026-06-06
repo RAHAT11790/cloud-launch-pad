@@ -50,7 +50,8 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
         if (t) set.add(t);
       });
     };
-    push(anime.language);
+    (anime.availableLanguages || []).forEach((lang) => push(lang));
+    push(anime.baseLanguage || anime.language);
     if (anime.seasons) {
       anime.seasons.forEach((s: any) => {
         (s.episodes || []).forEach((ep: any) => {
@@ -61,8 +62,8 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
     const arr = Array.from(set).filter(Boolean);
     if (arr.length === 0) return "";
     if (arr.length === 1) return arr[0];
-    if (arr.length === 2) return arr.join(" · ");
-    return "Multi";
+    if (arr.length === 2) return "Dual";
+    return "Multiple";
   })();
 
   // ---- Episode / season count ----
