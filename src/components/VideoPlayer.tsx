@@ -2431,12 +2431,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
 
   return (
     <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
-      {/* Close button */}
-      {!isFullscreen && (
-          <button onClick={stopAndClosePlayer} className="absolute top-5 right-5 z-[310] w-10 h-10 rounded-full gradient-primary flex items-center justify-center transition-all">
-          <X className="w-5 h-5" />
-        </button>
-      )}
+      {/* Back arrow lives inside the controls overlay below, so it hides/shows with controls */}
+
 
       <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full px-0 pb-6 pt-3'}`}>
 
