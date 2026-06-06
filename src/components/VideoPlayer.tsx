@@ -3401,6 +3401,34 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
           <div className="w-full bg-black text-white">
             <div ref={playerSheetAnchorRef} className="h-px w-full" />
 
+            {!inlineSheetOpen && (
+              <div className="px-3 pt-3 pb-1">
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide -mx-1 px-1">
+                  <button onClick={() => openInlineSheet("info")} className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-full bg-white/8 hover:bg-white/12 text-[12px] font-semibold text-white/90 transition-colors">
+                    <Info className="w-3.5 h-3.5" /><span>Info</span>
+                  </button>
+                  <button onClick={() => openInlineSheet("language")} className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-full bg-white/8 hover:bg-white/12 text-[12px] font-semibold text-white/90 transition-colors">
+                    <Languages className="w-3.5 h-3.5" /><span>{currentLangLabel}</span>
+                  </button>
+                  {!!seasons?.length && (
+                    <button onClick={() => openInlineSheet("season")} className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-full bg-white/8 hover:bg-white/12 text-[12px] font-semibold text-white/90 transition-colors">
+                      <Tv className="w-3.5 h-3.5" /><span>{activeSeasonLabel}</span>
+                    </button>
+                  )}
+                  <button onClick={() => void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx)} className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-full bg-white/8 hover:bg-white/12 text-[12px] font-semibold text-white/90 transition-colors">
+                    <Share2 className="w-3.5 h-3.5" /><span>Share</span>
+                  </button>
+                  <button onClick={() => openInlineSheet("download", "download")} className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-full bg-white/8 hover:bg-white/12 text-[12px] font-semibold text-white/90 transition-colors">
+                    <Download className="w-3.5 h-3.5" /><span>Download</span>
+                  </button>
+                  <button onClick={() => { closeInlineSheets(); handleToggleWatchlist(); }} className={`shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] font-semibold transition-colors ${saved ? 'bg-primary text-primary-foreground' : 'bg-white/8 hover:bg-white/12 text-white/90'}`}>
+                    <FolderDown className="w-3.5 h-3.5" /><span>{saved ? 'Saved' : 'Add to list'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+
             {!inlineSheetOpen && ((suggestedAnime && suggestedAnime.length > 0) || animeId) && (
               <div className="px-4 pt-4 pb-2">
                 <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
