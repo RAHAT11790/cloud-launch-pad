@@ -2785,6 +2785,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
                 <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <Lock className="w-3.5 h-3.5" />
                 </button>
+                </div>
               </div>
 
               {/* Center play */}
