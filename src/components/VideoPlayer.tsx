@@ -549,7 +549,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     const fallback = String(anime?.language || "").trim();
     if (fallback) return fallback;
     return "Unknown";
-  }, [propAudioTracks, selectedLanguageLabel]);
+  }, [anime?.language, propAudioTracks, selectedLanguageLabel]);
 
   const languageOptions = useMemo(() => {
     const labels = new Set<string>();
@@ -2868,7 +2868,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                   <div className="relative">
                     <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); setShowCcPanel(false); setShowSettings(false); setShowQualityPanel(false); setShowAudioPanel(false); }} className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
-                      <span className="text-[10px] font-medium">{manualServerSelected ? (effectiveVideoServers[activeServerIndex]?.name || `S${activeServerIndex + 1}`) : "Default"}</span>
+                      <span className="text-[10px] font-medium">{effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`}</span>
                     </button>
                     {showServerPanel && (
                       <div data-player-panel="true" className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] max-h-[min(70dvh,320px)] overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]" style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y" }} onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation} onWheel={stopPanelWheelPropagation}>
@@ -2883,7 +2883,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                             className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
                               !manualServerSelected ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                             }`}>
-                            <span>Default</span>
+                            <span>{effectiveVideoServers[0]?.name || "Server 1"}</span>
                             {!manualServerSelected && <Check className="w-3 h-3" />}
                           </button>
                         )}
@@ -3680,15 +3680,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
               {/* ============ Download Picker Modal ============ */}
               {showDownloadQualityPicker && (
-                <div
-                  className="fixed inset-0 z-[400] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
-                  onClick={closePanel}
-                >
-                  <div
-                    className="w-full max-w-md bg-card border border-border rounded-none sm:rounded-2xl shadow-2xl flex flex-col max-h-[88vh]"
-                    onClick={(e) => e.stopPropagation()}
-                    data-player-panel="true"
-                  >
+                <div className="w-full border-t border-border bg-background" data-player-panel="true">
                     {/* Header */}
                     <div className="flex items-center justify-between p-4 border-b border-border">
                         <div className="min-w-0">
@@ -3764,7 +3756,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                                 );
                               })}
                             </div>
-                          </div>
+                </div>
                         )}
                       </div>
 
