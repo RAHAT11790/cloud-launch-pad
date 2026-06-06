@@ -3639,21 +3639,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 {/* Add to list & Share now act as direct toggles — no inline sheet */}
 
         {!isFullscreen && showLibrarySheet && (
-          <div className="w-full bg-black text-white">
-            <div className="flex items-center justify-between px-5 pt-5 pb-3">
-              <h3 className="text-[18px] font-bold tracking-tight">My list</h3>
-              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
-                <X className="w-6 h-6" />
+          <div
+            className="fixed left-0 right-0 bottom-0 z-[40] overflow-y-auto overscroll-contain border-t border-white/10 bg-black text-white"
+            style={{ top: playerHeightPx }}
+            data-player-panel="true"
+          >
+            <div className="flex items-center justify-between px-4 pt-3 pb-2">
+              <h3 className="text-[15px] font-bold tracking-tight">My list</h3>
+              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-5 h-5" />
               </button>
             </div>
             <div className="h-px bg-white/10" />
-            <div className="px-4 pt-4 pb-8">
+            <div className="px-3 pt-3 pb-6">
               {watchlistItems.length === 0 ? (
-                <div className="rounded-[14px] bg-white/[0.05] px-4 py-8 text-center text-sm text-white/60">
+                <div className="rounded-[10px] bg-white/[0.05] px-3 py-6 text-center text-[12px] text-white/60">
                   No items in your list yet.
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 gap-2.5">
                   {watchlistItems.slice(0, 18).map((item: any) => (
                     <button
                       key={String(item?.id || item?.title)}
@@ -3663,10 +3667,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       }}
                       className="text-left"
                     >
-                      <div className="aspect-[2/3] overflow-hidden rounded-[12px] bg-white/[0.06] border border-white/10">
+                      <div className="aspect-[2/3] overflow-hidden rounded-[10px] bg-white/[0.06] border border-white/10">
                         {item?.poster ? <img src={item.poster} alt={item?.title || "Saved item"} className="w-full h-full object-cover" loading="lazy" /> : null}
                       </div>
-                      <p className="mt-2 text-[12px] font-medium leading-4 text-white line-clamp-2">{item?.title || "Untitled"}</p>
+                      <p className="mt-1.5 text-[11px] font-medium leading-4 text-white line-clamp-2">{item?.title || "Untitled"}</p>
                     </button>
                   ))}
                 </div>
