@@ -5350,20 +5350,7 @@ ${tgBulkFooter}
                                           </div>
                                         );
                                       })()}
-                                    <div>
-                                      <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Default</span>
-                                      <textarea value={ep.link} onChange={e => updateEpisodeLink(sIdx, eIdx, e.target.value)}
-                                        className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder="Default link" rows={2} />
                                     </div>
-                                    {["link480", "link720", "link1080", "link4k"].map(q => (
-                                      <div key={q}>
-                                        <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">
-                                          {q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"}
-                                        </span>
-                                        <textarea value={(ep as any)[q] || ""} onChange={e => updateEpisodeQualityLink(sIdx, eIdx, q, e.target.value)}
-                                          className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder={`${q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"} link (optional)`} rows={2} />
-                                      </div>
-                                    ))}
                                     {/* Audio Track Links */}
                                     <div className="mt-2 border-t border-white/5 pt-2">
                                       <div className="flex items-center justify-between mb-1.5">
