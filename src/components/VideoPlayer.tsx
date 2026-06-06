@@ -888,6 +888,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     };
   }, []);
 
+  const resolvedSheetTop = useMemo(() => {
+    const baseTop = sheetTopPx || playerHeightPx;
+    if (typeof window === "undefined") return baseTop;
+    const maxVisibleTop = Math.max(120, window.innerHeight - 220);
+    return Math.min(Math.max(baseTop, 88), maxVisibleTop);
+  }, [playerHeightPx, sheetTopPx]);
+
   // Lock body scroll while an overlay is open so the player stays anchored.
   // (No scrollIntoView needed — the overlays are fixed to the player edge.)
 
