@@ -5099,49 +5099,36 @@ ${tgBulkFooter}
                         </select>
                       </div>
                       <div className="mb-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center justify-between gap-2 mb-2">
                           <label className="block text-xs text-cyan-300 font-medium">Series Language Links</label>
-                          <button type="button" onClick={() => setSeriesForm({ ...seriesForm, audioTracks: [...(seriesForm.audioTracks || []), buildEmptyAudioTrack()] })} className="text-[10px] text-cyan-300 hover:text-cyan-200 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextLanguage = window.prompt("Language name", "English")?.trim();
+                              if (!nextLanguage) return;
+                              ensureSeriesLanguageTab(nextLanguage);
+                            }}
+                            className="text-[10px] text-cyan-300 hover:text-cyan-200 flex items-center gap-1"
+                          >
                             <Plus size={10} /> Add Language
                           </button>
                         </div>
                         <div className="space-y-2">
-                          {((seriesForm.audioTracks || []) as any[]).map((track, index) => (
-                            <div key={`series-audio-${index}`} className="rounded-lg border border-white/10 bg-black/20 p-2.5">
-                              <div className="flex gap-2 mb-2">
-                                <input value={track.label || ""} onChange={e => setSeriesForm((prev: any) => {
-                                  const next = [...(prev.audioTracks || [])];
-                                  next[index] = { ...next[index], label: e.target.value };
-                                  return { ...prev, audioTracks: next };
-                                })} className={`${inputClass} flex-1 !py-1.5 !text-[10px]`} placeholder="Label (Hindi dub)" />
-                                <input value={track.language || ""} onChange={e => setSeriesForm((prev: any) => {
-                                  const next = [...(prev.audioTracks || [])];
-                                  next[index] = { ...next[index], language: e.target.value };
-                                  return { ...prev, audioTracks: next };
-                                })} className={`${inputClass} w-24 !py-1.5 !text-[10px]`} placeholder="Language" />
-                                <button type="button" onClick={() => setSeriesForm((prev: any) => ({ ...prev, audioTracks: (prev.audioTracks || []).filter((_: any, i: number) => i !== index) }))} className="text-red-400 hover:text-red-300 p-1"><Trash2 size={10} /></button>
-                              </div>
-                              <textarea value={track.link || ""} onChange={e => setSeriesForm((prev: any) => {
-                                const next = [...(prev.audioTracks || [])];
-                                next[index] = { ...next[index], link: e.target.value };
-                                return { ...prev, audioTracks: next };
-                              })} className={`${inputClass} w-full !py-1.5 !text-[10px] min-h-[40px] resize-none`} placeholder="Default language link" rows={1} />
-                              <div className="grid grid-cols-2 gap-1 mt-2">
-                                {[
-                                  ["link480", "480p"],
-                                  ["link720", "720p"],
-                                  ["link1080", "1080p"],
-                                  ["link4k", "4K"],
-                                ].map(([field, label]) => (
-                                  <input key={field} value={track[field] || ""} onChange={e => setSeriesForm((prev: any) => {
-                                    const next = [...(prev.audioTracks || [])];
-                                    next[index] = { ...next[index], [field]: e.target.value };
-                                    return { ...prev, audioTracks: next };
-                                  })} className={`${inputClass} !py-1 !text-[9px]`} placeholder={`${label} link`} />
-                                ))}
-                              </div>
-                            </div>
-                          ))}
+                          <select
+                            value={seriesForm.selectedAdminLanguage || seriesForm.baseLanguage || "Hindi"}
+                            onChange={e => ensureSeriesLanguageTab(e.target.value)}
+                            className={`${selectClass} !text-[12px]`}
+                          >
+                            {Array.from(new Set([
+                              seriesForm.baseLanguage || seriesForm.language || "Hindi",
+                              ...(seriesForm.availableLanguages || []),
+                            ])).filter(Boolean).map((lang: string) => (
+                              <option key={lang} value={lang}>{lang}</option>
+                            ))}
+                          </select>
+                          <p className="text-[10px] text-cyan-100/70">
+                            Select one language above. Episode links below will show only that language.
+                          </p>
                         </div>
                       </div>
                       <div className="mb-4">
