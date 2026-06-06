@@ -208,7 +208,7 @@ interface VideoPlayerProps {
   initialSeekTime?: number;
   shareLink?: string;
   onInfoClick?: () => void;
-  onLibraryClick?: () => void;
+  onLibraryClick?: (animeId?: string) => void;
 }
 
 type DownloadEpisodeOption = {
@@ -3510,7 +3510,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                   {watchlistItems.slice(0, 18).map((item: any) => (
                     <button
                       key={String(item?.id || item?.title)}
-                      onClick={() => onLibraryClick?.()}
+                      onClick={() => onLibraryClick?.(String(item?.id || ""))}
                       className="text-left"
                     >
                       <div className="aspect-[2/3] overflow-hidden rounded-[10px] bg-foreground/5 border border-border">
