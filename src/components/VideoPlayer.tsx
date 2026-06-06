@@ -802,6 +802,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     setSheetOrigin(origin);
   }, []);
 
+  const inlineSheetOpen = showInfoSheet || showLanguageSheet || showSeasonSheet || showLibrarySheet || showDownloadQualityPicker;
+
   useEffect(() => {
     const unsub = downloadManager.subscribe((snapshot) => {
       setActiveDownloads(new Map(snapshot.downloads));
