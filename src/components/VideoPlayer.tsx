@@ -481,12 +481,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const [shortenLoading, setShortenLoading] = useState(false);
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
+  const [showInfoSheet, setShowInfoSheet] = useState(false);
+  const [showLanguageSheet, setShowLanguageSheet] = useState(false);
+  const [showSeasonSheet, setShowSeasonSheet] = useState(false);
   const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
   const [dlSelectedEpisodes, setDlSelectedEpisodes] = useState<Set<number>>(new Set());
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
   const [saved, setSaved] = useState(() => (animeId ? guestStore.watchlist.has(animeId) : false));
   const [bottomTab, setBottomTab] = useState<"foryou" | "comments">("foryou");
   const [commentCount, setCommentCount] = useState(0);
+  const [selectedLanguageLabel, setSelectedLanguageLabel] = useState<string>("");
   
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
