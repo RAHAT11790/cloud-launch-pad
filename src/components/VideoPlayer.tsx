@@ -207,6 +207,7 @@ interface VideoPlayerProps {
   forceEmbedMode?: boolean;
   initialSeekTime?: number;
   shareLink?: string;
+  buildShareLinkForEpisode?: (seasonIdx?: number, epIdx?: number) => string;
   onInfoClick?: () => void;
   onLibraryClick?: (animeId?: string) => void;
 }
@@ -501,9 +502,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const [showInfoSheet, setShowInfoSheet] = useState(false);
   const [showLanguageSheet, setShowLanguageSheet] = useState(false);
   const [showSeasonSheet, setShowSeasonSheet] = useState(false);
+  const [showShareSheet, setShowShareSheet] = useState(false);
+  const [showAddToListSheet, setShowAddToListSheet] = useState(false);
   const [showLibrarySheet, setShowLibrarySheet] = useState(false);
   const [sheetOrigin, setSheetOrigin] = useState<"resource" | "download">("resource");
   const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
+  const [sharePanelSeasonIdx, setSharePanelSeasonIdx] = useState<number>(currentSeasonIdx ?? 0);
+  const [sharePanelEpisodeIdx, setSharePanelEpisodeIdx] = useState<number>(0);
   const [dlSelectedEpisodes, setDlSelectedEpisodes] = useState<Set<number>>(new Set());
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
   const [saved, setSaved] = useState(() => (animeId ? guestStore.watchlist.has(animeId) : false));
@@ -541,6 +546,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const [userFreeAccessExpiresAt, setUserFreeAccessExpiresAt] = useState(0);
   const [freeAccessLoaded, setFreeAccessLoaded] = useState(false); // prevents unlock-button flash before Firebase responds
   const [unlockBlocked, setUnlockBlocked] = useState(false);
+
+  const activeEpisodeIdx = useMemo(() => {
+    const idx = episodeList?.findIndex((episode) => episode.active) ?? -1;
+    return idx >= 0 ? idx : 0;
+  }, [episodeList]);
 
   const animeMeta = useMemo(() => {
     const match = title.match(/^(.*?)(?:\s*[—-]\s*(.+))?$/);
