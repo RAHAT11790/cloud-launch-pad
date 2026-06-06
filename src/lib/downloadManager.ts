@@ -229,6 +229,7 @@ class DownloadManager {
     this.sequence += 1;
     this.downloads.set(params.id, {
       id: params.id,
+      url: params.url,
       title: params.title,
       subtitle: params.subtitle,
       poster: params.poster,
@@ -253,6 +254,7 @@ class DownloadManager {
     this.sequence += 1;
     this.downloads.set(params.id, {
       id: params.id,
+      url: params.url,
       title: params.title,
       subtitle: params.subtitle,
       poster: params.poster,
