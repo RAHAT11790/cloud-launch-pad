@@ -623,6 +623,82 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     return anime.cast.filter((person) => person?.name || person?.character || person?.photo).slice(0, 12);
   }, [anime]);
 
+  const infoMetaItems = useMemo(() => {
+    const items = [
+      anime?.rating ? `★ ${anime.rating}` : "",
+      anime?.year ? String(anime.year) : "",
+      anime?.category ? String(anime.category) : "",
+      anime?.type === "webseries" ? "Anime" : "Movie",
+    ].filter(Boolean);
+    return items;
+  }, [anime?.category, anime?.rating, anime?.type, anime?.year]);
+
+  const downloadLanguageChoices = useMemo(() => {
+    const labels = new Set<string>();
+    normalizedLanguageTracks.forEach((track) => {
+      const label = String(track.label || track.language || "").trim();
+      if (label) labels.add(label);
+    });
+    return Array.from(labels);
+  }, [normalizedLanguageTracks]);
+
+  const getTrackQualityLinks = useCallback((track?: { link?: string; link480?: string; link720?: string; link1080?: string; link4k?: string } | null) => {
+    const map: Record<string, string> = {};
+    const pushQuality = (label: string, value?: string | null) => {
+      const clean = String(value || "").trim();
+      if (!clean) return;
+      map[label] = clean;
+    };
+    pushQuality("360P", track?.link);
+    pushQuality("480P", track?.link480);
+    pushQuality("720P", track?.link720);
+    pushQuality("1080P", track?.link1080);
+    pushQuality("4K", track?.link4k);
+    return map;
+  }, []);
+
+  const availableDownloadQualities = useMemo(() => {
+    const season = seasons?.[downloadPanelSeasonIdx];
+    if (season?.episodes?.length) {
+      const track = normalizedLanguageTracks.find((item) => item.label === currentLangLabel) || activeLanguageTrack;
+      const qualities = Object.keys(getTrackQualityLinks(track));
+      if (qualities.length > 0) return qualities;
+      const episodeSets = season.episodes.map((ep: any) => Object.keys(getTrackQualityLinks(ep)));
+      if (episodeSets.length === 0) return [];
+      return episodeSets.reduce<string[]>((common, current, idx) => {
+        if (idx === 0) return current;
+        return common.filter((quality) => current.includes(quality));
+      }, []);
+    }
+    const movieQualities = Object.keys(activeLanguageTrack ? getTrackQualityLinks(activeLanguageTrack) : movieQualityLinks);
+    return movieQualities.length > 0 ? movieQualities : Object.keys(movieQualityLinks);
+  }, [activeLanguageTrack, currentLangLabel, downloadPanelSeasonIdx, getTrackQualityLinks, movieQualityLinks, normalizedLanguageTracks, seasons]);
+
+  const downloadEpisodes = useMemo<DownloadEpisodeOption[]>(() => {
+    const season = seasons?.[downloadPanelSeasonIdx];
+    if (!season?.episodes?.length) return [];
+    const selectedTrack = normalizedLanguageTracks.find((item) => item.label === currentLangLabel) || activeLanguageTrack;
+    return season.episodes.map((ep: any, index: number) => {
+      const qualityLinks = selectedTrack ? getTrackQualityLinks(ep.audioTracks?.find((track: any) => {
+        const trackLabel = String(track?.label || track?.language || "").trim().toLowerCase();
+        return trackLabel === selectedTrack.label.trim().toLowerCase();
+      }) || ep) : getTrackQualityLinks(ep);
+      return {
+        index,
+        episodeNumber: ep.episodeNumber || index + 1,
+        title: ep.title || `Episode ${ep.episodeNumber || index + 1}`,
+        metaText: ep.title ? ep.title : `Episode ${ep.episodeNumber || index + 1}`,
+        qualityLinks,
+      };
+    }).filter((ep) => availableDownloadQualities.some((quality) => ep.qualityLinks[quality]));
+  }, [activeLanguageTrack, availableDownloadQualities, currentLangLabel, downloadPanelSeasonIdx, getTrackQualityLinks, normalizedLanguageTracks, seasons]);
+
+  const preferredDownloadQuality = useMemo(() => {
+    return ["480P", "720P", "1080P", "360P", "4K"].find((quality) => availableDownloadQualities.includes(quality))
+      || availableDownloadQualities[0]
+      || "";
+  }, [availableDownloadQualities]);
+
   useEffect(() => {
     if (!animeId) return;
     if (isGuest()) {
