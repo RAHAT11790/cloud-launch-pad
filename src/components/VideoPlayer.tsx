@@ -844,10 +844,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     if (!showDownloadQualityPicker) return;
     const initialSeasonIdx = currentSeasonIdx ?? 0;
     setDownloadPanelSeasonIdx(initialSeasonIdx);
+    setSelectedDownloadLanguageLabel(currentLangLabel);
     const activeIdx = episodeList?.findIndex((episode) => episode.active) ?? -1;
     setDlSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
     setSelectedDownloadQuality(preferredDownloadQuality);
-  }, [currentSeasonIdx, episodeList, showDownloadQualityPicker]);
+  }, [currentLangLabel, currentSeasonIdx, episodeList, preferredDownloadQuality, showDownloadQualityPicker]);
 
   useEffect(() => {
     if (!availableDownloadQualities.length) {
