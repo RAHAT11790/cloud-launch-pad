@@ -3037,7 +3037,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         tmdbId: data.id, title: data.name || "", logo: logoUrl, poster: data.poster_path ? TMDB_IMG_BASE + "original" + data.poster_path : "",
         backdrop: data.backdrop_path ? TMDB_IMG_BASE + "original" + data.backdrop_path : "", trailer: trailerUrl,
         year: data.first_air_date?.split("-")[0] || "", rating: data.vote_average?.toFixed(1) || "",
-        language: "Hindi", category: autoCategory, dubType: "official", storyline: data.overview || "", visibility: "public", weeklyEnabled: false, weeklyEveryDays: 7
+        language: "Hindi", category: autoCategory, dubType: "official", storyline: data.overview || "", visibility: "public", weeklyEnabled: false, weeklyEveryDays: 7, audioTracks: []
       });
       if (autoCategory) toast.info(`অটো ক্যাটাগরি: ${autoCategory}`);
       setSeriesCast(cast);
@@ -3130,6 +3130,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         weeklyEnabled: data.weeklyEnabled === true, weeklyEveryDays: Math.max(1, Number(data.weeklyEveryDays) || 7), weeklyDaysSinceLast: 0,
         telegramCustomButtonText: data.telegramCustomButton?.text || "",
         telegramCustomButtonUrl: data.telegramCustomButton?.url || "",
+        audioTracks: Array.isArray(data.audioTracks) ? data.audioTracks : data.audioTracks ? Object.values(data.audioTracks) : [],
     });
     setSeriesCast(data.cast || []);
     const loadedSeasons = data.seasons || [];
@@ -3241,7 +3242,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         tmdbId: data.id, title: data.title || "", logo: logoUrl, poster: data.poster_path ? TMDB_IMG_BASE + "original" + data.poster_path : "",
         backdrop: data.backdrop_path ? TMDB_IMG_BASE + "original" + data.backdrop_path : "", trailer: trailerUrl,
         year: data.release_date?.split("-")[0] || "", rating: data.vote_average?.toFixed(1) || "",
-        language: "Hindi", category: autoCategory, dubType: "official", storyline: data.overview || "", movieLink: "", downloadLink: "", visibility: "public"
+        language: "Hindi", category: autoCategory, dubType: "official", storyline: data.overview || "", movieLink: "", downloadLink: "", visibility: "public", audioTracks: []
       });
       if (autoCategory) toast.info(`অটো ক্যাটাগরি: ${autoCategory}`);
       setMovieCast(cast);
@@ -3297,6 +3298,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       movieLink1080: data.movieLink1080 || "", movieLink4k: data.movieLink4k || "", visibility: data.visibility || "public",
       telegramCustomButtonText: data.telegramCustomButton?.text || "",
       telegramCustomButtonUrl: data.telegramCustomButton?.url || "",
+      audioTracks: Array.isArray(data.audioTracks) ? data.audioTracks : data.audioTracks ? Object.values(data.audioTracks) : [],
     });
     setMovieCast(data.cast || []);
     setMovieEditId(id);
