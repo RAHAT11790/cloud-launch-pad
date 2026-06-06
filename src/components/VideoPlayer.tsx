@@ -3541,14 +3541,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         )}
 
         {!isFullscreen && showLanguageSheet && (
-          <div className="w-full border-t border-border bg-background">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h3 className="text-[15px] font-bold text-foreground">Select language</h3>
-              <button onClick={() => setShowLanguageSheet(false)} className="h-10 w-10 flex items-center justify-center rounded-full bg-foreground/[0.06] text-foreground/80">
-                <X className="w-5 h-5" />
+          <div className="w-full bg-black text-white">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <h3 className="text-[18px] font-bold tracking-tight">Select language</h3>
+              <button onClick={() => setShowLanguageSheet(false)} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-6 h-6" />
               </button>
             </div>
-            <div className="px-5 py-5 space-y-3">
+            <div className="h-px bg-white/10" />
+            <div className="px-4 pt-4 pb-8 space-y-3">
               {downloadLanguageChoices.map((label) => {
                 const active = label === currentLangLabel;
                 const track = normalizedLanguageTracks.find((item) => item.label === label);
@@ -3561,7 +3562,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       setShowDownloadQualityPicker(false);
                       setShowLanguageSheet(false);
                     }}
-                    className={`w-full rounded-[10px] px-4 py-5 text-center text-[16px] font-medium border transition-all ${active ? 'bg-primary/20 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/75 border-border'}`}
+                    className={`w-full rounded-[14px] px-4 py-5 text-center text-[16px] font-semibold transition-all active:scale-[0.99] ${
+                      active
+                        ? 'bg-gradient-to-r from-cyan-500/25 via-teal-500/20 to-emerald-500/25 text-cyan-300'
+                        : 'bg-white/[0.07] text-white/85 hover:bg-white/[0.1]'
+                    }`}
                   >
                     {label}
                   </button>
@@ -3572,14 +3577,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         )}
 
         {!isFullscreen && showSeasonSheet && !!seasons?.length && (
-          <div className="w-full border-t border-border bg-background">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h3 className="text-[15px] font-bold text-foreground">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
-              <button onClick={() => setShowSeasonSheet(false)} className="h-10 w-10 flex items-center justify-center rounded-full bg-foreground/[0.06] text-foreground/80">
-                <X className="w-5 h-5" />
+          <div className="w-full bg-black text-white">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <h3 className="text-[18px] font-bold tracking-tight">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
+              <button onClick={() => setShowSeasonSheet(false)} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-6 h-6" />
               </button>
             </div>
-            <div className="px-5 py-5 space-y-3">
+            <div className="h-px bg-white/10" />
+            <div className="px-4 pt-4 pb-8 space-y-3">
               {seasons.map((_, idx) => {
                 const label = getShortSeasonLabel(seasons[idx]?.name, idx);
                 const active = idx === (currentSeasonIdx ?? 0);
@@ -3592,7 +3598,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       setDlSelectedEpisodes(new Set([0]));
                       setShowSeasonSheet(false);
                     }}
-                    className={`w-full rounded-[10px] px-4 py-5 text-center text-[16px] font-medium border transition-all ${active ? 'bg-primary/20 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/75 border-border'}`}
+                    className={`w-full rounded-[14px] px-4 py-5 text-center text-[16px] font-semibold transition-all active:scale-[0.99] ${
+                      active
+                        ? 'bg-gradient-to-r from-cyan-500/25 via-teal-500/20 to-emerald-500/25 text-cyan-300'
+                        : 'bg-white/[0.07] text-white/85 hover:bg-white/[0.1]'
+                    }`}
                   >
                     {label}
                   </button>
