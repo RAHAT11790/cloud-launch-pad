@@ -3547,7 +3547,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         )}
 
         {!isFullscreen && showInfoSheet && (
-          <div className="w-full bg-black text-white">
+          <div className="w-full border-t border-white/8 bg-black text-white">
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <h3 className="text-[20px] font-bold tracking-tight">More details</h3>
               <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
@@ -3555,14 +3555,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
               </button>
             </div>
             <div className="h-px bg-white/10 mx-0" />
-            <div className="px-5 pt-5 pb-8 space-y-6">
+            <div className="px-5 pt-4 pb-7 space-y-5">
               <div className="flex items-start gap-3">
-                <div className="w-[88px] h-[120px] shrink-0 overflow-hidden rounded-[12px] bg-white/5">
+                <div className="w-[76px] h-[104px] shrink-0 overflow-hidden rounded-[10px] bg-white/5">
                   {anime?.poster ? <img src={anime.poster} alt={anime?.title || title} className="w-full h-full object-cover" loading="lazy" /> : null}
                 </div>
                 <div className="min-w-0 flex-1 space-y-2">
-                  <h4 className="text-[20px] font-extrabold leading-tight">{anime?.title || title}</h4>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-white/70">
+                  <h4 className="text-[18px] font-extrabold leading-tight">{anime?.title || title}</h4>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-white/70">
                     {infoMetaItems.map((item, i) => (
                       <span key={item} className="flex items-center gap-2">
                         {i > 0 && <span className="text-white/30">|</span>}
@@ -3580,13 +3580,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
               </div>
 
               <div className="space-y-2">
-                <h5 className="text-[18px] font-bold">Info</h5>
-                <p className="text-[14px] leading-6 text-white/75">{anime?.storyline || 'No storyline available yet.'}</p>
+                <h5 className="text-[16px] font-bold">Info</h5>
+                <p className="text-[13px] leading-6 text-white/75">{anime?.storyline || 'No storyline available yet.'}</p>
               </div>
 
               {!!infoCast.length && (
                 <div className="space-y-3">
-                  <h5 className="text-[20px] font-extrabold">Starring ({anime?.cast?.length || infoCast.length})</h5>
+                  <h5 className="text-[18px] font-extrabold">Starring ({anime?.cast?.length || infoCast.length})</h5>
                   <div className="grid grid-cols-4 gap-3">
                     {infoCast.map((person, index) => (
                       <div key={`${person.name}-${index}`} className="min-w-0">
