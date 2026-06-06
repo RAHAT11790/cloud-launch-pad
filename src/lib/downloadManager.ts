@@ -4,6 +4,7 @@ export type DownloadStatus = "queued" | "downloading" | "paused" | "complete" | 
 
 export interface ActiveDownload {
   id: string;
+  url?: string;
   title: string;
   subtitle?: string;
   poster?: string;
