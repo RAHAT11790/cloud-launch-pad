@@ -3496,9 +3496,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                     For you
                   </button>
                   {animeId && (
-                    <button onClick={() => setBottomTab("comments")} className={`text-[13px] font-bold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1.5 ${bottomTab === "comments" ? "bg-primary text-primary-foreground" : "bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/10"}`}>
-                      <span>Comments</span>
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${bottomTab === "comments" ? "bg-primary-foreground/20" : "bg-primary/15 text-primary"}`}>{commentCount}</span>
+                    <button onClick={() => setBottomTab("comments")} className={`text-[13px] font-bold px-3 py-1.5 rounded-full transition-colors ${bottomTab === "comments" ? "bg-primary text-primary-foreground" : "bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/10"}`}>
+                      Comments
                     </button>
                   )}
                 </div>
