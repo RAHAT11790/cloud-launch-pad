@@ -3957,27 +3957,50 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                     </div>
 
                     {/* Multi-episode picker */}
-                      <div className="px-4 pt-4 pb-2 flex flex-col gap-3 min-h-0">
-                        <div className="rounded-[14px] border border-white/10 bg-white/[0.05] p-4">
-                          <div className="flex items-center gap-2 mb-3">
-                            <h4 className="text-[13px] font-bold text-white">Resources</h4>
-                          </div>
+                      <div className="px-4 pt-3 pb-2 flex flex-col gap-3 min-h-0">
+                        <div className="rounded-[12px] border border-white/10 bg-white/[0.05] p-3">
                           <div className="grid grid-cols-2 gap-2">
-                            <button onClick={() => { openInlineSheet("language", "download"); }} className="h-14 rounded-[10px] border border-white/10 bg-white/[0.07] px-3 text-left text-base text-white flex items-center justify-between">
-                              <span className="truncate">{currentDownloadLanguageLabel}</span>
-                              <ChevronDown className="w-5 h-5 text-white/55" />
-                            </button>
-                            {hasMultiEpisodes ? (
-                              <button onClick={() => { openInlineSheet("season", "download"); }} className="h-14 rounded-[10px] border border-white/10 bg-white/[0.07] px-3 text-left text-base text-white flex items-center justify-between">
-                                <span className="truncate">{getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx)}</span>
-                                <ChevronDown className="w-5 h-5 text-white/55" />
-                              </button>
-                            ) : (
-                              <div className="h-14 rounded-[10px] border border-white/10 bg-white/[0.07] px-3 text-left text-base text-white/70 flex items-center">Movie</div>
-                            )}
+                            <div className="rounded-[10px] border border-white/10 bg-white/[0.07] px-3 py-2.5">
+                              <p className="text-[10px] text-white/45">Language</p>
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {downloadLanguageChoices.map((label) => (
+                                  <button
+                                    key={`download-lang-${label}`}
+                                    onClick={() => setSelectedDownloadLanguageLabel(label)}
+                                    className={`min-w-[68px] rounded-[9px] px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${label === currentDownloadLanguageLabel ? 'bg-primary/20 text-primary border border-primary/35' : 'bg-white/[0.06] text-white/78 border border-white/8'}`}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="rounded-[10px] border border-white/10 bg-white/[0.07] px-3 py-2.5">
+                              <p className="text-[10px] text-white/45">{hasMultiEpisodes ? 'Season' : 'Type'}</p>
+                              {hasMultiEpisodes ? (
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {(seasons || []).map((season, idx) => {
+                                    const label = getShortSeasonLabel(season?.name, idx);
+                                    return (
+                                      <button
+                                        key={`download-season-${idx}`}
+                                        onClick={() => {
+                                          setDownloadPanelSeasonIdx(idx);
+                                          setDlSelectedEpisodes(new Set([0]));
+                                        }}
+                                        className={`rounded-[9px] px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${idx === downloadPanelSeasonIdx ? 'bg-primary/20 text-primary border border-primary/35' : 'bg-white/[0.06] text-white/78 border border-white/8'}`}
+                                      >
+                                        {label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <p className="mt-2 text-[12px] font-semibold text-white/75">Movie</p>
+                              )}
+                            </div>
                           </div>
                           <div className="mt-3 border-t border-white/10 pt-3">
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-3 gap-2">
                               {qualityChoices.map((label) => {
                                 const is4K = is4KLabel(label);
                                 const locked4K = is4K && !isPremium;
@@ -3989,7 +4012,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                                       if (locked4K) return;
                                       setSelectedDownloadQuality(label);
                                     }}
-                                    className={`h-12 rounded-[10px] text-base font-semibold border transition-all ${locked4K ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : 'bg-white/[0.07] text-white border-white/10'} ${label === activeQuality ? 'bg-primary/20 text-primary border-primary/40' : ''}`}
+                                    className={`h-10 rounded-[10px] text-[12px] font-semibold border transition-all ${locked4K ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : 'bg-white/[0.07] text-white border-white/10'} ${label === activeQuality ? 'bg-primary/20 text-primary border-primary/40' : ''}`}
                                   >
                                     {label}
                                   </button>
@@ -4000,19 +4023,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                         </div>
 
                         {hasMultiEpisodes && panelSeason && (
-                          <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: '38vh', WebkitOverflowScrolling: 'touch' }}>
+                          <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: '34vh', WebkitOverflowScrolling: 'touch' }}>
                             <div className="space-y-4">
                               {panelEpisodes.map((ep) => {
                                 const selected = dlSelectedEpisodes.has(ep.index);
                                 const qualityUrl = activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
                                 return (
-                                  <button key={`${downloadPanelSeasonIdx}-${ep.index}`} onClick={() => toggleEpisode(ep.index)} className="w-full flex items-start gap-3 text-left">
-                                    <span className={`mt-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 ${selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
+                                  <button key={`${downloadPanelSeasonIdx}-${ep.index}`} onClick={() => toggleEpisode(ep.index)} className="w-full flex items-start gap-3 rounded-[10px] border border-white/8 bg-white/[0.03] px-2.5 py-2 text-left">
+                                    <span className={`mt-1 flex h-5 w-5 items-center justify-center rounded-full border-2 ${selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
                                       <Check className="w-3.5 h-3.5" />
                                     </span>
                                     <span className="min-w-0 flex-1">
-                                      <span className="block text-[18px] font-medium text-white">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
-                                      <span className="block text-[12px] text-white/55 mt-1 truncate">{qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} link`}</span>
+                                      <span className="block text-[13px] font-medium text-white">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
+                                      <span className="block text-[11px] text-white/55 mt-0.5 truncate">{qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} link`}</span>
                                     </span>
                                   </button>
                                 );
@@ -4035,9 +4058,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                             if (hasMultiEpisodes) startSelectedDownloads(preferred);
                             else startMovieDownload(preferred);
                           }}
-                          className="flex-1 h-14 rounded-[12px] bg-gradient-to-r from-cyan-500 to-green-400 text-black text-[18px] font-semibold flex items-center justify-center gap-2"
+                          className="flex-1 h-11 rounded-[12px] bg-gradient-to-r from-cyan-500 to-green-400 text-black text-[13px] font-semibold flex items-center justify-center gap-2"
                         >
-                          <Download className="w-5 h-5" />
+                          <Download className="w-4 h-4" />
                           <span>{activeQuality ? `Download - ${activeQuality}` : 'Download'}</span>
                         </button>
                       </div>
