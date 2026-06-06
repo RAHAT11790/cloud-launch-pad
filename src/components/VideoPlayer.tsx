@@ -3937,8 +3937,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
               {showDownloadQualityPicker && (
                 <div
                   ref={downloadPanelRef}
-                  className="fixed left-0 right-0 bottom-0 z-[40] overflow-y-auto overscroll-contain border-t border-white/10 bg-black text-white flex flex-col"
-                  style={{ top: resolvedSheetTop }}
+                  className="mt-5 border-t border-white/10 bg-black text-white flex flex-col"
                   data-player-panel="true"
                 >
                   {/* Header */}
