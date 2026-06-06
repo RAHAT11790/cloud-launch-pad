@@ -3607,7 +3607,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                             </button>
                             {hasMultiEpisodes ? (
                               <button onClick={() => { setShowSeasonSheet(true); }} className="h-14 rounded-[10px] border border-border bg-secondary px-3 text-left text-base text-foreground flex items-center justify-between">
-                                <span className="truncate">{getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx).replace('Season ', 'Season 0')}</span>
+                                <span className="truncate">{activeSeasonLabel}</span>
                                 <ChevronDown className="w-5 h-5 text-muted-foreground" />
                               </button>
                             ) : (
