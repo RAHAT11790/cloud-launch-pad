@@ -3647,7 +3647,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
             <div className="h-px bg-white/10" />
             <div className="px-4 pt-4 pb-8 space-y-4">
               <button
-                onClick={() => void handleShare()}
+                onClick={() => {
+                  void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx);
+                  closeInlineSheets();
+                }}
                 className="w-full rounded-[14px] bg-gradient-to-r from-cyan-500/25 via-teal-500/20 to-emerald-500/25 px-4 py-5 text-left text-[16px] font-semibold text-cyan-300"
               >
                 Share current episode
@@ -3668,7 +3671,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                         key={`${sharePanelSeasonIdx}-${episode.index}`}
                         onClick={() => {
                           setSharePanelEpisodeIdx(episode.index);
-                          void handleEpisodeShare(sharePanelSeasonIdx, episode.index);
+                          void handleShare(sharePanelSeasonIdx, episode.index);
+                          closeInlineSheets();
                         }}
                         className={`rounded-[12px] px-3 py-3 text-left transition-all ${episode.index === sharePanelEpisodeIdx ? 'bg-gradient-to-r from-cyan-500/25 via-teal-500/20 to-emerald-500/25 text-cyan-300' : 'bg-white/[0.07] text-white/85 hover:bg-white/[0.1]'}`}
                       >
