@@ -111,15 +111,20 @@ class DownloadManager {
   }
 
   private async fetchTotalSize(url: string): Promise<number> {
+    const candidate = String(url || "").trim();
+    if (!candidate) return 0;
     try {
       // Try HEAD first (cheap, no body)
-      const head = await fetch(url, { method: "HEAD", mode: "cors" });
+      const head = await fetch(candidate, { method: "HEAD", mode: "cors" });
       const len = head.headers.get("content-length");
       if (len && Number(len) > 0) return Number(len);
+      const disposition = head.headers.get("content-disposition") || "";
+      const sizeHint = /size=(\d+)/i.exec(disposition)?.[1];
+      if (sizeHint && Number(sizeHint) > 0) return Number(sizeHint);
     } catch {}
     try {
       // Fallback: GET with Range bytes=0-0 to read Content-Range
-      const r = await fetch(url, { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" });
+      const r = await fetch(candidate, { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" });
       const range = r.headers.get("content-range");
       if (range) {
         const m = /\/(\d+)\s*$/.exec(range);
