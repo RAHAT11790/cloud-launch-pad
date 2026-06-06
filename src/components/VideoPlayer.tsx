@@ -2655,7 +2655,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, onClose, onNextEpisode, epi
               style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}
             >
               {/* Top controls */}
-              <div className="flex justify-end gap-1.5 p-2.5 sm:p-3">
+              <div className="flex justify-between items-center gap-1.5 p-2.5 sm:p-3">
+                <button onClick={(e) => { e.stopPropagation(); stopAndClosePlayer(); }} className="player-touch-button h-9 w-9 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div className="flex items-center gap-1.5">
                 <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95">
                   <Crop className="w-3.5 h-3.5" />
                   <span className="text-[10px] font-medium">{cropLabels[cropIndex]}</span>
