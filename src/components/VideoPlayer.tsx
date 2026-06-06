@@ -546,20 +546,77 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     if (selectedLanguageLabel) return selectedLanguageLabel;
     const explicit = propAudioTracks?.[0]?.language || propAudioTracks?.[0]?.label;
     if (explicit) return explicit;
-    return "Default";
+    const fallback = String(anime?.language || "").trim();
+    if (fallback) return fallback;
+    return "Unknown";
   }, [propAudioTracks, selectedLanguageLabel]);
 
   const languageOptions = useMemo(() => {
     const labels = new Set<string>();
+    const animeLanguage = String(anime?.language || "").trim();
+    if (animeLanguage) labels.add(animeLanguage);
     if (propAudioTracks?.length) {
       propAudioTracks.forEach((track) => {
         const label = String(track.label || track.language || "").trim();
         if (label) labels.add(label);
       });
     }
-    if (labels.size === 0) labels.add(currentLangLabel || "Default");
+    if (labels.size === 0 && currentLangLabel) labels.add(currentLangLabel);
     return Array.from(labels);
-  }, [currentLangLabel, propAudioTracks]);
+  }, [anime?.language, currentLangLabel, propAudioTracks]);
+
+  const activeSeasonLabel = useMemo(() => getShortSeasonLabel(seasons?.[currentSeasonIdx ?? 0]?.name, currentSeasonIdx ?? 0), [currentSeasonIdx, seasons]);
+
+  const movieQualityLinks = useMemo(() => {
+    const map: Record<string, string> = {};
+    const pushQuality = (label: string, value?: string | null) => {
+      const clean = String(value || "").trim();
+      if (!clean) return;
+      map[label] = clean;
+    };
+    pushQuality("360P", src);
+    pushQuality("480P", anime?.movieLink480);
+    pushQuality("720P", anime?.movieLink720);
+    pushQuality("1080P", anime?.movieLink1080);
+    pushQuality("4K", anime?.movieLink4k);
+    return map;
+  }, [anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, src]);
+
+  const normalizedLanguageTracks = useMemo(() => {
+    const fallbackLanguage = String(anime?.language || "").trim() || currentLangLabel;
+    const baseTrack = {
+      language: fallbackLanguage,
+      label: fallbackLanguage,
+      link: src,
+      link480: anime?.movieLink480,
+      link720: anime?.movieLink720,
+      link1080: anime?.movieLink1080,
+      link4k: anime?.movieLink4k,
+    };
+    const pool = propAudioTracks?.length ? propAudioTracks : [baseTrack];
+    const unique = new Map<string, typeof baseTrack>();
+    pool.forEach((track) => {
+      const label = String(track.label || track.language || fallbackLanguage).trim();
+      if (!label || unique.has(label.toLowerCase())) return;
+      unique.set(label.toLowerCase(), {
+        language: String(track.language || label).trim() || label,
+        label,
+        link: String(track.link || src || "").trim(),
+        link480: track.link480,
+        link720: track.link720,
+        link1080: track.link1080,
+        link4k: track.link4k,
+      });
+    });
+    return Array.from(unique.values());
+  }, [anime?.language, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, currentLangLabel, propAudioTracks, src]);
+
+  const activeLanguageTrack = useMemo(() => {
+    const selectedKey = currentLangLabel.trim().toLowerCase();
+    return normalizedLanguageTracks.find((track) => track.label.trim().toLowerCase() === selectedKey)
+      || normalizedLanguageTracks[0]
+      || null;
+  }, [currentLangLabel, normalizedLanguageTracks]);
 
   const infoCast = useMemo(() => {
     if (!anime?.cast?.length) return [];
