@@ -3997,23 +3997,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   };
 
   const updateEpisodeLink = (sIdx: number, eIdx: number, link: string) => {
-    setSeasonsData(prev => {
-      const copy = [...prev];
-      const s = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
-      s.episodes[eIdx] = { ...s.episodes[eIdx], link };
-      copy[sIdx] = s;
-      return copy;
-    });
+    updateSeriesEpisodeLanguageLink(sIdx, eIdx, "link", link);
   };
 
   const updateEpisodeQualityLink = (sIdx: number, eIdx: number, quality: string, link: string) => {
-    setSeasonsData(prev => {
-      const copy = [...prev];
-      const s = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
-      s.episodes[eIdx] = { ...s.episodes[eIdx], [quality]: link };
-      copy[sIdx] = s;
-      return copy;
-    });
+    updateSeriesEpisodeLanguageLink(sIdx, eIdx, quality, link);
   };
 
   // ==================== AUTH HANDLERS ====================
