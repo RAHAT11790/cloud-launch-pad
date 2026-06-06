@@ -3465,31 +3465,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
               .replace(/\s+/g, "_")
               .toLowerCase();
 
-          const pickEpUrlForQuality = (ep: any, quality: string): string => {
-            const q = quality.toLowerCase();
-            if (q.includes("4k") || q.includes("2160")) return ep.link4k || ep.link1080 || ep.link720 || ep.link480 || ep.link;
-            if (q.includes("1080")) return ep.link1080 || ep.link720 || ep.link480 || ep.link;
-            if (q.includes("720")) return ep.link720 || ep.link480 || ep.link1080 || ep.link;
-            if (q.includes("480")) return ep.link480 || ep.link720 || ep.link1080 || ep.link;
-            return ep.link || ep.link1080 || ep.link720 || ep.link480;
+          const pickEpUrlForQuality = (ep: DownloadEpisodeOption, quality: string): string => {
+            return ep.qualityLinks[quality] || "";
           };
 
           const hasMultiEpisodes = !!(seasons && seasons.length > 0 && seasons.some((s) => (s.episodes?.length || 0) > 0));
           const panelSeason = seasons && seasons[downloadPanelSeasonIdx] ? seasons[downloadPanelSeasonIdx] : null;
-          const panelEpisodes = panelSeason?.episodes || [];
-
-          const openDownloadPanel = () => {
-            const initialSeasonIdx = currentSeasonIdx ?? 0;
-            setDownloadPanelSeasonIdx(initialSeasonIdx);
-            // Preselect the currently-playing episode if we can identify it
-            const initial = new Set<number>();
-            if (seasons && seasons[initialSeasonIdx]) {
-              const activeIdx = episodeList?.findIndex((e) => e.active) ?? -1;
-              if (activeIdx >= 0) initial.add(activeIdx);
-            }
-            setDlSelectedEpisodes(initial);
-            setShowDownloadQualityPicker(true);
-          };
+          const panelEpisodes = downloadEpisodes;
 
           const toggleEpisode = (idx: number) => {
             setDlSelectedEpisodes((prev) => {
@@ -3502,7 +3484,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
           const toggleAll = () => {
             setDlSelectedEpisodes((prev) => {
               if (prev.size === panelEpisodes.length) return new Set();
-              return new Set(panelEpisodes.map((_, i) => i));
+              return new Set(panelEpisodes.map((episode) => episode.index));
             });
           };
 
@@ -3538,14 +3520,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
             let queued = 0;
             let skipped = 0;
             for (const idx of orderedIdxs) {
-              const ep = panelEpisodes[idx];
+              const ep = panelEpisodes.find((episode) => episode.index === idx);
               if (!ep) { skipped++; continue; }
-              const epSubtitle = `${panelSeason.name} - Episode ${ep.episodeNumber}`;
+              const epSubtitle = `${activeSeasonLabel} - Episode ${ep.episodeNumber}`;
               const epUrl = getDownloadUrl(
                 pickEpUrlForQuality(ep, quality),
                 quality,
                 epSubtitle,
-                [ep.link, ep.link480, ep.link720, ep.link1080, ep.link4k].filter(Boolean) as string[],
+                Object.values(ep.qualityLinks),
               );
               if (!epUrl) { skipped++; continue; }
               downloadManager.enqueueDownload({
