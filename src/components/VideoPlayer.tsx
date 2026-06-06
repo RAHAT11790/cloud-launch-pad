@@ -1197,19 +1197,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       : title;
     const shareData = { title: shareTitle, text: shareTitle, url };
     try {
-      if ((navigator as any).share && (!(navigator as any).canShare || (navigator as any).canShare(shareData))) {
-        await (navigator as any).share(shareData);
+      const nav: any = navigator;
+      if (nav?.share && (!nav.canShare || nav.canShare(shareData))) {
+        await nav.share(shareData);
         return;
       }
     } catch (err: any) {
       if (err?.name === "AbortError") return;
     }
-    try {
-      await navigator.clipboard?.writeText(url);
-      toast.success(hasEpisodeContext ? "Episode link copied" : "Link copied");
-    } catch {
-      toast.error("Sharing is not supported on this device.");
-    }
+    // No native share API — open a custom share menu (Telegram / WhatsApp / FB / X / Copy)
+    setShareFallback({ url, title: shareTitle });
   }, [buildShareLinkForEpisode, shareLink, title]);
 
   const handleOpenAdLink = useCallback(async (url: string, _service?: AdService) => {
