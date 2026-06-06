@@ -44,7 +44,6 @@ const PROXY_SERVER_LIMIT = 3;
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { pickHttpsDownloadUrl, isHttpsDownloadableUrl } from "@/lib/downloadSources";
-import { buildVideoDownloadUrl } from "@/lib/videoDownload";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 // Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
@@ -845,16 +844,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, [activeEpisodeIdx]);
 
   useEffect(() => {
-    if (!showDownloadQualityPicker) return;
-    const initialSeasonIdx = currentSeasonIdx ?? 0;
-    setDownloadPanelSeasonIdx(initialSeasonIdx);
-    setSelectedDownloadLanguageLabel(currentLangLabel);
-    const activeIdx = episodeList?.findIndex((episode) => episode.active) ?? -1;
-    setDlSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
-    setSelectedDownloadQuality(preferredDownloadQuality);
-  }, [currentLangLabel, currentSeasonIdx, episodeList, preferredDownloadQuality, showDownloadQualityPicker]);
-
-  useEffect(() => {
     if (!availableDownloadQualities.length) {
       setSelectedDownloadQuality("");
       return;
@@ -913,6 +902,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, []);
 
   const openInlineSheet = useCallback((sheet: "info" | "language" | "season" | "download" | "library" | "share" | "addToList", origin: "resource" | "download" | "share" = "resource") => {
+    if (sheet === "download") {
+      const initialSeasonIdx = currentSeasonIdx ?? 0;
+      const activeIdx = episodeList?.findIndex((episode) => episode.active) ?? -1;
+      setDownloadPanelSeasonIdx(initialSeasonIdx);
+      setSelectedDownloadLanguageLabel(currentLangLabel);
+      setDlSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
+      setSelectedDownloadQuality(preferredDownloadQuality);
+    }
     setShowInfoSheet(sheet === "info");
     setShowLanguageSheet(sheet === "language");
     setShowSeasonSheet(sheet === "season");
@@ -921,7 +918,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     setShowLibrarySheet(sheet === "library");
     setShowDownloadQualityPicker(sheet === "download");
     setSheetOrigin(origin);
-  }, []);
+  }, [currentLangLabel, currentSeasonIdx, episodeList, preferredDownloadQuality]);
 
   const handleInlineSheetClose = useCallback((event?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
     event?.preventDefault?.();
