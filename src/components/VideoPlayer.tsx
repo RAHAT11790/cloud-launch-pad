@@ -3394,6 +3394,115 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
           </div>
         )}
 
+        {!isFullscreen && showInfoSheet && (
+          <div className="w-full border-t border-border bg-background">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h3 className="text-[15px] font-bold text-foreground">More details</h3>
+              <button onClick={() => setShowInfoSheet(false)} className="h-10 w-10 flex items-center justify-center rounded-full bg-foreground/[0.06] text-foreground/80">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-5 py-5 space-y-6">
+              <div className="flex items-start gap-3">
+                <div className="w-[72px] h-[108px] shrink-0 overflow-hidden rounded-[10px] bg-foreground/5">
+                  {anime?.poster ? <img src={anime.poster} alt={anime?.title || title} className="w-full h-full object-cover" loading="lazy" /> : null}
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <h4 className="text-[18px] font-bold leading-tight text-foreground">{anime?.title || title}</h4>
+                  <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+                    {infoMetaItems.map((item) => (
+                      <span key={item}>{item}</span>
+                    ))}
+                    {!!seasons?.length && <span>{seasons.length} season{seasons.length > 1 ? 's' : ''}</span>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h5 className="text-[14px] font-semibold text-foreground">Info</h5>
+                <p className="text-[14px] leading-6 text-muted-foreground">{anime?.storyline || 'No storyline available yet.'}</p>
+              </div>
+
+              {!!infoCast.length && (
+                <div className="space-y-3">
+                  <h5 className="text-[18px] font-bold text-foreground">Starring ({anime?.cast?.length || infoCast.length})</h5>
+                  <div className="grid grid-cols-4 gap-3">
+                    {infoCast.map((person, index) => (
+                      <div key={`${person.name}-${index}`} className="min-w-0">
+                        <div className="aspect-[3/4] overflow-hidden rounded-[10px] bg-foreground/5">
+                          {person.photo ? <img src={person.photo} alt={person.name} className="w-full h-full object-cover" loading="lazy" /> : null}
+                        </div>
+                        <p className="mt-2 text-[12px] font-medium text-foreground line-clamp-2">{person.name}</p>
+                        {person.character ? <p className="mt-1 text-[11px] leading-4 text-muted-foreground line-clamp-2">{person.character}</p> : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!isFullscreen && showLanguageSheet && (
+          <div className="w-full border-t border-border bg-background">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h3 className="text-[15px] font-bold text-foreground">Select language</h3>
+              <button onClick={() => setShowLanguageSheet(false)} className="h-10 w-10 flex items-center justify-center rounded-full bg-foreground/[0.06] text-foreground/80">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-5 py-5 space-y-3">
+              {downloadLanguageChoices.map((label) => {
+                const active = label === currentLangLabel;
+                const track = normalizedLanguageTracks.find((item) => item.label === label);
+                return (
+                  <button
+                    key={label}
+                    onClick={() => {
+                      if (track) switchAudioTrack({ language: track.language, label: track.label, src: track.link, src480: track.link480, src720: track.link720, src1080: track.link1080, src4k: track.link4k });
+                      else setSelectedLanguageLabel(label);
+                      setShowLanguageSheet(false);
+                    }}
+                    className={`w-full rounded-[10px] px-4 py-5 text-center text-[16px] font-medium border transition-all ${active ? 'bg-primary/20 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/75 border-border'}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {!isFullscreen && showSeasonSheet && !!seasons?.length && (
+          <div className="w-full border-t border-border bg-background">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h3 className="text-[15px] font-bold text-foreground">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
+              <button onClick={() => setShowSeasonSheet(false)} className="h-10 w-10 flex items-center justify-center rounded-full bg-foreground/[0.06] text-foreground/80">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-5 py-5 space-y-3">
+              {seasons.map((_, idx) => {
+                const label = getShortSeasonLabel(seasons[idx]?.name, idx);
+                const active = idx === (currentSeasonIdx ?? 0);
+                return (
+                  <button
+                    key={`${label}-${idx}`}
+                    onClick={() => {
+                      setDownloadPanelSeasonIdx(idx);
+                      onSeasonChange?.(idx);
+                      setShowSeasonSheet(false);
+                    }}
+                    className={`w-full rounded-[10px] px-4 py-5 text-center text-[16px] font-medium border transition-all ${active ? 'bg-primary/20 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/75 border-border'}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Tutorial Video Modal */}
         {showTutorialVideo && (() => {
           const activeVid = activeTutorialIdx >= 0 && tutorialVideos[activeTutorialIdx]
