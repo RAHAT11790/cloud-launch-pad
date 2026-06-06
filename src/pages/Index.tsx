@@ -2119,6 +2119,8 @@ const Index = () => {
     return [...matched, ...fillers].slice(0, 15);
   }, [playerState?.anime, saltPlayerState?.anime, allAnime]);
 
+  const suggestedAnimeImmediate = useMemo(() => suggestedAnime.slice(0, 15), [suggestedAnime]);
+
   useEffect(() => {
     const warmProfile = () => import("@/components/ProfilePage");
     if (showProfile) {
