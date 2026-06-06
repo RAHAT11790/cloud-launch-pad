@@ -501,6 +501,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const [showLanguageSheet, setShowLanguageSheet] = useState(false);
   const [showSeasonSheet, setShowSeasonSheet] = useState(false);
   const [showLibrarySheet, setShowLibrarySheet] = useState(false);
+  const [sheetOrigin, setSheetOrigin] = useState<"resource" | "download">("resource");
   const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
   const [dlSelectedEpisodes, setDlSelectedEpisodes] = useState<Set<number>>(new Set());
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
@@ -786,6 +787,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       setSelectedDownloadQuality(preferredDownloadQuality);
     }
   }, [availableDownloadQualities, preferredDownloadQuality, selectedDownloadQuality]);
+
+  const closeInlineSheets = useCallback(() => {
+    setShowInfoSheet(false);
+    setShowLanguageSheet(false);
+    setShowSeasonSheet(false);
+    setShowLibrarySheet(false);
+    setShowDownloadQualityPicker(false);
+    setSheetOrigin("resource");
+  }, []);
+
+  const openInlineSheet = useCallback((sheet: "info" | "language" | "season" | "download" | "library", origin: "resource" | "download" = "resource") => {
+    setShowInfoSheet(sheet === "info");
+    setShowLanguageSheet(sheet === "language");
+    setShowSeasonSheet(sheet === "season");
+    setShowLibrarySheet(sheet === "library");
+    setShowDownloadQualityPicker(sheet === "download");
+    setSheetOrigin(origin);
+  }, []);
 
   useEffect(() => {
     const unsub = downloadManager.subscribe((snapshot) => {
