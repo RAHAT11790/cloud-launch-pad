@@ -120,7 +120,6 @@ import BottomNav from "@/components/BottomNav";
 import HeroSlider from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
-import AnimeDetails from "@/components/AnimeDetails";
 import VideoPlayer from "@/components/VideoPlayer";
 import NotificationsPage from "@/pages/NotificationsPage";
 import ProfilePage from "@/components/ProfilePage";
@@ -1147,13 +1146,13 @@ const Index = () => {
     return Array.from(bestByTitle.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [animeSaltItems]);
 
-  const openPlayerFromAnime = useCallback(async (anime: AnimeItem, overrides?: { seasonIdx?: number; epIdx?: number }) => {
+  async function openPlayerFromAnime(anime: AnimeItem, overrides?: { seasonIdx?: number; epIdx?: number }) {
     const target = {
       ...getDefaultWatchTarget(anime),
       ...(overrides || {}),
     };
     await handlePlay(anime, target.seasonIdx, target.epIdx);
-  }, [getDefaultWatchTarget, handlePlay]);
+  }
 
   const handleCardClick = async (anime: AnimeItem) => {
     // Cancel any stale in-flight AnimeSalt details requests when switching content
