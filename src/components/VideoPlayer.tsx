@@ -3418,7 +3418,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                 <Bookmark className={`w-3.5 h-3.5 flex-shrink-0 ${saved ? 'fill-primary' : ''}`} />
                 <span className="whitespace-nowrap truncate">{saved ? 'Saved' : 'Add to list'}</span>
               </button>
-              <button onClick={() => openInlineSheet("share")} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium border transition-colors ${showShareSheet ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
+              <button onClick={() => { void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx); }} className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium border transition-colors bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border">
                 <Share2 className="w-3.5 h-3.5 flex-shrink-0" />
                 <span>Share</span>
               </button>
@@ -3461,7 +3461,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
               </div>
             )}
 
-            {((suggestedAnime && suggestedAnime.length > 0) || animeId) && (
+            {!inlineSheetOpen && ((suggestedAnime && suggestedAnime.length > 0) || animeId) && (
               <div className="mt-5">
                 <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
                   <button onClick={() => setBottomTab("foryou")} className={`text-[13px] font-bold px-3 py-1.5 rounded-full transition-colors ${bottomTab === "foryou" ? "bg-primary text-primary-foreground" : "bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/10"}`}>
