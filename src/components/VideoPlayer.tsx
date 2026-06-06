@@ -1722,6 +1722,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     setShowAudioPanel(false);
     setShowQualityPanel(false);
     setShowServerPanel(false);
+    setShowInfoSheet(false);
+    setShowLanguageSheet(false);
+    setShowSeasonSheet(false);
+    setShowDownloadQualityPicker(false);
 
     const v = videoRef.current;
     const iframe = embedIframeRef.current;
