@@ -44,6 +44,7 @@ const PROXY_SERVER_LIMIT = 3;
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { pickHttpsDownloadUrl, isHttpsDownloadableUrl } from "@/lib/downloadSources";
+import { buildVideoDownloadUrl } from "@/lib/videoDownload";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 // Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
@@ -3765,7 +3766,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
             <div className="px-3 pt-3 pb-6 space-y-2">
               {seasons.map((_, idx) => {
                 const label = getShortSeasonLabel(seasons[idx]?.name, idx);
-                const activeSeasonIndex = sheetOrigin === "share" ? sharePanelSeasonIdx : (currentSeasonIdx ?? 0);
+                const activeSeasonIndex = sheetOrigin === "share"
+                  ? sharePanelSeasonIdx
+                  : sheetOrigin === "download"
+                    ? downloadPanelSeasonIdx
+                    : (currentSeasonIdx ?? 0);
                 const active = idx === activeSeasonIndex;
                 return (
                   <button
