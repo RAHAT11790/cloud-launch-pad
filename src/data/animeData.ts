@@ -57,6 +57,8 @@ export interface AnimeItem {
   source?: "firebase" | "animesalt" | "moviebox";
   slug?: string;
   dubType?: "official" | "fandub";
+  baseLanguage?: string;
+  availableLanguages?: string[];
   episodeCount?: number;
   audioTracks?: AudioTrack[];
   cast?: { name: string; character?: string; photo: string }[];
