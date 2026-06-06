@@ -3656,7 +3656,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
               {!!seasons?.length && (
                 <div className="space-y-3 rounded-[14px] bg-white/[0.05] p-4">
                   <div className="flex items-center gap-2">
-                    <button onClick={() => openInlineSheet("season")} className="inline-flex min-w-[132px] items-center justify-between gap-2 rounded-[10px] bg-white/[0.07] px-3 py-2 text-sm font-semibold text-white/90">
+                    <button onClick={() => openInlineSheet("season", "share")} className="inline-flex min-w-[132px] items-center justify-between gap-2 rounded-[10px] bg-white/[0.07] px-3 py-2 text-sm font-semibold text-white/90">
                       <span className="truncate">{getShortSeasonLabel(shareSeason?.name, sharePanelSeasonIdx)}</span>
                       <ChevronDown className="w-4 h-4 text-white/60" />
                     </button>
@@ -3740,6 +3740,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       if (track) switchAudioTrack({ language: track.language, label: track.label, src: track.link, src480: track.link480, src720: track.link720, src1080: track.link1080, src4k: track.link4k });
                       else setSelectedLanguageLabel(label);
                       if (sheetOrigin === "download") openInlineSheet("download", "download");
+                      else if (sheetOrigin === "share") openInlineSheet("share", "share");
                       else closeInlineSheets();
                     }}
                     className={`w-full rounded-[14px] px-4 py-5 text-center text-[16px] font-semibold transition-all active:scale-[0.99] ${
@@ -3773,6 +3774,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                   <button
                     key={`${label}-${idx}`}
                     onClick={() => {
+                      if (sheetOrigin === "share") {
+                        setSharePanelSeasonIdx(idx);
+                        setSharePanelEpisodeIdx(0);
+                        openInlineSheet("share", "share");
+                        return;
+                      }
                       setDownloadPanelSeasonIdx(idx);
                       onSeasonChange?.(idx);
                       setDlSelectedEpisodes(new Set([0]));
