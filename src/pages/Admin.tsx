@@ -3615,6 +3615,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const categoryList = useMemo(() => Object.entries(categoriesData).map(([id, cat]: any) => ({ id, name: cat.name })), [categoriesData]);
   const languageOptions = useMemo(() => ["English", "Hindi", "Tamil", "Telugu", "Korean", "Japanese", "Spanish", "Multi"], []);
 
+  const buildEmptyAudioTrack = useCallback(() => ({
+    language: "",
+    label: "",
+    link: "",
+    link480: "",
+    link720: "",
+    link1080: "",
+    link4k: "",
+  }), []);
+
   // Season/Episode helpers
   const addSeason = (name = "", episodeCount = 1) => {
     setSeasonsData(prev => [...prev, {
