@@ -480,6 +480,12 @@ const Index = () => {
     const qs = params.toString();
     return `/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
   }, []);
+  const getDefaultWatchTarget = useCallback((anime: AnimeItem) => {
+    if (anime.type === "webseries" && anime.seasons?.length) {
+      return { seasonIdx: 0, epIdx: 0 };
+    }
+    return { seasonIdx: undefined, epIdx: undefined };
+  }, []);
   const buildShareLink = useCallback((animeId: string, seasonIdx?: number, epIdx?: number) => {
     return buildEpisodeDeepLink(animeId, seasonIdx, epIdx);
   }, []);
@@ -1141,6 +1147,14 @@ const Index = () => {
     return Array.from(bestByTitle.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [animeSaltItems]);
 
+  const openPlayerFromAnime = useCallback(async (anime: AnimeItem, overrides?: { seasonIdx?: number; epIdx?: number }) => {
+    const target = {
+      ...getDefaultWatchTarget(anime),
+      ...(overrides || {}),
+    };
+    await handlePlay(anime, target.seasonIdx, target.epIdx);
+  }, [getDefaultWatchTarget, handlePlay]);
+
   const handleCardClick = async (anime: AnimeItem) => {
     // Cancel any stale in-flight AnimeSalt details requests when switching content
     detailsRequestRef.current += 1;
@@ -1148,7 +1162,8 @@ const Index = () => {
     // Reflect details view in the URL so back-button works as a real route.
     // Use replace when coming from a routed overlay (search/notifications) to
     // avoid stacking duplicate entries; push from anywhere else.
-    const targetRoute = buildAnimeRoute(anime.id);
+    const watchTarget = getDefaultWatchTarget(anime);
+    const targetRoute = buildWatchRoute(anime.id, watchTarget.seasonIdx, watchTarget.epIdx);
     if (location.pathname !== targetRoute) {
       const fromRoutedOverlay = isSearchRoute || isNotificationsRoute;
       navigate(targetRoute, { replace: fromRoutedOverlay });
@@ -1224,7 +1239,7 @@ const Index = () => {
             })),
           };
           detailsCacheRef.current.set(anime.id, fullAnime);
-          setSelectedAnime(fullAnime);
+          await openPlayerFromAnime(fullAnime);
           dismissDetailsLoadingToast();
           return;
         }
@@ -1357,7 +1372,7 @@ const Index = () => {
 
           if (requestId !== detailsRequestRef.current) return;
           detailsCacheRef.current.set(anime.id, fullAnime);
-          setSelectedAnime(fullAnime);
+          await openPlayerFromAnime(fullAnime);
         } else {
           // API didn't return data — show anime with metadata from Firebase
           const fallbackAnime: AnimeItem = {
@@ -1369,7 +1384,7 @@ const Index = () => {
             language: anime.language || '',
           };
           detailsCacheRef.current.set(anime.id, fallbackAnime);
-          setSelectedAnime(fallbackAnime);
+          await openPlayerFromAnime(fallbackAnime);
         }
       } catch {
         if (requestId === detailsRequestRef.current) {
@@ -1378,7 +1393,7 @@ const Index = () => {
             ...anime,
             storyline: anime.storyline || '',
           };
-          setSelectedAnime(fallbackAnime);
+          await openPlayerFromAnime(fallbackAnime);
         }
       } finally {
         if (detailsLoadingToastRef.current === toastId) dismissDetailsLoadingToast();
@@ -1387,7 +1402,7 @@ const Index = () => {
     }
 
     dismissDetailsLoadingToast();
-    setSelectedAnime(anime);
+    await openPlayerFromAnime(anime);
   };
 
   const handlePlay = async (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => {
