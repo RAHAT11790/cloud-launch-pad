@@ -3398,85 +3398,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         </div>
 
         {!isFullscreen && !adGateActive && !deviceBlocked && !unlockBlocked && (
-          <div className="w-full px-5 pt-4 pb-2">
-            <button
-              type="button"
-              onClick={() => openInlineSheet("info")}
-              className="w-full text-left active:opacity-80 transition-opacity"
-            >
-              <div className="flex items-start gap-2">
-                <h2 className="text-[15px] font-bold text-foreground leading-snug flex-1 truncate">{animeMeta.title}</h2>
-                <div className="flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-semibold text-muted-foreground flex-shrink-0 mt-1">
-                  Info <ChevronRight className="w-3.5 h-3.5" />
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 flex-nowrap mt-1.5 text-[12px] text-muted-foreground overflow-hidden">
-                <Tv className="w-3.5 h-3.5 text-foreground/60 flex-shrink-0" />
-                <span className="text-foreground/25 flex-shrink-0">|</span>
-                <span className="flex items-center gap-0.5 flex-shrink-0"><Star className="w-3 h-3 text-primary fill-primary flex-shrink-0" />9.0</span>
-                {currentLangLabel ? <><span className="text-foreground/25 flex-shrink-0">|</span><span className="truncate">{currentLangLabel}</span></> : null}
-                <span className="text-foreground/25 flex-shrink-0">|</span>
-                <span className="truncate capitalize">{seasons && seasons.length > 0 ? "Webseries" : "Movie"}</span>
-                {seasons && seasons.length > 0 ? <><span className="text-foreground/25 flex-shrink-0">|</span><span className="truncate">{seasons.length} season{seasons.length > 1 ? "s" : ""}</span></> : null}
-              </div>
-            </button>
-
-            <div className="grid grid-cols-4 gap-2 mt-4">
-              <button onClick={() => { closeInlineSheets(); handleToggleWatchlist(); }} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium transition-colors border ${saved ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
-                <Bookmark className={`w-3.5 h-3.5 flex-shrink-0 ${saved ? 'fill-primary' : ''}`} />
-                <span className="whitespace-nowrap truncate">{saved ? 'Saved' : 'Add to list'}</span>
-              </button>
-              <button onClick={() => { void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx); }} className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium border transition-colors bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border">
-                <Share2 className="w-3.5 h-3.5 flex-shrink-0" />
-                <span>Share</span>
-              </button>
-              <button onClick={() => openInlineSheet("download", "download")} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-[10px] text-[11px] font-medium border active:scale-95 transition-all ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
-                <Download className="w-3.5 h-3.5 flex-shrink-0" />
-                <span>Download</span>
-              </button>
-              <button onClick={() => openInlineSheet("library")} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-[10px] text-[11px] font-medium border active:scale-95 transition-all ${showLibrarySheet ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
-                <FolderDown className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="whitespace-nowrap truncate">Library</span>
-              </button>
-            </div>
-
-            {episodeList && episodeList.length > 0 && (
-              <div ref={playerSheetAnchorRef} className="mt-5">
-                <div className="flex items-baseline gap-2 mb-3">
-                  <h3 className="text-[15px] font-bold text-foreground">Resources</h3>
-                </div>
-                <div className="flex items-center gap-2 mb-3 flex-wrap">
-                  <button onClick={() => openInlineSheet("language")} className="inline-flex min-w-[116px] items-center justify-between gap-1.5 px-3 py-2 rounded-[10px] text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
-                    {currentLangLabel}
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  </button>
-                  {seasons && seasons.length > 0 && (
-                    <button onClick={() => openInlineSheet("season")} className="inline-flex min-w-[140px] items-center justify-between gap-1.5 px-3 py-2 rounded-[10px] text-xs font-semibold border bg-foreground/[0.06] text-foreground/85 border-border">
-                      {activeSeasonLabel}
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-                <div className="relative -mx-5">
-                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pl-5 pr-5">
-                    {episodeList.map((ep) => (
-                      <button key={ep.number} onClick={ep.onClick} className={`flex-shrink-0 min-w-[56px] px-3 py-2.5 rounded-lg text-sm font-bold transition-colors ${ep.active ? 'bg-gradient-to-br from-primary/25 to-primary/10 text-primary border border-primary/40' : 'bg-foreground/[0.06] text-foreground/85 border border-border hover:bg-foreground/10'}`}>
-                        {ep.number}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+          <div className="w-full bg-black text-white">
+            <div ref={playerSheetAnchorRef} className="h-px w-full" />
 
             {!inlineSheetOpen && ((suggestedAnime && suggestedAnime.length > 0) || animeId) && (
-              <div className="mt-5">
+              <div className="px-4 pt-4 pb-2">
                 <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
-                  <button onClick={() => setBottomTab("foryou")} className={`text-[13px] font-bold px-3 py-1.5 rounded-full transition-colors ${bottomTab === "foryou" ? "bg-primary text-primary-foreground" : "bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/10"}`}>
+                  <button onClick={() => setBottomTab("foryou")} className={`text-[12px] font-bold px-3 py-1.5 rounded-full transition-colors ${bottomTab === "foryou" ? "bg-primary text-primary-foreground" : "bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/10"}`}>
                     For you
                   </button>
                   {animeId && (
-                    <button onClick={() => setBottomTab("comments")} className={`text-[13px] font-bold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1.5 ${bottomTab === "comments" ? "bg-primary text-primary-foreground" : "bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/10"}`}>
+                    <button onClick={() => setBottomTab("comments")} className={`text-[12px] font-bold px-3 py-1.5 rounded-full transition-colors flex items-center gap-1.5 ${bottomTab === "comments" ? "bg-primary text-primary-foreground" : "bg-foreground/[0.06] text-foreground/80 hover:bg-foreground/10"}`}>
                       <span>Comments</span>
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${bottomTab === "comments" ? "bg-primary-foreground/20" : "bg-primary/15 text-primary"}`}>{commentCount}</span>
                     </button>
