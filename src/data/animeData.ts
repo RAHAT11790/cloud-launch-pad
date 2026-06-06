@@ -58,6 +58,7 @@ export interface AnimeItem {
   slug?: string;
   dubType?: "official" | "fandub";
   episodeCount?: number;
+  cast?: { name: string; character?: string; photo: string }[];
 }
 
 export const categories = ["Action", "Romance", "Fantasy", "Sci-Fi", "Horror", "Comedy"];
