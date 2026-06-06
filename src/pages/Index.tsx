@@ -2105,7 +2105,12 @@ const Index = () => {
     });
     
     scored.sort((a, b) => b.score - a.score || Math.random() - 0.5);
-    return scored.filter(s => s.score > 0).slice(0, 8).map(s => s.anime);
+    const matched = scored.filter(s => s.score > 0).map(s => s.anime);
+    if (matched.length >= 15) return matched.slice(0, 15);
+    // Fill up to 15 with random other items so the row is always full
+    const matchedIds = new Set(matched.map(a => a.id));
+    const fillers = candidates.filter(a => !matchedIds.has(a.id)).sort(() => Math.random() - 0.5);
+    return [...matched, ...fillers].slice(0, 15);
   }, [playerState?.anime, saltPlayerState?.anime, allAnime]);
 
   useEffect(() => {
