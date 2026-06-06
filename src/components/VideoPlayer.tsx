@@ -1932,6 +1932,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     setShowInfoSheet(false);
     setShowLanguageSheet(false);
     setShowSeasonSheet(false);
+    setShowLibrarySheet(false);
     setShowDownloadQualityPicker(false);
 
     const v = videoRef.current;
@@ -2063,7 +2064,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     hideTimer.current = setTimeout(() => {
       setShowControls(false);
     }, locked ? 2200 : 3800);
-  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showCcPanel, showDownloadQualityPicker, showInfoSheet, showLanguageSheet, showSeasonSheet, showQualityPanel, showServerPanel, showSettings, videoError]);
+  }, [adGateActive, clearHideTimer, locked, showAudioPanel, showCcPanel, showDownloadQualityPicker, showInfoSheet, showLanguageSheet, showLibrarySheet, showSeasonSheet, showQualityPanel, showServerPanel, showSettings, videoError]);
 
   const resetHideTimer = useCallback(() => {
     setShowControls(true);
@@ -3302,7 +3303,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                 <Download className="w-3.5 h-3.5 flex-shrink-0" />
                 <span>Download</span>
               </button>
-              <button onClick={() => onLibraryClick?.()} className="flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-[11px] font-medium bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border border-border">
+              <button onClick={() => setShowLibrarySheet(true)} className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-[10px] text-[11px] font-medium border active:scale-95 transition-all ${showLibrarySheet ? 'bg-primary/15 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/85 hover:bg-foreground/10 border-border'}`}>
                 <FolderDown className="w-3.5 h-3.5 flex-shrink-0" />
                 <span className="whitespace-nowrap truncate">Library</span>
               </button>
@@ -3491,6 +3492,39 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
           </div>
         )}
 
+        {!isFullscreen && showLibrarySheet && (
+          <div className="w-full border-t border-border bg-background">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h3 className="text-[15px] font-bold text-foreground">My list</h3>
+              <button onClick={() => setShowLibrarySheet(false)} className="h-10 w-10 flex items-center justify-center rounded-full bg-foreground/[0.06] text-foreground/80">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-5 py-5">
+              {watchlistItems.length === 0 ? (
+                <div className="rounded-[10px] border border-border bg-foreground/[0.04] px-4 py-8 text-center text-sm text-muted-foreground">
+                  No items in your list yet.
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  {watchlistItems.slice(0, 18).map((item: any) => (
+                    <button
+                      key={String(item?.id || item?.title)}
+                      onClick={() => onLibraryClick?.()}
+                      className="text-left"
+                    >
+                      <div className="aspect-[2/3] overflow-hidden rounded-[10px] bg-foreground/5 border border-border">
+                        {item?.poster ? <img src={item.poster} alt={item?.title || "Saved item"} className="w-full h-full object-cover" loading="lazy" /> : null}
+                      </div>
+                      <p className="mt-2 text-[12px] font-medium leading-4 text-foreground line-clamp-2">{item?.title || "Untitled"}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {!isFullscreen && showLanguageSheet && (
           <div className="w-full border-t border-border bg-background">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -3509,6 +3543,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                     onClick={() => {
                       if (track) switchAudioTrack({ language: track.language, label: track.label, src: track.link, src480: track.link480, src720: track.link720, src1080: track.link1080, src4k: track.link4k });
                       else setSelectedLanguageLabel(label);
+                      setShowDownloadQualityPicker(false);
                       setShowLanguageSheet(false);
                     }}
                     className={`w-full rounded-[10px] px-4 py-5 text-center text-[16px] font-medium border transition-all ${active ? 'bg-primary/20 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/75 border-border'}`}
@@ -3539,6 +3574,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                     onClick={() => {
                       setDownloadPanelSeasonIdx(idx);
                       onSeasonChange?.(idx);
+                      setDlSelectedEpisodes(new Set([0]));
                       setShowSeasonSheet(false);
                     }}
                     className={`w-full rounded-[10px] px-4 py-5 text-center text-[16px] font-medium border transition-all ${active ? 'bg-primary/20 text-primary border-primary/30' : 'bg-foreground/[0.06] text-foreground/75 border-border'}`}
