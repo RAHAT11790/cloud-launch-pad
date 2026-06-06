@@ -4960,7 +4960,7 @@ ${tgBulkFooter}
               <button onClick={() => setSeriesTab("ws-add")} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-add" ? "bg-indigo-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
                 Add New
               </button>
-              <button onClick={() => { setSeriesTab("ws-manual"); setSeriesEditId(""); setSeriesForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", category: "", storyline: "", visibility: "public", dubType: "official", weeklyEnabled: false, weeklyEveryDays: 7, weeklyDaysSinceLast: 0 }); setSeasonsData([{ name: "Season 1", seasonNumber: 1, episodes: [] }]); setSeriesCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
+              <button onClick={() => { setSeriesTab("ws-manual"); setSeriesEditId(""); setSeriesForm({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", baseLanguage: "Hindi", selectedAdminLanguage: "Hindi", availableLanguages: ["Hindi"], category: "", storyline: "", visibility: "public", dubType: "official", weeklyEnabled: false, weeklyEveryDays: 7, weeklyDaysSinceLast: 0, audioTracks: [] }); setSeasonsData([{ name: "Season 1", seasonNumber: 1, episodes: [] }]); setSeriesCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
                 Manual
               </button>
               {/* Weekly EP feature removed */}
