@@ -3638,7 +3638,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         )}
 
         {!isFullscreen && showShareSheet && (
-          <div className="w-full bg-black text-white">
+          <div className="w-full border-t border-white/8 bg-black text-white">
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <h3 className="text-[18px] font-bold tracking-tight">Share</h3>
               <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
@@ -3664,7 +3664,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       <span className="truncate">{getShortSeasonLabel(shareSeason?.name, sharePanelSeasonIdx)}</span>
                       <ChevronDown className="w-4 h-4 text-white/60" />
                     </button>
-                    <span className="text-[12px] text-white/55">Choose episode to share</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     {shareEpisodes.map((episode) => (
