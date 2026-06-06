@@ -2540,6 +2540,7 @@ const Index = () => {
           nextEpisodeSrc={playerState.nextEpisodeSrc}
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
           shareLink={buildShareLink(playerState.anime.id, playerState.seasonIdx, playerState.epIdx)}
+          buildShareLinkForEpisode={(seasonIdx, epIdx) => buildShareLink(playerState.anime.id, seasonIdx, epIdx)}
           onLibraryClick={(animeId) => {
             if (!animeId) return;
             const targetAnime = allAnime.find((item) => item.id === animeId);
