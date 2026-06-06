@@ -256,6 +256,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const rafId = useRef<number>(0);
   const progressRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
+  const downloadPanelRef = useRef<HTMLDivElement>(null);
 
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -787,6 +788,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       setSelectedDownloadQuality(preferredDownloadQuality);
     }
   }, [availableDownloadQualities, preferredDownloadQuality, selectedDownloadQuality]);
+
+  useEffect(() => {
+    if (!showDownloadQualityPicker) return;
+    const id = requestAnimationFrame(() => {
+      downloadPanelRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [showDownloadQualityPicker]);
 
   const closeInlineSheets = useCallback(() => {
     closeInlineSheets();
