@@ -3436,16 +3436,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                   onClick={closePanel}
                 >
                   <div
-                    className="w-full max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[88vh]"
+                    className="w-full max-w-md bg-card border border-border rounded-none sm:rounded-2xl shadow-2xl flex flex-col max-h-[88vh]"
                     onClick={(e) => e.stopPropagation()}
                     data-player-panel="true"
                   >
                     {/* Header */}
                     <div className="flex items-center justify-between p-4 border-b border-border">
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-foreground truncate">Download</p>
-                        <p className="text-[11px] text-muted-foreground truncate">{title}</p>
-                      </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-foreground truncate">Download</p>
+                        </div>
                       <button
                         onClick={closePanel}
                         className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 ml-3"
@@ -3455,115 +3454,90 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                     </div>
 
                     {/* Multi-episode picker */}
-                    {hasMultiEpisodes && panelSeason && (
-                      <div className="px-4 pt-3 flex flex-col gap-2 min-h-0">
-                        {/* Season tabs */}
-                        {seasons && seasons.length > 1 && (
-                          <div
-                            className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1 [&::-webkit-scrollbar]:hidden"
-                            style={{ scrollbarWidth: "none", touchAction: "pan-x" }}
-                          >
-                            {seasons.map((s, idx) => (
-                              <button
-                                key={idx}
-                                onClick={() => { setDownloadPanelSeasonIdx(idx); setDlSelectedEpisodes(new Set()); }}
-                                className={`shrink-0 whitespace-nowrap px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                                  idx === downloadPanelSeasonIdx
-                                    ? "gradient-primary text-primary-foreground border-primary/40"
-                                    : "bg-secondary border-border/40 text-muted-foreground"
-                                }`}
-                              >
-                                {getShortSeasonLabel(s.name, idx)}
-                              </button>
-                            ))}
+                      <div className="px-4 pt-3 pb-2 flex flex-col gap-3 min-h-0">
+                        <div className="rounded-[10px] border border-border bg-foreground/[0.04] p-3">
+                          <div className="flex items-center gap-2 mb-3">
+                            <h4 className="text-[13px] font-bold text-foreground">Resources</h4>
+                            <span className="text-[12px] text-muted-foreground truncate">Uploaded by halaj etc.</span>
                           </div>
-                        )}
-
-                        {/* Select-all + counter row */}
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-[11px] font-semibold text-muted-foreground">
-                            {dlSelectedEpisodes.size} / {panelEpisodes.length} selected
-                          </span>
-                          <button
-                            onClick={toggleAll}
-                            className={`text-[11px] font-bold px-3 py-1 rounded-lg border transition-all ${
-                              dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0
-                                ? "gradient-primary text-primary-foreground border-primary/40"
-                                : "bg-secondary text-foreground border-border/40 hover:border-primary/40"
-                            }`}
-                          >
-                            {dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0 ? "Clear All" : "Select All"}
-                          </button>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button onClick={() => { setShowLanguageSheet(true); }} className="h-14 rounded-[10px] border border-border bg-secondary px-3 text-left text-base text-foreground flex items-center justify-between">
+                              <span className="truncate">{currentLangLabel}</span>
+                              <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                            </button>
+                            {hasMultiEpisodes ? (
+                              <button onClick={() => { setShowSeasonSheet(true); }} className="h-14 rounded-[10px] border border-border bg-secondary px-3 text-left text-base text-foreground flex items-center justify-between">
+                                <span className="truncate">{getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx).replace('Season ', 'Season 0')}</span>
+                                <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                              </button>
+                            ) : (
+                              <div className="h-14 rounded-[10px] border border-border bg-secondary px-3 text-left text-base text-muted-foreground flex items-center">Movie</div>
+                            )}
+                          </div>
+                          <div className="mt-3 border-t border-border/60 pt-3">
+                            <div className="grid grid-cols-3 gap-3">
+                              {qualityChoices.map((opt) => {
+                                const is4K = is4KLabel(opt.label);
+                                const locked4K = is4K && !isPremium;
+                                return (
+                                  <button
+                                    key={opt.label}
+                                    disabled={locked4K}
+                                    onClick={() => {
+                                      if (locked4K) return;
+                                      if (!hasMultiEpisodes) startMovieDownload(opt.label);
+                                    }}
+                                    className={`h-12 rounded-[10px] text-base font-semibold border transition-all ${locked4K ? 'bg-secondary/50 text-muted-foreground opacity-50 border-border/30' : 'bg-secondary text-foreground border-border'} ${opt.label === '480p' ? 'bg-primary/20 text-primary border-primary/40' : ''}`}
+                                  >
+                                    {opt.label.replace('Auto', '360P').toUpperCase()}
+                                  </button>
+                                );
+                              }).slice(0,3)}
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Scrollable episode grid (fixed-height box, never expands) */}
-                        <div
-                          className="overflow-y-auto overscroll-contain border border-border/50 rounded-xl bg-background/40 p-2"
-                          style={{ maxHeight: "38vh", WebkitOverflowScrolling: "touch" }}
-                        >
-                          {panelEpisodes.length === 0 ? (
-                            <p className="text-xs text-muted-foreground text-center py-6">No episodes</p>
-                          ) : (
-                            <div className="grid grid-cols-5 gap-2">
+                        {hasMultiEpisodes && panelSeason && (
+                          <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: '38vh', WebkitOverflowScrolling: 'touch' }}>
+                            <div className="space-y-4">
                               {panelEpisodes.map((ep, idx) => {
                                 const selected = dlSelectedEpisodes.has(idx);
                                 return (
-                                  <button
-                                    key={idx}
-                                    onClick={() => toggleEpisode(idx)}
-                                    className={`h-11 rounded-lg flex items-center justify-center text-sm font-bold border transition-all active:scale-95 ${
-                                      selected
-                                        ? "gradient-primary text-primary-foreground border-primary shadow-[0_0_10px_hsla(42,80%,50%,0.45)]"
-                                        : "bg-secondary border-border/40 text-foreground"
-                                    }`}
-                                  >
-                                    {ep.episodeNumber}
+                                  <button key={idx} onClick={() => toggleEpisode(idx)} className="w-full flex items-start gap-3 text-left">
+                                    <span className={`mt-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 ${selected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/70 text-transparent'}`}>
+                                      <Check className="w-3.5 h-3.5" />
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block text-[18px] font-medium text-foreground">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
+                                      <span className="block text-[12px] text-muted-foreground mt-1">69.9MB | 24:27</span>
+                                    </span>
                                   </button>
                                 );
                               })}
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
-                    )}
 
-                    {/* Quality picker + start */}
-                    <div className="p-4 border-t border-border mt-3 space-y-2">
-                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                        Select Quality {hasMultiEpisodes ? `• ${dlSelectedEpisodes.size} ep${dlSelectedEpisodes.size === 1 ? "" : "s"}` : ""}
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {qualityChoices.map((opt) => {
-                          const is4K = is4KLabel(opt.label);
-                          const locked4K = is4K && !isPremium;
-                          const disabled = locked4K || (hasMultiEpisodes && dlSelectedEpisodes.size === 0);
-                          return (
-                            <button
-                              key={opt.label}
-                              disabled={disabled}
-                              onClick={() => {
-                                if (disabled) return;
-                                if (hasMultiEpisodes) startSelectedDownloads(opt.label);
-                                else startMovieDownload(opt.label);
-                              }}
-                              className={`py-2.5 px-3 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5 border transition-all ${
-                                disabled
-                                  ? "bg-secondary/50 text-muted-foreground opacity-50 cursor-not-allowed border-border/30"
-                                  : "gradient-primary text-primary-foreground border-primary/40 hover:scale-[1.02]"
-                              }`}
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              {opt.label}
-                              {locked4K && <Lock className="w-3 h-3" />}
-                            </button>
-                          );
-                        })}
+                    <div className="p-4 border-t border-border mt-auto">
+                      <div className="flex items-center gap-3">
+                        <button onClick={toggleAll} className={`flex items-center gap-2 text-[12px] ${dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          <span className={`flex h-6 w-6 items-center justify-center rounded-full border-2 ${dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0 ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/70 text-transparent'}`}><Check className="w-3.5 h-3.5" /></span>
+                          <span>Select All</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            const preferred = qualityChoices.find((opt) => opt.label === '480p') || qualityChoices[0];
+                            if (!preferred) return;
+                            if (hasMultiEpisodes) startSelectedDownloads(preferred.label);
+                            else startMovieDownload(preferred.label);
+                          }}
+                          className="flex-1 h-14 rounded-[12px] bg-gradient-to-r from-cyan-500 to-green-400 text-black text-[18px] font-semibold flex items-center justify-center gap-2"
+                        >
+                          <Download className="w-5 h-5" />
+                          <span>Download - 69.9MB</span>
+                        </button>
                       </div>
-                      {hasMultiEpisodes && dlSelectedEpisodes.size === 0 && (
-                        <p className="text-[10px] text-muted-foreground text-center pt-1">
-                          Pick at least one episode above
-                        </p>
-                      )}
                     </div>
                   </div>
                 </div>
