@@ -616,19 +616,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
   const activeSeasonLabel = useMemo(() => getShortSeasonLabel(seasons?.[currentSeasonIdx ?? 0]?.name, currentSeasonIdx ?? 0), [currentSeasonIdx, seasons]);
 
-  const movieQualityLinks = useMemo(() => {
-    return collectDownloadQualityLinks(
-      activeLanguageTrack,
-      {
-        link: anime?.movieLink || src,
-        link480: anime?.movieLink480,
-        link720: anime?.movieLink720,
-        link1080: anime?.movieLink1080,
-        link4k: anime?.movieLink4k,
-      },
-    );
-  }, [activeLanguageTrack, anime?.movieLink, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, src]);
-
   const normalizedLanguageTracks = useMemo(() => {
     const fallbackLanguage = String(anime?.language || "").trim() || currentLangLabel;
     const baseTrack = {
@@ -664,6 +651,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       || normalizedLanguageTracks[0]
       || null;
   }, [currentLangLabel, normalizedLanguageTracks]);
+
+  const movieQualityLinks = useMemo(() => {
+    return collectDownloadQualityLinks(
+      activeLanguageTrack,
+      {
+        link: anime?.movieLink || src,
+        link480: anime?.movieLink480,
+        link720: anime?.movieLink720,
+        link1080: anime?.movieLink1080,
+        link4k: anime?.movieLink4k,
+      },
+    );
+  }, [activeLanguageTrack, anime?.movieLink, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, src]);
 
   const infoCast = useMemo(() => {
     if (!anime?.cast?.length) return [];
