@@ -3575,31 +3575,35 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         )}
 
         {!isFullscreen && showInfoSheet && (
-          <div className="w-full border-t border-white/8 bg-black text-white">
-            <div className="flex items-center justify-between px-5 pt-5 pb-3">
-              <h3 className="text-[20px] font-bold tracking-tight">More details</h3>
-              <button onClick={handleInlineSheetClose} className="h-9 w-9 flex items-center justify-center text-white/70 active:scale-95">
-                <X className="w-6 h-6" />
+          <div
+            className="fixed left-0 right-0 bottom-0 z-[40] overflow-y-auto overscroll-contain border-t border-white/10 bg-black text-white"
+            style={{ top: playerHeightPx }}
+            data-player-panel="true"
+          >
+            <div className="flex items-center justify-between px-4 pt-3 pb-2">
+              <h3 className="text-[15px] font-bold tracking-tight">More details</h3>
+              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="h-px bg-white/10 mx-0" />
-            <div className="px-5 pt-4 pb-7 space-y-5">
+            <div className="h-px bg-white/10" />
+            <div className="px-4 pt-3 pb-6 space-y-4">
               <div className="flex items-start gap-3">
-                <div className="w-[76px] h-[104px] shrink-0 overflow-hidden rounded-[10px] bg-white/5">
+                <div className="w-[60px] h-[84px] shrink-0 overflow-hidden rounded-[8px] bg-white/5">
                   {anime?.poster ? <img src={anime.poster} alt={anime?.title || title} className="w-full h-full object-cover" loading="lazy" /> : null}
                 </div>
-                <div className="min-w-0 flex-1 space-y-2">
-                  <h4 className="text-[18px] font-extrabold leading-tight">{anime?.title || title}</h4>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-white/70">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <h4 className="text-[14px] font-bold leading-tight">{anime?.title || title}</h4>
+                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-white/65">
                     {infoMetaItems.map((item, i) => (
-                      <span key={item} className="flex items-center gap-2">
-                        {i > 0 && <span className="text-white/30">|</span>}
+                      <span key={item} className="flex items-center gap-1.5">
+                        {i > 0 && <span className="text-white/25">|</span>}
                         <span>{item}</span>
                       </span>
                     ))}
                     {!!seasons?.length && (
-                      <span className="flex items-center gap-2">
-                        <span className="text-white/30">|</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-white/25">|</span>
                         <span>{seasons.length} season{seasons.length > 1 ? 's' : ''}</span>
                       </span>
                     )}
@@ -3607,22 +3611,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <h5 className="text-[16px] font-bold">Info</h5>
-                <p className="text-[13px] leading-6 text-white/75">{anime?.storyline || 'No storyline available yet.'}</p>
+              <div className="space-y-1.5">
+                <h5 className="text-[13px] font-semibold">Info</h5>
+                <p className="text-[12px] leading-5 text-white/70">{anime?.storyline || 'No storyline available yet.'}</p>
               </div>
 
               {!!infoCast.length && (
-                <div className="space-y-3">
-                  <h5 className="text-[18px] font-extrabold">Starring ({anime?.cast?.length || infoCast.length})</h5>
-                  <div className="grid grid-cols-4 gap-3">
+                <div className="space-y-2">
+                  <h5 className="text-[13px] font-semibold">Starring ({anime?.cast?.length || infoCast.length})</h5>
+                  <div className="grid grid-cols-4 gap-2.5">
                     {infoCast.map((person, index) => (
                       <div key={`${person.name}-${index}`} className="min-w-0">
-                        <div className="aspect-[3/4] overflow-hidden rounded-[10px] bg-white/[0.06]">
+                        <div className="aspect-[3/4] overflow-hidden rounded-[8px] bg-white/[0.06]">
                           {person.photo ? <img src={person.photo} alt={person.name} className="w-full h-full object-cover" loading="lazy" /> : null}
                         </div>
-                        <p className="mt-2 text-[13px] font-semibold text-white line-clamp-2">{person.name}</p>
-                        {person.character ? <p className="mt-0.5 text-[12px] leading-4 text-white/60 line-clamp-2">{person.character}</p> : null}
+                        <p className="mt-1.5 text-[11px] font-medium text-white line-clamp-2">{person.name}</p>
+                        {person.character ? <p className="mt-0.5 text-[10px] leading-4 text-white/55 line-clamp-2">{person.character}</p> : null}
                       </div>
                     ))}
                   </div>
