@@ -658,6 +658,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     return currentLangLabel;
   }, [currentLangLabel, selectedDownloadLanguageLabel]);
 
+  const primarySeriesLanguageLabel = useMemo(() => {
+    return getPrimaryLanguageToken(anime?.language) || normalizedLanguageTracks[0]?.label || currentLangLabel;
+  }, [anime?.language, currentLangLabel, normalizedLanguageTracks]);
+
   const activeDownloadLanguageTrack = useMemo(() => {
     const selectedKey = currentDownloadLanguageLabel.trim().toLowerCase();
     return normalizedLanguageTracks.find((track) => track.label.trim().toLowerCase() === selectedKey)
@@ -708,17 +712,31 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     fallback?: { link?: string; link480?: string; link720?: string; link1080?: string; link4k?: string } | null,
   ) => collectDownloadQualityLinks(primary, fallback), []);
 
+  const getEpisodeDownloadLinksForLanguage = useCallback((ep: any, languageLabel: string) => {
+    const selectedKey = String(languageLabel || "").trim().toLowerCase();
+    const baseKey = String(primarySeriesLanguageLabel || "").trim().toLowerCase();
+    const matchingTrack = ep?.audioTracks?.find((entry: any) => {
+      const trackLabel = String(entry?.label || entry?.language || "").trim().toLowerCase();
+      return !!trackLabel && trackLabel === selectedKey;
+    });
+
+    if (matchingTrack) {
+      return getTrackQualityLinks(matchingTrack, selectedKey === baseKey ? ep : null);
+    }
+
+    if (selectedKey === baseKey) {
+      return getTrackQualityLinks(undefined, ep);
+    }
+
+    return {};
+  }, [getTrackQualityLinks, primarySeriesLanguageLabel]);
+
   const availableDownloadQualities = useMemo(() => {
     const season = seasons?.[downloadPanelSeasonIdx];
     if (season?.episodes?.length) {
-      const track = normalizedLanguageTracks.find((item) => item.label === currentDownloadLanguageLabel) || activeDownloadLanguageTrack;
       const qualitySet = new Set<string>();
       season.episodes.forEach((ep: any) => {
-        const matchingTrack = ep.audioTracks?.find((entry: any) => {
-          const trackLabel = String(entry?.label || entry?.language || "").trim().toLowerCase();
-          return trackLabel === String(track?.label || "").trim().toLowerCase();
-        });
-        Object.keys(getTrackQualityLinks(matchingTrack || track, ep)).forEach((quality) => qualitySet.add(quality));
+        Object.keys(getEpisodeDownloadLinksForLanguage(ep, currentDownloadLanguageLabel)).forEach((quality) => qualitySet.add(quality));
       });
       return ["Default", "480P", "720P", "1080P", "4K"].filter((quality) => qualitySet.has(quality));
     }
@@ -730,18 +748,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
       link4k: anime?.movieLink4k,
     }));
     return movieQualities.length > 0 ? movieQualities : Object.keys(movieQualityLinks);
-  }, [activeDownloadLanguageTrack, anime?.movieLink, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, currentDownloadLanguageLabel, downloadPanelSeasonIdx, getTrackQualityLinks, movieQualityLinks, normalizedLanguageTracks, seasons, src]);
+  }, [activeDownloadLanguageTrack, anime?.movieLink, anime?.movieLink1080, anime?.movieLink4k, anime?.movieLink480, anime?.movieLink720, currentDownloadLanguageLabel, downloadPanelSeasonIdx, getEpisodeDownloadLinksForLanguage, movieQualityLinks, seasons, src]);
 
   const downloadEpisodes = useMemo<DownloadEpisodeOption[]>(() => {
     const season = seasons?.[downloadPanelSeasonIdx];
     if (!season?.episodes?.length) return [];
-    const selectedTrack = normalizedLanguageTracks.find((item) => item.label === currentDownloadLanguageLabel) || activeDownloadLanguageTrack;
     return season.episodes.map((ep: any, index: number) => {
-      const matchingTrack = ep.audioTracks?.find((track: any) => {
-        const trackLabel = String(track?.label || track?.language || "").trim().toLowerCase();
-        return trackLabel === selectedTrack.label.trim().toLowerCase();
-      });
-      const qualityLinks = getTrackQualityLinks(matchingTrack || selectedTrack, ep);
+      const qualityLinks = getEpisodeDownloadLinksForLanguage(ep, currentDownloadLanguageLabel);
       return {
         index,
         episodeNumber: ep.episodeNumber || index + 1,
@@ -749,8 +762,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         metaText: ep.title ? ep.title : `Episode ${ep.episodeNumber || index + 1}`,
         qualityLinks,
       };
-    }).filter((ep) => availableDownloadQualities.some((quality) => ep.qualityLinks[quality]));
-  }, [activeDownloadLanguageTrack, availableDownloadQualities, currentDownloadLanguageLabel, downloadPanelSeasonIdx, getTrackQualityLinks, normalizedLanguageTracks, seasons]);
+    });
+  }, [currentDownloadLanguageLabel, downloadPanelSeasonIdx, getEpisodeDownloadLinksForLanguage, seasons]);
 
   const preferredDownloadQuality = useMemo(() => {
     return ["Default", "480P", "720P", "1080P", "4K"].find((quality) => availableDownloadQualities.includes(quality))
