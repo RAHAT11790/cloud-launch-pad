@@ -1060,13 +1060,14 @@ const Index = () => {
     const buildLangInfo = (item: any) => {
       const set = new Set<string>();
       const push = (raw?: string) => { if (!raw) return; String(raw).split(/[,/|]+/).forEach((s) => { const t = s.trim(); if (t) set.add(t); }); };
-      push(item.language);
+      (item.availableLanguages || []).forEach((lang: string) => push(lang));
+      push(item.baseLanguage || item.language);
       (item.seasons || []).forEach((s: any) => (s.episodes || []).forEach((ep: any) => (ep.audioTracks || []).forEach((at: any) => push(at.language || at.label))));
       const arr = Array.from(set).filter(Boolean);
       if (arr.length === 0) return "";
       if (arr.length === 1) return arr[0];
-      if (arr.length === 2) return arr.join(" · ");
-      return "Multi";
+      if (arr.length === 2) return "Dual";
+      return "Multiple";
     };
 
     const randomSlides = shuffled.slice(0, Math.min(6, shuffled.length)).map(item => ({
