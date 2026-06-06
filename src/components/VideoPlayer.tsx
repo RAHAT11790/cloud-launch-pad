@@ -721,6 +721,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, [propAudioTracks, src]);
 
   useEffect(() => {
+    const nextSeasonIdx = currentSeasonIdx ?? 0;
+    setDownloadPanelSeasonIdx(nextSeasonIdx);
+  }, [currentSeasonIdx]);
+
+  useEffect(() => {
     const unsub = downloadManager.subscribe((snapshot) => {
       setActiveDownloads(new Map(snapshot.downloads));
     });
