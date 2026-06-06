@@ -3755,13 +3755,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
             <div className="h-px bg-white/10" />
             <div className="px-4 pt-4 pb-8 space-y-3">
               {downloadLanguageChoices.map((label) => {
-                const active = label === currentLangLabel;
+                const active = label === (sheetOrigin === "download" ? currentDownloadLanguageLabel : currentLangLabel);
                 const track = normalizedLanguageTracks.find((item) => item.label === label);
                 return (
                   <button
                     key={label}
                     onClick={() => {
-                      if (track) switchAudioTrack({ language: track.language, label: track.label, src: track.link, src480: track.link480, src720: track.link720, src1080: track.link1080, src4k: track.link4k });
+                      if (sheetOrigin === "download") {
+                        setSelectedDownloadLanguageLabel(label);
+                      } else if (track) switchAudioTrack({ language: track.language, label: track.label, src: track.link, src480: track.link480, src720: track.link720, src1080: track.link1080, src4k: track.link4k });
                       else setSelectedLanguageLabel(label);
                       if (sheetOrigin === "download") {
                         setShowLanguageSheet(false);
@@ -4040,7 +4042,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <button onClick={() => { openInlineSheet("language", "download"); }} className="h-14 rounded-[10px] border border-white/10 bg-white/[0.07] px-3 text-left text-base text-white flex items-center justify-between">
-                              <span className="truncate">{currentLangLabel}</span>
+                              <span className="truncate">{currentDownloadLanguageLabel}</span>
                               <ChevronDown className="w-5 h-5 text-white/55" />
                             </button>
                             {hasMultiEpisodes ? (
