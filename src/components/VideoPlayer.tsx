@@ -3723,7 +3723,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
           };
 
           const closePanel = () => {
-            setShowDownloadQualityPicker(false);
+            closeInlineSheets();
             setDlSelectedEpisodes(new Set());
           };
 
@@ -3830,12 +3830,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                             <span className="text-[12px] text-muted-foreground truncate">Uploaded by halaj etc.</span>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
-                            <button onClick={() => { setShowLanguageSheet(true); }} className="h-14 rounded-[10px] border border-border bg-secondary px-3 text-left text-base text-foreground flex items-center justify-between">
+                            <button onClick={() => { openInlineSheet("language", "download"); }} className="h-14 rounded-[10px] border border-border bg-secondary px-3 text-left text-base text-foreground flex items-center justify-between">
                               <span className="truncate">{currentLangLabel}</span>
                               <ChevronDown className="w-5 h-5 text-muted-foreground" />
                             </button>
                             {hasMultiEpisodes ? (
-                              <button onClick={() => { setShowSeasonSheet(true); }} className="h-14 rounded-[10px] border border-border bg-secondary px-3 text-left text-base text-foreground flex items-center justify-between">
+                              <button onClick={() => { openInlineSheet("season", "download"); }} className="h-14 rounded-[10px] border border-border bg-secondary px-3 text-left text-base text-foreground flex items-center justify-between">
                                 <span className="truncate">{getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx)}</span>
                                 <ChevronDown className="w-5 h-5 text-muted-foreground" />
                               </button>
