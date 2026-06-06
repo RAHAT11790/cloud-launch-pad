@@ -2476,6 +2476,7 @@ const Index = () => {
           title={playerState.title}
           subtitle={playerState.subtitle}
           poster={playerState.anime.poster}
+          anime={playerState.anime}
           onClose={hardCloseToHome}
           qualityOptions={playerState.qualityOptions}
           audioTracks={playerState.audioTracks}
@@ -2532,12 +2533,6 @@ const Index = () => {
           nextEpisodeSrc={playerState.nextEpisodeSrc}
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
           shareLink={buildShareLink(playerState.anime.id, playerState.seasonIdx, playerState.epIdx)}
-          onInfoClick={() => {
-            stopAllPlayback();
-            setPlayerState(null);
-            navigate(buildAnimeRoute(playerState.anime.id));
-            handleCardClick(playerState.anime);
-          }}
           onLibraryClick={() => {
             stopAllPlayback();
             setPlayerState(null);
