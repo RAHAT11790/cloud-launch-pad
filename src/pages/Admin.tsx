@@ -3087,6 +3087,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     if (!seriesForm.category) { toast.error("Please select category"); return; }
 
       const syncedForm = syncSeriesLanguageSummary(seriesForm, seasonsData);
+      setSeriesForm(syncedForm);
       const data = {
       ...syncedForm,
       cast: seriesCast,
