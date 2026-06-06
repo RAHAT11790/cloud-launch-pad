@@ -3769,7 +3769,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
             <div className="px-4 pt-4 pb-8 space-y-3">
               {seasons.map((_, idx) => {
                 const label = getShortSeasonLabel(seasons[idx]?.name, idx);
-                const active = idx === (currentSeasonIdx ?? 0);
+                const activeSeasonIndex = sheetOrigin === "share" ? sharePanelSeasonIdx : (currentSeasonIdx ?? 0);
+                const active = idx === activeSeasonIndex;
                 return (
                   <button
                     key={`${label}-${idx}`}
