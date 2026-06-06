@@ -802,6 +802,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     setSheetOrigin(origin);
   }, []);
 
+  const handleInlineSheetClose = useCallback((event?: { preventDefault?: () => void; stopPropagation?: () => void }) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    closeInlineSheets();
+  }, [closeInlineSheets]);
+
   const inlineSheetOpen = showInfoSheet || showLanguageSheet || showSeasonSheet || showLibrarySheet || showDownloadQualityPicker;
 
   useEffect(() => {
