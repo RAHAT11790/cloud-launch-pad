@@ -3539,11 +3539,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-2">
-                <button onClick={() => { closeInlineSheets(); handleToggleWatchlist(); }} className={`flex h-10 items-center justify-center gap-1.5 rounded-[10px] border px-2 text-[11px] font-medium transition-colors ${saved ? 'bg-primary/15 text-primary border-primary/30' : 'bg-white/[0.06] text-white/85 hover:bg-white/[0.1] border-white/10'}`}>
-                  <Bookmark className={`w-3.5 h-3.5 flex-shrink-0 ${saved ? 'fill-primary' : ''}`} />
-                  <span className="truncate">{saved ? 'Saved' : 'List'}</span>
-                </button>
+              <div className="grid grid-cols-3 gap-2">
                 <button onClick={() => { void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx); }} className="flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-white/10 bg-white/[0.06] px-2 text-[11px] font-medium text-white/85 hover:bg-white/[0.1]">
                   <Share2 className="w-3.5 h-3.5 flex-shrink-0" />
                   <span>Share</span>
