@@ -222,8 +222,8 @@ type DownloadEpisodeOption = {
 const getShortSeasonLabel = (seasonName: string | undefined, index: number) => {
   const normalized = String(seasonName || "").trim();
   const explicitSeasonNumber = normalized.match(/season\s*(\d+)/i)?.[1];
-  if (explicitSeasonNumber) return `Season ${explicitSeasonNumber}`;
-  return `Season ${index + 1}`;
+  if (explicitSeasonNumber) return `Season ${String(explicitSeasonNumber).padStart(2, "0")}`;
+  return `Season ${String(index + 1).padStart(2, "0")}`;
 };
 
 const formatTime = (t: number) => {
@@ -492,13 +492,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const [showInfoSheet, setShowInfoSheet] = useState(false);
   const [showLanguageSheet, setShowLanguageSheet] = useState(false);
   const [showSeasonSheet, setShowSeasonSheet] = useState(false);
+  const [showLibrarySheet, setShowLibrarySheet] = useState(false);
   const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
   const [dlSelectedEpisodes, setDlSelectedEpisodes] = useState<Set<number>>(new Set());
   const [downloadedEpisodes, setDownloadedEpisodes] = useState<any[]>([]);
   const [saved, setSaved] = useState(() => (animeId ? guestStore.watchlist.has(animeId) : false));
+  const [watchlistItems, setWatchlistItems] = useState<any[]>([]);
   const [bottomTab, setBottomTab] = useState<"foryou" | "comments">("foryou");
   const [commentCount, setCommentCount] = useState(0);
   const [selectedLanguageLabel, setSelectedLanguageLabel] = useState<string>("");
+  const [selectedDownloadQuality, setSelectedDownloadQuality] = useState<string>("");
   
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
@@ -717,8 +720,42 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, [animeId]);
 
   useEffect(() => {
+    if (isGuest()) {
+      const items = guestStore.watchlist.list().slice().sort((a, b) => Number(b?.addedAt || 0) - Number(a?.addedAt || 0));
+      setWatchlistItems(items);
+      return;
+    }
+
+    const uid = getLocalUserId();
+    if (!uid) {
+      setWatchlistItems(guestStore.watchlist.list());
+      return;
+    }
+
+    const unsub = onValue(ref(db, `users/${uid}/watchlist`), (snap) => {
+      const data = snap.val();
+      const items = Array.isArray(data) ? data : data && typeof data === "object" ? Object.values(data) : [];
+      setWatchlistItems(items.sort((a: any, b: any) => Number(b?.addedAt || 0) - Number(a?.addedAt || 0)));
+    });
+    return () => unsub();
+  }, [animeId, saved]);
+
+  useEffect(() => {
     setSelectedLanguageLabel(propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || "");
   }, [propAudioTracks, src]);
+
+  useEffect(() => {
+    if (!normalizedLanguageTracks.length) {
+      setSelectedLanguageLabel("");
+      return;
+    }
+    const stillExists = normalizedLanguageTracks.some(
+      (track) => track.label.trim().toLowerCase() === selectedLanguageLabel.trim().toLowerCase(),
+    );
+    if (!stillExists) {
+      setSelectedLanguageLabel(normalizedLanguageTracks[0]?.label || normalizedLanguageTracks[0]?.language || "");
+    }
+  }, [normalizedLanguageTracks, selectedLanguageLabel]);
 
   useEffect(() => {
     const nextSeasonIdx = currentSeasonIdx ?? 0;
@@ -731,7 +768,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     setDownloadPanelSeasonIdx(initialSeasonIdx);
     const activeIdx = episodeList?.findIndex((episode) => episode.active) ?? -1;
     setDlSelectedEpisodes(activeIdx >= 0 ? new Set([activeIdx]) : new Set());
+    setSelectedDownloadQuality(preferredDownloadQuality);
   }, [currentSeasonIdx, episodeList, showDownloadQualityPicker]);
+
+  useEffect(() => {
+    if (!availableDownloadQualities.length) {
+      setSelectedDownloadQuality("");
+      return;
+    }
+    if (!selectedDownloadQuality || !availableDownloadQualities.includes(selectedDownloadQuality)) {
+      setSelectedDownloadQuality(preferredDownloadQuality);
+    }
+  }, [availableDownloadQualities, preferredDownloadQuality, selectedDownloadQuality]);
 
   useEffect(() => {
     const unsub = downloadManager.subscribe((snapshot) => {
