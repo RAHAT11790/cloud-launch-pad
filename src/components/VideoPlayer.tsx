@@ -3539,32 +3539,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                <button onClick={() => { void handleShare(currentSeasonIdx ?? 0, activeEpisodeIdx); }} className="flex h-10 items-center justify-center gap-1.5 rounded-[10px] border border-white/10 bg-white/[0.06] px-2 text-[11px] font-medium text-white/85 hover:bg-white/[0.1]">
-                  <Share2 className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span>Share</span>
-                </button>
-                <button onClick={() => openInlineSheet("download", "download")} className={`flex h-10 items-center justify-center gap-1.5 rounded-[10px] border px-2 text-[11px] font-medium transition-all ${showDownloadQualityPicker ? 'bg-primary/15 text-primary border-primary/30' : 'bg-white/[0.06] text-white/85 hover:bg-white/[0.1] border-white/10'}`}>
-                  <Download className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span>Download</span>
-                </button>
-                <button onClick={() => openInlineSheet("library")} className={`flex h-10 items-center justify-center gap-1.5 rounded-[10px] border px-2 text-[11px] font-medium transition-all ${showLibrarySheet ? 'bg-primary/15 text-primary border-primary/30' : 'bg-white/[0.06] text-white/85 hover:bg-white/[0.1] border-white/10'}`}>
-                  <FolderDown className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span className="truncate">Library</span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => openInlineSheet("language")} className="inline-flex h-10 items-center justify-between gap-2 rounded-[10px] border border-white/10 bg-white/[0.06] px-3 text-[11px] font-semibold text-white/85">
-                  <span className="truncate">{currentLangLabel}</span>
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => openInlineSheet("season")} className="inline-flex h-10 items-center justify-between gap-2 rounded-[10px] border border-white/10 bg-white/[0.06] px-3 text-[11px] font-semibold text-white/85">
-                  <span className="truncate">{activeSeasonLabel}</span>
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
               {episodeList && episodeList.length > 0 && (
                 <div className="space-y-2">
                   <div className="relative -mx-4">
