@@ -3755,6 +3755,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
           };
 
           const qualityChoices = availableDownloadQualities;
+          const activeQuality = selectedDownloadQuality && qualityChoices.includes(selectedDownloadQuality)
+            ? selectedDownloadQuality
+            : (preferredDownloadQuality || qualityChoices[0] || "");
 
           return (
             <div className="w-full max-w-md mx-auto">
@@ -3792,7 +3795,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                             </button>
                             {hasMultiEpisodes ? (
                               <button onClick={() => { setShowSeasonSheet(true); }} className="h-14 rounded-[10px] border border-border bg-secondary px-3 text-left text-base text-foreground flex items-center justify-between">
-                                <span className="truncate">{activeSeasonLabel}</span>
+                                <span className="truncate">{getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx)}</span>
                                 <ChevronDown className="w-5 h-5 text-muted-foreground" />
                               </button>
                             ) : (
@@ -3810,9 +3813,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                                     disabled={locked4K}
                                     onClick={() => {
                                       if (locked4K) return;
-                                      if (!hasMultiEpisodes) startMovieDownload(label);
+                                      setSelectedDownloadQuality(label);
                                     }}
-                                    className={`h-12 rounded-[10px] text-base font-semibold border transition-all ${locked4K ? 'bg-secondary/50 text-muted-foreground opacity-50 border-border/30' : 'bg-secondary text-foreground border-border'} ${label === preferredDownloadQuality ? 'bg-primary/20 text-primary border-primary/40' : ''}`}
+                                    className={`h-12 rounded-[10px] text-base font-semibold border transition-all ${locked4K ? 'bg-secondary/50 text-muted-foreground opacity-50 border-border/30' : 'bg-secondary text-foreground border-border'} ${label === activeQuality ? 'bg-primary/20 text-primary border-primary/40' : ''}`}
                                   >
                                     {label}
                                   </button>
@@ -3825,8 +3828,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                         {hasMultiEpisodes && panelSeason && (
                           <div className="overflow-y-auto overscroll-contain" style={{ maxHeight: '38vh', WebkitOverflowScrolling: 'touch' }}>
                             <div className="space-y-4">
-                              {downloadEpisodes.map((ep) => {
+                              {panelEpisodes.map((ep) => {
                                 const selected = dlSelectedEpisodes.has(ep.index);
+                                const qualityUrl = activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
                                 return (
                                   <button key={`${downloadPanelSeasonIdx}-${ep.index}`} onClick={() => toggleEpisode(ep.index)} className="w-full flex items-start gap-3 text-left">
                                     <span className={`mt-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 ${selected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/70 text-transparent'}`}>
@@ -3834,7 +3838,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                                     </span>
                                     <span className="min-w-0 flex-1">
                                       <span className="block text-[18px] font-medium text-foreground">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
-                                      <span className="block text-[12px] text-muted-foreground mt-1 truncate">{ep.metaText}</span>
+                                      <span className="block text-[12px] text-muted-foreground mt-1 truncate">{qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} link`}</span>
                                     </span>
                                   </button>
                                 );
@@ -3852,7 +3856,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                         </button>
                         <button
                           onClick={() => {
-                            const preferred = preferredDownloadQuality || qualityChoices[0];
+                            const preferred = activeQuality || preferredDownloadQuality || qualityChoices[0];
                             if (!preferred) return;
                             if (hasMultiEpisodes) startSelectedDownloads(preferred);
                             else startMovieDownload(preferred);
@@ -3860,7 +3864,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                           className="flex-1 h-14 rounded-[12px] bg-gradient-to-r from-cyan-500 to-green-400 text-black text-[18px] font-semibold flex items-center justify-center gap-2"
                         >
                           <Download className="w-5 h-5" />
-                          <span>{preferredDownloadQuality ? `Download - ${preferredDownloadQuality}` : 'Download'}</span>
+                          <span>{activeQuality ? `Download - ${activeQuality}` : 'Download'}</span>
                         </button>
                       </div>
                     </div>
