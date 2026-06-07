@@ -1,0 +1,219 @@
+// Multi-Firebase mirror engine.
+// Each extra Firebase = a warm replica of the primary Firebase. Admin can:
+//   - Push a section (e.g. webseries/users/images) from main → replica
+//   - Pull a section as JSON download (per replica)
+//   - Upload a JSON file to overwrite a section (per replica)
+//   - Ping connection
+//
+// The live app still reads/writes only the primary Firebase; replicas are
+// passive copies for backup / load distribution that you can wire later.
+
+import { initializeApp, deleteApp, getApps, type FirebaseApp } from "firebase/app";
+import { getDatabase, ref as rRef, get as rGet, set as rSet, update as rUpdate, type Database } from "firebase/database";
+import { db as mainDb, ref as mainRef, get as mainGet, set as mainSet, remove as mainRemove, update as mainUpdate } from "@/lib/firebase";
+
+export interface ExtraFirebaseConfig {
+  id: string;                 // uuid
+  displayName: string;        // e.g. "Backup-A"
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  databaseURL: string;        // primary RTDB URL
+  mirrorURL?: string;         // optional secondary region URL (read fallback)
+  storageBucket?: string;
+  messagingSenderId?: string;
+  appId?: string;
+  sections: string[];         // which top-level RTDB roots this FB handles
+  createdAt: number;
+  updatedAt: number;
+}
+
+// Default top-level sections used by the app.
+export const ALL_SECTIONS = [
+  "webseries", "movies", "liveTv",
+  "users", "userProfiles", "watchHistory", "library",
+  "comments", "notifications", "pushTokens", "fcmTokens",
+  "subscriptions", "adminLinks", "admin",
+  "seasonsByLanguage", "images", "analytics",
+  "miniApp", "telegramPerAnimeButtons", "weeklyEpisodes",
+  "categories", "branding",
+] as const;
+export type SectionName = typeof ALL_SECTIONS[number] | string;
+
+// Standard RTDB rules (admin can copy + paste in Firebase console)
+export const DEFAULT_RTDB_RULES = `{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null"
+  }
+}`;
+
+const appCache = new Map<string, { app: FirebaseApp; db: Database }>();
+
+function instanceName(id: string) { return `extra-fb-${id}`; }
+
+function ensureApp(cfg: ExtraFirebaseConfig): { app: FirebaseApp; db: Database } {
+  const cached = appCache.get(cfg.id);
+  if (cached) return cached;
+
+  // Re-use if already initialized in this session
+  const existing = getApps().find(a => a.name === instanceName(cfg.id));
+  const app = existing || initializeApp({
+    apiKey: cfg.apiKey,
+    authDomain: cfg.authDomain,
+    projectId: cfg.projectId,
+    databaseURL: cfg.databaseURL,
+    storageBucket: cfg.storageBucket,
+    messagingSenderId: cfg.messagingSenderId,
+    appId: cfg.appId,
+  }, instanceName(cfg.id));
+  const db = getDatabase(app, cfg.databaseURL);
+  const entry = { app, db };
+  appCache.set(cfg.id, entry);
+  return entry;
+}
+
+export async function disposeExtraFirebase(cfg: ExtraFirebaseConfig) {
+  const cached = appCache.get(cfg.id);
+  if (cached) {
+    try { await deleteApp(cached.app); } catch { /* ignore */ }
+    appCache.delete(cfg.id);
+  }
+}
+
+// ----------------- CRUD on the extra-firebase config list (stored in primary) -----------------
+
+export async function listExtraFirebases(): Promise<ExtraFirebaseConfig[]> {
+  const snap = await mainGet(mainRef(mainDb, "admin/extraFirebases"));
+  const v = (snap.val() || {}) as Record<string, ExtraFirebaseConfig>;
+  return Object.values(v).sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export async function saveExtraFirebase(cfg: ExtraFirebaseConfig) {
+  await mainSet(mainRef(mainDb, `admin/extraFirebases/${cfg.id}`), {
+    ...cfg,
+    updatedAt: Date.now(),
+  });
+}
+
+export async function deleteExtraFirebase(id: string) {
+  await mainRemove(mainRef(mainDb, `admin/extraFirebases/${id}`));
+}
+
+export async function updateSections(id: string, sections: string[]) {
+  await mainUpdate(mainRef(mainDb, `admin/extraFirebases/${id}`), {
+    sections, updatedAt: Date.now(),
+  });
+}
+
+// ----------------- Connection ops -----------------
+
+export async function pingExtra(cfg: ExtraFirebaseConfig): Promise<{ ok: boolean; ms: number; error?: string }> {
+  const t0 = performance.now();
+  try {
+    const { db } = ensureApp(cfg);
+    // Reading .info/connected can take a moment; race with a 5s timeout.
+    const result = await Promise.race([
+      rGet(rRef(db, ".info/serverTimeOffset")),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 5000)),
+    ]);
+    void result;
+    return { ok: true, ms: Math.round(performance.now() - t0) };
+  } catch (e: any) {
+    return { ok: false, ms: Math.round(performance.now() - t0), error: e?.message || String(e) };
+  }
+}
+
+// ----------------- Per-section operations -----------------
+
+export type ProgressFn = (info: {
+  doneNodes: number;
+  totalNodes: number;
+  currentSection: string;
+  currentKey?: string;
+  phase: "reading" | "writing" | "done";
+}) => void;
+
+const CHUNK = 25;
+
+/** Push one section from main DB → extra DB (full overwrite of each top-level child). */
+export async function pushSection(
+  cfg: ExtraFirebaseConfig,
+  section: string,
+  onProgress?: ProgressFn,
+) {
+  const { db: extraDb } = ensureApp(cfg);
+  onProgress?.({ doneNodes: 0, totalNodes: 1, currentSection: section, phase: "reading" });
+  const snap = await mainGet(mainRef(mainDb, section));
+  const val = snap.val();
+  if (val == null) {
+    // empty section → set null in replica too
+    await rSet(rRef(extraDb, section), null);
+    onProgress?.({ doneNodes: 0, totalNodes: 0, currentSection: section, phase: "done" });
+    return { nodes: 0 };
+  }
+  // If value is primitive or array (no top-level children to chunk), just set whole.
+  if (typeof val !== "object" || Array.isArray(val)) {
+    await rSet(rRef(extraDb, section), val);
+    onProgress?.({ doneNodes: 1, totalNodes: 1, currentSection: section, phase: "done" });
+    return { nodes: 1 };
+  }
+  const keys = Object.keys(val);
+  const total = keys.length;
+  let done = 0;
+  // Wipe section first so deleted nodes get removed in the replica too.
+  await rSet(rRef(extraDb, section), null);
+  for (let i = 0; i < keys.length; i += CHUNK) {
+    const slice = keys.slice(i, i + CHUNK);
+    const batch: Record<string, any> = {};
+    for (const k of slice) batch[k] = val[k];
+    await rUpdate(rRef(extraDb, section), batch);
+    done += slice.length;
+    onProgress?.({
+      doneNodes: done,
+      totalNodes: total,
+      currentSection: section,
+      currentKey: slice[slice.length - 1],
+      phase: "writing",
+    });
+  }
+  onProgress?.({ doneNodes: total, totalNodes: total, currentSection: section, phase: "done" });
+  return { nodes: total };
+}
+
+/** Push multiple sections sequentially, aggregating progress. */
+export async function pushAllSelectedSections(
+  cfg: ExtraFirebaseConfig,
+  sections: string[],
+  onProgress?: ProgressFn,
+) {
+  for (const s of sections) {
+    await pushSection(cfg, s, onProgress);
+  }
+}
+
+/** Pull a section from extra DB → return JSON object. */
+export async function pullSectionJson(cfg: ExtraFirebaseConfig, section: string): Promise<any> {
+  const { db: extraDb } = ensureApp(cfg);
+  const snap = await rGet(rRef(extraDb, section));
+  return snap.val();
+}
+
+/** Upload a section JSON object → write to extra DB (full overwrite). */
+export async function uploadSectionJson(cfg: ExtraFirebaseConfig, section: string, data: any) {
+  const { db: extraDb } = ensureApp(cfg);
+  await rSet(rRef(extraDb, section), data);
+}
+
+/** Helper for browser download. */
+export function triggerJsonDownload(filename: string, data: any) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
