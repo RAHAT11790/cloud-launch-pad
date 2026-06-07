@@ -5094,43 +5094,24 @@ ${tgBulkFooter}
                         </div>
                       </div>
                       <div className="mb-4">
-                        <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Language</label>
-                        <select value={seriesForm.language || "Hindi"} onChange={e => setSeriesForm({ ...seriesForm, language: e.target.value })} className={selectClass}>
-                          {languageOptions.map(l => <option key={l} value={l}>{l}</option>)}
+                        <label className="block text-xs text-[#D1C4E9] mb-2 font-medium flex items-center justify-between">
+                          <span>Language</span>
+                          <span className="text-[10px] text-cyan-300/80 font-normal">Episode links below show only this language</span>
+                        </label>
+                        <select
+                          value={seriesForm.selectedAdminLanguage || seriesForm.language || "Hindi"}
+                          onChange={e => ensureSeriesLanguageTab(e.target.value)}
+                          className={selectClass}
+                        >
+                          {Array.from(new Set([
+                            ...languageOptions,
+                            ...(seriesForm.availableLanguages || []),
+                            seriesForm.baseLanguage,
+                            seriesForm.language,
+                          ])).filter(Boolean).map((lang: string) => (
+                            <option key={lang} value={lang}>{lang}</option>
+                          ))}
                         </select>
-                      </div>
-                      <div className="mb-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <label className="block text-xs text-cyan-300 font-medium">Series Language Links</label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const nextLanguage = window.prompt("Language name", "English")?.trim();
-                              if (!nextLanguage) return;
-                              ensureSeriesLanguageTab(nextLanguage);
-                            }}
-                            className="text-[10px] text-cyan-300 hover:text-cyan-200 flex items-center gap-1"
-                          >
-                            <Plus size={10} /> Add Language
-                          </button>
-                        </div>
-                        <div className="space-y-2">
-                          <select
-                            value={seriesForm.selectedAdminLanguage || seriesForm.baseLanguage || "Hindi"}
-                            onChange={e => ensureSeriesLanguageTab(e.target.value)}
-                            className={`${selectClass} !text-[12px]`}
-                          >
-                            {Array.from(new Set([
-                              seriesForm.baseLanguage || seriesForm.language || "Hindi",
-                              ...(seriesForm.availableLanguages || []),
-                            ])).filter(Boolean).map((lang: string) => (
-                              <option key={lang} value={lang}>{lang}</option>
-                            ))}
-                          </select>
-                          <p className="text-[10px] text-cyan-100/70">
-                            Select one language above. Episode links below will show only that language.
-                          </p>
-                        </div>
                       </div>
                       <div className="mb-4">
                         <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Category</label>
