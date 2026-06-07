@@ -910,6 +910,41 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
   const inlineSheetOpen = showInfoSheet || showLanguageSheet || showSeasonSheet || showShareSheet || showAddToListSheet || showLibrarySheet || showDownloadQualityPicker;
 
+  // Track the bottom edge of the video player so inline overlays (Info / Library /
+  // Language / Season / Download) can be anchored *just below* the player and
+  // cover everything underneath (For You, Comments, Resources strip, etc).
+  const [videoBottomPx, setVideoBottomPx] = useState(0);
+  useEffect(() => {
+    const el = videoContainerRef.current;
+    if (!el) return;
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      setVideoBottomPx(Math.max(0, Math.round(rect.bottom)));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+    };
+  }, []);
+
+  // When any inline overlay opens, snap the outer scroll back to the top so the
+  // fixed overlay aligns precisely with the player's bottom edge.
+  useEffect(() => {
+    if (inlineSheetOpen && containerRef.current) {
+      containerRef.current.scrollTop = 0;
+    }
+  }, [inlineSheetOpen]);
+
+  const inlineSheetFixedClass =
+    "fixed left-0 right-0 bottom-0 z-[260] border-t border-white/10 bg-black text-white overflow-y-auto overscroll-contain";
+  const inlineSheetStyle = { top: videoBottomPx } as React.CSSProperties;
+
   useEffect(() => {
     const unsub = downloadManager.subscribe((snapshot) => {
       setActiveDownloads(new Map(snapshot.downloads));
