@@ -42,6 +42,7 @@ export function useFirebaseData() {
         if (cat.name) cats.push(cat.name);
       });
       setCategories(cats);
+      writeCache(LS_CATS, cats);
       checkLoaded();
     });
 
