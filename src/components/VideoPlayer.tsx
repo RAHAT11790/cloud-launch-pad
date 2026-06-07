@@ -3934,7 +3934,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     onClick={() => { ep.onClick(); closeInlineSheets(); }}
                     className={`aspect-square rounded-lg text-sm font-bold transition-colors flex items-center justify-center ${
                       ep.active
-                        ? 'bg-gradient-to-br from-emerald-500/30 to-emerald-400/10 text-emerald-300 border border-emerald-400/70 shadow-[0_0_14px_-2px_hsl(160_84%_50%/0.45)]'
+                        ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/20 text-amber-300 border border-amber-400/70 shadow-[0_0_14px_-2px_hsl(45_95%_55%/0.5)]'
                         : 'bg-white/[0.06] text-white/85 border border-white/10 active:scale-95'
                     }`}
                   >
