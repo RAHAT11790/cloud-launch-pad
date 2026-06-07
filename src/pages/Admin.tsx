@@ -3036,12 +3036,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         }
       }
 
-      setSeriesForm({
+      const nextMap = { Hindi: cloneSeasonList(newSeasons) };
+      setSeriesForm(syncSeriesLanguageSummary({
         tmdbId: data.id, title: data.name || "", logo: logoUrl, poster: data.poster_path ? TMDB_IMG_BASE + "original" + data.poster_path : "",
         backdrop: data.backdrop_path ? TMDB_IMG_BASE + "original" + data.backdrop_path : "", trailer: trailerUrl,
         year: data.first_air_date?.split("-")[0] || "", rating: data.vote_average?.toFixed(1) || "",
         language: "Hindi", baseLanguage: "Hindi", selectedAdminLanguage: "Hindi", availableLanguages: ["Hindi"], category: autoCategory, dubType: "official", storyline: data.overview || "", visibility: "public", weeklyEnabled: false, weeklyEveryDays: 7, audioTracks: []
-      });
+      }, nextMap));
       if (autoCategory) toast.info(`অটো ক্যাটাগরি: ${autoCategory}`);
       setSeriesCast(cast);
       setSeriesResults([]);
@@ -3075,7 +3076,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
           }
         }
       }
-      setSeasonsData(newSeasons);
+      setSeriesSeasonsByLanguage(nextMap);
+      setSeasonsData(cloneSeasonList(newSeasons));
       toast.success("Series details fetched! (এপিসোড নাম TMDB থেকে লোড হয়েছে)");
     } catch (err: any) { toast.error("Error: " + err.message); }
     finally { setFetchingOverlay(false); }
