@@ -3683,7 +3683,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
         {!isFullscreen && showInfoSheet && (
           <div className={inlineSheetFixedClass} style={inlineSheetStyle} data-player-panel="true">
-            <div className="flex items-center justify-between px-4 pt-3 pb-2">
+            <div className="sticky top-0 z-10 bg-black flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
               <h3 className="text-[15px] font-bold tracking-tight">More details</h3>
               <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
                 <X className="w-5 h-5" />
@@ -3743,7 +3743,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
         {!isFullscreen && showLibrarySheet && (
           <div className={inlineSheetFixedClass} style={inlineSheetStyle} data-player-panel="true">
-            <div className="flex items-center justify-between px-4 pt-3 pb-2">
+            <div className="sticky top-0 z-10 bg-black flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
               <h3 className="text-[15px] font-bold tracking-tight">My list</h3>
               <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
                 <X className="w-5 h-5" />
@@ -3780,7 +3780,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
         {!isFullscreen && showLanguageSheet && (
           <div className={inlineSheetFixedClass} style={inlineSheetStyle} data-player-panel="true">
-            <div className="flex items-center justify-between px-4 pt-3 pb-2">
+            <div className="sticky top-0 z-10 bg-black flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
               <h3 className="text-[15px] font-bold tracking-tight">Select language</h3>
               <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
                 <X className="w-5 h-5" />
@@ -3827,7 +3827,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
         {!isFullscreen && showSeasonSheet && !!seasons?.length && (
           <div className={inlineSheetFixedClass} style={inlineSheetStyle} data-player-panel="true">
-            <div className="flex items-center justify-between px-4 pt-3 pb-2">
+            <div className="sticky top-0 z-10 bg-black flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
               <h3 className="text-[15px] font-bold tracking-tight">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
               <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
                 <X className="w-5 h-5" />
@@ -4064,7 +4064,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                   data-player-panel="true"
                 >
                   {/* Header */}
-                  <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
+                  <div className="sticky top-0 z-10 bg-black flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
                     <p className="text-[15px] font-bold tracking-tight text-white truncate">Download</p>
                     <button
                       onClick={closePanel}
