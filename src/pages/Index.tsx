@@ -1475,12 +1475,14 @@ const Index = () => {
 
     dismissDetailsLoadingToast();
 
+    const resolvedLanguage = getPrimaryLanguageToken(anime.baseLanguage || anime.language) || anime.language || "";
+    const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, resolvedLanguage);
     let src = "";
     let subtitle = "";
     let qualityOptions: { label: string; src: string }[] = [];
     let audioTracks: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[] | undefined;
-    if (anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined) {
-      const season = anime.seasons[seasonIdx];
+    if (anime.type === "webseries" && resolvedSeasons && seasonIdx !== undefined && epIdx !== undefined) {
+      const season = resolvedSeasons[seasonIdx];
       const episode = season.episodes[epIdx];
       src = getEpisodeSrc(episode);
       subtitle = `${season.name} - Episode ${episode.episodeNumber}`;
@@ -1564,14 +1566,15 @@ const Index = () => {
         src,
         title: anime.title,
         subtitle,
-        anime,
+        anime: { ...anime, seasons: resolvedSeasons },
+        selectedLanguage: resolvedLanguage,
         seasonIdx,
         epIdx,
         qualityOptions,
         audioTracks,
         nextEpisodeSrc:
-          anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined
-            ? getEpisodeSrc(anime.seasons[seasonIdx]?.episodes?.[epIdx + 1] as Episode)
+          anime.type === "webseries" && resolvedSeasons && seasonIdx !== undefined && epIdx !== undefined
+            ? getEpisodeSrc(resolvedSeasons[seasonIdx]?.episodes?.[epIdx + 1] as Episode)
             : undefined,
       });
       setSelectedAnime(null);
