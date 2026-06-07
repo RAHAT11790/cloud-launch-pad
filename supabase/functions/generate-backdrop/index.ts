@@ -212,6 +212,7 @@ async function genWithLovableEdit(prompt: string, referenceDataUrl: string, mode
   const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
   if (bin.byteLength < 1000) throw new Error("Lovable AI edit: image too small");
   return bin;
+}
 
 async function genWithFlux(prompt: string, mode: "backdrop" | "logo"): Promise<string> {
   const ar = mode === "logo" ? "1:1" : "16:9";
