@@ -535,7 +535,8 @@ const Index = () => {
     return `/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
   }, []);
   const getDefaultWatchTarget = useCallback((anime: AnimeItem) => {
-    if (anime.type === "webseries" && anime.seasons?.length) {
+    const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, anime.baseLanguage || anime.language);
+    if (anime.type === "webseries" && resolvedSeasons?.length) {
       return { seasonIdx: 0, epIdx: 0 };
     }
     return { seasonIdx: undefined, epIdx: undefined };
