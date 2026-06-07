@@ -1929,14 +1929,16 @@ const Index = () => {
     }
 
     // Use preserveProgress=true so we don't overwrite currentTime/duration
-    if (item.episodeInfo) {
+      if (item.episodeInfo) {
       const sIdx = item.episodeInfo.seasonIdx ?? (item.episodeInfo.season - 1);
       const eIdx = item.episodeInfo.epIdx ?? (item.episodeInfo.episode - 1);
       let src = "";
       let subtitle = "";
       let qualityOptions: { label: string; src: string }[] = [];
-      if (anime.seasons) {
-        const season = anime.seasons[sIdx];
+        const selectedLanguage = item.language || anime.baseLanguage || anime.language || "";
+        const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, selectedLanguage);
+        if (resolvedSeasons) {
+          const season = resolvedSeasons[sIdx];
         const episode = season.episodes[eIdx];
         src = getEpisodeSrc(episode);
         subtitle = `${season.name} - Episode ${episode.episodeNumber}`;
@@ -1952,19 +1954,20 @@ const Index = () => {
         if (`${location.pathname}${location.search}` !== targetWatchRoute) {
           navigate(targetWatchRoute);
         }
-        const episode = anime.seasons?.[sIdx]?.episodes?.[eIdx];
+          const episode = resolvedSeasons?.[sIdx]?.episodes?.[eIdx];
         addToWatchHistory(anime, sIdx, eIdx, true);
         setPlayerState({
           src,
           title: anime.title,
           subtitle,
-          anime,
+            anime: { ...anime, seasons: resolvedSeasons },
+            selectedLanguage,
           seasonIdx: sIdx,
           epIdx: eIdx,
           audioTracks: episode?.audioTracks,
           resumeTime: item.currentTime || 0,
           qualityOptions: qualityOptions.length > 0 ? qualityOptions : undefined,
-          nextEpisodeSrc: getEpisodeSrc(anime.seasons?.[sIdx]?.episodes?.[eIdx + 1] as Episode),
+            nextEpisodeSrc: getEpisodeSrc(resolvedSeasons?.[sIdx]?.episodes?.[eIdx + 1] as Episode),
         });
         setSelectedAnime(null);
       }
