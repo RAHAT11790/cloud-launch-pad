@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 interface Props { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string; }
 
-type Item = { id: string; title: string; backdrop?: string; logo?: string; year?: string | number; type: "webseries" | "movies" };
+type Item = { id: string; title: string; backdrop?: string; logo?: string; year?: string | number; type: "webseries" | "movies"; category?: string; storyline?: string; genres?: string[]; };
 type Mode = "backdrop" | "logo";
 type Provider = "lovable" | "flux";
 
@@ -32,6 +32,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [useReference, setUseReference] = useState(true);
 
   useEffect(() => {
     const u1 = onValue(ref(db, "webseries"), (snap) => {
@@ -39,6 +40,8 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       const ws = Object.keys(v).map((id) => ({
         id, title: v[id]?.title || id, backdrop: v[id]?.backdrop, logo: v[id]?.logo,
         year: v[id]?.year, type: "webseries" as const,
+        category: v[id]?.category, storyline: v[id]?.storyline,
+        genres: Array.isArray(v[id]?.genres) ? v[id].genres : (v[id]?.category ? [v[id].category] : undefined),
       }));
       setItems((prev) => [...ws, ...prev.filter((p) => p.type !== "webseries")]);
     });
@@ -47,6 +50,8 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       const mv = Object.keys(v).map((id) => ({
         id, title: v[id]?.title || id, backdrop: v[id]?.backdrop, logo: v[id]?.logo,
         year: v[id]?.year, type: "movies" as const,
+        category: v[id]?.category, storyline: v[id]?.storyline,
+        genres: Array.isArray(v[id]?.genres) ? v[id].genres : (v[id]?.category ? [v[id].category] : undefined),
       }));
       setItems((prev) => [...prev.filter((p) => p.type !== "movies"), ...mv]);
     });
