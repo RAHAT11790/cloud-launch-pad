@@ -3800,6 +3800,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     onClick={() => {
                       if (sheetOrigin === "download") {
                         setSelectedDownloadLanguageLabel(label);
+                      } else if (seasons?.length && onLanguageChange) {
+                        onLanguageChange(label);
                       } else if (track) switchAudioTrack({ language: track.language, label: track.label, src: track.link, src480: track.link480, src720: track.link720, src1080: track.link1080, src4k: track.link4k });
                       else setSelectedLanguageLabel(label);
                       if (sheetOrigin === "download") {
