@@ -1428,64 +1428,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
   const instantSwitchRef = useRef(false);
-  const networkWarmupLinksRef = useRef<HTMLLinkElement[]>([]);
 
   // NOTE: Aggressive next-episode preload removed — it caused CORS fetches
   // and wasted bandwidth that slowed the *current* video load. Browser will
   // naturally prefetch via the video element when user switches.
-
-  useEffect(() => {
-    networkWarmupLinksRef.current.forEach((link) => {
-      try {
-        document.head.removeChild(link);
-      } catch {
-        /* noop */
-      }
-    });
-    networkWarmupLinksRef.current = [];
-
-    const origins = new Set<string>();
-    [activeSourceBaseRef.current, src, nextEpisodeSrc].forEach((candidate) => {
-      const clean = String(candidate || "").trim();
-      if (!clean) return;
-      try {
-        const parsed = new URL(clean, window.location.origin);
-        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-          origins.add(parsed.origin);
-        }
-      } catch {
-        /* noop */
-      }
-    });
-
-    const nextLinks: HTMLLinkElement[] = [];
-    origins.forEach((origin) => {
-      const preconnect = document.createElement("link");
-      preconnect.rel = "preconnect";
-      preconnect.href = origin;
-      preconnect.crossOrigin = "anonymous";
-      document.head.appendChild(preconnect);
-      nextLinks.push(preconnect);
-
-      const dnsPrefetch = document.createElement("link");
-      dnsPrefetch.rel = "dns-prefetch";
-      dnsPrefetch.href = origin;
-      document.head.appendChild(dnsPrefetch);
-      nextLinks.push(dnsPrefetch);
-    });
-
-    networkWarmupLinksRef.current = nextLinks;
-
-    return () => {
-      nextLinks.forEach((link) => {
-        try {
-          document.head.removeChild(link);
-        } catch {
-          /* noop */
-        }
-      });
-    };
-  }, [currentSrc, nextEpisodeSrc, src]);
 
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !effectiveVideoServers[serverIndex]) return;
@@ -1534,11 +1480,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           switchServer(nextIdx);
         }
       }
-    }, 1400);
+    }, 2500);
 
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
-    }, 250);
+    }, 400);
   }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
 
   // Auto-switch to premium server for premium users
@@ -2142,7 +2088,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     retryAttemptsRef.current.clear();
     setVideoError(false);
     failedSrcsRef.current.clear();
-    setIsBuffering(true);
     const seekTarget = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : 0;
     pendingSeek.current = seekTarget;
     // FORCE-RESET currentTime when switching episodes with no resume requested —
@@ -2161,7 +2106,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const t = setTimeout(() => {
       instantSwitchRef.current = false;
       setSwitchingEpisode(false);
-    }, 56);
+    }, 80);
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, initialSeekTime]);
 
@@ -2189,7 +2134,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
 
     const visibleFor = Date.now() - loaderShownAtRef.current;
-    const MIN_VISIBLE = 140;
+    const MIN_VISIBLE = 250; // ultra-fast: drop spinner as soon as canplay fires (was 1200ms)
     if (visibleFor >= MIN_VISIBLE) {
       setShowFixedLoader(false);
     } else {
@@ -2542,7 +2487,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
       console.log(`Video error, retry ${next}/${MAX_RETRIES}...`);
       // Exponential backoff: 500ms, 1000ms
-      const delay = next * 220;
+      const delay = next * 500;
       setTimeout(() => {
         if (v) {
           const savedTime = v.currentTime || lastKnownTime;
@@ -2587,7 +2532,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // Short debounce — show loader quickly on real stalls but stay calm on micro-hiccups
       waitingTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
-      }, 180);
+      }, 400);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
@@ -2607,7 +2552,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (stalledTimer) clearTimeout(stalledTimer);
       stalledTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
-      }, 650);
+      }, 1500);
     };
     v.addEventListener("loadedmetadata", onLoaded);
     v.addEventListener("play", onPlay);
@@ -3623,42 +3568,38 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   )}
                 </div>
                 <div className="relative -mx-5">
-                  {/* Hard tunnel box — episodes disappear fully behind this wall, no light bleed */}
+                  {/* Solid background cover behind All button — episodes vanish completely on the left side */}
                   <div
                     aria-hidden
-                    className="absolute left-0 top-0 z-10 h-11 w-[80px] pointer-events-none rounded-r-[12px] border-y border-r border-black/75"
-                    style={{
-                      background: "linear-gradient(180deg, rgba(0,0,0,0.92) 0%, rgba(7,7,7,0.98) 100%)",
-                      boxShadow: "10px 0 22px -14px rgba(0,0,0,0.95), inset -1px 0 0 rgba(255,210,70,0.08)",
-                    }}
+                    className="absolute left-0 top-0 z-10 h-11 w-[78px] pointer-events-none"
+                    style={{ background: "hsl(var(--background))" }}
                   />
-                  <div
-                    aria-hidden
-                    className="absolute left-[79px] top-0 z-10 h-11 w-3 pointer-events-none"
-                    style={{
-                      background: "linear-gradient(to right, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.52) 58%, rgba(0,0,0,0) 100%)",
-                    }}
-                  />
-                  {/* Sticky "All" box — compact, golden, same site feel */}
+                  {/* Sticky "All" pill — compact, golden, matches site theme */}
                   <button
                     onClick={() => openInlineSheet("allEpisodes")}
-                    className="absolute left-5 top-0 z-20 w-12 h-11 rounded-[16px] text-[12px] font-bold transition-all duration-200 active:scale-95 flex items-center justify-center border border-primary/55 bg-primary/15 text-primary shadow-[0_0_0_1px_rgba(0,0,0,0.7),0_10px_18px_-14px_hsl(var(--primary)/0.85),inset_0_1px_0_hsl(var(--primary)/0.22)]"
+                    className="absolute left-5 top-0 z-20 w-12 h-11 rounded-lg text-[12px] font-bold bg-amber-400/15 text-amber-300 border border-amber-400/40 transition-transform active:scale-95 flex items-center justify-center"
                     aria-label="All episodes"
                   >
                     All
                   </button>
+                  {/* Soft fade on right edge of cover — tunnel mouth */}
+                  <div
+                    aria-hidden
+                    className="absolute left-[78px] top-0 z-10 h-11 w-4 pointer-events-none"
+                    style={{ background: "linear-gradient(to right, hsl(var(--background)) 0%, hsl(var(--background) / 0) 100%)" }}
+                  />
                   <div
                     className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 pr-5"
-                    style={{ paddingLeft: 80, scrollPaddingLeft: 80, WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}
+                    style={{ paddingLeft: 78, scrollPaddingLeft: 78, WebkitOverflowScrolling: "touch" }}
                   >
                     {episodeList.map((ep) => (
                       <button
                         key={ep.number}
                         onClick={ep.onClick}
-                        className={`flex-shrink-0 w-12 h-11 rounded-[16px] text-[12px] font-bold transition-[transform,background-color,border-color,box-shadow,color] duration-200 flex items-center justify-center ${
+                        className={`flex-shrink-0 w-12 h-11 rounded-lg text-[12px] font-bold transition-colors flex items-center justify-center ${
                           ep.active
-                            ? 'bg-primary/20 text-primary border border-primary/60 shadow-[0_0_0_1px_rgba(0,0,0,0.55),0_8px_18px_-12px_hsl(var(--primary)/0.75),inset_0_1px_0_hsl(var(--primary)/0.18)]'
-                            : 'bg-foreground/[0.06] text-foreground/85 border border-border shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] active:scale-95'
+                            ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/20 text-amber-300 border border-amber-400/60 shadow-[0_0_10px_-2px_hsl(45_95%_55%/0.45)]'
+                            : 'bg-foreground/[0.06] text-foreground/85 border border-border active:scale-95'
                         }`}
                       >
                         {String(ep.number).padStart(2, '0')}
