@@ -536,6 +536,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [showShareSheet, setShowShareSheet] = useState(false);
   const [showAddToListSheet, setShowAddToListSheet] = useState(false);
   const [showLibrarySheet, setShowLibrarySheet] = useState(false);
+  const [showAllEpisodesSheet, setShowAllEpisodesSheet] = useState(false);
   const [sheetOrigin, setSheetOrigin] = useState<"resource" | "download" | "share">("resource");
   const [downloadPanelSeasonIdx, setDownloadPanelSeasonIdx] = useState<number>(0);
   const [sharePanelSeasonIdx, setSharePanelSeasonIdx] = useState<number>(currentSeasonIdx ?? 0);
@@ -942,10 +943,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setShowAddToListSheet(false);
     setShowLibrarySheet(false);
     setShowDownloadQualityPicker(false);
+    setShowAllEpisodesSheet(false);
     setSheetOrigin("resource");
   }, []);
 
-  const openInlineSheet = useCallback((sheet: "info" | "language" | "season" | "download" | "library" | "share" | "addToList", origin: "resource" | "download" | "share" = "resource") => {
+  const openInlineSheet = useCallback((sheet: "info" | "language" | "season" | "download" | "library" | "share" | "addToList" | "allEpisodes", origin: "resource" | "download" | "share" = "resource") => {
     if (sheet === "download") {
       const initialSeasonIdx = currentSeasonIdx ?? 0;
       const activeIdx = episodeList?.findIndex((episode) => episode.active) ?? -1;
@@ -961,6 +963,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setShowAddToListSheet(sheet === "addToList");
     setShowLibrarySheet(sheet === "library");
     setShowDownloadQualityPicker(sheet === "download");
+    setShowAllEpisodesSheet(sheet === "allEpisodes");
     setSheetOrigin(origin);
   }, [currentLangLabel, currentSeasonIdx, episodeList, preferredDownloadQuality]);
 
@@ -970,7 +973,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     closeInlineSheets();
   }, [closeInlineSheets]);
 
-  const inlineSheetOpen = showInfoSheet || showLanguageSheet || showSeasonSheet || showShareSheet || showAddToListSheet || showLibrarySheet || showDownloadQualityPicker;
+  const inlineSheetOpen = showInfoSheet || showLanguageSheet || showSeasonSheet || showShareSheet || showAddToListSheet || showLibrarySheet || showDownloadQualityPicker || showAllEpisodesSheet;
 
   // Track the bottom edge of the video player so inline overlays (Info / Library /
   // Language / Season / Download) can be anchored *just below* the player and
