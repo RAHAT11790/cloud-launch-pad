@@ -164,21 +164,40 @@ async function fetchAsDataUrl(url: string): Promise<string> {
 function buildGroundedPrompt(b: Body): string {
   const genreLine = b.genres?.length ? b.genres.join(", ") : "(unknown — infer from reference image)";
   const overview = (b.overview || "").trim().slice(0, 600);
-  return `You are editing/remastering a PROMOTIONAL ANIME BANNER based on the REFERENCE IMAGE provided.
+  const upperTitle = b.title.toUpperCase();
+  return `You are REMASTERING the REFERENCE IMAGE into a premium 16:9 anime promotional banner for "${b.title}".
 
 ANIME TITLE: "${b.title}"${b.year ? ` (${b.year})` : ""}
 OFFICIAL GENRE(S): ${genreLine}
 OVERVIEW: ${overview || "(none provided)"}
 
-CRITICAL RULES — do not violate:
-1. PRESERVE THE EXACT CHARACTERS from the reference image. Same hair color, hair style, eye color, face shape, body proportions, outfit, weapons, accessories, age, gender. Do NOT invent new characters. Do NOT replace them with generic anime faces.
-2. PRESERVE THE GENRE MOOD. Genre is ${genreLine}. Do NOT turn romance/slice-of-life into action. Do NOT add explosions, weapons, or aggressive poses unless the genre is Action/Shounen/Battle.
-3. ASPECT RATIO: 16:9 cinematic widescreen, full bleed, no letterboxing.
-4. STYLE: ultra-detailed official anime key visual / Crunchyroll-Netflix promotional banner. 4K HDR. Sharp linework. Clean anatomy. Cinematic lighting matching the genre mood.
-5. COMPOSITION: keep the same main character(s) as the reference, re-pose / re-light / re-frame them into a premium banner. Add atmospheric background that matches the genre (soft pastel + petals for romance; magic particles for fantasy; neon for sci-fi; battle aura ONLY for action).
-6. NO text, NO watermarks, NO logos in the output image.
+═══════ CHARACTER RULES (HIGHEST PRIORITY) ═══════
+1. PRESERVE THE EXACT CHARACTERS from the reference image. Same hair color & style, eye color, face shape, body proportions, outfit, weapons, accessories, age, gender. Do NOT invent or replace them with generic anime faces.
+2. PRESERVE GENRE MOOD (${genreLine}). Do NOT turn romance/slice-of-life into action. Add explosions/aura/weapons ONLY if genre is Action/Shounen/Battle.
+3. Re-pose, re-light, re-frame the original characters into a cinematic Crunchyroll/Netflix-style banner.
 
-OUTPUT: a single remastered 16:9 anime promotional banner faithful to the reference characters and the stated genre.`;
+═══════ LAYOUT (16:9 widescreen, full bleed, NO letterboxing) ═══════
+- LEFT 45%: large stylized anime title "${upperTitle}" in aggressive modern typography (brushstroke / neon / sharp-edge fonts), Japanese kanji subtitle under it in small elegant type, tagline area, branding chips at the bottom.
+- RIGHT 55%: main protagonist hero shot from the reference image, supporting cast layered behind with cinematic depth.
+
+═══════ BRANDING (MUST be visible and clean) ═══════
+- TOP-RIGHT CORNER: small premium "RS ANIME" badge with a minimal crown icon — elegant, not overpowering.
+- BOTTOM-LEFT: two small UI chips on a soft glassy bar:
+    • Telegram icon + text "TG :- @CARTOONFUNNY03"
+    • Globe icon + text "WEBSITE :- RS ANIME"
+- Branding text MUST be sharp, legible English typography. Do NOT garble the letters. Do NOT add any other random text/watermarks.
+
+═══════ STYLE ═══════
+- Ultra-detailed official anime key visual, 4K HDR, sharp linework, clean anatomy.
+- Cinematic genre-matched lighting: pastel + petals (romance), magic particles (fantasy), neon (sci-fi), battle aura (action), stadium lights (sports).
+- Rich cinematic colors, deep blacks, vibrant highlights, anime-accurate palette.
+
+═══════ STRICT NO-GO ═══════
+- NO year / release date numbers anywhere.
+- NO deformed faces, extra fingers, blurry textures.
+- NO generic AI typography — title must look like the official anime's logo treatment.
+
+OUTPUT: a single remastered 16:9 anime promotional banner with the reference characters preserved, genre-faithful mood, big stylized "${upperTitle}" title text on the left, RS ANIME crown badge top-right, and Telegram + Website chips bottom-left.`;
 }
 
 async function genWithLovableEdit(prompt: string, referenceDataUrl: string, model?: string): Promise<Uint8Array> {
