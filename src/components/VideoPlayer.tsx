@@ -870,7 +870,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     }
   }, [availableDownloadQualities, preferredDownloadQuality, selectedDownloadQuality]);
 
-  // Probe file sizes for download picker (HEAD via video-proxy for CORS)
+  // Probe file sizes for download picker — parallel HEAD with localStorage persistence
   useEffect(() => {
     if (!showDownloadQualityPicker) return;
     const quality = selectedDownloadQuality;
@@ -882,36 +882,41 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     });
     if (!urls.length) return;
     let cancelled = false;
+    const probe = async (u: string): Promise<[string, number] | null> => {
+      const proxied = buildVideoDownloadUrl(u, "probe.mp4");
+      if (!proxied) return null;
+      try {
+        const r = await fetch(proxied, { method: "HEAD" });
+        const len = Number(r.headers.get("content-length") || 0);
+        if (len > 0) return [u, len];
+      } catch {}
+      try {
+        const r2 = await fetch(proxied, { method: "GET", headers: { Range: "bytes=0-0" } });
+        const cr = r2.headers.get("content-range");
+        if (cr) {
+          const m = /\/(\d+)\s*$/.exec(cr);
+          if (m) return [u, Number(m[1])];
+        }
+        const len = Number(r2.headers.get("content-length") || 0);
+        if (len > 0) return [u, len];
+      } catch {}
+      return null;
+    };
     (async () => {
-      for (const u of urls) {
-        try {
-          const proxied = buildVideoDownloadUrl(u, "probe.mp4");
-          if (!proxied) continue;
-          let bytes = 0;
-          try {
-            const r = await fetch(proxied, { method: "HEAD" });
-            const len = r.headers.get("content-length");
-            if (len && Number(len) > 0) bytes = Number(len);
-          } catch {}
-          if (!bytes) {
-            try {
-              const r2 = await fetch(proxied, { method: "GET", headers: { Range: "bytes=0-0" } });
-              const cr = r2.headers.get("content-range");
-              if (cr) {
-                const m = /\/(\d+)\s*$/.exec(cr);
-                if (m) bytes = Number(m[1]);
-              }
-              if (!bytes) {
-                const len = r2.headers.get("content-length");
-                if (len) bytes = Number(len);
-              }
-            } catch {}
-          }
-          if (cancelled) return;
-          if (bytes > 0) {
-            setDownloadSizeCache((prev) => (prev[u] ? prev : { ...prev, [u]: bytes }));
-          }
-        } catch {}
+      // Parallel probes (max 6 at a time) for fast size reveal
+      const chunk = 6;
+      for (let i = 0; i < urls.length; i += chunk) {
+        if (cancelled) return;
+        const results = await Promise.all(urls.slice(i, i + chunk).map(probe));
+        if (cancelled) return;
+        const updates = results.filter(Boolean) as [string, number][];
+        if (!updates.length) continue;
+        setDownloadSizeCache((prev) => {
+          const next = { ...prev };
+          updates.forEach(([u, n]) => { if (!next[u]) next[u] = n; });
+          try { localStorage.setItem("rs_dl_size_cache_v1", JSON.stringify(next)); } catch {}
+          return next;
+        });
       }
     })();
     return () => { cancelled = true; };
