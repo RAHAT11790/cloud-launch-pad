@@ -64,6 +64,38 @@ export function useFirebaseData() {
           language: item.language || "",
           baseLanguage: item.baseLanguage || item.language || "",
           availableLanguages: Array.isArray(item.availableLanguages) ? item.availableLanguages : undefined,
+          seasonsByLanguage: item.seasonsByLanguage && typeof item.seasonsByLanguage === "object"
+            ? Object.fromEntries(
+                Object.entries(item.seasonsByLanguage).map(([lang, seasons]: [string, any]) => [
+                  lang,
+                  Array.isArray(seasons)
+                    ? seasons.map((s: any) => ({
+                        name: s.name || "",
+                        episodes: s.episodes
+                          ? Object.values(s.episodes).map((ep: any) => ({
+                              episodeNumber: ep.episodeNumber || 0,
+                              title: ep.title || "",
+                              link: ep.link || "",
+                              link480: ep.link480 || undefined,
+                              link720: ep.link720 || undefined,
+                              link1080: ep.link1080 || undefined,
+                              link4k: ep.link4k || undefined,
+                              audioTracks: ep.audioTracks ? Object.values(ep.audioTracks).map((at: any) => ({
+                                language: at.language || "",
+                                label: at.label || "",
+                                link: at.link || "",
+                                link480: at.link480 || undefined,
+                                link720: at.link720 || undefined,
+                                link1080: at.link1080 || undefined,
+                                link4k: at.link4k || undefined,
+                              })) : undefined,
+                            }))
+                          : [],
+                      }))
+                    : [],
+                ]),
+              )
+            : undefined,
           category: item.category || "",
           type: "webseries",
           storyline: item.storyline || "",
