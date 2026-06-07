@@ -1,53 +1,88 @@
-## 1. Episode strip "All" — sticky pill + bottom sheet
+# Firebase Add — Multi-Firebase Manager (replaces FB Cleanup)
 
-**File:** `src/components/VideoPlayer.tsx` (episode horizontal selector)
+## Scope (this turn only)
+1. Replace admin sidebar item **FB Cleanup** with **FB Add**.
+2. New component `src/components/admin/FirebaseMultiManager.tsx` with full multi-Firebase UI.
+3. Persist all extra Firebase configs in primary Firebase at `admin/extraFirebases/{id}`.
+4. Per-Firebase: section-wise transfer (push real data from primary), JSON export per section, JSON import per section, copy RTDB rules, status pings, progress bars.
+5. NOT in scope this turn: changing how the live app reads/writes (app still reads from primary). The extras are warm replicas — `useFirebaseData.ts` stays untouched. We can wire automatic read-fallback in a later turn if you want.
 
-- Remove "All" from the scrolling list. Render it as a separate sticky pill on the left (`position: sticky; left: 0; z-index: 2`) with a solid dark background + subtle border + small right-side shadow so scrolling episodes visually slide *underneath* it (matches the reference screenshot exactly).
-- Active state for "All" uses the same green gradient/glow as numbered episodes.
-- Tapping "All" opens a bottom sheet titled **"All episodes"** with:
-  - Close (×) top-right
-  - Grid of episode tiles (6 per row on mobile), same square style as the screenshot — current episode highlighted in green/teal.
-  - Tap tile → selects that episode + closes sheet.
-- Sheet uses existing `Sheet` from shadcn (side="bottom") so no extra animation cost; keep transitions ≤150ms to stay lag-free.
+## UI Layout
 
-No "All" detail page in the main layout — the sheet **is** the detail view, opened only on tap.
+```
+┌─ Firebase Add (sidebar item) ─────────────────────┐
+│ [+ Add Firebase Account]   [📋 Copy RTDB Rules]   │
+│                                                    │
+│ ┌── FB #1 · "Backup-A" · ● online ──────────────┐ │
+│ │ Project ID:  rs-backup-a                       │ │
+│ │ DB URL:      https://rs-backup-a.firebase…    │ │
+│ │ Mirror URL:  https://rs-backup-a.asia-se1…    │ │
+│ │ [Edit] [Delete] [Ping]                         │ │
+│ │                                                 │ │
+│ │ Sections this FB handles:                      │ │
+│ │  ☑ images    ☑ webseries   ☑ movies            │ │
+│ │  ☑ users     ☑ adminLinks  ☐ analytics          │ │
+│ │  ☑ liveTv    ☐ subscriptions ☐ notifications    │ │
+│ │                                                 │ │
+│ │ Per-section actions:                            │ │
+│ │  images   [⬇ Pull JSON] [⬆ Push from Main] [📤] │ │
+│ │  webseries[⬇ Pull JSON] [⬆ Push from Main] [📤] │ │
+│ │  …                                              │ │
+│ │                                                 │ │
+│ │ [▶ Sync ALL selected sections]                  │ │
+│ │ ▓▓▓▓▓▓▓▓░░░░░░  42%  · webseries · 18/52 nodes │ │
+│ └────────────────────────────────────────────────┘ │
+│                                                    │
+│ ┌── FB #2 · "Backup-B" · ● online ──────────────┐ │
+│ │ …                                              │ │
+│ └────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────┘
+```
 
-## 2. Backdrop AI — true image-to-image from TMDB reference
+## Section list (checkboxes per FB)
+All top-level RTDB roots used by the app:
+- `webseries`, `movies`, `liveTv`, `users`, `userProfiles`, `watchHistory`, `library`, `comments`, `notifications`, `pushTokens`, `subscriptions`, `adminLinks`, `admin`, `seasonsByLanguage`, `images`, `analytics`, `miniApp`, `telegramPerAnimeButtons`, `fcmTokens`, `weeklyEpisodes`
 
-**File:** `supabase/functions/generate-backdrop/index.ts` (+ small admin UI toggle in `src/components/admin/BackdropAiReplacer.tsx`)
+(rendered as a grid of checkboxes, persisted per-FB in `admin/extraFirebases/{id}.sections`)
 
-Current behavior: text-to-image only → AI invents characters and misreads genre (romance → action, etc.).
+## Transfer engine (`src/lib/firebaseMultiSync.ts`)
+- Initialize each extra Firebase via `initializeApp(config, uniqueName)` + `getDatabase(app, dbUrl)` lazily on demand (cached map).
+- **Push from main → extra**: for each selected section, `get(ref(mainDb, section))` → walk top-level children → batched `update(ref(extraDb, section), { [childKey]: value })` in groups of 25 → report progress via callback `(done, total, currentSection, currentNode) => void`.
+- **Pull JSON from extra**: `get(ref(extraDb, section))` → JSON.stringify → trigger download `section-{fbId}-{date}.json`.
+- **Upload JSON to extra**: file input → JSON.parse → validate shape (object) → `set(ref(extraDb, section), parsed)` with confirm modal.
+- **Copy RTDB rules**: clipboard with the standard rules block:
+  ```json
+  { "rules": { ".read": "auth != null", ".write": "auth != null" } }
+  ```
+  (Adjustable inline before copy.)
+- **Ping**: `get(ref(extraDb, ".info/connected"))` with 5s timeout → green/red dot.
 
-New flow when `mode="backdrop"`:
-1. Caller passes `tmdbBackdropUrl` + `tmdbOverview` + `tmdbGenres[]` + `title` + `year`.
-2. Edge function downloads the TMDB backdrop bytes.
-3. Builds a **grounded prompt** that explicitly states genre (`Romance / Slice-of-life — soft pastel lighting, NOT action`), overview summary (2 lines), and a "preserve original characters from reference image: same hair, eyes, outfit, body proportions, expressions" instruction.
-4. Calls **image-edit** model (`google/gemini-3.1-flash-image-preview` via Lovable AI Gateway `/v1/images/generations` with the reference image attached as input) instead of pure text-to-image. Falls back to `google/gemini-3-pro-image-preview` if flash fails.
-5. Lovable model output → ImgBB → returns URL.
-6. Keep old text-to-image path as fallback when TMDB backdrop is missing.
+## Add/Edit dialog fields
+- Display name (e.g. "Backup-A")
+- API key, Auth domain, Project ID, **Database URL**, **Mirror URL** (optional alt region), Storage bucket, Messaging sender ID, App ID
+- "Test connection" button before save
+- Persists to `admin/extraFirebases/{id}` (id = uuid)
 
-Admin UI: small "Use TMDB reference (recommended)" toggle defaults to ON. Pass the TMDB backdrop URL already stored on the anime record.
+## Sidebar change
+`Admin.tsx`:
+- Replace label `fb-cleanup` → `fb-add`, icon `Database`, title "Firebase Add"
+- Replace `<FirebaseCleanupSection />` with `<FirebaseMultiManager />`
+- Keep old `FirebaseCleanup.tsx` file for now (not deleted) so existing code paths don't break; we just stop rendering it.
 
-## 3. Admin Settings → Anime Name Exporter (AN / RS / Both)
+## Files touched
+- **New**: `src/components/admin/FirebaseMultiManager.tsx` (~500 LOC: UI, dialog, per-FB card, progress bar)
+- **New**: `src/lib/firebaseMultiSync.ts` (~200 LOC: app cache, push/pull/upload helpers, progress callback)
+- **Edit**: `src/pages/Admin.tsx` (sidebar item + render swap, ~6 line change)
 
-**Files:** new `src/components/admin/AnimeNameExporter.tsx`, mounted at the **bottom** of the Settings tab in `src/pages/Admin.tsx`.
+## Out of scope (will need a follow-up turn)
+- Auto read-fallback in `useFirebaseData.ts` (app still reads main only)
+- Auto realtime mirror on every write (huge architectural change; needs every `set/update` call wrapped)
+- Edge function for server-side scheduled sync
 
-UI: card titled "Export Anime Names" with 5 buttons, each downloads a `.json` and `.txt` (toggle):
-- **RS only** — names that exist in Firebase RS catalog but not in AnimeSalt (AN).
-- **AN only** — names from AnimeSalt that aren't in RS.
-- **In both** — intersection.
-- **All RS** — full RS list.
-- **All AN** — full AN list.
+## After approval — implementation steps
+1. Write `firebaseMultiSync.ts` (engine).
+2. Write `FirebaseMultiManager.tsx` (UI).
+3. Patch `Admin.tsx` (3 spots: import, sidebar item, render).
+4. Test: add a dummy FB, push `webseries` section, watch progress bar.
 
-Matching: normalized title (lowercase, strip punctuation, collapse spaces). Each export item: `{ id, title, year, source }`. Filename pattern: `rs-only-2026-06-07.json` etc. Pure client-side using already-loaded `useFirebaseData` + `useAnimeSaltData`.
-
-## Technical notes
-- No DB migrations.
-- No new dependencies.
-- Backdrop edge function will be redeployed after edit.
-- "All" pill uses semantic tokens (`bg-card`, `border-border`, `text-primary`) — no hard-coded colors.
-
-## Out of scope (explicitly not doing)
-- No standalone "All" detail route/page.
-- No changes to episode data model.
-- No changes to RS/AN catalog sources — exporter is read-only.
+Confirm and I'll build.
