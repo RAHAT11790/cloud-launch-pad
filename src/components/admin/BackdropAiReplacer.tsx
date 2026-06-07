@@ -96,6 +96,11 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         year: activeItem.year,
         mode,
         provider,
+        // Image-to-image grounding: TMDB/IMDB backdrop + genre + overview
+        referenceImageUrl: mode === "backdrop" && useReference ? activeItem.backdrop : undefined,
+        useReference: mode === "backdrop" ? useReference : false,
+        genres: activeItem.genres,
+        overview: activeItem.storyline,
       };
       if (usePromptOverride && customPrompt.trim()) {
         payload.customPrompt = customPrompt
