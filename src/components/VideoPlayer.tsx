@@ -865,6 +865,54 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
     }
   }, [availableDownloadQualities, preferredDownloadQuality, selectedDownloadQuality]);
 
+  // Probe file sizes for download picker (HEAD via video-proxy for CORS)
+  useEffect(() => {
+    if (!showDownloadQualityPicker) return;
+    const quality = selectedDownloadQuality;
+    if (!quality) return;
+    const urls: string[] = [];
+    downloadEpisodes.forEach((ep) => {
+      const u = ep.qualityLinks[quality];
+      if (u && !downloadSizeCache[u]) urls.push(u);
+    });
+    if (!urls.length) return;
+    let cancelled = false;
+    (async () => {
+      for (const u of urls) {
+        try {
+          const proxied = buildVideoDownloadUrl(u, "probe.mp4");
+          if (!proxied) continue;
+          let bytes = 0;
+          try {
+            const r = await fetch(proxied, { method: "HEAD" });
+            const len = r.headers.get("content-length");
+            if (len && Number(len) > 0) bytes = Number(len);
+          } catch {}
+          if (!bytes) {
+            try {
+              const r2 = await fetch(proxied, { method: "GET", headers: { Range: "bytes=0-0" } });
+              const cr = r2.headers.get("content-range");
+              if (cr) {
+                const m = /\/(\d+)\s*$/.exec(cr);
+                if (m) bytes = Number(m[1]);
+              }
+              if (!bytes) {
+                const len = r2.headers.get("content-length");
+                if (len) bytes = Number(len);
+              }
+            } catch {}
+          }
+          if (cancelled) return;
+          if (bytes > 0) {
+            setDownloadSizeCache((prev) => (prev[u] ? prev : { ...prev, [u]: bytes }));
+          }
+        } catch {}
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, downloadSizeCache]);
+
+
   useEffect(() => {
     if (!animeId) return;
     return onValue(ref(db, `comments/${animeId}`), (snap) => {
