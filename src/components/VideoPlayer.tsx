@@ -4078,6 +4078,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                           {qualityChoices.map((label) => {
                             const is4K = is4KLabel(label);
                             const locked4K = is4K && !isPremium;
+                            const isActive = label === activeQuality;
                             return (
                               <button
                                 key={label}
@@ -4086,7 +4087,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                                   if (locked4K) return;
                                   setSelectedDownloadQuality(label);
                                 }}
-                                className={`h-9 rounded-[8px] text-[12px] font-semibold border transition-all ${locked4K ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : 'bg-white/[0.07] text-white border-white/10'} ${label === activeQuality ? 'bg-primary/20 text-primary border-primary/40' : ''}`}
+                                className={`h-9 rounded-[8px] text-[12px] font-semibold border transition-all ${locked4K ? 'bg-white/[0.03] text-white/25 opacity-50 border-white/5' : isActive ? 'bg-gradient-to-r from-cyan-500 to-emerald-400 text-black border-emerald-300 shadow-[0_4px_14px_-2px_rgba(16,185,129,0.55)]' : 'bg-white/[0.07] text-white border-white/10'}`}
                               >
                                 {label}
                               </button>
@@ -4096,49 +4097,83 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
                       </div>
                     </div>
 
-                    {hasMultiEpisodes && panelSeason && (
-                      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
-                        <div className="space-y-2.5">
-                          {panelEpisodes.map((ep) => {
-                            const selected = dlSelectedEpisodes.has(ep.index);
-                            const qualityUrl = activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
-                            return (
-                              <button key={`${downloadPanelSeasonIdx}-${ep.index}`} onClick={() => toggleEpisode(ep.index)} className="w-full flex items-start gap-2.5 text-left">
-                                <span className={`mt-1 flex h-5 w-5 items-center justify-center rounded-full border-2 ${selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
-                                  <Check className="w-3 h-3" />
-                                </span>
-                                <span className="min-w-0 flex-1">
-                                  <span className="block text-[13px] font-medium text-white">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
-                                  <span className="block text-[11px] text-white/55 mt-0.5 truncate">{qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} file`}</span>
-                                </span>
-                              </button>
-                            );
-                          })}
+                    {hasMultiEpisodes && panelSeason && (() => {
+                      const fmtSize = (bytes: number) => {
+                        if (!bytes || bytes <= 0) return "";
+                        const mb = bytes / (1024 * 1024);
+                        if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
+                        return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
+                      };
+                      return (
+                        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+                          <div className="space-y-2.5">
+                            {panelEpisodes.map((ep) => {
+                              const selected = dlSelectedEpisodes.has(ep.index);
+                              const qualityUrl = activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
+                              const sizeBytes = qualityUrl ? downloadSizeCache[qualityUrl] || 0 : 0;
+                              const sizeLabel = fmtSize(sizeBytes);
+                              return (
+                                <button key={`${downloadPanelSeasonIdx}-${ep.index}`} onClick={() => toggleEpisode(ep.index)} className="w-full flex items-start gap-2.5 text-left">
+                                  <span className={`mt-1 flex h-5 w-5 items-center justify-center rounded-full border-2 ${selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}>
+                                    <Check className="w-3 h-3" />
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block text-[13px] font-medium text-white">S{String(downloadPanelSeasonIdx + 1).padStart(2, '0')} E{String(ep.episodeNumber).padStart(2, '0')}</span>
+                                    <span className="block text-[11px] text-white/55 mt-0.5 truncate">{qualityUrl ? ep.metaText : `${ep.metaText} • No ${activeQuality || 'selected'} file`}</span>
+                                  </span>
+                                  <span className="shrink-0 self-center text-right text-[11px] font-semibold tabular-nums text-emerald-300/90 min-w-[54px]">
+                                    {qualityUrl ? (sizeLabel || <span className="text-white/35 font-normal">…</span>) : <span className="text-white/30 font-normal">—</span>}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
 
-                  <div className="p-3 border-t border-white/10 bg-black">
-                    <div className="flex items-center gap-2.5">
-                      <button onClick={toggleAll} className={`flex items-center gap-1.5 text-[11px] ${dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0 ? 'text-white' : 'text-white/55'}`}>
-                        <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0 ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}><Check className="w-3 h-3" /></span>
-                        <span>All</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          const preferred = activeQuality || preferredDownloadQuality || qualityChoices[0];
-                          if (!preferred) return;
-                          if (hasMultiEpisodes) startSelectedDownloads(preferred);
-                          else startMovieDownload(preferred);
-                        }}
-                        className="flex-1 h-10 rounded-[10px] bg-gradient-to-r from-cyan-500 to-green-400 text-black text-[13px] font-semibold flex items-center justify-center gap-1.5 px-3"
-                      >
-                        <Download className="w-4 h-4" />
-                        <span className="truncate">{activeQuality ? `Download • ${activeQuality}` : 'Download'}</span>
-                      </button>
-                    </div>
-                  </div>
+                  {(() => {
+                    const fmtSize = (bytes: number) => {
+                      if (!bytes || bytes <= 0) return "0 MB";
+                      const mb = bytes / (1024 * 1024);
+                      if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
+                      return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
+                    };
+                    const selectedList = hasMultiEpisodes
+                      ? panelEpisodes.filter((ep) => dlSelectedEpisodes.has(ep.index))
+                      : [];
+                    const totalBytes = selectedList.reduce((sum, ep) => {
+                      const u = activeQuality ? pickEpUrlForQuality(ep, activeQuality) : "";
+                      return sum + (u ? (downloadSizeCache[u] || 0) : 0);
+                    }, 0);
+                    const totalLabel = hasMultiEpisodes && selectedList.length > 0 ? fmtSize(totalBytes) : "";
+                    return (
+                      <div className="p-3 border-t border-white/10 bg-black">
+                        <div className="flex items-center gap-2.5">
+                          <button onClick={toggleAll} className={`flex items-center gap-1.5 text-[11px] ${dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0 ? 'text-white' : 'text-white/55'}`}>
+                            <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${dlSelectedEpisodes.size === panelEpisodes.length && panelEpisodes.length > 0 ? 'border-primary bg-primary text-primary-foreground' : 'border-white/35 text-transparent'}`}><Check className="w-3 h-3" /></span>
+                            <span>All</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              const preferred = activeQuality || preferredDownloadQuality || qualityChoices[0];
+                              if (!preferred) return;
+                              if (hasMultiEpisodes) startSelectedDownloads(preferred);
+                              else startMovieDownload(preferred);
+                            }}
+                            className="flex-1 h-10 rounded-[10px] bg-gradient-to-r from-cyan-500 to-green-400 text-black text-[13px] font-semibold flex items-center justify-center gap-1.5 px-3"
+                          >
+                            <Download className="w-4 h-4" />
+                            <span className="truncate">
+                              {activeQuality ? `Download • ${activeQuality}` : 'Download'}
+                              {totalLabel ? ` • ${totalLabel}` : ''}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
