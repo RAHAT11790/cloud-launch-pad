@@ -1672,6 +1672,7 @@ const Index = () => {
           epIdx,
         };
       }
+      historyItem.language = getPrimaryLanguageToken((anime as any)?.selectedLanguage || anime.baseLanguage || anime.language) || anime.language || "";
 
       try {
         guestStore.continue.upsert({
