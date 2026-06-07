@@ -547,7 +547,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const [selectedLanguageLabel, setSelectedLanguageLabel] = useState<string>("");
   const [selectedDownloadLanguageLabel, setSelectedDownloadLanguageLabel] = useState<string>("");
   const [selectedDownloadQuality, setSelectedDownloadQuality] = useState<string>("");
-  const [downloadSizeCache, setDownloadSizeCache] = useState<Record<string, number>>({});
+  const [downloadSizeCache, setDownloadSizeCache] = useState<Record<string, number>>(() => {
+    try {
+      const raw = localStorage.getItem("rs_dl_size_cache_v1");
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
   
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
