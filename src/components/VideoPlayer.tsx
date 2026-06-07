@@ -2542,7 +2542,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
       console.log(`Video error, retry ${next}/${MAX_RETRIES}...`);
       // Exponential backoff: 500ms, 1000ms
-      const delay = next * 500;
+      const delay = next * 220;
       setTimeout(() => {
         if (v) {
           const savedTime = v.currentTime || lastKnownTime;
@@ -2587,7 +2587,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // Short debounce — show loader quickly on real stalls but stay calm on micro-hiccups
       waitingTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
-      }, 400);
+      }, 180);
     };
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
@@ -2607,7 +2607,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (stalledTimer) clearTimeout(stalledTimer);
       stalledTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
-      }, 1500);
+      }, 650);
     };
     v.addEventListener("loadedmetadata", onLoaded);
     v.addEventListener("play", onPlay);
