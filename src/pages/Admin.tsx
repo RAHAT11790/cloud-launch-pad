@@ -3141,6 +3141,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     const snap = await get(ref(db, `webseries/${id}`));
     const data = snap.val();
     if (!data) return;
+    const loadedMap = sanitizeSeasonLanguageMap(data.seasonsByLanguage && typeof data.seasonsByLanguage === "object"
+      ? data.seasonsByLanguage
+      : { [data.baseLanguage || data.language || "Hindi"]: data.seasons || [] });
+    const initialLanguage = normalizeLanguageValue(data.selectedAdminLanguage || data.baseLanguage || data.language || "Hindi") || "Hindi";
+    const loadedSeasons = cloneSeasonList(loadedMap[initialLanguage] || loadedMap[data.baseLanguage || data.language || "Hindi"] || []);
     setSeriesForm(syncSeriesLanguageSummary({
       tmdbId: data.tmdbId || "", title: data.title || "", logo: data.logo || "", poster: data.poster || "",
       backdrop: data.backdrop || "", trailer: data.trailer || "", year: data.year || "", rating: data.rating || "",
@@ -3149,9 +3154,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         telegramCustomButtonText: data.telegramCustomButton?.text || "",
         telegramCustomButtonUrl: data.telegramCustomButton?.url || "",
         audioTracks: Array.isArray(data.audioTracks) ? data.audioTracks : data.audioTracks ? Object.values(data.audioTracks) : [],
-    }, data.seasons || []));
+    }, loadedMap));
     setSeriesCast(data.cast || []);
-    const loadedSeasons = data.seasons || [];
+    setSeriesSeasonsByLanguage(loadedMap);
     setSeasonsData(loadedSeasons);
     // Auto-expand only the LATEST (running) season; collapse earlier finished seasons
     {
