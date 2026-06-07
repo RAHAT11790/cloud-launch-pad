@@ -3758,7 +3758,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
         )}
 
         {!isFullscreen && showSeasonSheet && !!seasons?.length && (
-          <div className="mt-5 border-t border-white/10 bg-black text-white" data-player-panel="true">
+          <div className={inlineSheetFixedClass} style={inlineSheetStyle} data-player-panel="true">
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
               <h3 className="text-[15px] font-bold tracking-tight">{seasons.length} season{seasons.length > 1 ? 's' : ''}</h3>
               <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
