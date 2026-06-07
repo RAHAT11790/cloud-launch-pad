@@ -7902,6 +7902,9 @@ ${tgBulkFooter}
             />
 
             {/* Link Checker moved to dedicated section */}
+
+            {/* Anime Name Exporter (RS vs AN) */}
+            <AnimeNameExporter glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
           </div>
         )}
 
