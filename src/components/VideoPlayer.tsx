@@ -3926,7 +3926,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   <button
                     key={ep.number}
                     onClick={() => { ep.onClick(); closeInlineSheets(); }}
-                    className={`aspect-square rounded-lg text-sm font-bold transition-colors flex items-center justify-center ${ep.active ? 'bg-gradient-to-br from-primary/30 to-primary/10 text-primary border border-primary/50' : 'bg-white/[0.06] text-white/85 border border-white/10 active:scale-95'}`}
+                    className={`aspect-square rounded-lg text-sm font-bold transition-colors flex items-center justify-center ${
+                      ep.active
+                        ? 'bg-gradient-to-br from-emerald-500/30 to-emerald-400/10 text-emerald-300 border border-emerald-400/70 shadow-[0_0_14px_-2px_hsl(160_84%_50%/0.45)]'
+                        : 'bg-white/[0.06] text-white/85 border border-white/10 active:scale-95'
+                    }`}
                   >
                     {String(ep.number).padStart(2, '0')}
                   </button>
