@@ -3568,16 +3568,34 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   )}
                 </div>
                 <div className="relative -mx-5">
-                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pl-5 pr-5" style={{ scrollPaddingLeft: 76 }}>
-                    <button
-                      onClick={() => openInlineSheet("allEpisodes")}
-                      className="sticky left-5 z-10 flex-shrink-0 min-w-[56px] px-3 py-2.5 rounded-lg text-sm font-bold bg-card text-foreground border border-border/70 transition-colors active:scale-95"
-                      style={{ boxShadow: "8px 0 12px -6px hsl(var(--background) / 0.95), 4px 0 0 0 hsl(var(--background))" }}
-                    >
-                      All
-                    </button>
+                  {/* Sticky "All" pill — episodes slide UNDER it like a tunnel */}
+                  <button
+                    onClick={() => openInlineSheet("allEpisodes")}
+                    className="absolute left-5 top-0 z-20 w-[60px] h-[52px] rounded-xl text-sm font-bold bg-[#1a1a1a] text-white border border-white/10 transition-transform active:scale-95 flex items-center justify-center"
+                    aria-label="All episodes"
+                  >
+                    All
+                  </button>
+                  {/* Tunnel mouth: hard background block + soft fade so scrolling episodes vanish behind All */}
+                  <div
+                    aria-hidden
+                    className="absolute left-[77px] top-0 z-10 h-[52px] w-6 pointer-events-none"
+                    style={{ background: "linear-gradient(to right, hsl(var(--background)) 0%, hsl(var(--background) / 0.85) 50%, hsl(var(--background) / 0) 100%)" }}
+                  />
+                  <div
+                    className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pr-5"
+                    style={{ paddingLeft: 85, scrollPaddingLeft: 85, WebkitOverflowScrolling: "touch" }}
+                  >
                     {episodeList.map((ep) => (
-                      <button key={ep.number} onClick={ep.onClick} className={`flex-shrink-0 min-w-[56px] px-3 py-2.5 rounded-lg text-sm font-bold transition-colors ${ep.active ? 'bg-gradient-to-br from-primary/25 to-primary/10 text-primary border border-primary/40' : 'bg-foreground/[0.06] text-foreground/85 border border-border hover:bg-foreground/10'}`}>
+                      <button
+                        key={ep.number}
+                        onClick={ep.onClick}
+                        className={`flex-shrink-0 w-[60px] h-[52px] rounded-xl text-sm font-bold transition-colors flex items-center justify-center ${
+                          ep.active
+                            ? 'bg-gradient-to-br from-emerald-500/25 to-emerald-400/10 text-emerald-300 border border-emerald-400/60 shadow-[0_0_12px_-2px_hsl(160_84%_50%/0.35)]'
+                            : 'bg-[#1a1a1a] text-white/80 border border-white/10 active:scale-95'
+                        }`}
+                      >
                         {String(ep.number).padStart(2, '0')}
                       </button>
                     ))}
