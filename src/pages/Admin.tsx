@@ -26,7 +26,7 @@ import EgdManager from "@/components/admin/EgdManager";
 import AdsterraConfig from "@/components/admin/AdsterraConfig";
 import BackdropAiReplacer from "@/components/admin/BackdropAiReplacer";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
-import FirebaseCleanupSection from "@/components/admin/FirebaseCleanup";
+import FirebaseMultiManager from "@/components/admin/FirebaseMultiManager";
 import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
 import WeeklyEpisodeManager from "@/components/admin/WeeklyEpisodeManager";
 
