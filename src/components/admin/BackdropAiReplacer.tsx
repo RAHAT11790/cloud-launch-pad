@@ -264,6 +264,31 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
             )}
           </div>
 
+          {mode === "backdrop" && provider === "lovable" && (
+            <div className="bg-emerald-500/[0.06] border border-emerald-500/25 rounded-lg p-2.5 space-y-1.5">
+              <label className="flex items-start gap-2 text-[11px] text-white/85 leading-relaxed cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 shrink-0"
+                  checked={useReference}
+                  onChange={(e) => setUseReference(e.target.checked)}
+                />
+                <span className="min-w-0 break-words">
+                  <span className="text-emerald-300 font-semibold">Use TMDB reference image (recommended)</span> — AI analyzes the
+                  current backdrop, preserves the EXACT characters, and remasters it. Respects genre ({activeItem.genres?.join(", ") || activeItem.category || "auto"}) so romance doesn't become action.
+                </span>
+              </label>
+              {useReference && !activeItem.backdrop && (
+                <div className="text-[10px] text-amber-300 pl-5">⚠ No reference backdrop on this title. Will fall back to text-to-image.</div>
+              )}
+              {useReference && activeItem.backdrop && (
+                <img src={activeItem.backdrop} alt="ref" className="w-full rounded border border-emerald-500/30 mt-1" />
+              )}
+            </div>
+          )}
+
+
+
 
           <div className="bg-white/[0.03] border border-white/10 rounded-lg p-2.5">
             <label className="flex items-start gap-2 text-[11px] text-white/80 leading-relaxed cursor-pointer">
