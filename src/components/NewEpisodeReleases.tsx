@@ -5,6 +5,14 @@ import { db, ref, onValue, remove } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
 
+const splitLanguageTokens = (value: string | undefined | null) =>
+  String(value || "")
+    .split(/[,/|]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const getPrimaryLanguageToken = (value: string | undefined | null) => splitLanguageTokens(value)[0] || "";
+
 const NEW_RELEASE_TTL_MS = 36 * 60 * 60 * 1000; // 36 hours
 
 interface EpisodeRelease {
@@ -154,6 +162,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             const title = content?.title || release.title || "Unknown";
             const year = content?.year || release.year || "N/A";
             const rating = content?.rating || release.rating || "N/A";
+            const languageLabel = getPrimaryLanguageToken((release as any).language || content?.baseLanguage || content?.language);
 
             // Fallback: if admin didn't set episode/season on the release, use latest from content seasons
             let epNum: number | undefined = getEpStart(release);
@@ -191,6 +200,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                   <img src={poster} alt={title} className="w-full h-full object-cover" loading="lazy" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.35) 45%, transparent 75%)" }} />
                   <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
+                    {languageLabel ? <span className="rounded-md bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold text-white backdrop-blur-sm">{languageLabel}</span> : null}
                     <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{year}</span>
                     <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${content?.source === "animesalt" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{content?.source === "animesalt" ? "AN" : "RS"}</span>
                   </div>
