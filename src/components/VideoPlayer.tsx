@@ -976,19 +976,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   useEffect(() => {
     const el = videoContainerRef.current;
     if (!el) return;
+    let raf = 0;
+    let last = -1;
     const update = () => {
+      raf = 0;
       const rect = el.getBoundingClientRect();
-      setVideoBottomPx(Math.max(0, Math.round(rect.bottom)));
+      const v = Math.max(0, Math.round(rect.bottom));
+      if (v !== last) { last = v; setVideoBottomPx(v); }
     };
-    update();
-    const ro = new ResizeObserver(update);
+    const schedule = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(update);
+    };
+    schedule();
+    const ro = new ResizeObserver(schedule);
     ro.observe(el);
-    window.addEventListener("resize", update);
-    window.addEventListener("orientationchange", update);
+    window.addEventListener("resize", schedule, { passive: true });
+    window.addEventListener("orientationchange", schedule, { passive: true });
     return () => {
+      if (raf) cancelAnimationFrame(raf);
       ro.disconnect();
-      window.removeEventListener("resize", update);
-      window.removeEventListener("orientationchange", update);
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("orientationchange", schedule);
     };
   }, []);
 
