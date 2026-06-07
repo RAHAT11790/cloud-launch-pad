@@ -1428,10 +1428,64 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
   const instantSwitchRef = useRef(false);
+  const networkWarmupLinksRef = useRef<HTMLLinkElement[]>([]);
 
   // NOTE: Aggressive next-episode preload removed — it caused CORS fetches
   // and wasted bandwidth that slowed the *current* video load. Browser will
   // naturally prefetch via the video element when user switches.
+
+  useEffect(() => {
+    networkWarmupLinksRef.current.forEach((link) => {
+      try {
+        document.head.removeChild(link);
+      } catch {
+        /* noop */
+      }
+    });
+    networkWarmupLinksRef.current = [];
+
+    const origins = new Set<string>();
+    [activeSourceBaseRef.current, src, nextEpisodeSrc].forEach((candidate) => {
+      const clean = String(candidate || "").trim();
+      if (!clean) return;
+      try {
+        const parsed = new URL(clean, window.location.origin);
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+          origins.add(parsed.origin);
+        }
+      } catch {
+        /* noop */
+      }
+    });
+
+    const nextLinks: HTMLLinkElement[] = [];
+    origins.forEach((origin) => {
+      const preconnect = document.createElement("link");
+      preconnect.rel = "preconnect";
+      preconnect.href = origin;
+      preconnect.crossOrigin = "anonymous";
+      document.head.appendChild(preconnect);
+      nextLinks.push(preconnect);
+
+      const dnsPrefetch = document.createElement("link");
+      dnsPrefetch.rel = "dns-prefetch";
+      dnsPrefetch.href = origin;
+      document.head.appendChild(dnsPrefetch);
+      nextLinks.push(dnsPrefetch);
+    });
+
+    networkWarmupLinksRef.current = nextLinks;
+
+    return () => {
+      nextLinks.forEach((link) => {
+        try {
+          document.head.removeChild(link);
+        } catch {
+          /* noop */
+        }
+      });
+    };
+  }, [currentSrc, nextEpisodeSrc, src]);
 
   const switchServer = useCallback((serverIndex: number) => {
     if (serverIndex === activeServerIndex || !effectiveVideoServers[serverIndex]) return;
@@ -1480,11 +1534,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           switchServer(nextIdx);
         }
       }
-    }, 2500);
+    }, 1400);
 
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
-    }, 400);
+    }, 250);
   }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
 
   // Auto-switch to premium server for premium users
