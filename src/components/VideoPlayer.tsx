@@ -188,7 +188,9 @@ interface VideoPlayerProps {
   subtitle?: string;
   poster?: string;
   anime?: AnimeItem;
+  selectedLanguage?: string;
   onClose: () => void;
+  onLanguageChange?: (language: string) => void;
   onNextEpisode?: () => void;
   episodeList?: { number: number; title?: string; active: boolean; onClick: () => void }[];
   qualityOptions?: QualityOption[];
@@ -269,7 +271,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
   // Removed preload anime character image - no longer needed
@@ -602,12 +604,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
 
   const currentLangLabel = useMemo(() => {
     if (selectedLanguageLabel) return selectedLanguageLabel;
+    if (selectedLanguage) return getPrimaryLanguageToken(selectedLanguage) || selectedLanguage;
     const explicit = propAudioTracks?.[0]?.language || propAudioTracks?.[0]?.label;
     if (explicit) return getPrimaryLanguageToken(explicit) || explicit;
     const fallback = getPrimaryLanguageToken(anime?.baseLanguage || anime?.language);
     if (fallback) return fallback;
     return "Unknown";
-  }, [anime?.baseLanguage, anime?.language, propAudioTracks, selectedLanguageLabel]);
+  }, [anime?.baseLanguage, anime?.language, propAudioTracks, selectedLanguage, selectedLanguageLabel]);
 
   const languageOptions = useMemo(() => {
     const labels = new Set<string>();
@@ -831,8 +834,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   }, [animeId, saved]);
 
   useEffect(() => {
-    setSelectedLanguageLabel(getPrimaryLanguageToken(anime?.baseLanguage || anime?.language) || propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || "");
-  }, [anime?.baseLanguage, anime?.language, propAudioTracks, src]);
+    setSelectedLanguageLabel(getPrimaryLanguageToken(selectedLanguage || anime?.baseLanguage || anime?.language) || propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || "");
+  }, [anime?.baseLanguage, anime?.language, propAudioTracks, selectedLanguage, src]);
 
   useEffect(() => {
     if (!normalizedLanguageTracks.length) {
