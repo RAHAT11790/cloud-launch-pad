@@ -593,6 +593,7 @@ const Index = () => {
     title: string;
     subtitle: string;
     anime: AnimeItem;
+    selectedLanguage?: string;
     seasonIdx?: number;
     epIdx?: number;
     qualityOptions?: { label: string; src: string }[];
