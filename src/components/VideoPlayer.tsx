@@ -2142,6 +2142,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     retryAttemptsRef.current.clear();
     setVideoError(false);
     failedSrcsRef.current.clear();
+    setIsBuffering(true);
     const seekTarget = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : 0;
     pendingSeek.current = seekTarget;
     // FORCE-RESET currentTime when switching episodes with no resume requested —
@@ -2160,7 +2161,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const t = setTimeout(() => {
       instantSwitchRef.current = false;
       setSwitchingEpisode(false);
-    }, 80);
+    }, 56);
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, initialSeekTime]);
 
@@ -2188,7 +2189,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
 
     const visibleFor = Date.now() - loaderShownAtRef.current;
-    const MIN_VISIBLE = 250; // ultra-fast: drop spinner as soon as canplay fires (was 1200ms)
+    const MIN_VISIBLE = 140;
     if (visibleFor >= MIN_VISIBLE) {
       setShowFixedLoader(false);
     } else {
