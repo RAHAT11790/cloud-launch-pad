@@ -1750,6 +1750,7 @@ const Index = () => {
           year: playerState.anime.year,
           rating: playerState.anime.rating,
           type: playerState.anime.type,
+          language: playerState.selectedLanguage || getPrimaryLanguageToken(playerState.anime.baseLanguage || playerState.anime.language) || playerState.anime.language || "",
           watchedAt: Date.now(),
           currentTime,
           duration,
