@@ -122,6 +122,52 @@ const getEpisodeQualityOptions = (ep: Episode): { label: string; src: string }[]
   if (!isInvalidPlaybackUrl(ep.link4k)) qualityOptions.push({ label: "4K", src: ep.link4k! });
   return qualityOptions;
 };
+
+const splitLanguageTokens = (value: string | undefined | null) =>
+  String(value || "")
+    .split(/[,/|]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const getPrimaryLanguageToken = (value: string | undefined | null) => splitLanguageTokens(value)[0] || "";
+
+const getLanguageBadgeLabel = (anime: AnimeItem): string => {
+  const set = new Set<string>();
+  const push = (raw?: string) => splitLanguageTokens(raw).forEach((label) => set.add(label));
+  (anime.availableLanguages || []).forEach((lang) => push(lang));
+  push(anime.baseLanguage || anime.language);
+  if (anime.seasonsByLanguage && typeof anime.seasonsByLanguage === "object") {
+    Object.keys(anime.seasonsByLanguage).forEach((lang) => push(lang));
+  }
+  if (anime.seasons) {
+    anime.seasons.forEach((season: any) => {
+      (season.episodes || []).forEach((ep: any) => {
+        (ep.audioTracks || []).forEach((at: any) => push(at.language || at.label));
+      });
+    });
+  }
+  const arr = Array.from(set).filter(Boolean);
+  if (arr.length === 0) return "";
+  if (arr.length === 1) return arr[0];
+  if (arr.length === 2) return "Dual";
+  return "Multiple";
+};
+
+const resolveAnimeSeasonsForLanguage = (anime: AnimeItem, language?: string | null) => {
+  const requested = String(language || "").trim().toLowerCase();
+  const byLanguage = anime.seasonsByLanguage && typeof anime.seasonsByLanguage === "object" ? anime.seasonsByLanguage : undefined;
+  if (byLanguage) {
+    const entries = Object.entries(byLanguage);
+    const exact = requested
+      ? entries.find(([lang]) => String(lang || "").trim().toLowerCase() === requested)?.[1]
+      : undefined;
+    if (exact) return exact;
+    const fallbackLanguage = String(anime.baseLanguage || anime.language || "").trim().toLowerCase();
+    const fallback = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === fallbackLanguage)?.[1];
+    if (fallback) return fallback;
+  }
+  return anime.seasons || [];
+};
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import Header from "@/components/Header";
