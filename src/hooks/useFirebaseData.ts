@@ -2,11 +2,29 @@ import { useState, useEffect, useMemo } from "react";
 import { db, ref, onValue } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 
+const LS_WS = "rs_cache_webseries_v1";
+const LS_MOV = "rs_cache_movies_v1";
+const LS_CATS = "rs_cache_categories_v1";
+
+const readCache = <T,>(key: string, fallback: T): T => {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch { return fallback; }
+};
+const writeCache = (key: string, value: unknown) => {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+};
+
 export function useFirebaseData() {
-  const [webseries, setWebseries] = useState<AnimeItem[]>([]);
-  const [movies, setMovies] = useState<AnimeItem[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [webseries, setWebseries] = useState<AnimeItem[]>(() => readCache<AnimeItem[]>(LS_WS, []));
+  const [movies, setMovies] = useState<AnimeItem[]>(() => readCache<AnimeItem[]>(LS_MOV, []));
+  const [categories, setCategories] = useState<string[]>(() => readCache<string[]>(LS_CATS, []));
+  const [loading, setLoading] = useState(() => {
+    // If we already have cached data, treat as ready immediately for zero-latency UI
+    return !(readCache<AnimeItem[]>(LS_WS, []).length || readCache<AnimeItem[]>(LS_MOV, []).length);
+  });
 
   useEffect(() => {
     let loadedCount = 0;
