@@ -112,6 +112,7 @@ export function useFirebaseData() {
       });
       publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
       setWebseries(publicItems);
+      writeCache(LS_WS, publicItems);
       checkLoaded();
     });
 
