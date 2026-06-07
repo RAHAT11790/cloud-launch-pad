@@ -2441,6 +2441,7 @@ const Index = () => {
                   const pct = (item.currentTime && item.duration) ? Math.min(100, Math.round((item.currentTime / item.duration) * 100)) : 0;
                   const sn = item.episodeInfo?.season;
                   const ep = item.episodeInfo?.episodeNumber || item.episodeInfo?.episode;
+                  const languageLabel = getPrimaryLanguageToken(item.language) || "";
                   const wt = item.watchedAt || item.updatedAt;
                   let agoLabel = "";
                   if (wt) {
@@ -2461,6 +2462,9 @@ const Index = () => {
                         <span className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider z-10 ${isAn ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{isAn ? "AN" : "RS"}</span>
                         {agoLabel && (
                           <span className="absolute top-1.5 left-1.5 bg-black/65 text-white text-[8px] font-semibold px-1.5 py-0.5 rounded backdrop-blur-sm z-10">{agoLabel} ago</span>
+                        )}
+                        {languageLabel && (
+                          <span className="absolute right-1.5 top-6 z-10 rounded-md bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold text-white backdrop-blur-sm">{languageLabel}</span>
                         )}
                         {pct > 0 && (
                           <div className="absolute bottom-0 left-0 right-0 h-1 bg-foreground/25">
