@@ -3893,6 +3893,32 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           </div>
         )}
 
+        {!isFullscreen && showAllEpisodesSheet && episodeList && episodeList.length > 0 && (
+          <div className={inlineSheetFixedClass} style={inlineSheetStyle} data-player-panel="true">
+            <div className="sticky top-0 z-10 bg-black flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
+              <h3 className="text-[15px] font-bold tracking-tight">All episodes</h3>
+              <button onClick={handleInlineSheetClose} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="h-px bg-white/10" />
+            <div className="px-4 pt-4 pb-8">
+              <div className="grid grid-cols-6 gap-2">
+                {episodeList.map((ep) => (
+                  <button
+                    key={ep.number}
+                    onClick={() => { ep.onClick(); closeInlineSheets(); }}
+                    className={`aspect-square rounded-lg text-sm font-bold transition-colors flex items-center justify-center ${ep.active ? 'bg-gradient-to-br from-primary/30 to-primary/10 text-primary border border-primary/50' : 'bg-white/[0.06] text-white/85 border border-white/10 active:scale-95'}`}
+                  >
+                    {String(ep.number).padStart(2, '0')}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+
         {/* Tutorial Video Modal */}
         {showTutorialVideo && (() => {
           const activeVid = activeTutorialIdx >= 0 && tutorialVideos[activeTutorialIdx]
