@@ -3568,10 +3568,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   )}
                 </div>
                 <div className="relative -mx-5">
-                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pl-5 pr-5">
+                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 pl-5 pr-5" style={{ scrollPaddingLeft: 76 }}>
+                    <button
+                      onClick={() => openInlineSheet("allEpisodes")}
+                      className="sticky left-5 z-10 flex-shrink-0 min-w-[56px] px-3 py-2.5 rounded-lg text-sm font-bold bg-card text-foreground border border-border/70 transition-colors active:scale-95"
+                      style={{ boxShadow: "8px 0 12px -6px hsl(var(--background) / 0.95), 4px 0 0 0 hsl(var(--background))" }}
+                    >
+                      All
+                    </button>
                     {episodeList.map((ep) => (
                       <button key={ep.number} onClick={ep.onClick} className={`flex-shrink-0 min-w-[56px] px-3 py-2.5 rounded-lg text-sm font-bold transition-colors ${ep.active ? 'bg-gradient-to-br from-primary/25 to-primary/10 text-primary border border-primary/40' : 'bg-foreground/[0.06] text-foreground/85 border border-border hover:bg-foreground/10'}`}>
-                        {ep.number}
+                        {String(ep.number).padStart(2, '0')}
                       </button>
                     ))}
                   </div>
