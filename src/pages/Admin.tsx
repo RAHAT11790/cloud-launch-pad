@@ -27,6 +27,7 @@ import AdsterraConfig from "@/components/admin/AdsterraConfig";
 import BackdropAiReplacer from "@/components/admin/BackdropAiReplacer";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseCleanupSection from "@/components/admin/FirebaseCleanup";
+import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
 import WeeklyEpisodeManager from "@/components/admin/WeeklyEpisodeManager";
 
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
