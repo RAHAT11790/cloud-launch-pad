@@ -5288,16 +5288,23 @@ ${tgBulkFooter}
                                 .map(({ ep, eIdx }) => {
                                   const selectedAdminLanguage = normalizeLanguageValue(seriesForm?.selectedAdminLanguage || seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
                                   const baseLanguage = normalizeLanguageValue(seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
-                                  const currentTrack = selectedAdminLanguage.toLowerCase() === baseLanguage.toLowerCase()
-                                    ? null
-                                    : getEpisodeTrackForLanguage(ep, selectedAdminLanguage);
-                                  const currentLanguageFields = {
-                                    link: currentTrack?.link ?? ep.link ?? "",
-                                    link480: currentTrack?.link480 ?? ep.link480 ?? "",
-                                    link720: currentTrack?.link720 ?? ep.link720 ?? "",
-                                    link1080: currentTrack?.link1080 ?? ep.link1080 ?? "",
-                                    link4k: currentTrack?.link4k ?? ep.link4k ?? "",
-                                  };
+                                  const isBaseLang = selectedAdminLanguage.toLowerCase() === baseLanguage.toLowerCase();
+                                  const currentTrack = isBaseLang ? null : getEpisodeTrackForLanguage(ep, selectedAdminLanguage);
+                                  const currentLanguageFields = isBaseLang
+                                    ? {
+                                        link: ep.link ?? "",
+                                        link480: ep.link480 ?? "",
+                                        link720: ep.link720 ?? "",
+                                        link1080: ep.link1080 ?? "",
+                                        link4k: ep.link4k ?? "",
+                                      }
+                                    : {
+                                        link: currentTrack?.link ?? "",
+                                        link480: currentTrack?.link480 ?? "",
+                                        link720: currentTrack?.link720 ?? "",
+                                        link1080: currentTrack?.link1080 ?? "",
+                                        link4k: currentTrack?.link4k ?? "",
+                                      };
 
                                   return (
                                     <div key={eIdx} className="mb-3 bg-white/[0.03] px-3 py-3 rounded-lg border border-white/5">
