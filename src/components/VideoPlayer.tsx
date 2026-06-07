@@ -547,6 +547,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, onClose, onNextEpiso
   const [selectedLanguageLabel, setSelectedLanguageLabel] = useState<string>("");
   const [selectedDownloadLanguageLabel, setSelectedDownloadLanguageLabel] = useState<string>("");
   const [selectedDownloadQuality, setSelectedDownloadQuality] = useState<string>("");
+  const [downloadSizeCache, setDownloadSizeCache] = useState<Record<string, number>>({});
   
   const [offlinePlaySrc, setOfflinePlaySrc] = useState<string | null>(null);
   const [offlinePlayInfo, setOfflinePlayInfo] = useState<any>(null);
