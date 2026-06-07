@@ -5320,23 +5320,13 @@ ${tgBulkFooter}
                                 .map(({ ep, eIdx }) => {
                                   const selectedAdminLanguage = normalizeLanguageValue(seriesForm?.selectedAdminLanguage || seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
                                   const baseLanguage = normalizeLanguageValue(seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
-                                  const isBaseLang = selectedAdminLanguage.toLowerCase() === baseLanguage.toLowerCase();
-                                  const currentTrack = isBaseLang ? null : getEpisodeTrackForLanguage(ep, selectedAdminLanguage);
-                                  const currentLanguageFields = isBaseLang
-                                    ? {
-                                        link: ep.link ?? "",
-                                        link480: ep.link480 ?? "",
-                                        link720: ep.link720 ?? "",
-                                        link1080: ep.link1080 ?? "",
-                                        link4k: ep.link4k ?? "",
-                                      }
-                                    : {
-                                        link: currentTrack?.link ?? "",
-                                        link480: currentTrack?.link480 ?? "",
-                                        link720: currentTrack?.link720 ?? "",
-                                        link1080: currentTrack?.link1080 ?? "",
-                                        link4k: currentTrack?.link4k ?? "",
-                                      };
+                                  const currentLanguageFields = {
+                                    link: ep.link ?? "",
+                                    link480: ep.link480 ?? "",
+                                    link720: ep.link720 ?? "",
+                                    link1080: ep.link1080 ?? "",
+                                    link4k: ep.link4k ?? "",
+                                  };
 
                                   return (
                                     <div key={eIdx} className="mb-3 bg-white/[0.03] px-3 py-3 rounded-lg border border-white/5">
@@ -5350,9 +5340,9 @@ ${tgBulkFooter}
                                       <div className="rounded-lg border border-cyan-500/15 bg-cyan-500/5 px-2.5 py-2">
                                         <p className="text-[10px] font-semibold text-cyan-300">Language: {selectedAdminLanguage}</p>
                                         <p className="mt-0.5 text-[9px] text-cyan-100/60">
-                                          {selectedAdminLanguage.toLowerCase() === baseLanguage.toLowerCase() ? "This is the base language." : "This language has its own separate episode links."}
+                                          {selectedAdminLanguage.toLowerCase() === baseLanguage.toLowerCase() ? "This is the base language." : "This language has its own separate seasons and episode links."}
                                         </p>
-                                        {selectedAdminLanguage.toLowerCase() !== baseLanguage.toLowerCase() && !currentTrack && (
+                                        {selectedAdminLanguage.toLowerCase() !== baseLanguage.toLowerCase() && !currentLanguageFields.link && !currentLanguageFields.link480 && !currentLanguageFields.link720 && !currentLanguageFields.link1080 && !currentLanguageFields.link4k && (
                                           <p className="mt-1 text-[9px] text-white/50">No links yet for this language. Add them below.</p>
                                         )}
 
@@ -5374,68 +5364,6 @@ ${tgBulkFooter}
                                         </div>
                                       </div>
 
-                                      <div className="mt-2 border-t border-white/5 pt-2">
-                                        <div className="flex items-center justify-between mb-1.5">
-                                          <span className="text-[10px] text-cyan-400 font-semibold">🎧 Audio Tracks</span>
-                                          <button type="button" onClick={() => {
-                                            const updated = [...seasonsData];
-                                            const epRef = updated[sIdx].episodes[eIdx];
-                                            if (!epRef.audioTracks) (epRef as any).audioTracks = [];
-                                            (epRef as any).audioTracks.push({ language: "", label: "", link: "" });
-                                            setSeasonsData(updated);
-                                          }} className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-0.5">
-                                            <Plus size={10} /> Add Audio
-                                          </button>
-                                        </div>
-                                        {((ep as any).audioTracks || []).map((at: any, atIdx: number) => (
-                                          <div key={atIdx} className="bg-zinc-800/30 rounded-lg p-2 mb-1.5 border border-white/5">
-                                            <div className="flex gap-1.5 mb-1">
-                                              <input value={at.label || ""} onChange={e => {
-                                                const updated = [...seasonsData];
-                                                (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].label = e.target.value;
-                                                setSeasonsData(updated);
-                                              }} className={`${inputClass} flex-1 !py-1.5 !text-[10px]`} placeholder="Label (e.g. Hindi)" />
-                                              <input value={at.language || ""} onChange={e => {
-                                                const updated = [...seasonsData];
-                                                (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].language = e.target.value;
-                                                setSeasonsData(updated);
-                                              }} className={`${inputClass} w-20 !py-1.5 !text-[10px]`} placeholder="Lang code" />
-                                              <button type="button" onClick={() => {
-                                                const updated = [...seasonsData];
-                                                (updated[sIdx].episodes[eIdx] as any).audioTracks.splice(atIdx, 1);
-                                                setSeasonsData(updated);
-                                              }} className="text-red-400 hover:text-red-300 p-1"><Trash2 size={10} /></button>
-                                            </div>
-                                            <textarea value={at.link || ""} onChange={e => {
-                                              const updated = [...seasonsData];
-                                              (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].link = e.target.value;
-                                              setSeasonsData(updated);
-                                            }} className={`${inputClass} w-full !py-1.5 !text-[10px] min-h-[36px] resize-none`} placeholder="Default Audio link URL" rows={1} />
-                                            <div className="grid grid-cols-2 gap-1 mt-1">
-                                              <input value={at.link480 || ""} onChange={e => {
-                                                const updated = [...seasonsData];
-                                                (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].link480 = e.target.value;
-                                                setSeasonsData(updated);
-                                              }} className={`${inputClass} !py-1 !text-[9px]`} placeholder="480p link" />
-                                              <input value={at.link720 || ""} onChange={e => {
-                                                const updated = [...seasonsData];
-                                                (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].link720 = e.target.value;
-                                                setSeasonsData(updated);
-                                              }} className={`${inputClass} !py-1 !text-[9px]`} placeholder="720p link" />
-                                              <input value={at.link1080 || ""} onChange={e => {
-                                                const updated = [...seasonsData];
-                                                (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].link1080 = e.target.value;
-                                                setSeasonsData(updated);
-                                              }} className={`${inputClass} !py-1 !text-[9px]`} placeholder="1080p link" />
-                                              <input value={at.link4k || ""} onChange={e => {
-                                                const updated = [...seasonsData];
-                                                (updated[sIdx].episodes[eIdx] as any).audioTracks[atIdx].link4k = e.target.value;
-                                                setSeasonsData(updated);
-                                              }} className={`${inputClass} !py-1 !text-[9px]`} placeholder="4K link" />
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
                                     </div>
                                   );
                                 })}
