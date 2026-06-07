@@ -3687,17 +3687,20 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       });
     });
 
-    const ordered = Array.from(seasonLanguages);
     const selectedBase = normalizeLanguageValue(form?.selectedAdminLanguage);
-    const fallbackBase = normalizeLanguageValue(form?.baseLanguage || form?.language || ordered[0] || "Hindi");
-    const resolvedBase = selectedBase || fallbackBase || "Hindi";
+    const fallbackBase = normalizeLanguageValue(form?.baseLanguage || form?.language || Array.from(seasonLanguages)[0] || "Hindi");
+    const resolvedBase = fallbackBase || "Hindi";
+    // Always include base language since base links live on ep.link directly
+    const all = new Set<string>(seasonLanguages);
+    if (resolvedBase) all.add(resolvedBase);
+    const ordered = Array.from(all);
 
     return {
       ...form,
       baseLanguage: resolvedBase,
-      selectedAdminLanguage: ordered.includes(resolvedBase) ? resolvedBase : (ordered[0] || resolvedBase),
+      selectedAdminLanguage: selectedBase || resolvedBase,
       availableLanguages: ordered,
-      language: getCardLanguageLabel(ordered.length ? ordered : [resolvedBase]),
+      language: getCardLanguageLabel(ordered),
       audioTracks: ordered.map((lang) => ({ language: lang, label: lang, link: "" })),
     };
   }, [getCardLanguageLabel, normalizeLanguageValue]);
