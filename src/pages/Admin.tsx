@@ -7942,7 +7942,7 @@ ${tgBulkFooter}
 
         {/* ==================== FIREBASE CLEANUP ==================== */}
         {activeSection === "fb-cleanup" && (
-          <FirebaseCleanupSection glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+          <FirebaseMultiManager glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
         )}
 
         {/* ==================== AI CONFIG ==================== */}
