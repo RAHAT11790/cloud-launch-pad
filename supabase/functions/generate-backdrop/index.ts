@@ -274,15 +274,37 @@ Deno.serve(async (req) => {
 
     const safe = body.animeId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
     let url: string;
+    let engineLabel: string = provider;
+
+    const useRef = mode === "backdrop"
+      && provider === "lovable"
+      && !!body.referenceImageUrl
+      && body.useReference !== false;
 
     if (provider === "flux") {
       url = await genWithFlux(prompt, mode);
+    } else if (useRef) {
+      // IMAGE-TO-IMAGE: ground on TMDB/IMDB backdrop, preserve characters + genre.
+      try {
+        const refDataUrl = await fetchAsDataUrl(body.referenceImageUrl!);
+        const groundedPrompt = (body.customPrompt && body.customPrompt.trim())
+          ? body.customPrompt.replace(/\{title\}/gi, body.title)
+          : buildGroundedPrompt(body);
+        const bytes = await genWithLovableEdit(groundedPrompt, refDataUrl, body.model);
+        url = await uploadToImgbb(bytes, `${mode}_ref_${safe}_${Date.now()}`);
+        engineLabel = "lovable-edit";
+      } catch (e: any) {
+        console.warn("[generate-backdrop] image-to-image failed, falling back to text-to-image:", e?.message || e);
+        const bytes = await genWithLovable(prompt, mode, body.model);
+        url = await uploadToImgbb(bytes, `${mode}_${safe}_${Date.now()}`);
+        engineLabel = "lovable-fallback";
+      }
     } else {
       const bytes = await genWithLovable(prompt, mode, body.model);
       url = await uploadToImgbb(bytes, `${mode}_${safe}_${Date.now()}`);
     }
 
-    return new Response(JSON.stringify({ ok: true, url, mode, engine: provider }), {
+    return new Response(JSON.stringify({ ok: true, url, mode, engine: engineLabel }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
