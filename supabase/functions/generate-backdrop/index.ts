@@ -165,39 +165,50 @@ function buildGroundedPrompt(b: Body): string {
   const genreLine = b.genres?.length ? b.genres.join(", ") : "(unknown — infer from reference image)";
   const overview = (b.overview || "").trim().slice(0, 600);
   const upperTitle = b.title.toUpperCase();
-  return `You are REMASTERING the REFERENCE IMAGE into a premium 16:9 anime promotional banner for "${b.title}".
+  return `You are designing an ULTRA-PROFESSIONAL 16:9 anime promotional banner for "${b.title}" — Crunchyroll / Netflix / official studio marketing quality.
 
 ANIME TITLE: "${b.title}"${b.year ? ` (${b.year})` : ""}
 OFFICIAL GENRE(S): ${genreLine}
 OVERVIEW: ${overview || "(none provided)"}
 
-═══════ CHARACTER RULES (HIGHEST PRIORITY) ═══════
-1. PRESERVE THE EXACT CHARACTERS from the reference image. Same hair color & style, eye color, face shape, body proportions, outfit, weapons, accessories, age, gender. Do NOT invent or replace them with generic anime faces.
-2. PRESERVE GENRE MOOD (${genreLine}). Do NOT turn romance/slice-of-life into action. Add explosions/aura/weapons ONLY if genre is Action/Shounen/Battle.
-3. Re-pose, re-light, re-frame the original characters into a cinematic Crunchyroll/Netflix-style banner.
+═══════ ROLE OF THE REFERENCE IMAGE ═══════
+The reference image is provided ONLY to identify the OFFICIAL CHARACTERS of this anime. You MUST:
+- Preserve the EXACT characters from the reference: hair color & style, eye color, face shape, body proportions, outfit, weapons, accessories, age, gender.
+- NOT copy the reference's composition, framing, background, lighting or layout.
+- Re-design EVERYTHING ELSE from scratch with your own ultra-professional creative direction.
 
-═══════ LAYOUT (16:9 widescreen, full bleed, NO letterboxing) ═══════
-- LEFT 45%: large stylized anime title "${upperTitle}" in aggressive modern typography (brushstroke / neon / sharp-edge fonts), Japanese kanji subtitle under it in small elegant type, tagline area, branding chips at the bottom.
-- RIGHT 55%: main protagonist hero shot from the reference image, supporting cast layered behind with cinematic depth.
+═══════ DESIGN FREEDOM ═══════
+You are the art director. Compose the banner however looks most cinematic and click-worthy for this specific anime's mood and genre (${genreLine}). Choose your own:
+- Composition, character poses, camera angle, depth, lighting, color grading
+- Background scenery, particles, effects (genre-appropriate)
+- Title typography style (must feel like an official anime logo, not generic AI text)
+- Decorative UI elements, accent shapes, frames
 
-═══════ BRANDING (MUST be visible and clean) ═══════
-- TOP-RIGHT CORNER: small premium "RS ANIME" badge with a minimal crown icon — elegant, not overpowering.
-- BOTTOM-LEFT: two small UI chips on a soft glassy bar:
-    • Telegram icon + text "TG :- @CARTOONFUNNY03"
-    • Globe icon + text "WEBSITE :- RS ANIME"
-- Branding text MUST be sharp, legible English typography. Do NOT garble the letters. Do NOT add any other random text/watermarks.
+Quality bar: must look like it was made by a top-tier anime marketing studio. NOT amateur, NOT generic AI banner, NOT fanart.
+
+═══════ MANDATORY BRANDING (small, elegant, never overpowering) ═══════
+- TOP-RIGHT CORNER: small premium "RS ANIME" badge with a minimal crown icon.
+- BOTTOM-LEFT: two small clean chips on a subtle glass bar:
+    • Telegram icon + "TG :- @CARTOONFUNNY03"
+    • Globe icon + "WEBSITE :- RS ANIME"
+- Branding text MUST be sharp, perfectly legible English. No garbled letters. No other random text/watermarks.
+
+═══════ TITLE TEXT ═══════
+- The anime title "${upperTitle}" must appear large and stylized, integrated naturally into the composition. Treat it like the official logo of the show — choose typography that fits the genre (brushstroke for action, elegant serif for romance, neon for sci-fi, etc.).
+- Optional small Japanese kanji subtitle.
 
 ═══════ STYLE ═══════
 - Ultra-detailed official anime key visual, 4K HDR, sharp linework, clean anatomy.
-- Cinematic genre-matched lighting: pastel + petals (romance), magic particles (fantasy), neon (sci-fi), battle aura (action), stadium lights (sports).
+- Cinematic genre-matched lighting and atmosphere.
 - Rich cinematic colors, deep blacks, vibrant highlights, anime-accurate palette.
 
 ═══════ STRICT NO-GO ═══════
 - NO year / release date numbers anywhere.
 - NO deformed faces, extra fingers, blurry textures.
-- NO generic AI typography — title must look like the official anime's logo treatment.
+- NO generic stock AI typography — title must look like an official anime logo treatment.
+- DO NOT replicate the reference image's layout or background — only borrow the characters.
 
-OUTPUT: a single remastered 16:9 anime promotional banner with the reference characters preserved, genre-faithful mood, big stylized "${upperTitle}" title text on the left, RS ANIME crown badge top-right, and Telegram + Website chips bottom-left.`;
+OUTPUT: one ultra-professional 16:9 anime promotional banner, original art-directed composition, with the official characters from the reference preserved, genre-faithful mood, stylized "${upperTitle}" title, RS ANIME crown badge top-right, Telegram + Website chips bottom-left.`;
 }
 
 async function genWithLovableEdit(prompt: string, referenceDataUrl: string, model?: string): Promise<Uint8Array> {
