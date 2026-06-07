@@ -21,6 +21,11 @@ interface Body {
   customPrompt?: string;
   provider?: "lovable" | "flux";
   model?: string;
+  // NEW: image-to-image grounding (backdrop mode only)
+  referenceImageUrl?: string;
+  useReference?: boolean;          // default true if referenceImageUrl provided
+  genres?: string[];               // e.g. ["Romance", "Slice of Life"]
+  overview?: string;               // TMDB overview / storyline
 }
 
 function defaultBackdropPrompt(title: string, _year?: string | number): string {
@@ -144,6 +149,69 @@ async function genWithLovable(prompt: string, mode: "backdrop" | "logo", model?:
   if (bin.byteLength < 1000) throw new Error("Lovable AI: image too small");
   return bin;
 }
+
+// ---------------- Image-to-image (Gemini) using a TMDB/IMDB reference ----------------
+async function fetchAsDataUrl(url: string): Promise<string> {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`reference fetch ${r.status}`);
+  const ct = r.headers.get("content-type") || "image/jpeg";
+  const buf = new Uint8Array(await r.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+  return `data:${ct};base64,${btoa(bin)}`;
+}
+
+function buildGroundedPrompt(b: Body): string {
+  const genreLine = b.genres?.length ? b.genres.join(", ") : "(unknown — infer from reference image)";
+  const overview = (b.overview || "").trim().slice(0, 600);
+  return `You are editing/remastering a PROMOTIONAL ANIME BANNER based on the REFERENCE IMAGE provided.
+
+ANIME TITLE: "${b.title}"${b.year ? ` (${b.year})` : ""}
+OFFICIAL GENRE(S): ${genreLine}
+OVERVIEW: ${overview || "(none provided)"}
+
+CRITICAL RULES — do not violate:
+1. PRESERVE THE EXACT CHARACTERS from the reference image. Same hair color, hair style, eye color, face shape, body proportions, outfit, weapons, accessories, age, gender. Do NOT invent new characters. Do NOT replace them with generic anime faces.
+2. PRESERVE THE GENRE MOOD. Genre is ${genreLine}. Do NOT turn romance/slice-of-life into action. Do NOT add explosions, weapons, or aggressive poses unless the genre is Action/Shounen/Battle.
+3. ASPECT RATIO: 16:9 cinematic widescreen, full bleed, no letterboxing.
+4. STYLE: ultra-detailed official anime key visual / Crunchyroll-Netflix promotional banner. 4K HDR. Sharp linework. Clean anatomy. Cinematic lighting matching the genre mood.
+5. COMPOSITION: keep the same main character(s) as the reference, re-pose / re-light / re-frame them into a premium banner. Add atmospheric background that matches the genre (soft pastel + petals for romance; magic particles for fantasy; neon for sci-fi; battle aura ONLY for action).
+6. NO text, NO watermarks, NO logos in the output image.
+
+OUTPUT: a single remastered 16:9 anime promotional banner faithful to the reference characters and the stated genre.`;
+}
+
+async function genWithLovableEdit(prompt: string, referenceDataUrl: string, model?: string): Promise<Uint8Array> {
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+  const chosen = model || "google/gemini-3.1-flash-image-preview";
+  const body = {
+    model: chosen,
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image_url", image_url: { url: referenceDataUrl } },
+        { type: "text", text: prompt },
+      ],
+    }],
+    modalities: ["image", "text"],
+  };
+  const res = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    if (res.status === 429) throw new Error("RATE_LIMIT");
+    if (res.status === 402) throw new Error("PAYMENT_REQUIRED — Lovable AI credits exhausted");
+    throw new Error(`Lovable AI edit ${res.status}: ${t.slice(0, 220)}`);
+  }
+  const j = await res.json();
+  const b64 = j?.data?.[0]?.b64_json;
+  if (!b64) throw new Error("Lovable AI edit: no image data in response");
+  const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  if (bin.byteLength < 1000) throw new Error("Lovable AI edit: image too small");
+  return bin;
 
 async function genWithFlux(prompt: string, mode: "backdrop" | "logo"): Promise<string> {
   const ar = mode === "logo" ? "1:1" : "16:9";
