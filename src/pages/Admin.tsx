@@ -62,6 +62,8 @@ interface Season {
   episodes: Episode[];
 }
 
+type SeasonsByLanguage = Record<string, Season[]>;
+
 import { THEME_PRESETS, type ThemePreset } from "@/lib/themePresets";
 
 // ==================== FCM PROVIDER TOGGLE SECTION ====================
