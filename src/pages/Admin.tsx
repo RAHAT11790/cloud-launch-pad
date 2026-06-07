@@ -2045,6 +2045,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const [seriesForm, setSeriesForm] = useState<any>(null);
   const [seriesCast, setSeriesCast] = useState<CastMember[]>([]);
   const [seasonsData, setSeasonsData] = useState<Season[]>([]);
+  const [seriesSeasonsByLanguage, setSeriesSeasonsByLanguage] = useState<SeasonsByLanguage>({});
   const [seriesSearch, setSeriesSearch] = useState("");
   const [seriesResults, setSeriesResults] = useState<any[]>([]);
   const [seriesEditId, setSeriesEditId] = useState("");
