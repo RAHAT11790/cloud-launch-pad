@@ -3036,13 +3036,12 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         }
       }
 
-      const nextMap = { Hindi: cloneSeasonList(newSeasons) };
-      setSeriesForm(syncSeriesLanguageSummary({
+      const nextSeriesForm = {
         tmdbId: data.id, title: data.name || "", logo: logoUrl, poster: data.poster_path ? TMDB_IMG_BASE + "original" + data.poster_path : "",
         backdrop: data.backdrop_path ? TMDB_IMG_BASE + "original" + data.backdrop_path : "", trailer: trailerUrl,
         year: data.first_air_date?.split("-")[0] || "", rating: data.vote_average?.toFixed(1) || "",
         language: "Hindi", baseLanguage: "Hindi", selectedAdminLanguage: "Hindi", availableLanguages: ["Hindi"], category: autoCategory, dubType: "official", storyline: data.overview || "", visibility: "public", weeklyEnabled: false, weeklyEveryDays: 7, audioTracks: []
-      }, nextMap));
+      };
       if (autoCategory) toast.info(`অটো ক্যাটাগরি: ${autoCategory}`);
       setSeriesCast(cast);
       setSeriesResults([]);
@@ -3076,6 +3075,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
           }
         }
       }
+      const nextMap = { Hindi: cloneSeasonList(newSeasons) };
+      setSeriesForm(syncSeriesLanguageSummary(nextSeriesForm, nextMap));
       setSeriesSeasonsByLanguage(nextMap);
       setSeasonsData(cloneSeasonList(newSeasons));
       toast.success("Series details fetched! (এপিসোড নাম TMDB থেকে লোড হয়েছে)");
@@ -3091,7 +3092,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     if (!seriesForm.title) { toast.error("Please enter title"); return; }
     if (!seriesForm.category) { toast.error("Please select category"); return; }
 
-      const syncedForm = syncSeriesLanguageSummary(seriesForm, seasonsData);
+      const nextMap = sanitizeSeasonLanguageMap({
+        ...seriesSeasonsByLanguage,
+        [normalizeLanguageValue(seriesForm?.selectedAdminLanguage || seriesForm?.baseLanguage || seriesForm?.language || "Hindi") || "Hindi"]: cloneSeasonList(seasonsData),
+      });
+      const syncedForm = syncSeriesLanguageSummary(seriesForm, nextMap);
       setSeriesForm(syncedForm);
       const data = {
       ...syncedForm,
@@ -3099,7 +3104,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
       audioTracks: Array.isArray(syncedForm.audioTracks)
         ? syncedForm.audioTracks.filter((track: any) => String(track?.label || track?.language || track?.link || "").trim())
         : [],
-      seasons: seasonsData,
+      seasons: cloneSeasonList(nextMap[syncedForm.baseLanguage || "Hindi"] || []),
+      seasonsByLanguage: nextMap,
       type: "webseries",
       weeklyEnabled: seriesForm.weeklyEnabled === true,
       weeklyEveryDays: Math.max(1, Number(seriesForm.weeklyEveryDays) || 7),
@@ -3110,6 +3116,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         : null,
       updatedAt: Date.now(),
     };
+    setSeriesSeasonsByLanguage(nextMap);
     let saveRef;
     let newId = seriesEditId || "";
     if (seriesEditId) {
