@@ -37,7 +37,6 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
   const fileName = buildSafeFileName(rawFileName);
   const link = document.createElement("a");
   link.href = proxyUrl;
-  link.target = "_blank";
   link.rel = "noopener noreferrer";
   link.download = fileName;
   document.body.appendChild(link);
