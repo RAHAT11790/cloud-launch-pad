@@ -722,7 +722,7 @@ const Index = () => {
   const showDetailsLoadingToast = useCallback(() => {
     dismissDetailsLoadingToast();
     const toastId = toast.loading("Loading details...", {
-      duration: 5000,
+      duration: 20000,
       closeButton: true,
     });
 
@@ -733,7 +733,7 @@ const Index = () => {
         detailsLoadingToastRef.current = null;
       }
       detailsLoadingTimeoutRef.current = null;
-    }, 5000);
+    }, 20000);
 
     return toastId;
   }, [dismissDetailsLoadingToast]);
