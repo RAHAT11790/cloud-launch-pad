@@ -12,6 +12,10 @@ import { initializeApp, deleteApp, getApps, type FirebaseApp } from "firebase/ap
 import { getDatabase, ref as rRef, get as rGet, set as rSet, update as rUpdate, type Database } from "firebase/database";
 import { db as mainDb, ref as mainRef, get as mainGet, set as mainSet, remove as mainRemove, update as mainUpdate } from "@/lib/firebase";
 
+// Re-export the main DB so the UI can label it without re-importing firebase directly.
+export const MAIN_DB_LABEL = "Main Firebase (primary)";
+
+
 export interface ExtraFirebaseConfig {
   id: string;                 // uuid
   displayName: string;        // e.g. "Backup-A"
