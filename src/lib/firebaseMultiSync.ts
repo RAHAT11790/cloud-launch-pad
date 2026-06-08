@@ -28,9 +28,11 @@ export interface ExtraFirebaseConfig {
   messagingSenderId?: string;
   appId?: string;
   sections: string[];         // which top-level RTDB roots this FB handles
+  autoMirrorMinutes?: number; // 0 / undefined = disabled
   createdAt: number;
   updatedAt: number;
 }
+
 
 // Default top-level sections used by the app.
 export const ALL_SECTIONS = [
