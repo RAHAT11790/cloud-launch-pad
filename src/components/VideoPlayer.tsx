@@ -4091,7 +4091,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               fileName: buildDownloadFileName(quality, subtitle),
             });
             closePanel();
-            toast.success(`Download started${quality !== "Auto" ? ` • ${quality}` : ""}`);
           };
 
           const startSelectedDownloads = async (quality: string) => {
