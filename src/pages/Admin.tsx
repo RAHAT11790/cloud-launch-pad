@@ -2229,6 +2229,24 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     setTgStatus(latest >= total ? "complete" : "ongoing");
   }, [tgStatusAuto, tgTotalEpisodes, tgNewEpAdded]);
 
+  // 🎯 Auto-derive Telegram watch button link as a DEEP LINK to the FIRST episode
+  // of the newly-added range. Example: tgNewEpAdded="37-39", tgSeason="02" →
+  // link points to season 2 episode 37 so users land directly on that episode in
+  // the video player. For single episodes it points to that one. For movies it
+  // omits season/episode params.
+  useEffect(() => {
+    if (!tgSelectedAnimeId) return;
+    const seasonNum = parseInt(String(tgSeason).replace(/[^\d]/g, ""), 10);
+    const epStartRaw = String(tgNewEpAdded || "").split("-")[0] || "";
+    const epStart = parseInt(epStartRaw.replace(/[^\d]/g, ""), 10);
+    const isMovie = /movie/i.test(String(tgSeason)) || /movie|full/i.test(String(tgNewEpAdded));
+    if (isMovie || !isFinite(seasonNum) || !isFinite(epStart)) {
+      setTgButtonLink(buildEpisodeShareUrl(tgSelectedAnimeId));
+      return;
+    }
+    setTgButtonLink(buildEpisodeShareUrl(tgSelectedAnimeId, Math.max(0, seasonNum - 1), Math.max(0, epStart - 1)));
+  }, [tgSelectedAnimeId, tgSeason, tgNewEpAdded]);
+
   // Load saved TG footer links from Firebase
   useEffect(() => {
     const unsub = onValue(ref(db, "admin/tgFooterLinks"), (snap) => {
