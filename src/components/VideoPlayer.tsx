@@ -229,6 +229,12 @@ const getShortSeasonLabel = (seasonName: string | undefined, index: number) => {
   return `Season ${String(index + 1).padStart(2, "0")}`;
 };
 
+const buildEpisodeDownloadName = (animeTitle: string, seasonLabel: string | undefined, episodeNumber: number | undefined) => {
+  const seasonPart = String(seasonLabel || "Season 01").trim();
+  const episodePart = `Episode ${String(episodeNumber || 1).padStart(2, "0")}`;
+  return [animeTitle, seasonPart, episodePart].map((part) => String(part || "").trim()).filter(Boolean).join(" - ");
+};
+
 const splitLanguageTokens = (value: string | undefined | null) =>
   String(value || "")
     .split(/[,/|]/)
@@ -4027,8 +4033,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             });
             return baseCandidates;
           };
-          const buildDownloadFileName = (quality: string, sub?: string) => {
-            const parts = [title, sub, quality && quality !== "Auto" ? quality : ""]
+          const buildDownloadFileName = (label: string, quality?: string) => {
+            const parts = [label, quality && quality !== "Auto" ? quality : ""]
               .map((part) => String(part || "").trim())
               .filter(Boolean);
             return `${parts.join(" - ") || "video"}.mp4`;
@@ -4041,7 +4047,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             if (directHttps) return directHttps;
             const managedCandidate = [u, ...candidates].find((candidate) => isDirectDownloadCandidate(candidate));
             if (!managedCandidate) return "";
-            return buildVideoDownloadUrl(managedCandidate, buildDownloadFileName(quality, sub)) || "";
+            return buildVideoDownloadUrl(managedCandidate, buildDownloadFileName(String(sub || title), quality)) || "";
           };
 
           const buildDlId = (q: string, sub: string) =>
@@ -4079,16 +4085,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
           const startMovieDownload = async (quality: string) => {
             const { toast } = await import("sonner");
-            const directHttpsUrl = getDownloadUrl(src, quality, subtitle, [src]);
+            const movieLabel = String(title || subtitle || "video").trim();
+            const directHttpsUrl = getDownloadUrl(src, quality, movieLabel, [src]);
             if (!directHttpsUrl) { toast.error("Download not available"); return; }
             downloadManager.startDownload({
-              id: buildDlId(quality, subtitle),
+              id: buildDlId(quality, movieLabel),
               url: directHttpsUrl,
               title,
-              subtitle,
+              subtitle: movieLabel,
               poster,
               quality,
-              fileName: buildDownloadFileName(quality, subtitle),
+              fileName: buildDownloadFileName(movieLabel, quality),
             });
             closePanel();
           };
@@ -4106,22 +4113,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               const ep = panelEpisodes.find((episode) => episode.index === idx);
               if (!ep) { skipped++; continue; }
               const seasonLabel = getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx);
-              const epSubtitle = `${seasonLabel} - Episode ${ep.episodeNumber}`;
+              const episodeLabel = buildEpisodeDownloadName(title, seasonLabel, ep.episodeNumber);
               const epUrl = getDownloadUrl(
                 pickEpUrlForQuality(ep, quality),
                 quality,
-                epSubtitle,
+                episodeLabel,
                 Object.values(ep.qualityLinks),
               );
               if (!epUrl) { skipped++; continue; }
               downloadManager.enqueueDownload({
-                id: buildDlId(quality, epSubtitle),
+                id: buildDlId(quality, episodeLabel),
                 url: epUrl,
                 title,
-                subtitle: epSubtitle,
+                subtitle: episodeLabel,
                 poster,
                 quality,
-                fileName: buildDownloadFileName(quality, epSubtitle),
+                fileName: buildDownloadFileName(episodeLabel, quality),
               });
               queued++;
             }
