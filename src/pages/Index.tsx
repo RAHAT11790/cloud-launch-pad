@@ -1429,8 +1429,10 @@ const Index = () => {
           detailsCacheRef.current.set(anime.id, fallbackAnime);
           await openPlayerFromAnime(fallbackAnime);
         }
-      } catch {
+      } catch (err) {
         if (requestId === detailsRequestRef.current) {
+          console.error("AN details load failed", err);
+          toast.error("AN video load failed. Try again.");
           // Show anime with available metadata instead of error
           const fallbackAnime: AnimeItem = {
             ...anime,
