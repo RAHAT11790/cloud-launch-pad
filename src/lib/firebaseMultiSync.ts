@@ -224,6 +224,33 @@ export function triggerJsonDownload(filename: string, data: any) {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
+function buildRealtimeJsonDownloadUrl(databaseURL: string, filename: string) {
+  const base = String(databaseURL || "").trim().replace(/\/+$/, "");
+  if (!base) return "";
+  return `${base}/.json?download=${encodeURIComponent(filename)}`;
+}
+
+export function getMainRemoteJsonDownloadUrl(filename: string) {
+  const mainUrl = String((mainDb as any)?.app?.options?.databaseURL || "").trim();
+  return buildRealtimeJsonDownloadUrl(mainUrl, filename);
+}
+
+export function getExtraRemoteJsonDownloadUrl(cfg: ExtraFirebaseConfig, filename: string) {
+  return buildRealtimeJsonDownloadUrl(cfg.databaseURL, filename);
+}
+
+export function triggerRemoteJsonDownload(downloadUrl: string) {
+  if (typeof document === "undefined") return;
+  const clean = String(downloadUrl || "").trim();
+  if (!clean) throw new Error("Missing remote download URL.");
+  const a = document.createElement("a");
+  a.href = clean;
+  a.rel = "noopener noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 export async function streamJsonDownload(
   filename: string,
   data: any,

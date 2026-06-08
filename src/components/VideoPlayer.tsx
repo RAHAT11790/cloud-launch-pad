@@ -1445,10 +1445,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (effectiveVideoServers[serverIndex].locked && !isPremium) return;
     if (serverSwitchingRef.current) return;
     const v = videoRef.current;
-    if (!v) return;
 
-    const savedTime = v.currentTime || 0;
-    const wasPlaying = !v.paused;
+    const savedTime = isEmbedPlayback ? (embedTimeRef.current.currentTime || 0) : (v?.currentTime || 0);
+    const wasPlaying = isEmbedPlayback ? playing : !!v && !v.paused;
     const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
     const resolved = resolvePlaybackSrc(newRawSrc);
 
@@ -1467,19 +1466,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // Fast swap — just change src, browser handles the rest. Avoid forcing a
     // fresh load() here because it restarts the pipeline and adds seconds.
     setCurrentSrc(resolved);
-    try {
-      if (v.src !== resolved) v.src = resolved;
-      if (savedTime > 0) {
-        const onMeta = () => { try { v.currentTime = savedTime; } catch {} v.removeEventListener("loadedmetadata", onMeta); };
-        v.addEventListener("loadedmetadata", onMeta);
-      }
-      if (wasPlaying) v.play().catch(() => {});
-    } catch {}
+    if (v) {
+      try {
+        if (v.src !== resolved) v.src = resolved;
+        if (savedTime > 0) {
+          const onMeta = () => { try { v.currentTime = savedTime; } catch {} v.removeEventListener("loadedmetadata", onMeta); };
+          v.addEventListener("loadedmetadata", onMeta);
+        }
+        if (wasPlaying) v.play().catch(() => {});
+      } catch {}
+    }
 
     // Auto-failover only if server truly dead (5s, no data at all)
     window.setTimeout(() => {
       const vv = videoRef.current;
-      if (!vv) return;
+      if (!vv || isEmbedPlayback) return;
       if (vv.readyState < 1 && vv.networkState === 3) {
         const nextIdx = effectiveVideoServers.findIndex((s, i) => i !== serverIndex && (!s.locked || isPremium));
         if (nextIdx >= 0 && nextIdx !== serverIndex) {
@@ -1492,7 +1493,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
     }, 400);
-  }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isPremium]);
+  }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isEmbedPlayback, isPremium, playing]);
 
   // Auto-switch to premium server for premium users
   useEffect(() => {

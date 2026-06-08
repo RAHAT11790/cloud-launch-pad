@@ -8,7 +8,7 @@ import {
   ALL_SECTIONS, DEFAULT_RTDB_RULES, MAIN_DB_LABEL,
   listExtraFirebases, saveExtraFirebase, deleteExtraFirebase, updateSections,
   pingExtra, pushSection, pushAllSelectedSections, pullSectionJson, uploadSectionJson,
-  triggerJsonDownload, streamJsonDownload, disposeExtraFirebase,
+  triggerJsonDownload, streamJsonDownload, getMainRemoteJsonDownloadUrl, getExtraRemoteJsonDownloadUrl, triggerRemoteJsonDownload, disposeExtraFirebase,
   pullMainFullJson, pullExtraFullJson, uploadMainFullJson, uploadExtraFullJson,
   analyzeMainStorage, analyzeExtraStorage, setAutoMirror,
   type ExtraFirebaseConfig, type ProgressFn, type StorageStats,
@@ -232,16 +232,24 @@ const FirebaseMultiManager = ({ glassCard, btnPrimary, btnSecondary }: Props) =>
     const key = "MAIN";
     try {
       setDownloadBusy((prev) => ({ ...prev, [key]: { progress: 5, label: "Reading database…" } }));
-      const data = await pullMainFullJson();
       const stamp = new Date().toISOString().slice(0, 10);
-      await streamJsonDownload(`main-firebase-FULL-${stamp}.json`, data, (info) => {
-        const label = info.stage === "preparing"
-          ? "Preparing JSON…"
-          : info.stage === "writing"
-            ? `Saving file… ${info.progress}%`
-            : "Done";
-        setDownloadBusy((prev) => ({ ...prev, [key]: { progress: info.progress, label } }));
-      });
+      const filename = `main-firebase-FULL-${stamp}.json`;
+      const directUrl = getMainRemoteJsonDownloadUrl(filename);
+      if (directUrl) {
+        setDownloadBusy((prev) => ({ ...prev, [key]: { progress: 35, label: "Starting browser download…" } }));
+        triggerRemoteJsonDownload(directUrl);
+        setDownloadBusy((prev) => ({ ...prev, [key]: { progress: 100, label: "Download sent to browser" } }));
+      } else {
+        const data = await pullMainFullJson();
+        await streamJsonDownload(filename, data, (info) => {
+          const label = info.stage === "preparing"
+            ? "Preparing JSON…"
+            : info.stage === "writing"
+              ? `Saving file… ${info.progress}%`
+              : "Done";
+          setDownloadBusy((prev) => ({ ...prev, [key]: { progress: info.progress, label } }));
+        });
+      }
       toast.success("Main full JSON downloaded");
     } catch (e: any) {
       toast.error("Download failed: " + (e?.message || e));
@@ -252,16 +260,24 @@ const FirebaseMultiManager = ({ glassCard, btnPrimary, btnSecondary }: Props) =>
   const onDownloadFullExtra = async (cfg: ExtraFirebaseConfig) => {
     try {
       setDownloadBusy((prev) => ({ ...prev, [cfg.id]: { progress: 5, label: `Reading ${cfg.displayName}…` } }));
-      const data = await pullExtraFullJson(cfg);
       const stamp = new Date().toISOString().slice(0, 10);
-      await streamJsonDownload(`${cfg.displayName.replace(/\W+/g, "_")}-FULL-${stamp}.json`, data, (info) => {
-        const label = info.stage === "preparing"
-          ? "Preparing JSON…"
-          : info.stage === "writing"
-            ? `Saving file… ${info.progress}%`
-            : "Done";
-        setDownloadBusy((prev) => ({ ...prev, [cfg.id]: { progress: info.progress, label } }));
-      });
+      const filename = `${cfg.displayName.replace(/\W+/g, "_")}-FULL-${stamp}.json`;
+      const directUrl = getExtraRemoteJsonDownloadUrl(cfg, filename);
+      if (directUrl) {
+        setDownloadBusy((prev) => ({ ...prev, [cfg.id]: { progress: 35, label: "Starting browser download…" } }));
+        triggerRemoteJsonDownload(directUrl);
+        setDownloadBusy((prev) => ({ ...prev, [cfg.id]: { progress: 100, label: "Download sent to browser" } }));
+      } else {
+        const data = await pullExtraFullJson(cfg);
+        await streamJsonDownload(filename, data, (info) => {
+          const label = info.stage === "preparing"
+            ? "Preparing JSON…"
+            : info.stage === "writing"
+              ? `Saving file… ${info.progress}%`
+              : "Done";
+          setDownloadBusy((prev) => ({ ...prev, [cfg.id]: { progress: info.progress, label } }));
+        });
+      }
       toast.success(`${cfg.displayName} full JSON downloaded`);
     } catch (e: any) {
       toast.error("Download failed: " + (e?.message || e));
