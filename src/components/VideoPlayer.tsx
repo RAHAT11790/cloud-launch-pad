@@ -3568,7 +3568,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   )}
                 </div>
                 <div className="relative -mx-5">
-                  {/* Sticky "All" button — its own solid background hides any episode passing behind it. No extra shadow/cover. */}
+                  <div
+                    aria-hidden="true"
+                    className="absolute left-0 top-0 z-10 h-11 w-[68px] bg-background pointer-events-none"
+                  />
+                  {/* Hard left mask: episode cards can only enter from the right side of All; once behind it they never reappear from left/top/bottom. */}
                   <button
                     onClick={() => openInlineSheet("allEpisodes")}
                     className="absolute left-5 top-0 z-20 w-12 h-11 rounded-lg text-[12px] font-bold bg-background text-foreground border border-border transition-transform active:scale-95 flex items-center justify-center"

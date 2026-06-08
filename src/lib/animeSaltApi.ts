@@ -4,6 +4,7 @@ import { db, ref, get } from '@/lib/firebase';
 const ANIMESALT_BASE = 'https://animesalt.ac';
 const PLAYABLE_EXT_RE = /\.(?:m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/i;
 const ASSET_EXT_RE = /\.(?:js|css|json|jpe?g|png|gif|svg|webp|ico|woff2?|ttf)(?:[?#].*)?$/i;
+const FETCH_TIMEOUT_MS = 12_000;
 
 type AnimeSaltLink = { quality: string; url: string };
 
@@ -14,6 +15,19 @@ const toAbsoluteUrl = (value: unknown): string => {
   if (raw.startsWith('//')) return `https:${raw}`;
   if (raw.startsWith('/')) return `${ANIMESALT_BASE}${raw}`;
   return raw;
+};
+
+const fetchWithTimeout = async (url: string, init?: RequestInit): Promise<Response> => {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timer);
+  }
 };
 
 const decodeHtml = (value: string) =>
@@ -168,7 +182,7 @@ const getAnimeSaltProxyUrl = async (): Promise<string> => {
 
 const fetchPage = async (url: string): Promise<string> => {
   const proxyUrl = await getAnimeSaltProxyUrl();
-  let res = await fetch(proxyUrl, {
+  let res = await fetchWithTimeout(proxyUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),
@@ -190,7 +204,7 @@ const fetchPage = async (url: string): Promise<string> => {
   else if (slugMatch && !pageMatch) fallbackBody = { action: slugMatch[1] === 'series' ? 'series' : 'movie', slug: slugMatch[2] };
   else fallbackBody = { action: 'browse', type: isMoviesPage ? 'movies' : 'series', page: pageMatch ? parseInt(pageMatch[1], 10) : 1 };
 
-  res = await fetch(proxyUrl, {
+  res = await fetchWithTimeout(proxyUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(fallbackBody),
@@ -354,7 +368,7 @@ const parsePlaybackPage = (html: string) => {
 /** Try direct API call first, supporting both nested and top-level response formats */
 const tryDirectApi = async (proxyUrl: string, body: any): Promise<any | null> => {
   try {
-    const res = await fetch(proxyUrl, {
+    const res = await fetchWithTimeout(proxyUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

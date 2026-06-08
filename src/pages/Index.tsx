@@ -193,6 +193,24 @@ import { guestStore } from "@/lib/guestStore";
 // Session cache for API responses to speed up continue watching
 const apiCache = new Map<string, { data: any; ts: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 min
+const API_TIMEOUT_MS = 12_000;
+
+const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+};
+
 const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
   const cached = apiCache.get(key);
   if (cached && Date.now() - cached.ts < CACHE_TTL) {
@@ -205,7 +223,7 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
   let lastErr: any = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const data = await fn();
+      const data = await withTimeout(fn(), API_TIMEOUT_MS, key);
       const ok = data && (data.success === true || data.embedUrl || data.allEmbeds?.length || data.links?.length || data.data);
       if (ok) {
         apiCache.set(key, { data, ts: Date.now() });
@@ -1202,16 +1220,6 @@ const Index = () => {
     // Cancel any stale in-flight AnimeSalt details requests when switching content
     detailsRequestRef.current += 1;
 
-    // Reflect details view in the URL so back-button works as a real route.
-    // Use replace when coming from a routed overlay (search/notifications) to
-    // avoid stacking duplicate entries; push from anywhere else.
-    const watchTarget = getDefaultWatchTarget(anime);
-    const targetRoute = buildWatchRoute(anime.id, watchTarget.seasonIdx, watchTarget.epIdx);
-    if (location.pathname !== targetRoute) {
-      const fromRoutedOverlay = isSearchRoute || isNotificationsRoute;
-      navigate(targetRoute, { replace: fromRoutedOverlay });
-    }
-
     // Track click for trending popularity (fire-and-forget)
     try {
       import("@/lib/firebase").then(({ runTransaction, ref: fbRef, db: fbDb }) => {
@@ -1228,7 +1236,7 @@ const Index = () => {
       const cachedDetails = detailsCacheRef.current.get(anime.id);
       if (cachedDetails) {
         dismissDetailsLoadingToast();
-        setSelectedAnime(cachedDetails);
+        await openPlayerFromAnime(cachedDetails);
         return;
       }
 
@@ -1444,6 +1452,16 @@ const Index = () => {
         if (detailsLoadingToastRef.current === toastId) dismissDetailsLoadingToast();
       }
       return;
+    }
+
+    // Reflect details view in the URL so back-button works as a real route.
+    // Use replace when coming from a routed overlay (search/notifications) to
+    // avoid stacking duplicate entries; push from anywhere else.
+    const watchTarget = getDefaultWatchTarget(anime);
+    const targetRoute = buildWatchRoute(anime.id, watchTarget.seasonIdx, watchTarget.epIdx);
+    if (location.pathname !== targetRoute) {
+      const fromRoutedOverlay = isSearchRoute || isNotificationsRoute;
+      navigate(targetRoute, { replace: fromRoutedOverlay });
     }
 
     dismissDetailsLoadingToast();
