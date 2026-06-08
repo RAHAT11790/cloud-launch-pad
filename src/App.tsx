@@ -47,7 +47,6 @@ const App = () => (
         
         <Toaster />
         <Sonner />
-        <DownloadProgressOverlay />
         <Routes>
           <Route path="/admin" element={<Suspense fallback={<RouteFallback />}><Admin /></Suspense>} />
           <Route path="/unlock" element={<Unlock />} />
