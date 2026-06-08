@@ -356,7 +356,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       } else if (val && typeof val === "object") {
         servers = Object.values(val).filter((s: any) => s && s.domain) as any[];
       }
-      setVideoServers(servers.slice(0, PROXY_SERVER_LIMIT));
+      setVideoServers(servers);
     });
     return () => unsub();
   }, []);
@@ -365,7 +365,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const effectiveVideoServers = useMemo(() => {
     if (noServerSwitch || isRawHlsSource) return [];
-    if (videoServers.length > 0) return videoServers.slice(0, PROXY_SERVER_LIMIT);
+    if (videoServers.length > 0) return videoServers;
     return buildFallbackServers(src).slice(0, PROXY_SERVER_LIMIT);
   }, [isRawHlsSource, noServerSwitch, src, videoServers]);
 
