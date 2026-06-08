@@ -3568,29 +3568,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   )}
                 </div>
                 <div className="relative -mx-5">
-                  {/* Solid background cover behind All button — episodes vanish completely on the left side */}
+                  {/* Solid black tunnel box behind All — episodes fully vanish behind it */}
                   <div
                     aria-hidden
-                    className="absolute left-0 top-0 z-10 h-11 w-[78px] pointer-events-none"
-                    style={{ background: "hsl(var(--background))" }}
+                    className="absolute left-0 top-0 z-10 h-11 w-[82px] pointer-events-none bg-black"
                   />
-                  {/* Sticky "All" pill — compact, golden, matches site theme */}
+                  {/* Sticky "All" button — clean black banner box */}
                   <button
                     onClick={() => openInlineSheet("allEpisodes")}
-                    className="absolute left-5 top-0 z-20 w-12 h-11 rounded-lg text-[12px] font-bold bg-amber-400/15 text-amber-300 border border-amber-400/40 transition-transform active:scale-95 flex items-center justify-center"
+                    className="absolute left-5 top-0 z-20 w-12 h-11 rounded-lg text-[12px] font-bold bg-black text-white border border-white/15 transition-transform active:scale-95 flex items-center justify-center"
                     aria-label="All episodes"
                   >
                     All
                   </button>
-                  {/* Soft fade on right edge of cover — tunnel mouth */}
+                  {/* Soft fade — tunnel mouth from black to transparent */}
                   <div
                     aria-hidden
-                    className="absolute left-[78px] top-0 z-10 h-11 w-4 pointer-events-none"
-                    style={{ background: "linear-gradient(to right, hsl(var(--background)) 0%, hsl(var(--background) / 0) 100%)" }}
+                    className="absolute left-[82px] top-0 z-10 h-11 w-5 pointer-events-none"
+                    style={{ background: "linear-gradient(to right, #000 0%, rgba(0,0,0,0) 100%)" }}
                   />
                   <div
                     className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 pr-5"
-                    style={{ paddingLeft: 78, scrollPaddingLeft: 78, WebkitOverflowScrolling: "touch" }}
+                    style={{ paddingLeft: 82, scrollPaddingLeft: 82, WebkitOverflowScrolling: "touch" }}
                   >
                     {episodeList.map((ep) => (
                       <button
@@ -3598,8 +3597,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         onClick={ep.onClick}
                         className={`flex-shrink-0 w-12 h-11 rounded-lg text-[12px] font-bold transition-colors flex items-center justify-center ${
                           ep.active
-                            ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/20 text-amber-300 border border-amber-400/60 shadow-[0_0_10px_-2px_hsl(45_95%_55%/0.45)]'
-                            : 'bg-foreground/[0.06] text-foreground/85 border border-border active:scale-95'
+                            ? 'bg-gradient-to-br from-amber-400/30 to-yellow-500/15 text-amber-300 border border-amber-400/60'
+                            : 'bg-white/[0.07] text-white border border-white/15 active:scale-95'
                         }`}
                       >
                         {String(ep.number).padStart(2, '0')}
