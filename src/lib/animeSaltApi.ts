@@ -137,9 +137,11 @@ const parseMeta = (html: string) => {
     getAttr(doc, ['.poster img', '.thumb img', 'article img', 'img'], 'data-src') ||
     getAttr(doc, ['.poster img', '.thumb img', 'article img', 'img'], 'src');
   const backdrop = getAttr(doc, ['meta[property="og:image"]', 'meta[name="twitter:image"]'], 'content') || poster;
-  const storyline =
-    getAttr(doc, ['meta[name="description"]', 'meta[property="og:description"]'], 'content') ||
-    getText(doc, ['.entry-content p', '.entry-content', '.summary', '.description', 'article p']);
+  const storylineFull = getText(doc, ['.entry-content', '.entry-content p', '.summary', '.description', 'article p']);
+  const storylineMeta = getAttr(doc, ['meta[name="description"]', 'meta[property="og:description"]'], 'content');
+  const storyline = (storylineFull && storylineFull.length > (storylineMeta?.length || 0))
+    ? storylineFull
+    : (storylineMeta || storylineFull);
   const yearMatch = (doc.body?.textContent || '').match(/(?:19|20)\d{2}/);
   const ratingMatch = (doc.body?.textContent || '').match(/([0-9](?:\.[0-9])?)\s*\/\s*10/);
 
