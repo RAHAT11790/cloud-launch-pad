@@ -4127,7 +4127,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             }
             closePanel();
             if (queued === 0) toast.error("No downloadable links found");
-            else toast.success(`${queued} episode${queued > 1 ? "s" : ""} queued${quality !== "Auto" ? ` • ${quality}` : ""}${skipped ? ` • ${skipped} skipped` : ""}`);
           };
 
           const playOffline = async (episodeData?: any) => {
