@@ -3974,8 +3974,45 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           );
         })()}
 
+        {/* AN Download Not-Available overlay (always rendered, even in embed mode) */}
+        {!isFullscreen && !adGateActive && showDownloadQualityPicker && anime?.source === "animesalt" && (
+          <div
+            className="fixed left-0 right-0 bottom-0 z-[260] border-t border-white/10 bg-black text-white flex flex-col overflow-hidden"
+            style={inlineSheetStyle}
+            data-player-panel="true"
+          >
+            <div className="sticky top-0 z-10 bg-black flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
+              <p className="text-[15px] font-bold tracking-tight text-white truncate">Download</p>
+              <button
+                onClick={() => { closeInlineSheets(); }}
+                className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95 flex-shrink-0 ml-3"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-5 pt-7 pb-8 flex flex-col items-center text-center gap-4 flex-1 overflow-y-auto">
+              <div className="w-16 h-16 rounded-full bg-amber-400/15 border border-amber-400/40 flex items-center justify-center">
+                <Download className="w-7 h-7 text-amber-300" />
+              </div>
+              <h3 className="text-[17px] font-bold text-white">Download not available</h3>
+              <p className="text-[13px] leading-relaxed text-white/75 max-w-sm">
+                Sorry — <span className="font-bold text-amber-300">AN</span> videos can&apos;t be downloaded.
+                Only <span className="font-bold text-amber-300">RS</span> videos support offline download.
+                Please look for the <span className="font-bold text-amber-300">RS</span> version of this title to enjoy it offline.
+              </p>
+              <p className="text-[12px] text-white/55">Thanks for visiting 💛</p>
+              <button
+                onClick={() => { closeInlineSheets(); }}
+                className="mt-2 px-7 py-2.5 rounded-full bg-white text-black text-[13px] font-bold active:scale-95 transition-transform inline-flex items-center gap-2"
+              >
+                <X className="w-4 h-4" /> Close
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Download Button (single) + Multi-Episode Picker + Offline Playback */}
-        {!isFullscreen && !adGateActive && !hideDownload && !isEmbedPlayback && (() => {
+        {!isFullscreen && !adGateActive && !hideDownload && !isEmbedPlayback && anime?.source !== "animesalt" && (() => {
           // Check if this episode is already saved in IndexedDB
           const savedEpisode = downloadedEpisodes.find(d => d.subtitle === subtitle);
           const isAlreadySaved = !!savedEpisode;
