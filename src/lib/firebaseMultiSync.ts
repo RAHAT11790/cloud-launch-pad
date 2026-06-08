@@ -221,3 +221,102 @@ export function triggerJsonDownload(filename: string, data: any) {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
+
+// ============================================================
+// FULL-DB operations (entire RTDB tree)
+// ============================================================
+
+/** Download the entire MAIN Firebase RTDB tree as JSON. */
+export async function pullMainFullJson(): Promise<any> {
+  const snap = await mainGet(mainRef(mainDb, "/"));
+  return snap.val();
+}
+
+/** Download the entire EXTRA Firebase RTDB tree as JSON. */
+export async function pullExtraFullJson(cfg: ExtraFirebaseConfig): Promise<any> {
+  const { db: extraDb } = ensureApp(cfg);
+  const snap = await rGet(rRef(extraDb, "/"));
+  return snap.val();
+}
+
+/**
+ * Upload a full JSON tree to MAIN Firebase. MERGES at root level (safer than overwrite).
+ * Top-level keys present in `data` replace those subtrees; keys not in `data` are preserved.
+ */
+export async function uploadMainFullJson(data: any) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Full JSON must be a plain object with top-level sections.");
+  }
+  // Use update to merge top-level children rather than wiping entire DB.
+  await mainUpdate(mainRef(mainDb, "/"), data);
+}
+
+/** Upload a full JSON tree to an EXTRA Firebase (merge at root). */
+export async function uploadExtraFullJson(cfg: ExtraFirebaseConfig, data: any) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Full JSON must be a plain object with top-level sections.");
+  }
+  const { db: extraDb } = ensureApp(cfg);
+  await rUpdate(rRef(extraDb, "/"), data);
+}
+
+// ============================================================
+// Storage analytics — estimate RTDB usage from JSON byte size
+// ============================================================
+
+export interface StorageStats {
+  bytes: number;
+  human: string;
+  sections: Array<{ name: string; bytes: number; nodeCount: number }>;
+  totalNodes: number;
+}
+
+function humanBytes(b: number): string {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(2)} MB`;
+  return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function analyzeTree(root: any): StorageStats {
+  if (!root || typeof root !== "object") {
+    const bytes = root == null ? 0 : new Blob([JSON.stringify(root)]).size;
+    return { bytes, human: humanBytes(bytes), sections: [], totalNodes: 0 };
+  }
+  const sections: StorageStats["sections"] = [];
+  let total = 0;
+  let totalNodes = 0;
+  for (const name of Object.keys(root)) {
+    const sub = root[name];
+    const bytes = new Blob([JSON.stringify(sub)]).size;
+    const nodeCount =
+      sub && typeof sub === "object" && !Array.isArray(sub) ? Object.keys(sub).length : 1;
+    sections.push({ name, bytes, nodeCount });
+    total += bytes;
+    totalNodes += nodeCount;
+  }
+  sections.sort((a, b) => b.bytes - a.bytes);
+  return { bytes: total, human: humanBytes(total), sections, totalNodes };
+}
+
+export async function analyzeMainStorage(): Promise<StorageStats> {
+  const data = await pullMainFullJson();
+  return analyzeTree(data);
+}
+
+export async function analyzeExtraStorage(cfg: ExtraFirebaseConfig): Promise<StorageStats> {
+  const data = await pullExtraFullJson(cfg);
+  return analyzeTree(data);
+}
+
+// ============================================================
+// Auto-mirror config (per-extra interval push from MAIN → extra)
+// Stored alongside extra config: cfg.autoMirrorMinutes (0 = off)
+// ============================================================
+
+export async function setAutoMirror(id: string, minutes: number) {
+  await mainUpdate(mainRef(mainDb, `admin/extraFirebases/${id}`), {
+    autoMirrorMinutes: Math.max(0, Math.floor(minutes || 0)),
+    updatedAt: Date.now(),
+  });
+}
