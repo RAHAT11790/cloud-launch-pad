@@ -3568,28 +3568,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   )}
                 </div>
                 <div className="relative -mx-5">
-                  {/* Solid black tunnel box behind All — episodes fully vanish behind it */}
-                  <div
-                    aria-hidden
-                    className="absolute left-0 top-0 z-10 h-11 w-[82px] pointer-events-none bg-black"
-                  />
-                  {/* Sticky "All" button — clean black banner box */}
+                  {/* Sticky "All" button — its own solid background hides any episode passing behind it. No extra shadow/cover. */}
                   <button
                     onClick={() => openInlineSheet("allEpisodes")}
-                    className="absolute left-5 top-0 z-20 w-12 h-11 rounded-lg text-[12px] font-bold bg-black text-white border border-white/15 transition-transform active:scale-95 flex items-center justify-center"
+                    className="absolute left-5 top-0 z-20 w-12 h-11 rounded-lg text-[12px] font-bold bg-background text-foreground border border-border transition-transform active:scale-95 flex items-center justify-center"
                     aria-label="All episodes"
                   >
                     All
                   </button>
-                  {/* Soft fade — tunnel mouth from black to transparent */}
-                  <div
-                    aria-hidden
-                    className="absolute left-[82px] top-0 z-10 h-11 w-5 pointer-events-none"
-                    style={{ background: "linear-gradient(to right, #000 0%, rgba(0,0,0,0) 100%)" }}
-                  />
                   <div
                     className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 pr-5"
-                    style={{ paddingLeft: 82, scrollPaddingLeft: 82, WebkitOverflowScrolling: "touch" }}
+                    style={{ paddingLeft: 76, scrollPaddingLeft: 76, WebkitOverflowScrolling: "touch" }}
                   >
                     {episodeList.map((ep) => (
                       <button
