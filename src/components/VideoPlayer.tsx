@@ -4239,6 +4239,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       );
                     })()}
                   </div>
+                  )}
+
+
 
                   {(() => {
                     const fmtSize = (bytes: number) => {
