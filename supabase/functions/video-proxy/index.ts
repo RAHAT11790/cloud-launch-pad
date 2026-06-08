@@ -134,7 +134,11 @@ Deno.serve(async (req) => {
       .replace(/[\\/:*?"<>|]+/g, " ")
       .replace(/\s+/g, " ")
       .trim() || "video.mp4";
-    respHeaders.set("content-disposition", `attachment; filename*=UTF-8''${encodeURIComponent(safeFileName)}`);
+    const asciiFileName = safeFileName.replace(/[^\x20-\x7E]+/g, " ").replace(/\s+/g, " ").trim() || "video.mp4";
+    respHeaders.set(
+      "content-disposition",
+      `attachment; filename="${asciiFileName.replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(safeFileName)}`,
+    );
   } else {
     respHeaders.set("content-disposition", "inline");
   }
