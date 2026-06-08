@@ -4143,6 +4143,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   </div>
 
                   {/* Picker body */}
+                  {anime?.source === "animesalt" ? (
+                    <div className="px-4 pt-5 pb-6 flex flex-col items-center text-center gap-4 flex-1 overflow-y-auto">
+                      <div className="w-14 h-14 rounded-full bg-amber-400/15 border border-amber-400/40 flex items-center justify-center">
+                        <Download className="w-6 h-6 text-amber-300" />
+                      </div>
+                      <h3 className="text-[16px] font-bold text-white">Download not available</h3>
+                      <p className="text-[13px] leading-relaxed text-white/75 max-w-sm">
+                        You cannot download <span className="font-bold text-amber-300">AN</span> videos — sorry for that.
+                        You can only download <span className="font-bold text-amber-300">{(typeof window !== "undefined" && (window as any).__rsCardLabel) || "RS"}</span> videos.
+                        If you want to download this episode, please find the <span className="font-bold text-amber-300">RS</span> version of the anime and enjoy it offline.
+                      </p>
+                      <p className="text-[12px] text-white/55">Thanks for visiting 💛</p>
+                      <button
+                        onClick={closePanel}
+                        className="mt-2 px-6 py-2.5 rounded-full bg-white text-black text-[13px] font-bold active:scale-95 transition-transform inline-flex items-center gap-2"
+                      >
+                        <X className="w-4 h-4" /> Close
+                      </button>
+                    </div>
+                  ) : (
                   <div className="px-3 pt-3 pb-2 flex flex-col gap-2.5 min-h-0 flex-1">
                     <div className="rounded-[10px] border border-white/10 bg-white/[0.05] p-3">
                       <h4 className="text-[11px] font-bold text-white/80 uppercase tracking-wider mb-2">Resources</h4>
