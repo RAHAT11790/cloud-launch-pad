@@ -8,7 +8,7 @@ import {
   ALL_SECTIONS, DEFAULT_RTDB_RULES, MAIN_DB_LABEL,
   listExtraFirebases, saveExtraFirebase, deleteExtraFirebase, updateSections,
   pingExtra, pushSection, pushAllSelectedSections, pullSectionJson, uploadSectionJson,
-  triggerJsonDownload, disposeExtraFirebase,
+  triggerJsonDownload, streamJsonDownload, disposeExtraFirebase,
   pullMainFullJson, pullExtraFullJson, uploadMainFullJson, uploadExtraFullJson,
   analyzeMainStorage, analyzeExtraStorage, setAutoMirror,
   type ExtraFirebaseConfig, type ProgressFn, type StorageStats,
@@ -52,6 +52,7 @@ const FirebaseMultiManager = ({ glassCard, btnPrimary, btnSecondary }: Props) =>
   // Storage stats keyed by id ("MAIN" for primary)
   const [stats, setStats] = useState<Record<string, StorageStats | null>>({});
   const [statsBusy, setStatsBusy] = useState<Record<string, boolean>>({});
+  const [downloadBusy, setDownloadBusy] = useState<Record<string, { progress: number; label: string } | null>>({});
 
   const refresh = async () => {
     setLoading(true);
@@ -228,22 +229,45 @@ const FirebaseMultiManager = ({ glassCard, btnPrimary, btnSecondary }: Props) =>
 
   // ─── Full-JSON downloads ────────────────────────────────────────────────
   const onDownloadFullMain = async () => {
+    const key = "MAIN";
     try {
-      toast.info("Reading full MAIN database…");
+      setDownloadBusy((prev) => ({ ...prev, [key]: { progress: 5, label: "Reading database…" } }));
       const data = await pullMainFullJson();
       const stamp = new Date().toISOString().slice(0, 10);
-      triggerJsonDownload(`main-firebase-FULL-${stamp}.json`, data);
+      await streamJsonDownload(`main-firebase-FULL-${stamp}.json`, data, (info) => {
+        const label = info.stage === "preparing"
+          ? "Preparing JSON…"
+          : info.stage === "writing"
+            ? `Saving file… ${info.progress}%`
+            : "Done";
+        setDownloadBusy((prev) => ({ ...prev, [key]: { progress: info.progress, label } }));
+      });
       toast.success("Main full JSON downloaded");
-    } catch (e: any) { toast.error("Download failed: " + (e?.message || e)); }
+    } catch (e: any) {
+      toast.error("Download failed: " + (e?.message || e));
+    } finally {
+      setTimeout(() => setDownloadBusy((prev) => ({ ...prev, [key]: null })), 1200);
+    }
   };
   const onDownloadFullExtra = async (cfg: ExtraFirebaseConfig) => {
     try {
-      toast.info(`Reading ${cfg.displayName}…`);
+      setDownloadBusy((prev) => ({ ...prev, [cfg.id]: { progress: 5, label: `Reading ${cfg.displayName}…` } }));
       const data = await pullExtraFullJson(cfg);
       const stamp = new Date().toISOString().slice(0, 10);
-      triggerJsonDownload(`${cfg.displayName.replace(/\W+/g, "_")}-FULL-${stamp}.json`, data);
+      await streamJsonDownload(`${cfg.displayName.replace(/\W+/g, "_")}-FULL-${stamp}.json`, data, (info) => {
+        const label = info.stage === "preparing"
+          ? "Preparing JSON…"
+          : info.stage === "writing"
+            ? `Saving file… ${info.progress}%`
+            : "Done";
+        setDownloadBusy((prev) => ({ ...prev, [cfg.id]: { progress: info.progress, label } }));
+      });
       toast.success(`${cfg.displayName} full JSON downloaded`);
-    } catch (e: any) { toast.error("Download failed: " + (e?.message || e)); }
+    } catch (e: any) {
+      toast.error("Download failed: " + (e?.message || e));
+    } finally {
+      setTimeout(() => setDownloadBusy((prev) => ({ ...prev, [cfg.id]: null })), 1200);
+    }
   };
 
   // ─── Storage analytics ──────────────────────────────────────────────────
@@ -382,8 +406,19 @@ const FirebaseMultiManager = ({ glassCard, btnPrimary, btnSecondary }: Props) =>
           </div>
         </div>
         <StorageCard stats={stats.MAIN} busy={!!statsBusy.MAIN} onAnalyze={analyzeMain} />
+        {downloadBusy.MAIN && (
+          <div className="space-y-1.5 rounded-lg border border-amber-400/20 bg-black/30 px-3 py-2">
+            <div className="flex items-center justify-between text-[10.5px] text-white/75">
+              <span>{downloadBusy.MAIN.label}</span>
+              <span className="font-mono">{downloadBusy.MAIN.progress}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all" style={{ width: `${Math.max(4, downloadBusy.MAIN.progress)}%` }} />
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
-          <button onClick={onDownloadFullMain} className={btnSecondary + " flex items-center justify-center gap-1.5 !py-2 !text-[11px]"}>
+          <button onClick={onDownloadFullMain} disabled={!!downloadBusy.MAIN} className={btnSecondary + " flex items-center justify-center gap-1.5 !py-2 !text-[11px] disabled:opacity-50"}>
             <Download size={12} /> Download FULL JSON
           </button>
           <button onClick={onUploadFullMain} className={btnSecondary + " flex items-center justify-center gap-1.5 !py-2 !text-[11px]"}>
@@ -432,10 +467,21 @@ const FirebaseMultiManager = ({ glassCard, btnPrimary, btnSecondary }: Props) =>
 
               {/* Storage analytics */}
               <StorageCard stats={stats[cfg.id]} busy={!!statsBusy[cfg.id]} onAnalyze={() => analyzeExtra(cfg)} />
+              {downloadBusy[cfg.id] && (
+                <div className="space-y-1.5 rounded-lg border border-emerald-400/15 bg-black/25 px-3 py-2">
+                  <div className="flex items-center justify-between text-[10.5px] text-white/75">
+                    <span>{downloadBusy[cfg.id]?.label}</span>
+                    <span className="font-mono">{downloadBusy[cfg.id]?.progress}%</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <div className="h-full bg-gradient-to-r from-emerald-400 to-sky-400 transition-all" style={{ width: `${Math.max(4, downloadBusy[cfg.id]?.progress || 0)}%` }} />
+                  </div>
+                </div>
+              )}
 
               {/* Full-JSON actions */}
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => onDownloadFullExtra(cfg)} className={btnSecondary + " flex items-center justify-center gap-1.5 !py-2 !text-[11px]"}>
+                <button onClick={() => onDownloadFullExtra(cfg)} disabled={!!downloadBusy[cfg.id]} className={btnSecondary + " flex items-center justify-center gap-1.5 !py-2 !text-[11px] disabled:opacity-50"}>
                   <Download size={12} /> Download FULL JSON
                 </button>
                 <button onClick={() => onUploadFullExtra(cfg)} className={btnSecondary + " flex items-center justify-center gap-1.5 !py-2 !text-[11px]"}>

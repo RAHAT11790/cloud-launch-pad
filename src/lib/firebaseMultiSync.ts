@@ -224,6 +224,53 @@ export function triggerJsonDownload(filename: string, data: any) {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
+export async function streamJsonDownload(
+  filename: string,
+  data: any,
+  onProgress?: (info: { stage: "preparing" | "writing" | "done"; progress: number; writtenBytes: number; totalBytes: number }) => void,
+) {
+  const encoder = new TextEncoder();
+  const json = JSON.stringify(data, null, 2);
+  const totalBytes = encoder.encode(json).length;
+  onProgress?.({ stage: "preparing", progress: 0, writtenBytes: 0, totalBytes });
+
+  if (typeof window === "undefined") {
+    triggerJsonDownload(filename, data);
+    onProgress?.({ stage: "done", progress: 100, writtenBytes: totalBytes, totalBytes });
+    return;
+  }
+
+  const fileStreamApi = (window as any).showSaveFilePicker;
+  if (typeof fileStreamApi === "function") {
+    const handle = await fileStreamApi({
+      suggestedName: filename,
+      types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+    });
+    const writable = await handle.createWritable();
+    const chunkSize = 256 * 1024;
+    let writtenBytes = 0;
+    for (let i = 0; i < json.length; i += chunkSize) {
+      const chunk = json.slice(i, i + chunkSize);
+      const encoded = encoder.encode(chunk);
+      await writable.write(encoded);
+      writtenBytes += encoded.length;
+      onProgress?.({
+        stage: "writing",
+        progress: totalBytes > 0 ? Math.min(99, Math.round((writtenBytes / totalBytes) * 100)) : 100,
+        writtenBytes,
+        totalBytes,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    await writable.close();
+    onProgress?.({ stage: "done", progress: 100, writtenBytes: totalBytes, totalBytes });
+    return;
+  }
+
+  triggerJsonDownload(filename, data);
+  onProgress?.({ stage: "done", progress: 100, writtenBytes: totalBytes, totalBytes });
+}
+
 // ============================================================
 // FULL-DB operations (entire RTDB tree)
 // ============================================================

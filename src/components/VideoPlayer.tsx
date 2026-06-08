@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
+import AdsterraAdManager from "@/components/AdsterraAdManager";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
@@ -2087,10 +2088,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     instantSwitchRef.current = true;
     sourceBaseRef.current = src;
     activeSourceBaseRef.current = src;
+    premiumServerApplied.current = false;
     const resolvedSrc = resolvePlaybackSrc(src);
     setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
     setManualServerSelected(false);
+    setActiveServerIndex(0);
     retryAttemptsRef.current.clear();
     setVideoError(false);
     failedSrcsRef.current.clear();
@@ -2981,6 +2984,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               onDragStart={(e) => e.preventDefault()}
             />
           )}
+          <AdsterraAdManager isPremium={isPremium} videoEl={videoRef.current} />
 
           {subtitleOverlayText && !isEmbedPlayback && (
             <div
