@@ -3146,7 +3146,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               onMouseEnter={() => { if (anOverlayTimer.current) clearTimeout(anOverlayTimer.current); }}
               onMouseLeave={scheduleAnOverlayHide}
             >
-              <button onClick={(e) => { e.stopPropagation(); stopAndClosePlayer(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center bg-black/70 backdrop-blur" aria-label="Back">
+              <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center bg-black/70 backdrop-blur" aria-label="Back">
                 <ArrowLeft className="w-4 h-4 text-white" />
               </button>
               <div className="flex items-center gap-2">
