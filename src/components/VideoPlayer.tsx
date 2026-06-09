@@ -2924,7 +2924,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       {/* Back arrow lives inside the controls overlay below, so it hides/shows with controls */}
 
 
-      <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full px-0 pb-6 pt-3'}`}>
+      <div className={`w-full ${isFullscreen ? 'h-full p-0' : 'max-w-full px-0 pb-6 pt-0'}`}>
 
         {/* Video Container - will-change for GPU compositing */}
         <div
