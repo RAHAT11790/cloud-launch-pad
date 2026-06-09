@@ -2082,8 +2082,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   }, [activeServerIndex, anime?.language, applyServerDomain, currentSrc, manualServerSelected, propAudioTracks, resolvePlaybackSrc, src]);
 
+  // Track the last `src` we actually reacted to. Without this guard the effect
+  // re-runs whenever qualityOptions / resolvePlaybackSrc identity changes
+  // (every parent re-render), which would clobber a user-selected quality back
+  // to "Auto" within ~1s of switching. We only want a true episode change to
+  // reset the player state.
+  const lastSrcRef = useRef<string>("");
   useEffect(() => {
     if (!playbackRouteReady) return;
+    if (lastSrcRef.current === src) return; // src didn't actually change → do nothing
+    lastSrcRef.current = src;
     // Ultra-fast episode switch: do NOT pause/blank the player. Just swap src
     // and let the video element load the new source while keeping the UI alive.
     instantSwitchRef.current = true;
