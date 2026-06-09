@@ -1962,12 +1962,13 @@ const Index = () => {
       const eIdx = item.episodeInfo.epIdx ?? (item.episodeInfo.episode - 1);
       let src = "";
       let subtitle = "";
+      let episode: Episode | undefined;
       let qualityOptions: { label: string; src: string }[] = [];
         const selectedLanguage = item.language || anime.baseLanguage || anime.language || "";
         const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, selectedLanguage);
         if (resolvedSeasons) {
           const season = resolvedSeasons[sIdx];
-        const episode = season.episodes[eIdx];
+        episode = season.episodes[eIdx];
         src = getEpisodeSrc(episode);
         subtitle = `${season.name} - Episode ${episode.episodeNumber}`;
         if (episode.link480) qualityOptions.push({ label: "480p", src: episode.link480 });
