@@ -1,0 +1,15 @@
+# RS Anime
+
+> Free anime streaming site for series, movies, donghua, cartoons, and latest episode updates.
+
+RS Anime is a public anime streaming website focused on fast playback, Hindi dubbed content, English subtitles, multi-audio support, and daily episode updates.
+
+## Pages
+- [Home](/): Main discovery page for anime, movies, ongoing releases, and featured content.
+- [Search](/search): Public search experience for finding anime titles.
+- [Notifications](/notifications): Public updates and release notifications.
+- [About](/?page=about): About RS Anime and service details.
+- [Privacy Policy](/?page=privacy): Privacy and data-use details.
+
+## Optional
+- [Telegram Channel](https://t.me/cartoonfunny03): Official channel for release updates and announcements.
