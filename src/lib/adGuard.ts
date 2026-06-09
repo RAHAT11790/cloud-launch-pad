@@ -89,18 +89,48 @@ function buildOverlay(): HTMLDivElement {
   return el;
 }
 
+let pauseEnforceTimer: number | null = null;
+let onPlayHandler: ((e: Event) => void) | null = null;
+
+function forcePauseAllVideos() {
+  try {
+    const vids = document.querySelectorAll("video");
+    vids.forEach((v) => {
+      try {
+        const el = v as HTMLVideoElement;
+        if (!el.paused) el.pause();
+        el.muted = true;
+      } catch {}
+    });
+  } catch {}
+}
+
 function showOverlay(videoEl: HTMLVideoElement | null) {
-  if (overlayEl && overlayEl.isConnected) return;
+  if (overlayEl && overlayEl.isConnected) {
+    forcePauseAllVideos();
+    return;
+  }
   pausedVideoEl = videoEl;
-  try { videoEl?.pause(); } catch {}
+  forcePauseAllVideos();
   overlayEl = buildOverlay();
   document.body.appendChild(overlayEl);
+
+  // Aggressively keep ALL videos paused while the overlay is visible —
+  // re-pause on any play() attempt and poll as a safety net.
+  onPlayHandler = (e: Event) => {
+    try { (e.target as HTMLVideoElement)?.pause(); } catch {}
+  };
+  document.addEventListener("play", onPlayHandler, true);
+  if (pauseEnforceTimer !== null) window.clearInterval(pauseEnforceTimer);
+  pauseEnforceTimer = window.setInterval(forcePauseAllVideos, 500);
 }
 
 function hideOverlay() {
   try { overlayEl?.remove(); } catch {}
   overlayEl = null;
-  try { pausedVideoEl?.play().catch(() => {}); } catch {}
+  if (pauseEnforceTimer !== null) { window.clearInterval(pauseEnforceTimer); pauseEnforceTimer = null; }
+  if (onPlayHandler) { document.removeEventListener("play", onPlayHandler, true); onPlayHandler = null; }
+  // Do NOT auto-resume — require an explicit user retry/refresh.
 }
 
 async function runCheck(isRetry = false) {
