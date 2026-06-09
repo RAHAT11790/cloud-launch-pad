@@ -527,6 +527,27 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   const premiumDaysLeft = premiumExpiry ? Math.max(0, Math.ceil((premiumExpiry - Date.now()) / 86400000)) : 0;
   const isPremiumExpiringSoon = isPremium && premiumDaysLeft <= 3;
 
+  useEffect(() => {
+    if (!userId) return;
+    const unsubUser = onValue(ref(db, `users/${userId}`), (snap) => {
+      const data = snap.val() || {};
+      const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+      const remoteName = String(data.name || "").trim();
+
+      if (remotePhoto) {
+        setProfilePhoto(remotePhoto);
+        try { localStorage.setItem("rs_profile_photo", remotePhoto); } catch {}
+      }
+      if (remoteName && remoteName !== "Guest User") {
+        setDisplayName(remoteName);
+        setTempName(remoteName);
+        try { localStorage.setItem("rs_display_name", remoteName); } catch {}
+      }
+    });
+
+    return () => unsubUser();
+  }, [userId]);
+
   const handleDeleteThisPhoneLogin = useCallback(async () => {
     try {
       const uid = getUserId();
@@ -666,6 +687,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
       const url = await uploadToImgbb(file);
       setProfilePhoto(url);
       localStorage.setItem("rs_profile_photo", url);
+      if (userId) {
+        update(ref(db, `users/${userId}`), { profilePhoto: url, photoUrl: url, avatar: url }).catch(() => {});
+      }
       toast.success("✅ Profile photo uploaded!");
     } catch {
       // Fallback to base64 if imgbb fails
@@ -674,6 +698,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
         const result = ev.target?.result as string;
         setProfilePhoto(result);
         localStorage.setItem("rs_profile_photo", result);
+        if (userId) {
+          update(ref(db, `users/${userId}`), { profilePhoto: result, photoUrl: result, avatar: result }).catch(() => {});
+        }
       };
       reader.readAsDataURL(file);
       toast.error("ImgBB failed, saved locally");
@@ -684,11 +711,17 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   const removePhoto = () => {
     setProfilePhoto(null);
     localStorage.removeItem("rs_profile_photo");
+    if (userId) {
+      update(ref(db, `users/${userId}`), { profilePhoto: null, photoUrl: null, avatar: null }).catch(() => {});
+    }
   };
 
   const saveName = () => {
     setDisplayName(tempName);
     localStorage.setItem("rs_display_name", tempName);
+    if (userId && tempName.trim()) {
+      update(ref(db, `users/${userId}`), { name: tempName.trim() }).catch(() => {});
+    }
     setActivePanel("main");
   };
 
