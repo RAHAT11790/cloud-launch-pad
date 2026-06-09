@@ -2608,6 +2608,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       cancelAnimationFrame(rafId.current);
       if (stalledTimer) clearTimeout(stalledTimer);
       v.removeEventListener("loadedmetadata", onLoaded);
+      v.removeEventListener("timeupdate", onTimeUpdate);
+      v.removeEventListener("durationchange", onDurationChange);
       v.removeEventListener("play", onPlay);
       v.removeEventListener("pause", onPause);
       v.removeEventListener("ended", onEnded);
