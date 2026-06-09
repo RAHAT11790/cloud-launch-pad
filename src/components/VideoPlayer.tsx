@@ -203,6 +203,7 @@ interface VideoPlayerProps {
   noServerSwitch?: boolean;
   seasons?: Season[];
   currentSeasonIdx?: number;
+  currentEpisodeIdx?: number;
   onSeasonChange?: (idx: number) => void;
   suggestedAnime?: AnimeItem[];
   onSuggestedClick?: (anime: AnimeItem) => void;
@@ -278,7 +279,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
   // Removed preload anime character image - no longer needed
@@ -1381,7 +1382,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         fbGet(histRef).then((snap: any) => {
           if (snap.exists()) {
             const data = snap.val();
-            const resumeFrom = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : data.currentTime;
+            const hasExplicitResume = typeof initialSeekTime === "number" && initialSeekTime > 0;
+            const storedSeasonIdx = data?.episodeInfo?.seasonIdx ?? (typeof data?.episodeInfo?.season === "number" ? data.episodeInfo.season - 1 : undefined);
+            const storedEpisodeIdx = data?.episodeInfo?.epIdx ?? (typeof data?.episodeInfo?.episode === "number" ? data.episodeInfo.episode - 1 : undefined);
+            const episodeMatches = currentSeasonIdx === undefined && currentEpisodeIdx === undefined
+              ? storedSeasonIdx === undefined && storedEpisodeIdx === undefined
+              : storedSeasonIdx === currentSeasonIdx && storedEpisodeIdx === currentEpisodeIdx;
+            const resumeFrom = hasExplicitResume ? initialSeekTime : (episodeMatches ? data.currentTime : 0);
             if (resumeFrom && data.duration && (resumeFrom / data.duration) < 0.95) {
               pendingSeek.current = resumeFrom;
             }
@@ -1389,7 +1396,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         });
       });
     } catch {}
-  }, [animeId, initialSeekTime]);
+  }, [animeId, currentEpisodeIdx, currentSeasonIdx, initialSeekTime]);
 
   // Build quality list - 4K is premium-only
   const is4KLabel = (label: string) => /4k|2160|uhd/i.test(label);
