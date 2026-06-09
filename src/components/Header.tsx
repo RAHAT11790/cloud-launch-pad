@@ -96,6 +96,24 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
 
     // Update online status only for real users
     if (id) {
+      const userUnsub = onValue(ref(db, `users/${id}`), (snap) => {
+        const data = snap.val() || {};
+        const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+        const remoteName = String(data.name || "").trim();
+        if (remotePhoto) {
+          try { localStorage.setItem("rs_profile_photo", remotePhoto); } catch {}
+          setProfilePhoto(remotePhoto);
+        }
+        if (remoteName && remoteName !== "Guest User") {
+          try {
+            localStorage.setItem("rs_display_name", remoteName);
+            const rawUser = localStorage.getItem("rsanime_user");
+            const parsedUser = rawUser ? JSON.parse(rawUser) : {};
+            localStorage.setItem("rsanime_user", JSON.stringify({ ...parsedUser, name: remoteName }));
+          } catch {}
+        }
+      });
+
       const updateOnline = () => {
         update(ref(db, `users/${id}`), { online: true, lastSeen: Date.now() }).catch(() => {});
       };
@@ -110,6 +128,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       return () => {
         clearInterval(interval);
         clearInterval(heartbeat);
+        userUnsub();
         window.removeEventListener("beforeunload", onUnload);
       };
     }
