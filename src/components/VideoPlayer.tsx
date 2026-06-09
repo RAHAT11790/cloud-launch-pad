@@ -2564,7 +2564,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (v.readyState < 3) setIsBuffering(true);
       }, 1500);
     };
+    const onTimeUpdate = () => {
+      const ct = v.currentTime;
+      const dur = v.duration;
+      if (ct > 0) lastKnownTime = ct;
+      if (progressRef.current && dur > 0) {
+        progressRef.current.style.width = `${(ct / dur) * 100}%`;
+      }
+      if (timeDisplayRef.current && dur > 0) {
+        timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
+      }
+      const now = performance.now();
+      if (now - lastNativeSyncRef.current >= 1000) {
+        lastNativeSyncRef.current = now;
+        setCurrentTime(ct);
+        if (Number.isFinite(dur) && dur > 0) setDuration(dur);
+      }
+    };
+    const onDurationChange = () => {
+      if (Number.isFinite(v.duration) && v.duration > 0) setDuration(v.duration);
+    };
     v.addEventListener("loadedmetadata", onLoaded);
+    v.addEventListener("timeupdate", onTimeUpdate);
+    v.addEventListener("durationchange", onDurationChange);
     v.addEventListener("play", onPlay);
     v.addEventListener("pause", onPause);
     v.addEventListener("ended", onEnded);
