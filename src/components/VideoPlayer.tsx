@@ -1348,22 +1348,33 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
   }, []);
 
-  // Save progress every 10s
+  // Save progress for both native video and embed playback.
   useEffect(() => {
     if (!onSaveProgress) return;
     const v = videoRef.current;
-    if (!v) return;
-    const saveInterval = setInterval(() => {
-      if (v.currentTime > 0 && v.duration > 0) onSaveProgress(v.currentTime, v.duration);
-    }, 10000);
-    const onPause = () => { if (v.currentTime > 0 && v.duration > 0) onSaveProgress(v.currentTime, v.duration); };
-    v.addEventListener("pause", onPause);
+    const saveNow = () => {
+      if (isEmbedPlayback) {
+        const cur = embedTimeRef.current.currentTime || 0;
+        const dur = embedTimeRef.current.duration || 0;
+        if (cur > 0 && dur > 0) onSaveProgress(cur, dur);
+        return;
+      }
+      if (v && v.currentTime > 0 && v.duration > 0) {
+        onSaveProgress(v.currentTime, v.duration);
+      }
+    };
+
+    const saveInterval = setInterval(saveNow, 5000);
+    if (v) v.addEventListener("pause", saveNow);
+    window.addEventListener("pagehide", saveNow);
+
     return () => {
       clearInterval(saveInterval);
-      v.removeEventListener("pause", onPause);
-      if (v.currentTime > 0 && v.duration > 0) onSaveProgress(v.currentTime, v.duration);
+      if (v) v.removeEventListener("pause", saveNow);
+      window.removeEventListener("pagehide", saveNow);
+      saveNow();
     };
-  }, [onSaveProgress]);
+  }, [currentSrc, isEmbedPlayback, onSaveProgress]);
 
   // Restore watch position (per-account)
   useEffect(() => {
@@ -2134,6 +2145,51 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }, 80);
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, initialSeekTime]);
+
+  const applyPendingSeek = useCallback((targetVideo?: HTMLVideoElement | null) => {
+    const v = targetVideo || videoRef.current;
+    const target = pendingSeek.current;
+    if (!v || target === null) return false;
+    if (!Number.isFinite(target) || target < 0) {
+      pendingSeek.current = null;
+      return false;
+    }
+
+    const hasSeekContext = v.readyState >= 1 || (Number.isFinite(v.duration) && v.duration > 0);
+    if (!hasSeekContext) return false;
+
+    const maxTarget = Number.isFinite(v.duration) && v.duration > 0
+      ? Math.max(0, v.duration - 0.25)
+      : target;
+    const seekTo = Math.max(0, Math.min(target, maxTarget));
+
+    try {
+      v.currentTime = seekTo;
+      if (seekTo === 0 || Math.abs(v.currentTime - seekTo) <= 1.5) {
+        pendingSeek.current = null;
+        setCurrentTime(seekTo);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || isEmbedPlayback || pendingSeek.current === null) return;
+    if (applyPendingSeek(v)) return;
+
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      if (applyPendingSeek(v) || attempts >= 25) {
+        window.clearInterval(timer);
+      }
+    }, 200);
+
+    return () => window.clearInterval(timer);
+  }, [applyPendingSeek, currentSrc, isEmbedPlayback]);
 
   // Loader follows real buffering state but with anti-flicker guards:
   // - Show immediately when buffering starts.
