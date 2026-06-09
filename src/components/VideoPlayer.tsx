@@ -2472,10 +2472,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     let lastKnownTime = 0;
     const onLoaded = () => {
       setDuration(v.duration);
-      if (pendingSeek.current !== null) {
-        v.currentTime = pendingSeek.current;
-        pendingSeek.current = null;
-      }
+      applyPendingSeek(v);
       // Only autoplay if ad gate is not active
       if (!adGateActive) {
         // Keep native audio path; do not force muted autoplay fallback
@@ -2610,10 +2607,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setVideoError(false);
       setIsBuffering(false);
       // Also apply pending seek here in case loadedmetadata didn't fire
-      if (pendingSeek.current !== null && v.duration > 0) {
-        v.currentTime = pendingSeek.current;
-        pendingSeek.current = null;
-      }
+      applyPendingSeek(v);
       if (v.paused && !adGateActive) {
         // Keep native audio path; manual user interaction will start playback if autoplay is blocked
         v.play().catch(() => {});
@@ -2713,7 +2707,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex]);
+  }, [applyPendingSeek, currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
@@ -2888,13 +2882,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return;
     }
     const v = videoRef.current;
-    pendingSeek.current = v?.currentTime || 0;
+    pendingSeek.current = isEmbedPlayback ? (embedTimeRef.current.currentTime || 0) : (v?.currentTime || 0);
     setIsBuffering(true);
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);
     setShowSettings(false);
 
-  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
+  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain, isEmbedPlayback]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
