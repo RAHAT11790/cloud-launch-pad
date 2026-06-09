@@ -450,6 +450,14 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         await set(ref(db, `users/${emailKey}`), {
           name: name.trim(), email: email.trim(), createdAt: Date.now(), online: true, lastSeen: Date.now(), id: userId, authProvider: "email",
         });
+        await update(ref(db, `users/${userId}`), {
+          id: userId,
+          name: name.trim(),
+          email: email.trim(),
+          online: true,
+          lastSeen: Date.now(),
+          authProvider: "email",
+        }).catch(() => {});
         localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: name.trim(), email: email.trim() }));
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         localStorage.setItem("rs_display_name", name.trim());
@@ -483,6 +491,10 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           await update(ref(db, `users/${uid}`), {
             name: displayName, email: loginEmail, online: true, lastSeen: Date.now(), authProvider: "email",
           });
+          const currentPhoto = String(finalUserData.profilePhoto || finalUserData.photoUrl || finalUserData.avatar || "").trim();
+          if (currentPhoto) {
+            localStorage.setItem("rs_profile_photo", currentPhoto);
+          }
         } catch (e) {}
         toast.success(`Welcome back, ${displayName}!`);
         onLogin(uid);
