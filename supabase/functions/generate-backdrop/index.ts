@@ -181,16 +181,21 @@ Quality bar: must look like it was made by a top-tier anime marketing studio. NO
 - The anime title "${upperTitle}" must appear large and stylized, integrated naturally into the composition. Treat it like the official logo of the show — choose typography that fits the genre (brushstroke for action, elegant serif for romance, neon for sci-fi, etc.).
 - Optional small Japanese kanji subtitle.
 
-═══════ STYLE ═══════
-- Ultra-detailed official anime key visual, 4K HDR, sharp linework, clean anatomy.
-- Cinematic genre-matched lighting and atmosphere.
-- Rich cinematic colors, deep blacks, vibrant highlights, anime-accurate palette.
+═══════ STYLE — JAPANESE ANIME ONLY (HARD LOCK) ═══════
+- MUST be authentic Japanese anime key-visual art (ufotable / MAPPA / Wit Studio / A-1 / Madhouse / Bones quality).
+- Ultra-detailed official anime key visual, 4K HDR, sharp linework, cel-shading, realistic anime proportions, expressive anime eyes.
+- Cinematic genre-matched lighting, deep blacks, vibrant highlights, anime-accurate palette.
 
-═══════ STRICT NO-GO ═══════
+═══════ STRICT NO-GO — DO NOT VIOLATE ═══════
+- ❌ ABSOLUTELY NO Western cartoon style (no Disney, Pixar, DreamWorks, Cartoon Network, Nickelodeon, Simpsons, Family Guy, Adventure Time, Steven Universe look).
+- ❌ NO 3D Pixar/CGI, NO chibi, NO super-deformed, NO kiddie/preschool/baby cartoon style, NO mascot art, NO rubber-hose limbs, NO oversized round heads.
+- ❌ NO flat vector cartoon, NO sticker art, NO coloring-book outlines, NO American comic-book style.
+- ❌ NO childish, silly, goofy, or cute-baby tone — this is a mature cinematic anime banner.
 - NO year / release date numbers anywhere.
 - NO deformed faces, extra fingers, blurry textures.
 - NO generic stock AI typography — title must look like an official anime logo treatment.
 - DO NOT replicate the reference image's layout or background — only borrow the characters.
+- IF THE OUTPUT LOOKS LIKE A CARTOON OR KIDS SHOW IN ANY WAY, IT IS WRONG — produce only true Japanese anime style.
 
 OUTPUT: one ultra-professional 16:9 anime promotional banner, original art-directed composition, with the official characters from the reference preserved, genre-faithful mood, stylized "${upperTitle}" title, RS ANIME crown badge top-right, Telegram + Website chips bottom-left.`;
 }
