@@ -2243,6 +2243,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }, 0);
   }, [clearHideTimer, closeInlineSheets, onClose]);
 
+  // Back-button behavior: when in fullscreen, first exit fullscreen; otherwise close the player.
+  const handleBackPress = useCallback(() => {
+    const inFs = !!document.fullscreenElement || isFullscreen;
+    if (inFs) {
+      try { (screen.orientation as any).unlock?.(); } catch {}
+      try {
+        const p = document.exitFullscreen?.();
+        if (p && typeof (p as Promise<void>).catch === "function") (p as Promise<void>).catch(() => {});
+      } catch {}
+      setIsFullscreen(false);
+      return;
+    }
+    stopAndClosePlayer();
+  }, [isFullscreen, stopAndClosePlayer]);
+
   // Auto-close when user leaves the page/app — pause when tab hidden, fully close on pagehide.
   useEffect(() => {
     const onVisibility = () => {
