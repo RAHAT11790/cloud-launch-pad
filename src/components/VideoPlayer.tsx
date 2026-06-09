@@ -3191,7 +3191,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             >
               {/* Top controls */}
               <div className="flex justify-between items-center gap-1.5 p-2.5 sm:p-3">
-                <button onClick={(e) => { e.stopPropagation(); stopAndClosePlayer(); }} className="player-touch-button h-9 w-9 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
+                <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button h-9 w-9 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
                   <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div className="flex items-center gap-1.5">
