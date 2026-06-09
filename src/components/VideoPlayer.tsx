@@ -2497,7 +2497,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           } else {
             setCurrentSrc(newFallbackSrc);
           }
-          setCurrentQuality(nextOption.label);
+          // Keep the user-chosen quality label sticky on fallback. Only update
+          // label if the user was on "Auto" (i.e. no explicit selection).
+          if (currentQuality === "Auto") setCurrentQuality(nextOption.label);
         } else {
           // ===== AUTO SERVER FAILOVER =====
           // All quality/route fallbacks exhausted — try next server automatically
