@@ -1856,9 +1856,30 @@ const Index = () => {
 
             if (cEp.link && !cEp.link.startsWith('animesalt://')) {
               // Custom link - use regular video player
+              const qualityOptions: { label: string; src: string }[] = [];
+              if (cEp.link480) qualityOptions.push({ label: "480p", src: cEp.link480 });
+              if (cEp.link720) qualityOptions.push({ label: "720p", src: cEp.link720 });
+              if (cEp.link1080) qualityOptions.push({ label: "1080p", src: cEp.link1080 });
+              if (cEp.link4k) qualityOptions.push({ label: "4K", src: cEp.link4k });
+              const nextState = {
+                src: cEp.link,
+                title: anime.title,
+                subtitle: `${cSeason.name} - Episode ${cEp.episodeNumber || cEp.number || eIdx + 1}`,
+                anime: fullAnime,
+                seasonIdx: sIdx,
+                epIdx: eIdx,
+                qualityOptions: qualityOptions.length > 0 ? qualityOptions : undefined,
+                resumeTime: item.currentTime || 0,
+                nextEpisodeSrc: getEpisodeSrc(fullAnime.seasons?.[sIdx]?.episodes?.[eIdx + 1] as Episode),
+              };
+              playerStateRef.current = nextState;
+              setPlayerState(nextState);
               addToWatchHistory(anime, sIdx, eIdx, true);
               setSelectedAnime(fullAnime);
-              handlePlay(fullAnime, sIdx, eIdx);
+              const targetWatchRoute = buildWatchRoute(anime.id, sIdx, eIdx);
+              if (`${location.pathname}${location.search}` !== targetWatchRoute) {
+                navigate(targetWatchRoute);
+              }
               return;
             }
 
@@ -1923,9 +1944,30 @@ const Index = () => {
 
               if (override?.link) {
                 const fullAnime: AnimeItem = { ...anime, seasons: buildSeasons() };
+                const qualityOptions: { label: string; src: string }[] = [];
+                if (override.link480) qualityOptions.push({ label: "480p", src: override.link480 });
+                if (override.link720) qualityOptions.push({ label: "720p", src: override.link720 });
+                if (override.link1080) qualityOptions.push({ label: "1080p", src: override.link1080 });
+                if (override.link4k) qualityOptions.push({ label: "4K", src: override.link4k });
+                const nextState = {
+                  src: override.link,
+                  title: anime.title,
+                  subtitle: `${season.name} - Episode ${ep.number}`,
+                  anime: fullAnime,
+                  seasonIdx: sIdx,
+                  epIdx: eIdx,
+                  qualityOptions: qualityOptions.length > 0 ? qualityOptions : undefined,
+                  resumeTime: item.currentTime || 0,
+                  nextEpisodeSrc: getEpisodeSrc(fullAnime.seasons?.[sIdx]?.episodes?.[eIdx + 1] as Episode),
+                };
+                playerStateRef.current = nextState;
+                setPlayerState(nextState);
                 addToWatchHistory(anime, sIdx, eIdx, true);
                 setSelectedAnime(fullAnime);
-                handlePlay(fullAnime, sIdx, eIdx);
+                const targetWatchRoute = buildWatchRoute(anime.id, sIdx, eIdx);
+                if (`${location.pathname}${location.search}` !== targetWatchRoute) {
+                  navigate(targetWatchRoute);
+                }
                 return;
               }
 
