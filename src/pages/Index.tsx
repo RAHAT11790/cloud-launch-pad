@@ -2105,6 +2105,45 @@ const Index = () => {
     setIsLoggedIn(true);
   };
 
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    let cancelled = false;
+
+    const syncProfileFromRemote = async () => {
+      try {
+        const raw = localStorage.getItem("rsanime_user");
+        const user = raw ? JSON.parse(raw) : null;
+        const userId = user?.id;
+        if (!userId) return;
+
+        const snap = await get(ref(db, `users/${userId}`));
+        if (!snap.exists() || cancelled) return;
+        const data = snap.val() || {};
+
+        const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+        const remoteName = String(data.name || "").trim();
+
+        if (remotePhoto) {
+          localStorage.setItem("rs_profile_photo", remotePhoto);
+        }
+        if (remoteName && remoteName !== "Guest User") {
+          localStorage.setItem("rs_display_name", remoteName);
+          localStorage.setItem("rsanime_user", JSON.stringify({
+            ...user,
+            name: remoteName,
+          }));
+        }
+      } catch {}
+    };
+
+    void syncProfileFromRemote();
+    window.addEventListener("focus", syncProfileFromRemote);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", syncProfileFromRemote);
+    };
+  }, [isLoggedIn]);
+
   const handleLogout = async () => {
     try {
       const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
