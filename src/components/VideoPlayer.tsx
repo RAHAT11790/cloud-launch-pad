@@ -3,6 +3,7 @@ import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
+import { forceReloadAdsterraSlots, getAdsterraLastInteractionAt, loadAdsterraSlots } from "@/lib/adsterraAds";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
@@ -11,7 +12,7 @@ import {
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
 import logoImg from "@/assets/logo.png";
-import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, isAdGateCooldownActive, markAdGateShownNow, type AdService } from "@/lib/unlockAccess";
+import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurrentDeviceFreeAccessExpiry, getLocalUserId, isAdGateCooldownActive, isPlayerAdCooldownActive, markAdGateShownNow, markPlayerAdClickNow, type AdService } from "@/lib/unlockAccess";
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
 import { guestStore, isGuest } from "@/lib/guestStore";
@@ -32,6 +33,15 @@ interface QualityOption {
   label: string;
   src: string;
 }
+
+const WATCH_HISTORY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+const buildWatchHistoryKey = (animeId?: string, seasonIdx?: number, epIdx?: number) => {
+  const base = String(animeId || "").trim();
+  if (!base) return "";
+  if (seasonIdx === undefined && epIdx === undefined) return base;
+  return `${base}__s${seasonIdx ?? 0}__e${epIdx ?? 0}`;
+};
 
 interface VideoServerOption {
   name: string;
@@ -326,6 +336,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
   const [shareFallback, setShareFallback] = useState<{ url: string; title: string } | null>(null);
+  const resumeHistoryKey = useMemo(() => buildWatchHistoryKey(animeId, currentSeasonIdx, currentEpisodeIdx), [animeId, currentEpisodeIdx, currentSeasonIdx]);
 
   // ===== AN iframe minimal overlay auto-hide =====
   // Buttons start visible, then auto-hide after 3s. Tapping the iframe area
@@ -1328,6 +1339,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [buildShareLinkForEpisode, shareLink, title]);
 
   const handleOpenAdLink = useCallback(async (url: string, _service?: AdService) => {
+    markPlayerAdClickNow();
     const { openExternalBrowser, openTelegramDeepLink } = await import("@/lib/openExternal");
     try {
       const fb = await import("@/lib/firebase");
@@ -1378,7 +1390,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   // Restore watch position (per-account)
   useEffect(() => {
-    if (!animeId) return;
+    if (!animeId || !resumeHistoryKey) return;
     pendingSeek.current = typeof initialSeekTime === "number" ? Math.max(0, initialSeekTime) : 0;
     if (typeof initialSeekTime === "number" && initialSeekTime > 0) {
       pendingSeek.current = initialSeekTime;
@@ -1389,7 +1401,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const userId = JSON.parse(user).id;
       if (!userId) return;
       import("@/lib/firebase").then(({ get: fbGet, ref: fbRef, db: fbDb }) => {
-        const histRef = fbRef(fbDb, `users/${userId}/watchHistory/${animeId}`);
+        const histRef = fbRef(fbDb, `users/${userId}/watchHistory/${resumeHistoryKey}`);
         fbGet(histRef).then((snap: any) => {
           if (snap.exists()) {
             const data = snap.val();
@@ -1400,14 +1412,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               ? storedSeasonIdx === undefined && storedEpisodeIdx === undefined
               : storedSeasonIdx === currentSeasonIdx && storedEpisodeIdx === currentEpisodeIdx;
             const resumeFrom = hasExplicitResume ? initialSeekTime : (episodeMatches ? data.currentTime : 0);
-            if (resumeFrom && data.duration && (resumeFrom / data.duration) < 0.95) {
+            const withinWindow = !data?.watchedAt || Date.now() - Number(data.watchedAt) <= WATCH_HISTORY_TTL_MS;
+            if (withinWindow && resumeFrom && data.duration && (resumeFrom / data.duration) < 0.95) {
               pendingSeek.current = resumeFrom;
             }
           }
         });
       });
     } catch {}
-  }, [animeId, currentEpisodeIdx, currentSeasonIdx, initialSeekTime]);
+  }, [animeId, currentEpisodeIdx, currentSeasonIdx, initialSeekTime, resumeHistoryKey]);
 
   // Build quality list - 4K is premium-only
   const is4KLabel = (label: string) => /4k|2160|uhd/i.test(label);
@@ -2105,11 +2118,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // (every parent re-render), which would clobber a user-selected quality back
   // to "Auto" within ~1s of switching. We only want a true episode change to
   // reset the player state.
-  const lastSrcRef = useRef<string>("");
+  const lastPlaybackKeyRef = useRef<string>("");
   useEffect(() => {
     if (!playbackRouteReady) return;
-    if (lastSrcRef.current === src) return; // src didn't actually change → do nothing
-    lastSrcRef.current = src;
+    const playbackKey = `${src}__${currentSeasonIdx ?? -1}__${currentEpisodeIdx ?? -1}`;
+    if (lastPlaybackKeyRef.current === playbackKey) return;
+    lastPlaybackKeyRef.current = playbackKey;
     // Ultra-fast episode switch: do NOT pause/blank the player. Just swap src
     // and let the video element load the new source while keeping the UI alive.
     instantSwitchRef.current = true;
@@ -2144,7 +2158,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSwitchingEpisode(false);
     }, 80);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, initialSeekTime]);
+  }, [src, currentSeasonIdx, currentEpisodeIdx, noProxy, playbackRouteReady, resolvePlaybackSrc, initialSeekTime]);
 
   const applyPendingSeek = useCallback((targetVideo?: HTMLVideoElement | null) => {
     const v = targetVideo || videoRef.current;
@@ -2225,6 +2239,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }, MIN_VISIBLE - visibleFor);
     }
   }, [currentSrc, isBuffering, switchingEpisode]);
+
+  useEffect(() => {
+    if (isPremium || adGateActive) return;
+    const triggerPlayerAds = () => {
+      if (isPlayerAdCooldownActive()) return;
+      const lastInteractionAt = getAdsterraLastInteractionAt();
+      if (!lastInteractionAt || Date.now() - lastInteractionAt > 1500) return;
+      markPlayerAdClickNow();
+      forceReloadAdsterraSlots().catch(() => {});
+    };
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("[data-player-panel='true']")) return;
+      if (target.closest("button, a, input, textarea, select, [role='button']")) return;
+      triggerPlayerAds();
+    };
+
+    const node = videoContainerRef.current;
+    node?.addEventListener("pointerdown", onPointerDown, true);
+    return () => node?.removeEventListener("pointerdown", onPointerDown, true);
+  }, [adGateActive, isPremium]);
 
   // Simple volume sync - no AudioContext needed
   useEffect(() => {
@@ -2871,6 +2908,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (is4KLabel(option.label) && !isPremium) return;
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
+    const v = videoRef.current;
+    const savedTime = isEmbedPlayback ? (embedTimeRef.current.currentTime || 0) : (v?.currentTime || 0);
+    const wasPlaying = isEmbedPlayback ? playing : !!v && !v.paused;
     sourceBaseRef.current = option.src;
     const finalOptionSrc = manualServerSelected ? applyServerDomain(option.src, activeServerIndex) : option.src;
     activeSourceBaseRef.current = finalOptionSrc;
@@ -2881,14 +2921,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setShowSettings(false);
       return;
     }
-    const v = videoRef.current;
-    pendingSeek.current = isEmbedPlayback ? (embedTimeRef.current.currentTime || 0) : (v?.currentTime || 0);
+    pendingSeek.current = savedTime;
     setIsBuffering(true);
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);
     setShowSettings(false);
+    if (!isEmbedPlayback && v) {
+      try {
+        if (v.src !== newSrc) v.src = newSrc;
+        const restoreTime = () => {
+          try { v.currentTime = savedTime; } catch {}
+          if (wasPlaying) v.play().catch(() => {});
+          v.removeEventListener("loadedmetadata", restoreTime);
+        };
+        v.addEventListener("loadedmetadata", restoreTime);
+      } catch {}
+    }
 
-  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain, isEmbedPlayback]);
+  }, [activeServerIndex, applyServerDomain, currentQuality, currentSrc, isEmbedPlayback, isPremium, manualServerSelected, playing, resolvePlaybackSrc]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;

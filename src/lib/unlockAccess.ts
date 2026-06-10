@@ -6,13 +6,14 @@ import { getDeviceFingerprint, getDeviceId, getDeviceInfo } from "@/lib/premiumD
 const UNLOCK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const DEFAULT_FREE_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
 const AD_GATE_LAST_SHOWN_KEY = "rs_ad_gate_last_shown_at";
+const PLAYER_AD_LAST_CLICK_KEY = "rs_player_ad_last_click_at";
 
-// Admin-configurable cooldown (minutes). 0 = no cooldown (every play shows ad gate).
-let _adGateCooldownMs = 0;
+// Admin-configurable cooldown (minutes). Defaults to 2 minutes.
+let _adGateCooldownMs = 2 * 60 * 1000;
 try {
   onValue(ref(db, "settings/adGateCooldownMinutes"), (snap) => {
     const mins = Number(snap.val());
-    _adGateCooldownMs = Number.isFinite(mins) && mins > 0 ? mins * 60 * 1000 : 0;
+    _adGateCooldownMs = Number.isFinite(mins) && mins > 0 ? mins * 60 * 1000 : 2 * 60 * 1000;
   });
 } catch {}
 
@@ -170,6 +171,25 @@ export const getRemainingAdGateCooldownMs = (): number => {
 };
 
 export const isAdGateCooldownActive = (): boolean => getRemainingAdGateCooldownMs() > 0;
+
+export const markPlayerAdClickNow = (): void => {
+  try {
+    localStorage.setItem(PLAYER_AD_LAST_CLICK_KEY, String(Date.now()));
+  } catch {}
+};
+
+export const getRemainingPlayerAdCooldownMs = (): number => {
+  if (_adGateCooldownMs <= 0) return 0;
+  try {
+    const lastClickAt = Number(localStorage.getItem(PLAYER_AD_LAST_CLICK_KEY) || 0);
+    if (!lastClickAt) return 0;
+    return Math.max(0, lastClickAt + _adGateCooldownMs - Date.now());
+  } catch {
+    return 0;
+  }
+};
+
+export const isPlayerAdCooldownActive = (): boolean => getRemainingPlayerAdCooldownMs() > 0;
 
 /** Shorten via dedicated shortener URL, legacy functionUrl, or generic site+apiKey */
 async function shortenWithService(svc: AdService, callbackUrl: string): Promise<string | null> {

@@ -537,6 +537,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
       if (remotePhoto) {
         setProfilePhoto(remotePhoto);
         try { localStorage.setItem("rs_profile_photo", remotePhoto); } catch {}
+      } else {
+        setProfilePhoto(null);
+        try { localStorage.removeItem("rs_profile_photo"); } catch {}
       }
       if (remoteName && remoteName !== "Guest User") {
         setDisplayName(remoteName);

@@ -457,6 +457,9 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           online: true,
           lastSeen: Date.now(),
           authProvider: "email",
+          profilePhoto: null,
+          photoUrl: null,
+          avatar: null,
         }).catch(() => {});
         localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: name.trim(), email: email.trim() }));
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
@@ -493,7 +496,16 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           });
           const currentPhoto = String(finalUserData.profilePhoto || finalUserData.photoUrl || finalUserData.avatar || "").trim();
           if (currentPhoto) {
+            await update(ref(db, `users/${uid}`), {
+              profilePhoto: currentPhoto,
+              photoUrl: currentPhoto,
+              avatar: currentPhoto,
+            }).catch(() => {});
+          }
+          if (currentPhoto) {
             localStorage.setItem("rs_profile_photo", currentPhoto);
+          } else {
+            localStorage.removeItem("rs_profile_photo");
           }
         } catch (e) {}
         toast.success(`Welcome back, ${displayName}!`);

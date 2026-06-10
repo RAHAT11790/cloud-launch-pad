@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import {
   enterAdsterraPlayerScope,
   exitAdsterraPlayerScope,
-  loadAdsterraSlots,
   setAdsterraPremium,
+  markAdsterraInteractionNow,
 } from "@/lib/adsterraAds";
 import { startAdGuard, stopAdGuard } from "@/lib/adGuard";
 
@@ -25,12 +25,26 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     setAdsterraPremium(!!isPremium);
     if (isPremium) { stopAdGuard(); return; }
     const t = window.setTimeout(() => {
-      loadAdsterraSlots();
-      // Start the bypass-detection guard after ads have a chance to load.
+      // Only the guard starts automatically. Ads themselves are interaction-driven
+      // and reloaded by the player with cooldown control.
       window.setTimeout(() => { startAdGuard(videoEl ?? null); }, 1500);
     }, 250);
     return () => window.clearTimeout(t);
   }, [isPremium, videoEl]);
+
+  useEffect(() => {
+    if (isPremium) return;
+    const onPointerDown = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("[data-player-panel='true']")) return;
+      if (target.closest("button, a, input, textarea, select, [role='button']")) return;
+      markAdsterraInteractionNow();
+    };
+
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [isPremium]);
 
   return null;
 };

@@ -114,6 +114,17 @@ const getMovieQualityOptions = (anime: AnimeItem): { label: string; src: string 
   return qualityOptions;
 };
 
+const WATCH_HISTORY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+const buildWatchHistoryKey = (animeId?: string, seasonIdx?: number, epIdx?: number) => {
+  const base = String(animeId || "").trim();
+  if (!base) return "";
+  if (seasonIdx === undefined && epIdx === undefined) return base;
+  return `${base}__s${seasonIdx ?? 0}__e${epIdx ?? 0}`;
+};
+
+const getHistoryEpisodeInfo = (item: any) => item?.episodeInfo || {};
+
 const getEpisodeQualityOptions = (ep: Episode): { label: string; src: string }[] => {
   const qualityOptions: { label: string; src: string }[] = [];
   if (!isInvalidPlaybackUrl(ep.link480)) qualityOptions.push({ label: "480p", src: ep.link480! });
@@ -794,13 +805,19 @@ const Index = () => {
       const whRef = ref(db, `users/${u.id}/watchHistory`);
       const unsub = onValue(whRef, (snapshot) => {
         const data = snapshot.val() || {};
-        const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
         const now = Date.now();
         // Skip legacy per-device nested keys (objects without `id` field)
         const items = Object.values(data).filter((v: any) => v && typeof v === "object" && v.id) as any[];
-        const withProgress = items.filter((i: any) => {
+        const bestByAnime = new Map<string, any>();
+        items.forEach((entry: any) => {
+          const existing = bestByAnime.get(entry.id);
+          if (!existing || Number(entry.watchedAt || 0) > Number(existing.watchedAt || 0)) {
+            bestByAnime.set(entry.id, entry);
+          }
+        });
+        const withProgress = Array.from(bestByAnime.values()).filter((i: any) => {
           // Respect 30-day retention window
-          if (i.watchedAt && now - i.watchedAt > THIRTY_DAYS) return false;
+          if (i.watchedAt && now - i.watchedAt > WATCH_HISTORY_TTL_MS) return false;
           if (i.id?.startsWith('as_')) return true;
           return i.currentTime && i.duration && (i.currentTime / i.duration) < 0.95;
         });
@@ -1669,13 +1686,17 @@ const Index = () => {
     try {
       const user = localStorage.getItem("rsanime_user");
       const userId = user ? JSON.parse(user).id : null;
+      const historyKey = buildWatchHistoryKey(anime.id, seasonIdx, epIdx);
       const cacheRaw = localStorage.getItem("rs_continueCache");
       const cached = cacheRaw ? JSON.parse(cacheRaw) : [];
-      const cachedMatch = Array.isArray(cached) ? cached.find((item: any) => item?.id === anime.id) : null;
+      const cachedMatch = Array.isArray(cached)
+        ? cached.find((item: any) => (item?.historyKey || buildWatchHistoryKey(item?.id, item?.episodeInfo?.seasonIdx, item?.episodeInfo?.epIdx)) === historyKey)
+        : null;
       const guestMatch = guestStore.continue.list().find((item) => item.animeId === anime.id && item.seasonIdx === seasonIdx && item.epIdx === epIdx);
 
       const historyItem: any = {
         id: anime.id,
+        historyKey,
         source: anime.source || "firebase",
         title: anime.title,
         poster: anime.poster,
@@ -1716,7 +1737,9 @@ const Index = () => {
             currentTime: preserveProgress ? Number(cachedMatch?.currentTime || 0) : 0,
             duration: preserveProgress ? Number(cachedMatch?.duration || 0) : 0,
           },
-          ...(Array.isArray(cached) ? cached.filter((item: any) => item?.id !== anime.id) : []),
+          ...(Array.isArray(cached)
+            ? cached.filter((item: any) => (item?.historyKey || buildWatchHistoryKey(item?.id, item?.episodeInfo?.seasonIdx, item?.episodeInfo?.epIdx)) !== historyKey)
+            : []),
         ].slice(0, 50);
         localStorage.setItem("rs_continueCache", JSON.stringify(nextCache));
       } catch {}
@@ -1725,10 +1748,10 @@ const Index = () => {
 
       if (preserveProgress) {
         import("@/lib/firebase").then(({ update }) => {
-          update(ref(db, `users/${userId}/watchHistory/${anime.id}`), historyItem).catch(() => {});
+          update(ref(db, `users/${userId}/watchHistory/${historyKey}`), historyItem).catch(() => {});
         });
       } else {
-        set(ref(db, `users/${userId}/watchHistory/${anime.id}`), historyItem);
+        set(ref(db, `users/${userId}/watchHistory/${historyKey}`), historyItem);
       }
     } catch (e) {
       console.error("Failed to save watch history:", e);
@@ -1742,8 +1765,9 @@ const Index = () => {
       const user = localStorage.getItem("rsanime_user");
       const userId = user ? JSON.parse(user).id : null;
       if (!playerState.anime.id) return;
+      const historyKey = buildWatchHistoryKey(playerState.anime.id, playerState.seasonIdx, playerState.epIdx);
 
-      const updates: any = { currentTime, duration, watchedAt: Date.now() };
+      const updates: any = { historyKey, currentTime, duration, watchedAt: Date.now() };
       if (playerState.seasonIdx !== undefined && playerState.epIdx !== undefined && playerState.anime.seasons) {
         const season = playerState.anime.seasons[playerState.seasonIdx];
         const episode = season?.episodes?.[playerState.epIdx];
@@ -1759,7 +1783,7 @@ const Index = () => {
         }
       }
       if (userId) {
-        const histRef = ref(db, `users/${userId}/watchHistory/${playerState.anime.id}`);
+        const histRef = ref(db, `users/${userId}/watchHistory/${historyKey}`);
         import("@/lib/firebase").then(({ update }) => {
           update(histRef, updates).catch(() => {});
         });
@@ -1770,6 +1794,7 @@ const Index = () => {
         const cached = raw ? JSON.parse(raw) : [];
         const nextItem = {
           id: playerState.anime.id,
+          historyKey,
           source: playerState.anime.source || "firebase",
           title: playerState.anime.title,
           poster: playerState.anime.poster,
@@ -1782,7 +1807,12 @@ const Index = () => {
           duration,
           episodeInfo: updates.episodeInfo,
         };
-        const nextCache = [nextItem, ...(Array.isArray(cached) ? cached.filter((item: any) => item?.id !== playerState.anime.id) : [])].slice(0, 50);
+        const nextCache = [
+          nextItem,
+          ...(Array.isArray(cached)
+            ? cached.filter((item: any) => (item?.historyKey || buildWatchHistoryKey(item?.id, item?.episodeInfo?.seasonIdx, item?.episodeInfo?.epIdx)) !== historyKey)
+            : []),
+        ].slice(0, 50);
         localStorage.setItem("rs_continueCache", JSON.stringify(nextCache));
         guestStore.continue.upsert({
           animeId: playerState.anime.id,
@@ -1999,9 +2029,10 @@ const Index = () => {
     }
 
     // Use preserveProgress=true so we don't overwrite currentTime/duration
-      if (item.episodeInfo) {
-      const sIdx = item.episodeInfo.seasonIdx ?? (item.episodeInfo.season - 1);
-      const eIdx = item.episodeInfo.epIdx ?? (item.episodeInfo.episode - 1);
+    const itemEpisodeInfo = getHistoryEpisodeInfo(item);
+    if (itemEpisodeInfo && (itemEpisodeInfo.seasonIdx !== undefined || itemEpisodeInfo.season !== undefined)) {
+      const sIdx = itemEpisodeInfo.seasonIdx ?? (itemEpisodeInfo.season - 1);
+      const eIdx = itemEpisodeInfo.epIdx ?? (itemEpisodeInfo.episode - 1);
       let src = "";
       let subtitle = "";
       let episode: Episode | undefined;
@@ -2142,6 +2173,34 @@ const Index = () => {
       cancelled = true;
       window.removeEventListener("focus", syncProfileFromRemote);
     };
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    try {
+      const raw = localStorage.getItem("rsanime_user");
+      const user = raw ? JSON.parse(raw) : null;
+      const userId = user?.id;
+      if (!userId) return;
+
+      const unsub = onValue(ref(db, `users/${userId}`), (snap) => {
+        const data = snap.val() || {};
+        const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+        const remoteName = String(data.name || "").trim();
+
+        if (remotePhoto) {
+          try { localStorage.setItem("rs_profile_photo", remotePhoto); } catch {}
+        }
+        if (remoteName && remoteName !== "Guest User") {
+          try {
+            localStorage.setItem("rs_display_name", remoteName);
+            localStorage.setItem("rsanime_user", JSON.stringify({ ...user, name: remoteName }));
+          } catch {}
+        }
+      });
+
+      return () => unsub();
+    } catch {}
   }, [isLoggedIn]);
 
   const handleLogout = async () => {
