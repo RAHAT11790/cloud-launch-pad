@@ -160,12 +160,19 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         try {
           await set(ref(db, `users/${commaKey}`), {
             id: uid, name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true,
+            profilePhoto: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || null,
+            photoUrl: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || null,
+            avatar: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || null,
             lastSeen: Date.now(), createdAt: existingData?.createdAt || Date.now(),
           });
           // Also update users/${uid} to fix "Guest User" display
           if (uid !== commaKey) {
             await update(ref(db, `users/${uid}`), {
-              name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true, lastSeen: Date.now(),
+              name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true,
+              profilePhoto: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || null,
+              photoUrl: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || null,
+              avatar: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || null,
+              lastSeen: Date.now(),
             }).catch(() => {});
           }
         } catch (e) {}
@@ -211,11 +218,18 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
       try {
         await set(ref(db, `users/${commaKey}`), {
           id: uid, name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true,
+          profilePhoto: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || null,
+          photoUrl: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || null,
+          avatar: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || null,
           lastSeen: Date.now(), createdAt: existingData?.createdAt || Date.now(),
         });
         if (uid !== commaKey) {
           await update(ref(db, `users/${uid}`), {
-            name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true, lastSeen: Date.now(),
+            name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true,
+            profilePhoto: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || null,
+            photoUrl: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || null,
+            avatar: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || null,
+            lastSeen: Date.now(),
           }).catch(() => {});
         }
       } catch (e) {}
@@ -449,6 +463,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         });
         await set(ref(db, `users/${emailKey}`), {
           name: name.trim(), email: email.trim(), createdAt: Date.now(), online: true, lastSeen: Date.now(), id: userId, authProvider: "email",
+          profilePhoto: null, photoUrl: null, avatar: null,
         });
         await update(ref(db, `users/${userId}`), {
           id: userId,
@@ -491,10 +506,13 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         localStorage.setItem("rs_display_name", displayName);
         try {
+          const currentPhoto = String(finalUserData.profilePhoto || finalUserData.photoUrl || finalUserData.avatar || "").trim();
           await update(ref(db, `users/${uid}`), {
             name: displayName, email: loginEmail, online: true, lastSeen: Date.now(), authProvider: "email",
+            profilePhoto: currentPhoto || null,
+            photoUrl: currentPhoto || null,
+            avatar: currentPhoto || null,
           });
-          const currentPhoto = String(finalUserData.profilePhoto || finalUserData.photoUrl || finalUserData.avatar || "").trim();
           if (currentPhoto) {
             await update(ref(db, `users/${uid}`), {
               profilePhoto: currentPhoto,
