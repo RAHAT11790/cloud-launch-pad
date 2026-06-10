@@ -2089,11 +2089,11 @@ const Index = () => {
         };
         playerStateRef.current = nextState;
         setPlayerState(nextState);
+        addToWatchHistory(anime, sIdx, eIdx, true);
         const targetWatchRoute = buildWatchRoute(anime.id, sIdx, eIdx);
         if (`${location.pathname}${location.search}` !== targetWatchRoute) {
           navigate(targetWatchRoute);
         }
-        addToWatchHistory(anime, sIdx, eIdx, true);
         setSelectedAnime(null);
       }
     } else {
@@ -2115,11 +2115,11 @@ const Index = () => {
         }
         playerStateRef.current = nextState;
         setPlayerState(nextState);
+        addToWatchHistory(anime, undefined, undefined, true);
         const targetWatchRoute = buildWatchRoute(anime.id);
         if (`${location.pathname}${location.search}` !== targetWatchRoute) {
           navigate(targetWatchRoute);
         }
-        addToWatchHistory(anime, undefined, undefined, true);
         setSelectedAnime(null);
       }
     }
