@@ -2260,7 +2260,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const target = event.target as HTMLElement | null;
       if (!target) return;
       if (target.closest("[data-player-panel='true']")) return;
-      if (target.closest("button, a, input, textarea, select, [role='button']")) return;
+      if (target.closest("a, input, textarea, select")) return;
       triggerPlayerAds();
     };
 
