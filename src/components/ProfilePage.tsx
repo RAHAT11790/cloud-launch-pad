@@ -524,15 +524,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   };
 
   const userId = getUserId();
-  const userEmailKey = useMemo(() => {
-    try {
-      const raw = localStorage.getItem("rsanime_user");
-      const email = raw ? JSON.parse(raw)?.email : "";
-      return String(email || "").trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
-    } catch {
-      return "";
-    }
-  }, []);
   const premiumDaysLeft = premiumExpiry ? Math.max(0, Math.ceil((premiumExpiry - Date.now()) / 86400000)) : 0;
   const isPremiumExpiringSoon = isPremium && premiumDaysLeft <= 3;
 
@@ -701,7 +692,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
       localStorage.setItem("rs_profile_photo", url);
       if (userId) {
         update(ref(db, `users/${userId}`), { profilePhoto: url, photoUrl: url, avatar: url }).catch(() => {});
-        if (userEmailKey) update(ref(db, `users/${userEmailKey}`), { profilePhoto: url, photoUrl: url, avatar: url }).catch(() => {});
       }
       toast.success("✅ Profile photo uploaded!");
     } catch {
@@ -713,7 +703,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
         localStorage.setItem("rs_profile_photo", result);
         if (userId) {
           update(ref(db, `users/${userId}`), { profilePhoto: result, photoUrl: result, avatar: result }).catch(() => {});
-          if (userEmailKey) update(ref(db, `users/${userEmailKey}`), { profilePhoto: result, photoUrl: result, avatar: result }).catch(() => {});
         }
       };
       reader.readAsDataURL(file);
@@ -727,7 +716,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     localStorage.removeItem("rs_profile_photo");
     if (userId) {
       update(ref(db, `users/${userId}`), { profilePhoto: null, photoUrl: null, avatar: null }).catch(() => {});
-      if (userEmailKey) update(ref(db, `users/${userEmailKey}`), { profilePhoto: null, photoUrl: null, avatar: null }).catch(() => {});
     }
   };
 
@@ -736,7 +724,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     localStorage.setItem("rs_display_name", tempName);
     if (userId && tempName.trim()) {
       update(ref(db, `users/${userId}`), { name: tempName.trim() }).catch(() => {});
-      if (userEmailKey) update(ref(db, `users/${userEmailKey}`), { name: tempName.trim() }).catch(() => {});
     }
     setActivePanel("main");
   };

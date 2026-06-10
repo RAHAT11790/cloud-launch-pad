@@ -1536,17 +1536,6 @@ const Index = () => {
     }
 
     // Handle AnimeSalt video - check ad-gate first
-    const resumeHistoryKey = buildWatchHistoryKey(anime.id, seasonIdx, epIdx);
-    const resolveResumeTime = () => {
-      const cacheRaw = localStorage.getItem("rs_continueCache");
-      const cached = cacheRaw ? JSON.parse(cacheRaw) : [];
-      const cachedMatch = Array.isArray(cached)
-        ? cached.find((entry: any) => (entry?.historyKey || buildWatchHistoryKey(entry?.id, entry?.episodeInfo?.seasonIdx, entry?.episodeInfo?.epIdx)) === resumeHistoryKey)
-        : null;
-      return Number(cachedMatch?.currentTime || 0);
-    };
-    const resumeTime = resolveResumeTime();
-
     if (src.startsWith("animesalt://")) {
       const hasAccess = await checkAndShowAdGate(anime, seasonIdx, epIdx);
       if (!hasAccess) return;
@@ -1563,7 +1552,6 @@ const Index = () => {
             anime,
             seasonIdx,
             epIdx,
-            resumeTime,
             qualityOptions: sourceOptions,
             nextEpisodeSrc:
               anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined
@@ -1597,7 +1585,6 @@ const Index = () => {
             title: anime.title,
             subtitle: "Movie",
             anime,
-            resumeTime,
             qualityOptions: sourceOptions,
           } as any);
           setSelectedAnime(null);
@@ -1611,7 +1598,7 @@ const Index = () => {
     }
 
     if (src) {
-      addToWatchHistory(anime, seasonIdx, epIdx, resumeTime > 0);
+      addToWatchHistory(anime, seasonIdx, epIdx);
       setPlayerState({
         src,
         title: anime.title,
@@ -1620,7 +1607,6 @@ const Index = () => {
         selectedLanguage: resolvedLanguage,
         seasonIdx,
         epIdx,
-        resumeTime,
         qualityOptions,
         audioTracks,
         nextEpisodeSrc:
@@ -1802,14 +1788,6 @@ const Index = () => {
           update(histRef, updates).catch(() => {});
         });
       }
-
-      setPlayerState((prev) => {
-        if (!prev) return prev;
-        if (prev.anime.id !== playerState.anime.id) return prev;
-        if ((prev.seasonIdx ?? undefined) !== (playerState.seasonIdx ?? undefined)) return prev;
-        if ((prev.epIdx ?? undefined) !== (playerState.epIdx ?? undefined)) return prev;
-        return { ...prev, resumeTime: currentTime };
-      });
 
       try {
         const raw = localStorage.getItem("rs_continueCache");
@@ -2089,11 +2067,11 @@ const Index = () => {
         };
         playerStateRef.current = nextState;
         setPlayerState(nextState);
-        addToWatchHistory(anime, sIdx, eIdx, true);
         const targetWatchRoute = buildWatchRoute(anime.id, sIdx, eIdx);
         if (`${location.pathname}${location.search}` !== targetWatchRoute) {
           navigate(targetWatchRoute);
         }
+        addToWatchHistory(anime, sIdx, eIdx, true);
         setSelectedAnime(null);
       }
     } else {
@@ -2115,11 +2093,11 @@ const Index = () => {
         }
         playerStateRef.current = nextState;
         setPlayerState(nextState);
-        addToWatchHistory(anime, undefined, undefined, true);
         const targetWatchRoute = buildWatchRoute(anime.id);
         if (`${location.pathname}${location.search}` !== targetWatchRoute) {
           navigate(targetWatchRoute);
         }
+        addToWatchHistory(anime, undefined, undefined, true);
         setSelectedAnime(null);
       }
     }

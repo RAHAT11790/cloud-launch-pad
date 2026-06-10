@@ -4283,7 +4283,7 @@ ${tgHashtags}`;
     // Telegram renders <blockquote> with a colored left bar, giving each item a card-like feel.
     const boxes = picked.map((it, i) => {
       const num = String(i + 1).padStart(2, "0");
-      const url = `${SITE_URL}/watch/${encodeURIComponent(it.id)}`;
+      const url = `${SITE_URL}?anime=${encodeURIComponent(it.id)}`;
       const icon = it.type === "movie" ? "🎬" : "📺";
       const tag = it.type === "movie" ? "MOVIE" : "SERIES";
       const title = escapeHtmlBasic(it.title);

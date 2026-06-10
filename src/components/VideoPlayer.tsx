@@ -2119,16 +2119,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // to "Auto" within ~1s of switching. We only want a true episode change to
   // reset the player state.
   const lastPlaybackKeyRef = useRef<string>("");
-  const skipAutoPlaybackResetRef = useRef(false);
   useEffect(() => {
     if (!playbackRouteReady) return;
     const playbackKey = `${src}__${currentSeasonIdx ?? -1}__${currentEpisodeIdx ?? -1}`;
     if (lastPlaybackKeyRef.current === playbackKey) return;
-    if (skipAutoPlaybackResetRef.current) {
-      lastPlaybackKeyRef.current = playbackKey;
-      skipAutoPlaybackResetRef.current = false;
-      return;
-    }
     lastPlaybackKeyRef.current = playbackKey;
     // Ultra-fast episode switch: do NOT pause/blank the player. Just swap src
     // and let the video element load the new source while keeping the UI alive.
@@ -2260,7 +2254,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const target = event.target as HTMLElement | null;
       if (!target) return;
       if (target.closest("[data-player-panel='true']")) return;
-      if (target.closest("a, input, textarea, select")) return;
+      if (target.closest("button, a, input, textarea, select, [role='button']")) return;
       triggerPlayerAds();
     };
 
@@ -2928,8 +2922,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return;
     }
     pendingSeek.current = savedTime;
-    skipAutoPlaybackResetRef.current = true;
-    lastPlaybackKeyRef.current = `${option.src}__${currentSeasonIdx ?? -1}__${currentEpisodeIdx ?? -1}`;
     setIsBuffering(true);
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);

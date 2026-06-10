@@ -13,7 +13,7 @@ let _adGateCooldownMs = 2 * 60 * 1000;
 try {
   onValue(ref(db, "settings/adGateCooldownMinutes"), (snap) => {
     const mins = Number(snap.val());
-    _adGateCooldownMs = Number.isFinite(mins) && mins > 0 ? Math.max(2, mins) * 60 * 1000 : 2 * 60 * 1000;
+    _adGateCooldownMs = Number.isFinite(mins) && mins > 0 ? mins * 60 * 1000 : 2 * 60 * 1000;
   });
 } catch {}
 
