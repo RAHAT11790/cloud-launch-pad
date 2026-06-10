@@ -98,6 +98,20 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     return () => { clearTimeout(timer); audioRef.current?.pause(); };
   }, []);
 
+  const getRemoteProfilePhoto = async (uid?: string | null, emailKey?: string | null) => {
+    const keys = [uid, emailKey].filter(Boolean) as string[];
+    for (const key of keys) {
+      try {
+        const snap = await get(ref(db, `users/${key}`));
+        if (!snap.exists()) continue;
+        const data = snap.val() || {};
+        const photo = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+        if (photo) return photo;
+      } catch {}
+    }
+    return "";
+  };
+
   const checkAndRegisterDevice = async (userId: string): Promise<boolean> => {
     try {
       const { checkDeviceLimitForLogin, registerDeviceOnLogin } = await import("@/lib/premiumDevice");
@@ -177,10 +191,11 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           }
         } catch (e) {}
 
+        const resolvedPhoto = gPhoto || await getRemoteProfilePhoto(uid, commaKey);
         localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         localStorage.setItem("rs_display_name", gName);
-        if (gPhoto) localStorage.setItem("rs_profile_photo", gPhoto);
+        if (resolvedPhoto) localStorage.setItem("rs_profile_photo", resolvedPhoto);
         toast.success(`Welcome, ${gName}!`);
         onLogin(uid);
       } else {
@@ -234,10 +249,11 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         }
       } catch (e) {}
 
+      const resolvedPhoto = gPhoto || await getRemoteProfilePhoto(uid, commaKey);
       localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
       localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
       localStorage.setItem("rs_display_name", gName);
-      if (gPhoto) localStorage.setItem("rs_profile_photo", gPhoto);
+      if (resolvedPhoto) localStorage.setItem("rs_profile_photo", resolvedPhoto);
       toast.success(`Welcome, ${gName}! Password set successfully ✅`);
       setGoogleSetPwMode(false);
       setGooglePendingData(null);
@@ -465,6 +481,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           name: name.trim(), email: email.trim(), createdAt: Date.now(), online: true, lastSeen: Date.now(), id: userId, authProvider: "email",
           profilePhoto: null, photoUrl: null, avatar: null,
         });
+        const existingPhoto = await getRemoteProfilePhoto(userId, emailKey);
         await update(ref(db, `users/${userId}`), {
           id: userId,
           name: name.trim(),
@@ -472,13 +489,14 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           online: true,
           lastSeen: Date.now(),
           authProvider: "email",
-          profilePhoto: null,
-          photoUrl: null,
-          avatar: null,
+          profilePhoto: existingPhoto || null,
+          photoUrl: existingPhoto || null,
+          avatar: existingPhoto || null,
         }).catch(() => {});
         localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: name.trim(), email: email.trim() }));
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         localStorage.setItem("rs_display_name", name.trim());
+        if (existingPhoto) localStorage.setItem("rs_profile_photo", existingPhoto);
         toast.success("Account created successfully!");
         onLogin(userId);
       } else {
@@ -506,13 +524,26 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         localStorage.setItem("rs_display_name", displayName);
         try {
-          const currentPhoto = String(finalUserData.profilePhoto || finalUserData.photoUrl || finalUserData.avatar || "").trim();
+          const currentPhoto = String(finalUserData.profilePhoto || finalUserData.photoUrl || finalUserData.avatar || "").trim() || await getRemoteProfilePhoto(uid, loginEmail ? loginEmail.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_") : "");
           await update(ref(db, `users/${uid}`), {
             name: displayName, email: loginEmail, online: true, lastSeen: Date.now(), authProvider: "email",
             profilePhoto: currentPhoto || null,
             photoUrl: currentPhoto || null,
             avatar: currentPhoto || null,
           });
+          if (loginEmail) {
+            await update(ref(db, `users/${loginEmail.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_")}`), {
+              id: uid,
+              name: displayName,
+              email: loginEmail,
+              online: true,
+              lastSeen: Date.now(),
+              authProvider: "email",
+              profilePhoto: currentPhoto || null,
+              photoUrl: currentPhoto || null,
+              avatar: currentPhoto || null,
+            }).catch(() => {});
+          }
           if (currentPhoto) {
             await update(ref(db, `users/${uid}`), {
               profilePhoto: currentPhoto,

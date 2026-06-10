@@ -1388,6 +1388,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
   }, [currentSrc, isEmbedPlayback, onSaveProgress]);
 
+  useEffect(() => {
+    if (isEmbedPlayback) {
+      lastStableTimeRef.current = embedTimeRef.current.currentTime || lastStableTimeRef.current || 0;
+      return;
+    }
+    const v = videoRef.current;
+    if (!v) return;
+    const syncStableTime = () => {
+      if (Number.isFinite(v.currentTime) && v.currentTime > 0) {
+        lastStableTimeRef.current = v.currentTime;
+      }
+    };
+    v.addEventListener("timeupdate", syncStableTime);
+    v.addEventListener("seeked", syncStableTime);
+    return () => {
+      v.removeEventListener("timeupdate", syncStableTime);
+      v.removeEventListener("seeked", syncStableTime);
+    };
+  }, [currentSrc, isEmbedPlayback]);
+
   // Restore watch position (per-account)
   useEffect(() => {
     if (!animeId || !resumeHistoryKey) return;
@@ -1421,6 +1441,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       });
     } catch {}
   }, [animeId, currentEpisodeIdx, currentSeasonIdx, initialSeekTime, resumeHistoryKey]);
+
+  useEffect(() => {
+    if (!resumeHistoryKey) return;
+    lastStableTimeRef.current = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : 0;
+  }, [initialSeekTime, resumeHistoryKey]);
 
   // Build quality list - 4K is premium-only
   const is4KLabel = (label: string) => /4k|2160|uhd/i.test(label);
@@ -1466,6 +1491,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
   const instantSwitchRef = useRef(false);
+  const lastStableTimeRef = useRef(0);
 
   // NOTE: Aggressive next-episode preload removed — it caused CORS fetches
   // and wasted bandwidth that slowed the *current* video load. Browser will
@@ -1477,7 +1503,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (serverSwitchingRef.current) return;
     const v = videoRef.current;
 
-    const savedTime = isEmbedPlayback ? (embedTimeRef.current.currentTime || 0) : (v?.currentTime || 0);
+    const savedTime = isEmbedPlayback
+      ? (embedTimeRef.current.currentTime || lastStableTimeRef.current || 0)
+      : (v?.currentTime || lastStableTimeRef.current || 0);
     const wasPlaying = isEmbedPlayback ? playing : !!v && !v.paused;
     const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
     const resolved = resolvePlaybackSrc(newRawSrc);
@@ -2260,11 +2288,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const target = event.target as HTMLElement | null;
       if (!target) return;
       if (target.closest("[data-player-panel='true']")) return;
-      if (target.closest("a, input, textarea, select")) return;
+      if (target.closest("button, [role='button'], a, input, textarea, select, label")) return;
       triggerPlayerAds();
     };
 
     const node = videoContainerRef.current;
+    loadAdsterraSlots().catch(() => {});
     node?.addEventListener("pointerdown", onPointerDown, true);
     return () => node?.removeEventListener("pointerdown", onPointerDown, true);
   }, [adGateActive, isPremium]);
@@ -2915,7 +2944,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     const v = videoRef.current;
-    const savedTime = isEmbedPlayback ? (embedTimeRef.current.currentTime || 0) : (v?.currentTime || 0);
+    const savedTime = isEmbedPlayback
+      ? (embedTimeRef.current.currentTime || lastStableTimeRef.current || 0)
+      : (v?.currentTime || lastStableTimeRef.current || 0);
     const wasPlaying = isEmbedPlayback ? playing : !!v && !v.paused;
     sourceBaseRef.current = option.src;
     const finalOptionSrc = manualServerSelected ? applyServerDomain(option.src, activeServerIndex) : option.src;
