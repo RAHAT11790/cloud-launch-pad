@@ -123,10 +123,6 @@ const buildWatchHistoryKey = (animeId?: string, seasonIdx?: number, epIdx?: numb
   return `${base}__s${seasonIdx ?? 0}__e${epIdx ?? 0}`;
 };
 
-const buildUserEmailKey = (email?: string | null) => {
-  return String(email || "").trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
-};
-
 const getHistoryEpisodeInfo = (item: any) => item?.episodeInfo || {};
 
 const getEpisodeQualityOptions = (ep: Episode): { label: string; src: string }[] => {
@@ -810,33 +806,10 @@ const Index = () => {
       const unsub = onValue(whRef, (snapshot) => {
         const data = snapshot.val() || {};
         const now = Date.now();
-        let localCached: any[] = [];
-        try {
-          const raw = localStorage.getItem("rs_continueCache");
-          localCached = raw ? JSON.parse(raw) : [];
-        } catch {}
         // Skip legacy per-device nested keys (objects without `id` field)
         const items = Object.values(data).filter((v: any) => v && typeof v === "object" && v.id) as any[];
-        const mergedByHistoryKey = new Map<string, any>();
-        [...items, ...(Array.isArray(localCached) ? localCached : [])].forEach((entry: any) => {
-          const historyKey = entry?.historyKey || buildWatchHistoryKey(entry?.id, entry?.episodeInfo?.seasonIdx, entry?.episodeInfo?.epIdx);
-          if (!historyKey || !entry?.id) return;
-          const existing = mergedByHistoryKey.get(historyKey);
-          if (!existing) {
-            mergedByHistoryKey.set(historyKey, entry);
-            return;
-          }
-
-          const existingWatchedAt = Number(existing?.watchedAt || 0);
-          const nextWatchedAt = Number(entry?.watchedAt || 0);
-          const existingProgress = Number(existing?.currentTime || 0);
-          const nextProgress = Number(entry?.currentTime || 0);
-          const shouldReplace = nextWatchedAt > existingWatchedAt || (nextWatchedAt === existingWatchedAt && nextProgress > existingProgress);
-          if (shouldReplace) mergedByHistoryKey.set(historyKey, { ...existing, ...entry });
-        });
-
         const bestByAnime = new Map<string, any>();
-        Array.from(mergedByHistoryKey.values()).forEach((entry: any) => {
+        items.forEach((entry: any) => {
           const existing = bestByAnime.get(entry.id);
           if (!existing || Number(entry.watchedAt || 0) > Number(existing.watchedAt || 0)) {
             bestByAnime.set(entry.id, entry);
@@ -1801,39 +1774,25 @@ const Index = () => {
 
   // Save video progress to Firebase (per-device)
   const saveVideoProgress = useCallback((currentTime: number, duration: number) => {
-    const activePlayer = playerStateRef.current;
-    if (!activePlayer) return;
+    if (!playerState) return;
     try {
       const user = localStorage.getItem("rsanime_user");
       const userId = user ? JSON.parse(user).id : null;
-      if (!activePlayer.anime.id) return;
-      const historyKey = buildWatchHistoryKey(activePlayer.anime.id, activePlayer.seasonIdx, activePlayer.epIdx);
+      if (!playerState.anime.id) return;
+      const historyKey = buildWatchHistoryKey(playerState.anime.id, playerState.seasonIdx, playerState.epIdx);
 
-      const updates: any = {
-        id: activePlayer.anime.id,
-        historyKey,
-        source: activePlayer.anime.source || "firebase",
-        title: activePlayer.anime.title,
-        poster: activePlayer.anime.poster,
-        year: activePlayer.anime.year,
-        rating: activePlayer.anime.rating,
-        type: activePlayer.anime.type,
-        language: activePlayer.selectedLanguage || getPrimaryLanguageToken(activePlayer.anime.baseLanguage || activePlayer.anime.language) || activePlayer.anime.language || "",
-        currentTime,
-        duration,
-        watchedAt: Date.now(),
-      };
-      if (activePlayer.seasonIdx !== undefined && activePlayer.epIdx !== undefined && activePlayer.anime.seasons) {
-        const season = activePlayer.anime.seasons[activePlayer.seasonIdx];
-        const episode = season?.episodes?.[activePlayer.epIdx];
+      const updates: any = { historyKey, currentTime, duration, watchedAt: Date.now() };
+      if (playerState.seasonIdx !== undefined && playerState.epIdx !== undefined && playerState.anime.seasons) {
+        const season = playerState.anime.seasons[playerState.seasonIdx];
+        const episode = season?.episodes?.[playerState.epIdx];
         if (season && episode) {
           updates.episodeInfo = {
-            season: activePlayer.seasonIdx + 1,
-            episode: activePlayer.epIdx + 1,
+            season: playerState.seasonIdx + 1,
+            episode: playerState.epIdx + 1,
             seasonName: season.name,
             episodeNumber: episode.episodeNumber,
-            seasonIdx: activePlayer.seasonIdx,
-            epIdx: activePlayer.epIdx,
+            seasonIdx: playerState.seasonIdx,
+            epIdx: playerState.epIdx,
           };
         }
       }
@@ -1844,17 +1803,31 @@ const Index = () => {
         });
       }
 
-      playerStateRef.current = { ...activePlayer, resumeTime: currentTime };
-      try {
-        const { qualityOptions, ...rest } = playerStateRef.current;
-        sessionStorage.setItem("rs_playerState", JSON.stringify(rest));
-      } catch {}
+      setPlayerState((prev) => {
+        if (!prev) return prev;
+        if (prev.anime.id !== playerState.anime.id) return prev;
+        if ((prev.seasonIdx ?? undefined) !== (playerState.seasonIdx ?? undefined)) return prev;
+        if ((prev.epIdx ?? undefined) !== (playerState.epIdx ?? undefined)) return prev;
+        return { ...prev, resumeTime: currentTime };
+      });
 
       try {
         const raw = localStorage.getItem("rs_continueCache");
         const cached = raw ? JSON.parse(raw) : [];
         const nextItem = {
-          ...updates,
+          id: playerState.anime.id,
+          historyKey,
+          source: playerState.anime.source || "firebase",
+          title: playerState.anime.title,
+          poster: playerState.anime.poster,
+          year: playerState.anime.year,
+          rating: playerState.anime.rating,
+          type: playerState.anime.type,
+          language: playerState.selectedLanguage || getPrimaryLanguageToken(playerState.anime.baseLanguage || playerState.anime.language) || playerState.anime.language || "",
+          watchedAt: Date.now(),
+          currentTime,
+          duration,
+          episodeInfo: updates.episodeInfo,
         };
         const nextCache = [
           nextItem,
@@ -1864,18 +1837,18 @@ const Index = () => {
         ].slice(0, 50);
         localStorage.setItem("rs_continueCache", JSON.stringify(nextCache));
         guestStore.continue.upsert({
-          animeId: activePlayer.anime.id,
-          seasonIdx: activePlayer.seasonIdx,
-          epIdx: activePlayer.epIdx,
+          animeId: playerState.anime.id,
+          seasonIdx: playerState.seasonIdx,
+          epIdx: playerState.epIdx,
           position: currentTime,
           duration,
-          title: activePlayer.anime.title,
-          poster: activePlayer.anime.poster,
+          title: playerState.anime.title,
+          poster: playerState.anime.poster,
           updatedAt: Date.now(),
         });
       } catch {}
     } catch {}
-  }, []);
+  }, [playerState]);
 
   const handleContinueWatching = async (item: any) => {
     if (unlockBlocked) {
@@ -2230,12 +2203,12 @@ const Index = () => {
       const raw = localStorage.getItem("rsanime_user");
       const user = raw ? JSON.parse(raw) : null;
       const userId = user?.id;
-      const emailKey = buildUserEmailKey(user?.email);
-      if (!userId && !emailKey) return;
+      if (!userId) return;
 
-      const applyRemoteProfile = (data: any) => {
-        const remotePhoto = String(data?.profilePhoto || data?.photoUrl || data?.avatar || "").trim();
-        const remoteName = String(data?.name || "").trim();
+      const unsub = onValue(ref(db, `users/${userId}`), (snap) => {
+        const data = snap.val() || {};
+        const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+        const remoteName = String(data.name || "").trim();
 
         if (remotePhoto) {
           try { localStorage.setItem("rs_profile_photo", remotePhoto); } catch {}
@@ -2246,22 +2219,9 @@ const Index = () => {
             localStorage.setItem("rsanime_user", JSON.stringify({ ...user, name: remoteName }));
           } catch {}
         }
-      };
+      });
 
-      const unsubscribers: Array<() => void> = [];
-
-      if (userId) {
-        unsubscribers.push(onValue(ref(db, `users/${userId}`), (snap) => {
-          applyRemoteProfile(snap.val() || {});
-        }));
-      }
-      if (emailKey && emailKey !== userId) {
-        unsubscribers.push(onValue(ref(db, `users/${emailKey}`), (snap) => {
-          applyRemoteProfile(snap.val() || {});
-        }));
-      }
-
-      return () => unsubscribers.forEach((unsub) => unsub());
+      return () => unsub();
     } catch {}
   }, [isLoggedIn]);
 

@@ -6,8 +6,6 @@ import { useBranding } from "@/hooks/useBranding";
 import ThemeToggle from "./ThemeToggle";
 import { db, ref, set, update, onValue } from "@/lib/firebase";
 
-const buildUserEmailKey = (email?: string | null) => String(email || "").trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
-
 // Get existing user ID from localStorage (do NOT auto-create guest accounts)
 const getExistingUserId = (): string | undefined => {
   try {
@@ -92,12 +90,10 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       userUnsub = null;
       if (!id) return;
 
-      const rawUser = localStorage.getItem("rsanime_user");
-      const parsedUser = rawUser ? JSON.parse(rawUser) : {};
-      const emailKey = buildUserEmailKey(parsedUser?.email);
-      const applyRemoteProfile = (data: any) => {
-        const remotePhoto = String(data?.profilePhoto || data?.photoUrl || data?.avatar || "").trim();
-        const remoteName = String(data?.name || "").trim();
+      userUnsub = onValue(ref(db, `users/${id}`), (snap) => {
+        const data = snap.val() || {};
+        const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+        const remoteName = String(data.name || "").trim();
         if (remotePhoto) {
           try { localStorage.setItem("rs_profile_photo", remotePhoto); } catch {}
           setProfilePhoto(remotePhoto);
@@ -105,19 +101,12 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
         if (remoteName && remoteName !== "Guest User") {
           try {
             localStorage.setItem("rs_display_name", remoteName);
-            const currentRawUser = localStorage.getItem("rsanime_user");
-            const currentParsedUser = currentRawUser ? JSON.parse(currentRawUser) : {};
-            localStorage.setItem("rsanime_user", JSON.stringify({ ...currentParsedUser, name: remoteName }));
+            const rawUser = localStorage.getItem("rsanime_user");
+            const parsedUser = rawUser ? JSON.parse(rawUser) : {};
+            localStorage.setItem("rsanime_user", JSON.stringify({ ...parsedUser, name: remoteName }));
           } catch {}
         }
-      };
-
-      const unsubscribers: Array<() => void> = [];
-      unsubscribers.push(onValue(ref(db, `users/${id}`), (snap) => applyRemoteProfile(snap.val() || {})));
-      if (emailKey && emailKey !== id) {
-        unsubscribers.push(onValue(ref(db, `users/${emailKey}`), (snap) => applyRemoteProfile(snap.val() || {})));
-      }
-      userUnsub = () => unsubscribers.forEach((unsub) => unsub());
+      });
     };
 
     syncLocalUser();

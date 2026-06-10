@@ -537,15 +537,16 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   const isPremiumExpiringSoon = isPremium && premiumDaysLeft <= 3;
 
   useEffect(() => {
-    if (!userId && !userEmailKey) return;
-    const applyRemoteUser = (data: any) => {
-      const remotePhoto = String(data?.profilePhoto || data?.photoUrl || data?.avatar || "").trim();
-      const remoteName = String(data?.name || "").trim();
+    if (!userId) return;
+    const unsubUser = onValue(ref(db, `users/${userId}`), (snap) => {
+      const data = snap.val() || {};
+      const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+      const remoteName = String(data.name || "").trim();
 
       if (remotePhoto) {
         setProfilePhoto(remotePhoto);
         try { localStorage.setItem("rs_profile_photo", remotePhoto); } catch {}
-      } else if (!userEmailKey) {
+      } else {
         setProfilePhoto(null);
         try { localStorage.removeItem("rs_profile_photo"); } catch {}
       }
@@ -554,18 +555,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
         setTempName(remoteName);
         try { localStorage.setItem("rs_display_name", remoteName); } catch {}
       }
-    };
+    });
 
-    const unsubscribers: Array<() => void> = [];
-    if (userId) {
-      unsubscribers.push(onValue(ref(db, `users/${userId}`), (snap) => applyRemoteUser(snap.val() || {})));
-    }
-    if (userEmailKey && userEmailKey !== userId) {
-      unsubscribers.push(onValue(ref(db, `users/${userEmailKey}`), (snap) => applyRemoteUser(snap.val() || {})));
-    }
-
-    return () => unsubscribers.forEach((unsub) => unsub());
-  }, [userEmailKey, userId]);
+    return () => unsubUser();
+  }, [userId]);
 
   const handleDeleteThisPhoneLogin = useCallback(async () => {
     try {
