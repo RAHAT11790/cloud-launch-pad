@@ -13,7 +13,7 @@ import PrivacyPolicyPage from "./PrivacyPolicyPage";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { Progress } from "@/components/ui/progress";
 import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
-import { readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
+import { buildEmailAliasKey, readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -536,11 +536,18 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
 
   useEffect(() => {
     if (!userId) return;
-    const unsubUser = onValue(ref(db, `users/${userId}`), (snap) => {
-      const data = snap.val() || {};
-      const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
-      const remoteName = String(data.name || "").trim();
 
+    // Resolve email alias once for the photo mirror.
+    let storedEmail = "";
+    try {
+      const raw = localStorage.getItem("rsanime_user");
+      if (raw) storedEmail = JSON.parse(raw)?.email || "";
+    } catch {}
+    const emailKey = buildEmailAliasKey(storedEmail);
+
+    const applyRemote = (data: any) => {
+      const remotePhoto = String(data?.profilePhoto || data?.photoUrl || data?.avatar || "").trim();
+      const remoteName = String(data?.name || "").trim();
       if (remotePhoto) {
         setProfilePhoto(remotePhoto);
         writeProfilePhoto(remotePhoto, userId);
@@ -550,9 +557,17 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
         setTempName(remoteName);
         writeDisplayName(remoteName, userId);
       }
-    });
+    };
 
-    return () => unsubUser();
+    const unsubUser = onValue(ref(db, `users/${userId}`), (snap) => applyRemote(snap.val() || {}));
+    const unsubAlias = emailKey
+      ? onValue(ref(db, `appUsers/${emailKey}`), (snap) => applyRemote(snap.val() || {}))
+      : null;
+    const unsubMirror = emailKey
+      ? onValue(ref(db, `userProfiles/${emailKey}`), (snap) => applyRemote(snap.val() || {}))
+      : null;
+
+    return () => { unsubUser(); unsubAlias?.(); unsubMirror?.(); };
   }, [userId]);
 
   const handleDeleteThisPhoneLogin = useCallback(async () => {
@@ -689,25 +704,47 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     if (file.size > 5 * 1024 * 1024) { alert("Image must be under 5MB!"); return; }
     if (!file.type.startsWith("image/")) { alert("Please select an image file."); return; }
     setPhotoUploading(true);
+
+    // Resolve email alias so the photo URL is mirrored under a stable
+    // per-Gmail key. Logging in with the same account on another device
+    // resolves that key and pulls the photo back.
+    let storedEmail = "";
     try {
-      const { uploadToImgbb } = await import("@/lib/imgbbUpload");
-      const url = await uploadToImgbb(file);
+      const raw = localStorage.getItem("rsanime_user");
+      if (raw) storedEmail = JSON.parse(raw)?.email || "";
+    } catch {}
+    const emailKey = buildEmailAliasKey(storedEmail);
+
+    const persistUrl = (url: string) => {
       setProfilePhoto(url);
       writeProfilePhoto(url, userId);
       if (userId) {
         update(ref(db, `users/${userId}`), { profilePhoto: url, photoUrl: url, avatar: url }).catch(() => {});
       }
+      if (emailKey) {
+        // Email-keyed mirrors so any other device that signs into the
+        // same Gmail can fetch the URL back instantly.
+        update(ref(db, `userProfiles/${emailKey}`), {
+          photoUrl: url, profilePhoto: url, avatar: url,
+          email: storedEmail, uid: userId || null, updatedAt: Date.now(),
+        }).catch(() => {});
+        update(ref(db, `appUsers/${emailKey}`), {
+          profilePhoto: url, photoUrl: url, avatar: url,
+        }).catch(() => {});
+      }
+    };
+
+    try {
+      const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+      const url = await uploadToImgbb(file);
+      persistUrl(url);
       toast.success("✅ Profile photo uploaded!");
     } catch {
       // Fallback to base64 if imgbb fails
       const reader = new FileReader();
       reader.onload = (ev) => {
         const result = ev.target?.result as string;
-        setProfilePhoto(result);
-        writeProfilePhoto(result, userId);
-        if (userId) {
-          update(ref(db, `users/${userId}`), { profilePhoto: result, photoUrl: result, avatar: result }).catch(() => {});
-        }
+        persistUrl(result);
       };
       reader.readAsDataURL(file);
       toast.error("ImgBB failed, saved locally");
@@ -718,8 +755,18 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   const removePhoto = () => {
     setProfilePhoto(null);
     removeProfilePhoto(userId);
+    let storedEmail = "";
+    try {
+      const raw = localStorage.getItem("rsanime_user");
+      if (raw) storedEmail = JSON.parse(raw)?.email || "";
+    } catch {}
+    const emailKey = buildEmailAliasKey(storedEmail);
     if (userId) {
       update(ref(db, `users/${userId}`), { profilePhoto: null, photoUrl: null, avatar: null }).catch(() => {});
+    }
+    if (emailKey) {
+      update(ref(db, `userProfiles/${emailKey}`), { photoUrl: null, profilePhoto: null, avatar: null }).catch(() => {});
+      update(ref(db, `appUsers/${emailKey}`), { profilePhoto: null, photoUrl: null, avatar: null }).catch(() => {});
     }
   };
 
