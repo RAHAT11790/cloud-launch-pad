@@ -3027,7 +3027,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       : "scale(1)";
 
   return (
-    <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
+    <div data-video-player-root="true" className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
       {/* Back arrow lives inside the controls overlay below, so it hides/shows with controls */}
 
 
