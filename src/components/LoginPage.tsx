@@ -87,6 +87,9 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const [forgotNewPw, setForgotNewPw] = useState("");
   const [forgotNewPwConfirm, setForgotNewPwConfirm] = useState("");
 
+  const pickPreferredPhoto = (...values: Array<string | undefined | null>) =>
+    values.map((value) => String(value || "").trim()).find(Boolean) || "";
+
   const syncCanonicalUserNode = async (userId: string, payload: Record<string, any>, email?: string) => {
     const aliasKey = buildEmailAliasKey(email);
     const writes: Promise<any>[] = [
@@ -163,6 +166,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         // User already has password, proceed normally
         const deviceOk = await checkAndRegisterDevice(uid);
         if (!deviceOk) { setLoading(false); return; }
+        const resolvedPhoto = pickPreferredPhoto(existingData?.profilePhoto, existingData?.photoUrl, existingData?.avatar, gPhoto);
 
         await set(ref(db, `appUsers/${commaKey}`), {
           ...existingData,
@@ -178,16 +182,16 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
             googleAuth: true,
             lastSeen: Date.now(),
             createdAt: existingData?.createdAt || Date.now(),
-            profilePhoto: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || "",
-            photoUrl: gPhoto || existingData?.photoUrl || existingData?.profilePhoto || existingData?.avatar || "",
-            avatar: gPhoto || existingData?.avatar || existingData?.profilePhoto || existingData?.photoUrl || "",
+            profilePhoto: resolvedPhoto,
+            photoUrl: resolvedPhoto,
+            avatar: resolvedPhoto,
           }, gEmail);
         } catch (e) {}
 
         localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         writeDisplayName(gName, uid);
-        if (gPhoto) { writeProfilePhoto(gPhoto, uid); } else { removeProfilePhoto(uid); }
+        if (resolvedPhoto) { writeProfilePhoto(resolvedPhoto, uid); } else { removeProfilePhoto(uid); }
         toast.success(`Welcome, ${gName}!`);
         onLogin(uid);
       } else {
@@ -216,6 +220,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
       const deviceOk = await checkAndRegisterDevice(uid);
       if (!deviceOk) { setLoading(false); return; }
+      const resolvedPhoto = pickPreferredPhoto(existingData?.profilePhoto, existingData?.photoUrl, existingData?.avatar, gPhoto);
 
       await set(ref(db, `appUsers/${commaKey}`), {
         id: uid, name: gName, email: gEmail, googleAuth: true,
@@ -231,16 +236,16 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           googleAuth: true,
           lastSeen: Date.now(),
           createdAt: existingData?.createdAt || Date.now(),
-          profilePhoto: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || "",
-          photoUrl: gPhoto || existingData?.photoUrl || existingData?.profilePhoto || existingData?.avatar || "",
-          avatar: gPhoto || existingData?.avatar || existingData?.profilePhoto || existingData?.photoUrl || "",
+          profilePhoto: resolvedPhoto,
+          photoUrl: resolvedPhoto,
+          avatar: resolvedPhoto,
         }, gEmail);
       } catch (e) {}
 
       localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
       localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
       writeDisplayName(gName, uid);
-      if (gPhoto) { writeProfilePhoto(gPhoto, uid); } else { removeProfilePhoto(uid); }
+      if (resolvedPhoto) { writeProfilePhoto(resolvedPhoto, uid); } else { removeProfilePhoto(uid); }
       toast.success(`Welcome, ${gName}! Password set successfully ✅`);
       setGoogleSetPwMode(false);
       setGooglePendingData(null);
