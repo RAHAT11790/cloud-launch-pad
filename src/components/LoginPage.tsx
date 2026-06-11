@@ -187,7 +187,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         writeDisplayName(gName, uid);
-        if (gPhoto) writeProfilePhoto(gPhoto, uid);
+        if (gPhoto) { writeProfilePhoto(gPhoto, uid); } else { removeProfilePhoto(uid); }
         toast.success(`Welcome, ${gName}!`);
         onLogin(uid);
       } else {
@@ -240,7 +240,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
       localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
       localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
       writeDisplayName(gName, uid);
-      if (gPhoto) writeProfilePhoto(gPhoto, uid);
+      if (gPhoto) { writeProfilePhoto(gPhoto, uid); } else { removeProfilePhoto(uid); }
       toast.success(`Welcome, ${gName}! Password set successfully ✅`);
       setGoogleSetPwMode(false);
       setGooglePendingData(null);

@@ -548,10 +548,18 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     const applyRemote = (data: any) => {
       const remotePhoto = String(data?.profilePhoto || data?.photoUrl || data?.avatar || "").trim();
       const remoteName = String(data?.name || "").trim();
-      if (remotePhoto) {
-        setProfilePhoto(remotePhoto);
-        writeProfilePhoto(remotePhoto, userId);
+
+      // Sync photo (including deletions)
+      if (remotePhoto !== (readProfilePhoto(userId) || "")) {
+        if (remotePhoto) {
+          setProfilePhoto(remotePhoto);
+          writeProfilePhoto(remotePhoto, userId);
+        } else if (userId) {
+          setProfilePhoto(null);
+          removeProfilePhoto(userId);
+        }
       }
+
       if (remoteName && remoteName !== "Guest User") {
         setDisplayName(remoteName);
         setTempName(remoteName);

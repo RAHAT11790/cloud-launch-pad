@@ -87,13 +87,6 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
     } catch {}
 
     // Listen for profile photo changes
-    const checkPhoto = () => {
-      try {
-        const photo = readProfilePhoto(id);
-        setProfilePhoto(photo);
-      } catch {}
-    };
-    const interval = setInterval(checkPhoto, 2000);
 
     // Update online status only for real users
     if (id) {
@@ -110,10 +103,19 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       const applyRemote = (data: any) => {
         const remotePhoto = String(data?.profilePhoto || data?.photoUrl || data?.avatar || "").trim();
         const remoteName = String(data?.name || "").trim();
-        if (remotePhoto) {
-          writeProfilePhoto(remotePhoto, id);
-          setProfilePhoto(remotePhoto);
+        
+        // Sync photo (including deletions)
+        if (remotePhoto !== (readProfilePhoto(id) || "")) {
+          if (remotePhoto) {
+            writeProfilePhoto(remotePhoto, id);
+            setProfilePhoto(remotePhoto);
+          } else if (id) {
+            // Only clear if we have a real user ID and remote is explicitly empty
+            removeProfilePhoto(id);
+            setProfilePhoto(null);
+          }
         }
+
         if (remoteName && remoteName !== "Guest User") {
           try {
             writeDisplayName(remoteName, id);
@@ -151,7 +153,6 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
         mirrorUnsub?.();
         window.removeEventListener("beforeunload", onUnload);
       };
-    }
 
     return () => {
       clearInterval(interval);
