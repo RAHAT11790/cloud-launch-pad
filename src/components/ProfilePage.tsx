@@ -763,20 +763,27 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     const emailKey = buildEmailAliasKey(storedEmail);
 
     const persistUrl = (url: string) => {
+      const stamp = Date.now();
       setProfilePhoto(url);
       writeProfilePhoto(url, userId);
       if (userId) {
-        update(ref(db, `users/${userId}`), { profilePhoto: url, photoUrl: url, avatar: url }).catch(() => {});
+        update(ref(db, `users/${userId}`), { profilePhoto: url, photoUrl: url, avatar: url, photoUpdatedAt: stamp }).catch(() => {});
+        update(ref(db, `users/${userId}/profilePhotos/${stamp}`), { url, createdAt: stamp, active: true }).catch(() => {});
       }
       if (emailKey) {
         // Email-keyed mirrors so any other device that signs into the
         // same Gmail can fetch the URL back instantly.
         update(ref(db, `userProfiles/${emailKey}`), {
           photoUrl: url, profilePhoto: url, avatar: url,
-          email: storedEmail, uid: userId || null, updatedAt: Date.now(),
+          email: storedEmail, uid: userId || null, updatedAt: stamp,
         }).catch(() => {});
         update(ref(db, `appUsers/${emailKey}`), {
-          profilePhoto: url, photoUrl: url, avatar: url,
+          profilePhoto: url, photoUrl: url, avatar: url, photoUpdatedAt: stamp,
+        }).catch(() => {});
+        update(ref(db, `userProfiles/${emailKey}/history/${stamp}`), {
+          url,
+          createdAt: stamp,
+          uid: userId || null,
         }).catch(() => {});
       }
     };
