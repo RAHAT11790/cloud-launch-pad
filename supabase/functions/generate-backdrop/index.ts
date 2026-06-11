@@ -29,71 +29,51 @@ interface Body {
 }
 
 function defaultBackdropPrompt(title: string, _year?: string | number): string {
-  return `Create a PROFESSIONAL 16:9 cinematic ANIME promotional poster/banner in ultra detailed 4K quality for the anime "${title}".
+  return `Create an ULTRA-PROFESSIONAL 16:9 ANIME promotional banner — official Crunchyroll / Netflix / Aniplex / Toho key visual quality — for the anime titled "${title}".
 
-═══════════ ABSOLUTE STYLE LOCK ═══════════
-This is an authentic JAPANESE ANIME key visual — official Crunchyroll / Netflix / Aniplex / Toho marketing quality (ufotable / MAPPA / Wit Studio / A-1 / Madhouse / Bones / KyoAni level).
-HARD-FORBIDDEN — DO NOT PRODUCE ANY OF THESE:
-- ❌ Western cartoon style (Disney, Pixar, DreamWorks, Cartoon Network, Nickelodeon, Simpsons, Family Guy, Adventure Time, Steven Universe).
-- ❌ 3D Pixar/CGI, chibi, super-deformed, kiddie/preschool, mascot art, rubber-hose limbs, oversized round heads.
-- ❌ Flat vector cartoon, sticker art, coloring-book outlines, American comic-book style.
-- ❌ Childish / silly / goofy / cute-baby tone. This must look MATURE and CINEMATIC.
-IF THE OUTPUT LOOKS LIKE A CARTOON OR KIDS' SHOW IN ANY WAY, IT IS WRONG.
+═══════════ ABSOLUTE STYLE LOCK — READ FIRST ═══════════
+THIS IS A JAPANESE ANIME KEY VISUAL. NOT A WESTERN CARTOON. NOT A KIDS SHOW.
+STRICTLY FORBIDDEN STYLES (DO NOT PRODUCE ANY OF THESE UNDER ANY CIRCUMSTANCE):
+- ❌ NO Western cartoon style (no Disney, no Pixar, no DreamWorks, no Cartoon Network, no Nickelodeon, no Adventure Time, no Steven Universe, no Family Guy, no Simpsons look).
+- ❌ NO 3D Pixar/CGI rendering, NO toy-like plastic shading, NO chibi, NO super-deformed, NO cute mascot, NO baby/kiddie style.
+- ❌ NO rubber-hose limbs, NO oversized round heads on tiny bodies, NO flat vector cartoon look, NO sticker-art, NO comic-book Marvel/DC American style.
+- ❌ NO childish coloring-book outlines, NO crayon shading, NO simplified preschool art.
+IF THE OUTPUT LOOKS LIKE A CARTOON IN ANY WAY, IT IS WRONG. REGENERATE AS PROPER ANIME.
 
-═══════════ STYLE REQUIREMENTS ═══════════
-- Modern anime thumbnail/poster design with dark cinematic atmosphere and glowing effects.
-- Ultra-high-detail anime illustration, sharp focus, vibrant lighting, dramatic shadows.
-- Dynamic composition with depth and motion. Professional typography and clean layout.
-- Eye-catching YouTube/Telegram style anime banner. Highly detailed background matching the anime's theme.
-- Energy effects, particles, glow, sparks, speed lines, cinematic lighting.
-- Make the entire design feel PREMIUM and VIRAL.
+MANDATORY STYLE — JAPANESE ANIME ONLY:
+- ✅ Authentic Japanese anime art (in the style of ufotable, MAPPA, Wit Studio, Bones, A-1 Pictures, Madhouse, Kyoto Animation, Shaft).
+- ✅ Sharp anime linework, detailed cel-shading, realistic anime proportions, expressive anime eyes, sharp facial features.
+- ✅ Cinematic anime lighting, HDR color grading, depth of field, atmospheric particles.
+- ✅ Mature, cinematic, cool/serious tone — NOT childish, NOT silly, NOT goofy.
+- ✅ Looks like an official anime Blu-ray cover or theatrical poster.
 
-═══════════ CHARACTER DESIGN ═══════════
-- Use the ORIGINAL OFFICIAL anime characters of "${title}" in their most iconic pose — match the real canonical hair, eye color, outfit, weapons, aura, age, proportions exactly as fans know them from Crunchyroll / IMDB / official posters.
-- Characters must look powerful, emotional, stylish, dynamic.
-- Studio-quality modern polished anime art, detailed anime eyes, hair glow, dramatic expressions.
-- Color grading must match the anime's actual theme.
-- DO NOT redesign or cartoonify the characters.
+CHARACTERS:
+- Use the ORIGINAL OFFICIAL ANIME CHARACTERS from "${title}" — exact canonical hair, eyes, outfit, weapons, aura, age, proportions.
+- DO NOT redesign, DO NOT cartoonify, DO NOT chibi-fy.
+- Anime fans must instantly recognize the characters from the real show.
+- Main protagonist front-and-center / right; supporting characters layered with cinematic depth.
 
-═══════════ TYPOGRAPHY ═══════════
-- BIG bold stylized anime title text for "${title}".
-- Aggressive, modern, cinematic feel — brush-stroke / neon / sharp-edge style.
-- Add a Japanese kanji subtitle for anime aesthetic.
-- Text must blend naturally with the effects and background.
+LAYOUT (16:9 widescreen, like the reference "CAPTAIN TSUBASA" / "SCUM OF THE BRAVE" banners):
+- LEFT SIDE: large stylized anime title "${title}" in bold brushstroke / sharp-edged anime logo typography. Small Japanese kanji subtitle below. Optional one-line tagline.
+- RIGHT SIDE: hero anime character artwork in a dynamic cinematic pose, supporting characters behind.
+- Background matches the anime's true genre mood (action → energy/sparks/destruction; romance → soft bokeh; dark/horror → shadow/neon; sports → stadium lights/motion; fantasy → magic particles).
 
-═══════════ BRANDING LAYOUT ═══════════
-- TOP-RIGHT CORNER: small elegant "RS ANIME" logo with a minimal crown icon — premium, not overpowering.
-- BOTTOM-LEFT: Telegram icon + "TG :- @CARTOONFUNNY03"
-- Below it: Website icon + "WEBSITE :- RS ANIME"
-- Use subtle glowing UI bars/shapes around the social links. Branding small but stylish and crisp.
-- All branding text must be sharp, perfectly legible English. No garbled letters.
+BRANDING (small, premium, never childish):
+- TOP-RIGHT: small "RS ANIME" badge with a minimal crown icon.
+- BOTTOM-LEFT: clean glass chips — Telegram icon + "TG :- @CARTOONFUNNY03"  and  Globe icon + "WEBSITE :- RS ANIME".
+- All branding text must be crisp, perfectly legible English. No garbled letters.
 
-═══════════ COLOR & THEME ═══════════
-- Match the anime's original mood and genre.
-- Cinematic contrast, vibrant anime palette.
-- Blue / red / purple / orange glow depending on the show's vibe.
-- High-contrast lighting and realistic anime shading.
+COLOR & FINISH:
+- Rich cinematic anime palette, deep blacks, vibrant highlights, glow, lens flares, particles, motion lines where appropriate.
+- 4K ultra-detailed, sharp focus, no blur on faces, no extra fingers, no deformed anatomy, no watermarks, no random text.
 
-═══════════ QUALITY ═══════════
-- Ultra detailed, 4K, HDR, professional anime poster quality.
-- Trending anime thumbnail style. Clean edges, sharp anime rendering, high quality textures.
-- No blur, no watermark, no random text, no extra fingers, no deformed anatomy.
+STRICT:
+- DO NOT include any year, date, or version number anywhere in the artwork.
+- DO NOT add any cartoon mascots, emojis, or kiddie decorations.
+- The final image MUST look like a real official Japanese anime promotional key visual — indistinguishable from one made by an actual anime studio's marketing team.
 
-═══════════ COMPOSITION ═══════════
-- LEFT side = title and text elements.
-- RIGHT side = main anime characters / artwork.
-- Balanced cinematic framing, depth, layered visual effects.
-- Make the poster feel alive and immersive.
-
-═══════════ EXTRA INSTRUCTIONS ═══════════
-- DO NOT add any year, release date, or version number anywhere in the artwork.
-- Design must look UNIQUE for "${title}" — avoid generic layouts.
-- Looks like an official anime promotional key visual mixed with a premium YouTube thumbnail.
-- Highly attractive and click-worthy professional anime marketing artwork.
-
-FINAL CHECK: If the image looks like a Western cartoon, Pixar 3D, chibi, or anything childish — IT IS WRONG. Output ONLY a true professional Japanese anime promotional key visual.`;
+FINAL CHECK BEFORE OUTPUT: If the image looks like a Western cartoon, a kids' show, Pixar 3D, chibi, or anything childish — IT IS WRONG. Output ONLY professional Japanese anime key-visual style.`;
 }
-
 
 
 function defaultLogoPrompt(title: string): string {

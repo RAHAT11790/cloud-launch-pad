@@ -1,7 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onValue, push, set, remove, update, query, orderByChild, equalTo, get, runTransaction } from "firebase/database";
 import { getAuth, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword } from "firebase/auth";
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCP5bfue5FOc0eTO4E52-0A0w3PppO3Mvw",
@@ -16,7 +15,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
 export const auth = getAuth(app);
-export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
-export { ref, onValue, push, set, remove, update, query, orderByChild, equalTo, get, runTransaction, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword, storageRef, uploadBytes, getDownloadURL, deleteObject };
+export { ref, onValue, push, set, remove, update, query, orderByChild, equalTo, get, runTransaction, signInWithEmailAndPassword, signOut, signInWithPopup, sendPasswordResetEmail, confirmPasswordReset, updatePassword };
