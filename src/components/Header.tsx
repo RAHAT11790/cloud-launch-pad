@@ -5,6 +5,7 @@ import NotificationPanel from "./NotificationPanel";
 import { useBranding } from "@/hooks/useBranding";
 import ThemeToggle from "./ThemeToggle";
 import { db, ref, set, update, onValue } from "@/lib/firebase";
+import { readProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
 // Get existing user ID from localStorage (do NOT auto-create guest accounts)
 const getExistingUserId = (): string | undefined => {
@@ -81,14 +82,14 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
 
     // Load profile photo
     try {
-      const photo = localStorage.getItem("rs_profile_photo");
+      const photo = readProfilePhoto(id);
       setProfilePhoto(photo);
     } catch {}
 
     // Listen for profile photo changes
     const checkPhoto = () => {
       try {
-        const photo = localStorage.getItem("rs_profile_photo");
+        const photo = readProfilePhoto(id);
         setProfilePhoto(photo);
       } catch {}
     };
@@ -101,12 +102,12 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
         const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
         const remoteName = String(data.name || "").trim();
         if (remotePhoto) {
-          try { localStorage.setItem("rs_profile_photo", remotePhoto); } catch {}
+          writeProfilePhoto(remotePhoto, id);
           setProfilePhoto(remotePhoto);
         }
         if (remoteName && remoteName !== "Guest User") {
           try {
-            localStorage.setItem("rs_display_name", remoteName);
+            writeDisplayName(remoteName, id);
             const rawUser = localStorage.getItem("rsanime_user");
             const parsedUser = rawUser ? JSON.parse(rawUser) : {};
             localStorage.setItem("rsanime_user", JSON.stringify({ ...parsedUser, name: remoteName }));
