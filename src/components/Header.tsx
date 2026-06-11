@@ -102,10 +102,18 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       const applyRemote = (data: any) => {
         const remotePhoto = String(data?.profilePhoto || data?.photoUrl || data?.avatar || "").trim();
         const remoteName = String(data?.name || "").trim();
+        const remotePhotoPath = String(data?.profilePhotoPath || "").trim();
         
         if (remotePhoto && remotePhoto !== (readProfilePhoto(id) || "")) {
           writeProfilePhoto(remotePhoto, id);
           setProfilePhoto(remotePhoto);
+        }
+        if (remotePhotoPath) {
+          try {
+            const rawUser = localStorage.getItem("rsanime_user");
+            const parsedUser = rawUser ? JSON.parse(rawUser) : {};
+            localStorage.setItem("rsanime_user", JSON.stringify({ ...parsedUser, profilePhotoPath: remotePhotoPath }));
+          } catch {}
         }
 
         if (remoteName && remoteName !== "Guest User") {
