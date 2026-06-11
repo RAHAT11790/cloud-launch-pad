@@ -134,9 +134,13 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const handleClick = (release: EpisodeRelease) => {
+  const handleClick = (release: EpisodeRelease, startEpisode?: number) => {
     const content = getContent(release.contentId);
-    if (content) { const sIdx = getSeason(release) ? getSeason(release)! - 1 : 0; const eIdx = getEpStart(release) ? getEpStart(release)! - 1 : 0; onCardClick(content, sIdx, eIdx); }
+    if (content) {
+      const sIdx = getSeason(release) ? getSeason(release)! - 1 : 0;
+      const eIdx = typeof startEpisode === "number" ? Math.max(0, startEpisode - 1) : (getEpStart(release) ? getEpStart(release)! - 1 : 0);
+      onCardClick(content, sIdx, eIdx);
+    }
   };
 
   return (
@@ -190,7 +194,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
               <div
                 key={release.id}
                 className="relative flex-shrink-0 w-[124px] cursor-pointer group"
-                onClick={() => handleClick(release)}
+                onClick={() => handleClick(release, minEp)}
               >
                 <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card shadow-md transition-transform group-hover:scale-[1.03]">
                   {/* NEW badge */}
@@ -267,7 +271,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                   return (
                     <div
                       key={release.id}
-                      onClick={() => { handleClick(release); setShowModal(false); }}
+                      onClick={() => { handleClick(release, minEp); setShowModal(false); }}
                       className="flex gap-4 p-3 rounded-xl bg-foreground/5 cursor-pointer transition-all hover:bg-primary/20 hover:translate-x-1"
                     >
                       <img src={content.poster} alt={content.title} className="w-[60px] h-[80px] rounded-lg object-cover flex-shrink-0" />
