@@ -7403,6 +7403,18 @@ ${tgBulkFooter}
               toast.success("রেকর্ড ডিলিট হয়েছে");
             };
 
+            const clearAllPostRecords = async () => {
+              if (tgPosts.length === 0) {
+                toast.info("কোনো পোস্ট রেকর্ড নেই");
+                return;
+              }
+              if (!window.confirm(`সব ${tgPosts.length}টি পোস্ট রেকর্ড একসাথে মুছে ফেলতে চান?`)) return;
+              await set(ref(db, "telegramPosts"), null);
+              setTgBulkResults([]);
+              setTgSelectedPost("all");
+              toast.success("সব পোস্ট রেকর্ড ক্লিয়ার হয়েছে");
+            };
+
             return (
               <div>
                 <div className={`${glassCard} p-4 mb-4`}>
@@ -7505,9 +7517,18 @@ ${tgBulkFooter}
 
                 {/* Saved Posts List */}
                 <div className={`${glassCard} p-4`}>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <Send size={14} className="text-blue-400" /> সেভ করা পোস্ট ({tgPosts.length}টি)
-                  </h3>
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <h3 className="text-sm font-semibold flex items-center gap-2">
+                      <Send size={14} className="text-blue-400" /> সেভ করা পোস্ট ({tgPosts.length}টি)
+                    </h3>
+                    <button
+                      onClick={clearAllPostRecords}
+                      disabled={tgPostsLoading || tgPosts.length === 0}
+                      className={`${btnSecondary} !px-3 !py-1.5 text-[11px] text-red-300 border-red-500/30 disabled:opacity-50`}
+                    >
+                      Clear All
+                    </button>
+                  </div>
                   {tgPostsLoading ? (
                     <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>
                   ) : tgPosts.length === 0 ? (
