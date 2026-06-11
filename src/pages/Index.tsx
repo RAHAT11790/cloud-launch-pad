@@ -189,6 +189,7 @@ import LiveTvPage from "@/components/LiveTvPage";
 import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
+import { clearActiveDisplayName, clearActiveProfilePhoto, readProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
 // Session cache for API responses to speed up continue watching
 const apiCache = new Map<string, { data: any; ts: number }>();
@@ -387,8 +388,8 @@ const Index = () => {
 
       try {
         localStorage.removeItem("rsanime_user");
-        localStorage.removeItem("rs_display_name");
-        localStorage.removeItem("rs_profile_photo");
+        clearActiveDisplayName();
+        clearActiveProfilePhoto();
         localStorage.removeItem("rs_session_started_at");
       } catch {}
       setIsLoggedIn(false);
@@ -798,7 +799,17 @@ const Index = () => {
         const now = Date.now();
         // Skip legacy per-device nested keys (objects without `id` field)
         const items = Object.values(data).filter((v: any) => v && typeof v === "object" && v.id) as any[];
-        const withProgress = items.filter((i: any) => {
+        const localRaw = localStorage.getItem("rs_continueCache");
+        const localItems = Array.isArray(JSON.parse(localRaw || "[]")) ? JSON.parse(localRaw || "[]") : [];
+        const merged = new Map<string, any>();
+        [...localItems, ...items].forEach((entry: any) => {
+          if (!entry?.id) return;
+          const epKey = entry?.episodeInfo ? `${entry.episodeInfo?.seasonIdx ?? entry.episodeInfo?.season ?? "m"}:${entry.episodeInfo?.epIdx ?? entry.episodeInfo?.episode ?? "m"}` : "movie";
+          const key = `${entry.id}__${epKey}`;
+          const current = merged.get(key);
+          if (!current || Number(entry?.watchedAt || 0) >= Number(current?.watchedAt || 0)) merged.set(key, entry);
+        });
+        const withProgress = Array.from(merged.values()).filter((i: any) => {
           // Respect 30-day retention window
           if (i.watchedAt && now - i.watchedAt > THIRTY_DAYS) return false;
           if (i.id?.startsWith('as_')) return true;
@@ -1671,7 +1682,9 @@ const Index = () => {
       const userId = user ? JSON.parse(user).id : null;
       const cacheRaw = localStorage.getItem("rs_continueCache");
       const cached = cacheRaw ? JSON.parse(cacheRaw) : [];
-      const cachedMatch = Array.isArray(cached) ? cached.find((item: any) => item?.id === anime.id) : null;
+      const cachedMatch = Array.isArray(cached)
+        ? cached.find((item: any) => item?.id === anime.id && ((item?.episodeInfo?.seasonIdx ?? item?.episodeInfo?.season) === (seasonIdx ?? item?.episodeInfo?.seasonIdx ?? item?.episodeInfo?.season)) && ((item?.episodeInfo?.epIdx ?? item?.episodeInfo?.episode) === (epIdx ?? item?.episodeInfo?.epIdx ?? item?.episodeInfo?.episode)))
+        : null;
       const guestMatch = guestStore.continue.list().find((item) => item.animeId === anime.id && item.seasonIdx === seasonIdx && item.epIdx === epIdx);
 
       const historyItem: any = {
@@ -1716,7 +1729,9 @@ const Index = () => {
             currentTime: preserveProgress ? Number(cachedMatch?.currentTime || 0) : 0,
             duration: preserveProgress ? Number(cachedMatch?.duration || 0) : 0,
           },
-          ...(Array.isArray(cached) ? cached.filter((item: any) => item?.id !== anime.id) : []),
+          ...(Array.isArray(cached)
+            ? cached.filter((item: any) => !(item?.id === anime.id && ((item?.episodeInfo?.seasonIdx ?? item?.episodeInfo?.season) === (historyItem?.episodeInfo?.seasonIdx ?? historyItem?.episodeInfo?.season)) && ((item?.episodeInfo?.epIdx ?? item?.episodeInfo?.episode) === (historyItem?.episodeInfo?.epIdx ?? historyItem?.episodeInfo?.episode))))
+            : []),
         ].slice(0, 50);
         localStorage.setItem("rs_continueCache", JSON.stringify(nextCache));
       } catch {}
@@ -1782,7 +1797,12 @@ const Index = () => {
           duration,
           episodeInfo: updates.episodeInfo,
         };
-        const nextCache = [nextItem, ...(Array.isArray(cached) ? cached.filter((item: any) => item?.id !== playerState.anime.id) : [])].slice(0, 50);
+        const nextCache = [
+          nextItem,
+          ...(Array.isArray(cached)
+            ? cached.filter((item: any) => !(item?.id === playerState.anime.id && ((item?.episodeInfo?.seasonIdx ?? item?.episodeInfo?.season) === (updates?.episodeInfo?.seasonIdx ?? updates?.episodeInfo?.season)) && ((item?.episodeInfo?.epIdx ?? item?.episodeInfo?.episode) === (updates?.episodeInfo?.epIdx ?? updates?.episodeInfo?.episode))))
+            : []),
+        ].slice(0, 50);
         localStorage.setItem("rs_continueCache", JSON.stringify(nextCache));
         guestStore.continue.upsert({
           animeId: playerState.anime.id,
@@ -2124,10 +2144,10 @@ const Index = () => {
         const remoteName = String(data.name || "").trim();
 
         if (remotePhoto) {
-          localStorage.setItem("rs_profile_photo", remotePhoto);
+          writeProfilePhoto(remotePhoto, userId);
         }
         if (remoteName && remoteName !== "Guest User") {
-          localStorage.setItem("rs_display_name", remoteName);
+          writeDisplayName(remoteName, userId);
           localStorage.setItem("rsanime_user", JSON.stringify({
             ...user,
             name: remoteName,
@@ -2153,8 +2173,8 @@ const Index = () => {
       }
     } catch {}
     localStorage.removeItem("rsanime_user");
-    localStorage.removeItem("rs_display_name");
-    localStorage.removeItem("rs_profile_photo");
+    clearActiveDisplayName();
+    clearActiveProfilePhoto();
     localStorage.removeItem("rs_session_started_at");
     setIsLoggedIn(false);
   };
@@ -2169,8 +2189,8 @@ const Index = () => {
     } catch {}
 
     localStorage.removeItem("rsanime_user");
-    localStorage.removeItem("rs_display_name");
-    localStorage.removeItem("rs_profile_photo");
+    clearActiveDisplayName();
+    clearActiveProfilePhoto();
     localStorage.removeItem("rs_session_started_at");
     setDeviceLimitWarning(null);
     setUserFreeAccessExpiresAt(0);
