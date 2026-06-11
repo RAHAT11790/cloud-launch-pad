@@ -13,7 +13,7 @@ import PrivacyPolicyPage from "./PrivacyPolicyPage";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { Progress } from "@/components/ui/progress";
 import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
-import { clearActiveProfilePhoto, readDisplayName, readProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
+import { readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -717,7 +717,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
 
   const removePhoto = () => {
     setProfilePhoto(null);
-    clearActiveProfilePhoto();
+    removeProfilePhoto(userId);
     if (userId) {
       update(ref(db, `users/${userId}`), { profilePhoto: null, photoUrl: null, avatar: null }).catch(() => {});
     }
