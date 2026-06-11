@@ -2620,7 +2620,7 @@ const Index = () => {
             </div>
           )}
 
-          <NewEpisodeReleases allAnime={allAnime} onCardClick={handleCardClick} />
+          <NewEpisodeReleases allAnime={allAnime} onCardClick={(anime, seasonIdx, epIdx) => void handlePlay(anime, seasonIdx, epIdx)} />
           {trendingSeries.length > 0 && (
             <AnimeSection title="🔥 Trending Anime Series" items={trendingSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("series")} />
           )}
@@ -2680,7 +2680,7 @@ const Index = () => {
           qualityOptions={playerState.qualityOptions}
           audioTracks={playerState.audioTracks}
           animeId={playerState.anime.id}
-          initialSeekTime={playerState.resumeTime}
+          initialSeekTime={typeof playerState.resumeTime === "number" ? playerState.resumeTime : undefined}
           currentEpisodeIdx={playerState.epIdx}
           onSaveProgress={saveVideoProgress}
           onNextEpisode={
