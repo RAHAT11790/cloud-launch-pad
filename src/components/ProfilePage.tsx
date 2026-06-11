@@ -67,7 +67,7 @@ const DownloadVideoPlayer = ({ src, title, subtitle, poster, onClose, downloaded
 interface ProfilePageProps {
   onClose: () => void;
   allAnime?: AnimeItem[];
-  onCardClick?: (anime: AnimeItem) => void;
+  onCardClick?: (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => void;
   onLogout?: () => void;
   onLoginClick?: () => void;
 }
@@ -751,8 +751,18 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     if (!onCardClick) return;
     const anime = allAnime.find(a => a.id === item.id);
     if (anime) {
+      const seasonIdx = typeof item?.episodeInfo?.seasonIdx === "number"
+        ? item.episodeInfo.seasonIdx
+        : typeof item?.episodeInfo?.season === "number"
+          ? Math.max(0, item.episodeInfo.season - 1)
+          : undefined;
+      const epIdx = typeof item?.episodeInfo?.epIdx === "number"
+        ? item.episodeInfo.epIdx
+        : typeof item?.episodeInfo?.episode === "number"
+          ? Math.max(0, item.episodeInfo.episode - 1)
+          : undefined;
       onClose();
-      setTimeout(() => onCardClick(anime), 100);
+      setTimeout(() => onCardClick(anime, seasonIdx, epIdx), 100);
     }
   };
 
