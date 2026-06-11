@@ -1216,7 +1216,7 @@ const Index = () => {
     await handlePlay(anime, target.seasonIdx, target.epIdx);
   }
 
-  const handleCardClick = async (anime: AnimeItem) => {
+  const handleCardClick = async (anime: AnimeItem, sIdx?: number, eIdx?: number) => {
     // Cancel any stale in-flight AnimeSalt details requests when switching content
     detailsRequestRef.current += 1;
 
@@ -1236,7 +1236,7 @@ const Index = () => {
       const cachedDetails = detailsCacheRef.current.get(anime.id);
       if (cachedDetails) {
         dismissDetailsLoadingToast();
-        await openPlayerFromAnime(cachedDetails);
+        await openPlayerFromAnime(cachedDetails, { seasonIdx: sIdx, epIdx: eIdx });
         return;
       }
 
@@ -1290,7 +1290,7 @@ const Index = () => {
             })),
           };
           detailsCacheRef.current.set(anime.id, fullAnime);
-          await openPlayerFromAnime(fullAnime);
+          await openPlayerFromAnime(fullAnime, { seasonIdx: sIdx, epIdx: eIdx });
           dismissDetailsLoadingToast();
           return;
         }
@@ -1423,7 +1423,7 @@ const Index = () => {
 
           if (requestId !== detailsRequestRef.current) return;
           detailsCacheRef.current.set(anime.id, fullAnime);
-          await openPlayerFromAnime(fullAnime);
+          await openPlayerFromAnime(fullAnime, { seasonIdx: sIdx, epIdx: eIdx });
         } else {
           // API didn't return data — show anime with metadata from Firebase
           const fallbackAnime: AnimeItem = {
@@ -1435,7 +1435,7 @@ const Index = () => {
             language: anime.language || '',
           };
           detailsCacheRef.current.set(anime.id, fallbackAnime);
-          await openPlayerFromAnime(fallbackAnime);
+          await openPlayerFromAnime(fallbackAnime, { seasonIdx: sIdx, epIdx: eIdx });
         }
       } catch (err) {
         if (requestId === detailsRequestRef.current) {
@@ -1446,7 +1446,7 @@ const Index = () => {
             ...anime,
             storyline: anime.storyline || '',
           };
-          await openPlayerFromAnime(fallbackAnime);
+          await openPlayerFromAnime(fallbackAnime, { seasonIdx: sIdx, epIdx: eIdx });
         }
       } finally {
         if (detailsLoadingToastRef.current === toastId) dismissDetailsLoadingToast();
@@ -1465,7 +1465,7 @@ const Index = () => {
     }
 
     dismissDetailsLoadingToast();
-    await openPlayerFromAnime(anime);
+    await openPlayerFromAnime(anime, { seasonIdx: sIdx, epIdx: eIdx });
   };
 
   const handlePlay = async (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => {
