@@ -4,8 +4,8 @@ import logoImg from "@/assets/logo.png";
 import NotificationPanel from "./NotificationPanel";
 import { useBranding } from "@/hooks/useBranding";
 import ThemeToggle from "./ThemeToggle";
-import { db, ref, set, update, onValue } from "@/lib/firebase";
-import { buildEmailAliasKey, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
+import { db, ref, update, onValue } from "@/lib/firebase";
+import { buildEmailAliasKey, readProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
 // Get existing user ID from localStorage (do NOT auto-create guest accounts)
 const getExistingUserId = (): string | undefined => {
@@ -103,16 +103,9 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
         const remotePhoto = String(data?.profilePhoto || data?.photoUrl || data?.avatar || "").trim();
         const remoteName = String(data?.name || "").trim();
         
-        // Sync photo (including deletions)
-        if (remotePhoto !== (readProfilePhoto(id) || "")) {
-          if (remotePhoto) {
-            writeProfilePhoto(remotePhoto, id);
-            setProfilePhoto(remotePhoto);
-          } else if (id) {
-            // Only clear if we have a real user ID and remote is explicitly empty
-            removeProfilePhoto(id);
-            setProfilePhoto(null);
-          }
+        if (remotePhoto && remotePhoto !== (readProfilePhoto(id) || "")) {
+          writeProfilePhoto(remotePhoto, id);
+          setProfilePhoto(remotePhoto);
         }
 
         if (remoteName && remoteName !== "Guest User") {
