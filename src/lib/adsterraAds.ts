@@ -39,7 +39,6 @@ declare global {
     __adsterraCloseButton?: HTMLButtonElement | null;
     __adsterraLastLoadAt?: number;
     __adsterraMountPromise?: Promise<void> | null;
-    __adsterraLastInteractionAt?: number;
   }
 }
 
@@ -97,16 +96,6 @@ export function setAdsterraPremium(p: boolean) {
   if (typeof window !== "undefined") window.__adsterraPremium = !!p;
 }
 
-export function markAdsterraInteractionNow() {
-  if (typeof window === "undefined") return;
-  window.__adsterraLastInteractionAt = Date.now();
-}
-
-export function getAdsterraLastInteractionAt(): number {
-  if (typeof window === "undefined") return 0;
-  return Number(window.__adsterraLastInteractionAt || 0);
-}
-
 function hasSnippets(cfg: AdsterraConfig) {
   return !!(cfg.popunder.trim() || cfg.socialBar.trim());
 }
@@ -145,8 +134,6 @@ function scheduleRefresh(cfg: AdsterraConfig, baseTs: number) {
   const dueTs = baseTs + cfg.refreshIntervalSec * 1000;
   const delay = Math.max(0, dueTs - Date.now());
   window.__adsterraRefreshTimer = window.setTimeout(() => {
-    const lastInteractionAt = getAdsterraLastInteractionAt();
-    if (!lastInteractionAt || Date.now() - lastInteractionAt > 2000) return;
     const nextCfg = window.__adsterraActiveConfig ?? cfg;
     mountAdCycle(nextCfg, true).catch(() => {
       scheduleRefresh(nextCfg, Date.now());
@@ -396,7 +383,6 @@ export function exitAdsterraPlayerScope() {
   window.__adsterraLastLoadAt = undefined;
   window.__adsterraMountPromise = null;
   window.__adsterraLastConfigJson = undefined;
-  window.__adsterraLastInteractionAt = undefined;
 }
 
 export async function loadAdsterraSlots(): Promise<void> {
@@ -426,13 +412,5 @@ export async function loadAdsterraSlots(): Promise<void> {
   }
 
   window.__adsterraLastConfigJson = json;
-  await mountAdCycle(cfg);
-}
-
-export async function forceReloadAdsterraSlots(): Promise<void> {
-  if (typeof window === "undefined") return;
-  if (!window.__adsterraPlayerScopeActive || window.__adsterraPremium) return;
-  const cfg = await getAdsterraConfig();
-  window.__adsterraLastConfigJson = JSON.stringify(cfg);
   await mountAdCycle(cfg);
 }

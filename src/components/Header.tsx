@@ -76,21 +76,27 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
   }, [displayTitles.length]);
 
   useEffect(() => {
-    let userUnsub: (() => void) | null = null;
+    const id = getExistingUserId();
+    setUserId(id);
 
-    const syncLocalUser = () => {
-      const id = getExistingUserId();
-      setUserId(id);
+    // Load profile photo
+    try {
+      const photo = localStorage.getItem("rs_profile_photo");
+      setProfilePhoto(photo);
+    } catch {}
+
+    // Listen for profile photo changes
+    const checkPhoto = () => {
       try {
         const photo = localStorage.getItem("rs_profile_photo");
         setProfilePhoto(photo);
       } catch {}
+    };
+    const interval = setInterval(checkPhoto, 2000);
 
-      userUnsub?.();
-      userUnsub = null;
-      if (!id) return;
-
-      userUnsub = onValue(ref(db, `users/${id}`), (snap) => {
+    // Update online status only for real users
+    if (id) {
+      const userUnsub = onValue(ref(db, `users/${id}`), (snap) => {
         const data = snap.val() || {};
         const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
         const remoteName = String(data.name || "").trim();
@@ -107,14 +113,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
           } catch {}
         }
       });
-    };
 
-    syncLocalUser();
-    const interval = setInterval(syncLocalUser, 2000);
-    window.addEventListener("storage", syncLocalUser);
-
-    const id = getExistingUserId();
-    if (id) {
       const updateOnline = () => {
         update(ref(db, `users/${id}`), { online: true, lastSeen: Date.now() }).catch(() => {});
       };
@@ -128,17 +127,14 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
 
       return () => {
         clearInterval(interval);
-        window.removeEventListener("storage", syncLocalUser);
         clearInterval(heartbeat);
-        userUnsub?.();
+        userUnsub();
         window.removeEventListener("beforeunload", onUnload);
       };
     }
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener("storage", syncLocalUser);
-      userUnsub?.();
     };
   }, []);
 
