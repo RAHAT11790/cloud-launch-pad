@@ -53,7 +53,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         </label>
       </div>
       <p className="text-[11px] text-white/60 leading-relaxed">
-        Paste the exact <code className="text-white/80">&lt;script&gt;</code> snippets from your Adsterra dashboard. Both ads now run inside <strong>sandboxed iframes</strong> mounted only inside the video player — they cannot leak anywhere else on the site. After every ad fires (or user taps the × on the push bar) the cooldown timer below blocks new ads until it expires.
+        Paste the exact <code className="text-white/80">&lt;script&gt;</code> snippet from your Adsterra dashboard. Only your player-scoped direct link and push notification ads run here, and each successful ad interaction starts the refresh cooldown so users do not get spammed.
       </p>
 
       <div className="space-y-1.5">
@@ -80,7 +80,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
 
       <div className="space-y-1.5">
         <label className="text-xs font-semibold text-white/80 block">
-          Cooldown (seconds)
+          Ad Refresh Interval (seconds)
         </label>
         <input
           type="number"
@@ -92,7 +92,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
           placeholder="60"
         />
         <p className="text-[10px] text-white/50 leading-relaxed">
-          After an ad fires (popunder opens / user taps × on the push bar) no new ad can load for this many seconds. Set <strong>0</strong> to let ads re-arm immediately after every fire.
+          Refresh starts counting after the current ad cycle finishes loading. Example: if an ad loads at 1:00 and this is <strong>120</strong>, the next cycle starts at about 3:00. Set <strong>0</strong> to disable auto refresh.
         </p>
       </div>
 

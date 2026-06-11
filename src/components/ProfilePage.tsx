@@ -13,7 +13,7 @@ import PrivacyPolicyPage from "./PrivacyPolicyPage";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { Progress } from "@/components/ui/progress";
 import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
-import { buildEmailAliasKey, readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
+import { readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -536,86 +536,24 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
 
   useEffect(() => {
     if (!userId) return;
+    const unsubUser = onValue(ref(db, `users/${userId}`), (snap) => {
+      const data = snap.val() || {};
+      const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+      const remoteName = String(data.name || "").trim();
 
-    // Resolve email alias once for the photo mirror.
-    let storedEmail = "";
-    try {
-      const raw = localStorage.getItem("rsanime_user");
-      if (raw) storedEmail = JSON.parse(raw)?.email || "";
-    } catch {}
-    const emailKey = buildEmailAliasKey(storedEmail);
-
-    const applyRemote = (data: any) => {
-      const remotePhoto = String(data?.profilePhoto || data?.photoUrl || data?.avatar || "").trim();
-      const remoteName = String(data?.name || "").trim();
-
-      if (remotePhoto && remotePhoto !== (readProfilePhoto(userId) || "")) {
+      if (remotePhoto) {
         setProfilePhoto(remotePhoto);
         writeProfilePhoto(remotePhoto, userId);
       }
-
       if (remoteName && remoteName !== "Guest User") {
         setDisplayName(remoteName);
         setTempName(remoteName);
         writeDisplayName(remoteName, userId);
       }
-    };
+    });
 
-    const unsubUser = onValue(ref(db, `users/${userId}`), (snap) => applyRemote(snap.val() || {}));
-    const unsubAlias = emailKey
-      ? onValue(ref(db, `appUsers/${emailKey}`), (snap) => applyRemote(snap.val() || {}))
-      : null;
-    const unsubMirror = emailKey
-      ? onValue(ref(db, `userProfiles/${emailKey}`), (snap) => applyRemote(snap.val() || {}))
-      : null;
-
-    return () => { unsubUser(); unsubAlias?.(); unsubMirror?.(); };
+    return () => unsubUser();
   }, [userId]);
-
-  useEffect(() => {
-    if (!userId || !profilePhoto) return;
-    let storedEmail = "";
-    try {
-      const raw = localStorage.getItem("rsanime_user");
-      if (raw) storedEmail = JSON.parse(raw)?.email || "";
-    } catch {}
-    const emailKey = buildEmailAliasKey(storedEmail);
-    const stamp = Date.now();
-
-    update(ref(db, `users/${userId}`), {
-      profilePhoto,
-      photoUrl: profilePhoto,
-      avatar: profilePhoto,
-      photoUpdatedAt: stamp,
-    }).catch(() => {});
-    update(ref(db, `users/${userId}/profilePhotos/${stamp}`), {
-      url: profilePhoto,
-      createdAt: stamp,
-      active: true,
-    }).catch(() => {});
-
-    if (emailKey) {
-      update(ref(db, `userProfiles/${emailKey}`), {
-        profilePhoto,
-        photoUrl: profilePhoto,
-        avatar: profilePhoto,
-        uid: userId,
-        email: storedEmail,
-        updatedAt: stamp,
-      }).catch(() => {});
-      update(ref(db, `appUsers/${emailKey}`), {
-        profilePhoto,
-        photoUrl: profilePhoto,
-        avatar: profilePhoto,
-        photoUpdatedAt: stamp,
-      }).catch(() => {});
-      update(ref(db, `userProfiles/${emailKey}/history/${stamp}`), {
-        url: profilePhoto,
-        createdAt: stamp,
-        uid: userId,
-      }).catch(() => {});
-    }
-  }, [userId, profilePhoto]);
 
   const handleDeleteThisPhoneLogin = useCallback(async () => {
     try {
@@ -751,54 +689,25 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     if (file.size > 5 * 1024 * 1024) { alert("Image must be under 5MB!"); return; }
     if (!file.type.startsWith("image/")) { alert("Please select an image file."); return; }
     setPhotoUploading(true);
-
-    // Resolve email alias so the photo URL is mirrored under a stable
-    // per-Gmail key. Logging in with the same account on another device
-    // resolves that key and pulls the photo back.
-    let storedEmail = "";
-    try {
-      const raw = localStorage.getItem("rsanime_user");
-      if (raw) storedEmail = JSON.parse(raw)?.email || "";
-    } catch {}
-    const emailKey = buildEmailAliasKey(storedEmail);
-
-    const persistUrl = (url: string) => {
-      const stamp = Date.now();
-      setProfilePhoto(url);
-      writeProfilePhoto(url, userId);
-      if (userId) {
-        update(ref(db, `users/${userId}`), { profilePhoto: url, photoUrl: url, avatar: url, photoUpdatedAt: stamp }).catch(() => {});
-        update(ref(db, `users/${userId}/profilePhotos/${stamp}`), { url, createdAt: stamp, active: true }).catch(() => {});
-      }
-      if (emailKey) {
-        // Email-keyed mirrors so any other device that signs into the
-        // same Gmail can fetch the URL back instantly.
-        update(ref(db, `userProfiles/${emailKey}`), {
-          photoUrl: url, profilePhoto: url, avatar: url,
-          email: storedEmail, uid: userId || null, updatedAt: stamp,
-        }).catch(() => {});
-        update(ref(db, `appUsers/${emailKey}`), {
-          profilePhoto: url, photoUrl: url, avatar: url, photoUpdatedAt: stamp,
-        }).catch(() => {});
-        update(ref(db, `userProfiles/${emailKey}/history/${stamp}`), {
-          url,
-          createdAt: stamp,
-          uid: userId || null,
-        }).catch(() => {});
-      }
-    };
-
     try {
       const { uploadToImgbb } = await import("@/lib/imgbbUpload");
       const url = await uploadToImgbb(file);
-      persistUrl(url);
+      setProfilePhoto(url);
+      writeProfilePhoto(url, userId);
+      if (userId) {
+        update(ref(db, `users/${userId}`), { profilePhoto: url, photoUrl: url, avatar: url }).catch(() => {});
+      }
       toast.success("✅ Profile photo uploaded!");
     } catch {
       // Fallback to base64 if imgbb fails
       const reader = new FileReader();
       reader.onload = (ev) => {
         const result = ev.target?.result as string;
-        persistUrl(result);
+        setProfilePhoto(result);
+        writeProfilePhoto(result, userId);
+        if (userId) {
+          update(ref(db, `users/${userId}`), { profilePhoto: result, photoUrl: result, avatar: result }).catch(() => {});
+        }
       };
       reader.readAsDataURL(file);
       toast.error("ImgBB failed, saved locally");
@@ -809,18 +718,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   const removePhoto = () => {
     setProfilePhoto(null);
     removeProfilePhoto(userId);
-    let storedEmail = "";
-    try {
-      const raw = localStorage.getItem("rsanime_user");
-      if (raw) storedEmail = JSON.parse(raw)?.email || "";
-    } catch {}
-    const emailKey = buildEmailAliasKey(storedEmail);
     if (userId) {
       update(ref(db, `users/${userId}`), { profilePhoto: null, photoUrl: null, avatar: null }).catch(() => {});
-    }
-    if (emailKey) {
-      update(ref(db, `userProfiles/${emailKey}`), { photoUrl: null, profilePhoto: null, avatar: null }).catch(() => {});
-      update(ref(db, `appUsers/${emailKey}`), { profilePhoto: null, photoUrl: null, avatar: null }).catch(() => {});
     }
   };
 

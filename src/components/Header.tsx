@@ -4,8 +4,8 @@ import logoImg from "@/assets/logo.png";
 import NotificationPanel from "./NotificationPanel";
 import { useBranding } from "@/hooks/useBranding";
 import ThemeToggle from "./ThemeToggle";
-import { db, ref, update, onValue } from "@/lib/firebase";
-import { buildEmailAliasKey, readProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
+import { db, ref, set, update, onValue } from "@/lib/firebase";
+import { readProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
 // Get existing user ID from localStorage (do NOT auto-create guest accounts)
 const getExistingUserId = (): string | undefined => {
@@ -73,6 +73,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
         setAnimating(false);
       }, 300);
     }, 3000);
+    return () => clearInterval(interval);
   }, [displayTitles.length]);
 
   useEffect(() => {
@@ -86,28 +87,24 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
     } catch {}
 
     // Listen for profile photo changes
+    const checkPhoto = () => {
+      try {
+        const photo = readProfilePhoto(id);
+        setProfilePhoto(photo);
+      } catch {}
+    };
+    const interval = setInterval(checkPhoto, 2000);
 
     // Update online status only for real users
     if (id) {
-      // Resolve email alias for cross-device photo sync (photo is stored
-      // per-email so the same Gmail on a different phone still resolves
-      // the uploaded ImgBB URL).
-      let storedEmail = "";
-      try {
-        const raw = localStorage.getItem("rsanime_user");
-        if (raw) storedEmail = JSON.parse(raw)?.email || "";
-      } catch {}
-      const emailKey = buildEmailAliasKey(storedEmail);
-
-      const applyRemote = (data: any) => {
-        const remotePhoto = String(data?.profilePhoto || data?.photoUrl || data?.avatar || "").trim();
-        const remoteName = String(data?.name || "").trim();
-        
-        if (remotePhoto && remotePhoto !== (readProfilePhoto(id) || "")) {
+      const userUnsub = onValue(ref(db, `users/${id}`), (snap) => {
+        const data = snap.val() || {};
+        const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+        const remoteName = String(data.name || "").trim();
+        if (remotePhoto) {
           writeProfilePhoto(remotePhoto, id);
           setProfilePhoto(remotePhoto);
         }
-
         if (remoteName && remoteName !== "Guest User") {
           try {
             writeDisplayName(remoteName, id);
@@ -116,37 +113,29 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
             localStorage.setItem("rsanime_user", JSON.stringify({ ...parsedUser, name: remoteName }));
           } catch {}
         }
-      };
-
-      const userUnsub = onValue(ref(db, `users/${id}`), (snap) => applyRemote(snap.val() || {}));
-      const aliasUnsub = emailKey
-        ? onValue(ref(db, `appUsers/${emailKey}`), (snap) => applyRemote(snap.val() || {}))
-        : null;
-      const mirrorUnsub = emailKey
-        ? onValue(ref(db, `userProfiles/${emailKey}`), (snap) => applyRemote(snap.val() || {}))
-        : null;
+      });
 
       const updateOnline = () => {
         update(ref(db, `users/${id}`), { online: true, lastSeen: Date.now() }).catch(() => {});
       };
       updateOnline();
       const heartbeat = setInterval(updateOnline, 30000);
-
+      
       const onUnload = () => {
         update(ref(db, `users/${id}`), { online: false, lastSeen: Date.now() }).catch(() => {});
       };
       window.addEventListener("beforeunload", onUnload);
 
       return () => {
+        clearInterval(interval);
         clearInterval(heartbeat);
         userUnsub();
-        aliasUnsub?.();
-        mirrorUnsub?.();
         window.removeEventListener("beforeunload", onUnload);
       };
     }
 
     return () => {
+      clearInterval(interval);
     };
   }, []);
 
