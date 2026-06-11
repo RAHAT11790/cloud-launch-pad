@@ -189,7 +189,7 @@ import LiveTvPage from "@/components/LiveTvPage";
 import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
-import { clearActiveDisplayName, clearActiveProfilePhoto, readProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
+import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
 // Session cache for API responses to speed up continue watching
 const apiCache = new Map<string, { data: any; ts: number }>();
@@ -800,7 +800,11 @@ const Index = () => {
         // Skip legacy per-device nested keys (objects without `id` field)
         const items = Object.values(data).filter((v: any) => v && typeof v === "object" && v.id) as any[];
         const localRaw = localStorage.getItem("rs_continueCache");
-        const localItems = Array.isArray(JSON.parse(localRaw || "[]")) ? JSON.parse(localRaw || "[]") : [];
+        let localItems: any[] = [];
+        try {
+          const parsed = JSON.parse(localRaw || "[]");
+          localItems = Array.isArray(parsed) ? parsed : [];
+        } catch {}
         const merged = new Map<string, any>();
         [...localItems, ...items].forEach((entry: any) => {
           if (!entry?.id) return;
@@ -1489,8 +1493,12 @@ const Index = () => {
       return;
     }
 
+    const fallbackTarget = getDefaultWatchTarget(anime);
+    const resolvedSeasonIdx = seasonIdx ?? fallbackTarget.seasonIdx;
+    const resolvedEpIdx = epIdx ?? fallbackTarget.epIdx;
+
     stopAllPlayback();
-    const targetWatchRoute = buildWatchRoute(anime.id, seasonIdx, epIdx);
+    const targetWatchRoute = buildWatchRoute(anime.id, resolvedSeasonIdx, resolvedEpIdx);
     if (location.pathname !== targetWatchRoute || location.search !== new URL(targetWatchRoute, window.location.origin).search) {
       navigate(targetWatchRoute);
     }
@@ -1499,7 +1507,7 @@ const Index = () => {
       // If admin disabled the unlock gate entirely, skip redirect and play directly
       const shortenerOn = await isShortenerEnabled();
       if (shortenerOn) {
-        redirectToUnlockRequired(anime, seasonIdx, epIdx);
+        redirectToUnlockRequired(anime, resolvedSeasonIdx, resolvedEpIdx);
         return;
       }
     }
@@ -1512,9 +1520,9 @@ const Index = () => {
     let subtitle = "";
     let qualityOptions: { label: string; src: string }[] = [];
     let audioTracks: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[] | undefined;
-    if (anime.type === "webseries" && resolvedSeasons && seasonIdx !== undefined && epIdx !== undefined) {
-      const season = resolvedSeasons[seasonIdx];
-      const episode = season.episodes[epIdx];
+    if (anime.type === "webseries" && resolvedSeasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined) {
+      const season = resolvedSeasons[resolvedSeasonIdx];
+      const episode = season.episodes[resolvedEpIdx];
       src = getEpisodeSrc(episode);
       subtitle = `${season.name} - Episode ${episode.episodeNumber}`;
       if (episode.link480) qualityOptions.push({ label: "480p", src: episode.link480 });
@@ -1531,25 +1539,25 @@ const Index = () => {
 
     // Handle AnimeSalt video - check ad-gate first
     if (src.startsWith("animesalt://")) {
-      const hasAccess = await checkAndShowAdGate(anime, seasonIdx, epIdx);
+      const hasAccess = await checkAndShowAdGate(anime, resolvedSeasonIdx, resolvedEpIdx);
       if (!hasAccess) return;
       const epSlug = src.replace("animesalt://", "");
       try {
         const result = await cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug));
         const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result || {});
         if (primarySrc) {
-          addToWatchHistory(anime, seasonIdx, epIdx, true);
+          addToWatchHistory(anime, resolvedSeasonIdx, resolvedEpIdx, true);
           setPlayerState({
             src: primarySrc,
             title: anime.title,
             subtitle: subtitle || `Episode`,
             anime,
-            seasonIdx,
-            epIdx,
+            seasonIdx: resolvedSeasonIdx,
+            epIdx: resolvedEpIdx,
             qualityOptions: sourceOptions,
             nextEpisodeSrc:
-              anime.type === "webseries" && anime.seasons && seasonIdx !== undefined && epIdx !== undefined
-                ? getEpisodeSrc(anime.seasons[seasonIdx]?.episodes?.[epIdx + 1] as Episode)
+              anime.type === "webseries" && anime.seasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined
+                ? getEpisodeSrc(anime.seasons[resolvedSeasonIdx]?.episodes?.[resolvedEpIdx + 1] as Episode)
                 : undefined,
           } as any);
           setSelectedAnime(null);
@@ -1592,20 +1600,20 @@ const Index = () => {
     }
 
     if (src) {
-      addToWatchHistory(anime, seasonIdx, epIdx);
+      addToWatchHistory(anime, resolvedSeasonIdx, resolvedEpIdx);
       setPlayerState({
         src,
         title: anime.title,
         subtitle,
         anime: { ...anime, seasons: resolvedSeasons },
         selectedLanguage: resolvedLanguage,
-        seasonIdx,
-        epIdx,
+        seasonIdx: resolvedSeasonIdx,
+        epIdx: resolvedEpIdx,
         qualityOptions,
         audioTracks,
         nextEpisodeSrc:
-          anime.type === "webseries" && resolvedSeasons && seasonIdx !== undefined && epIdx !== undefined
-            ? getEpisodeSrc(resolvedSeasons[seasonIdx]?.episodes?.[epIdx + 1] as Episode)
+          anime.type === "webseries" && resolvedSeasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined
+            ? getEpisodeSrc(resolvedSeasons[resolvedSeasonIdx]?.episodes?.[resolvedEpIdx + 1] as Episode)
             : undefined,
       });
       setSelectedAnime(null);
