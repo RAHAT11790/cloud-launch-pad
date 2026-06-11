@@ -68,7 +68,9 @@ export const clearActiveLocalValue = (baseKey: string) => {
 export const readProfilePhoto = (userId?: string | null) => readScopedLocalValue(PROFILE_PHOTO_KEY, userId);
 export const writeProfilePhoto = (value: string, userId?: string | null) => writeScopedLocalValue(PROFILE_PHOTO_KEY, value, userId);
 export const clearActiveProfilePhoto = () => clearActiveLocalValue(PROFILE_PHOTO_KEY);
+export const removeProfilePhoto = (userId?: string | null) => removeScopedLocalValue(PROFILE_PHOTO_KEY, userId);
 
 export const readDisplayName = (userId?: string | null) => readScopedLocalValue(DISPLAY_NAME_KEY, userId);
 export const writeDisplayName = (value: string, userId?: string | null) => writeScopedLocalValue(DISPLAY_NAME_KEY, value, userId);
 export const clearActiveDisplayName = () => clearActiveLocalValue(DISPLAY_NAME_KEY);
+export const removeDisplayName = (userId?: string | null) => removeScopedLocalValue(DISPLAY_NAME_KEY, userId);
