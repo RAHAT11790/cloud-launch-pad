@@ -9,6 +9,7 @@ import {
 } from "@/lib/adsterraAds";
 import { startAdGuard, stopAdGuard } from "@/lib/adGuard";
 import { supabase } from "@/integrations/supabase/client";
+import { getLocalAuthUser } from "@/lib/localUser";
 
 interface Props { isPremium?: boolean | null; videoEl?: HTMLVideoElement | null }
 
@@ -29,6 +30,7 @@ interface Props { isPremium?: boolean | null; videoEl?: HTMLVideoElement | null 
 
 type AdKind = "popunder" | "social";
 const SCRIPT_MARK = "data-rs-ad";
+const LOAD_MARK = "data-rs-ad-loaded";
 
 function extractSrc(snippet: string): string | null {
   if (!snippet) return null;
@@ -44,6 +46,7 @@ function injectAdScript(kind: AdKind, src: string): HTMLScriptElement | null {
   s.src = src;
   s.async = true;
   s.setAttribute(SCRIPT_MARK, kind);
+  s.setAttribute(LOAD_MARK, String(Date.now()));
   document.body.appendChild(s);
   return s;
 }
@@ -59,6 +62,10 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
   const popSrcRef = useRef<string | null>(null);
   const socSrcRef = useRef<string | null>(null);
   const originalOpenRef = useRef<typeof window.open | null>(null);
+  const currentKindRef = useRef<AdKind>("popunder");
+  const userIdRef = useRef<string>("anon");
+  const lastPopupAtRef = useRef<Record<AdKind, number>>({ popunder: 0, social: 0 });
+  const [stats, setStats] = useState<any>(null);
 
   // Scope flag — adGuard / other systems gate on this.
   useEffect(() => {
@@ -72,6 +79,10 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     setAdsterraPremium(!!isPremium);
     if (isPremium) stopAdGuard();
   }, [isPremium]);
+
+  useEffect(() => {
+    userIdRef.current = getLocalAuthUser()?.id || "anon";
+  }, []);
 
   // Load + subscribe to admin config.
   useEffect(() => {
@@ -114,16 +125,50 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
   const captureAndCooldown = async (kind: AdKind, url: string) => {
     try {
       const { data, error } = await supabase.functions.invoke("ad-capture", {
-        body: { kind, url, cycle: Date.now() },
+        body: {
+          kind,
+          url,
+          cycle: Date.now(),
+          userId: userIdRef.current,
+          result: "ok",
+          phase: "click",
+          cooldownMs: Math.max(0, (cfg?.refreshIntervalSec ?? 60) * 1000),
+        },
       });
       const ok = !error && (data?.ok === true);
       if (ok) {
+        lastPopupAtRef.current[kind] = Date.now();
         enterCooldown(kind);
+        void readStats();
       }
       // if not ok → leave script armed so next fire can retry
     } catch {
       // network failed → don't cooldown
     }
+  };
+
+  const readStats = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("ad-capture", { method: "GET" });
+      if (!error) setStats(data?.stats || null);
+    } catch {}
+  };
+
+  const reportLoad = async (kind: AdKind, src: string) => {
+    try {
+      await supabase.functions.invoke("ad-capture", {
+        body: {
+          kind,
+          url: src,
+          cycle: Date.now(),
+          userId: userIdRef.current,
+          result: "pending",
+          phase: "load",
+          cooldownMs: 0,
+        },
+      });
+      void readStats();
+    } catch {}
   };
 
   // Inject scripts + wrap window.open whenever cfg changes.
@@ -140,16 +185,7 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
       originalOpenRef.current = window.open.bind(window);
       const orig = originalOpenRef.current;
       (window as any).open = function (url?: any, target?: any, features?: any) {
-        // We don't know which script fired, but heuristically: if push
-        // notification cooldown is inactive and popunder cooldown is
-        // inactive too, attribute to popunder (the direct link is the
-        // dominant click-triggered one). Either way both go through
-        // the same capture endpoint, server stores `kind` independently.
-        const kind: AdKind = !cooldownActiveRef.current.popunder
-          ? "popunder"
-          : !cooldownActiveRef.current.social
-            ? "social"
-            : "popunder";
+        const kind: AdKind = currentKindRef.current;
         if (cooldownActiveRef.current[kind]) {
           // suppressed — already cooling down
           return null;
@@ -162,12 +198,37 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     }
 
     // initial inject (only if not currently cooling down)
-    if (popSrc && !cooldownActiveRef.current.popunder) injectAdScript("popunder", popSrc);
-    if (socSrc && !cooldownActiveRef.current.social) injectAdScript("social", socSrc);
+    if (popSrc && !cooldownActiveRef.current.popunder) {
+      currentKindRef.current = "popunder";
+      injectAdScript("popunder", popSrc);
+      void reportLoad("popunder", popSrc);
+    }
+    if (socSrc && !cooldownActiveRef.current.social) {
+      currentKindRef.current = "social";
+      injectAdScript("social", socSrc);
+      void reportLoad("social", socSrc);
+    }
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isInsideVideo = !!target?.closest("video, .video-player-root, [data-video-player-root='true']");
+      if (!isInsideVideo) return;
+      if (!cooldownActiveRef.current.popunder && popSrcRef.current) {
+        currentKindRef.current = "popunder";
+        return;
+      }
+      if (!cooldownActiveRef.current.social && socSrcRef.current) {
+        currentKindRef.current = "social";
+      }
+    };
+    window.addEventListener("pointerdown", onPointerDown, true);
+
+    void readStats();
 
     return () => {
       removeAdScript("popunder");
       removeAdScript("social");
+      window.removeEventListener("pointerdown", onPointerDown, true);
       if (cooldownTimersRef.current.popunder) window.clearTimeout(cooldownTimersRef.current.popunder!);
       if (cooldownTimersRef.current.social) window.clearTimeout(cooldownTimersRef.current.social!);
       cooldownTimersRef.current = { popunder: null, social: null };
