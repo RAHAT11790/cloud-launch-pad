@@ -33,7 +33,7 @@ interface EpisodeRelease {
 
 interface NewEpisodeReleasesProps {
   allAnime: AnimeItem[];
-  onCardClick: (anime: AnimeItem) => void;
+  onCardClick: (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => void;
 }
 
 const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>(({ allAnime, onCardClick }, _ref) => {
@@ -136,7 +136,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
 
   const handleClick = (release: EpisodeRelease) => {
     const content = getContent(release.contentId);
-    if (content) onCardClick(content);
+    if (content) { const sIdx = getSeason(release) ? getSeason(release)! - 1 : 0; const eIdx = getEpStart(release) ? getEpStart(release)! - 1 : 0; onCardClick(content, sIdx, eIdx); }
   };
 
   return (
