@@ -32,8 +32,7 @@ export const buildScopedLocalKey = (baseKey: string, userId?: string | null) =>
 export const readScopedLocalValue = (baseKey: string, userId?: string | null): string | null => {
   try {
     if (userId) {
-      const scoped = localStorage.getItem(buildScopedLocalKey(baseKey, userId));
-      if (scoped) return scoped;
+      return localStorage.getItem(buildScopedLocalKey(baseKey, userId));
     }
     return localStorage.getItem(baseKey);
   } catch {
