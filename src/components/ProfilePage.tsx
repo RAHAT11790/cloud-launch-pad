@@ -840,8 +840,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
       update(ref(db, `users/${userId}`), { profilePhoto: null, photoUrl: null, avatar: null, profilePhotoPath: null }).catch(() => {});
     }
     if (emailKey) {
-      update(ref(db, `userProfiles/${emailKey}`), { photoUrl: null, profilePhoto: null, avatar: null }).catch(() => {});
-      update(ref(db, `appUsers/${emailKey}`), { profilePhoto: null, photoUrl: null, avatar: null }).catch(() => {});
+      update(ref(db, `userProfiles/${emailKey}`), { photoUrl: null, profilePhoto: null, avatar: null, profilePhotoPath: null }).catch(() => {});
+      update(ref(db, `appUsers/${emailKey}`), { profilePhoto: null, photoUrl: null, avatar: null, profilePhotoPath: null }).catch(() => {});
     }
   };
 

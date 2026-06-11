@@ -30,7 +30,6 @@ interface Props { isPremium?: boolean | null; videoEl?: HTMLVideoElement | null 
 
 type AdKind = "popunder" | "social";
 const SCRIPT_MARK = "data-rs-ad";
-const LOAD_MARK = "data-rs-ad-loaded";
 
 function extractSrc(snippet: string): string | null {
   if (!snippet) return null;
@@ -46,7 +45,6 @@ function injectAdScript(kind: AdKind, src: string): HTMLScriptElement | null {
   s.src = src;
   s.async = true;
   s.setAttribute(SCRIPT_MARK, kind);
-  s.setAttribute(LOAD_MARK, String(Date.now()));
   document.body.appendChild(s);
   return s;
 }
@@ -65,7 +63,6 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
   const currentKindRef = useRef<AdKind>("popunder");
   const userIdRef = useRef<string>("anon");
   const lastPopupAtRef = useRef<Record<AdKind, number>>({ popunder: 0, social: 0 });
-  const [stats, setStats] = useState<any>(null);
 
   // Scope flag — adGuard / other systems gate on this.
   useEffect(() => {
@@ -150,7 +147,7 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
   const readStats = async () => {
     try {
       const { data, error } = await supabase.functions.invoke("ad-capture", { method: "GET" });
-      if (!error) setStats(data?.stats || null);
+      if (error) return;
     } catch {}
   };
 
