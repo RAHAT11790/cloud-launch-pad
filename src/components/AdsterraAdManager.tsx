@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import {
   AdsterraConfig,
   enterAdsterraPlayerScope,
@@ -9,79 +8,57 @@ import {
   subscribeAdsterraConfig,
 } from "@/lib/adsterraAds";
 import { startAdGuard, stopAdGuard } from "@/lib/adGuard";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Props { isPremium?: boolean | null; videoEl?: HTMLVideoElement | null }
 
 /**
- * Two sandboxed iframes mounted INSIDE the video player:
- *   1. Direct Link (popunder) — invisible 1x1 iframe. Fires once when user
- *      taps the player. After firing, a cooldown gate blocks any further
- *      window.open until cooldown expires, then iframe is rebuilt.
- *   2. Push Notification (social bar) — visible bottom strip with an
- *      explicit × close button rendered by us. Cross click opens the
- *      ad (synthetic click inside the iframe), then closes + starts
- *      cooldown.
- *
- * Both ads stay confined to the player. When the player unmounts we tear
- * everything down — no ads survive outside the video player.
- *
- * The scripts run inside sandbox="allow-scripts allow-popups
- * allow-popups-to-escape-sandbox". window.open() is wrapped so the parent
- * is notified (postMessage) whenever an ad fires, and so the same gate
- * can suppress repeat fires during cooldown.
+ * NEW logic (no iframe):
+ *  - When player mounts (non-premium + ads enabled), inject each ad
+ *    network <script src="..."> straight into <body>.
+ *  - Globally wrap window.open. Every time an ad script calls
+ *    window.open(...) we POST to the Supabase `ad-capture` edge function.
+ *    On { ok: true } we:
+ *       1. start the cooldown timer (admin-configurable seconds)
+ *       2. remove the ad <script> from the DOM
+ *    Once the cooldown elapses we re-inject the script. If the capture
+ *    request fails (no ok) we do NOT enter cooldown — the script stays
+ *    armed so the next user interaction can try again.
+ *  - When the player unmounts: scripts removed, window.open restored.
  */
 
 type AdKind = "popunder" | "social";
+const SCRIPT_MARK = "data-rs-ad";
 
-const DIRECT_HITBOX_HEIGHT = 104;
+function extractSrc(snippet: string): string | null {
+  if (!snippet) return null;
+  const m = snippet.match(/<script[^>]*\bsrc\s*=\s*["']([^"']+)["']/i);
+  return m ? m[1] : null;
+}
 
-function buildSrcdoc(snippet: string, kind: AdKind, cooldownMs: number, cycleId: number, bodyStyle: string) {
-  // Escape closing </script> inside the user snippet so injection cannot
-  // break out of our wrapper.
-  const safe = (snippet || "").replace(/<\/script>/gi, "<\\/script>");
-  return `<!DOCTYPE html><html><head>
-<meta charset="utf-8" />
-<style>html,body{margin:0;padding:0;background:transparent;color:#fff;font:13px system-ui,-apple-system,sans-serif;${bodyStyle}}*{box-sizing:border-box}</style>
-<script>
-(function(){
-  var COOLDOWN_MS = ${Math.max(0, Math.floor(cooldownMs))};
-  var KIND = ${JSON.stringify(kind)};
-  var CYCLE = ${JSON.stringify(cycleId)};
-  var fired = false;
-  var lastFiredAt = 0;
-  function notify(type, extra){
-    try { parent.postMessage(Object.assign({ __adsterra: true, type: type, kind: KIND, cycle: CYCLE }, extra || {}), '*'); } catch(e){}
-  }
-  var _open = window.open;
-  window.open = function(url, target, features){
-    var now = Date.now();
-    if (COOLDOWN_MS > 0 && (now - lastFiredAt) < COOLDOWN_MS) {
-      notify('suppressed', { url: String(url||'') });
-      return null;
-    }
-    lastFiredAt = now;
-    fired = true;
-    notify('fired', { url: String(url||'') });
-    try { return _open.call(window, url, target || '_blank', features); }
-    catch(e){ try { window.location.href = String(url||''); } catch(_){} return null; }
-  };
-  // Ping ready
-  notify('ready');
-})();
-</script>
-</head><body>${safe}</body></html>`;
+function injectAdScript(kind: AdKind, src: string): HTMLScriptElement | null {
+  if (!src) return null;
+  // Remove any previous instance of the same kind first.
+  document.querySelectorAll<HTMLScriptElement>(`script[${SCRIPT_MARK}="${kind}"]`).forEach((s) => s.remove());
+  const s = document.createElement("script");
+  s.src = src;
+  s.async = true;
+  s.setAttribute(SCRIPT_MARK, kind);
+  document.body.appendChild(s);
+  return s;
+}
+
+function removeAdScript(kind: AdKind) {
+  document.querySelectorAll<HTMLScriptElement>(`script[${SCRIPT_MARK}="${kind}"]`).forEach((s) => s.remove());
 }
 
 const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
   const [cfg, setCfg] = useState<AdsterraConfig | null>(null);
-  const [popCycle, setPopCycle] = useState(0);
-  const [socialCycle, setSocialCycle] = useState(0);
-  const [popCooldownUntil, setPopCooldownUntil] = useState(0);
-  const [socialCooldownUntil, setSocialCooldownUntil] = useState(0);
-  const popFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const socialFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const popCooldownTimerRef = useRef<number | null>(null);
-  const socialCooldownTimerRef = useRef<number | null>(null);
+  const cooldownTimersRef = useRef<Record<AdKind, number | null>>({ popunder: null, social: null });
+  const cooldownActiveRef = useRef<Record<AdKind, boolean>>({ popunder: false, social: false });
+  const popSrcRef = useRef<string | null>(null);
+  const socSrcRef = useRef<string | null>(null);
+  const originalOpenRef = useRef<typeof window.open | null>(null);
 
   // Scope flag — adGuard / other systems gate on this.
   useEffect(() => {
@@ -105,7 +82,7 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     return () => { alive = false; if (unsub) try { unsub(); } catch {} };
   }, []);
 
-  // Start adblock/DNS guard once we have a non-premium user with ads enabled.
+  // Start adblock/DNS guard.
   useEffect(() => {
     if (!cfg) return;
     if (isPremium) { stopAdGuard(); return; }
@@ -114,128 +91,95 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     return () => window.clearTimeout(t);
   }, [cfg, isPremium, videoEl]);
 
-  // postMessage bus — listen for fire/suppressed events from the iframes
-  // and apply cooldown gating on the parent side too.
-  useEffect(() => {
-    const onMsg = (e: MessageEvent) => {
-      const d = e?.data;
-      if (!d || typeof d !== "object" || (d as any).__adsterra !== true) return;
-      const kind = (d as any).kind as AdKind;
-      const type = (d as any).type as string;
-      const cd = Math.max(0, (cfg?.refreshIntervalSec ?? 60) * 1000);
-      if (type === "fired") {
-        if (kind === "popunder") {
-          setPopCooldownUntil(Date.now() + cd);
-          if (popCooldownTimerRef.current) window.clearTimeout(popCooldownTimerRef.current);
-          popCooldownTimerRef.current = window.setTimeout(() => {
-            setPopCooldownUntil(0);
-            setPopCycle((n) => n + 1);
-          }, cd);
-        }
-        if (kind === "social") {
-          setSocialCooldownUntil(Date.now() + cd);
-          if (socialCooldownTimerRef.current) window.clearTimeout(socialCooldownTimerRef.current);
-          socialCooldownTimerRef.current = window.setTimeout(() => {
-            setSocialCooldownUntil(0);
-            setSocialCycle((n) => n + 1);
-          }, cd);
-        }
-      }
-    };
-    window.addEventListener("message", onMsg);
-    return () => window.removeEventListener("message", onMsg);
-  }, [cfg?.refreshIntervalSec]);
-
-  useEffect(() => {
-    return () => {
-      if (popCooldownTimerRef.current) window.clearTimeout(popCooldownTimerRef.current);
-      if (socialCooldownTimerRef.current) window.clearTimeout(socialCooldownTimerRef.current);
-    };
-  }, []);
-
-  const popSrcdoc = useMemo(() => {
-    if (!cfg?.popunder?.trim()) return "";
-    return buildSrcdoc(cfg.popunder, "popunder", cfg.refreshIntervalSec * 1000, popCycle, "");
-  }, [cfg?.popunder, cfg?.refreshIntervalSec, popCycle]);
-
-  const socialSrcdoc = useMemo(() => {
-    if (!cfg?.socialBar?.trim()) return "";
-    return buildSrcdoc(cfg.socialBar, "social", cfg.refreshIntervalSec * 1000, socialCycle, "display:flex;align-items:center;justify-content:center;min-height:60px;");
-  }, [cfg?.socialBar, cfg?.refreshIntervalSec, socialCycle]);
-
-  // Manually close the social bar — same cooldown as a real fire.
-  const handleCloseSocial = () => {
-    // Try to synthesise a click inside the iframe so the user's intent
-    // (close after seeing the ad) also lets the script fire its
-    // window.open hook before we tear down. Sandbox without
-    // allow-same-origin prevents direct DOM access, so we just fall
-    // through to the close + cooldown path.
-    const cd = Math.max(0, (cfg?.refreshIntervalSec ?? 60) * 1000);
-    setSocialCooldownUntil(Date.now() + cd);
-    if (socialCooldownTimerRef.current) window.clearTimeout(socialCooldownTimerRef.current);
-    socialCooldownTimerRef.current = window.setTimeout(() => {
-      setSocialCooldownUntil(0);
-      setSocialCycle((n) => n + 1);
-    }, cd);
+  // Cool-down + re-arm helper.
+  const enterCooldown = (kind: AdKind) => {
+    const ms = Math.max(0, (cfg?.refreshIntervalSec ?? 60) * 1000);
+    cooldownActiveRef.current[kind] = true;
+    removeAdScript(kind);
+    if (cooldownTimersRef.current[kind]) window.clearTimeout(cooldownTimersRef.current[kind]!);
+    if (ms === 0) {
+      cooldownActiveRef.current[kind] = false;
+      const src = kind === "popunder" ? popSrcRef.current : socSrcRef.current;
+      if (src) injectAdScript(kind, src);
+      return;
+    }
+    cooldownTimersRef.current[kind] = window.setTimeout(() => {
+      cooldownActiveRef.current[kind] = false;
+      const src = kind === "popunder" ? popSrcRef.current : socSrcRef.current;
+      if (src) injectAdScript(kind, src);
+    }, ms) as unknown as number;
   };
 
-  if (isPremium || !cfg || !cfg.enabled) return null;
+  // Capture → Supabase → cooldown.
+  const captureAndCooldown = async (kind: AdKind, url: string) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("ad-capture", {
+        body: { kind, url, cycle: Date.now() },
+      });
+      const ok = !error && (data?.ok === true);
+      if (ok) {
+        enterCooldown(kind);
+      }
+      // if not ok → leave script armed so next fire can retry
+    } catch {
+      // network failed → don't cooldown
+    }
+  };
 
-  const popActive = !!cfg.popunder.trim() && !popCooldownUntil;
-  const socialActive = !!cfg.socialBar.trim() && !socialCooldownUntil;
-  return (
-    <>
-      {/* Direct-link popunder zone — limited to the center body of the player
-          so top/bottom controls remain tappable while a normal play-tap still
-          triggers the ad network's click handler. */}
-      {popActive && popSrcdoc && (
-        <iframe
-          ref={popFrameRef}
-          key={`pop-${popCycle}`}
-          title="ad-popunder"
-          srcDoc={popSrcdoc}
-          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
-          className="absolute left-0 right-0 border-0 bg-transparent z-[6]"
-          style={{
-            pointerEvents: "auto",
-            top: DIRECT_HITBOX_HEIGHT,
-            bottom: DIRECT_HITBOX_HEIGHT,
-            width: "100%",
-            height: `calc(100% - ${DIRECT_HITBOX_HEIGHT * 2}px)`,
-          }}
-        />
-      )}
+  // Inject scripts + wrap window.open whenever cfg changes.
+  useEffect(() => {
+    if (!cfg || isPremium || !cfg.enabled) return;
 
-      {/* Push notification / social bar — visible strip at the bottom with
-          our own × close button overlay. Iframe stops short of the
-          progress bar area. */}
-      {socialActive && socialSrcdoc && (
-        <div className="absolute left-0 right-0 bottom-[72px] z-[7] pointer-events-none">
-          <div className="relative mx-auto max-w-[640px] px-3">
-            <div className="relative rounded-xl overflow-hidden bg-black/70 border border-white/15 shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-md pointer-events-auto">
-              <iframe
-                ref={socialFrameRef}
-                key={`soc-${socialCycle}`}
-                title="ad-push-notification"
-                srcDoc={socialSrcdoc}
-                sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
-                className="block w-full border-0 bg-transparent"
-                style={{ height: 76 }}
-              />
-              <button
-                type="button"
-                onClick={handleCloseSocial}
-                aria-label="Close ad"
-                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white text-black flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.5)] ring-2 ring-primary"
-              >
-                <X className="w-4 h-4" strokeWidth={3} />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
+    const popSrc = extractSrc(cfg.popunder);
+    const socSrc = extractSrc(cfg.socialBar);
+    popSrcRef.current = popSrc;
+    socSrcRef.current = socSrc;
+
+    // wrap window.open exactly once
+    if (!originalOpenRef.current) {
+      originalOpenRef.current = window.open.bind(window);
+      const orig = originalOpenRef.current;
+      (window as any).open = function (url?: any, target?: any, features?: any) {
+        // We don't know which script fired, but heuristically: if push
+        // notification cooldown is inactive and popunder cooldown is
+        // inactive too, attribute to popunder (the direct link is the
+        // dominant click-triggered one). Either way both go through
+        // the same capture endpoint, server stores `kind` independently.
+        const kind: AdKind = !cooldownActiveRef.current.popunder
+          ? "popunder"
+          : !cooldownActiveRef.current.social
+            ? "social"
+            : "popunder";
+        if (cooldownActiveRef.current[kind]) {
+          // suppressed — already cooling down
+          return null;
+        }
+        // fire async capture; do NOT block the popup
+        captureAndCooldown(kind, String(url || ""));
+        try { return orig(url, target || "_blank", features); }
+        catch { try { window.location.href = String(url || ""); } catch {} return null; }
+      } as typeof window.open;
+    }
+
+    // initial inject (only if not currently cooling down)
+    if (popSrc && !cooldownActiveRef.current.popunder) injectAdScript("popunder", popSrc);
+    if (socSrc && !cooldownActiveRef.current.social) injectAdScript("social", socSrc);
+
+    return () => {
+      removeAdScript("popunder");
+      removeAdScript("social");
+      if (cooldownTimersRef.current.popunder) window.clearTimeout(cooldownTimersRef.current.popunder!);
+      if (cooldownTimersRef.current.social) window.clearTimeout(cooldownTimersRef.current.social!);
+      cooldownTimersRef.current = { popunder: null, social: null };
+      cooldownActiveRef.current = { popunder: false, social: false };
+      if (originalOpenRef.current) {
+        (window as any).open = originalOpenRef.current;
+        originalOpenRef.current = null;
+      }
+    };
+  }, [cfg?.popunder, cfg?.socialBar, cfg?.enabled, cfg?.refreshIntervalSec, isPremium]);
+
+  return null;
 };
 
 export default AdsterraAdManager;
