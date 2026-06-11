@@ -73,7 +73,6 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
         setAnimating(false);
       }, 300);
     }, 3000);
-    return () => clearInterval(interval);
   }, [displayTitles.length]);
 
   useEffect(() => {
@@ -146,7 +145,6 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       window.addEventListener("beforeunload", onUnload);
 
       return () => {
-        clearInterval(interval);
         clearInterval(heartbeat);
         userUnsub();
         aliasUnsub?.();
@@ -155,7 +153,6 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       };
 
     return () => {
-      clearInterval(interval);
     };
   }, []);
 
