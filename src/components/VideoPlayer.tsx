@@ -2105,11 +2105,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // (every parent re-render), which would clobber a user-selected quality back
   // to "Auto" within ~1s of switching. We only want a true episode change to
   // reset the player state.
-  const lastSrcRef = useRef<string>("");
+  const lastSourceFingerprintRef = useRef<string>("");
   useEffect(() => {
     if (!playbackRouteReady) return;
-    if (lastSrcRef.current === src) return; // src didn't actually change → do nothing
-    lastSrcRef.current = src;
+    const nextFingerprint = `${src}__${currentSeasonIdx ?? "movie"}__${currentEpisodeIdx ?? "movie"}`;
+    if (lastSourceFingerprintRef.current === nextFingerprint) return; // same episode/movie source
+    lastSourceFingerprintRef.current = nextFingerprint;
     // Ultra-fast episode switch: do NOT pause/blank the player. Just swap src
     // and let the video element load the new source while keeping the UI alive.
     instantSwitchRef.current = true;
@@ -2144,7 +2145,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSwitchingEpisode(false);
     }, 80);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, initialSeekTime]);
+  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, initialSeekTime, currentSeasonIdx, currentEpisodeIdx]);
 
   const applyPendingSeek = useCallback((targetVideo?: HTMLVideoElement | null) => {
     const v = targetVideo || videoRef.current;
