@@ -14,6 +14,7 @@ import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { Progress } from "@/components/ui/progress";
 import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
 import { buildEmailAliasKey, readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
+import { deleteProfilePhotoFromFirebase, uploadProfilePhotoToFirebase } from "@/lib/profilePhotoStorage";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -607,6 +608,8 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
         profilePhoto,
         photoUrl: profilePhoto,
         avatar: profilePhoto,
+          uid: userId,
+          email: storedEmail,
         photoUpdatedAt: stamp,
       }).catch(() => {});
       update(ref(db, `userProfiles/${emailKey}/history/${stamp}`), {
@@ -762,12 +765,24 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     } catch {}
     const emailKey = buildEmailAliasKey(storedEmail);
 
-    const persistUrl = (url: string) => {
+    let previousPath = "";
+    try {
+      const raw = localStorage.getItem("rsanime_user");
+      const parsed = raw ? JSON.parse(raw) : {};
+      previousPath = String(parsed?.profilePhotoPath || "").trim();
+    } catch {}
+
+    const persistUrl = (url: string, storagePath: string) => {
       const stamp = Date.now();
       setProfilePhoto(url);
       writeProfilePhoto(url, userId);
+      try {
+        const raw = localStorage.getItem("rsanime_user");
+        const parsed = raw ? JSON.parse(raw) : {};
+        localStorage.setItem("rsanime_user", JSON.stringify({ ...parsed, profilePhotoPath: storagePath }));
+      } catch {}
       if (userId) {
-        update(ref(db, `users/${userId}`), { profilePhoto: url, photoUrl: url, avatar: url, photoUpdatedAt: stamp }).catch(() => {});
+        update(ref(db, `users/${userId}`), { profilePhoto: url, photoUrl: url, avatar: url, profilePhotoPath: storagePath, photoUpdatedAt: stamp }).catch(() => {});
         update(ref(db, `users/${userId}/profilePhotos/${stamp}`), { url, createdAt: stamp, active: true }).catch(() => {});
       }
       if (emailKey) {
@@ -775,10 +790,11 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
         // same Gmail can fetch the URL back instantly.
         update(ref(db, `userProfiles/${emailKey}`), {
           photoUrl: url, profilePhoto: url, avatar: url,
+          profilePhotoPath: storagePath,
           email: storedEmail, uid: userId || null, updatedAt: stamp,
         }).catch(() => {});
         update(ref(db, `appUsers/${emailKey}`), {
-          profilePhoto: url, photoUrl: url, avatar: url, photoUpdatedAt: stamp,
+          profilePhoto: url, photoUrl: url, avatar: url, profilePhotoPath: storagePath, uid: userId || null, email: storedEmail, photoUpdatedAt: stamp,
         }).catch(() => {});
         update(ref(db, `userProfiles/${emailKey}/history/${stamp}`), {
           url,
@@ -789,21 +805,18 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     };
 
     try {
-      const { uploadToImgbb } = await import("@/lib/imgbbUpload");
-      const url = await uploadToImgbb(file);
-      persistUrl(url);
+      if (!userId) throw new Error("Login required");
+      const { url, path } = await uploadProfilePhotoToFirebase(userId, file);
+      persistUrl(url, path);
+      if (previousPath && previousPath !== path) {
+        void deleteProfilePhotoFromFirebase(previousPath);
+      }
       toast.success("✅ Profile photo uploaded!");
     } catch {
-      // Fallback to base64 if imgbb fails
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const result = ev.target?.result as string;
-        persistUrl(result);
-      };
-      reader.readAsDataURL(file);
-      toast.error("ImgBB failed, saved locally");
+      toast.error("Profile photo upload failed");
     }
     setPhotoUploading(false);
+    e.target.value = "";
   };
 
   const removePhoto = () => {
@@ -816,7 +829,15 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     } catch {}
     const emailKey = buildEmailAliasKey(storedEmail);
     if (userId) {
-      update(ref(db, `users/${userId}`), { profilePhoto: null, photoUrl: null, avatar: null }).catch(() => {});
+      let previousPath = "";
+      try {
+        const raw = localStorage.getItem("rsanime_user");
+        const parsed = raw ? JSON.parse(raw) : {};
+        previousPath = String(parsed?.profilePhotoPath || "").trim();
+        localStorage.setItem("rsanime_user", JSON.stringify({ ...parsed, profilePhotoPath: "" }));
+      } catch {}
+      if (previousPath) void deleteProfilePhotoFromFirebase(previousPath);
+      update(ref(db, `users/${userId}`), { profilePhoto: null, photoUrl: null, avatar: null, profilePhotoPath: null }).catch(() => {});
     }
     if (emailKey) {
       update(ref(db, `userProfiles/${emailKey}`), { photoUrl: null, profilePhoto: null, avatar: null }).catch(() => {});
