@@ -5,7 +5,7 @@ import NotificationPanel from "./NotificationPanel";
 import { useBranding } from "@/hooks/useBranding";
 import ThemeToggle from "./ThemeToggle";
 import { db, ref, set, update, onValue } from "@/lib/firebase";
-import { buildEmailAliasKey, readProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
+import { buildEmailAliasKey, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
 // Get existing user ID from localStorage (do NOT auto-create guest accounts)
 const getExistingUserId = (): string | undefined => {
@@ -153,6 +153,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
       };
 
     return () => {
+      clearInterval(interval);
     };
   }, []);
 

@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
-import { buildEmailAliasKey, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
+import { buildEmailAliasKey, writeDisplayName, removeProfilePhoto, writeProfilePhoto } from "@/lib/localUser";
 
 interface LoginPageProps {
   onLogin: (userId: string) => void;
