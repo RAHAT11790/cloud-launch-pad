@@ -13,6 +13,7 @@ import PrivacyPolicyPage from "./PrivacyPolicyPage";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { Progress } from "@/components/ui/progress";
 import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
+import { clearActiveProfilePhoto, readDisplayName, readProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -450,10 +451,16 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   const brandingCfg = useBranding();
   const [activePanel, setActivePanel] = useState<"main" | "settings" | "edit" | "language" | "quality" | "notification-settings" | "premium" | "change-password" | "downloads" | "about" | "privacy">("main");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(() => {
-    try { return localStorage.getItem("rs_profile_photo"); } catch { return null; }
+    try {
+      const uid = JSON.parse(localStorage.getItem("rsanime_user") || "{}").id;
+      return readProfilePhoto(uid);
+    } catch { return null; }
   });
   const [displayName, setDisplayName] = useState(() => {
-    try { return localStorage.getItem("rs_display_name") || "Guest User"; } catch { return "Guest User"; }
+    try {
+      const uid = JSON.parse(localStorage.getItem("rsanime_user") || "{}").id;
+      return readDisplayName(uid) || "Guest User";
+    } catch { return "Guest User"; }
   });
   const [tempName, setTempName] = useState(displayName);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -536,12 +543,12 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
 
       if (remotePhoto) {
         setProfilePhoto(remotePhoto);
-        try { localStorage.setItem("rs_profile_photo", remotePhoto); } catch {}
+        writeProfilePhoto(remotePhoto, userId);
       }
       if (remoteName && remoteName !== "Guest User") {
         setDisplayName(remoteName);
         setTempName(remoteName);
-        try { localStorage.setItem("rs_display_name", remoteName); } catch {}
+        writeDisplayName(remoteName, userId);
       }
     });
 
@@ -686,7 +693,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
       const { uploadToImgbb } = await import("@/lib/imgbbUpload");
       const url = await uploadToImgbb(file);
       setProfilePhoto(url);
-      localStorage.setItem("rs_profile_photo", url);
+      writeProfilePhoto(url, userId);
       if (userId) {
         update(ref(db, `users/${userId}`), { profilePhoto: url, photoUrl: url, avatar: url }).catch(() => {});
       }
@@ -697,7 +704,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
       reader.onload = (ev) => {
         const result = ev.target?.result as string;
         setProfilePhoto(result);
-        localStorage.setItem("rs_profile_photo", result);
+        writeProfilePhoto(result, userId);
         if (userId) {
           update(ref(db, `users/${userId}`), { profilePhoto: result, photoUrl: result, avatar: result }).catch(() => {});
         }
@@ -710,7 +717,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
 
   const removePhoto = () => {
     setProfilePhoto(null);
-    localStorage.removeItem("rs_profile_photo");
+    clearActiveProfilePhoto();
     if (userId) {
       update(ref(db, `users/${userId}`), { profilePhoto: null, photoUrl: null, avatar: null }).catch(() => {});
     }
@@ -718,7 +725,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
 
   const saveName = () => {
     setDisplayName(tempName);
-    localStorage.setItem("rs_display_name", tempName);
+    writeDisplayName(tempName, userId);
     if (userId && tempName.trim()) {
       update(ref(db, `users/${userId}`), { name: tempName.trim() }).catch(() => {});
     }
