@@ -172,6 +172,9 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           ...existingData,
           id: uid, name: gName, email: gEmail, googleAuth: true,
           createdAt: existingData?.createdAt || Date.now(),
+          profilePhoto: resolvedPhoto,
+          photoUrl: resolvedPhoto,
+          avatar: resolvedPhoto,
         });
         try {
           await syncCanonicalUserNode(uid, {
@@ -226,6 +229,9 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         id: uid, name: gName, email: gEmail, googleAuth: true,
         password: googlePw,
         createdAt: existingData?.createdAt || Date.now(),
+        profilePhoto: resolvedPhoto,
+        photoUrl: resolvedPhoto,
+        avatar: resolvedPhoto,
       });
       try {
         await syncCanonicalUserNode(uid, {
