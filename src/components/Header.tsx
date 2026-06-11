@@ -151,9 +151,9 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
         mirrorUnsub?.();
         window.removeEventListener("beforeunload", onUnload);
       };
+    }
 
     return () => {
-      clearInterval(interval);
     };
   }, []);
 
