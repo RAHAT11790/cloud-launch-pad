@@ -12,15 +12,29 @@ export const buildProfilePhotoPath = (userId: string, file: File) => {
   return `profile-photos/${sanitizePart(userId)}/current_${Date.now()}.${ext}`;
 };
 
-export async function uploadProfilePhotoToFirebase(userId: string, file: File) {
-  const path = buildProfilePhotoPath(userId, file);
-  const fileRef = storageRef(storage, path);
-  const snapshot = await uploadBytes(fileRef, file, {
-    contentType: file.type || "image/jpeg",
-    cacheControl: "public,max-age=31536000,immutable",
+async function fileToDataUrl(file: File): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read image"));
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsDataURL(file);
   });
-  const url = await getDownloadURL(snapshot.ref);
-  return { url, path };
+}
+
+export async function uploadProfilePhotoToFirebase(userId: string, file: File) {
+  try {
+    const path = buildProfilePhotoPath(userId, file);
+    const fileRef = storageRef(storage, path);
+    const snapshot = await uploadBytes(fileRef, file, {
+      contentType: file.type || "image/jpeg",
+      cacheControl: "public,max-age=31536000,immutable",
+    });
+    const url = await getDownloadURL(snapshot.ref);
+    return { url, path };
+  } catch {
+    const url = await fileToDataUrl(file);
+    return { url, path: "" };
+  }
 }
 
 export async function deleteProfilePhotoFromFirebase(path?: string | null) {
