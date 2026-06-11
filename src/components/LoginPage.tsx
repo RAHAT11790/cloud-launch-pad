@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SITE_NAME, TELEGRAM_ADMIN_URL } from "@/lib/siteConfig";
 import { useBranding } from "@/hooks/useBranding";
+import { buildEmailAliasKey, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 
 interface LoginPageProps {
   onLogin: (userId: string) => void;
@@ -86,6 +87,17 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const [forgotNewPw, setForgotNewPw] = useState("");
   const [forgotNewPwConfirm, setForgotNewPwConfirm] = useState("");
 
+  const syncCanonicalUserNode = async (userId: string, payload: Record<string, any>, email?: string) => {
+    const aliasKey = buildEmailAliasKey(email);
+    const writes: Promise<any>[] = [
+      update(ref(db, `users/${userId}`), payload).catch(() => {}),
+    ];
+    if (aliasKey) {
+      writes.push(update(ref(db, `users/${aliasKey}`), { ...payload, id: userId }).catch(() => {}));
+    }
+    await Promise.all(writes);
+  };
+
   // Intro animation sequence
   useEffect(() => {
     const timer = setTimeout(() => setShowContent(true), 800);
@@ -158,22 +170,24 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           createdAt: existingData?.createdAt || Date.now(),
         });
         try {
-          await set(ref(db, `users/${commaKey}`), {
-            id: uid, name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true,
-            lastSeen: Date.now(), createdAt: existingData?.createdAt || Date.now(),
-          });
-          // Also update users/${uid} to fix "Guest User" display
-          if (uid !== commaKey) {
-            await update(ref(db, `users/${uid}`), {
-              name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true, lastSeen: Date.now(),
-            }).catch(() => {});
-          }
+          await syncCanonicalUserNode(uid, {
+            name: gName,
+            email: gEmail,
+            online: true,
+            authProvider: "google",
+            googleAuth: true,
+            lastSeen: Date.now(),
+            createdAt: existingData?.createdAt || Date.now(),
+            profilePhoto: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || "",
+            photoUrl: gPhoto || existingData?.photoUrl || existingData?.profilePhoto || existingData?.avatar || "",
+            avatar: gPhoto || existingData?.avatar || existingData?.profilePhoto || existingData?.photoUrl || "",
+          }, gEmail);
         } catch (e) {}
 
         localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
-        localStorage.setItem("rs_display_name", gName);
-        if (gPhoto) localStorage.setItem("rs_profile_photo", gPhoto);
+        writeDisplayName(gName, uid);
+        if (gPhoto) writeProfilePhoto(gPhoto, uid);
         toast.success(`Welcome, ${gName}!`);
         onLogin(uid);
       } else {
@@ -209,21 +223,24 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         createdAt: existingData?.createdAt || Date.now(),
       });
       try {
-        await set(ref(db, `users/${commaKey}`), {
-          id: uid, name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true,
-          lastSeen: Date.now(), createdAt: existingData?.createdAt || Date.now(),
-        });
-        if (uid !== commaKey) {
-          await update(ref(db, `users/${uid}`), {
-            name: gName, email: gEmail, online: true, authProvider: "google", googleAuth: true, lastSeen: Date.now(),
-          }).catch(() => {});
-        }
+        await syncCanonicalUserNode(uid, {
+          name: gName,
+          email: gEmail,
+          online: true,
+          authProvider: "google",
+          googleAuth: true,
+          lastSeen: Date.now(),
+          createdAt: existingData?.createdAt || Date.now(),
+          profilePhoto: gPhoto || existingData?.profilePhoto || existingData?.photoUrl || existingData?.avatar || "",
+          photoUrl: gPhoto || existingData?.photoUrl || existingData?.profilePhoto || existingData?.avatar || "",
+          avatar: gPhoto || existingData?.avatar || existingData?.profilePhoto || existingData?.photoUrl || "",
+        }, gEmail);
       } catch (e) {}
 
       localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
       localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
-      localStorage.setItem("rs_display_name", gName);
-      if (gPhoto) localStorage.setItem("rs_profile_photo", gPhoto);
+      writeDisplayName(gName, uid);
+      if (gPhoto) writeProfilePhoto(gPhoto, uid);
       toast.success(`Welcome, ${gName}! Password set successfully ✅`);
       setGoogleSetPwMode(false);
       setGooglePendingData(null);
@@ -447,20 +464,18 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         await set(ref(db, `appUsers/${emailKey}`), {
           id: userId, name: name.trim(), email: email.trim(), password: password, createdAt: Date.now(),
         });
-        await set(ref(db, `users/${emailKey}`), {
-          name: name.trim(), email: email.trim(), createdAt: Date.now(), online: true, lastSeen: Date.now(), id: userId, authProvider: "email",
-        });
-        await update(ref(db, `users/${userId}`), {
+        await syncCanonicalUserNode(userId, {
           id: userId,
           name: name.trim(),
           email: email.trim(),
+          createdAt: Date.now(),
           online: true,
           lastSeen: Date.now(),
           authProvider: "email",
-        }).catch(() => {});
+        }, email.trim());
         localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: name.trim(), email: email.trim() }));
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
-        localStorage.setItem("rs_display_name", name.trim());
+        writeDisplayName(name.trim(), userId);
         toast.success("Account created successfully!");
         onLogin(userId);
       } else {
@@ -486,14 +501,17 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         const loginEmail = finalUserData.email || (input.includes("@") ? input : "");
         localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: displayName, email: loginEmail }));
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
-        localStorage.setItem("rs_display_name", displayName);
+        writeDisplayName(displayName, uid);
         try {
-          await update(ref(db, `users/${uid}`), {
+          await syncCanonicalUserNode(uid, {
             name: displayName, email: loginEmail, online: true, lastSeen: Date.now(), authProvider: "email",
-          });
+            profilePhoto: finalUserData.profilePhoto || finalUserData.photoUrl || finalUserData.avatar || "",
+            photoUrl: finalUserData.photoUrl || finalUserData.profilePhoto || finalUserData.avatar || "",
+            avatar: finalUserData.avatar || finalUserData.profilePhoto || finalUserData.photoUrl || "",
+          }, loginEmail);
           const currentPhoto = String(finalUserData.profilePhoto || finalUserData.photoUrl || finalUserData.avatar || "").trim();
           if (currentPhoto) {
-            localStorage.setItem("rs_profile_photo", currentPhoto);
+            writeProfilePhoto(currentPhoto, uid);
           }
         } catch (e) {}
         toast.success(`Welcome back, ${displayName}!`);
