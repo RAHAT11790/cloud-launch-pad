@@ -53,8 +53,9 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         </label>
       </div>
       <p className="text-[11px] text-white/60 leading-relaxed">
-        Paste the exact <code className="text-white/80">&lt;script&gt;</code> snippets from your Adsterra dashboard. Both ads now run inside <strong>sandboxed iframes</strong> mounted only inside the video player — they cannot leak anywhere else on the site. After every ad fires (or user taps the × on the push bar) the cooldown timer below blocks new ads until it expires.
+        Paste the exact <code className="text-white/80">&lt;script src="..."&gt;</code> snippets from your Adsterra dashboard. Both scripts are now injected directly into the page (no iframe). When an ad fires (window.open), the click is captured through Supabase — on a successful capture response the cooldown below starts and the ad script is removed from the DOM. After the cooldown elapses the script is automatically re-injected.
       </p>
+
 
       <div className="space-y-1.5">
         <label className="text-xs font-semibold text-white/80 block">Direct Link Script</label>
