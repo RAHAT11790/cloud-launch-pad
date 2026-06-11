@@ -33,7 +33,7 @@ interface Props { isPremium?: boolean | null; videoEl?: HTMLVideoElement | null 
 
 type AdKind = "popunder" | "social";
 
-const COOLDOWN_RING_HZ = 10; // visual refresh rate for cooldown countdown
+const DIRECT_HITBOX_HEIGHT = 104;
 
 function buildSrcdoc(snippet: string, kind: AdKind, cooldownMs: number, cycleId: number, bodyStyle: string) {
   // Escape closing </script> inside the user snippet so injection cannot
@@ -78,9 +78,10 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
   const [socialCycle, setSocialCycle] = useState(0);
   const [popCooldownUntil, setPopCooldownUntil] = useState(0);
   const [socialCooldownUntil, setSocialCooldownUntil] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
   const popFrameRef = useRef<HTMLIFrameElement | null>(null);
   const socialFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const popCooldownTimerRef = useRef<number | null>(null);
+  const socialCooldownTimerRef = useRef<number | null>(null);
 
   // Scope flag — adGuard / other systems gate on this.
   useEffect(() => {
@@ -131,28 +132,12 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     return () => window.removeEventListener("message", onMsg);
   }, [cfg?.refreshIntervalSec]);
 
-  // Cooldown ticker — drives both countdown UI and re-mount when expired.
   useEffect(() => {
-    const i = window.setInterval(() => setNow(Date.now()), Math.round(1000 / COOLDOWN_RING_HZ));
-    return () => window.clearInterval(i);
+    return () => {
+      if (popCooldownTimerRef.current) window.clearTimeout(popCooldownTimerRef.current);
+      if (socialCooldownTimerRef.current) window.clearTimeout(socialCooldownTimerRef.current);
+    };
   }, []);
-
-  // Re-mount cycles when cooldown elapses.
-  useEffect(() => {
-    if (!cfg?.enabled || !cfg.popunder.trim() || isPremium) return;
-    if (popCooldownUntil && now >= popCooldownUntil) {
-      setPopCooldownUntil(0);
-      setPopCycle((n) => n + 1);
-    }
-  }, [now, popCooldownUntil, cfg, isPremium]);
-
-  useEffect(() => {
-    if (!cfg?.enabled || !cfg.socialBar.trim() || isPremium) return;
-    if (socialCooldownUntil && now >= socialCooldownUntil) {
-      setSocialCooldownUntil(0);
-      setSocialCycle((n) => n + 1);
-    }
-  }, [now, socialCooldownUntil, cfg, isPremium]);
 
   const popSrcdoc = useMemo(() => {
     if (!cfg?.popunder?.trim()) return "";
@@ -173,19 +158,22 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     // through to the close + cooldown path.
     const cd = Math.max(0, (cfg?.refreshIntervalSec ?? 60) * 1000);
     setSocialCooldownUntil(Date.now() + cd);
+    if (socialCooldownTimerRef.current) window.clearTimeout(socialCooldownTimerRef.current);
+    socialCooldownTimerRef.current = window.setTimeout(() => {
+      setSocialCooldownUntil(0);
+      setSocialCycle((n) => n + 1);
+    }, cd);
   };
 
   if (isPremium || !cfg || !cfg.enabled) return null;
 
   const popActive = !!cfg.popunder.trim() && !popCooldownUntil;
   const socialActive = !!cfg.socialBar.trim() && !socialCooldownUntil;
-  const socialCooldownSecLeft = socialCooldownUntil ? Math.max(0, Math.ceil((socialCooldownUntil - now) / 1000)) : 0;
-
   return (
     <>
-      {/* Direct-link popunder iframe — invisible, lives over the player so
-          taps on the video bubble up into it and trigger the popunder
-          script's click handler. Sandbox keeps it isolated. */}
+      {/* Direct-link popunder zone — limited to the center body of the player
+          so top/bottom controls remain tappable while a normal play-tap still
+          triggers the ad network's click handler. */}
       {popActive && popSrcdoc && (
         <iframe
           ref={popFrameRef}
@@ -193,8 +181,14 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
           title="ad-popunder"
           srcDoc={popSrcdoc}
           sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
-          className="absolute inset-0 w-full h-full border-0 bg-transparent z-[6]"
-          style={{ pointerEvents: "auto" }}
+          className="absolute left-0 right-0 border-0 bg-transparent z-[6]"
+          style={{
+            pointerEvents: "auto",
+            top: DIRECT_HITBOX_HEIGHT,
+            bottom: DIRECT_HITBOX_HEIGHT,
+            width: "100%",
+            height: `calc(100% - ${DIRECT_HITBOX_HEIGHT * 2}px)`,
+          }}
         />
       )}
 
@@ -218,20 +212,11 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
                 type="button"
                 onClick={handleCloseSocial}
                 aria-label="Close ad"
-                className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-white text-black flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.5)] ring-2 ring-primary animate-pulse"
+                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white text-black flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.5)] ring-2 ring-primary"
               >
                 <X className="w-4 h-4" strokeWidth={3} />
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Cooldown indicator (only when social cooldown is active) */}
-      {socialCooldownSecLeft > 0 && (
-        <div className="absolute left-3 bottom-[72px] z-[7] pointer-events-none">
-          <div className="px-2 py-1 rounded-full bg-black/60 text-[10px] font-mono text-white/80 border border-white/10">
-            Ad cooldown {socialCooldownSecLeft}s
           </div>
         </div>
       )}
