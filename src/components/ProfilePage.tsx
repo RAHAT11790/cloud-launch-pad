@@ -549,15 +549,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
       const remotePhoto = String(data?.profilePhoto || data?.photoUrl || data?.avatar || "").trim();
       const remoteName = String(data?.name || "").trim();
 
-      // Sync photo (including deletions)
-      if (remotePhoto !== (readProfilePhoto(userId) || "")) {
-        if (remotePhoto) {
-          setProfilePhoto(remotePhoto);
-          writeProfilePhoto(remotePhoto, userId);
-        } else if (userId) {
-          setProfilePhoto(null);
-          removeProfilePhoto(userId);
-        }
+      if (remotePhoto && remotePhoto !== (readProfilePhoto(userId) || "")) {
+        setProfilePhoto(remotePhoto);
+        writeProfilePhoto(remotePhoto, userId);
       }
 
       if (remoteName && remoteName !== "Guest User") {
@@ -577,6 +571,51 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
 
     return () => { unsubUser(); unsubAlias?.(); unsubMirror?.(); };
   }, [userId]);
+
+  useEffect(() => {
+    if (!userId || !profilePhoto) return;
+    let storedEmail = "";
+    try {
+      const raw = localStorage.getItem("rsanime_user");
+      if (raw) storedEmail = JSON.parse(raw)?.email || "";
+    } catch {}
+    const emailKey = buildEmailAliasKey(storedEmail);
+    const stamp = Date.now();
+
+    update(ref(db, `users/${userId}`), {
+      profilePhoto,
+      photoUrl: profilePhoto,
+      avatar: profilePhoto,
+      photoUpdatedAt: stamp,
+    }).catch(() => {});
+    update(ref(db, `users/${userId}/profilePhotos/${stamp}`), {
+      url: profilePhoto,
+      createdAt: stamp,
+      active: true,
+    }).catch(() => {});
+
+    if (emailKey) {
+      update(ref(db, `userProfiles/${emailKey}`), {
+        profilePhoto,
+        photoUrl: profilePhoto,
+        avatar: profilePhoto,
+        uid: userId,
+        email: storedEmail,
+        updatedAt: stamp,
+      }).catch(() => {});
+      update(ref(db, `appUsers/${emailKey}`), {
+        profilePhoto,
+        photoUrl: profilePhoto,
+        avatar: profilePhoto,
+        photoUpdatedAt: stamp,
+      }).catch(() => {});
+      update(ref(db, `userProfiles/${emailKey}/history/${stamp}`), {
+        url: profilePhoto,
+        createdAt: stamp,
+        uid: userId,
+      }).catch(() => {});
+    }
+  }, [userId, profilePhoto]);
 
   const handleDeleteThisPhoneLogin = useCallback(async () => {
     try {
