@@ -124,8 +124,22 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
       const type = (d as any).type as string;
       const cd = Math.max(0, (cfg?.refreshIntervalSec ?? 60) * 1000);
       if (type === "fired") {
-        if (kind === "popunder") setPopCooldownUntil(Date.now() + cd);
-        if (kind === "social") setSocialCooldownUntil(Date.now() + cd);
+        if (kind === "popunder") {
+          setPopCooldownUntil(Date.now() + cd);
+          if (popCooldownTimerRef.current) window.clearTimeout(popCooldownTimerRef.current);
+          popCooldownTimerRef.current = window.setTimeout(() => {
+            setPopCooldownUntil(0);
+            setPopCycle((n) => n + 1);
+          }, cd);
+        }
+        if (kind === "social") {
+          setSocialCooldownUntil(Date.now() + cd);
+          if (socialCooldownTimerRef.current) window.clearTimeout(socialCooldownTimerRef.current);
+          socialCooldownTimerRef.current = window.setTimeout(() => {
+            setSocialCooldownUntil(0);
+            setSocialCycle((n) => n + 1);
+          }, cd);
+        }
       }
     };
     window.addEventListener("message", onMsg);
