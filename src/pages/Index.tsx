@@ -2150,9 +2150,16 @@ const Index = () => {
 
         const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
         const remoteName = String(data.name || "").trim();
+        const remotePhotoPath = String(data.profilePhotoPath || "").trim();
 
         if (remotePhoto) {
           writeProfilePhoto(remotePhoto, userId);
+        }
+        if (remotePhotoPath) {
+          localStorage.setItem("rsanime_user", JSON.stringify({
+            ...user,
+            profilePhotoPath: remotePhotoPath,
+          }));
         }
         if (remoteName && remoteName !== "Guest User") {
           writeDisplayName(remoteName, userId);
