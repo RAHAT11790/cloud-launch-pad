@@ -609,6 +609,8 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
 
   return (
     <div>
+      <FunctionUrlOverrides glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+
       <div className={`${glassCard} p-4 mb-4`}>
         <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
           <Send size={14} className="text-blue-400" /> Telegram Post URL
