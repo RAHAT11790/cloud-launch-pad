@@ -452,6 +452,61 @@ export default function EgdManager({
         </div>
       </div>
 
+      {/* ===== Code Library — one click loads source + secret slots ===== */}
+      <div className={glassCard + " p-4 sm:p-5"}>
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+          <h3 className="font-bold flex items-center gap-2 text-sm sm:text-base">
+            <Library size={16} className="text-amber-400" /> Code Library
+          </h3>
+          <span className="text-[10px] text-zinc-500">
+            Tap → loads source + required secret fields below.
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {EDGE_FUNCTION_LIBRARY.map((entry) => (
+            <button
+              key={entry.slug}
+              type="button"
+              onClick={() => {
+                setSelected("");
+                setSlug(entry.slug);
+                setCode(entry.source);
+                setSecrets(
+                  entry.secrets.length > 0
+                    ? entry.secrets.map((name) => ({ name, value: "" }))
+                    : [{ name: "", value: "" }],
+                );
+                setResultUrl("");
+                setErrorLog("");
+                setSourceHint(
+                  entry.secrets.length > 0
+                    ? `Loaded "${entry.label}" — fill ${entry.secrets.length} secret(s) below, then Deploy.`
+                    : `Loaded "${entry.label}" — no secrets required.`,
+                );
+                toast.success(`Loaded: ${entry.label}`);
+                if (typeof window !== "undefined") {
+                  setTimeout(() => {
+                    document
+                      .querySelector('[data-egd-editor-anchor="true"]')
+                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }, 50);
+                }
+              }}
+              className="text-left rounded-xl border border-zinc-700/60 bg-zinc-900/50 hover:border-amber-400/60 hover:bg-amber-500/5 transition p-3 min-w-0 overflow-hidden"
+            >
+              <div className="font-semibold text-xs text-white truncate">{entry.label}</div>
+              <div className="text-[10px] text-zinc-500 truncate mt-0.5">{entry.slug}</div>
+              <div className="text-[10px] text-zinc-400 mt-1 line-clamp-2 break-words">{entry.description}</div>
+              {entry.secrets.length > 0 && (
+                <div className="mt-1.5 inline-flex items-center gap-1 text-[9px] text-amber-300/90">
+                  <KeyRound size={9} /> {entry.secrets.length} secret{entry.secrets.length > 1 ? "s" : ""}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Setup card */}
       {showSetup && (
         <div className={glassCard + " p-4 sm:p-6 space-y-4 border border-amber-500/30"}>
