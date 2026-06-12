@@ -208,7 +208,63 @@ function ensureContainer(): HTMLDivElement {
   return div;
 }
 
-function startObserver() {
+function throttleNotificationNode(node: HTMLElement | null) {
+  if (!node || !(node instanceof HTMLElement) || !node.isConnected) return;
+  if (isOwnedNode(node)) return;
+  let cs: CSSStyleDeclaration;
+  try { cs = window.getComputedStyle(node); } catch { return; }
+  // Only throttle floating ad chrome (fixed position notifications / bars).
+  if (cs.position !== "fixed") return;
+  if (cs.display === "none" || cs.visibility === "hidden") return;
+  // Skip our own close button.
+  if (node === window.__adsterraCloseButton) return;
+  const now = Date.now();
+  const last = window.__adsterraLastNotifAt ?? 0;
+  if (now - last < NOTIF_MIN_GAP_MS) {
+    try {
+      node.style.setProperty("display", "none", "important");
+      node.style.setProperty("visibility", "hidden", "important");
+      node.style.setProperty("pointer-events", "none", "important");
+    } catch {}
+    // Drop it shortly so Adsterra doesn't accumulate hidden DOM.
+    window.setTimeout(() => { try { node.remove(); } catch {} }, 250);
+    return;
+  }
+  window.__adsterraLastNotifAt = now;
+}
+
+function installPopunderThrottle() {
+  if (typeof window === "undefined") return;
+  if (window.__adsterraOpenWrapped) return;
+  window.__adsterraOpenWrapped = true;
+  const origOpen = window.open?.bind(window);
+  if (!origOpen) return;
+  window.open = function (url?: string | URL, target?: string, features?: string): Window | null {
+    try {
+      const urlStr = String(url ?? "");
+      // Treat empty / same-origin / hash links as legitimate app navigation.
+      const isAppUrl =
+        !urlStr ||
+        urlStr.startsWith("#") ||
+        urlStr.startsWith("/") ||
+        urlStr.startsWith("mailto:") ||
+        urlStr.startsWith("tel:") ||
+        urlStr.startsWith(location.origin);
+      if (!isAppUrl) {
+        const now = Date.now();
+        const last = window.__adsterraLastPopAt ?? 0;
+        if (now - last < POPUNDER_MIN_GAP_MS) {
+          // Silently swallow — popunder/popup is throttled.
+          return null;
+        }
+        window.__adsterraLastPopAt = now;
+      }
+    } catch {}
+    return origOpen(url as any, target as any, features as any);
+  } as typeof window.open;
+}
+
+
   if (typeof window === "undefined") return;
   if (window.__adsterraObserver) return;
   if (!window.__adsterraTrackedNodes) window.__adsterraTrackedNodes = new Set();
