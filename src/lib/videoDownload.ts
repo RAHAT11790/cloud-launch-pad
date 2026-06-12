@@ -2,7 +2,7 @@ import { toast } from "sonner";
 
 import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { SUPABASE_URL } from "@/lib/siteConfig";
-import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { db, ref, onValue } from "@/lib/firebase";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
@@ -15,22 +15,42 @@ const buildSafeFileName = (rawName: string) => {
   return withExt || "video.mp4";
 };
 
-// Resolve the download proxy base URL — prefers admin-configured override
-// (settings/functionOverrides/video-download.customUrl) and falls back to
-// the project's default Supabase Edge Function URL.
-async function resolveDownloadBase(): Promise<string> {
-  try {
-    const fromRouter = await getEdgeFunctionUrl("video-download");
-    if (fromRouter) return fromRouter;
-  } catch {}
+// ----- Live-updating override URL for the download proxy --------------------
+// Admin can override the default `video-download` Supabase URL in:
+//   Firebase → settings/functionOverrides/video-download.customUrl
+// We subscribe once at module load and keep the latest value in memory so
+// buildVideoDownloadUrl() can stay synchronous (VideoPlayer probes need that).
+let overrideBaseUrl = "";
+let overrideEnabled = true;
+try {
+  if (typeof window !== "undefined") {
+    onValue(ref(db, "settings/functionOverrides/video-download"), (snap) => {
+      const v = snap.val() || {};
+      overrideBaseUrl = String(v.customUrl || "").trim();
+      overrideEnabled = v.enabled !== false;
+    });
+  }
+} catch {}
+
+const defaultBase = (): string => {
   if (!SUPABASE_URL) return "";
   return `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/video-download`;
-}
+};
 
-export async function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): Promise<string | null> {
+const resolveBaseSync = (): string => {
+  if (overrideEnabled && overrideBaseUrl) return overrideBaseUrl.replace(/\/+$/, "");
+  return defaultBase();
+};
+
+/**
+ * Build the dedicated `video-download` proxy URL. Stays synchronous so it can
+ * be used inside render paths and HEAD probes. Picks up admin URL overrides
+ * live via the Firebase subscription above.
+ */
+export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): string | null {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return null;
-  const base = await resolveDownloadBase();
+  const base = resolveBaseSync();
   if (!base) return null;
   const fileName = buildSafeFileName(rawFileName);
   return `${base}?filename=${encodeURIComponent(fileName)}&url=${encodeURIComponent(trimmedUrl)}`;
@@ -62,15 +82,11 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
     return false;
   }
   const fileName = buildSafeFileName(rawFileName);
-  // Resolve async, but kick off the download as soon as we have the URL.
-  buildVideoDownloadUrl(trimmedUrl, fileName)
-    .then((finalUrl) => {
-      if (!finalUrl) {
-        toast.error("Download service is unavailable");
-        return;
-      }
-      openDownloadLink(finalUrl, fileName);
-    })
-    .catch(() => toast.error("Download service is unavailable"));
+  const finalUrl = buildVideoDownloadUrl(trimmedUrl, fileName);
+  if (!finalUrl) {
+    toast.error("Download service is unavailable");
+    return false;
+  }
+  openDownloadLink(finalUrl, fileName);
   return true;
 }
