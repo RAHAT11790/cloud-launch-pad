@@ -264,8 +264,9 @@ function installPopunderThrottle() {
   } as typeof window.open;
 }
 
-
+function startObserver() {
   if (typeof window === "undefined") return;
+
   if (window.__adsterraObserver) return;
   if (!window.__adsterraTrackedNodes) window.__adsterraTrackedNodes = new Set();
   const tracked = window.__adsterraTrackedNodes!;
