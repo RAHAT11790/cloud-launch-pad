@@ -53,8 +53,13 @@ const DEFAULT: AdsterraConfig = {
   enabled: true,
   popunder: "",
   socialBar: "",
-  refreshIntervalSec: 60,
+  refreshIntervalSec: 600,
 };
+
+// Minimum gap (ms) between cross-origin window.open() popunder triggers.
+const POPUNDER_MIN_GAP_MS = 35_000;
+// Minimum gap (ms) between visible in-page push notifications.
+const NOTIF_MIN_GAP_MS = 5_500;
 
 let cached: AdsterraConfig | null = null;
 let cachedPromise: Promise<AdsterraConfig> | null = null;
@@ -65,9 +70,10 @@ function normalize(v: any): AdsterraConfig {
     enabled: v?.enabled !== false,
     popunder: typeof v?.popunder === "string" ? v.popunder : "",
     socialBar: typeof v?.socialBar === "string" ? v.socialBar : "",
-    refreshIntervalSec: Number.isFinite(n) && n >= 0 ? Math.min(n, 3600) : 60,
+    refreshIntervalSec: Number.isFinite(n) && n >= 0 ? Math.min(n, 3600) : 600,
   };
 }
+
 
 export async function getAdsterraConfig(): Promise<AdsterraConfig> {
   if (cached) return cached;
