@@ -2185,6 +2185,7 @@ const Index = () => {
     clearActiveProfilePhoto();
     localStorage.removeItem("rs_session_started_at");
     setIsLoggedIn(false);
+    try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
   };
 
   const handleLogoutAllDevices = async () => {
