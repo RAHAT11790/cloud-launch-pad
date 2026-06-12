@@ -76,68 +76,62 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
     return () => clearInterval(interval);
   }, [displayTitles.length]);
 
+  // Track current logged-in user id (reacts instantly to login/logout)
   useEffect(() => {
-    const id = getExistingUserId();
-    setUserId(id);
-
-    // Load profile photo
-    try {
-      const photo = readProfilePhoto(id);
-      setProfilePhoto(photo);
-    } catch {}
-
-    // Listen for profile photo changes
-    const checkPhoto = () => {
+    const syncId = () => {
+      const id = getExistingUserId();
+      setUserId((prev) => (prev === id ? prev : id));
       try {
         const photo = readProfilePhoto(id);
-        setProfilePhoto(photo);
+        setProfilePhoto((prev) => (prev === photo ? prev : photo));
       } catch {}
     };
-    const interval = setInterval(checkPhoto, 2000);
-
-    // Update online status only for real users
-    if (id) {
-      const userUnsub = onValue(ref(db, `users/${id}`), (snap) => {
-        const data = snap.val() || {};
-        const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
-        const remoteName = String(data.name || "").trim();
-        if (remotePhoto) {
-          writeProfilePhoto(remotePhoto, id);
-          setProfilePhoto(remotePhoto);
-        }
-        if (remoteName && remoteName !== "Guest User") {
-          try {
-            writeDisplayName(remoteName, id);
-            const rawUser = localStorage.getItem("rsanime_user");
-            const parsedUser = rawUser ? JSON.parse(rawUser) : {};
-            localStorage.setItem("rsanime_user", JSON.stringify({ ...parsedUser, name: remoteName }));
-          } catch {}
-        }
-      });
-
-      const updateOnline = () => {
-        update(ref(db, `users/${id}`), { online: true, lastSeen: Date.now() }).catch(() => {});
-      };
-      updateOnline();
-      const heartbeat = setInterval(updateOnline, 30000);
-      
-      const onUnload = () => {
-        update(ref(db, `users/${id}`), { online: false, lastSeen: Date.now() }).catch(() => {});
-      };
-      window.addEventListener("beforeunload", onUnload);
-
-      return () => {
-        clearInterval(interval);
-        clearInterval(heartbeat);
-        userUnsub();
-        window.removeEventListener("beforeunload", onUnload);
-      };
-    }
-
+    syncId();
+    const poll = setInterval(syncId, 800);
+    window.addEventListener("storage", syncId);
+    window.addEventListener("rs_auth_changed", syncId as EventListener);
     return () => {
-      clearInterval(interval);
+      clearInterval(poll);
+      window.removeEventListener("storage", syncId);
+      window.removeEventListener("rs_auth_changed", syncId as EventListener);
     };
   }, []);
+
+  // Firebase profile + online status — re-bound whenever userId changes
+  useEffect(() => {
+    if (!userId) return;
+    const userUnsub = onValue(ref(db, `users/${userId}`), (snap) => {
+      const data = snap.val() || {};
+      const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+      const remoteName = String(data.name || "").trim();
+      if (remotePhoto) {
+        writeProfilePhoto(remotePhoto, userId);
+        setProfilePhoto(remotePhoto);
+      }
+      if (remoteName && remoteName !== "Guest User") {
+        try {
+          writeDisplayName(remoteName, userId);
+          const rawUser = localStorage.getItem("rsanime_user");
+          const parsedUser = rawUser ? JSON.parse(rawUser) : {};
+          localStorage.setItem("rsanime_user", JSON.stringify({ ...parsedUser, name: remoteName }));
+        } catch {}
+      }
+    });
+    const updateOnline = () => {
+      update(ref(db, `users/${userId}`), { online: true, lastSeen: Date.now() }).catch(() => {});
+    };
+    updateOnline();
+    const heartbeat = setInterval(updateOnline, 30000);
+    const onUnload = () => {
+      update(ref(db, `users/${userId}`), { online: false, lastSeen: Date.now() }).catch(() => {});
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => {
+      clearInterval(heartbeat);
+      userUnsub();
+      window.removeEventListener("beforeunload", onUnload);
+    };
+  }, [userId]);
 
   const currentPlaceholder = displayTitles[placeholderIdx] || "Search...";
 
