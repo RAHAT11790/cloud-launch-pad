@@ -806,12 +806,27 @@ const Index = () => {
           localItems = Array.isArray(parsed) ? parsed : [];
         } catch {}
         const merged = new Map<string, any>();
-        // One Continue Watching card PER SERIES — latest episode/timestamp wins.
+        // One Continue Watching card PER SERIES — pick latest watchedAt, but
+        // never lose progress: if the newer entry lacks currentTime/duration
+        // (e.g. user just re-opened the card), keep the older entry that
+        // actually has playback progress so the % bar + resume time stay.
         [...localItems, ...items].forEach((entry: any) => {
           if (!entry?.id) return;
           const key = String(entry.id);
           const current = merged.get(key);
-          if (!current || Number(entry?.watchedAt || 0) >= Number(current?.watchedAt || 0)) merged.set(key, entry);
+          if (!current) { merged.set(key, entry); return; }
+          const entryHasProgress = Number(entry?.currentTime) > 0 && Number(entry?.duration) > 0;
+          const currentHasProgress = Number(current?.currentTime) > 0 && Number(current?.duration) > 0;
+          const entryNewer = Number(entry?.watchedAt || 0) >= Number(current?.watchedAt || 0);
+          if (entryNewer && entryHasProgress) { merged.set(key, entry); return; }
+          if (entryNewer && !entryHasProgress && currentHasProgress) {
+            // Keep older progress data but bump the watchedAt timestamp
+            merged.set(key, { ...current, watchedAt: entry.watchedAt || current.watchedAt });
+            return;
+          }
+          if (!entryNewer && entryHasProgress && !currentHasProgress) {
+            merged.set(key, { ...entry, watchedAt: current.watchedAt || entry.watchedAt });
+          }
         });
         const withProgress = Array.from(merged.values()).filter((i: any) => {
           // Respect 30-day retention window
