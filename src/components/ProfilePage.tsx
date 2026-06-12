@@ -686,31 +686,50 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { alert("Image must be under 5MB!"); return; }
+    if (file.size > 10 * 1024 * 1024) { alert("Image must be under 10MB!"); return; }
     if (!file.type.startsWith("image/")) { alert("Please select an image file."); return; }
     setPhotoUploading(true);
     try {
-      const { uploadToImgbb } = await import("@/lib/imgbbUpload");
-      const url = await uploadToImgbb(file);
-      setProfilePhoto(url);
-      writeProfilePhoto(url, userId);
+      // Compress to a small square JPEG (≤ ~50KB) so we can store it directly in Firebase
+      // under users/{uid}. This guarantees cross-device sync (no ImgBB / IMG host needed).
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const SIZE = 256;
+              const canvas = document.createElement("canvas");
+              canvas.width = SIZE; canvas.height = SIZE;
+              const ctx = canvas.getContext("2d");
+              if (!ctx) return reject(new Error("canvas"));
+              // Cover-fit (center-crop) so circular avatars look correct on every device.
+              const ratio = Math.max(SIZE / img.width, SIZE / img.height);
+              const w = img.width * ratio;
+              const h = img.height * ratio;
+              ctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
+              resolve(canvas.toDataURL("image/jpeg", 0.85));
+            } catch (err) { reject(err as any); }
+          };
+          img.onerror = () => reject(new Error("image"));
+          img.src = String(reader.result || "");
+        };
+        reader.onerror = () => reject(new Error("read"));
+        reader.readAsDataURL(file);
+      });
+
+      setProfilePhoto(dataUrl);
+      writeProfilePhoto(dataUrl, userId);
       if (userId) {
-        update(ref(db, `users/${userId}`), { profilePhoto: url, photoUrl: url, avatar: url }).catch(() => {});
+        await update(ref(db, `users/${userId}`), {
+          profilePhoto: dataUrl,
+          photoUrl: dataUrl,
+          avatar: dataUrl,
+        }).catch(() => {});
       }
-      toast.success("✅ Profile photo uploaded!");
+      toast.success("✅ Profile photo saved — synced across all your devices");
     } catch {
-      // Fallback to base64 if imgbb fails
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const result = ev.target?.result as string;
-        setProfilePhoto(result);
-        writeProfilePhoto(result, userId);
-        if (userId) {
-          update(ref(db, `users/${userId}`), { profilePhoto: result, photoUrl: result, avatar: result }).catch(() => {});
-        }
-      };
-      reader.readAsDataURL(file);
-      toast.error("ImgBB failed, saved locally");
+      toast.error("Could not process image. Try a different photo.");
     }
     setPhotoUploading(false);
   };
