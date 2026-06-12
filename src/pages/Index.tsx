@@ -806,10 +806,10 @@ const Index = () => {
           localItems = Array.isArray(parsed) ? parsed : [];
         } catch {}
         const merged = new Map<string, any>();
+        // One Continue Watching card PER SERIES — latest episode/timestamp wins.
         [...localItems, ...items].forEach((entry: any) => {
           if (!entry?.id) return;
-          const epKey = entry?.episodeInfo ? `${entry.episodeInfo?.seasonIdx ?? entry.episodeInfo?.season ?? "m"}:${entry.episodeInfo?.epIdx ?? entry.episodeInfo?.episode ?? "m"}` : "movie";
-          const key = `${entry.id}__${epKey}`;
+          const key = String(entry.id);
           const current = merged.get(key);
           if (!current || Number(entry?.watchedAt || 0) >= Number(current?.watchedAt || 0)) merged.set(key, entry);
         });
