@@ -8,7 +8,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [enabled, setEnabled] = useState(true);
   const [popunder, setPopunder] = useState("");
   const [socialBar, setSocialBar] = useState("");
-  const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(60);
+  const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(600);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -18,7 +18,7 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       setPopunder(v.popunder || "");
       setSocialBar(v.socialBar || "");
       const n = Number(v.refreshIntervalSec);
-      setRefreshIntervalSec(Number.isFinite(n) && n >= 0 ? n : 60);
+      setRefreshIntervalSec(Number.isFinite(n) && n >= 0 ? n : 600);
     });
     return () => u();
   }, []);
