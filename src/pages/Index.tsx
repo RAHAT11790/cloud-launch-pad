@@ -2204,6 +2204,7 @@ const Index = () => {
     setDeviceLimitWarning(null);
     setUserFreeAccessExpiresAt(0);
     setIsLoggedIn(false);
+    try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
     toast.success("All devices logged out. Please log in again.");
   };
 
