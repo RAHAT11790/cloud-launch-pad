@@ -1731,15 +1731,14 @@ const Index = () => {
           updatedAt: Date.now(),
         });
 
+        // One cache entry per series — replace any prior episode of the same series.
         const nextCache = [
           {
             ...historyItem,
             currentTime: preserveProgress ? Number(cachedMatch?.currentTime || 0) : 0,
             duration: preserveProgress ? Number(cachedMatch?.duration || 0) : 0,
           },
-          ...(Array.isArray(cached)
-            ? cached.filter((item: any) => !(item?.id === anime.id && ((item?.episodeInfo?.seasonIdx ?? item?.episodeInfo?.season) === (historyItem?.episodeInfo?.seasonIdx ?? historyItem?.episodeInfo?.season)) && ((item?.episodeInfo?.epIdx ?? item?.episodeInfo?.episode) === (historyItem?.episodeInfo?.epIdx ?? historyItem?.episodeInfo?.episode))))
-            : []),
+          ...(Array.isArray(cached) ? cached.filter((item: any) => item?.id !== anime.id) : []),
         ].slice(0, 50);
         localStorage.setItem("rs_continueCache", JSON.stringify(nextCache));
       } catch {}
