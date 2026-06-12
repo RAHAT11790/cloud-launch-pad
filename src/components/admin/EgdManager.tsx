@@ -581,7 +581,7 @@ export default function EgdManager({
       {/* Editor + List */}
       <div className="grid lg:grid-cols-[1fr_320px] gap-4">
         {/* Editor card */}
-        <div className={glassCard + " p-4 sm:p-6 space-y-4 min-w-0"}>
+        <div data-egd-editor-anchor="true" className={glassCard + " p-4 sm:p-6 space-y-4 min-w-0"}>
           {/* Name */}
           <div className="min-w-0">
             <label className="text-xs text-zinc-400 mb-1 flex items-center gap-1">
