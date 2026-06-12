@@ -2,6 +2,7 @@ import { toast } from "sonner";
 
 import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
 import { SUPABASE_URL } from "@/lib/siteConfig";
+import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
@@ -14,18 +15,25 @@ const buildSafeFileName = (rawName: string) => {
   return withExt || "video.mp4";
 };
 
-/**
- * Build the Supabase video-proxy URL. All downloads go through the proxy so
- * the server can set Content-Disposition with the custom filename the user
- * picked (anime + season + episode + quality), and so HTTP origins work on
- * the HTTPS app without mixed-content blocks.
- */
-export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): string | null {
-  const trimmedUrl = String(rawUrl || "").trim();
-  if (!trimmedUrl || !isHttpUrl(trimmedUrl) || !SUPABASE_URL) return null;
+// Resolve the download proxy base URL — prefers admin-configured override
+// (settings/functionOverrides/video-download.customUrl) and falls back to
+// the project's default Supabase Edge Function URL.
+async function resolveDownloadBase(): Promise<string> {
+  try {
+    const fromRouter = await getEdgeFunctionUrl("video-download");
+    if (fromRouter) return fromRouter;
+  } catch {}
+  if (!SUPABASE_URL) return "";
+  return `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/video-download`;
+}
 
+export async function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): Promise<string | null> {
+  const trimmedUrl = String(rawUrl || "").trim();
+  if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return null;
+  const base = await resolveDownloadBase();
+  if (!base) return null;
   const fileName = buildSafeFileName(rawFileName);
-  return `${SUPABASE_URL}/functions/v1/video-proxy?download=1&filename=${encodeURIComponent(fileName)}&url=${encodeURIComponent(trimmedUrl)}`;
+  return `${base}?filename=${encodeURIComponent(fileName)}&url=${encodeURIComponent(trimmedUrl)}`;
 }
 
 function openDownloadLink(finalUrl: string, fileName: string) {
@@ -40,11 +48,12 @@ function openDownloadLink(finalUrl: string, fileName: string) {
 }
 
 /**
- * Always route downloads through the Supabase video-proxy. This guarantees:
- *  - Custom file name (anime - season - episode - quality.mp4) via Content-Disposition.
- *  - HTTP origins work on HTTPS app (no mixed-content block).
- *  - HTTPS origins that go dead (e.g. Render 502) never reach the user as
- *    a "This page isn't working" screen — the proxy handles upstream errors.
+ * Route every download through the dedicated `video-download` edge function.
+ * That function adds:
+ *  - upstream retries (no more ERR_INVALID_RESPONSE in the browser)
+ *  - clean Content-Disposition with the chosen filename
+ *  - HTTP origin support on an HTTPS app (no mixed-content block)
+ *  - JSON-formatted errors instead of raw broken bytes
  */
 export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: string): boolean {
   const trimmedUrl = String(rawUrl || "").trim();
@@ -52,14 +61,16 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
     toast.error("Download link is invalid");
     return false;
   }
-
   const fileName = buildSafeFileName(rawFileName);
-  const proxyUrl = buildVideoDownloadUrl(trimmedUrl, fileName);
-  if (!proxyUrl) {
-    toast.error("Download service is unavailable");
-    return false;
-  }
-
-  openDownloadLink(proxyUrl, fileName);
+  // Resolve async, but kick off the download as soon as we have the URL.
+  buildVideoDownloadUrl(trimmedUrl, fileName)
+    .then((finalUrl) => {
+      if (!finalUrl) {
+        toast.error("Download service is unavailable");
+        return;
+      }
+      openDownloadLink(finalUrl, fileName);
+    })
+    .catch(() => toast.error("Download service is unavailable"));
   return true;
 }

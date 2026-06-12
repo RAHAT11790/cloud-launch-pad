@@ -47,7 +47,7 @@ const DEFAULT_CONFIG: EdgeRouterConfig = {
 
 let cachedConfig: EdgeRouterConfig | null = null;
 let cacheTime = 0;
-const CACHE_TTL = 30_000;
+const CACHE_TTL = 120_000;
 
 export async function getEdgeRouterConfig(): Promise<EdgeRouterConfig> {
   const now = Date.now();
