@@ -154,7 +154,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
         </div>
       )}
 
-      <div className="relative flex-1 mx-3 cursor-pointer" onClick={onSearchClick} style={{ maxWidth: 200, minWidth: 120 }}>
+      <div className="relative flex-1 mx-2 cursor-pointer min-w-0" onClick={onSearchClick} style={{ maxWidth: 200 }}>
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4 z-10" />
         <div className="w-full py-2.5 pl-9 pr-3 rounded-full text-sm h-[38px] flex items-center overflow-hidden"
           style={{ boxShadow: "var(--neu-shadow-inset)", background: "hsl(var(--secondary))" }}>
@@ -166,13 +166,13 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
           </span>
         </div>
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1 flex-shrink-0">
         <ThemeToggle />
         <NotificationPanel userId={userId} onOpenContent={onOpenContent} />
         {userId ? (
           <button
             onClick={onProfileClick}
-            className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center transition-all hover:scale-110"
+            className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center transition-all hover:scale-110 flex-shrink-0"
             style={{ boxShadow: "var(--neu-shadow-sm)" }}
             aria-label="Open profile"
           >
@@ -187,7 +187,7 @@ const Header = ({ onSearchClick, onProfileClick, onOpenContent, animeTitles = []
         ) : (
           <button
             onClick={onProfileClick}
-            className="h-9 px-3.5 rounded-full bg-primary text-primary-foreground text-[12px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95"
+            className="h-9 px-2.5 sm:px-3.5 rounded-full bg-primary text-primary-foreground text-[11px] sm:text-[12px] font-bold uppercase tracking-wider flex items-center gap-1 sm:gap-1.5 transition-all hover:scale-105 active:scale-95 flex-shrink-0 whitespace-nowrap"
             style={{ boxShadow: "0 4px 14px hsl(var(--primary) / 0.35)" }}
             aria-label="Sign in"
           >
