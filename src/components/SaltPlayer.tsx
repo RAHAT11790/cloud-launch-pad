@@ -452,8 +452,8 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
           <div
             className="absolute inset-0 z-10"
             style={{ background: 'transparent' }}
-            onClick={(e) => { e.stopPropagation(); /* allow document-level handlers via bubble */ }}
           />
+
           {/* Adsterra ads — never mount for Live TV (SaltPlayer is only series/movies). */}
           <AdsterraAdManager isPremium={isPremium} videoEl={null} />
         </div>
