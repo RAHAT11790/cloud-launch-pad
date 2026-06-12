@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Bot, Copy, Loader2, Plus, RefreshCw, Rocket, Trash2, X, FileCode2, KeyRound,
   Link as LinkIcon, ExternalLink, Settings, CheckCircle2, AlertCircle, Download,
+  Library,
 } from "lucide-react";
 import { toast } from "sonner";
 import { db, ref, onValue, set } from "@/lib/firebase";
 import { EGD_DEPLOYER_CODE } from "@/lib/egdDeployerCode";
+import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
 
 /**
  * EGD MANAGER
