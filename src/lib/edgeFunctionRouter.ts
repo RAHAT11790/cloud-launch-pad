@@ -92,10 +92,12 @@ function supabaseFallbackUrl(fnName: string): string {
     "generate-backdrop",
     "rs-bot",
     "video-proxy",
+    "video-download",
     "apk-download",
     "send-otp-email",
     "link-share-bot",
     "process-email-queue",
+    "shorten-arolinks",
   ]);
   if (!ENABLED.has(fnName)) return "";
   return `${base.replace(/\/$/, "")}/functions/v1/${fnName}`;
