@@ -436,6 +436,8 @@ async function mountAdCycle(cfg: AdsterraConfig, fromTimer = false) {
 export function enterAdsterraPlayerScope() {
   if (typeof window === "undefined") return;
   window.__adsterraPlayerScopeActive = true;
+  installPopunderThrottle();
+
 }
 
 export function exitAdsterraPlayerScope() {
