@@ -59,6 +59,20 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   const cropPanelRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Premium status — disables ads for paid users.
+  const [isPremium, setIsPremium] = useState<boolean | null>(null);
+  useEffect(() => {
+    let uid: string | null = null;
+    try { const u = localStorage.getItem("rsanime_user"); if (u) uid = JSON.parse(u).id; } catch {}
+    if (!uid) { setIsPremium(false); return; }
+    const unsub = onValue(ref(db, `users/${uid}/premium`), (snap) => {
+      const d = snap.val();
+      setIsPremium(!!(d && d.active === true && d.expiresAt > Date.now()));
+    });
+    return () => unsub();
+  }, []);
+
+
   // Auto-hide controls timer
   const startHideTimer = useCallback(() => {
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
