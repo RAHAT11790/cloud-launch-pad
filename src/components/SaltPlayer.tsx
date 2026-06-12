@@ -447,10 +447,18 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
             referrerPolicy="no-referrer"
             sandbox="allow-scripts allow-same-origin allow-presentation"
           />
-          {/* Transparent overlay — blocks remote iframe's native controls so only our controls open */}
-          <div className="absolute inset-0 z-10" style={{ background: 'transparent' }} />
+          {/* Transparent overlay — blocks remote iframe's native controls so only our controls open.
+              Clicks here bubble to document so Adsterra popunder can trigger over the iframe. */}
+          <div
+            className="absolute inset-0 z-10"
+            style={{ background: 'transparent' }}
+            onClick={(e) => { e.stopPropagation(); /* allow document-level handlers via bubble */ }}
+          />
+          {/* Adsterra ads — never mount for Live TV (SaltPlayer is only series/movies). */}
+          <AdsterraAdManager isPremium={isPremium} videoEl={null} />
         </div>
       </div>
+
 
       {/* Season selector + Episode list + Suggested (only when not fullscreen) */}
       {!isFullscreen && (
