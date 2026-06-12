@@ -184,7 +184,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           }, gEmail);
         } catch (e) {}
 
-        localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
+        localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         writeDisplayName(gName, uid);
         if (gPhoto) writeProfilePhoto(gPhoto, uid);
@@ -237,7 +237,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         }, gEmail);
       } catch (e) {}
 
-      localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail }));
+      localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: gName, email: gEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
       localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
       writeDisplayName(gName, uid);
       if (gPhoto) writeProfilePhoto(gPhoto, uid);
@@ -473,7 +473,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           lastSeen: Date.now(),
           authProvider: "email",
         }, email.trim());
-        localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: name.trim(), email: email.trim() }));
+        localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: name.trim(), email: email.trim() })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         writeDisplayName(name.trim(), userId);
         toast.success("Account created successfully!");
@@ -499,7 +499,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
         }
         const displayName = finalUserData.name || input;
         const loginEmail = finalUserData.email || (input.includes("@") ? input : "");
-        localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: displayName, email: loginEmail }));
+        localStorage.setItem("rsanime_user", JSON.stringify({ id: uid, name: displayName, email: loginEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
         writeDisplayName(displayName, uid);
         try {
