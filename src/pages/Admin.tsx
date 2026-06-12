@@ -571,6 +571,153 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 };
 
 // ==================== CLOUDFLARE WORKER ROUTER SECTION ====================
+// ==================== FUNCTION URL OVERRIDES — every edge function gets a router URL field ====================
+const ROUTER_FUNCTIONS: Array<{ slug: string; label: string }> = [
+  { slug: "video-download",      label: "Video Download" },
+  { slug: "video-proxy",         label: "Video Proxy" },
+  { slug: "telegram-post",       label: "Telegram Post" },
+  { slug: "rs-bot",              label: "RS Bot (AI)" },
+  { slug: "send-otp-email",      label: "Send OTP Email" },
+  { slug: "process-email-queue", label: "Process Email Queue" },
+  { slug: "apk-download",        label: "APK Download" },
+  { slug: "link-share-bot",      label: "Link Share Bot" },
+  { slug: "shorten-arolinks",    label: "Shorten Arolinks" },
+  { slug: "generate-backdrop",   label: "Generate Backdrop" },
+];
+const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
+  const defaultBase = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1";
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [enabled, setEnabled] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<Record<string, { ok: boolean; ms: number }>>({});
+
+  useEffect(() => {
+    const unsub = onValue(ref(db, "settings/functionOverrides"), (snap) => {
+      const v = snap.val() || {};
+      const u: Record<string, string> = {};
+      const e: Record<string, boolean> = {};
+      ROUTER_FUNCTIONS.forEach(({ slug }) => {
+        u[slug] = String(v?.[slug]?.customUrl || "");
+        e[slug] = v?.[slug]?.enabled !== false;
+      });
+      setUrls(u);
+      setEnabled(e);
+    });
+    return () => unsub();
+  }, []);
+
+  const save = async (slug: string) => {
+    setSaving(slug);
+    try {
+      await set(ref(db, `settings/functionOverrides/${slug}`), {
+        enabled: enabled[slug] !== false,
+        customUrl: (urls[slug] || "").trim(),
+      });
+      toast.success(`Saved · ${slug}`);
+    } catch (e: any) { toast.error(e?.message || "Save failed"); }
+    finally { setSaving(null); }
+  };
+
+  const fillRecommended = (slug: string) =>
+    setUrls((p) => ({ ...p, [slug]: `${defaultBase}/${slug}` }));
+
+  const fillAllDefaults = async () => {
+    setSaving("__all__");
+    try {
+      const next: Record<string, string> = {};
+      for (const { slug } of ROUTER_FUNCTIONS) {
+        const u = `${defaultBase}/${slug}`;
+        next[slug] = u;
+        await set(ref(db, `settings/functionOverrides/${slug}`), { enabled: true, customUrl: u });
+      }
+      setUrls(next);
+      toast.success("All URLs reset to defaults");
+    } catch (e: any) { toast.error(e?.message || "Save failed"); }
+    finally { setSaving(null); }
+  };
+
+  const ping = async (slug: string) => {
+    const u = (urls[slug] || `${defaultBase}/${slug}`).trim();
+    setTesting(slug);
+    const start = Date.now();
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 6000);
+      const r = await fetch(u, { method: "OPTIONS", signal: ctrl.signal });
+      clearTimeout(t);
+      setTestResult((p) => ({ ...p, [slug]: { ok: r.status < 500, ms: Date.now() - start } }));
+    } catch {
+      setTestResult((p) => ({ ...p, [slug]: { ok: false, ms: Date.now() - start } }));
+    } finally { setTesting(null); }
+  };
+
+  return (
+    <div className={`${glassCard} p-4 mb-4`}>
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Link size={14} className="text-emerald-400" /> Edge Function URL Router
+          </h3>
+          <p className="text-[10px] text-zinc-400 mt-1 break-words">
+            Each Edge Function can be redirected to your own deployed URL. Leave empty to fall back to defaults.
+          </p>
+        </div>
+        <button onClick={fillAllDefaults} disabled={saving === "__all__"} className={`${btnSecondary} !px-3 !py-1.5 !text-[11px] inline-flex items-center gap-1.5 shrink-0`}>
+          {saving === "__all__" ? <Loader2 className="animate-spin" size={12} /> : <RefreshCw size={12} />}
+          Reset all to defaults
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {ROUTER_FUNCTIONS.map(({ slug, label }) => {
+          const recommended = `${defaultBase}/${slug}`;
+          const res = testResult[slug];
+          return (
+            <div key={slug} className="rounded-xl border border-zinc-700/50 bg-zinc-900/40 p-3 min-w-0">
+              <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-white truncate">{label}</div>
+                  <div className="text-[10px] text-zinc-500 truncate">{slug}</div>
+                </div>
+                <button
+                  onClick={() => setEnabled((p) => ({ ...p, [slug]: !(p[slug] !== false) }))}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${enabled[slug] !== false ? 'bg-emerald-600' : 'bg-zinc-600'}`}
+                  title={enabled[slug] !== false ? "Enabled" : "Disabled"}
+                >
+                  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${enabled[slug] !== false ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+              <input
+                value={urls[slug] || ""}
+                onChange={(e) => setUrls((p) => ({ ...p, [slug]: e.target.value }))}
+                placeholder={recommended}
+                className={inputClass + " w-full text-[11px]"}
+              />
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <button onClick={() => fillRecommended(slug)} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
+                  Use Default
+                </button>
+                <button onClick={() => save(slug)} disabled={saving === slug} className={`${btnPrimary} !px-2 !py-1 !text-[10px] inline-flex items-center gap-1`}>
+                  {saving === slug ? <Loader2 className="animate-spin" size={10} /> : <Save size={10} />} Save
+                </button>
+                <button onClick={() => ping(slug)} disabled={testing === slug} className={`${btnSecondary} !px-2 !py-1 !text-[10px] inline-flex items-center gap-1`}>
+                  {testing === slug ? <Loader2 className="animate-spin" size={10} /> : <span>📡</span>} Ping
+                </button>
+                {res && (
+                  <span className={`text-[10px] px-1.5 py-1 rounded ${res.ok ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>
+                    {res.ok ? "✓" : "✕"} {res.ms}ms
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
   const [telegramPostUrl, setTelegramPostUrl] = useState("");
   const [telegramPostUrlInput, setTelegramPostUrlInput] = useState("");
