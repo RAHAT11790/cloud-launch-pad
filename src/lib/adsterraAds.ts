@@ -226,10 +226,15 @@ function startObserver() {
         const parent = (node as Node).parentNode;
         if (parent === document.body || parent === document.documentElement || parent === document.head) {
           tracked.add(node);
+          // Throttle in-page push notification toasts: if a fixed/visible
+          // ad node appears within NOTIF_MIN_GAP_MS of the last one, hide it.
+          // Runs after a tick so Adsterra's inline styles settle first.
+          window.setTimeout(() => throttleNotificationNode(node as HTMLElement), 80);
         }
       });
     }
   });
+
   obs.observe(document.documentElement, { childList: true, subtree: true });
   window.__adsterraObserver = obs;
 }
