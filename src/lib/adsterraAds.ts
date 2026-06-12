@@ -39,6 +39,10 @@ declare global {
     __adsterraCloseButton?: HTMLButtonElement | null;
     __adsterraLastLoadAt?: number;
     __adsterraMountPromise?: Promise<void> | null;
+    __adsterraLastNotifAt?: number;
+    __adsterraLastPopAt?: number;
+    __adsterraOpenWrapped?: boolean;
+
   }
 }
 
