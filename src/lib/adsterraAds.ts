@@ -61,7 +61,7 @@ const DEFAULT: AdsterraConfig = {
 };
 
 // Minimum gap (ms) between cross-origin window.open() popunder triggers.
-const POPUNDER_MIN_GAP_MS = 35_000;
+const POPUNDER_MIN_GAP_MS = 20_000;
 // Minimum gap (ms) between visible in-page push notifications.
 const NOTIF_MIN_GAP_MS = 5_500;
 
