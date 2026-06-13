@@ -7,13 +7,19 @@ import {
 } from "lucide-react";
 
 const DAYS = [
-  "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+  "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "AllDay",
 ] as const;
 type Day = typeof DAYS[number];
 
 const SHORT: Record<Day, string> = {
   Saturday: "Sat", Sunday: "Sun", Monday: "Mon", Tuesday: "Tue",
-  Wednesday: "Wed", Thursday: "Thu", Friday: "Fri",
+  Wednesday: "Wed", Thursday: "Thu", Friday: "Fri", AllDay: "All Day",
+};
+
+const LONG_LABEL: Record<Day, string> = {
+  Saturday: "Saturday", Sunday: "Sunday", Monday: "Monday", Tuesday: "Tuesday",
+  Wednesday: "Wednesday", Thursday: "Thursday", Friday: "Friday",
+  AllDay: "All Day (every day)",
 };
 
 const DAY_GRADIENT: Record<Day, string> = {
@@ -24,6 +30,7 @@ const DAY_GRADIENT: Record<Day, string> = {
   Wednesday: "from-violet-500 to-purple-600",
   Thursday: "from-fuchsia-500 to-pink-600",
   Friday: "from-indigo-500 to-cyan-600",
+  AllDay: "from-yellow-400 via-orange-500 to-red-500",
 };
 
 function todayName(): Day {
