@@ -497,6 +497,13 @@ const Index = () => {
     // Guest playback is allowed. Account-level unlock gating applies only to logged-in users.
     if (!isLoggedIn) return true;
 
+    // AnimeSalt (AN) content always plays — for everyone, logged-in or guest.
+    // Logged-in users get the SAME zero-friction playback as guests so the
+    // "File not found / can't play" asymmetry never happens again.
+    if (anime?.source === "animesalt" || String(anime?.id || "").startsWith("as_")) {
+      return true;
+    }
+
     if (unlockBlocked) {
       toast.error("This account is blocked because the same unlock token was misused.");
       return false;
