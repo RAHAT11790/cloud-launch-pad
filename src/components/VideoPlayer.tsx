@@ -4235,7 +4235,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               );
               if (!epUrl) continue;
               const fileName = buildDownloadFileName(episodeLabel, quality);
-              downloadManager.enqueueDownload({
+              batchItems.push({ url: epUrl, fileName });
+              // UI-only entry — actual browser download is fired by the
+              // bulk helper below, all in this same user gesture.
+              downloadManager.registerExternalDownload({
                 id: buildDlId(quality, episodeLabel),
                 url: epUrl,
                 title,
@@ -4244,7 +4247,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 quality,
                 fileName,
               });
-              batchItems.push({ url: epUrl, fileName });
             }
             // Fire EVERY browser download in this same user gesture so
             // Chrome shows the "Allow multiple downloads" prompt only ONCE
