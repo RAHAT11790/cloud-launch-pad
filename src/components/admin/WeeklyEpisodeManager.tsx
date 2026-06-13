@@ -243,7 +243,7 @@ export default function WeeklyEpisodeManager({
               <div>
                 <label className="text-[11px] text-zinc-400 mb-1.5 block font-medium">Release Day</label>
                 <select value={selectedDay} onChange={e => setSelectedDay(e.target.value as Day)} className={selectClass}>
-                  {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                  {DAYS.map(d => <option key={d} value={d}>{LONG_LABEL[d]}</option>)}
                 </select>
               </div>
 
@@ -366,7 +366,7 @@ export default function WeeklyEpisodeManager({
                         <div className="flex gap-1.5 mt-2">
                           <select value={editingDay} onChange={e => setEditingDay(e.target.value as Day)}
                             className={`${selectClass} flex-1 py-1.5 text-[11px]`}>
-                            {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                            {DAYS.map(d => <option key={d} value={d}>{LONG_LABEL[d]}</option>)}
                           </select>
                           <button onClick={() => changeDay(item.seriesId, editingDay)}
                             className="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 rounded-lg">
