@@ -267,7 +267,7 @@ export default function WeeklyEpisodeManager({
         <div className="flex items-center gap-2 mb-2.5 px-1">
           <CalendarDays size={13} className="text-indigo-400" />
           <h3 className="text-[12px] font-semibold text-white">Days of the week</h3>
-          <span className="text-[10px] text-zinc-500 ml-auto">Today: {todayName()}</span>
+          <span className="text-[10px] text-zinc-500 ml-auto">Today: {LONG_LABEL[todayName()]}</span>
         </div>
         <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1 -mx-1 px-1">
           {DAYS.map(d => {
@@ -306,7 +306,7 @@ export default function WeeklyEpisodeManager({
               <Film size={14} className="text-white" />
             </div>
             <div>
-              <h3 className="text-sm font-bold">{activeDay}</h3>
+              <h3 className="text-sm font-bold">{LONG_LABEL[activeDay]}</h3>
               <p className="text-[10.5px] text-zinc-500">{visibleList.length} anime scheduled</p>
             </div>
           </div>
@@ -315,7 +315,7 @@ export default function WeeklyEpisodeManager({
         {visibleList.length === 0 ? (
           <div className="text-center py-10 text-zinc-500">
             <Calendar size={32} className="mx-auto mb-2 opacity-30" />
-            <p className="text-[12px]">No anime scheduled for {activeDay}</p>
+            <p className="text-[12px]">No anime scheduled for {LONG_LABEL[activeDay]}</p>
             <p className="text-[10.5px] mt-1 text-zinc-600">Use the picker above to add one.</p>
           </div>
         ) : (
