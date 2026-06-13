@@ -6,6 +6,8 @@ import { db, ref, onValue } from "@/lib/firebase";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
+const isManagedVideoDownloadUrl = (value: string) => /\/functions\/v1\/video-download\?/i.test(String(value || ""));
+
 const buildSafeFileName = (rawName: string) => {
   const cleaned = String(rawName || "video")
     .replace(/[\\/:*?"<>|]+/g, " ")
@@ -50,6 +52,7 @@ const resolveBaseSync = (): string => {
 export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): string | null {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return null;
+   if (isManagedVideoDownloadUrl(trimmedUrl)) return trimmedUrl;
   const base = resolveBaseSync();
   if (!base) return null;
   const fileName = buildSafeFileName(rawFileName);
