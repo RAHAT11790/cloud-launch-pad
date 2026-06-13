@@ -65,15 +65,13 @@ const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualit
     }
   });
 
-  embedOptions.sort((a, b) => {
-    const score = (src: string) => {
-      const value = String(src || "").trim().toLowerCase();
-      if (/hf\.space|huggingface/.test(value)) return 0;
-      if (/embed|player|watch/.test(value)) return 1;
-      return 2;
-    };
-    return score(a.src) - score(b.src);
-  });
+  // Preserve upstream order for AN sources.
+  // Several AN movies return a clean Server 1 URL first (for example as-cdn)
+  // and a secondary `player.php` URL later. Re-ranking by `player|watch|embed`
+  // was incorrectly promoting the broken server for signed-in users, which is
+  // why they were seeing 500 / Invalid hash while guests sometimes still got
+  // the original first source. Server 1 must always stay first unless the user
+  // manually switches servers.
 
   if (directOptions.length > 0) {
     return {
