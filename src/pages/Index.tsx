@@ -65,6 +65,16 @@ const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualit
     }
   });
 
+  embedOptions.sort((a, b) => {
+    const score = (src: string) => {
+      const value = String(src || "").trim().toLowerCase();
+      if (/hf\.space|huggingface/.test(value)) return 0;
+      if (/embed|player|watch/.test(value)) return 1;
+      return 2;
+    };
+    return score(a.src) - score(b.src);
+  });
+
   if (directOptions.length > 0) {
     return {
       primarySrc: directOptions[0].src,
