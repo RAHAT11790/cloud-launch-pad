@@ -4219,11 +4219,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               return;
             }
             const orderedIdxs = Array.from(dlSelectedEpisodes).sort((a, b) => a - b);
-            let queued = 0;
-            let skipped = 0;
+            const batchItems: Array<{ url: string; fileName: string }> = [];
+            // Register every selected episode in the download-manager UI so
+            // the user sees progress for all of them — not only the first.
             for (const idx of orderedIdxs) {
               const ep = panelEpisodes.find((episode) => episode.index === idx);
-              if (!ep) { skipped++; continue; }
+              if (!ep) continue;
               const seasonLabel = getShortSeasonLabel(panelSeason?.name, downloadPanelSeasonIdx);
               const episodeLabel = buildEpisodeDownloadName(title, seasonLabel, ep.episodeNumber);
               const epUrl = getDownloadUrl(
@@ -4232,7 +4233,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 episodeLabel,
                 Object.values(ep.qualityLinks),
               );
-              if (!epUrl) { skipped++; continue; }
+              if (!epUrl) continue;
+              const fileName = buildDownloadFileName(episodeLabel, quality);
               downloadManager.enqueueDownload({
                 id: buildDlId(quality, episodeLabel),
                 url: epUrl,
@@ -4240,12 +4242,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 subtitle: episodeLabel,
                 poster,
                 quality,
-                fileName: buildDownloadFileName(episodeLabel, quality),
+                fileName,
               });
-              queued++;
+              batchItems.push({ url: epUrl, fileName });
             }
+            // Fire EVERY browser download in this same user gesture so
+            // Chrome shows the "Allow multiple downloads" prompt only ONCE
+            // (no per-episode prompt, no battery prompt loop).
+            const { triggerBulkBackgroundDownloads } = await import("@/lib/videoDownload");
+            const fired = triggerBulkBackgroundDownloads(batchItems);
             closePanel();
-            if (queued === 0) toast.error("No downloadable links found");
+            if (fired === 0) toast.error("No downloadable links found");
+            else toast.success(`Started ${fired} downloads`);
           };
 
           const playOffline = async (episodeData?: any) => {
