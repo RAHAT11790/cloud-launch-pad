@@ -68,6 +68,33 @@ function openDownloadLink(finalUrl: string, fileName: string) {
 }
 
 /**
+ * Iframe-based download trigger. Used for batch/bulk downloads so the browser
+ * does NOT show the "Allow multiple downloads" / battery prompt for every
+ * additional file. Each download lives in its own short-lived iframe, which
+ * Chrome treats as a separate document context and bypasses the prompt.
+ */
+function openDownloadViaIframe(finalUrl: string) {
+  try {
+    const iframe = document.createElement("iframe");
+    iframe.style.display = "none";
+    iframe.src = finalUrl;
+    document.body.appendChild(iframe);
+    // Remove after browser has had time to start the download.
+    setTimeout(() => {
+      try { document.body.removeChild(iframe); } catch {}
+    }, 10_000);
+  } catch {
+    // Fallback to anchor click if iframe creation fails.
+    const link = document.createElement("a");
+    link.href = finalUrl;
+    link.rel = "noopener noreferrer";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+}
+
+/**
  * Route every download through the dedicated `video-download` edge function.
  * That function adds:
  *  - upstream retries (no more ERR_INVALID_RESPONSE in the browser)
@@ -89,4 +116,50 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
   }
   openDownloadLink(finalUrl, fileName);
   return true;
+}
+
+/**
+ * Fire MANY downloads in a single user gesture without spamming the browser's
+ * "Allow multiple downloads" / battery prompt.
+ *
+ * Strategy:
+ *  - First download → standard anchor click (so the user sees one prompt,
+ *    if any, that grants permission for the rest).
+ *  - Subsequent downloads → hidden iframes, fired with tiny 80ms gaps so
+ *    Chrome groups them with the first gesture and does NOT re-prompt.
+ *
+ * Pass an array of { url, fileName } in the order you want them downloaded.
+ * Returns the number of downloads that were actually triggered.
+ */
+export function triggerBulkBackgroundDownloads(
+  items: Array<{ url: string; fileName: string }>,
+): number {
+  if (!Array.isArray(items) || items.length === 0) return 0;
+
+  const valid = items
+    .map((it) => {
+      const u = String(it?.url || "").trim();
+      if (!u || !isHttpUrl(u)) return null;
+      const fn = buildSafeFileName(it?.fileName || "video");
+      const final = buildVideoDownloadUrl(u, fn);
+      return final ? { final, fn } : null;
+    })
+    .filter((x): x is { final: string; fn: string } => !!x);
+
+  if (valid.length === 0) {
+    toast.error("No downloadable links found");
+    return 0;
+  }
+
+  // First one via anchor (carries the user-gesture, gets the one-shot prompt).
+  const [head, ...rest] = valid;
+  openDownloadLink(head.final, head.fn);
+
+  // Rest via iframes, staggered by 80ms so the browser treats them as a
+  // single batch and does NOT show a separate prompt for each file.
+  rest.forEach((entry, idx) => {
+    setTimeout(() => openDownloadViaIframe(entry.final), 80 * (idx + 1));
+  });
+
+  return valid.length;
 }
