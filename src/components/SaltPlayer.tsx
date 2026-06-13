@@ -237,10 +237,10 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   const handleEpisodeClick = async (ep: any, season: any, sIdx: number, eIdx: number) => {
     const epSrc = ep.link;
     if (epSrc?.startsWith("animesalt://")) {
-      if (saltPlayerState.anime && onRequireUnlock) {
-        const hasAccess = await onRequireUnlock(saltPlayerState.anime, sIdx, eIdx);
-        if (!hasAccess) return;
-      }
+      // AN content plays without unlock gating — guest and logged-in users
+      // are treated identically (priority to logged-in users, no asymmetric
+      // gating). The earlier ad-gate redirect for AN was the root cause of
+      // "File not found" loops for signed-in accounts.
       const epSlug = epSrc.replace("animesalt://", "");
       try {
         const result = await animeSaltApi.getEpisode(epSlug);
@@ -259,9 +259,11 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
             currentEmbedIdx: 0,
             loading: false,
           });
+        } else {
+          toast.error("This episode source is not available right now. Try another server.");
         }
       } catch {
-        toast.error("Failed to load");
+        toast.error("Failed to load this episode. Try another server.");
       }
     }
   };
