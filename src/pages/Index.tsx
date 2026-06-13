@@ -25,6 +25,19 @@ const isDirectMediaPlaybackUrl = (url?: string | null) => {
   return /\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(normalized);
 };
 
+const normalizeAnimeSaltPlaybackUrl = (url?: string | null) => {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    const isMultiLangPlayer = /(^|\.)animesalt\.(ac|top)$/i.test(parsed.hostname) && /\/multi-lang-plyr\/player\.php$/i.test(parsed.pathname);
+    if (isMultiLangPlayer) {
+      return `https://codecryptic.net/player/multi-lang-plyr.php${parsed.search}`;
+    }
+  } catch {}
+  return raw;
+};
+
 const getAnimeSaltSourcePriority = (url?: string | null) => {
   const value = String(url || "").trim().toLowerCase();
   if (!value) return 99;
@@ -37,7 +50,7 @@ const getAnimeSaltSourcePriority = (url?: string | null) => {
 
 const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualityOptions?: { label: string; src: string }[] } => {
   const seen = new Set<string>();
-  const normalize = (value?: string | null) => String(value || "").trim();
+  const normalize = (value?: string | null) => normalizeAnimeSaltPlaybackUrl(value);
   const pushUnique = (list: { label: string; src: string }[], label: string, src?: string | null) => {
     const cleanSrc = normalize(src);
     if (!cleanSrc || seen.has(cleanSrc)) return;
@@ -96,7 +109,7 @@ const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualit
 const resolveSaltEmbed = (payload: any): { embedUrl: string; allEmbeds: string[] } => {
   const collected: string[] = [];
   const push = (u?: string | null) => {
-    const v = String(u || "").trim();
+    const v = normalizeAnimeSaltPlaybackUrl(u);
     if (v && !collected.includes(v)) collected.push(v);
   };
   // Preserve upstream order — Server 1 is always first as returned by the
