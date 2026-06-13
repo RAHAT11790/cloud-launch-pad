@@ -1567,7 +1567,9 @@ const Index = () => {
       navigate(targetWatchRoute);
     }
 
-    if (!hasFreeAccess() && !saltIsPremium) {
+    const isAnimeSaltContent = anime.source === "animesalt" || String(anime.id || "").startsWith("as_");
+
+    if (!hasFreeAccess() && !saltIsPremium && !isAnimeSaltContent) {
       // If admin disabled the unlock gate entirely, skip redirect and play directly
       const shortenerOn = await isShortenerEnabled();
       if (shortenerOn) {
