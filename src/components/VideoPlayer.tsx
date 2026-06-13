@@ -4213,7 +4213,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           };
 
           const startSelectedDownloads = async (quality: string) => {
-            const { toast } = await import("sonner");
             if (!panelSeason || dlSelectedEpisodes.size === 0) {
               toast.error("Select at least one episode");
               return;
@@ -4251,8 +4250,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             // Fire EVERY browser download in this same user gesture so
             // Chrome shows the "Allow multiple downloads" prompt only ONCE
             // (no per-episode prompt, no battery prompt loop).
-            const { triggerBulkBackgroundDownloads } = await import("@/lib/videoDownload");
-            const fired = triggerBulkBackgroundDownloads(batchItems);
             closePanel();
             if (fired === 0) toast.error("No downloadable links found");
             else toast.success(`Started ${fired} downloads`);

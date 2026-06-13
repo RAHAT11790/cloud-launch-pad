@@ -54,27 +54,70 @@ export const DEFAULT_RTDB_RULES = `{
   }
 }`;
 
-const appCache = new Map<string, { app: FirebaseApp; db: Database }>();
+const appCache = new Map<string, { app: FirebaseApp; db: Database; url: string }>();
 
 function instanceName(id: string) { return `extra-fb-${id}`; }
 
-function ensureApp(cfg: ExtraFirebaseConfig): { app: FirebaseApp; db: Database } {
-  const cached = appCache.get(cfg.id);
-  if (cached) return cached;
+/** 
+ * Clean up a database URL: trim, remove trailing slashes. 
+ */
+function normalizeUrl(url: string | undefined): string {
+  if (!url) return "";
+  let s = url.trim();
+  if (!s) return "";
+  s = s.replace(/\/+$/, "");
+  if (s && !s.startsWith("http")) s = "https://" + s;
+  return s;
+}
 
-  // Re-use if already initialized in this session
-  const existing = getApps().find(a => a.name === instanceName(cfg.id));
-  const app = existing || initializeApp({
+/**
+ * Extract the root of an RTDB URL (origin only).
+ * Necessary because .info paths only work at the REAL database root.
+ */
+function getRootUrl(url: string): string {
+  try {
+    const u = new URL(normalizeUrl(url));
+    return u.origin;
+  } catch {
+    return normalizeUrl(url);
+  }
+}
+
+function ensureApp(cfg: ExtraFirebaseConfig): { app: FirebaseApp; db: Database } {
+  const normUrl = normalizeUrl(cfg.databaseURL);
+  const cached = appCache.get(cfg.id);
+
+  // If URL changed in config, kill old app instance to avoid stale connection
+  if (cached && cached.url !== normUrl) {
+    disposeExtraFirebase(cfg);
+  } else if (cached) {
+    return cached;
+  }
+
+  // Re-use if already initialized in this session (e.g. after HMR or page navigation)
+  const name = instanceName(cfg.id);
+  const existing = getApps().find(a => a.name === name);
+  
+  if (existing) { if ((existing as any).options.databaseURL !== normUrl) { try { deleteApp(existing); } catch {} } else {
+    // If it exists in Firebase global state but not our cache (happens after refresh)
+    const db = getDatabase(existing, normUrl);
+    const entry = { app: existing, db, url: normUrl };
+    appCache.set(cfg.id, entry);
+    return entry; } }
+  }
+
+  const app = initializeApp({
     apiKey: cfg.apiKey,
     authDomain: cfg.authDomain,
     projectId: cfg.projectId,
-    databaseURL: cfg.databaseURL,
+    databaseURL: normUrl,
     storageBucket: cfg.storageBucket,
     messagingSenderId: cfg.messagingSenderId,
     appId: cfg.appId,
-  }, instanceName(cfg.id));
-  const db = getDatabase(app, cfg.databaseURL);
-  const entry = { app, db };
+  }, name);
+
+  const db = getDatabase(app, normUrl);
+  const entry = { app, db, url: normUrl };
   appCache.set(cfg.id, entry);
   return entry;
 }
@@ -84,6 +127,13 @@ export async function disposeExtraFirebase(cfg: ExtraFirebaseConfig) {
   if (cached) {
     try { await deleteApp(cached.app); } catch { /* ignore */ }
     appCache.delete(cfg.id);
+  } else {
+    // Check global state too
+    const name = instanceName(cfg.id);
+    const existing = getApps().find(a => a.name === name);
+    if (existing) { if ((existing as any).options.databaseURL !== normUrl) { try { deleteApp(existing); } catch {} } else {
+      try { await deleteApp(existing); } catch { /* ignore */ }
+    }
   }
 }
 
@@ -114,18 +164,39 @@ export async function updateSections(id: string, sections: string[]) {
 
 // ----------------- Connection ops -----------------
 
+/** 
+ * Ping an RTDB. If primary fails and mirror exists, try mirror. 
+ * Uses .info/serverTimeOffset at the absolute root of the database URL.
+ */
 export async function pingExtra(cfg: ExtraFirebaseConfig): Promise<{ ok: boolean; ms: number; error?: string }> {
   const t0 = performance.now();
-  try {
-    const { db } = ensureApp(cfg);
-    // Reading .info/connected can take a moment; race with a 5s timeout.
-    const result = await Promise.race([
-      rGet(rRef(db, ".info/serverTimeOffset")),
+  
+  const attemptPing = async (url: string) => {
+    const { app } = ensureApp(cfg);
+    const rootUrl = getRootUrl(url);
+    const rootDb = getDatabase(app, rootUrl);
+    
+    // Reading .info/serverTimeOffset. MUST use leading slash for .info if SDK is sensitive.
+    // Actually ref(db, ".info/...") is standard, but some envs prefer "/.info/..."
+    await Promise.race([
+      rGet(rRef(rootDb, "/.info/serverTimeOffset")),
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 5000)),
     ]);
-    void result;
+  };
+
+  try {
+    await attemptPing(cfg.databaseURL);
     return { ok: true, ms: Math.round(performance.now() - t0) };
   } catch (e: any) {
+    // If primary failed and we have a mirror, try it as a fallback
+    if (cfg.mirrorURL) {
+      try {
+        await attemptPing(cfg.mirrorURL);
+        return { ok: true, ms: Math.round(performance.now() - t0), error: "(via mirror)" };
+      } catch (me: any) {
+        return { ok: false, ms: Math.round(performance.now() - t0), error: `Primary: ${e?.message}; Mirror: ${me?.message}` };
+      }
+    }
     return { ok: false, ms: Math.round(performance.now() - t0), error: e?.message || String(e) };
   }
 }
@@ -201,8 +272,19 @@ export async function pushAllSelectedSections(
 /** Pull a section from extra DB → return JSON object. */
 export async function pullSectionJson(cfg: ExtraFirebaseConfig, section: string): Promise<any> {
   const { db: extraDb } = ensureApp(cfg);
-  const snap = await rGet(rRef(extraDb, section));
-  return snap.val();
+  try {
+    const snap = await rGet(rRef(extraDb, section));
+    return snap.val();
+  } catch (e) {
+    // Fallback to mirror for reads if available
+    if (cfg.mirrorURL) {
+      const { app } = ensureApp(cfg);
+      const mirrorDb = getDatabase(app, normalizeUrl(cfg.mirrorURL));
+      const snap = await rGet(rRef(mirrorDb, section));
+      return snap.val();
+    }
+    throw e;
+  }
 }
 
 /** Upload a section JSON object → write to extra DB (full overwrite). */
@@ -269,29 +351,37 @@ export async function streamJsonDownload(
 
   const fileStreamApi = (window as any).showSaveFilePicker;
   if (typeof fileStreamApi === "function") {
-    const handle = await fileStreamApi({
-      suggestedName: filename,
-      types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
-    });
-    const writable = await handle.createWritable();
-    const chunkSize = 256 * 1024;
-    let writtenBytes = 0;
-    for (let i = 0; i < json.length; i += chunkSize) {
-      const chunk = json.slice(i, i + chunkSize);
-      const encoded = encoder.encode(chunk);
-      await writable.write(encoded);
-      writtenBytes += encoded.length;
-      onProgress?.({
-        stage: "writing",
-        progress: totalBytes > 0 ? Math.min(99, Math.round((writtenBytes / totalBytes) * 100)) : 100,
-        writtenBytes,
-        totalBytes,
+    try {
+      const handle = await fileStreamApi({
+        suggestedName: filename,
+        types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
       });
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      const writable = await handle.createWritable();
+      const chunkSize = 256 * 1024;
+      let writtenBytes = 0;
+      for (let i = 0; i < json.length; i += chunkSize) {
+        const chunk = json.slice(i, i + chunkSize);
+        const encoded = encoder.encode(chunk);
+        await writable.write(encoded);
+        writtenBytes += encoded.length;
+        onProgress?.({
+          stage: "writing",
+          progress: totalBytes > 0 ? Math.min(99, Math.round((writtenBytes / totalBytes) * 100)) : 100,
+          writtenBytes,
+          totalBytes,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      await writable.close();
+      onProgress?.({ stage: "done", progress: 100, writtenBytes: totalBytes, totalBytes });
+      return;
+    } catch (e: any) {
+      if (e?.name === "AbortError") {
+        onProgress?.({ stage: "done", progress: 0, writtenBytes: 0, totalBytes: 0 });
+        return;
+      }
+      // fallback to blob download
     }
-    await writable.close();
-    onProgress?.({ stage: "done", progress: 100, writtenBytes: totalBytes, totalBytes });
-    return;
   }
 
   triggerJsonDownload(filename, data);
@@ -311,8 +401,18 @@ export async function pullMainFullJson(): Promise<any> {
 /** Download the entire EXTRA Firebase RTDB tree as JSON. */
 export async function pullExtraFullJson(cfg: ExtraFirebaseConfig): Promise<any> {
   const { db: extraDb } = ensureApp(cfg);
-  const snap = await rGet(rRef(extraDb, "/"));
-  return snap.val();
+  try {
+    const snap = await rGet(rRef(extraDb, "/"));
+    return snap.val();
+  } catch (e) {
+    if (cfg.mirrorURL) {
+      const { app } = ensureApp(cfg);
+      const mirrorDb = getDatabase(app, normalizeUrl(cfg.mirrorURL));
+      const snap = await rGet(rRef(mirrorDb, "/"));
+      return snap.val();
+    }
+    throw e;
+  }
 }
 
 /**
