@@ -25,6 +25,16 @@ const isDirectMediaPlaybackUrl = (url?: string | null) => {
   return /\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(normalized);
 };
 
+const getAnimeSaltSourcePriority = (url?: string | null) => {
+  const value = String(url || "").trim().toLowerCase();
+  if (!value) return 99;
+  if (/multi-lang-plyr|codecryptic\.net\/player|player\.php\?data=/.test(value)) return 0;
+  if (/hf\.space|huggingface/.test(value)) return 1;
+  if (/embed|watch|player/.test(value)) return 2;
+  if (/as-cdn\d+\.top\/video\/[a-f0-9]{16,}/.test(value)) return 6;
+  return 3;
+};
+
 const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualityOptions?: { label: string; src: string }[] } => {
   const seen = new Set<string>();
   const normalize = (value?: string | null) => String(value || "").trim();
@@ -65,13 +75,7 @@ const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualit
     }
   });
 
-  // Preserve upstream order for AN sources.
-  // Several AN movies return a clean Server 1 URL first (for example as-cdn)
-  // and a secondary `player.php` URL later. Re-ranking by `player|watch|embed`
-  // was incorrectly promoting the broken server for signed-in users, which is
-  // why they were seeing 500 / Invalid hash while guests sometimes still got
-  // the original first source. Server 1 must always stay first unless the user
-  // manually switches servers.
+  embedOptions.sort((a, b) => getAnimeSaltSourcePriority(a.src) - getAnimeSaltSourcePriority(b.src));
 
   if (directOptions.length > 0) {
     return {
@@ -103,6 +107,8 @@ const resolveSaltEmbed = (payload: any): { embedUrl: string; allEmbeds: string[]
   (Array.isArray(payload?.allEmbeds) ? payload.allEmbeds : []).forEach(push);
   (Array.isArray(payload?.links) ? payload.links : []).forEach((l: any) => push(l?.url || l?.src));
   [payload?.streamUrl, payload?.videoUrl, payload?.directUrl, payload?.file].forEach(push);
+
+  collected.sort((a, b) => getAnimeSaltSourcePriority(a) - getAnimeSaltSourcePriority(b));
 
   return { embedUrl: collected[0] || "", allEmbeds: collected };
 };
