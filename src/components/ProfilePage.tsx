@@ -690,8 +690,10 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     if (!file.type.startsWith("image/")) { alert("Please select an image file."); return; }
     setPhotoUploading(true);
     try {
-      // Compress to a small square JPEG (≤ ~50KB) so we can store it directly in Firebase
-      // under users/{uid}. This guarantees cross-device sync (no ImgBB / IMG host needed).
+      // Compress to a small square JPEG so we can store the data URL locally
+      // (instant preview, works for guests). For logged-in users we also push
+      // a permanent ImgBB URL into users/{uid} so the photo follows the account
+      // across devices — works identically for Google + email/password logins.
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
@@ -703,7 +705,6 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
               canvas.width = SIZE; canvas.height = SIZE;
               const ctx = canvas.getContext("2d");
               if (!ctx) return reject(new Error("canvas"));
-              // Cover-fit (center-crop) so circular avatars look correct on every device.
               const ratio = Math.max(SIZE / img.width, SIZE / img.height);
               const w = img.width * ratio;
               const h = img.height * ratio;
@@ -718,14 +719,34 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
         reader.readAsDataURL(file);
       });
 
+      // Instant local preview (guests + logged-in users)
       setProfilePhoto(dataUrl);
       writeProfilePhoto(dataUrl, userId);
+
       if (userId) {
-        await update(ref(db, `users/${userId}`), {
-          profilePhoto: dataUrl,
-          photoUrl: dataUrl,
-          avatar: dataUrl,
-        }).catch(() => {});
+        // Permanent host upload so other devices can fetch it. Fall back to
+        // the inline data URL if the host upload fails — Firebase RTDB accepts
+        // values up to 10MB, and our 256×256 JPEG is ~25KB so it always fits.
+        let finalUrl = dataUrl;
+        try {
+          const { uploadToImgbb } = await import("@/lib/imgbbUpload");
+          finalUrl = await uploadToImgbb(file);
+        } catch (err) {
+          console.warn("[profile-photo] ImgBB failed, using inline copy", err);
+        }
+        try {
+          await update(ref(db, `users/${userId}`), {
+            profilePhoto: finalUrl,
+            photoUrl: finalUrl,
+            avatar: finalUrl,
+          });
+          if (finalUrl !== dataUrl) {
+            setProfilePhoto(finalUrl);
+            writeProfilePhoto(finalUrl, userId);
+          }
+        } catch (err) {
+          console.error("[profile-photo] Firebase write failed", err);
+        }
       }
       toast.success("✅ Profile photo saved — synced across all your devices");
     } catch {
