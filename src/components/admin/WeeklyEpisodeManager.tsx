@@ -352,7 +352,7 @@ export default function WeeklyEpisodeManager({
                       <h4 className="text-[13px] font-semibold truncate">{live.title}</h4>
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-gradient-to-r ${DAY_GRADIENT[item.day]} text-white`}>
-                          {item.day}
+                          {LONG_LABEL[item.day]}
                         </span>
                         <span className="text-[10px] text-zinc-400">
                           {totalAvailable}{expected ? `/${expected}` : ""} eps
