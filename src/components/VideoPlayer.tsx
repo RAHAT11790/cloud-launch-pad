@@ -4155,11 +4155,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             const candidates = [...deriveServerDownloadCandidates(u), ...fallbackUrls]
               .filter(Boolean)
               .filter((candidate) => !String(candidate).includes("/functions/v1/video-proxy?"));
-            const directHttps = pickHttpsDownloadUrl(u, candidates);
-            if (directHttps) return directHttps;
-            const managedCandidate = [u, ...candidates].find((candidate) => isDirectDownloadCandidate(candidate));
-            if (!managedCandidate) return "";
-            return buildVideoDownloadUrl(managedCandidate, buildDownloadFileName(String(sub || title), quality)) || "";
+
+            const managedAlready = [u, ...candidates].find((candidate) => String(candidate).includes("/functions/v1/video-download?"));
+            if (managedAlready) return managedAlready;
+
+            const directCandidate = [u, ...candidates].find((candidate) => isDirectDownloadCandidate(candidate));
+            if (!directCandidate) return "";
+
+            return buildVideoDownloadUrl(directCandidate, buildDownloadFileName(String(sub || title), quality)) || "";
           };
 
           const buildDlId = (q: string, sub: string) =>
