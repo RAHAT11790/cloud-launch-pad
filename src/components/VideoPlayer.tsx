@@ -44,7 +44,6 @@ const PROXY_SERVER_LIMIT = 3;
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
-import { pickHttpsDownloadUrl, isHttpsDownloadableUrl } from "@/lib/downloadSources";
 import { buildVideoDownloadUrl, triggerBulkBackgroundDownloads } from "@/lib/videoDownload";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
@@ -4248,6 +4247,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               });
             }
             const fired = triggerBulkBackgroundDownloads(batchItems);
+            closePanel();
+            if (fired === 0) toast.error("No downloadable links found");
+            else toast.success(`Started ${fired} downloads`);
           };
 
           const playOffline = async (episodeData?: any) => {
