@@ -939,9 +939,28 @@ const Index = () => {
     const isSaltLink = pendingAnimeId.startsWith("as_");
     if (isSaltLink && saltLoading) return; // wait for AN data
 
+    // Deep-link from Telegram / share URLs: read ?s= and ?e= so we open
+    // the player DIRECTLY at the requested episode instead of bouncing
+    // through the details page (kills the 10-15s perceived latency).
+    let deepSIdx: number | undefined;
+    let deepEIdx: number | undefined;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const s = params.get("s");
+      const e = params.get("e") ?? params.get("ep");
+      if (s !== null) {
+        const n = Number(s);
+        if (Number.isFinite(n) && n >= 0) deepSIdx = n;
+      }
+      if (e !== null) {
+        const n = Number(e);
+        if (Number.isFinite(n) && n >= 0) deepEIdx = n;
+      }
+    } catch {}
+
     const found = allAnime.find((a) => a.id === pendingAnimeId);
     if (found) {
-      handleCardClick(found);
+      handleCardClick(found, deepSIdx, deepEIdx);
       setPendingAnimeId(null);
       return;
     }
@@ -968,7 +987,7 @@ const Index = () => {
           source: "animesalt",
           slug,
         };
-        handleCardClick(stub);
+        handleCardClick(stub, deepSIdx, deepEIdx);
       }
     }
 
