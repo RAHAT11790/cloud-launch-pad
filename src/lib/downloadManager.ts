@@ -28,7 +28,7 @@ export interface DownloadQueueSnapshot {
   totalCount: number;
 }
 
-type DownloadParams = {
+export type DownloadParams = {
   id: string;
   url: string;
   title: string;
@@ -326,10 +326,38 @@ class DownloadManager {
   }
 
   /**
-   * UI-only registration. Used by bulk/batch flows that fire the actual
-   * browser downloads themselves (e.g. via triggerBulkBackgroundDownloads)
-   * so the manager does NOT double-click each anchor. We just want the
-   * Downloads list to show progress for every item.
+   * Enqueue multiple downloads as a single batch with correct metadata.
+   */
+  enqueueBatch(items: DownloadParams[]) {
+    if (!items || items.length === 0) return;
+    const total = items.length;
+    items.forEach((params, idx) => {
+      const fileName = params.fileName || buildFileName(params.title, params.subtitle, params.quality);
+      this.sequence += 1;
+      this.downloads.set(params.id, {
+        id: params.id,
+        url: params.url,
+        title: params.title,
+        subtitle: params.subtitle,
+        poster: params.poster,
+        quality: params.quality,
+        percent: 0,
+        loadedMB: 0,
+        totalMB: 1,
+        status: "queued",
+        sequence: this.sequence,
+        queueIndex: idx + 1,
+        totalInBatch: total,
+        fileName,
+      });
+      this.queue.push(params.id);
+    });
+    this.emit();
+    this.pump();
+  }
+
+  /**
+   * UI-only registration.
    */
   registerExternalDownload(params: DownloadParams) {
     const fileName = params.fileName || buildFileName(params.title, params.subtitle, params.quality);

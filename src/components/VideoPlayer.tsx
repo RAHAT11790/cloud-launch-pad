@@ -45,7 +45,7 @@ const PROXY_SERVER_LIMIT = 3;
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { pickHttpsDownloadUrl, isHttpsDownloadableUrl } from "@/lib/downloadSources";
-import { buildVideoDownloadUrl } from "@/lib/videoDownload";
+import { buildVideoDownloadUrl, triggerBulkBackgroundDownloads } from "@/lib/videoDownload";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 // Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
@@ -4220,7 +4220,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             const orderedIdxs = Array.from(dlSelectedEpisodes).sort((a, b) => a - b);
             const batchItems: Array<{ url: string; fileName: string }> = [];
             // Register every selected episode in the download-manager UI so
-            // the user sees progress for all of them — not only the first.
             for (const idx of orderedIdxs) {
               const ep = panelEpisodes.find((episode) => episode.index === idx);
               if (!ep) continue;
@@ -4235,8 +4234,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               if (!epUrl) continue;
               const fileName = buildDownloadFileName(episodeLabel, quality);
               batchItems.push({ url: epUrl, fileName });
-              // UI-only entry — actual browser download is fired by the
-              // bulk helper below, all in this same user gesture.
               downloadManager.registerExternalDownload({
                 id: buildDlId(quality, episodeLabel),
                 url: epUrl,
@@ -4247,12 +4244,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 fileName,
               });
             }
-            // Fire EVERY browser download in this same user gesture so
-            // Chrome shows the "Allow multiple downloads" prompt only ONCE
-            // (no per-episode prompt, no battery prompt loop).
-            closePanel();
-            if (fired === 0) toast.error("No downloadable links found");
-            else toast.success(`Started ${fired} downloads`);
+            const fired = triggerBulkBackgroundDownloads(batchItems);
           };
 
           const playOffline = async (episodeData?: any) => {
