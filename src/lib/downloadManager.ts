@@ -324,6 +324,34 @@ class DownloadManager {
     this.emit();
     this.pump();
   }
+
+  /**
+   * UI-only registration. Used by bulk/batch flows that fire the actual
+   * browser downloads themselves (e.g. via triggerBulkBackgroundDownloads)
+   * so the manager does NOT double-click each anchor. We just want the
+   * Downloads list to show progress for every item.
+   */
+  registerExternalDownload(params: DownloadParams) {
+    const fileName = params.fileName || buildFileName(params.title, params.subtitle, params.quality);
+    this.sequence += 1;
+    this.downloads.set(params.id, {
+      id: params.id,
+      url: params.url,
+      title: params.title,
+      subtitle: params.subtitle,
+      poster: params.poster,
+      quality: params.quality,
+      percent: 100,
+      loadedMB: 1,
+      totalMB: 1,
+      status: "complete",
+      sequence: this.sequence,
+      queueIndex: 1,
+      totalInBatch: 1,
+      fileName,
+    });
+    this.emit();
+  }
 }
 
 export const downloadManager = new DownloadManager();
