@@ -3217,11 +3217,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 <ArrowLeft className="w-4 h-4 text-white" />
               </button>
               <div className="flex items-center gap-2">
-              {availableQualities.length > 1 && (
+              {availableQualities.filter(opt => opt.label !== "Auto").length > 1 && (
                 <div className="relative">
                   <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); }} className={`player-touch-button h-8 px-2.5 rounded-full flex items-center justify-center gap-1 bg-black/70 backdrop-blur ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                     <Server className="w-3.5 h-3.5 text-white" />
-                    <span className="text-[10px] font-medium text-white">{currentQuality === "Auto" ? (availableQualities[1]?.label || "Server 1") : currentQuality}</span>
+                    <span className="text-[10px] font-medium text-white">{currentQuality === "Auto" ? (availableQualities.filter(opt => opt.label !== "Auto")[0]?.label || "Server 1") : currentQuality}</span>
                   </button>
                   {showServerPanel && (
                     <div data-player-panel="true" className="absolute top-10 right-0 player-glass rounded-xl p-2 z-30 min-w-[150px] max-h-[min(70dvh,320px)] overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]" style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y" }} onClick={(e) => e.stopPropagation()} onWheel={stopPanelWheelPropagation}>
