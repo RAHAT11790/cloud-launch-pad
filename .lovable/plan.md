@@ -1,77 +1,65 @@
-# Plan: Download Proxy + Edge Manager Library + Router URL Fields
+এই message-এ ৪টা আলাদা সমস্যা আছে। সবগুলা একই pass-এ fix করব, কিন্তু প্রতিটার scope আলাদা রাখব যেন একটার change অন্যটাকে না ভাঙে।
 
-## 1. নতুন dedicated Download Proxy edge function (`video-download`)
+---
 
-**সমস্যা:** screenshot এ `ERR_INVALID_RESPONSE` — Render origin মাঝে মাঝে malformed header / chunked-encoding ভাঙা response পাঠায়। বর্তমান `video-proxy` streaming এর জন্য optimized, কিন্তু download path এ upstream error গুলো user এর browser এ raw চলে যায়।
+## ১. AN video play হয় না (login user → "File not found")
 
-**সমাধান:** আলাদা `supabase/functions/video-download/index.ts` — শুধু download এর জন্য, যা:
-- Upstream এ HEAD probe → fail হলে retry (২ বার, exponential backoff)
-- Range request করে না (full file fetch) → invalid range response এড়ায়
-- Upstream chunked/identity encoding ঠিকঠাক normalize করে — invalid hop-by-hop header strip
-- 5xx পেলে retry, তাও fail হলে clear JSON error (browser এ blank page না)
-- `Content-Disposition: attachment` filename UTF-8 সহ
-- Larger socket timeout (90s), keep-alive, parallel-safe
-- কোনো cache না (`no-store`) — corrupt partial cache এড়ায়
+**Root cause (screenshot থেকে):** AnimeSalt player Cloudflare scraper worker call করে। Guest user-এর জন্য কোনো `Authorization` header যায় না, তাই worker সরাসরি কাজ করে। কিন্তু Firebase login user-এর জন্য `SaltPlayer` / `animeSaltApi.ts` Supabase session token attach করে দিচ্ছে — যেটা ওই non-Supabase worker reject করে এবং empty/404 response পাঠায় → UI-তে "File not found" দেখায়।
 
-`src/lib/videoDownload.ts` → এখন `video-download` কে call করবে, `video-proxy` না।
+**Fix:**
 
-## 2. Edge Manager — Button-based Code Library (`src/components/admin/EgdManager.tsx` update)
+- `src/lib/animeSaltApi.ts` এবং AN-related fetch গুলোতে **কোনো auth header attach করব না** (third-party worker — anonymous fetch হওয়া উচিত)।
+- `src/components/SaltPlayer.tsx`-এ login user detect হলে guest-এর মতই একই code path follow করবে — login-specific gating সরাব।
+- ব্যর্থ হলে retry (২x exponential backoff) + clear English error যাতে raw "File not found" না দেখায়।
 
-বর্তমান EgdManager এ যোগ হবে একটা **"Code Library"** section, যেখানে এই function গুলোর full source code button হিসেবে থাকবে (Firebase `settings/edgeCodeLibrary` তে save):
+## ২. Download manager — single fail + bulk only first + battery prompt
 
-| Button | Edge Function |
-|---|---|
-| Video Proxy | `video-proxy` |
-| Video Download (new) | `video-download` |
-| Telegram Post | `telegram-post` |
-| RS Bot | `rs-bot` |
-| Send OTP Email | `send-otp-email` |
-| Process Email Queue | `process-email-queue` |
-| APK Download | `apk-download` |
-| Link Share Bot | `link-share-bot` |
-| Shorten Arolinks | `shorten-arolinks` |
-| Generate Backdrop | `generate-backdrop` |
+**Root cause:**
 
-**Flow:**
-- Button click → নিচের bigass code textarea তে full source paste হয়ে যায়
-- নিচে auto-detected ENV vars listed (e.g. `LOVABLE_API_KEY`, `TELEGRAM_BOT_TOKEN`, `RESEND_API_KEY`) — empty input fields সহ
-- "Copy Code" button → clipboard
-- User Supabase Dashboard → Edge Functions → paste → deploy → URL copy
+- **Single fail (502 Bad Gateway):** কিছু source-এ Render origin slow/dead — current `video-download` edge function ২x retry করে hard-fail করে, browser-এ JSON error দেখায়।
+- **Bulk only first:** `select all` → download click → loop চললেও browser একটার পরের আরেকটা `<a download>.click()` block করে দেয় (popup blocker behavior)। প্রতিটার মাঝে delay নেই।
+- **Battery permission:** `navigator.getBattery()` কোথাও call হচ্ছে যা Android Chrome-এ prompt তোলে।
 
-**Lovable-only functions** (যেগুলোর secret/value user নিজে আনতে পারবে না, e.g. internal Lovable AI Gateway proxy) — list করা হবে না, কারণ তুমি বলেছো।
+**Fix:**
 
-## 3. Edge Router — URL Override Fields সবার জন্য
+- `supabase/functions/video-download/index.ts`: retry ২→৪, delay 600→400ms, এবং upstream 5xx হলে **অন্য fallback proxy chain চেষ্টা করব** (multi-CDN style)। শেষে `Range: bytes=0-` দিয়ে retry।
+- Bulk download: প্রতিটা `<a>.click()`-এর মাঝে 350ms gap + iframe-based trigger (browser popup-block bypass)। `src/lib/videoDownload.ts`-এ নতুন `triggerBulkDownloads(items[])` helper যোগ করব।
+- Admin/User Downloads UI-তে select-all → download button সেই bulk helper call করবে।
+- Codebase scan করে `getBattery` reference সরাব।
 
-`src/components/admin/EdgeRouterConfig.tsx` (বা যেখানে router config UI আছে) এ প্রতি function এর জন্য একটা URL input field থাকবে, যা Firebase `settings/functionOverrides/{fnName}.customUrl` তে save হয়। বর্তমান `getEdgeFunctionUrl()` already এই pattern support করে — শুধু UI add করতে হবে।
+## ৩. Weekly Episode — "All Day" tab যোগ
 
-**Default values:** আমি current Lovable Supabase URL গুলো (`https://kqxpzqegtvaiwgdusrin.supabase.co/functions/v1/{fnName}`) প্রতিটার জন্য prefill করে দিবো, যাতে fallback হিসাবে কাজ করে।
+`src/components/admin/WeeklyEpisodeManager.tsx` + `src/lib/weeklyEpManager.ts`-এ:
 
-## 4. Latency Optimization
+- প্রতিটা card-এ নতুন checkbox: **"Show every day (All Day)"** → Firebase-এ `allDay: true` flag।
+- Weekly section UI-তে ৭ দিনের button-এর পাশে নতুন **"All Day"** button। ওই tab `allDay === true` সব card দেখাবে এবং অন্য দিনের tab-এও ওই card visible থাকবে (যেহেতু "প্রতিদিন আসে")।
 
-- Edge Router config cache TTL 30s → 120s
-- Firebase initial fetch parallelize (Promise.all already আছে কিনা check করবো)
-- Index.tsx এর splash safety timeout 4s → 2.5s
-- Console এ heavy debug log গুলো production এ strip
+## ৪. Telegram deep-link → instant player open (10-15s latency সরাও)
 
-## Files to Touch
+**Root cause:** invite link-এ `?anime=ID&ep=N` থাকে। বর্তমানে App-এ Index.tsx পুরো splash + Firebase initial sync শেষ হওয়ার পরই URL param read করে → AnimeDetails open → তারপর Watch open → তারপর video load (৩ ধাপ)।
 
-```text
-NEW: supabase/functions/video-download/index.ts
-EDIT: src/lib/videoDownload.ts              (call new function)
-EDIT: src/components/admin/EgdManager.tsx   (add Code Library section)
-EDIT: src/components/admin/EgdManager.tsx   (or related Router config) — URL inputs
-EDIT: src/lib/edgeFunctionRouter.ts         (cache TTL, prefill defaults)
-EDIT: src/pages/Index.tsx                   (splash timeout)
-```
+**Fix (`src/pages/Index.tsx` + URL handler):**
 
-## Out of Scope (পরে handle করবো)
-- Ad spam (already adjusted)
-- Continue Watching (already fixed in previous turn)
-- Profile sync (already done)
+- App boot-এর প্রথম tick-এই URL param পড়ব। `?anime=` থাকলে **splash skip** করে সরাসরি `<SaltPlayer />` mount করব (anime metadata পরে hydrate হবে)।
+- `?ep=` / `?s=` থাকলে initial episode/season set হয়ে যাবে।
+- Player-এর video source URL Firebase থেকে আসে — তাই metadata fetch আর player mount **parallel** করব (আগে sequential ছিল)।
+- Target: link click → ১.৫-২s-এর মধ্যে player visible এবং buffering শুরু।
 
-## Verification
-- Admin panel এ login (PIN `258800`) → EgdManager খুলে button গুলো test
-- নতুন `video-download` deploy করার জন্য code library থেকে copy → user Supabase এ deploy → URL Router এ paste
-- Preview এ একটা problematic episode download try
+---
 
-**Approve দিলে আমি এক shot এ build করবো।**
+### Files to edit
+
+- `src/lib/animeSaltApi.ts`, `src/components/SaltPlayer.tsx` (issue 1)
+- `supabase/functions/video-download/index.ts`, `src/lib/videoDownload.ts`, `src/lib/downloadManager.ts` + Downloads UI (issue 2)
+- `src/lib/weeklyEpManager.ts`, `src/components/admin/WeeklyEpisodeManager.tsx`, `src/components/NewEpisodeReleases.tsx` (issue 3)
+- `src/pages/Index.tsx`, possibly `src/App.tsx` (issue 4)
+
+### Verification
+
+- Admin PIN 258800 দিয়ে preview-এ ঢুকব।
+- Login করে user id দিয়ে id pass :- [rahatsarker224@gmail.com](mailto:rahatsarker224@gmail.com) RAHAT1@a AN anime-এ যাব → play হবে কিনা check।
+- Anime select-all → bulk download trigger check।
+- Weekly Manager-এ একটা anime "All Day" mark → home-এ All Day tab দেখা যাবে।
+- Telegram-style deep link `?anime=xxx&ep=1` open করে player mount time মাপব।
+
+Approve করলে শুরু করছি।
