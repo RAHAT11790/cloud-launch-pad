@@ -88,7 +88,9 @@ const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualit
     }
   });
 
-  embedOptions.sort((a, b) => getAnimeSaltSourcePriority(a.src) - getAnimeSaltSourcePriority(b.src));
+  // Keep upstream order intact so AnimeSalt Server 1 always remains the
+  // default first option shown to users. Re-sorting here can accidentally push
+  // a problematic mirror ahead of the original server.
 
   if (directOptions.length > 0) {
     return {
@@ -120,8 +122,6 @@ const resolveSaltEmbed = (payload: any): { embedUrl: string; allEmbeds: string[]
   (Array.isArray(payload?.allEmbeds) ? payload.allEmbeds : []).forEach(push);
   (Array.isArray(payload?.links) ? payload.links : []).forEach((l: any) => push(l?.url || l?.src));
   [payload?.streamUrl, payload?.videoUrl, payload?.directUrl, payload?.file].forEach(push);
-
-  collected.sort((a, b) => getAnimeSaltSourcePriority(a) - getAnimeSaltSourcePriority(b));
 
   return { embedUrl: collected[0] || "", allEmbeds: collected };
 };
