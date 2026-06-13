@@ -92,7 +92,20 @@ const resolveSaltEmbed = (payload: any): { embedUrl: string; allEmbeds: string[]
   (Array.isArray(payload?.allEmbeds) ? payload.allEmbeds : []).forEach(push);
   (Array.isArray(payload?.links) ? payload.links : []).forEach((l: any) => push(l?.url || l?.src));
   [payload?.streamUrl, payload?.videoUrl, payload?.directUrl, payload?.file].forEach(push);
-  return { embedUrl: collected[0] || "", allEmbeds: collected };
+
+  const ranked = [...collected].sort((a, b) => {
+    const score = (value: string) => {
+      const raw = String(value || "").trim().toLowerCase();
+      if (!raw) return 99;
+      if (/\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(raw)) return 0;
+      if (/hf\.space|huggingface/.test(raw)) return 1;
+      if (/embed|player|watch/.test(raw)) return 2;
+      return 3;
+    };
+    return score(a) - score(b);
+  });
+
+  return { embedUrl: ranked[0] || "", allEmbeds: ranked };
 };
 
 // Helper: get best available src from episode (fallback if default link is empty)
