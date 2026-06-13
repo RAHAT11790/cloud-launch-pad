@@ -94,16 +94,19 @@ function ensureApp(cfg: ExtraFirebaseConfig): { app: FirebaseApp; db: Database }
     return cached;
   }
 
-  // Re-use if already initialized in this session (e.g. after HMR or page navigation)
+  // Re-use if already initialized in this session
   const name = instanceName(cfg.id);
   const existing = getApps().find(a => a.name === name);
   
-  if (existing) { if ((existing as any).options.databaseURL !== normUrl) { try { deleteApp(existing); } catch {} } else {
-    // If it exists in Firebase global state but not our cache (happens after refresh)
-    const db = getDatabase(existing, normUrl);
-    const entry = { app: existing, db, url: normUrl };
-    appCache.set(cfg.id, entry);
-    return entry; } }
+  if (existing) {
+    if ((existing as any).options.databaseURL !== normUrl) {
+      try { deleteApp(existing); } catch {}
+    } else {
+      const db = getDatabase(existing, normUrl);
+      const entry = { app: existing, db, url: normUrl };
+      appCache.set(cfg.id, entry);
+      return entry;
+    }
   }
 
   const app = initializeApp({
@@ -131,7 +134,7 @@ export async function disposeExtraFirebase(cfg: ExtraFirebaseConfig) {
     // Check global state too
     const name = instanceName(cfg.id);
     const existing = getApps().find(a => a.name === name);
-    if (existing) { if ((existing as any).options.databaseURL !== normUrl) { try { deleteApp(existing); } catch {} } else {
+    if (existing) {
       try { await deleteApp(existing); } catch { /* ignore */ }
     }
   }
@@ -177,7 +180,6 @@ export async function pingExtra(cfg: ExtraFirebaseConfig): Promise<{ ok: boolean
     const rootDb = getDatabase(app, rootUrl);
     
     // Reading .info/serverTimeOffset. MUST use leading slash for .info if SDK is sensitive.
-    // Actually ref(db, ".info/...") is standard, but some envs prefer "/.info/..."
     await Promise.race([
       rGet(rRef(rootDb, "/.info/serverTimeOffset")),
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 5000)),
@@ -188,7 +190,6 @@ export async function pingExtra(cfg: ExtraFirebaseConfig): Promise<{ ok: boolean
     await attemptPing(cfg.databaseURL);
     return { ok: true, ms: Math.round(performance.now() - t0) };
   } catch (e: any) {
-    // If primary failed and we have a mirror, try it as a fallback
     if (cfg.mirrorURL) {
       try {
         await attemptPing(cfg.mirrorURL);
@@ -224,12 +225,10 @@ export async function pushSection(
   const snap = await mainGet(mainRef(mainDb, section));
   const val = snap.val();
   if (val == null) {
-    // empty section → set null in replica too
     await rSet(rRef(extraDb, section), null);
     onProgress?.({ doneNodes: 0, totalNodes: 0, currentSection: section, phase: "done" });
     return { nodes: 0 };
   }
-  // If value is primitive or array (no top-level children to chunk), just set whole.
   if (typeof val !== "object" || Array.isArray(val)) {
     await rSet(rRef(extraDb, section), val);
     onProgress?.({ doneNodes: 1, totalNodes: 1, currentSection: section, phase: "done" });
@@ -238,7 +237,6 @@ export async function pushSection(
   const keys = Object.keys(val);
   const total = keys.length;
   let done = 0;
-  // Wipe section first so deleted nodes get removed in the replica too.
   await rSet(rRef(extraDb, section), null);
   for (let i = 0; i < keys.length; i += CHUNK) {
     const slice = keys.slice(i, i + CHUNK);
@@ -258,7 +256,6 @@ export async function pushSection(
   return { nodes: total };
 }
 
-/** Push multiple sections sequentially, aggregating progress. */
 export async function pushAllSelectedSections(
   cfg: ExtraFirebaseConfig,
   sections: string[],
@@ -269,14 +266,12 @@ export async function pushAllSelectedSections(
   }
 }
 
-/** Pull a section from extra DB → return JSON object. */
 export async function pullSectionJson(cfg: ExtraFirebaseConfig, section: string): Promise<any> {
   const { db: extraDb } = ensureApp(cfg);
   try {
     const snap = await rGet(rRef(extraDb, section));
     return snap.val();
   } catch (e) {
-    // Fallback to mirror for reads if available
     if (cfg.mirrorURL) {
       const { app } = ensureApp(cfg);
       const mirrorDb = getDatabase(app, normalizeUrl(cfg.mirrorURL));
@@ -287,13 +282,11 @@ export async function pullSectionJson(cfg: ExtraFirebaseConfig, section: string)
   }
 }
 
-/** Upload a section JSON object → write to extra DB (full overwrite). */
 export async function uploadSectionJson(cfg: ExtraFirebaseConfig, section: string, data: any) {
   const { db: extraDb } = ensureApp(cfg);
   await rSet(rRef(extraDb, section), data);
 }
 
-/** Helper for browser download. */
 export function triggerJsonDownload(filename: string, data: any) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -380,7 +373,6 @@ export async function streamJsonDownload(
         onProgress?.({ stage: "done", progress: 0, writtenBytes: 0, totalBytes: 0 });
         return;
       }
-      // fallback to blob download
     }
   }
 
@@ -389,16 +381,14 @@ export async function streamJsonDownload(
 }
 
 // ============================================================
-// FULL-DB operations (entire RTDB tree)
+// FULL-DB operations
 // ============================================================
 
-/** Download the entire MAIN Firebase RTDB tree as JSON. */
 export async function pullMainFullJson(): Promise<any> {
   const snap = await mainGet(mainRef(mainDb, "/"));
   return snap.val();
 }
 
-/** Download the entire EXTRA Firebase RTDB tree as JSON. */
 export async function pullExtraFullJson(cfg: ExtraFirebaseConfig): Promise<any> {
   const { db: extraDb } = ensureApp(cfg);
   try {
@@ -415,19 +405,13 @@ export async function pullExtraFullJson(cfg: ExtraFirebaseConfig): Promise<any> 
   }
 }
 
-/**
- * Upload a full JSON tree to MAIN Firebase. MERGES at root level (safer than overwrite).
- * Top-level keys present in `data` replace those subtrees; keys not in `data` are preserved.
- */
 export async function uploadMainFullJson(data: any) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Full JSON must be a plain object with top-level sections.");
   }
-  // Use update to merge top-level children rather than wiping entire DB.
   await mainUpdate(mainRef(mainDb, "/"), data);
 }
 
-/** Upload a full JSON tree to an EXTRA Firebase (merge at root). */
 export async function uploadExtraFullJson(cfg: ExtraFirebaseConfig, data: any) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Full JSON must be a plain object with top-level sections.");
@@ -437,7 +421,7 @@ export async function uploadExtraFullJson(cfg: ExtraFirebaseConfig, data: any) {
 }
 
 // ============================================================
-// Storage analytics — estimate RTDB usage from JSON byte size
+// Storage analytics
 // ============================================================
 
 export interface StorageStats {
@@ -484,11 +468,6 @@ export async function analyzeExtraStorage(cfg: ExtraFirebaseConfig): Promise<Sto
   const data = await pullExtraFullJson(cfg);
   return analyzeTree(data);
 }
-
-// ============================================================
-// Auto-mirror config (per-extra interval push from MAIN → extra)
-// Stored alongside extra config: cfg.autoMirrorMinutes (0 = off)
-// ============================================================
 
 export async function setAutoMirror(id: string, minutes: number) {
   await mainUpdate(mainRef(mainDb, `admin/extraFirebases/${id}`), {
