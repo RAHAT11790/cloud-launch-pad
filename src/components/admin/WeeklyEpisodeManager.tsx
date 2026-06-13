@@ -101,15 +101,19 @@ export default function WeeklyEpisodeManager({
 
   const dayCounts = useMemo(() => {
     const counts: Record<Day, number> = {
-      Saturday: 0, Sunday: 0, Monday: 0, Tuesday: 0, Wednesday: 0, Thursday: 0, Friday: 0,
+      Saturday: 0, Sunday: 0, Monday: 0, Tuesday: 0, Wednesday: 0, Thursday: 0, Friday: 0, AllDay: 0,
     };
     Object.values(schedules).forEach(s => { if (counts[s.day] !== undefined) counts[s.day]++; });
     return counts;
   }, [schedules]);
 
+  // "All Day" anime are visible on EVERY day's tab as well as their own tab.
   const visibleList = useMemo(() => {
     return Object.values(schedules)
-      .filter(s => s.day === activeDay)
+      .filter(s => {
+        if (activeDay === "AllDay") return s.day === "AllDay";
+        return s.day === activeDay || s.day === "AllDay";
+      })
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   }, [schedules, activeDay]);
 
