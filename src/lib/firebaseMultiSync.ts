@@ -58,8 +58,10 @@ const appCache = new Map<string, { app: FirebaseApp; db: Database; url: string }
 
 function instanceName(id: string) { return `extra-fb-${id}`; }
 
-/** 
- * Clean up a database URL: trim, remove trailing slashes. 
+/**
+ * Clean up a database URL so SDK calls always target the RTDB root.
+ * Admins sometimes paste URLs with path/query/hash fragments, which causes
+ * false "Invalid token in path" errors even when the database is healthy.
  */
 function normalizeUrl(url: string | undefined): string {
   if (!url) return "";
@@ -67,6 +69,15 @@ function normalizeUrl(url: string | undefined): string {
   if (!s) return "";
   s = s.replace(/\/+$/, "");
   if (s && !s.startsWith("http")) s = "https://" + s;
+  try {
+    const u = new URL(s);
+    u.hash = "";
+    u.search = "";
+    u.pathname = "/";
+    return u.toString().replace(/\/+$/, "");
+  } catch {
+    s = s.replace(/[?#].*$/, "").replace(/\/\.json$/i, "").replace(/\/+$/, "");
+  }
   return s;
 }
 
@@ -167,9 +178,10 @@ export async function updateSections(id: string, sections: string[]) {
 
 // ----------------- Connection ops -----------------
 
-/** 
- * Ping an RTDB. If primary fails and mirror exists, try mirror. 
- * Uses .info/serverTimeOffset at the absolute root of the database URL.
+/**
+ * Ping an RTDB. If primary fails and mirror exists, try mirror.
+ * We probe a normal root node instead of /.info/* because pasted custom URLs
+ * with path fragments can make the SDK throw a misleading path-token error.
  */
 export async function pingExtra(cfg: ExtraFirebaseConfig): Promise<{ ok: boolean; ms: number; error?: string }> {
   const t0 = performance.now();
@@ -179,9 +191,8 @@ export async function pingExtra(cfg: ExtraFirebaseConfig): Promise<{ ok: boolean
     const rootUrl = getRootUrl(url);
     const rootDb = getDatabase(app, rootUrl);
     
-    // Reading .info/serverTimeOffset. MUST use leading slash for .info if SDK is sensitive.
     await Promise.race([
-      rGet(rRef(rootDb, "/.info/serverTimeOffset")),
+      rGet(rRef(rootDb, "/admin")),
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 5000)),
     ]);
   };
