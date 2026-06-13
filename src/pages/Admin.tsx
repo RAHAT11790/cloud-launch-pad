@@ -3805,7 +3805,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   }, []);
   const todayDayName = useMemo(() => new Date().toLocaleDateString("en-US", { weekday: "long" }), []);
   const todayScheduled = useMemo(
-    () => Object.values(weeklyScheduleData).filter((s: any) => s?.day === todayDayName),
+    () => Object.values(weeklyScheduleData).filter((s: any) => s?.day === todayDayName || s?.day === "AllDay"),
     [weeklyScheduleData, todayDayName]
   );
   const categoryList = useMemo(() => Object.entries(categoriesData).map(([id, cat]: any) => ({ id, name: cat.name })), [categoriesData]);
