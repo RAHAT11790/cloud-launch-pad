@@ -642,7 +642,11 @@ const Index = () => {
   } | null>(() => {
     try {
       const saved = sessionStorage.getItem("rs_playerState");
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const isAnimeSalt = parsed?.anime?.source === "animesalt" || String(parsed?.anime?.id || "").startsWith("as_");
+        if (!isAnimeSalt) return parsed;
+      }
     } catch {}
     return null;
   });
@@ -667,7 +671,11 @@ const Index = () => {
   } | null>(() => {
     try {
       const saved = sessionStorage.getItem("rs_saltPlayerState");
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const isAnimeSalt = parsed?.anime?.source === "animesalt" || String(parsed?.anime?.id || "").startsWith("as_");
+        if (!isAnimeSalt) return parsed;
+      }
     } catch {}
     return null;
   });
@@ -675,7 +683,8 @@ const Index = () => {
   // Persist player states to sessionStorage for refresh recovery
   useEffect(() => {
     try {
-      if (playerState) {
+      const isAnimeSalt = playerState?.anime?.source === "animesalt" || String(playerState?.anime?.id || "").startsWith("as_");
+      if (playerState && !isAnimeSalt) {
         const { qualityOptions, ...rest } = playerState;
         sessionStorage.setItem("rs_playerState", JSON.stringify(rest));
       } else {
@@ -686,7 +695,8 @@ const Index = () => {
 
   useEffect(() => {
     try {
-      if (saltPlayerState) {
+      const isAnimeSalt = saltPlayerState?.anime?.source === "animesalt" || String(saltPlayerState?.anime?.id || "").startsWith("as_");
+      if (saltPlayerState && !isAnimeSalt) {
         const { loading, ...rest } = saltPlayerState;
         sessionStorage.setItem("rs_saltPlayerState", JSON.stringify(rest));
       } else {
