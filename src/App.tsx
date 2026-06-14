@@ -14,6 +14,7 @@ import ManifestManager from "./components/ManifestManager";
 
 
 const Admin = lazy(() => import("./pages/Admin"));
+const AnExplorer = lazy(() => import("./pages/AnExplorer"));
 const queryClient = new QueryClient();
 
 const RouteFallback = () => (
