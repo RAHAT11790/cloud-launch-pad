@@ -1792,8 +1792,11 @@ const Index = () => {
       if (!hasAccess) return;
       const epSlug = src.replace("animesalt://", "");
       try {
-        const result = await cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug));
-        const directState = await getAnimeSaltDirectState(epSlug);
+        // Parallel — these used to be sequential, adding ~1-2s of dead time.
+        const [result, directState] = await Promise.all([
+          cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug)),
+          getAnimeSaltDirectState(epSlug),
+        ]);
         const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result || {});
         if (directState?.src || primarySrc) {
           addToWatchHistory(anime, resolvedSeasonIdx, resolvedEpIdx, true);
