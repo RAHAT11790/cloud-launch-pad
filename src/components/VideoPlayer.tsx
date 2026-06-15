@@ -241,11 +241,52 @@ const buildEpisodeDownloadName = (animeTitle: string, seasonLabel: string | unde
   return [animeTitle, seasonPart, episodePart].map((part) => String(part || "").trim()).filter(Boolean).join(" - ");
 };
 
-const splitLanguageTokens = (value: string | undefined | null) =>
+const LANGUAGE_NAME_MAP: Record<string, string> = {
+  hi: "Hindi", hin: "Hindi", hindi: "Hindi",
+  en: "English", eng: "English", english: "English",
+  ja: "Japanese", jp: "Japanese", jpn: "Japanese", japanese: "Japanese",
+  bn: "Bengali", ben: "Bengali", bengali: "Bengali", bangla: "Bengali",
+  ta: "Tamil", tam: "Tamil", tamil: "Tamil",
+  te: "Telugu", tel: "Telugu", telugu: "Telugu",
+  ml: "Malayalam", mal: "Malayalam", malayalam: "Malayalam",
+  kn: "Kannada", kan: "Kannada", kannada: "Kannada",
+  mr: "Marathi", mar: "Marathi", marathi: "Marathi",
+  gu: "Gujarati", guj: "Gujarati", gujarati: "Gujarati",
+  pa: "Punjabi", pan: "Punjabi", punjabi: "Punjabi",
+  ur: "Urdu", urd: "Urdu", urdu: "Urdu",
+  ko: "Korean", kor: "Korean", korean: "Korean",
+  zh: "Chinese", chi: "Chinese", zho: "Chinese", chinese: "Chinese", mandarin: "Chinese",
+  fr: "French", fra: "French", fre: "French", french: "French",
+  de: "German", ger: "German", deu: "German", german: "German",
+  es: "Spanish", spa: "Spanish", spanish: "Spanish",
+  it: "Italian", ita: "Italian", italian: "Italian",
+  pt: "Portuguese", por: "Portuguese", portuguese: "Portuguese",
+  ru: "Russian", rus: "Russian", russian: "Russian",
+  ar: "Arabic", ara: "Arabic", arabic: "Arabic",
+  tr: "Turkish", tur: "Turkish", turkish: "Turkish",
+};
+
+export const normalizeLanguageName = (raw: string | undefined | null): string => {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const key = s.toLowerCase().replace(/[^a-z]/g, "");
+  if (LANGUAGE_NAME_MAP[key]) return LANGUAGE_NAME_MAP[key];
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+};
+
+const splitLanguageTokens = (value: string | undefined | null) => {
+  const seen = new Set<string>();
+  const out: string[] = [];
   String(value || "")
     .split(/[,/|]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+    .map((item) => normalizeLanguageName(item))
+    .filter(Boolean)
+    .forEach((name) => {
+      const k = name.toLowerCase();
+      if (!seen.has(k)) { seen.add(k); out.push(name); }
+    });
+  return out;
+};
 
 const getPrimaryLanguageToken = (value: string | undefined | null) => splitLanguageTokens(value)[0] || "";
 
