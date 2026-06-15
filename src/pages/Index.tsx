@@ -1339,11 +1339,10 @@ const Index = () => {
   const [heroRotation, setHeroRotation] = useState(0);
   
   useEffect(() => {
-    // const timer = setInterval(() => {
-      setHeroRotation(prev => prev + 1);
-    }, 60000); // shuffle every 60 seconds
+    const timer = setInterval(() => { setHeroRotation(prev => prev + 1); }, 60000);
     return () => clearInterval(timer);
   }, []);
+
 
   // Pinned hero posts from Firebase
   const [pinnedHeroPosts, setPinnedHeroPosts] = useState<any[]>([]);
@@ -2454,7 +2453,7 @@ const Index = () => {
     }
   };
 
-  const handleHeroPlay = (index: number) => {
+  const handleHeroPlay = useCallback((index: number) => {
     const slide = heroSlides[index];
     if (!slide) return;
     if (slide.isCustom) {
@@ -2470,9 +2469,9 @@ const Index = () => {
     } else {
       handleCardClick(anime);
     }
-  };
+  }, [heroSlides, allAnime, handlePlay, handleCardClick]);
 
-  const handleHeroInfo = (index: number) => {
+  const handleHeroInfo = useCallback((index: number) => {
     const slide = heroSlides[index];
     if (!slide) return;
     if (slide.isCustom) {
@@ -2481,7 +2480,7 @@ const Index = () => {
     }
     const anime = allAnime.find(a => a.id === slide.id);
     if (anime) handleCardClick(anime);
-  };
+  }, [heroSlides, allAnime, handleCardClick]);
 
   const handleLogin = (userId: string) => {
     setIsLoggedIn(true);
