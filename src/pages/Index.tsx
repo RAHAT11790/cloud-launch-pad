@@ -1531,7 +1531,9 @@ const Index = () => {
         ...filteredMovies.slice(0, 10).map((item) => item.poster),
         ...allAnimeSaltUnique.slice(0, ALL_ANIME_BATCH_SIZE).map((item) => item.poster),
       ];
-      heroTargets.concat(cardTargets).forEach((src) => { void preloadImage(src); });
+      const allTargets = heroTargets.concat(cardTargets).filter(Boolean) as string[];
+      splashAssetTargetsRef.current = allTargets;
+      allTargets.forEach((src) => { void preloadImage(src); });
 
       const warmAnimeSalt = async () => {
         const targets = activeSaltItems.slice(0, 12);
