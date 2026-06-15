@@ -789,6 +789,9 @@ const Index = () => {
     return buildEpisodeDeepLink(animeId, seasonIdx, epIdx);
   }, []);
   const stopAllPlayback = useCallback(() => {
+    // Skip teardown when the suggestion-switch flow wants to keep the player
+    // alive so React can swap props in-place (no flash / no reopen).
+    if (keepPlayerAliveRef.current) return;
     try {
       document.querySelectorAll("video, audio").forEach((node) => {
         const media = node as HTMLMediaElement;
