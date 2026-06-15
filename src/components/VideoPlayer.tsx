@@ -673,27 +673,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const languageOptions = useMemo(() => {
     const labels = new Set<string>();
-    // For AnimeSalt content the only trustworthy language list is the
-    // audioTracks actually returned by the AN API for THIS episode.
-    // Do NOT merge anime.availableLanguages / anime.language — those are
-    // pre-populated from elsewhere and would surface fake options
-    // (e.g. Bengali/Tamil for a Naruto episode that has no such track).
+    const add = (raw: string | undefined | null) => {
+      splitLanguageTokens(raw).forEach((l) => labels.add(l));
+    };
     if (isAnimeSaltContent) {
-      (propAudioTracks || []).forEach((track) => {
-        splitLanguageTokens(String(track.label || track.language || "")).forEach((label) => labels.add(label));
-      });
-      return Array.from(labels);
+      (propAudioTracks || []).forEach((track) => add(String(track.label || track.language || "")));
+    } else {
+      add(anime?.baseLanguage || anime?.language);
+      (anime?.availableLanguages || []).forEach((label) => add(label));
+      if (anime?.seasonsByLanguage && typeof anime.seasonsByLanguage === "object") {
+        Object.keys(anime.seasonsByLanguage).forEach((k) => add(k));
+      }
+      (propAudioTracks || []).forEach((track) => add(String(track.label || track.language || "")));
     }
-    splitLanguageTokens(anime?.baseLanguage || anime?.language).forEach((label) => labels.add(label));
-    (anime?.availableLanguages || []).forEach((label) => labels.add(label));
-    if (propAudioTracks?.length) {
-      propAudioTracks.forEach((track) => {
-        splitLanguageTokens(String(track.label || track.language || "")).forEach((label) => labels.add(label));
-      });
-    }
-    if (labels.size === 0 && currentLangLabel) labels.add(currentLangLabel);
-    return Array.from(labels);
-  }, [anime?.availableLanguages, anime?.baseLanguage, anime?.language, currentLangLabel, isAnimeSaltContent, propAudioTracks]);
+    if (labels.size === 0 && currentLangLabel) add(currentLangLabel);
+    // Sort: Hindi first, then alphabetical
+    return Array.from(labels).sort((a, b) => {
+      const ah = a.toLowerCase() === "hindi" ? 0 : 1;
+      const bh = b.toLowerCase() === "hindi" ? 0 : 1;
+      if (ah !== bh) return ah - bh;
+      return a.localeCompare(b);
+    });
+  }, [anime?.availableLanguages, anime?.baseLanguage, anime?.language, anime?.seasonsByLanguage, currentLangLabel, isAnimeSaltContent, propAudioTracks]);
 
   const activeSeasonLabel = useMemo(() => getShortSeasonLabel(seasons?.[currentSeasonIdx ?? 0]?.name, currentSeasonIdx ?? 0), [currentSeasonIdx, seasons]);
 
