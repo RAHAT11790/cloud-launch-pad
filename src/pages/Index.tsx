@@ -145,7 +145,48 @@ const buildAnSyntheticMaster = (
   lines.push(buildAnProxyUrl(stream.url));
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(lines.join("\n"))))}`;
 };
-...
+
+const normalizeAnAudioTracks = (
+  audio: Array<{ language?: string; name?: string; uri?: string }> | undefined,
+  streams: Array<{ label?: string; url?: string; height?: number }> | undefined,
+) => {
+  if (!Array.isArray(audio) || audio.length === 0) return undefined;
+
+  const qualityMap = new Map<string, string>();
+  (streams || []).forEach((stream) => {
+    const label = String(stream?.label || "").trim().toLowerCase();
+    const url = String(stream?.url || "").trim();
+    if (!label || !url) return;
+    qualityMap.set(label, url);
+  });
+
+  return audio
+    .map((track, trackIndex) => {
+      const pickStreamUrl = (qualityLabel: string) => {
+        const direct = qualityMap.get(qualityLabel);
+        if (!direct) return undefined;
+        return buildAnSyntheticMaster({
+          url: direct,
+          height: Number(qualityLabel.replace(/\D/g, "")) || undefined,
+        }, audio, trackIndex);
+      };
+      const label = String(track?.name || track?.language || "Audio").trim();
+      const uri = String(track?.uri || "").trim();
+      if (!uri) return null;
+      const defaultStreamUrl = String(streams?.[0]?.url || "").trim() || uri;
+      return {
+        language: String(track?.language || label).trim() || label,
+        label,
+        link: buildAnSyntheticMaster({ url: defaultStreamUrl }, audio, trackIndex),
+        link480: pickStreamUrl("480p"),
+        link720: pickStreamUrl("720p"),
+        link1080: pickStreamUrl("1080p"),
+        link4k: pickStreamUrl("4k") || pickStreamUrl("2160p"),
+      };
+    })
+    .filter(Boolean) as { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
+};
+
 const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   const sourceList = Array.isArray(payload?.sources) ? payload.sources : [];
   const primarySource = sourceList.find((entry: any) => Array.isArray(entry?.streams) && entry.streams.length > 0) || sourceList[0];
