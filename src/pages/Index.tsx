@@ -1480,19 +1480,11 @@ const Index = () => {
   }, [allAnime, heroRotation, pinnedHeroPosts]);
 
   // ALL ANIME: deduplicated, loads incrementally every 10s
-  const [allAnimeVisibleCount, setAllAnimeVisibleCount] = useState(6);
+  const [allAnimeVisibleCount, setAllAnimeVisibleCount] = useState(ALL_ANIME_BATCH_SIZE);
   
   useEffect(() => {
     if (animeSaltItems.length === 0) return;
-    setAllAnimeVisibleCount(999); // Show all items immediately
-    const timer = setInterval(() => {
-      setAllAnimeVisibleCount(prev => {
-        const max = animeSaltItems.length;
-        if (prev >= max) { clearInterval(timer); return prev; }
-        return Math.min(prev + 6, max);
-      });
-    }, 10000); // every 10 seconds
-    return () => clearInterval(timer);
+    setAllAnimeVisibleCount((prev) => Math.min(Math.max(prev, ALL_ANIME_BATCH_SIZE), animeSaltItems.length));
   }, [animeSaltItems.length]);
 
   const allAnimeSaltUnique = useMemo(() => {
