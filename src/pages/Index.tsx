@@ -1732,17 +1732,19 @@ const Index = () => {
       const epSlug = src.replace("animesalt://", "");
       try {
         const result = await cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug));
+        const directState = await getAnimeSaltDirectState(epSlug);
         const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result || {});
-        if (primarySrc) {
+        if (directState?.src || primarySrc) {
           addToWatchHistory(anime, resolvedSeasonIdx, resolvedEpIdx, true);
           setPlayerState({
-            src: primarySrc,
+            src: directState?.src || primarySrc,
             title: anime.title,
             subtitle: subtitle || `Episode`,
             anime,
             seasonIdx: resolvedSeasonIdx,
             epIdx: resolvedEpIdx,
-            qualityOptions: sourceOptions,
+            qualityOptions: directState?.qualityOptions || sourceOptions,
+            audioTracks: directState?.audioTracks,
             nextEpisodeSrc:
               anime.type === "webseries" && anime.seasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined
                 ? getEpisodeSrc(anime.seasons[resolvedSeasonIdx]?.episodes?.[resolvedEpIdx + 1] as Episode)
@@ -1767,15 +1769,17 @@ const Index = () => {
       const movieSlug = src.replace("animesalt_movie://", "");
       try {
         const result = await cachedApiCall(`movie_${movieSlug}`, () => animeSaltApi.getMovie(movieSlug));
+        const directState = await getAnimeSaltDirectState(movieSlug);
         const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result.success ? result.data : result);
-        if (primarySrc) {
+        if (directState?.src || primarySrc) {
           addToWatchHistory(anime, undefined, undefined, true);
           setPlayerState({
-            src: primarySrc,
+            src: directState?.src || primarySrc,
             title: anime.title,
             subtitle: "Movie",
             anime,
-            qualityOptions: sourceOptions,
+            qualityOptions: directState?.qualityOptions || sourceOptions,
+            audioTracks: directState?.audioTracks,
           } as any);
           setSelectedAnime(null);
         } else {
