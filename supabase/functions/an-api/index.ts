@@ -207,21 +207,37 @@ async function extractFromPlayer(embedUrl: string) {
   };
 }
 
-async function episode(slug: string) {
-  const html = await fetchText(`${AN_BASE}/episode/${slug}/`);
+async function episode(slug: string, type?: string) {
+  // Try paths based on type, fall back to the other if no embeds.
+  const candidates = type === "movies"
+    ? [`${AN_BASE}/movies/${slug}/`, `${AN_BASE}/episode/${slug}/`]
+    : [`${AN_BASE}/episode/${slug}/`, `${AN_BASE}/movies/${slug}/`, `${AN_BASE}/series/${slug}/`];
+
+  let html = "";
+  let pageUrl = candidates[0];
+  let embeds = new Set<string>();
+  for (const url of candidates) {
+    try {
+      const h = await fetchText(url);
+      const found = new Set<string>();
+      const reIframe = /<iframe[^>]+(?:src|data-src)="([^"]+)"/gi;
+      let m: RegExpExecArray | null;
+      while ((m = reIframe.exec(h))) {
+        if (/\/video\/[a-f0-9]+/i.test(m[1])) found.add(m[1]);
+      }
+      const reData = /data-(?:src|embed|player|video)="([^"]+\/video\/[a-f0-9]+[^"]*)"/gi;
+      while ((m = reData.exec(h))) found.add(m[1]);
+      // any URL in HTML
+      const reAny = /https?:\/\/[a-z0-9.-]+\/video\/[a-f0-9]+/gi;
+      while ((m = reAny.exec(h))) found.add(m[0]);
+      if (found.size > 0) { html = h; pageUrl = url; embeds = found; break; }
+      if (!html) { html = h; pageUrl = url; }
+    } catch {}
+  }
+
   const titleM =
     html.match(/<meta property="og:title" content="([^"]+)"/i) ||
     html.match(/<title>([^<]+)<\/title>/i);
-  const embeds = new Set<string>();
-  const reIframe = /<iframe[^>]+(?:src|data-src)="([^"]+)"/gi;
-  let m: RegExpExecArray | null;
-  while ((m = reIframe.exec(html))) {
-    const u = m[1];
-    if (/\/video\/[a-f0-9]+/i.test(u)) embeds.add(u);
-  }
-  // also pick from any data-src outside iframes
-  const reData = /data-(?:src|embed)="([^"]+\/video\/[a-f0-9]+[^"]*)"/gi;
-  while ((m = reData.exec(html))) embeds.add(m[1]);
 
   const sources: any[] = [];
   for (const embed of embeds) {
@@ -234,7 +250,7 @@ async function episode(slug: string) {
   return {
     slug,
     title: titleM ? decode(titleM[1]) : slug,
-    pageUrl: `${AN_BASE}/episode/${slug}/`,
+    pageUrl,
     sources,
   };
 }
