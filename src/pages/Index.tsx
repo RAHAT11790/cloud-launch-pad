@@ -149,25 +149,24 @@ const normalizeAnAudioTracks = (
     qualityMap.set(label, url);
   });
 
-      const pickStreamUrl = (qualityLabel: string) => {
-    const direct = qualityMap.get(qualityLabel);
-    if (direct) return buildAnSyntheticMaster({
-      label: qualityLabel,
-      url: direct,
-      height: Number(qualityLabel.replace(/\D/g, "")) || undefined,
-    } as any, audio, audio.findIndex((entry) => entry === track));
-    return undefined;
-  };
-
   return audio
-    .map((track) => {
+    .map((track, trackIndex) => {
+      const pickStreamUrl = (qualityLabel: string) => {
+        const direct = qualityMap.get(qualityLabel);
+        if (!direct) return undefined;
+        return buildAnSyntheticMaster({
+          url: direct,
+          height: Number(qualityLabel.replace(/\D/g, "")) || undefined,
+        }, audio, trackIndex);
+      };
       const label = String(track?.name || track?.language || "Audio").trim();
       const uri = String(track?.uri || "").trim();
       if (!uri) return null;
+      const defaultStreamUrl = String(streams?.[0]?.url || "").trim() || uri;
       return {
         language: String(track?.language || label).trim() || label,
         label,
-        link: buildAnSyntheticMaster(streams?.[0] || { url: uri }, audio, audio.findIndex((entry) => entry === track)),
+        link: buildAnSyntheticMaster({ url: defaultStreamUrl }, audio, trackIndex),
         link480: pickStreamUrl("480p"),
         link720: pickStreamUrl("720p"),
         link1080: pickStreamUrl("1080p"),
