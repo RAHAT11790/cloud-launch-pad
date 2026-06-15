@@ -3998,7 +3998,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
             <div className="h-px bg-white/10" />
             <div className="px-3 pt-3 pb-6 space-y-2">
-              {downloadLanguageChoices.map((label) => {
+              {(sheetOrigin === "download" ? downloadLanguageChoices : languageOptions).map((label) => {
                 const active = label === (sheetOrigin === "download" ? currentDownloadLanguageLabel : currentLangLabel);
                 const track = normalizedLanguageTracks.find((item) => item.label === label);
                 return (
