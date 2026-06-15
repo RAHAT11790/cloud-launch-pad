@@ -3157,9 +3157,17 @@ const Index = () => {
             setPlayerState(nextState);
           }}
           onSuggestedClick={(anime) => {
-            stopAllPlayback();
+            // In-place suggestion switch: keep VideoPlayer mounted so the new
+            // anime's source slides in without a player close/reopen flash.
+            keepPlayerAliveRef.current = true;
             navigate(buildAnimeRoute(anime.id));
-            handleCardClick(anime);
+            void (async () => {
+              try { await handleCardClick(anime); }
+              finally {
+                // Re-enable normal teardown shortly after the new src is loaded.
+                window.setTimeout(() => { keepPlayerAliveRef.current = false; }, 400);
+              }
+            })();
           }}
           nextEpisodeSrc={playerState.nextEpisodeSrc}
           forceEmbedMode={playerState.anime.source === "animesalt" && !isDirectMediaPlaybackUrl(playerState.src)}
