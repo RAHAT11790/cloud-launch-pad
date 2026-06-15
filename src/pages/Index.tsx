@@ -2449,16 +2449,24 @@ const Index = () => {
       if (!hasAccess) return;
       let nextSrc = getEpisodeSrc(clickedEp);
       let qOpts = getEpisodeQualityOptions(clickedEp);
+      let nextAudioTracks = clickedEp.audioTracks;
         if (playerState?.anime.source === "animesalt" && String(clickedEp.link || "").startsWith("animesalt://")) {
         const epSlug = String(clickedEp.link).replace("animesalt://", "");
         try {
           const epResult = await animeSaltApi.getEpisode(epSlug);
+          const directState = await getAnimeSaltDirectState(epSlug);
+          if (directState?.src) {
+            nextSrc = directState.src;
+            qOpts = directState.qualityOptions || [];
+            nextAudioTracks = directState.audioTracks;
+          } else {
             const resolved = resolveSaltEmbed(epResult);
             const embedServers = resolved.allEmbeds.filter(Boolean);
             nextSrc = resolved.embedUrl || nextSrc;
-          qOpts = embedServers.length > 1
-            ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
-            : [];
+            qOpts = embedServers.length > 1
+              ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
+              : [];
+          }
         } catch {}
       }
       addToWatchHistory(playerState!.anime, playerState!.seasonIdx, i);
@@ -2468,7 +2476,7 @@ const Index = () => {
         subtitle: `${season.name} - Episode ${clickedEp.episodeNumber}`,
         epIdx: i,
         resumeTime: 0,
-        audioTracks: clickedEp.audioTracks,
+        audioTracks: nextAudioTracks,
         qualityOptions: qOpts.length > 0 ? qOpts : undefined,
         nextEpisodeSrc: undefined,
       };
@@ -2487,16 +2495,24 @@ const Index = () => {
     if (!hasAccess) return;
     let nextSrc = getEpisodeSrc(ep);
     let qOpts: { label: string; src: string }[] = getEpisodeQualityOptions(ep);
+    let nextAudioTracks = ep.audioTracks;
     if (playerState.anime.source === "animesalt" && String(ep.link || "").startsWith("animesalt://")) {
       const epSlug = String(ep.link).replace("animesalt://", "");
       try {
         const epResult = await animeSaltApi.getEpisode(epSlug);
-        const resolved = resolveSaltEmbed(epResult);
-        const embedServers = resolved.allEmbeds.filter(Boolean);
-        nextSrc = resolved.embedUrl || nextSrc;
-        qOpts = embedServers.length > 1
-          ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
-          : [];
+        const directState = await getAnimeSaltDirectState(epSlug);
+        if (directState?.src) {
+          nextSrc = directState.src;
+          qOpts = directState.qualityOptions || [];
+          nextAudioTracks = directState.audioTracks;
+        } else {
+          const resolved = resolveSaltEmbed(epResult);
+          const embedServers = resolved.allEmbeds.filter(Boolean);
+          nextSrc = resolved.embedUrl || nextSrc;
+          qOpts = embedServers.length > 1
+            ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
+            : [];
+        }
       } catch {}
     }
     addToWatchHistory(playerState.anime, newSeasonIdx, 0);
@@ -2507,7 +2523,7 @@ const Index = () => {
       seasonIdx: newSeasonIdx,
       epIdx: 0,
       resumeTime: 0,
-      audioTracks: ep.audioTracks,
+      audioTracks: nextAudioTracks,
       qualityOptions: qOpts.length > 0 ? qOpts : undefined,
       nextEpisodeSrc: undefined,
     };
