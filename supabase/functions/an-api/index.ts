@@ -428,14 +428,16 @@ function rewriteM3U8(text: string, baseUrl: string, proxyPrefix: string): string
 
 async function hlsProxy(req: Request, target: string, proxyPrefix: string): Promise<Response> {
   const range = req.headers.get("range") || undefined;
+  // NOTE: AN's CDN returns 500 if Referer/Origin are set on segment requests.
+  // The CDN serves all variant playlists + segments fine without any
+  // identifying headers, so we send a minimal request.
   const upstream = await fetch(target, {
     headers: {
       "User-Agent": UA,
-      Referer: AN_BASE + "/",
-      Origin: AN_BASE,
       ...(range ? { Range: range } : {}),
     },
   });
+
   const ct = (upstream.headers.get("content-type") || "").toLowerCase();
   const looksM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(\?|$)/i.test(target);
 
