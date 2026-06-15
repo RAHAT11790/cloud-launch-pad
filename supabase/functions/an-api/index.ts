@@ -411,19 +411,62 @@ async function openEpisode(slug){
 </script>
 </body></html>`;
 
+// ---------- HLS PROXY (CORS-safe pass-through + m3u8 URL rewriting) ----------
+// Used by the native player so hls.js can fetch playlists and segments from a
+// same-origin (CORS-allowed) URL. Body is NOT modified other than rewriting
+// URL references inside .m3u8 to point back through this proxy.
+function rewriteM3U8(text: string, baseUrl: string, proxyPrefix: string): string {
+  const base = new URL(baseUrl);
+  const toAbs = (u: string) => { try { return new URL(u, base).toString(); } catch { return u; } };
+  const wrap = (u: string) => `${proxyPrefix}?url=${encodeURIComponent(toAbs(u))}`;
+  return text.split(/\r?\n/).map((line) => {
+    if (!line) return line;
+    if (line.startsWith("#")) return line.replace(/URI="([^"]+)"/g, (_, u) => `URI="${wrap(u)}"`);
+    return wrap(line.trim());
+  }).join("\n");
+}
+
+async function hlsProxy(req: Request, target: string, proxyPrefix: string): Promise<Response> {
+  const range = req.headers.get("range") || undefined;
+  const upstream = await fetch(target, {
+    headers: {
+      "User-Agent": UA,
+      Referer: AN_BASE + "/",
+      Origin: AN_BASE,
+      ...(range ? { Range: range } : {}),
+    },
+  });
+  const ct = (upstream.headers.get("content-type") || "").toLowerCase();
+  const looksM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(\?|$)/i.test(target);
+
+  const baseHeaders: Record<string, string> = { ...cors };
+  for (const h of ["content-type", "content-length", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"]) {
+    const v = upstream.headers.get(h);
+    if (v) baseHeaders[h] = v;
+  }
+
+  if (looksM3u8) {
+    const text = await upstream.text();
+    const rewritten = rewriteM3U8(text, target, proxyPrefix);
+    delete baseHeaders["content-length"];
+    baseHeaders["content-type"] = "application/vnd.apple.mpegurl; charset=utf-8";
+    baseHeaders["cache-control"] = "no-store";
+    return new Response(rewritten, { status: upstream.status, headers: baseHeaders });
+  }
+  return new Response(upstream.body, { status: upstream.status, headers: baseHeaders });
+}
+
 // ---------- ROUTER ----------
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
   const url = new URL(req.url);
-  // Strip Supabase function base path (/an-api) so /search etc. work
   const path = url.pathname.replace(/^.*?\/an-api/i, "") || "/";
+  const proxyPrefix = `${url.protocol}//${url.host}${url.pathname.replace(/\/[^\/]*$/, "")}/hls`;
 
   try {
     if (path === "/" || path === "") {
-      return new Response(HTML_UI, {
-        headers: { ...cors, "Content-Type": "text/html; charset=utf-8" },
-      });
+      return new Response(HTML_UI, { headers: { ...cors, "Content-Type": "text/html; charset=utf-8" } });
     }
     if (path === "/search") {
       const q = url.searchParams.get("q") || "";
@@ -441,6 +484,16 @@ Deno.serve(async (req) => {
       const type = url.searchParams.get("type") || "";
       if (!slug) return json({ error: "missing ?slug=" }, 400);
       return json(await episode(slug, type));
+    }
+    if (path === "/embed") {
+      const embedUrl = url.searchParams.get("url") || "";
+      if (!embedUrl) return json({ error: "missing ?url=" }, 400);
+      return json(await extractFromPlayer(embedUrl));
+    }
+    if (path === "/hls") {
+      const target = url.searchParams.get("url") || "";
+      if (!target) return new Response("missing ?url=", { status: 400, headers: cors });
+      return await hlsProxy(req, target, proxyPrefix);
     }
     return json({ error: "not found", path }, 404);
   } catch (e) {
