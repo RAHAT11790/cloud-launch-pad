@@ -1845,10 +1845,11 @@ const Index = () => {
     const resolvedSeasonIdx = seasonIdx ?? fallbackTarget.seasonIdx;
     const resolvedEpIdx = epIdx ?? fallbackTarget.epIdx;
 
+    const isInlineSwitch = keepPlayerAliveRef.current;
     stopAllPlayback();
     const targetWatchRoute = buildWatchRoute(anime.id, resolvedSeasonIdx, resolvedEpIdx);
     if (location.pathname !== targetWatchRoute || location.search !== new URL(targetWatchRoute, window.location.origin).search) {
-      navigate(targetWatchRoute);
+      navigate(targetWatchRoute, { replace: isInlineSwitch || inPlayerSwitchRef.current });
     }
 
     const isAnimeSaltContent = anime.source === "animesalt" || String(anime.id || "").startsWith("as_");
@@ -1916,12 +1917,14 @@ const Index = () => {
                 : undefined,
           } as any);
           setSelectedAnime(null);
+          inPlayerSwitchRef.current = false;
         } else {
           console.warn("[AN] no source for episode", epSlug, result);
           toast.error("Episode source not available. Try another server or episode.");
         }
       } catch (e) {
         console.warn("[AN] episode load failed", epSlug, e);
+        inPlayerSwitchRef.current = false;
         toast.error("Failed to load episode. Please try again.");
       }
       return;
@@ -1947,10 +1950,12 @@ const Index = () => {
             audioTracks: directState?.audioTracks,
           } as any);
           setSelectedAnime(null);
+          inPlayerSwitchRef.current = false;
         } else {
           toast.error("Movie source not found");
         }
       } catch {
+        inPlayerSwitchRef.current = false;
         toast.error("Failed to load movie");
       }
       return;
@@ -1982,6 +1987,7 @@ const Index = () => {
             : undefined,
       });
       setSelectedAnime(null);
+      inPlayerSwitchRef.current = false;
     }
   };
 
