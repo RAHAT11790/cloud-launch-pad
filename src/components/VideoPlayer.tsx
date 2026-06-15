@@ -3,7 +3,6 @@ import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
-import AnNativeView from "@/components/AnNativeView";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
@@ -298,8 +297,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const downloadPanelRef = useRef<HTMLDivElement>(null);
 
   const [playing, setPlaying] = useState(false);
-  const [anNativeFailed, setAnNativeFailed] = useState(false);
-  useEffect(() => { setAnNativeFailed(false); }, [src]);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
@@ -3058,38 +3055,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               the *visual* surface — UI/controls live in this player and drive
               the embed via postMessage (see useEffect above). */}
           {isEmbedPlayback ? (
-            (() => {
-              // AN (AnimeSalt) content → native HLS via AnNativeView (no iframe).
-              // hf.space / other embed hosts keep the iframe MKV pipeline.
-              const isAnContent = anime?.source === "animesalt" || String(anime?.id || "").startsWith("as_");
-              if (isAnContent && !anNativeFailed) {
-                return (
-                  <AnNativeView
-                    embedUrl={currentSrc}
-                    videoClassName="absolute inset-0 w-full h-full bg-black"
-                    videoStyle={{ objectFit: cropModes[cropIndex], transform: embedTransform, transformOrigin: "center center" }}
-                    onFail={(reason) => { console.warn("[AN-native] fallback to iframe:", reason); setAnNativeFailed(true); }}
-                  />
-                );
-              }
-              // currentSrc is already the fully-built watch URL produced by
-              // applyServerDomain() — e.g.
-              //   https://xxx.hf.space/watch/http://fi3.bot-hosting.net/.../file.mkv
-              // We load it directly as the iframe src. The hf.space backend
-              // serves the player page (or proxies the video) at that path.
-              return (
-                <iframe
-                  ref={embedIframeRef}
-                  src={currentSrc}
-                  className="absolute inset-0 w-full h-full bg-black border-0 block"
-                  style={{ transform: embedTransform, transformOrigin: "center center" }}
-                  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-                  allowFullScreen
-                  referrerPolicy="no-referrer"
-                  title="player"
-                />
-              );
-            })()
+            <iframe
+              ref={embedIframeRef}
+              src={currentSrc}
+              className="absolute inset-0 w-full h-full bg-black border-0 block"
+              style={{ transform: embedTransform, transformOrigin: "center center" }}
+              allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+              allowFullScreen
+              referrerPolicy="no-referrer"
+              title="player"
+            />
           ) : (
             <video
               ref={videoRef}
