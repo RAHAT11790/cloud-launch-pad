@@ -279,41 +279,122 @@ async function uploadToImgbb(bytes: Uint8Array, name: string): Promise<string> {
   throw lastErr instanceof Error ? lastErr : new Error("ImgBB failed");
 }
 
+// ============= Gemini direct API (user-supplied key) =============
+const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image-preview";
+
+async function probeGemini(apiKey: string): Promise<{ ok: boolean; model?: string; message?: string; error?: string }> {
+  // Cheap probe — list models. Confirms the key is valid + reachable.
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+    if (!r.ok) {
+      const t = await r.text().catch(() => "");
+      return { ok: false, error: `Gemini ${r.status}: ${t.slice(0, 180)}` };
+    }
+    const j = await r.json();
+    const names: string[] = (j?.models || []).map((m: any) => String(m?.name || "").replace("models/", ""));
+    const hasImage = names.find((n) => n.includes("image"));
+    return {
+      ok: true,
+      model: hasImage || GEMINI_IMAGE_MODEL,
+      message: `Reachable. ${names.length} models available.${hasImage ? "" : " (image-preview model not listed — may need access)"}`,
+    };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+async function genWithGemini(prompt: string, referenceDataUrl: string | null, apiKey: string): Promise<Uint8Array> {
+  const parts: any[] = [{ text: prompt }];
+  if (referenceDataUrl) {
+    const m = /^data:([^;]+);base64,(.+)$/.exec(referenceDataUrl);
+    if (m) parts.unshift({ inline_data: { mime_type: m[1], data: m[2] } });
+  }
+  const body = {
+    contents: [{ role: "user", parts }],
+    generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+  };
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    if (res.status === 429) throw new Error("RATE_LIMIT");
+    throw new Error(`Gemini ${res.status}: ${t.slice(0, 220)}`);
+  }
+  const j = await res.json();
+  const allParts: any[] = j?.candidates?.[0]?.content?.parts || [];
+  const imgPart = allParts.find((p) => p?.inline_data?.data || p?.inlineData?.data);
+  const b64 = imgPart?.inline_data?.data || imgPart?.inlineData?.data;
+  if (!b64) throw new Error("Gemini: no image data in response");
+  const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  if (bin.byteLength < 1000) throw new Error("Gemini: image too small");
+  return bin;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method === "GET") {
-    return new Response(JSON.stringify({ ok: true, service: "generate-backdrop", providers: ["lovable", "flux"] }), {
+    return new Response(JSON.stringify({ ok: true, service: "generate-backdrop", providers: ["lovable", "flux", "gemini"] }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
   try {
     const body = (await req.json()) as Body;
+
+    // ---- Status probe action (no generation) ----
+    if (body.action === "check-gemini") {
+      if (!body.geminiKey) {
+        return new Response(JSON.stringify({ ok: false, error: "geminiKey required" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const r = await probeGemini(body.geminiKey);
+      return new Response(JSON.stringify(r), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!body?.title || !body?.animeId) {
       return new Response(JSON.stringify({ error: "title and animeId required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     const mode = body.mode === "logo" ? "logo" : "backdrop";
-    const provider = body.provider === "flux" ? "flux" : "lovable";
-    const prompt = buildPrompt({ ...body, mode });
+    const provider: "lovable" | "flux" | "gemini" =
+      body.provider === "flux" ? "flux" : body.provider === "gemini" ? "gemini" : "lovable";
+    const prompt = buildPrompt({ ...body, mode } as Body);
 
     const safe = body.animeId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
     let url: string;
     let engineLabel: string = provider;
 
     const useRef = mode === "backdrop"
-      && provider === "lovable"
+      && (provider === "lovable" || provider === "gemini")
       && !!body.referenceImageUrl
       && body.useReference !== false;
 
     if (provider === "flux") {
       url = await genWithFlux(prompt, mode);
+    } else if (provider === "gemini") {
+      if (!body.geminiKey) throw new Error("Gemini API key missing — set it in admin panel.");
+      const refDataUrl = useRef ? await fetchAsDataUrl(body.referenceImageUrl!).catch(() => null) : null;
+      const groundedPrompt = useRef
+        ? ((body.customPrompt && body.customPrompt.trim())
+            ? body.customPrompt.replace(/\{title\}/gi, body.title!)
+            : buildGroundedPrompt(body))
+        : prompt;
+      const bytes = await genWithGemini(groundedPrompt, refDataUrl, body.geminiKey);
+      url = await uploadToImgbb(bytes, `${mode}_gem_${safe}_${Date.now()}`);
+      engineLabel = useRef ? "gemini-edit" : "gemini";
     } else if (useRef) {
-      // IMAGE-TO-IMAGE: ground on TMDB/IMDB backdrop, preserve characters + genre.
+      // Lovable image-to-image
       try {
         const refDataUrl = await fetchAsDataUrl(body.referenceImageUrl!);
         const groundedPrompt = (body.customPrompt && body.customPrompt.trim())
-          ? body.customPrompt.replace(/\{title\}/gi, body.title)
+          ? body.customPrompt.replace(/\{title\}/gi, body.title!)
           : buildGroundedPrompt(body);
         const bytes = await genWithLovableEdit(groundedPrompt, refDataUrl, body.model);
         url = await uploadToImgbb(bytes, `${mode}_ref_${safe}_${Date.now()}`);
