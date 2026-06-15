@@ -354,6 +354,12 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
               </span>
             )}
           </button>
+          {!nativeFailed && (
+            <span className="px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-bold tracking-wider border border-primary/30">
+              HLS
+            </span>
+          )}
+
           {(saltPlayerState.allEmbeds?.length ?? 0) > 1 && (
             <button
               onClick={() => {
