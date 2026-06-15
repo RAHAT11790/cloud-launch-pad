@@ -2949,16 +2949,24 @@ const Index = () => {
                   if (!hasAccess) return;
                   let nextSrc = getEpisodeSrc(nextEp);
                   let qOpts = getEpisodeQualityOptions(nextEp);
+                  let nextAudioTracks = nextEp.audioTracks;
                   if (playerState.anime.source === "animesalt" && String(nextEp.link || "").startsWith("animesalt://")) {
                     const epSlug = String(nextEp.link).replace("animesalt://", "");
                     try {
                       const epResult = await animeSaltApi.getEpisode(epSlug);
-                      const resolved = resolveSaltEmbed(epResult);
-                      const embedServers = resolved.allEmbeds.filter(Boolean);
-                      nextSrc = resolved.embedUrl || nextSrc;
-                      qOpts = embedServers.length > 1
-                        ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
-                        : [];
+                      const directState = await getAnimeSaltDirectState(epSlug);
+                      if (directState?.src) {
+                        nextSrc = directState.src;
+                        qOpts = directState.qualityOptions || [];
+                        nextAudioTracks = directState.audioTracks;
+                      } else {
+                        const resolved = resolveSaltEmbed(epResult);
+                        const embedServers = resolved.allEmbeds.filter(Boolean);
+                        nextSrc = resolved.embedUrl || nextSrc;
+                        qOpts = embedServers.length > 1
+                          ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
+                          : [];
+                      }
                     } catch {}
                   }
                   addToWatchHistory(playerState.anime, playerState.seasonIdx, nextIdx);
@@ -2968,7 +2976,7 @@ const Index = () => {
                     subtitle: `${season.name} - Episode ${nextEp.episodeNumber}`,
                     epIdx: nextIdx,
                      resumeTime: 0,
-                     audioTracks: nextEp.audioTracks,
+                     audioTracks: nextAudioTracks,
                     qualityOptions: qOpts.length > 0 ? qOpts : undefined,
                     nextEpisodeSrc: undefined,
                   };
