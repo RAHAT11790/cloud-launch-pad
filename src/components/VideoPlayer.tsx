@@ -1959,7 +1959,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }));
       setHlsAudioOptions(opts);
       const active = typeof hls.audioTrack === "number" ? hls.audioTrack : -1;
-      setCurrentHlsAudio(active >= 0 ? active : (opts.length > 0 ? 0 : -1));
+      const resolvedActive = active >= 0 ? active : (opts.length > 0 ? 0 : -1);
+      setCurrentHlsAudio(resolvedActive);
+      const activeTrack = resolvedActive >= 0 ? opts[resolvedActive] : opts[0];
+      const activeLabel = activeTrack
+        ? (getPrimaryLanguageToken(activeTrack.label || activeTrack.language || "") || activeTrack.label || activeTrack.language || "")
+        : "";
+      if (activeLabel) setSelectedLanguageLabel(activeLabel);
     };
 
     const refreshHlsSubs = () => {
@@ -4038,6 +4044,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     onClick={() => {
                       if (sheetOrigin === "download") {
                         setSelectedDownloadLanguageLabel(label);
+                      } else if (isAnimeSaltContent && track) {
+                        switchAudioTrack({ language: track.language, label: track.label, src: track.link, src480: track.link480, src720: track.link720, src1080: track.link1080, src4k: track.link4k });
                       } else if (seasons?.length && onLanguageChange) {
                         onLanguageChange(label);
                       } else if (track) switchAudioTrack({ language: track.language, label: track.label, src: track.link, src480: track.link480, src720: track.link720, src1080: track.link1080, src4k: track.link4k });
