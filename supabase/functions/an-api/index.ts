@@ -462,7 +462,7 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   const path = url.pathname.replace(/^.*?\/an-api/i, "") || "/";
-  const proxyPrefix = `https://${url.host}${url.pathname.replace(/\/[^\/]*$/, "")}/hls`;
+  const proxyPrefix = `https://${url.host}/functions/v1/an-api/hls`;
 
   try {
     if (path === "/" || path === "") {
