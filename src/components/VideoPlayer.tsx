@@ -661,12 +661,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     [anime?.id, anime?.source],
   );
 
-  const activeHlsLanguageLabel = useMemo(() => {
-    const activeTrack = currentHlsAudio >= 0 ? hlsAudioOptions[currentHlsAudio] : hlsAudioOptions[0];
-    if (!activeTrack) return "";
-    return getPrimaryLanguageToken(activeTrack.label || activeTrack.language || "") || activeTrack.label || activeTrack.language || "";
-  }, [currentHlsAudio, hlsAudioOptions]);
-
   const currentLangLabel = useMemo(() => {
     if (activeHlsLanguageLabel) return activeHlsLanguageLabel;
     // AnimeSalt: before HLS exposes tracks, fall back to the real available
