@@ -3051,15 +3051,30 @@ const Index = () => {
           selectedLanguage={(playerState as any).selectedLanguage || playerState.anime.baseLanguage || playerState.anime.language}
           onLanguageChange={async (label) => {
             const anime = playerState.anime;
-            const newSeasons = resolveAnimeSeasonsForLanguage(anime, label);
+            const resolvedLabel = resolvePlayableLanguage(anime, label);
+            const newSeasons = resolveAnimeSeasonsForLanguage(anime, resolvedLabel);
             if (!newSeasons || newSeasons.length === 0) return;
             const seasonIdx = Math.min(playerState.seasonIdx ?? 0, newSeasons.length - 1);
             const epIdx = Math.min(playerState.epIdx ?? 0, (newSeasons[seasonIdx]?.episodes?.length || 1) - 1);
             const ep = newSeasons[seasonIdx]?.episodes?.[epIdx];
             if (!ep) return;
-            const nextSrc = getEpisodeSrc(ep);
-            const qOpts = getEpisodeQualityOptions(ep);
-            const newAnime = { ...anime, seasons: newSeasons, baseLanguage: label, language: label };
+            let nextSrc = getEpisodeSrc(ep);
+            let qOpts = getEpisodeQualityOptions(ep);
+            let nextAudioTracks = ep.audioTracks || anime.audioTracks;
+
+            if (anime.source === "animesalt" && String(ep.link || "").startsWith("animesalt://")) {
+              const epSlug = String(ep.link).replace("animesalt://", "");
+              try {
+                const directState = await getAnimeSaltDirectState(epSlug);
+                if (directState?.src) {
+                  nextSrc = directState.src;
+                  qOpts = directState.qualityOptions || [];
+                  nextAudioTracks = directState.audioTracks;
+                }
+              } catch {}
+            }
+
+            const newAnime = { ...anime, seasons: newSeasons, baseLanguage: resolvedLabel, language: resolvedLabel };
             const nextState = {
               ...playerState,
               anime: newAnime,
@@ -3068,9 +3083,9 @@ const Index = () => {
               seasonIdx,
               epIdx,
               resumeTime: 0,
-              audioTracks: ep.audioTracks || anime.audioTracks,
+              audioTracks: nextAudioTracks,
               qualityOptions: qOpts.length > 0 ? qOpts : undefined,
-              selectedLanguage: label,
+              selectedLanguage: resolvedLabel,
             } as any;
             playerStateRef.current = nextState;
             setPlayerState(nextState);
