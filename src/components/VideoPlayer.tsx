@@ -3708,7 +3708,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 {currentLangLabel ? <><span className="text-foreground/25 flex-shrink-0">|</span><span className="truncate">{currentLangLabel}</span></> : null}
                 <span className="text-foreground/25 flex-shrink-0">|</span>
                 <span className="truncate capitalize">{seasons && seasons.length > 0 ? "Webseries" : "Movie"}</span>
-                {seasons && seasons.length > 0 ? <><span className="text-foreground/25 flex-shrink-0">|</span><span className="truncate">{seasons.length} season{seasons.length > 1 ? "s" : ""}</span></> : null}
+                {seasons && seasons.length > 0 ? <><span className="text-foreground/25 flex-shrink-0">|</span><span className="truncate">{activeSeasonLabel}</span></> : null}
               </div>
             </button>
 
