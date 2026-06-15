@@ -433,8 +433,9 @@ Deno.serve(async (req) => {
     }
     if (path === "/episode") {
       const slug = url.searchParams.get("slug") || "";
+      const type = url.searchParams.get("type") || "";
       if (!slug) return json({ error: "missing ?slug=" }, 400);
-      return json(await episode(slug));
+      return json(await episode(slug, type));
     }
     return json({ error: "not found", path }, 404);
   } catch (e) {
