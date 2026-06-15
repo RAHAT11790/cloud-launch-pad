@@ -160,6 +160,7 @@ const normalizeAnAudioTracks = (
     qualityMap.set(label, url);
   });
 
+  const seen = new Set<string>();
   return audio
     .map((track, trackIndex) => {
       const pickStreamUrl = (qualityLabel: string) => {
@@ -170,13 +171,18 @@ const normalizeAnAudioTracks = (
           height: Number(qualityLabel.replace(/\D/g, "")) || undefined,
         }, audio, trackIndex);
       };
-      const label = String(track?.name || track?.language || "Audio").trim();
+      const rawLabel = String(track?.name || track?.language || "Audio").trim();
+      const rawLang = String(track?.language || rawLabel).trim();
+      const normalized = normalizeLanguageName(rawLang) || normalizeLanguageName(rawLabel) || rawLabel;
+      const key = normalized.toLowerCase();
+      if (seen.has(key)) return null;
       const uri = String(track?.uri || "").trim();
       if (!uri) return null;
+      seen.add(key);
       const defaultStreamUrl = String(streams?.[0]?.url || "").trim() || uri;
       return {
-        language: String(track?.language || label).trim() || label,
-        label,
+        language: normalized,
+        label: normalized,
         link: buildAnSyntheticMaster({ url: defaultStreamUrl }, audio, trackIndex),
         link480: pickStreamUrl("480p"),
         link720: pickStreamUrl("720p"),
