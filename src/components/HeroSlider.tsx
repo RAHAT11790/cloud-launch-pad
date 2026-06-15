@@ -124,8 +124,11 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
   return (
     <div
+      data-no-swipe="true"
       className="relative w-full h-[42vh] min-h-[300px] overflow-hidden rounded-b-3xl"
       style={{ boxShadow: "0 8px 30px rgba(0,0,0,0.1)", touchAction: "pan-y pinch-zoom" }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       {/* Background with cinematic effect */}
       <AnimatePresence initial={false} custom={direction} mode="popLayout">
