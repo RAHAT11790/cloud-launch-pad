@@ -1557,6 +1557,7 @@ const Index = () => {
   const handleCardClick = async (anime: AnimeItem, sIdx?: number, eIdx?: number) => {
     // Cancel any stale in-flight AnimeSalt details requests when switching content
     detailsRequestRef.current += 1;
+    const switchingInPlayer = keepPlayerAliveRef.current;
 
     // Track click for trending popularity (fire-and-forget)
     try {
@@ -1579,7 +1580,7 @@ const Index = () => {
       }
 
       const requestId = detailsRequestRef.current;
-      const toastId = showDetailsLoadingToast();
+      const toastId = switchingInPlayer ? null : showDetailsLoadingToast();
 
       try {
         // Step 1: Try Firebase customSeasons first (no API needed)
@@ -1642,7 +1643,7 @@ const Index = () => {
             }
           } catch {}
           await openPlayerFromAnime(fullAnime, { seasonIdx: sIdx, epIdx: eIdx });
-          dismissDetailsLoadingToast();
+          if (!switchingInPlayer) dismissDetailsLoadingToast();
           return;
         }
 
@@ -1811,7 +1812,7 @@ const Index = () => {
           await openPlayerFromAnime(fallbackAnime, { seasonIdx: sIdx, epIdx: eIdx });
         }
       } finally {
-        if (detailsLoadingToastRef.current === toastId) dismissDetailsLoadingToast();
+        if (!switchingInPlayer && detailsLoadingToastRef.current === toastId) dismissDetailsLoadingToast();
       }
       return;
     }
