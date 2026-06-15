@@ -4,7 +4,7 @@ import type { Episode } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
-import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
+import { SUPABASE_URL, TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
 
 const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: number) => {
   const params = new URLSearchParams();
@@ -216,6 +216,18 @@ const resolveSaltEmbed = (payload: any): { embedUrl: string; allEmbeds: string[]
   [payload?.streamUrl, payload?.videoUrl, payload?.directUrl, payload?.file].forEach(push);
 
   return { embedUrl: collected[0] || "", allEmbeds: collected };
+};
+
+const getAnimeSaltDirectState = async (episodeSlug: string) => {
+  if (!AN_API_BASE) return null;
+  try {
+    const response = await fetch(`${AN_API_BASE}/episode?slug=${encodeURIComponent(episodeSlug)}`);
+    if (!response.ok) return null;
+    const payload = await response.json();
+    return await buildAnimeSaltDirectPlaybackState(payload);
+  } catch {
+    return null;
+  }
 };
 
 // Helper: get best available src from episode (fallback if default link is empty)
