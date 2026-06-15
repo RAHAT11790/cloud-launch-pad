@@ -386,7 +386,7 @@ import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writ
 // Session cache for API responses to speed up continue watching
 const apiCache = new Map<string, { data: any; ts: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 min
-const API_TIMEOUT_MS = 12_000;
+const API_TIMEOUT_MS = 6_000;
 
 const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
   return new Promise<T>((resolve, reject) => {
