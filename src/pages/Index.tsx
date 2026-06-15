@@ -832,7 +832,10 @@ const Index = () => {
     return null;
   });
   const playerStateRef = useRef(playerState);
-  useEffect(() => { playerStateRef.current = playerState; }, [playerState]);
+  // Sync synchronously during render so the route-watch effect never sees a
+  // stale value — prevents handlePlay from firing twice and the RS player
+  // from flashing Hindi ↔ English while playerState catches up.
+  playerStateRef.current = playerState;
 
   // AnimeSalt iframe player state
   const [saltPlayerState, setSaltPlayerState] = useState<{
