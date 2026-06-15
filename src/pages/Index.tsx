@@ -3021,6 +3021,33 @@ const Index = () => {
           seasons={playerState.anime.seasons}
           currentSeasonIdx={playerState.seasonIdx}
           onSeasonChange={handleVideoPlayerSeasonChange}
+          selectedLanguage={(playerState as any).selectedLanguage || playerState.anime.baseLanguage || playerState.anime.language}
+          onLanguageChange={async (label) => {
+            const anime = playerState.anime;
+            const newSeasons = resolveAnimeSeasonsForLanguage(anime, label);
+            if (!newSeasons || newSeasons.length === 0) return;
+            const seasonIdx = Math.min(playerState.seasonIdx ?? 0, newSeasons.length - 1);
+            const epIdx = Math.min(playerState.epIdx ?? 0, (newSeasons[seasonIdx]?.episodes?.length || 1) - 1);
+            const ep = newSeasons[seasonIdx]?.episodes?.[epIdx];
+            if (!ep) return;
+            const nextSrc = getEpisodeSrc(ep);
+            const qOpts = getEpisodeQualityOptions(ep);
+            const newAnime = { ...anime, seasons: newSeasons, baseLanguage: label, language: label };
+            const nextState = {
+              ...playerState,
+              anime: newAnime,
+              src: nextSrc,
+              subtitle: `${newSeasons[seasonIdx].name} - Episode ${ep.episodeNumber}`,
+              seasonIdx,
+              epIdx,
+              resumeTime: 0,
+              audioTracks: ep.audioTracks || anime.audioTracks,
+              qualityOptions: qOpts.length > 0 ? qOpts : undefined,
+              selectedLanguage: label,
+            } as any;
+            playerStateRef.current = nextState;
+            setPlayerState(nextState);
+          }}
           onSuggestedClick={(anime) => {
             stopAllPlayback();
             navigate(buildAnimeRoute(anime.id));
