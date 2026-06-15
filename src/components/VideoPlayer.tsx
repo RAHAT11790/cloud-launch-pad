@@ -298,6 +298,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const downloadPanelRef = useRef<HTMLDivElement>(null);
 
   const [playing, setPlaying] = useState(false);
+  const [anNativeFailed, setAnNativeFailed] = useState(false);
+  useEffect(() => { setAnNativeFailed(false); }, [src]);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
