@@ -3,6 +3,7 @@ import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
+import AnNativeView from "@/components/AnNativeView";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
