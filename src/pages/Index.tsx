@@ -3227,14 +3227,9 @@ const Index = () => {
             // anime's source slides in without a player close/reopen flash.
             keepPlayerAliveRef.current = true;
             inPlayerSwitchRef.current = true;
-            const currentState = playerStateRef.current;
-            const target = {
-              seasonIdx: currentState?.seasonIdx,
-              epIdx: currentState?.epIdx,
-            };
-            navigate(buildWatchRoute(anime.id, target.seasonIdx, target.epIdx), { replace: true });
+            navigate(buildWatchRoute(anime.id), { replace: true });
             void (async () => {
-              try { await handleCardClick(anime, target.seasonIdx, target.epIdx); }
+              try { await handleCardClick(anime); }
               finally {
                 // Re-enable normal teardown shortly after the new src is loaded.
                 window.setTimeout(() => {
@@ -3255,14 +3250,9 @@ const Index = () => {
             if (!targetAnime) return;
             keepPlayerAliveRef.current = true;
             inPlayerSwitchRef.current = true;
-            const currentState = playerStateRef.current;
-            const target = {
-              seasonIdx: currentState?.seasonIdx,
-              epIdx: currentState?.epIdx,
-            };
-            navigate(buildWatchRoute(targetAnime.id, target.seasonIdx, target.epIdx), { replace: true });
+            navigate(buildWatchRoute(targetAnime.id), { replace: true });
             void (async () => {
-              try { await handleCardClick(targetAnime, target.seasonIdx, target.epIdx); }
+              try { await handleCardClick(targetAnime); }
               finally {
                 window.setTimeout(() => {
                   keepPlayerAliveRef.current = false;
