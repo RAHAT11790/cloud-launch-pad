@@ -453,20 +453,31 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
               <div className="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin" />
             </div>
           )}
-          <iframe
-            src={saltPlayerState.cleanEmbedUrl || saltPlayerState.embedUrl}
-            className={`${isFullscreen ? 'w-full h-full' : 'absolute inset-0 w-full h-full'} border-0`}
-            style={{ ...getIframeStyle(), pointerEvents: 'none' }}
-            allow="autoplay; encrypted-media; picture-in-picture"
-            referrerPolicy="no-referrer"
-            sandbox="allow-scripts allow-same-origin allow-presentation"
-          />
-          {/* Transparent overlay — blocks remote iframe's native controls so only our controls open.
-              Clicks here bubble to document so Adsterra popunder can trigger over the iframe. */}
-          <div
-            className="absolute inset-0 z-10"
-            style={{ background: 'transparent' }}
-          />
+          {!nativeFailed && saltPlayerState.embedUrl ? (
+            <AnNativeView
+              embedUrl={saltPlayerState.embedUrl}
+              videoClassName={`${isFullscreen ? 'w-full h-full' : 'absolute inset-0 w-full h-full'} bg-black`}
+              videoStyle={getIframeStyle()}
+              onFail={(reason) => {
+                console.warn('[AnNative] fallback to iframe:', reason);
+                setNativeFailed(true);
+              }}
+            />
+          ) : (
+            <>
+              <iframe
+                src={saltPlayerState.cleanEmbedUrl || saltPlayerState.embedUrl}
+                className={`${isFullscreen ? 'w-full h-full' : 'absolute inset-0 w-full h-full'} border-0`}
+                style={{ ...getIframeStyle(), pointerEvents: 'none' }}
+                allow="autoplay; encrypted-media; picture-in-picture"
+                referrerPolicy="no-referrer"
+                sandbox="allow-scripts allow-same-origin allow-presentation"
+              />
+              {/* Transparent overlay — blocks remote iframe's native controls so only our controls open. */}
+              <div className="absolute inset-0 z-10" style={{ background: 'transparent' }} />
+            </>
+          )}
+
 
           {/* Adsterra ads — never mount for Live TV (SaltPlayer is only series/movies). */}
           <AdsterraAdManager isPremium={isPremium} videoEl={null} />
