@@ -662,7 +662,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   );
 
   const currentLangLabel = useMemo(() => {
-    if (activeHlsLanguageLabel) return activeHlsLanguageLabel;
     // AnimeSalt: before HLS exposes tracks, fall back to the real available
     // track list only — never invent a language pill that does not exist.
     if (isAnimeSaltContent && propAudioTracks?.length) {
@@ -686,7 +685,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const fallback = getPrimaryLanguageToken(anime?.baseLanguage || anime?.language);
     if (fallback) return fallback;
     return "Unknown";
-  }, [activeHlsLanguageLabel, anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage, selectedLanguageLabel]);
+  }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage, selectedLanguageLabel]);
 
 
   const languageOptions = useMemo(() => {
