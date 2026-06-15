@@ -57,28 +57,33 @@ async function search(q: string) {
   const html = await fetchText(`${AN_BASE}/?s=${encodeURIComponent(q)}`);
   const seen = new Set<string>();
   const out: any[] = [];
-  const re =
-    /<a[^>]+href="(https:\/\/animesalt\.ac\/(series|movies)\/([^"\/]+)\/?)"[^>]*>([\s\S]*?)<\/a>/gi;
+  // Each result is wrapped in <li ...><article>...<a class="lnk-blk" href="...slug/"></a></article></li>
+  const liRe = /<li[^>]*class="[^"]*post-\d+[^"]*"[^>]*>([\s\S]*?)<\/li>/gi;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(html))) {
-    const slug = m[3];
+  while ((m = liRe.exec(html))) {
+    const block = m[1];
+    const hrefM = block.match(/href="https:\/\/animesalt\.ac\/(series|movies)\/([^"\/]+)\/?"/i);
+    if (!hrefM) continue;
+    const type = hrefM[1];
+    const slug = hrefM[2];
     if (seen.has(slug)) continue;
     seen.add(slug);
-    const block = m[4];
-    const imgM = block.match(/<img[^>]+(?:data-src|src)="([^"]+)"/i);
-    const titleM =
-      block.match(/<(?:h[1-6]|span|div)[^>]*>([^<]{2,200})<\/(?:h[1-6]|span|div)>/i) ||
-      block.match(/alt="([^"]+)"/i) ||
-      block.match(/title="([^"]+)"/i);
+    const titleM = block.match(/<h2[^>]*class="entry-title"[^>]*>([\s\S]*?)<\/h2>/i);
     const title = titleM ? decode(titleM[1]) : slug.replace(/-/g, " ");
-    const yearM = block.match(/(?:19|20)\d{2}/);
+    // poster: prefer data-src on img, fall back to src
+    const imgM =
+      block.match(/<img[^>]+data-src="([^"]+)"/i) ||
+      block.match(/<img[^>]+src="(https?:[^"]+)"/i);
+    let poster = imgM ? imgM[1] : "";
+    if (poster.startsWith("//")) poster = "https:" + poster;
+    const yearM = block.match(/annee-(\d{3,4})/i) || block.match(/(?:19|20)\d{2}/);
     out.push({
       slug,
-      type: m[2],
+      type,
       title,
-      poster: imgM ? imgM[1] : "",
-      year: yearM ? yearM[0] : "",
-      detailUrl: m[1],
+      poster,
+      year: yearM ? yearM[0].replace(/^annee-/, "") : "",
+      detailUrl: `${AN_BASE}/${type}/${slug}/`,
     });
   }
   return out;
