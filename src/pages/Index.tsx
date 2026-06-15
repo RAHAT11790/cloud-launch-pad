@@ -507,6 +507,7 @@ const Index = () => {
   // close and re-open with a flash. While this ref is true, the stop helper
   // skips that teardown so React can diff new props onto the same player.
   const keepPlayerAliveRef = useRef(false);
+  const inPlayerSwitchRef = useRef(false);
 
 
   // AnimeSalt enabled state from Firebase
