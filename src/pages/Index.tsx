@@ -1861,11 +1861,19 @@ const Index = () => {
         src,
         title: anime.title,
         subtitle,
-        anime: { ...anime, seasons: resolvedSeasons },
+        // Override baseLanguage/language with the resolved language so the
+        // VideoPlayer never sees a mismatch between the requested track
+        // (e.g. "Hindi") and the anime's stored default (e.g. "English").
+        // For RS we just want to play seasonsByLanguage[resolvedLanguage]
+        // directly with no audio-track switching loop.
+        anime: { ...anime, seasons: resolvedSeasons, baseLanguage: resolvedLanguage, language: resolvedLanguage },
         selectedLanguage: resolvedLanguage,
         seasonIdx: resolvedSeasonIdx,
         epIdx: resolvedEpIdx,
         qualityOptions,
+        // RS content is NOT multi-audio HLS — never feed propAudioTracks
+        // unless the episode actually defines them, otherwise the player's
+        // language sheet hallucinates extra options and flips back and forth.
         audioTracks,
         nextEpisodeSrc:
           anime.type === "webseries" && resolvedSeasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined
