@@ -335,7 +335,7 @@ import BottomNav from "@/components/BottomNav";
 import HeroSlider from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
-import VideoPlayer from "@/components/VideoPlayer";
+import VideoPlayer, { normalizeLanguageName } from "@/components/VideoPlayer";
 import NotificationsPage from "@/pages/NotificationsPage";
 import ProfilePage from "@/components/ProfilePage";
 import SearchPage from "@/components/SearchPage";
