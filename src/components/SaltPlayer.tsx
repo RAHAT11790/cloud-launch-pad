@@ -3,7 +3,9 @@ import { X, Crop, Monitor, Search, Maximize, Minimize, ChevronDown, Play } from 
 import { toast } from "sonner";
 import type { AnimeItem } from "@/data/animeData";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
+import AnNativeView from "@/components/AnNativeView";
 import { db, ref, onValue } from "@/lib/firebase";
+
 
 
 interface SaltPlayerState {
