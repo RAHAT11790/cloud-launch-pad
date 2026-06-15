@@ -29,6 +29,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   const [[current, direction], setSlide] = useState([0, 1]);
   const autoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const SLIDE_DURATION = 6000;
 
@@ -66,6 +67,23 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     }
   };
 
+  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.changedTouches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const start = touchStartRef.current;
+    const touch = event.changedTouches[0];
+    touchStartRef.current = null;
+    if (!start || !touch) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx > 0) goTo((current - 1 + slides.length) % slides.length, -1);
+    else goTo((current + 1) % slides.length, 1);
+  };
+
   if (slides.length === 0) {
     return (
       <div className="relative w-full h-[42vh] min-h-[300px] bg-card flex items-center justify-center" style={{ boxShadow: "var(--neu-shadow)" }}>
@@ -88,8 +106,8 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       scale: 1,
       opacity: 1,
       transition: {
-        x: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
-        scale: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+        x: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
+        scale: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
         opacity: { duration: 0.3 },
       },
     },
@@ -99,7 +117,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       opacity: 0,
       transition: {
         duration: 0.5,
-        ease: [0.22, 1, 0.36, 1],
+        ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
       },
     }),
   };
