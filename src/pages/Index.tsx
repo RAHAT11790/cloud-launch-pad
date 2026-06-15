@@ -468,6 +468,31 @@ const Index = () => {
   const { items: animeSaltItems, loading: saltLoading } = useSelectedAnimeSalt();
   const brandingConfig = useBranding();
 
+  // --- Splash hold ---
+  // Even if Firebase data is served instantly from localStorage cache, hold the
+  // splash for a brief minimum on first session entry so users always see the
+  // brand splash (previously it could flicker invisibly).
+  const [splashHold, setSplashHold] = useState<boolean>(() => {
+    try { return !sessionStorage.getItem("rs_splash_shown_v1"); } catch { return true; }
+  });
+  useEffect(() => {
+    if (!splashHold) return;
+    const t = window.setTimeout(() => {
+      setSplashHold(false);
+      try { sessionStorage.setItem("rs_splash_shown_v1", "1"); } catch {}
+    }, 1100);
+    return () => window.clearTimeout(t);
+  }, [splashHold]);
+
+  // --- In-player suggestion switch ---
+  // When the user picks a suggestion from within the running player, we want
+  // the player to STAY mounted and just swap its content. stopAllPlayback()
+  // ordinarily nukes <video>/<iframe> sources, which causes the player to
+  // close and re-open with a flash. While this ref is true, the stop helper
+  // skips that teardown so React can diff new props onto the same player.
+  const keepPlayerAliveRef = useRef(false);
+
+
   // AnimeSalt enabled state from Firebase
   const [animeSaltEnabled, setAnimeSaltEnabled] = useState(true);
   useEffect(() => {
