@@ -78,6 +78,11 @@ const isDirectPlaybackUrl = (url: string): boolean => {
   return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
 };
 
+const isDataHlsUrl = (url: string): boolean => {
+  const normalized = String(url || "").trim().toLowerCase();
+  return normalized.startsWith("data:application/vnd.apple.mpegurl");
+};
+
 const isInsecureHttpSource = (url: string): boolean => {
   return String(url || "").trim().toLowerCase().startsWith("http://");
 };
@@ -393,7 +398,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // HLS / m3u8 detection — these MUST go through native <video>+hls.js, never iframe,
   // so the player controls (audio track / subtitle / quality / seek) keep working.
   const isHlsSrc = useMemo(
-    () => !!currentSrc && /\.m3u8(\?|#|$)/i.test(currentSrc),
+    () => !!currentSrc && (/\.m3u8(\?|#|$)/i.test(currentSrc) || isDataHlsUrl(currentSrc)),
     [currentSrc],
   );
 
