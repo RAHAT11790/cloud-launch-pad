@@ -625,8 +625,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return "Unknown";
   }, [anime?.baseLanguage, anime?.language, propAudioTracks, selectedLanguage, selectedLanguageLabel]);
 
+  const isAnimeSaltContent = useMemo(
+    () => anime?.source === "animesalt" || String(anime?.id || "").startsWith("as_"),
+    [anime?.id, anime?.source],
+  );
+
   const languageOptions = useMemo(() => {
     const labels = new Set<string>();
+    // For AnimeSalt content the only trustworthy language list is the
+    // audioTracks actually returned by the AN API for THIS episode.
+    // Do NOT merge anime.availableLanguages / anime.language — those are
+    // pre-populated from elsewhere and would surface fake options
+    // (e.g. Bengali/Tamil for a Naruto episode that has no such track).
+    if (isAnimeSaltContent) {
+      (propAudioTracks || []).forEach((track) => {
+        splitLanguageTokens(String(track.label || track.language || "")).forEach((label) => labels.add(label));
+      });
+      return Array.from(labels);
+    }
     splitLanguageTokens(anime?.baseLanguage || anime?.language).forEach((label) => labels.add(label));
     (anime?.availableLanguages || []).forEach((label) => labels.add(label));
     if (propAudioTracks?.length) {
@@ -636,7 +652,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
     if (labels.size === 0 && currentLangLabel) labels.add(currentLangLabel);
     return Array.from(labels);
-  }, [anime?.availableLanguages, anime?.baseLanguage, anime?.language, currentLangLabel, propAudioTracks]);
+  }, [anime?.availableLanguages, anime?.baseLanguage, anime?.language, currentLangLabel, isAnimeSaltContent, propAudioTracks]);
 
   const activeSeasonLabel = useMemo(() => getShortSeasonLabel(seasons?.[currentSeasonIdx ?? 0]?.name, currentSeasonIdx ?? 0), [currentSeasonIdx, seasons]);
 
