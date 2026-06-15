@@ -3216,12 +3216,21 @@ const Index = () => {
             // In-place suggestion switch: keep VideoPlayer mounted so the new
             // anime's source slides in without a player close/reopen flash.
             keepPlayerAliveRef.current = true;
-            navigate(buildAnimeRoute(anime.id));
+            inPlayerSwitchRef.current = true;
+            const currentState = playerStateRef.current;
+            const target = {
+              seasonIdx: currentState?.seasonIdx,
+              epIdx: currentState?.epIdx,
+            };
+            navigate(buildWatchRoute(anime.id, target.seasonIdx, target.epIdx), { replace: true });
             void (async () => {
-              try { await handleCardClick(anime); }
+              try { await handleCardClick(anime, target.seasonIdx, target.epIdx); }
               finally {
                 // Re-enable normal teardown shortly after the new src is loaded.
-                window.setTimeout(() => { keepPlayerAliveRef.current = false; }, 400);
+                window.setTimeout(() => {
+                  keepPlayerAliveRef.current = false;
+                  inPlayerSwitchRef.current = false;
+                }, 400);
               }
             })();
           }}
@@ -3234,7 +3243,23 @@ const Index = () => {
             if (!animeId) return;
             const targetAnime = allAnime.find((item) => item.id === animeId);
             if (!targetAnime) return;
-            void handleCardClick(targetAnime);
+            keepPlayerAliveRef.current = true;
+            inPlayerSwitchRef.current = true;
+            const currentState = playerStateRef.current;
+            const target = {
+              seasonIdx: currentState?.seasonIdx,
+              epIdx: currentState?.epIdx,
+            };
+            navigate(buildWatchRoute(targetAnime.id, target.seasonIdx, target.epIdx), { replace: true });
+            void (async () => {
+              try { await handleCardClick(targetAnime, target.seasonIdx, target.epIdx); }
+              finally {
+                window.setTimeout(() => {
+                  keepPlayerAliveRef.current = false;
+                  inPlayerSwitchRef.current = false;
+                }, 400);
+              }
+            })();
           }}
           suggestedAnime={suggestedAnimeImmediate}
         />
