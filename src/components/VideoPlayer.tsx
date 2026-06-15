@@ -3057,6 +3057,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               the embed via postMessage (see useEffect above). */}
           {isEmbedPlayback ? (
             (() => {
+              // AN (AnimeSalt) content → native HLS via AnNativeView (no iframe).
+              // hf.space / other embed hosts keep the iframe MKV pipeline.
+              const isAnContent = anime?.source === "animesalt" || String(anime?.id || "").startsWith("as_");
+              if (isAnContent && !anNativeFailed) {
+                return (
+                  <AnNativeView
+                    embedUrl={currentSrc}
+                    videoClassName="absolute inset-0 w-full h-full bg-black"
+                    videoStyle={{ objectFit: cropModes[cropIndex], transform: embedTransform, transformOrigin: "center center" }}
+                    onFail={(reason) => { console.warn("[AN-native] fallback to iframe:", reason); setAnNativeFailed(true); }}
+                  />
+                );
+              }
               // currentSrc is already the fully-built watch URL produced by
               // applyServerDomain() — e.g.
               //   https://xxx.hf.space/watch/http://fi3.bot-hosting.net/.../file.mkv
