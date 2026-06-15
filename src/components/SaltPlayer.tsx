@@ -57,9 +57,13 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   const [customH, setCustomH] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  // Native HLS playback (no iframe). Resets per embed; falls back to iframe on failure.
+  const [nativeFailed, setNativeFailed] = useState(false);
+  useEffect(() => { setNativeFailed(false); }, [saltPlayerState.embedUrl]);
   const containerRef = useRef<HTMLDivElement>(null);
   const cropPanelRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
 
   // Premium status — disables ads for paid users.
   const [isPremium, setIsPremium] = useState<boolean | null>(null);
