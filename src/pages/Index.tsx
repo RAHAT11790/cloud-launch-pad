@@ -1479,46 +1479,6 @@ const Index = () => {
     return randomSlides;
   }, [allAnime, heroRotation, pinnedHeroPosts]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const warmHomeAssets = () => {
-      const heroTargets = heroSlides.slice(0, 4).flatMap((slide) => [slide.backdrop]);
-      const cardTargets = [
-        ...continueWatching.slice(0, 8).map((item: any) => item.poster),
-        ...trendingSeries.slice(0, 10).map((item) => item.poster),
-        ...filteredMovies.slice(0, 10).map((item) => item.poster),
-        ...allAnimeSaltUnique.slice(0, ALL_ANIME_BATCH_SIZE).map((item) => item.poster),
-      ];
-      heroTargets.concat(cardTargets).forEach((src) => { void preloadImage(src); });
-
-      const warmAnimeSalt = async () => {
-        const targets = activeSaltItems.slice(0, 12);
-        await Promise.allSettled(targets.map(async (item) => {
-          if (!item.slug) return;
-          try {
-            await cachedApiCall(`series_${item.slug}`, () => animeSaltApi.getSeries(item.slug!));
-          } catch {
-            try {
-              await cachedApiCall(`movie_${item.slug}`, () => animeSaltApi.getMovie(item.slug!));
-            } catch {}
-          }
-        }));
-      };
-
-      void warmAnimeSalt();
-    };
-
-    const idle = (window as any).requestIdleCallback;
-    if (typeof idle === "function") {
-      const id = idle(warmHomeAssets, { timeout: 1200 });
-      return () => {
-        try { (window as any).cancelIdleCallback?.(id); } catch {}
-      };
-    }
-    const timer = window.setTimeout(warmHomeAssets, 120);
-    return () => window.clearTimeout(timer);
-  }, [heroSlides, continueWatching, trendingSeries, filteredMovies, allAnimeSaltUnique, activeSaltItems]);
-
   // ALL ANIME: deduplicated, loads incrementally every 10s
   const [allAnimeVisibleCount, setAllAnimeVisibleCount] = useState(ALL_ANIME_BATCH_SIZE);
   
