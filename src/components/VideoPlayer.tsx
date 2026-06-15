@@ -863,8 +863,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [animeId, saved]);
 
   useEffect(() => {
+    // For AnimeSalt episodes, default to Hindi when the API actually returned
+    // a Hindi audio track. Falls back to the first AN track otherwise.
+    if (isAnimeSaltContent && propAudioTracks?.length) {
+      const hindi = propAudioTracks.find((t) =>
+        /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`),
+      );
+      const pick = hindi || propAudioTracks[0];
+      setSelectedLanguageLabel(getPrimaryLanguageToken(pick.label || pick.language || "") || pick.label || pick.language || "");
+      return;
+    }
     setSelectedLanguageLabel(getPrimaryLanguageToken(selectedLanguage || anime?.baseLanguage || anime?.language) || propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || "");
-  }, [anime?.baseLanguage, anime?.language, propAudioTracks, selectedLanguage, src]);
+  }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage, src]);
 
   useEffect(() => {
     if (!normalizedLanguageTracks.length) {
