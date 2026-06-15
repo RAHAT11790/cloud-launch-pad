@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
+import { memo, useState, useEffect } from "react";
 import { Star, Heart } from "lucide-react";
 import type { AnimeItem } from "@/data/animeData";
-import { db, ref, set, remove, onValue } from "@/lib/firebase";
-import { getAnimeTitleStyle } from "@/lib/animeFonts";
+import { db, ref, set, remove, get } from "@/lib/firebase";
 import { useBranding } from "@/hooks/useBranding";
 
 interface AnimeCardProps {
@@ -22,17 +21,27 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
 
   useEffect(() => {
     if (!userId) return;
-    const wlRef = ref(db, `users/${userId}/watchlist/${anime.id}`);
-    const unsub = onValue(wlRef, (snap) => setIsInWatchlist(snap.exists()));
-    return () => unsub();
+    let cancelled = false;
+    void get(ref(db, `users/${userId}/watchlist/${anime.id}`))
+      .then((snap) => {
+        if (!cancelled) setIsInWatchlist(snap.exists());
+      })
+      .catch(() => {
+        if (!cancelled) setIsInWatchlist(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [userId, anime.id]);
 
   const toggleWatchlist = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!userId) return;
     if (isInWatchlist) {
+      setIsInWatchlist(false);
       remove(ref(db, `users/${userId}/watchlist/${anime.id}`));
     } else {
+      setIsInWatchlist(true);
       set(ref(db, `users/${userId}/watchlist/${anime.id}`), {
         id: anime.id, title: anime.title, poster: anime.poster,
         year: anime.year, rating: anime.rating, type: anime.type, addedAt: Date.now(),
@@ -140,4 +149,4 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   );
 };
 
-export default AnimeCard;
+export default memo(AnimeCard, (prev, next) => prev.anime === next.anime);
