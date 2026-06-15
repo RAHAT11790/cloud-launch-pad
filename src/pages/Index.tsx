@@ -2110,6 +2110,25 @@ const Index = () => {
                 navigate(targetWatchRoute);
               }
               const epResult = await cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug));
+              const directState = await getAnimeSaltDirectState(epSlug);
+              if (directState?.src) {
+                addToWatchHistory(anime, sIdx, eIdx, true);
+                const nextState = {
+                  src: directState.src,
+                  title: anime.title,
+                  subtitle: `${cSeason.name} - Episode ${cEp.episodeNumber || cEp.number || eIdx + 1}`,
+                  anime: fullAnime,
+                  seasonIdx: sIdx,
+                  epIdx: eIdx,
+                  qualityOptions: directState.qualityOptions,
+                  audioTracks: directState.audioTracks,
+                  resumeTime: item.currentTime || 0,
+                  nextEpisodeSrc: getEpisodeSrc(fullAnime.seasons?.[sIdx]?.episodes?.[eIdx + 1] as Episode),
+                };
+                playerStateRef.current = nextState;
+                setPlayerState(nextState);
+                return;
+              }
               const resolved = resolveSaltEmbed(epResult);
               if (resolved.embedUrl) {
                 addToWatchHistory(anime, sIdx, eIdx, true);
@@ -2195,6 +2214,26 @@ const Index = () => {
                 navigate(targetWatchRoute);
               }
               const epResult = await cachedApiCall(`ep_${ep.slug}`, () => animeSaltApi.getEpisode(ep.slug));
+              const directState = await getAnimeSaltDirectState(ep.slug);
+              if (directState?.src) {
+                const fullAnime: AnimeItem = { ...anime, seasons: buildSeasons() };
+                addToWatchHistory(anime, sIdx, eIdx, true);
+                const nextState = {
+                  src: directState.src,
+                  title: anime.title,
+                  subtitle: `${season.name} - Episode ${ep.number}`,
+                  anime: fullAnime,
+                  seasonIdx: sIdx,
+                  epIdx: eIdx,
+                  qualityOptions: directState.qualityOptions,
+                  audioTracks: directState.audioTracks,
+                  resumeTime: item.currentTime || 0,
+                  nextEpisodeSrc: getEpisodeSrc(fullAnime.seasons?.[sIdx]?.episodes?.[eIdx + 1] as Episode),
+                };
+                playerStateRef.current = nextState;
+                setPlayerState(nextState);
+                return;
+              }
               const resolved = resolveSaltEmbed(epResult);
               if (resolved.embedUrl) {
                 const fullAnime: AnimeItem = { ...anime, seasons: buildSeasons() };
