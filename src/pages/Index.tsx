@@ -2907,7 +2907,7 @@ const Index = () => {
     );
   }
 
-  if ((loading || saltLoading || splashHold) && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute && !isAnimeRoute && !isWatchRoute) {
+  if ((loading || splashHold) && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute && !isAnimeRoute && !isWatchRoute) {
     return <SplashLoader />;
   }
 
