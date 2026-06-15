@@ -656,7 +656,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
   }, [poster, subtitle, title]);
 
+  const isAnimeSaltContent = useMemo(
+    () => anime?.source === "animesalt" || String(anime?.id || "").startsWith("as_"),
+    [anime?.id, anime?.source],
+  );
+
   const currentLangLabel = useMemo(() => {
+    // AnimeSalt: always reflect the actually-playing track. Prefer user's pick if
+    // it matches an available track, else default to Hindi (or first track).
+    if (isAnimeSaltContent && propAudioTracks?.length) {
+      if (selectedLanguageLabel) {
+        const match = propAudioTracks.find((t) => {
+          const lbl = getPrimaryLanguageToken(t.label || t.language || "") || "";
+          return lbl.toLowerCase() === selectedLanguageLabel.trim().toLowerCase();
+        });
+        if (match) return getPrimaryLanguageToken(match.label || match.language || "") || selectedLanguageLabel;
+      }
+      const hindi = propAudioTracks.find((t) =>
+        /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`),
+      );
+      const pick = hindi || propAudioTracks[0];
+      return getPrimaryLanguageToken(pick.label || pick.language || "") || pick.label || pick.language || "Hindi";
+    }
     if (selectedLanguageLabel) return selectedLanguageLabel;
     if (selectedLanguage) return getPrimaryLanguageToken(selectedLanguage) || selectedLanguage;
     const explicit = propAudioTracks?.[0]?.language || propAudioTracks?.[0]?.label;
@@ -664,7 +685,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const fallback = getPrimaryLanguageToken(anime?.baseLanguage || anime?.language);
     if (fallback) return fallback;
     return "Unknown";
-  }, [anime?.baseLanguage, anime?.language, propAudioTracks, selectedLanguage, selectedLanguageLabel]);
+  }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage, selectedLanguageLabel]);
 
   const isAnimeSaltContent = useMemo(
     () => anime?.source === "animesalt" || String(anime?.id || "").startsWith("as_"),
