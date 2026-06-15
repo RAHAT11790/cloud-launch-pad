@@ -485,20 +485,35 @@ const Index = () => {
   const brandingConfig = useBranding();
 
   // --- Splash hold ---
-  // Even if Firebase data is served instantly from localStorage cache, hold the
-  // splash for a brief minimum on first session entry so users always see the
-  // brand splash (previously it could flicker invisibly).
+  // Hold the splash until hero + first batch of poster images have actually
+  // preloaded (bytes in cache). Min 900ms (brand visibility), hard cap 4s so
+  // a slow/blocked image never traps the user. After release, sessionStorage
+  // prevents the splash from showing again in this tab.
   const [splashHold, setSplashHold] = useState<boolean>(() => {
     try { return !sessionStorage.getItem("rs_splash_shown_v1"); } catch { return true; }
   });
+  const splashAssetTargetsRef = useRef<string[]>([]);
   useEffect(() => {
     if (!splashHold) return;
-    const t = window.setTimeout(() => {
+    let cancelled = false;
+    const release = () => {
+      if (cancelled) return;
+      cancelled = true;
       setSplashHold(false);
       try { sessionStorage.setItem("rs_splash_shown_v1", "1"); } catch {}
-    }, 1100);
-    return () => window.clearTimeout(t);
-  }, [splashHold]);
+    };
+    const cap = window.setTimeout(release, 4000);
+    const min = new Promise<void>((r) => window.setTimeout(r, 900));
+    const waitForAssets = async () => {
+      await new Promise((r) => window.setTimeout(r, 60));
+      const targets = splashAssetTargetsRef.current.slice(0, 14).filter(Boolean);
+      if (targets.length === 0) return;
+      await Promise.all(targets.map((u) => preloadImage(u)));
+    };
+    Promise.all([min, waitForAssets()]).then(release).catch(release);
+    return () => { cancelled = true; window.clearTimeout(cap); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- In-player suggestion switch ---
   // When the user picks a suggestion from within the running player, we want
