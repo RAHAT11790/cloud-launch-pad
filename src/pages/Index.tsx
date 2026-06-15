@@ -1552,6 +1552,19 @@ const Index = () => {
             })),
           };
           detailsCacheRef.current.set(anime.id, fullAnime);
+          // Background pre-warm: kick off the episode-source fetch NOW so by
+          // the time handlePlay awaits it, the cache already has the result.
+          // Zero visible latency between details fetch and player open.
+          try {
+            const targetSeason = fullAnime.seasons?.[sIdx ?? 0];
+            const targetEp = targetSeason?.episodes?.[eIdx ?? 0];
+            const link = (targetEp as any)?.link || "";
+            if (link.startsWith("animesalt://")) {
+              const epSlug = link.replace("animesalt://", "");
+              void cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug)).catch(() => {});
+              void getAnimeSaltDirectState(epSlug).catch(() => {});
+            }
+          } catch {}
           await openPlayerFromAnime(fullAnime, { seasonIdx: sIdx, epIdx: eIdx });
           dismissDetailsLoadingToast();
           return;
