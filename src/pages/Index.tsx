@@ -115,6 +115,7 @@ const buildAnProxyUrl = (url: string) => {
 const buildAnSyntheticMaster = (
   stream: { url: string; bandwidth?: number; resolution?: string; height?: number },
   audio: Array<{ language?: string; name?: string; uri?: string }>,
+  defaultAudioIdx = 0,
 ) => {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audio.forEach((track, index) => {
@@ -123,7 +124,7 @@ const buildAnSyntheticMaster = (
     const uri = String(track?.uri || "").trim();
     if (!uri) return;
     lines.push(
-      `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${rawName}",LANGUAGE="${rawLanguage || `aud${index + 1}`}",DEFAULT=${index === 0 ? "YES" : "NO"},AUTOSELECT=YES,URI="${buildAnProxyUrl(uri)}"`,
+      `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${rawName}",LANGUAGE="${rawLanguage || `aud${index + 1}`}",DEFAULT=${index === defaultAudioIdx ? "YES" : "NO"},AUTOSELECT=YES,URI="${buildAnProxyUrl(uri)}"`,
     );
   });
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
@@ -148,13 +149,13 @@ const normalizeAnAudioTracks = (
     qualityMap.set(label, url);
   });
 
-  const pickStreamUrl = (qualityLabel: string) => {
+      const pickStreamUrl = (qualityLabel: string) => {
     const direct = qualityMap.get(qualityLabel);
     if (direct) return buildAnSyntheticMaster({
       label: qualityLabel,
       url: direct,
       height: Number(qualityLabel.replace(/\D/g, "")) || undefined,
-    } as any, audio);
+    } as any, audio, audio.findIndex((entry) => entry === track));
     return undefined;
   };
 
@@ -166,7 +167,7 @@ const normalizeAnAudioTracks = (
       return {
         language: String(track?.language || label).trim() || label,
         label,
-        link: buildAnProxyUrl(uri),
+        link: buildAnSyntheticMaster(streams?.[0] || { url: uri }, audio, audio.findIndex((entry) => entry === track)),
         link480: pickStreamUrl("480p"),
         link720: pickStreamUrl("720p"),
         link1080: pickStreamUrl("1080p"),
