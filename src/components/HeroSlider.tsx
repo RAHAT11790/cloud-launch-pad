@@ -57,6 +57,15 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
     resetAutoPlay();
   }, [resetAutoPlay]);
 
+  const onDragEnd = (e: any, info: any) => {
+    const swipeThreshold = 50;
+    if (info.offset.x > swipeThreshold) {
+      goTo((current - 1 + slides.length) % slides.length, -1);
+    } else if (info.offset.x < -swipeThreshold) {
+      goTo((current + 1) % slides.length, 1);
+    }
+  };
+
   if (slides.length === 0) {
     return (
       <div className="relative w-full h-[42vh] min-h-[300px] bg-card flex items-center justify-center" style={{ boxShadow: "var(--neu-shadow)" }}>
@@ -71,7 +80,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
   const slideVariants = {
     enter: (dir: number) => ({
       x: dir > 0 ? "100%" : "-100%",
-      scale: 1.15,
+      scale: 1.1,
       opacity: 0,
     }),
     center: {
@@ -79,29 +88,28 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       scale: 1,
       opacity: 1,
       transition: {
-        x: { duration: 0.7, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
-        scale: { duration: 6, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] },
-        opacity: { duration: 0.4 },
+        x: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+        scale: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+        opacity: { duration: 0.3 },
       },
     },
     exit: (dir: number) => ({
-      x: dir > 0 ? "-30%" : "30%",
-      scale: 1.05,
+      x: dir > 0 ? "-50%" : "50%",
+      scale: 0.95,
       opacity: 0,
       transition: {
         duration: 0.5,
-        ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
+        ease: [0.22, 1, 0.36, 1],
       },
     }),
   };
 
   return (
     <div
-      data-no-swipe="true"
       className="relative w-full h-[42vh] min-h-[300px] overflow-hidden rounded-b-3xl"
       style={{ boxShadow: "0 8px 30px rgba(0,0,0,0.1)", touchAction: "pan-y pinch-zoom" }}
     >
-      {/* Background with cinematic zoom-out effect */}
+      {/* Background with cinematic effect */}
       <AnimatePresence initial={false} custom={direction} mode="popLayout">
         <motion.div
           key={slide.id + current}
@@ -110,13 +118,17 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
           initial="enter"
           animate="center"
           exit="exit"
-          className="absolute inset-0 will-change-transform"
+          drag="x"
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.2}
+          onDragEnd={onDragEnd}
+          className="absolute inset-0 will-change-transform cursor-grab active:cursor-grabbing"
           style={{ touchAction: "pan-y" }}
         >
           <img
             src={slide.backdrop}
             alt={slide.title}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover pointer-events-none"
             draggable={false}
           />
         </motion.div>
@@ -131,15 +143,15 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       }} />
 
       {/* Content */}
-      <div className="absolute bottom-[80px] left-0 right-0 px-5 z-10">
+      <div className="absolute bottom-[80px] left-0 right-0 px-5 z-10 pointer-events-none">
         <AnimatePresence mode="wait">
           <motion.div key={slide.id + "-" + current + "-info"} className="max-w-lg">
             <motion.h1
-              initial={{ opacity: 0, y: 40, filter: "blur(10px)" }}
+              initial={{ opacity: 0, y: 30, filter: "blur(8px)" }}
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -20, filter: "blur(6px)" }}
-              transition={{ duration: 0.5, delay: 0.15 }}
-              className="text-[26px] leading-[1.1] font-extrabold mb-3 line-clamp-2 drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)]"
+              exit={{ opacity: 0, y: -20, filter: "blur(4px)" }}
+              transition={{ duration: 0.4, delay: 0.1 }}
+              className="text-[26px] leading-[1.1] font-extrabold mb-3 line-clamp-2 drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)] pointer-events-auto"
               style={{
                 ...getAnimeTitleStyle(slide.title),
                 ...(slide.titleColor ? { color: slide.titleColor } : { color: "white" }),
@@ -151,11 +163,11 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
 
             {!slide.isCustom ? (
               <motion.div
-                className="flex items-center gap-2 text-xs flex-wrap mb-4"
-                initial={{ opacity: 0, y: 20 }}
+                className="flex items-center gap-2 text-xs flex-wrap mb-4 pointer-events-auto"
+                initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.4, delay: 0.25 }}
+                transition={{ duration: 0.3, delay: 0.2 }}
               >
                 {slide.rating && (
                   <span className="gradient-primary px-2.5 py-1 rounded-md text-[11px] font-bold text-primary-foreground flex items-center gap-1"
@@ -181,22 +193,22 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
               </motion.div>
             ) : slide.description ? (
               <motion.p
-                className="text-white/80 text-xs mb-4 line-clamp-2 max-w-[280px]"
-                initial={{ opacity: 0, y: 20 }}
+                className="text-white/80 text-xs mb-4 line-clamp-2 max-w-[280px] pointer-events-auto"
+                initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.4, delay: 0.25 }}
+                transition={{ duration: 0.3, delay: 0.2 }}
               >
                 {slide.description}
               </motion.p>
             ) : null}
 
             <motion.div
-              className="flex gap-3"
-              initial={{ opacity: 0, y: 25 }}
+              className="flex gap-3 pointer-events-auto"
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.4, delay: 0.35 }}
+              transition={{ duration: 0.3, delay: 0.3 }}
             >
               <motion.button
                 onClick={() => slide.isCustom ? onInfo(current) : onPlay(current)}

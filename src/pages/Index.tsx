@@ -1339,7 +1339,7 @@ const Index = () => {
   const [heroRotation, setHeroRotation] = useState(0);
   
   useEffect(() => {
-    const timer = setInterval(() => {
+    // const timer = setInterval(() => {
       setHeroRotation(prev => prev + 1);
     }, 60000); // shuffle every 60 seconds
     return () => clearInterval(timer);
@@ -1468,7 +1468,7 @@ const Index = () => {
   
   useEffect(() => {
     if (animeSaltItems.length === 0) return;
-    setAllAnimeVisibleCount(6); // reset on new data
+    setAllAnimeVisibleCount(999); // Show all items immediately
     const timer = setInterval(() => {
       setAllAnimeVisibleCount(prev => {
         const max = animeSaltItems.length;
@@ -2851,7 +2851,7 @@ const Index = () => {
     );
   }
 
-  if ((loading || splashHold) && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute && !isAnimeRoute && !isWatchRoute) {
+  if ((loading || saltLoading || splashHold) && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute && !isAnimeRoute && !isWatchRoute) {
     return <SplashLoader />;
   }
 
