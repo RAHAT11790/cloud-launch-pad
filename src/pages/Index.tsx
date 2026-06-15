@@ -1993,6 +1993,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!isWatchRoute) {
+      if (keepPlayerAliveRef.current || inPlayerSwitchRef.current) return;
       stopAllPlayback();
       if (playerStateRef.current) setPlayerState(null);
       return;
