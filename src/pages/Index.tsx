@@ -3084,6 +3084,16 @@ const Index = () => {
                   </div>
                 ))}
               </div>
+              {allAnimeVisibleCount < allAnimeSaltUnique.length && (
+                <div className="mt-3 flex justify-center">
+                  <button
+                    onClick={() => setAllAnimeVisibleCount((prev) => Math.min(prev + ALL_ANIME_BATCH_SIZE, allAnimeSaltUnique.length))}
+                    className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-accent"
+                  >
+                    Load More
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </>
