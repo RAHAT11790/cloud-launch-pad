@@ -13,19 +13,24 @@ const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
 const IMGBB_KEYS = ["d5c0bce7c98c54d813bf285ffe453689"];
 
 interface Body {
-  animeId: string;
-  title: string;
+  // For normal generation:
+  animeId?: string;
+  title?: string;
   type?: "webseries" | "movies";
   year?: string | number;
   mode?: "backdrop" | "logo";
   customPrompt?: string;
-  provider?: "lovable" | "flux";
+  provider?: "lovable" | "flux" | "gemini";
   model?: string;
-  // NEW: image-to-image grounding (backdrop mode only)
+  // image-to-image grounding (backdrop mode only)
   referenceImageUrl?: string;
-  useReference?: boolean;          // default true if referenceImageUrl provided
-  genres?: string[];               // e.g. ["Romance", "Slice of Life"]
-  overview?: string;               // TMDB overview / storyline
+  useReference?: boolean;
+  genres?: string[];
+  overview?: string;
+  // For Gemini path — user-supplied API key from admin panel
+  geminiKey?: string;
+  // For status probe
+  action?: "check-gemini";
 }
 
 function defaultBackdropPrompt(title: string, _year?: string | number): string {
