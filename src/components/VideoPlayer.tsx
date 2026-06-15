@@ -923,44 +923,63 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   useEffect(() => {
     if (isAnimeSaltContent && propAudioTracks?.length) {
-      const existing = getPrimaryLanguageToken(selectedLanguageLabel);
-      if (existing && propAudioTracks.some((t) => {
-        const label = getPrimaryLanguageToken(t.label || t.language || "") || "";
-        return label.toLowerCase() === existing.toLowerCase();
-      })) {
-        return;
-      }
-      const preferred = getPrimaryLanguageToken(selectedLanguage);
-      const preferredMatch = preferred
-        ? propAudioTracks.find((t) => {
-            const label = getPrimaryLanguageToken(t.label || t.language || "") || "";
-            return label.toLowerCase() === preferred.toLowerCase();
-          })
-        : null;
-      const hindi = propAudioTracks.find((t) =>
-        /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`),
-      );
-      const pick = preferredMatch || hindi || propAudioTracks[0];
-      const nextLabel = getPrimaryLanguageToken(pick.label || pick.language || "") || pick.label || pick.language || "";
-      if (nextLabel && nextLabel !== selectedLanguageLabel) setSelectedLanguageLabel(nextLabel);
+      setSelectedLanguageLabel((existing) => {
+        const existingToken = getPrimaryLanguageToken(existing);
+        if (existingToken && propAudioTracks.some((t) => {
+          const label = getPrimaryLanguageToken(t.label || t.language || "") || "";
+          return label.toLowerCase() === existingToken.toLowerCase();
+        })) return existing;
+        const preferred = getPrimaryLanguageToken(selectedLanguage);
+        const preferredMatch = preferred
+          ? propAudioTracks.find((t) => {
+              const label = getPrimaryLanguageToken(t.label || t.language || "") || "";
+              return label.toLowerCase() === preferred.toLowerCase();
+            })
+          : null;
+        const hindi = propAudioTracks.find((t) =>
+          /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`),
+        );
+        const pick = preferredMatch || hindi || propAudioTracks[0];
+        const nextLabel = getPrimaryLanguageToken(pick.label || pick.language || "") || pick.label || pick.language || "";
+        return nextLabel || existing;
+      });
       return;
     }
-    const nextLabel = getPrimaryLanguageToken(selectedLanguage || anime?.baseLanguage || anime?.language) || propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || "";
-    if (nextLabel && nextLabel !== selectedLanguageLabel) setSelectedLanguageLabel(nextLabel);
-  }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage, selectedLanguageLabel]);
+    // RS / non-AN: trust the parent-supplied selectedLanguage prop.
+    // Use functional setState so this effect does NOT depend on
+    // selectedLanguageLabel — that dep used to create a self-firing loop
+    // (set label → re-run effect → set label again → flash Hindi/English).
+    const nextLabel =
+      getPrimaryLanguageToken(selectedLanguage || anime?.baseLanguage || anime?.language) ||
+      propAudioTracks?.[0]?.label ||
+      propAudioTracks?.[0]?.language ||
+      "";
+    if (!nextLabel) return;
+    setSelectedLanguageLabel((prev) => (prev === nextLabel ? prev : nextLabel));
+  }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage]);
 
   useEffect(() => {
     if (!normalizedLanguageTracks.length) {
-      setSelectedLanguageLabel("");
+      setSelectedLanguageLabel((prev) => (prev === "" ? prev : ""));
       return;
     }
-    const stillExists = normalizedLanguageTracks.some(
-      (track) => track.label.trim().toLowerCase() === selectedLanguageLabel.trim().toLowerCase(),
-    );
-    if (!stillExists) {
-      setSelectedLanguageLabel(normalizedLanguageTracks[0]?.label || normalizedLanguageTracks[0]?.language || "");
-    }
-  }, [normalizedLanguageTracks, selectedLanguageLabel]);
+    setSelectedLanguageLabel((prev) => {
+      const stillExists = normalizedLanguageTracks.some(
+        (track) => track.label.trim().toLowerCase() === prev.trim().toLowerCase(),
+      );
+      if (stillExists) return prev;
+      // Prefer the parent-supplied language before falling back to tracks[0],
+      // otherwise RS would flip to whatever happens to be first in the list.
+      const preferred = getPrimaryLanguageToken(selectedLanguage);
+      if (preferred) {
+        const match = normalizedLanguageTracks.find(
+          (t) => t.label.trim().toLowerCase() === preferred.toLowerCase(),
+        );
+        if (match) return match.label;
+      }
+      return normalizedLanguageTracks[0]?.label || normalizedLanguageTracks[0]?.language || "";
+    });
+  }, [normalizedLanguageTracks, selectedLanguage]);
 
   useEffect(() => {
     const nextSeasonIdx = currentSeasonIdx ?? 0;
