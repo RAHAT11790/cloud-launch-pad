@@ -2851,7 +2851,7 @@ const Index = () => {
     );
   }
 
-  if (loading && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute) {
+  if ((loading || splashHold) && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute && !isAnimeRoute && !isWatchRoute) {
     return <SplashLoader />;
   }
 
