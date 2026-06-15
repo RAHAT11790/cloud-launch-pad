@@ -495,38 +495,64 @@ export const animeSaltApi = {
   },
 
   async getSeries(slug: string) {
+    const cached = await readAsCache('series', slug, CACHE_TTL_SERIES_MS);
+    if (cached) return { success: true, data: cached, cached: true };
+
     const proxyUrl = await getAnimeSaltProxyUrl();
     const directResult = await tryDirectApi(proxyUrl, { action: 'series', slug });
     if (directResult) {
       const normalized = normalizeSeriesPayload(directResult);
-      if (normalized.seasons.length > 0) return { success: true, data: normalized };
+      if (normalized.seasons.length > 0) {
+        writeAsCache('series', slug, normalized);
+        return { success: true, data: normalized };
+      }
     }
 
     const html = await fetchPage(`${ANIMESALT_BASE}/series/${slug}/`);
-    return { success: true, data: parseSeriesDetail(html) };
+    const data = parseSeriesDetail(html);
+    if (data?.seasons?.length) writeAsCache('series', slug, data);
+    return { success: true, data };
   },
 
   async getMovie(slug: string) {
+    const cached = await readAsCache('movie', slug, CACHE_TTL_PLAYBACK_MS);
+    if (cached) return { success: true, data: cached, cached: true };
+
     const proxyUrl = await getAnimeSaltProxyUrl();
     const directResult = await tryDirectApi(proxyUrl, { action: 'movie', slug });
     if (directResult) {
       const normalized = normalizePlaybackPayload(directResult);
-      if (normalized.embedUrl || normalized.links?.length) return { success: true, data: normalized };
+      if (normalized.embedUrl || normalized.links?.length) {
+        writeAsCache('movie', slug, normalized);
+        return { success: true, data: normalized };
+      }
     }
 
     const html = await fetchPage(`${ANIMESALT_BASE}/movies/${slug}/`);
-    return { success: true, data: parsePlaybackPage(html) };
+    const data = parsePlaybackPage(html);
+    if (data?.embedUrl || data?.links?.length) writeAsCache('movie', slug, data);
+    return { success: true, data };
   },
 
   async getEpisode(slug: string) {
+    const cached = await readAsCache('episode', slug, CACHE_TTL_PLAYBACK_MS);
+    if (cached) return { success: true, ...cached, cached: true };
+
     const proxyUrl = await getAnimeSaltProxyUrl();
     const directResult = await tryDirectApi(proxyUrl, { action: 'episode', slug });
     if (directResult) {
       const normalized = normalizePlaybackPayload(directResult);
-      if (normalized.embedUrl || normalized.links?.length || normalized.allEmbeds?.length) return { success: true, ...normalized };
+      if (normalized.embedUrl || normalized.links?.length || normalized.allEmbeds?.length) {
+        writeAsCache('episode', slug, normalized);
+        return { success: true, ...normalized };
+      }
     }
 
     const html = await fetchPage(`${ANIMESALT_BASE}/episode/${slug}/`);
-    return { success: true, ...parsePlaybackPage(html) };
+    const parsed = parsePlaybackPage(html);
+    if (parsed?.embedUrl || parsed?.links?.length || parsed?.allEmbeds?.length) {
+      writeAsCache('episode', slug, parsed);
+    }
+    return { success: true, ...parsed };
   },
 };
