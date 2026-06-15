@@ -1698,6 +1698,17 @@ const Index = () => {
 
           if (requestId !== detailsRequestRef.current) return;
           detailsCacheRef.current.set(anime.id, fullAnime);
+          // Pre-warm target episode source while player is mounting.
+          try {
+            const targetSeason = fullAnime.seasons?.[sIdx ?? 0];
+            const targetEp = targetSeason?.episodes?.[eIdx ?? 0];
+            const link = (targetEp as any)?.link || "";
+            if (link.startsWith("animesalt://")) {
+              const epSlug = link.replace("animesalt://", "");
+              void cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug)).catch(() => {});
+              void getAnimeSaltDirectState(epSlug).catch(() => {});
+            }
+          } catch {}
           await openPlayerFromAnime(fullAnime, { seasonIdx: sIdx, epIdx: eIdx });
         } else {
           // API didn't return data — show anime with metadata from Firebase
