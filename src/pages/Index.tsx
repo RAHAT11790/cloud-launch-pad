@@ -753,7 +753,8 @@ const Index = () => {
     return `/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
   }, []);
   const getDefaultWatchTarget = useCallback((anime: AnimeItem) => {
-    const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, anime.baseLanguage || anime.language);
+    const resolvedLanguage = resolvePlayableLanguage(anime, anime.baseLanguage || anime.language);
+    const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, resolvedLanguage);
     if (anime.type === "webseries" && resolvedSeasons?.length) {
       return { seasonIdx: 0, epIdx: 0 };
     }
@@ -1759,7 +1760,7 @@ const Index = () => {
 
     dismissDetailsLoadingToast();
 
-    const resolvedLanguage = getPrimaryLanguageToken(anime.baseLanguage || anime.language) || anime.language || "";
+    const resolvedLanguage = resolvePlayableLanguage(anime, anime.baseLanguage || anime.language);
     const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, resolvedLanguage);
     let src = "";
     let subtitle = "";
@@ -2321,7 +2322,7 @@ const Index = () => {
       let subtitle = "";
       let episode: Episode | undefined;
       let qualityOptions: { label: string; src: string }[] = [];
-        const selectedLanguage = item.language || anime.baseLanguage || anime.language || "";
+        const selectedLanguage = resolvePlayableLanguage(anime, item.language || anime.baseLanguage || anime.language || "");
         const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, selectedLanguage);
         if (resolvedSeasons) {
           const season = resolvedSeasons[sIdx];
