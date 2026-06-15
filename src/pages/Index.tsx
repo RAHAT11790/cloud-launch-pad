@@ -334,6 +334,32 @@ const resolveAnimeSeasonsForLanguage = (anime: AnimeItem, language?: string | nu
   }
   return anime.seasons || [];
 };
+
+const resolvePlayableLanguage = (anime: AnimeItem, preferred?: string | null) => {
+  const normalizedPreferred = normalizeLanguageName(preferred);
+  const byLanguage = anime.seasonsByLanguage && typeof anime.seasonsByLanguage === "object"
+    ? Object.entries(anime.seasonsByLanguage)
+    : [];
+
+  const hasPlayableEpisodes = (seasons?: Season[]) => !!seasons?.some((season) => season?.episodes?.some((ep) => getEpisodeSrc(ep as Episode)));
+
+  if (byLanguage.length > 0) {
+    const normalizedEntries = byLanguage.map(([lang, seasons]) => ({
+      label: normalizeLanguageName(lang),
+      seasons: seasons as Season[],
+    }));
+    const exact = normalizedPreferred
+      ? normalizedEntries.find((entry) => entry.label.toLowerCase() === normalizedPreferred.toLowerCase() && hasPlayableEpisodes(entry.seasons))
+      : undefined;
+    if (exact) return exact.label;
+    const hindi = normalizedEntries.find((entry) => entry.label.toLowerCase() === "hindi" && hasPlayableEpisodes(entry.seasons));
+    if (hindi) return hindi.label;
+    const firstPlayable = normalizedEntries.find((entry) => hasPlayableEpisodes(entry.seasons));
+    if (firstPlayable) return firstPlayable.label;
+  }
+
+  return normalizedPreferred || normalizeLanguageName(anime.baseLanguage || anime.language) || normalizeLanguageName(anime.language) || "";
+};
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import Header from "@/components/Header";
