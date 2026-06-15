@@ -112,11 +112,22 @@ const buildAnProxyUrl = (url: string) => {
   return `${AN_API_BASE}/hls?url=${encodeURIComponent(url)}`;
 };
 
+// Prefer Hindi as the default audio track for AnimeSalt content.
+// Falls back to the first track when no Hindi variant exists.
+const pickAnDefaultAudioIdx = (audio: Array<{ language?: string; name?: string; uri?: string }>) => {
+  const idx = audio.findIndex((t) => {
+    const blob = `${t?.language || ""} ${t?.name || ""}`.toLowerCase();
+    return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
+  });
+  return idx >= 0 ? idx : 0;
+};
+
 const buildAnSyntheticMaster = (
   stream: { url: string; bandwidth?: number; resolution?: string; height?: number },
   audio: Array<{ language?: string; name?: string; uri?: string }>,
-  defaultAudioIdx = 0,
+  defaultAudioIdx?: number,
 ) => {
+  const resolvedDefault = typeof defaultAudioIdx === "number" ? defaultAudioIdx : pickAnDefaultAudioIdx(audio);
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audio.forEach((track, index) => {
     const rawName = String(track?.name || track?.language || `Audio ${index + 1}`).replace(/"/g, "").trim();
@@ -124,7 +135,7 @@ const buildAnSyntheticMaster = (
     const uri = String(track?.uri || "").trim();
     if (!uri) return;
     lines.push(
-      `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${rawName}",LANGUAGE="${rawLanguage || `aud${index + 1}`}",DEFAULT=${index === defaultAudioIdx ? "YES" : "NO"},AUTOSELECT=YES,URI="${buildAnProxyUrl(uri)}"`,
+      `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${rawName}",LANGUAGE="${rawLanguage || `aud${index + 1}`}",DEFAULT=${index === resolvedDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${buildAnProxyUrl(uri)}"`,
     );
   });
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
@@ -134,48 +145,7 @@ const buildAnSyntheticMaster = (
   lines.push(buildAnProxyUrl(stream.url));
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(lines.join("\n"))))}`;
 };
-
-const normalizeAnAudioTracks = (
-  audio: Array<{ language?: string; name?: string; uri?: string }> | undefined,
-  streams: Array<{ label?: string; url?: string; height?: number }> | undefined,
-) => {
-  if (!Array.isArray(audio) || audio.length === 0) return undefined;
-
-  const qualityMap = new Map<string, string>();
-  (streams || []).forEach((stream) => {
-    const label = String(stream?.label || "").trim().toLowerCase();
-    const url = String(stream?.url || "").trim();
-    if (!label || !url) return;
-    qualityMap.set(label, url);
-  });
-
-  return audio
-    .map((track, trackIndex) => {
-      const pickStreamUrl = (qualityLabel: string) => {
-        const direct = qualityMap.get(qualityLabel);
-        if (!direct) return undefined;
-        return buildAnSyntheticMaster({
-          url: direct,
-          height: Number(qualityLabel.replace(/\D/g, "")) || undefined,
-        }, audio, trackIndex);
-      };
-      const label = String(track?.name || track?.language || "Audio").trim();
-      const uri = String(track?.uri || "").trim();
-      if (!uri) return null;
-      const defaultStreamUrl = String(streams?.[0]?.url || "").trim() || uri;
-      return {
-        language: String(track?.language || label).trim() || label,
-        label,
-        link: buildAnSyntheticMaster({ url: defaultStreamUrl }, audio, trackIndex),
-        link480: pickStreamUrl("480p"),
-        link720: pickStreamUrl("720p"),
-        link1080: pickStreamUrl("1080p"),
-        link4k: pickStreamUrl("4k") || pickStreamUrl("2160p"),
-      };
-    })
-    .filter(Boolean) as { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
-};
-
+...
 const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   const sourceList = Array.isArray(payload?.sources) ? payload.sources : [];
   const primarySource = sourceList.find((entry: any) => Array.isArray(entry?.streams) && entry.streams.length > 0) || sourceList[0];
@@ -185,15 +155,29 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   if (streams.length === 0) return null;
 
   const primaryStream = streams[0];
+  const defaultAudioIdx = pickAnDefaultAudioIdx(audio);
   const qualityOptions = streams.map((stream: any) => ({
     label: String(stream?.label || (stream?.height ? `${stream.height}p` : "Auto")).trim() || "Auto",
-    src: buildAnSyntheticMaster(stream, audio),
+    src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx),
   }));
+
+  // Reorder audioTracks so Hindi (when present) is first → VideoPlayer picks
+  // it as the default language pill and matching HLS audio track.
+  const normalized = normalizeAnAudioTracks(audio, streams);
+  let audioTracks = normalized;
+  if (normalized && normalized.length > 1) {
+    const hindiIdx = normalized.findIndex((t) =>
+      /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language} ${t.label}`),
+    );
+    if (hindiIdx > 0) {
+      audioTracks = [normalized[hindiIdx], ...normalized.filter((_, i) => i !== hindiIdx)];
+    }
+  }
 
   return {
     src: qualityOptions[0]?.src || buildAnProxyUrl(primaryStream.url),
     qualityOptions: qualityOptions.length > 1 ? qualityOptions : undefined,
-    audioTracks: normalizeAnAudioTracks(audio, streams),
+    audioTracks,
   };
 };
 
