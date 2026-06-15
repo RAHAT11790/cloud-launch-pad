@@ -1,10 +1,43 @@
 import { getEdgeFunctionUrl } from '@/lib/edgeFunctionRouter';
-import { db, ref, get } from '@/lib/firebase';
+import { db, ref, get, set } from '@/lib/firebase';
 
 const ANIMESALT_BASE = 'https://animesalt.ac';
 const PLAYABLE_EXT_RE = /\.(?:m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/i;
 const ASSET_EXT_RE = /\.(?:js|css|json|jpe?g|png|gif|svg|webp|ico|woff2?|ttf)(?:[?#].*)?$/i;
 const FETCH_TIMEOUT_MS = 12_000;
+
+// Firebase-backed cache for AnimeSalt API responses.
+// Series structure rarely changes -> long TTL. Playback URLs may be signed -> shorter TTL.
+const CACHE_TTL_SERIES_MS = 7 * 24 * 60 * 60 * 1000;   // 7 days
+const CACHE_TTL_PLAYBACK_MS = 6 * 60 * 60 * 1000;      // 6 hours
+const memCache = new Map<string, { ts: number; data: any }>();
+
+const sanitizeKey = (s: string) => String(s || '').replace(/[.#$/\[\]]/g, '_').slice(0, 200);
+
+async function readAsCache(kind: 'series' | 'movie' | 'episode', slug: string, ttl: number): Promise<any | null> {
+  const key = `${kind}:${slug}`;
+  const mem = memCache.get(key);
+  const now = Date.now();
+  if (mem && now - mem.ts < ttl) return mem.data;
+  try {
+    const snap = await get(ref(db, `animesaltCache/${kind}/${sanitizeKey(slug)}`));
+    const val = snap.val();
+    if (val && val.ts && val.data && now - Number(val.ts) < ttl) {
+      memCache.set(key, { ts: Number(val.ts), data: val.data });
+      return val.data;
+    }
+  } catch {}
+  return null;
+}
+
+function writeAsCache(kind: 'series' | 'movie' | 'episode', slug: string, data: any) {
+  const ts = Date.now();
+  memCache.set(`${kind}:${slug}`, { ts, data });
+  try {
+    // Fire-and-forget; never block UX on cache writes.
+    set(ref(db, `animesaltCache/${kind}/${sanitizeKey(slug)}`), { ts, data }).catch(() => {});
+  } catch {}
+}
 
 type AnimeSaltLink = { quality: string; url: string };
 
