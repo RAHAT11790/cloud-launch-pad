@@ -661,9 +661,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     [anime?.id, anime?.source],
   );
 
+  const activeHlsLanguageLabel = useMemo(() => {
+    const activeTrack = currentHlsAudio >= 0 ? hlsAudioOptions[currentHlsAudio] : hlsAudioOptions[0];
+    if (!activeTrack) return "";
+    return getPrimaryLanguageToken(activeTrack.label || activeTrack.language || "") || activeTrack.label || activeTrack.language || "";
+  }, [currentHlsAudio, hlsAudioOptions]);
+
   const currentLangLabel = useMemo(() => {
-    // AnimeSalt: always reflect the actually-playing track. Prefer user's pick if
-    // it matches an available track, else default to Hindi (or first track).
+    if (activeHlsLanguageLabel) return activeHlsLanguageLabel;
+    // AnimeSalt: before HLS exposes tracks, fall back to the real available
+    // track list only — never invent a language pill that does not exist.
     if (isAnimeSaltContent && propAudioTracks?.length) {
       if (selectedLanguageLabel) {
         const match = propAudioTracks.find((t) => {
@@ -685,7 +692,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const fallback = getPrimaryLanguageToken(anime?.baseLanguage || anime?.language);
     if (fallback) return fallback;
     return "Unknown";
-  }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage, selectedLanguageLabel]);
+  }, [activeHlsLanguageLabel, anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage, selectedLanguageLabel]);
 
 
   const languageOptions = useMemo(() => {
@@ -922,18 +929,32 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [animeId, saved]);
 
   useEffect(() => {
-    // For AnimeSalt episodes, default to Hindi when the API actually returned
-    // a Hindi audio track. Falls back to the first AN track otherwise.
     if (isAnimeSaltContent && propAudioTracks?.length) {
+      const existing = getPrimaryLanguageToken(selectedLanguageLabel);
+      if (existing && propAudioTracks.some((t) => {
+        const label = getPrimaryLanguageToken(t.label || t.language || "") || "";
+        return label.toLowerCase() === existing.toLowerCase();
+      })) {
+        return;
+      }
+      const preferred = getPrimaryLanguageToken(selectedLanguage);
+      const preferredMatch = preferred
+        ? propAudioTracks.find((t) => {
+            const label = getPrimaryLanguageToken(t.label || t.language || "") || "";
+            return label.toLowerCase() === preferred.toLowerCase();
+          })
+        : null;
       const hindi = propAudioTracks.find((t) =>
         /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`),
       );
-      const pick = hindi || propAudioTracks[0];
-      setSelectedLanguageLabel(getPrimaryLanguageToken(pick.label || pick.language || "") || pick.label || pick.language || "");
+      const pick = preferredMatch || hindi || propAudioTracks[0];
+      const nextLabel = getPrimaryLanguageToken(pick.label || pick.language || "") || pick.label || pick.language || "";
+      if (nextLabel && nextLabel !== selectedLanguageLabel) setSelectedLanguageLabel(nextLabel);
       return;
     }
-    setSelectedLanguageLabel(getPrimaryLanguageToken(selectedLanguage || anime?.baseLanguage || anime?.language) || propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || "");
-  }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage, src]);
+    const nextLabel = getPrimaryLanguageToken(selectedLanguage || anime?.baseLanguage || anime?.language) || propAudioTracks?.[0]?.label || propAudioTracks?.[0]?.language || "";
+    if (nextLabel && nextLabel !== selectedLanguageLabel) setSelectedLanguageLabel(nextLabel);
+  }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage, selectedLanguageLabel]);
 
   useEffect(() => {
     if (!normalizedLanguageTracks.length) {
