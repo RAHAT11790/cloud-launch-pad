@@ -387,6 +387,22 @@ import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writ
 const apiCache = new Map<string, { data: any; ts: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 min
 const API_TIMEOUT_MS = 6_000;
+const warmedImageUrls = new Set<string>();
+const ALL_ANIME_BATCH_SIZE = 18;
+
+const preloadImage = (src?: string | null) => {
+  const url = String(src || "").trim();
+  if (!url || warmedImageUrls.has(url) || typeof window === "undefined") return Promise.resolve();
+  warmedImageUrls.add(url);
+  return new Promise<void>((resolve) => {
+    const img = new Image();
+    img.decoding = "async";
+    img.loading = "eager";
+    img.onload = () => resolve();
+    img.onerror = () => resolve();
+    img.src = url;
+  });
+};
 
 const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
   return new Promise<T>((resolve, reject) => {
