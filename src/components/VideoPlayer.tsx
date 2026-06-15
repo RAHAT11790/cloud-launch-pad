@@ -687,10 +687,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return "Unknown";
   }, [anime?.baseLanguage, anime?.language, isAnimeSaltContent, propAudioTracks, selectedLanguage, selectedLanguageLabel]);
 
-  const isAnimeSaltContent = useMemo(
-    () => anime?.source === "animesalt" || String(anime?.id || "").startsWith("as_"),
-    [anime?.id, anime?.source],
-  );
 
   const languageOptions = useMemo(() => {
     const labels = new Set<string>();
