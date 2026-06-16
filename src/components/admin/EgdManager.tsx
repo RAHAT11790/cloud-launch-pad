@@ -561,6 +561,67 @@ export default function EgdManager({
         </div>
       </div>
 
+      {/* ===== Secrets Vault — one-time values for bulk deploy ===== */}
+      <div className={glassCard + " p-4 sm:p-5"}>
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+          <div className="min-w-0">
+            <h3 className="font-bold flex items-center gap-2 text-sm sm:text-base">
+              <KeyRound size={16} className="text-fuchsia-400" /> Secrets Vault
+            </h3>
+            <p className="text-[11px] text-zinc-500 mt-1 break-words">
+              Fill these once — Bulk Deploy auto-injects them into every function that needs them.
+              Stored in your Firebase under <code className="bg-zinc-800 px-1 rounded">egdManager/secretValues</code>.
+              Leave blank if the secret is already set on your Supabase project.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setShowVaultValues((v) => !v)}
+              className={btnSecondary + " text-[11px] !px-3 !py-1.5"}
+            >
+              {showVaultValues ? "Hide" : "Show"} values
+            </button>
+            <button
+              onClick={saveVault}
+              disabled={savingVault || !vaultDirty}
+              className={btnPrimary + " inline-flex items-center gap-2 disabled:opacity-50 text-[11px] !px-3 !py-1.5"}
+            >
+              {savingVault ? <Loader2 className="animate-spin" size={12} /> : <CheckCircle2 size={12} />}
+              {vaultDirty ? "Save vault" : "Saved"}
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {allLibrarySecrets.map((name) => {
+            const onProject = projectSecrets.includes(name);
+            const hasValue = !!(vault[name] && vault[name].trim());
+            return (
+              <div key={name} className="rounded-lg border border-zinc-700/60 bg-zinc-900/50 p-2 min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <code className="text-[11px] font-semibold text-amber-300 truncate">{name}</code>
+                  <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${
+                    hasValue ? "bg-emerald-500/15 text-emerald-300" :
+                    onProject ? "bg-sky-500/15 text-sky-300" :
+                    "bg-rose-500/15 text-rose-300"
+                  }`}>
+                    {hasValue ? "vault" : onProject ? "on project" : "missing"}
+                  </span>
+                </div>
+                <input
+                  type={showVaultValues ? "text" : "password"}
+                  value={vault[name] || ""}
+                  onChange={(e) => updateVault(name, e.target.value)}
+                  placeholder={onProject ? "(already on project — leave blank)" : "paste value"}
+                  className={inputClass + " w-full !text-[11px] font-mono"}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* ===== Bulk Deploy ===== */}
       <div className={glassCard + " p-4 sm:p-5"}>
         <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
