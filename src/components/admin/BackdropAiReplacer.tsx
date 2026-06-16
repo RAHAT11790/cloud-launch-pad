@@ -288,28 +288,33 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
             placeholder="Search anime title… (fuzzy, 50% match)"
             className={inputClass + " w-full"}
           />
-          <div className="grid grid-cols-1 gap-1.5 max-h-[520px] overflow-y-auto pr-1">
+          <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto pr-1 -mr-1">
             {visible.map((it) => (
               <button
                 key={it.type + it.id}
                 onClick={() => setActiveId(`${it.type}:${it.id}`)}
-                className="w-full text-left bg-white/5 hover:bg-white/10 rounded-lg p-2.5 border border-white/5 flex gap-3 items-center transition min-w-0"
+                className="group w-full text-left rounded-xl p-2 pr-3 border border-white/8 bg-gradient-to-br from-white/[0.04] to-white/[0.015] hover:from-white/[0.08] hover:to-white/[0.03] hover:border-white/15 flex gap-3 items-center transition-all duration-150 min-w-0 active:scale-[0.99]"
               >
-                {it.backdrop ? (
-                  <img src={it.backdrop} alt="" className="w-20 h-[44px] object-cover rounded flex-shrink-0" loading="lazy" />
-                ) : (
-                  <div className="w-20 h-[44px] bg-white/5 rounded grid place-items-center text-[9px] text-white/40 flex-shrink-0">no bd</div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-semibold text-white truncate">{it.title}</div>
-                  <div className="text-[10px] text-white/50">
-                    {it.type} {it.year ? `• ${it.year}` : ""} {it.logo ? "• logo ✓" : ""}
+                <div className="relative w-[88px] h-12 rounded-lg overflow-hidden flex-shrink-0 ring-1 ring-white/10 bg-black/40">
+                  {it.backdrop ? (
+                    <img src={it.backdrop} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="w-full h-full grid place-items-center text-[9px] text-white/40">no art</div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 py-0.5">
+                  <div className="text-[12.5px] font-semibold text-white truncate leading-tight">{it.title}</div>
+                  <div className="text-[10px] text-white/45 mt-0.5 flex items-center gap-1.5">
+                    <span className="px-1.5 py-px rounded bg-white/8 uppercase tracking-wide text-[9px]">{it.type}</span>
+                    {it.year ? <span>{it.year}</span> : null}
+                    {it.logo ? <span className="text-emerald-400/80">• logo</span> : null}
                   </div>
                 </div>
+                <span className="text-white/30 group-hover:text-white/60 text-[14px] transition">›</span>
               </button>
             ))}
             {visible.length === 0 && (
-              <div className="text-center text-white/40 text-xs py-6">No items match the filter.</div>
+              <div className="text-center text-white/40 text-xs py-8">No items match the filter.</div>
             )}
           </div>
         </>

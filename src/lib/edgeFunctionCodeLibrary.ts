@@ -37,16 +37,26 @@ export type EdgeFnLibraryEntry = {
 // secret input fields. Anything starting with SUPABASE_ is provided by
 // the platform and stripped.
 const RESERVED_PREFIXES = ["SUPABASE_", "SB_"];
+// Detect ONLY truly-required env vars. A var is OPTIONAL if every occurrence in
+// the source has a fallback via `?? "..."` or `|| "..."` (or `?? '...'`).
 function autoDetectSecrets(source: string, extra: string[] = []): string[] {
-  const found = new Set<string>(extra);
-  const re = /Deno\.env\.get\(\s*["']([A-Z0-9_]+)["']\s*\)/g;
+  const required = new Set<string>(extra);
+  const optional = new Set<string>();
+  // Capture each env.get and the immediate suffix so we can see fallbacks.
+  const re = /Deno\.env\.get\(\s*["']([A-Z0-9_]+)["']\s*\)\s*(\?\?|\|\|)?\s*(["'`][^"'`\n]*["'`])?/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source)) !== null) {
     const name = m[1];
     if (RESERVED_PREFIXES.some((p) => name.startsWith(p))) continue;
-    found.add(name);
+    const hasFallback = !!(m[2] && m[3]);
+    if (hasFallback) {
+      if (!required.has(name)) optional.add(name);
+    } else {
+      required.add(name);
+      optional.delete(name);
+    }
   }
-  return Array.from(found).sort();
+  return Array.from(required).sort();
 }
 
 const entry = (
