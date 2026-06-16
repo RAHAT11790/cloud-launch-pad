@@ -3032,8 +3032,8 @@ const Index = () => {
       </div>
       <div className="grid grid-cols-3 gap-2.5">
         {filteredSeries.map((anime) => (
-          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+          <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" onClick={() => handleCardClick(anime)}>
+            <img src={anime.poster} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="low" />
             <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
             <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
             {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
@@ -3063,8 +3063,8 @@ const Index = () => {
       </div>
       <div className="grid grid-cols-3 gap-2.5">
         {filteredMovies.map((anime) => (
-          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+          <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" onClick={() => handleCardClick(anime)}>
+            <img src={anime.poster} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="low" />
             <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
             <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
             {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
@@ -3088,8 +3088,8 @@ const Index = () => {
           {filteredAnime.length > 0 ? (
             <div className="grid grid-cols-3 gap-2.5">
               {filteredAnime.map((anime) => (
-                <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-                  <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+                <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" onClick={() => handleCardClick(anime)}>
+                  <img src={anime.poster} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="low" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
                   <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
                   <div className="absolute bottom-0 left-0 right-0 p-2">
@@ -3127,8 +3127,8 @@ const Index = () => {
                   return (
                     <div key={item.id} onClick={() => handleContinueWatching(item)}
                       className="flex-shrink-0 w-[130px] cursor-pointer">
-                      <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-card mb-1">
-                        <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                      <div data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover mb-1">
+                        <img src={item.poster} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="low" />
                         <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
                         <span className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider z-10 ${isAn ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{isAn ? "AN" : "RS"}</span>
                         {agoLabel && (
