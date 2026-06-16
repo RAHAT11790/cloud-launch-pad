@@ -764,11 +764,13 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
           console.warn("[profile-photo] ImgBB failed, using inline copy", err);
         }
         try {
+          const photoSavedAt = Date.now();
+          profilePhotoStampRef.current = photoSavedAt;
           const photoPayload = {
             profilePhoto: finalUrl,
             photoUrl: finalUrl,
             avatar: finalUrl,
-            photoUpdatedAt: Date.now(),
+            photoUpdatedAt: photoSavedAt,
           };
           const writes: Promise<any>[] = [
             update(ref(db, `users/${userId}`), photoPayload),
@@ -806,7 +808,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     if (userId) {
       const localUser = getLocalAuthUser();
       const emailAlias = buildEmailAliasKey(localUser.email);
-      const payload = { profilePhoto: null, photoUrl: null, avatar: null, photoUpdatedAt: Date.now() };
+      const photoRemovedAt = Date.now();
+      profilePhotoStampRef.current = photoRemovedAt;
+      const payload = { profilePhoto: null, photoUrl: null, avatar: null, photoUpdatedAt: photoRemovedAt };
       const writes: Promise<any>[] = [update(ref(db, `users/${userId}`), payload).catch(() => {})];
       if (emailAlias) {
         writes.push(update(ref(db, `users/${emailAlias}`), payload).catch(() => {}));
