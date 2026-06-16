@@ -406,9 +406,25 @@ Deno.serve(async (req) => {
             ? body.customPrompt.replace(/\{title\}/gi, body.title!)
             : buildGroundedPrompt(body))
         : prompt;
-      const bytes = await genWithGemini(groundedPrompt, refDataUrl, body.geminiKey);
-      url = await uploadToImgbb(bytes, `${mode}_gem_${safe}_${Date.now()}`);
-      engineLabel = useRef ? "gemini-edit" : "gemini";
+      try {
+        const bytes = await genWithGemini(groundedPrompt, refDataUrl, body.geminiKey);
+        url = await uploadToImgbb(bytes, `${mode}_gem_${safe}_${Date.now()}`);
+        engineLabel = useRef ? "gemini-edit" : "gemini";
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        console.warn("[generate-backdrop] Gemini failed, using fallback:", msg);
+        try {
+          const bytes = refDataUrl && LOVABLE_API_KEY
+            ? await genWithLovableEdit(groundedPrompt, refDataUrl, body.model)
+            : await genWithLovable(prompt, mode, body.model);
+          url = await uploadToImgbb(bytes, `${mode}_gem_fallback_${safe}_${Date.now()}`);
+          engineLabel = msg === "RATE_LIMIT" || msg.includes("429") ? "gemini-rate-limited-lovable-fallback" : "gemini-lovable-fallback";
+        } catch (fallbackErr: any) {
+          console.warn("[generate-backdrop] Lovable fallback failed, using Flux:", fallbackErr?.message || fallbackErr);
+          url = await genWithFlux(prompt, mode);
+          engineLabel = msg === "RATE_LIMIT" || msg.includes("429") ? "gemini-rate-limited-flux-fallback" : "gemini-flux-fallback";
+        }
+      }
     } else if (useRef) {
       // Lovable image-to-image
       try {
