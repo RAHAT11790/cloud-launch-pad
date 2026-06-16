@@ -1603,7 +1603,6 @@ const Index = () => {
     if (anime.source === "animesalt" && anime.slug) {
       const cachedDetails = detailsCacheRef.current.get(anime.id);
       if (cachedDetails) {
-        dismissDetailsLoadingToast();
         await openPlayerFromAnime(cachedDetails, { seasonIdx: sIdx, epIdx: eIdx });
         return;
       }
@@ -1672,7 +1671,6 @@ const Index = () => {
             }
           } catch {}
           await openPlayerFromAnime(fullAnime, { seasonIdx: sIdx, epIdx: eIdx });
-          if (!switchingInPlayer) dismissDetailsLoadingToast();
           return;
         }
 
@@ -1856,7 +1854,6 @@ const Index = () => {
       navigate(targetRoute, { replace: fromRoutedOverlay });
     }
 
-    dismissDetailsLoadingToast();
     await openPlayerFromAnime(anime, { seasonIdx: sIdx, epIdx: eIdx });
   };
 
@@ -1891,8 +1888,6 @@ const Index = () => {
         return;
       }
     }
-
-    dismissDetailsLoadingToast();
 
     const resolvedLanguage = resolvePlayableLanguage(anime, anime.baseLanguage || anime.language);
     const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, resolvedLanguage);
