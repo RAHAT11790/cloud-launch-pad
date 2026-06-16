@@ -2997,7 +2997,7 @@ const Index = () => {
         ))}
       </div>
       <div className="grid grid-cols-3 gap-2.5">
-        {filteredSeries.map((anime) => (
+        {filteredSeries.slice(0, tabGridVisibleCount.series).map((anime) => (
           <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
         ))}
       </div>
@@ -3020,7 +3020,7 @@ const Index = () => {
         ))}
       </div>
       <div className="grid grid-cols-3 gap-2.5">
-        {filteredMovies.map((anime) => (
+        {filteredMovies.slice(0, tabGridVisibleCount.movies).map((anime) => (
           <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
         ))}
       </div>
