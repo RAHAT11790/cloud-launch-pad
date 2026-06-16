@@ -529,6 +529,7 @@ export default function EgdManager({
       const d = await callDeployer("delete", { slug: s });
       if (d?.ok) {
         toast.success("Deleted");
+        await set(ref(db, `settings/functionOverrides/${s}`), null);
         if (selected === s) { setSelected(""); setSlug(""); setCode(STARTER); setResultUrl(""); }
         loadList();
       } else { toast.error("Delete failed"); appendError(JSON.stringify(d?.error || d)); }
