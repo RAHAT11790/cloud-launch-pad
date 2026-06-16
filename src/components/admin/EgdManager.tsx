@@ -201,34 +201,8 @@ export default function EgdManager({
     });
   }, []);
 
-  // ---------- Load Secrets Vault from Firebase ----------
-  useEffect(() => {
-    const r = ref(db, "egdManager/secretValues");
-    return onValue(r, (snap) => {
-      const v = (snap.val() as Record<string, string>) || {};
-      setVault(v);
-      setVaultDirty(false);
-    });
-  }, []);
 
-  const updateVault = (name: string, value: string) => {
-    setVault((p) => ({ ...p, [name]: value }));
-    setVaultDirty(true);
-  };
 
-  const saveVault = async () => {
-    setSavingVault(true);
-    try {
-      // Strip empty values so they don't overwrite real secrets
-      const clean: Record<string, string> = {};
-      Object.entries(vault).forEach(([k, v]) => { if (v && v.trim()) clean[k] = v; });
-      await set(ref(db, "egdManager/secretValues"), clean);
-      setVaultDirty(false);
-      toast.success("Secrets Vault saved");
-    } catch (e: any) {
-      toast.error("Vault save failed: " + (e?.message || String(e)));
-    } finally { setSavingVault(false); }
-  };
 
   const appendError = (msg: string) =>
     setErrorLog((prev) => `[${new Date().toLocaleTimeString()}] ${msg}\n` + prev);
