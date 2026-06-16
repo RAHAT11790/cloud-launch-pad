@@ -20,6 +20,8 @@ import apkDownloadSource from "../../supabase/functions/apk-download/index.ts?ra
 import linkShareBotSource from "../../supabase/functions/link-share-bot/index.ts?raw";
 import shortenArolinksSource from "../../supabase/functions/shorten-arolinks/index.ts?raw";
 import generateBackdropSource from "../../supabase/functions/generate-backdrop/index.ts?raw";
+import anApiSource from "../../supabase/functions/an-api/index.ts?raw";
+
 
 export type EdgeFnLibraryEntry = {
   slug: string;          // Supabase function slug — also the URL path segment
