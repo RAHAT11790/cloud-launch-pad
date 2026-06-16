@@ -3165,24 +3165,25 @@ const Index = () => {
           {trendingSeries.length > 0 && (
             <AnimeSection title="🔥 Popular Anime" items={trendingSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/series")} />
           )}
-          {(() => {
-            // Keep exactly TWO category rows on home: one Adventure-flavoured (prefer
-            // the combined "Adventure & Fantasy" over a plain "Adventure" duplicate)
-            // and one Romance-flavoured. Total home rows stay at 5.
-            const entries = Object.entries(categoryGroups).filter(([cat]) => cat !== 'AnimeSalt');
-            const pick = (predicate: (c: string) => boolean) => {
-              const matches = entries.filter(([c]) => predicate(c.toLowerCase()));
-              if (matches.length === 0) return null;
-              const combo = matches.find(([c]) => c.includes('&'));
-              return combo || matches[0];
-            };
-            const advRow = pick(c => c.includes('adventure') || c.includes('fantasy'));
-            const romRow = pick(c => c.includes('romance'));
-            const rows = [advRow, romRow].filter(Boolean) as Array<[string, AnimeItem[]]>;
-            return rows.map(([cat, items]) => (
-              <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
-            ));
-          })()}
+          {Object.entries(categoryGroups).map(([cat, items]) => (
+            <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
+          ))}
+          {allAnime.length > 0 && (
+            <div className="relative">
+              <AnimeSection title="All Anime" items={allAnime.slice(0, allAnimeVisibleCount)} onCardClick={handleCardClick} />
+              {allAnimeVisibleCount < allAnime.length && (
+                <div className="px-4 -mt-4 mb-4">
+                  <button
+                    data-no-swipe="true"
+                    onClick={() => setAllAnimeVisibleCount((count) => Math.min(count + ALL_ANIME_BATCH_SIZE, allAnime.length))}
+                    className="w-full rounded-xl border border-border bg-card py-2 text-xs font-semibold text-primary"
+                  >
+                    Load More
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
       <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
