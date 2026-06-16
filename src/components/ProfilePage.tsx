@@ -69,6 +69,7 @@ interface ProfilePageProps {
   onClose: () => void;
   allAnime?: AnimeItem[];
   onCardClick?: (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => void;
+  onContinueWatching?: (item: any) => void;
   onLogout?: () => void;
   onLoginClick?: () => void;
 }
