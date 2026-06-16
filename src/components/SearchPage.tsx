@@ -35,11 +35,32 @@ const clearHistory = () => {
 
 const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onClose, onCardClick }, _ref) => {
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [historyIds, setHistoryIds] = useState<string[]>(getSearchHistory());
 
-  const results = query.trim()
-    ? allAnime.filter((a) => a.title.toLowerCase().includes(query.toLowerCase()))
-    : [];
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 180);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // Pre-lowercase titles ONCE for fast filtering
+  const indexed = useMemo(
+    () => allAnime.map((a) => ({ a, t: a.title.toLowerCase() })),
+    [allAnime]
+  );
+
+  const results = useMemo(() => {
+    if (!debouncedQuery) return [];
+    const q = debouncedQuery;
+    const out: AnimeItem[] = [];
+    for (let i = 0; i < indexed.length; i++) {
+      if (indexed[i].t.includes(q)) {
+        out.push(indexed[i].a);
+        if (out.length >= 60) break;
+      }
+    }
+    return out;
+  }, [debouncedQuery, indexed]);
 
   const historyAnime = useMemo(() => {
     return historyIds
