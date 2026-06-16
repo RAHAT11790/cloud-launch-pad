@@ -465,6 +465,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   });
   const [tempName, setTempName] = useState(displayName);
   const fileRef = useRef<HTMLInputElement>(null);
+  const profilePhotoStampRef = useRef(0);
 
   // Settings state
   const [selectedLanguage, setSelectedLanguage] = useState(() => {
@@ -551,9 +552,12 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     const applyRemoteProfile = (data: any) => {
       if (!data || typeof data !== "object") return;
       const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+      const remotePhotoAt = Number(data.photoUpdatedAt || 0);
       const remoteName = String(data.name || localUser.name || "").trim();
 
       if (remotePhoto) {
+        if (remotePhotoAt && remotePhotoAt < profilePhotoStampRef.current) return;
+        if (remotePhotoAt) profilePhotoStampRef.current = remotePhotoAt;
         setProfilePhoto(remotePhoto);
         writeProfilePhoto(remotePhoto, userId);
       }
