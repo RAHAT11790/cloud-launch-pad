@@ -572,18 +572,10 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 
 // ==================== CLOUDFLARE WORKER ROUTER SECTION ====================
 // ==================== FUNCTION URL OVERRIDES — every edge function gets a router URL field ====================
-const ROUTER_FUNCTIONS: Array<{ slug: string; label: string }> = [
-  { slug: "video-download",      label: "Video Download" },
-  { slug: "video-proxy",         label: "Video Proxy" },
-  { slug: "telegram-post",       label: "Telegram Post" },
-  { slug: "rs-bot",              label: "RS Bot (AI)" },
-  { slug: "send-otp-email",      label: "Send OTP Email" },
-  { slug: "process-email-queue", label: "Process Email Queue" },
-  { slug: "apk-download",        label: "APK Download" },
-  { slug: "link-share-bot",      label: "Link Share Bot" },
-  { slug: "shorten-arolinks",    label: "Shorten Arolinks" },
-  { slug: "generate-backdrop",   label: "Generate Backdrop" },
-];
+const ROUTER_FUNCTIONS: Array<{ slug: string; label: string }> = EDGE_FUNCTION_LIBRARY.map(
+  (e) => ({ slug: e.slug, label: e.label })
+);
+
 const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
   const defaultBase = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1";
   const [urls, setUrls] = useState<Record<string, string>>({});
