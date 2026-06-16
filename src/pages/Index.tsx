@@ -579,6 +579,8 @@ const Index = () => {
     return combined;
   }, [firebaseAnime, activeSaltItems]);
 
+  const allAnimeTitles = useMemo(() => allAnime.map((a) => a.title), [allAnime]);
+
   const allSeries = useMemo(() => {
     const saltSeries = activeSaltItems.filter(i => i.type === 'webseries');
     return [...webseries, ...saltSeries];
