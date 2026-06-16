@@ -420,8 +420,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const effectiveVideoServers = useMemo(() => {
     if (noServerSwitch || isRawHlsSource) return [];
     const list = videoServers.length > 0 ? videoServers : buildFallbackServers(src);
-    // Permanent: single-server only — Server 2 logic removed per product decision.
-    return list.slice(0, 1);
+    // Show ALL configured servers so the user can switch between them.
+    return list;
   }, [isRawHlsSource, noServerSwitch, src, videoServers]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
