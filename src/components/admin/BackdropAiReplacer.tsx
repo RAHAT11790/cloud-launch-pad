@@ -470,7 +470,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
                 </span>
               </label>
               {useReference && !activeItem.backdrop && (
-                <div className="text-[10px] text-amber-300 pl-5">⚠ No reference backdrop on this title. Will fall back to text-to-image.</div>
+                <div className="text-[10px] text-amber-300 pl-5">⚠ No reference backdrop on this title. Generation is blocked until a backdrop is added.</div>
               )}
               {useReference && activeItem.backdrop && (
                 <img src={activeItem.backdrop} alt="ref" className="w-full rounded border border-emerald-500/30 mt-1" />
