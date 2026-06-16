@@ -403,24 +403,15 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
 
               {/* Form */}
               <div className="px-3 py-3 space-y-2.5">
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase tracking-wider text-white/55 font-semibold">
-                    API Key
-                  </label>
-                  <input
-                    type="password"
-                    value={geminiKeyDraft}
-                    onChange={(e) => setGeminiKeyDraft(e.target.value)}
-                    placeholder="AIzaSy…"
-                    className={inputClass + " w-full !text-[12px] !font-mono"}
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
+                <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.06] px-2.5 py-2">
+                  <div className="text-[10.5px] text-emerald-200/90 leading-snug">
+                    🔒 <b>GEMINI_API_KEY</b> is configured server-side via <b>EGD Manager → generate-backdrop → Deploy</b>. No key needed here.
+                  </div>
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase tracking-wider text-white/55 font-semibold">
-                    Daily Quota
+                    Daily Quota (client-side counter)
                   </label>
                   <input
                     type="number"
@@ -435,18 +426,19 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
                 <div className="flex items-center gap-2 pt-1">
                   <button
                     onClick={() => checkGemini(false)}
-                    disabled={!geminiKey || geminiStatus.state === "checking"}
+                    disabled={geminiStatus.state === "checking"}
                     className={btnSecondary + " flex-1 !text-[11px] !py-1.5 disabled:opacity-40"}
                   >
-                    {geminiStatus.state === "checking" ? "Testing…" : "Test Key"}
+                    {geminiStatus.state === "checking" ? "Testing…" : "Test Connection"}
                   </button>
                   <button
                     onClick={saveGeminiConfig}
                     className={btnPrimary + " flex-1 !text-[11px] !py-1.5"}
                   >
-                    Save Config
+                    Save Quota
                   </button>
                 </div>
+
 
                 <a
                   href="https://aistudio.google.com/app/apikey"
