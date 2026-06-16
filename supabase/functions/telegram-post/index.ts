@@ -315,10 +315,26 @@ serve(async (req) => {
 
     const body = await req.json();
     if (body?.test === true) return json({ ok: true, ping: "telegram-post" });
+
+    // ========== TELEGRAM WEBHOOK ENTRY (group anime-share) ==========
+    // Telegram calls our URL directly with an `update` object — detect & handle.
+    if (body?.update_id !== undefined || body?.message || body?.edited_message) {
+      const update = body;
+      const msg = update.message || update.edited_message;
+      if (msg && (msg.chat?.type === "group" || msg.chat?.type === "supergroup")) {
+        const text: string = msg.text || msg.caption || "";
+        if (text && !text.startsWith("/") && msg.from?.id) {
+          handleGroupQuery(botToken, msg.chat.id, msg.from.id, msg.from, text, msg.message_id)
+            .catch((e) => console.error("[group anime share]", e));
+        }
+      }
+      return json({ ok: true });
+    }
+
     const action = String(body?.action || "send");
     const telegramBase = `https://api.telegram.org/bot${botToken}`;
 
-    // telegram-post এখন শুধুই post sender; access / unlock flow আলাদা bot-এ থাকবে
+
 
     // ========== GENERIC SHORTENER (multi-site) ==========
     // body: { url, site, apiKey } – uses any "*.*/api?api=KEY&url=..." style endpoint
