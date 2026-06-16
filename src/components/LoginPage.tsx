@@ -757,17 +757,13 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     >
       {/* Animated background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
+        <div
           className="absolute top-[-30%] left-[-20%] w-[80%] h-[80%] rounded-full"
           style={{ background: "radial-gradient(circle, hsla(176,65%,48%,0.08) 0%, transparent 70%)" }}
-          animate={{ scale: [1, 1.2, 1], rotate: [0, 30, 0] }}
-          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
         />
-        <motion.div
+        <div
           className="absolute bottom-[-30%] right-[-20%] w-[80%] h-[80%] rounded-full"
           style={{ background: "radial-gradient(circle, hsla(38,90%,55%,0.06) 0%, transparent 70%)" }}
-          animate={{ scale: [1.2, 1, 1.2], rotate: [0, -30, 0] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
         />
       </div>
 
@@ -820,11 +816,9 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           >
             <div className="relative">
-              <motion.div
+              <div
                 className="absolute -inset-[2px] rounded-3xl opacity-60"
                 style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)), hsl(var(--primary)))" }}
-                animate={{ backgroundPosition: ["0% 50%", "200% 50%"] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
               />
               
               <div className="relative glass-card-strong p-6 rounded-3xl overflow-hidden">
@@ -840,12 +834,11 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 0.1 }}
                 >
-                  <motion.img 
+                  <img 
                     src={logoSrc} 
                     alt={branding.loginTitle} 
                     className="w-16 h-16 mx-auto mb-3 rounded-2xl"
                     style={{ boxShadow: "0 10px 40px hsla(176,65%,48%,0.3)" }}
-                    whileHover={{ scale: 1.1, rotate: 5 }}
                   />
                   <h1 className="text-2xl font-black text-primary" style={{ fontFamily: "'Russo One', sans-serif", textShadow: "0 0 30px hsla(176,65%,48%,0.4)" }}>
                     {branding.loginTitle}
@@ -907,7 +900,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                       >
                         <div className="relative mb-3">
                           <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <input name="email" type="email" placeholder="Email" defaultValue={email} onChange={e => setEmail(e.target.value)} maxLength={100}
+                          <input name="email" type="email" placeholder="Email" defaultValue={email} maxLength={100}
                             className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                         </div>
                       </motion.div>
@@ -917,7 +910,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
                     <div className="relative">
                       <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <input name="name" type="text" placeholder={isRegister ? "Username" : "Email or Username"} defaultValue={name} onChange={e => setName(e.target.value)} maxLength={100}
+                      <input name="name" type="text" placeholder={isRegister ? "Username" : "Email or Username"} defaultValue={name} maxLength={100}
                         className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                     </div>
                   </motion.div>
@@ -925,7 +918,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.25 }}>
                     <div className="relative">
                       <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <input name="password" type={showPassword ? "text" : "password"} placeholder="Password" defaultValue={password} onChange={e => setPassword(e.target.value)}
+                      <input name="password" type={showPassword ? "text" : "password"} placeholder="Password" defaultValue={password}
                         className="w-full py-3 pl-10 pr-10 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                       <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2">
                         {showPassword ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
