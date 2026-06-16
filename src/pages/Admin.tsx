@@ -5165,20 +5165,49 @@ ${tgBulkFooter}
 
             {seriesTab === "ws-list" && (
               <div>
-                {/* Search bar — sticky so it stays visible while scrolling the list */}
-                <div className="sticky top-[56px] z-30 -mx-3 px-3 py-2 mb-3 bg-[#0D0D1A]/95 backdrop-blur-md border-b border-white/5">
+                {/* Search bar — pinned to the very top of the admin viewport */}
+                <div className="sticky top-0 z-40 -mx-3 px-3 py-2 mb-3 bg-[#0D0D1A]/95 backdrop-blur-md border-b border-white/5">
                   <div className="relative">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-500" />
                     <input value={wsListSearch} onChange={e => setWsListSearch(e.target.value)}
-                      className={`${inputClass} pl-9`} placeholder="Search series..." />
+                      className={`${inputClass} pl-9`} placeholder="Search series" />
                   </div>
                 </div>
                 {(() => {
-                  const filtered = wsListSearch.trim()
-                    ? webseriesData.filter(item => item.title?.toLowerCase().includes(wsListSearch.toLowerCase()))
-                    : webseriesData;
+                  // Latest-first ordering (newest createdAt/updatedAt at top)
+                  const latestFirst = [...webseriesData].sort((a: any, b: any) => {
+                    const ta = Number(a?.updatedAt || a?.createdAt || 0);
+                    const tb = Number(b?.updatedAt || b?.createdAt || 0);
+                    return tb - ta;
+                  });
+                  const q = wsListSearch.trim().toLowerCase();
+                  let filtered = latestFirst;
+                  if (q) {
+                    // 50%-similarity fuzzy match (bigram Dice coefficient) + substring fast path
+                    const bigrams = (s: string) => {
+                      const out = new Set<string>();
+                      for (let i = 0; i < s.length - 1; i++) out.add(s.slice(i, i + 2));
+                      return out;
+                    };
+                    const qb = bigrams(q);
+                    const similarity = (title: string) => {
+                      const t = title.toLowerCase();
+                      if (!t) return 0;
+                      if (t.includes(q)) return 1;
+                      if (q.length < 2 || t.length < 2) return 0;
+                      const tb = bigrams(t);
+                      let inter = 0;
+                      qb.forEach(g => { if (tb.has(g)) inter++; });
+                      return (2 * inter) / (qb.size + tb.size);
+                    };
+                    filtered = latestFirst
+                      .map((item: any) => ({ item, score: similarity(item.title || "") }))
+                      .filter(x => x.score >= 0.5)
+                      .sort((a, b) => b.score - a.score)
+                      .map(x => x.item);
+                  }
                   return filtered.length === 0 ? (
-                    <p className="text-[#957DAD] text-[13px] text-center py-8">{wsListSearch.trim() ? "No matching series" : "No web series yet"}</p>
+                    <p className="text-[#957DAD] text-[13px] text-center py-8">{q ? "No matching series" : "No web series yet"}</p>
                   ) : filtered.map(item => (
                   <div key={item.id} className="bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-all">
                     <div className="flex gap-3.5">
