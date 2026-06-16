@@ -1922,11 +1922,15 @@ async function handleUpdate(update: any) {
 
   const text: string = msg.text || msg.caption || "";
 
-  // Group anime link-share + access keyword (non-command messages only)
+  // Group anime link-share has been MOVED to the telegram-post bot.
+  // This bot now only handles access keyword in groups (free-access deep link).
   if ((msg.chat.type === "group" || msg.chat.type === "supergroup") && text && !text.startsWith("/")) {
-    await handleGroupQuery(chat_id, user_id, from, text, msg.message_id).catch((e) => console.error("[group]", e));
+    if (isAccessTrigger(text)) {
+      await sendGroupAccessCard(chat_id, user_id, from, msg.message_id).catch((e) => console.error("[group access]", e));
+    }
     return;
   }
+
 
   if (!text.startsWith("/")) return;
 
