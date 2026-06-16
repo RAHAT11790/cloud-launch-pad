@@ -15,7 +15,7 @@
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
-import { Layers, Volume2, Loader2 } from "lucide-react";
+import { Layers, Volume2 } from "lucide-react";
 
 const SUPA = (import.meta.env.VITE_SUPABASE_URL as string) ||
   "https://kqxpzqegtvaiwgdusrin.supabase.co";
