@@ -53,6 +53,11 @@ const App = () => (
           <Route path="/an-explorer" element={<Suspense fallback={<RouteFallback />}><AnExplorer /></Suspense>} />
           <Route path="/unlock" element={<Unlock />} />
           <Route path="/unlock-required" element={<UnlockRequired />} />
+          {/* Main tab routes — all render Index, which syncs activePage from pathname */}
+          <Route path="/" element={<Index />} />
+          <Route path="/series" element={<Index />} />
+          <Route path="/movies" element={<Index />} />
+          <Route path="/live-tv" element={<Index />} />
           <Route path="*" element={<Index />} />
         </Routes>
       </BrowserRouter>
