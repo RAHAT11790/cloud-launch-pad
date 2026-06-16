@@ -630,7 +630,7 @@ export default function EgdManager({
               <Rocket size={16} className="text-emerald-400" /> Bulk Deploy to Your Supabase
             </h3>
             <p className="text-[11px] text-zinc-500 mt-1 break-words">
-              One click → deploys every library function to your project and auto-registers each URL in the app router. Functions whose secrets aren't set yet are skipped.
+              One click → deploys every library function to your project, injects values from the Secrets Vault above, and auto-registers each URL in the app router.
             </p>
           </div>
           <button
