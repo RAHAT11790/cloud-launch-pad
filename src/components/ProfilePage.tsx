@@ -707,8 +707,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { alert("Image must be under 10MB!"); return; }
-    if (!file.type.startsWith("image/")) { alert("Please select an image file."); return; }
+    e.target.value = "";
+    if (file.size > MAX_PHOTO_SIZE) { toast.error("Image must be under 10MB"); return; }
+    if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
     setPhotoUploading(true);
     try {
       // Compress to a small square JPEG so we can store the data URL locally
@@ -745,6 +746,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
       writeProfilePhoto(dataUrl, userId);
 
       if (userId) {
+        const localUser = getLocalAuthUser();
+        const email = String(localUser.email || "").trim();
+        const emailAlias = buildEmailAliasKey(email);
         // Permanent host upload so other devices can fetch it. Fall back to
         // the inline data URL if the host upload fails — Firebase RTDB accepts
         // values up to 10MB, and our 256×256 JPEG is ~25KB so it always fits.
@@ -756,17 +760,33 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
           console.warn("[profile-photo] ImgBB failed, using inline copy", err);
         }
         try {
-          await update(ref(db, `users/${userId}`), {
+          const photoPayload = {
             profilePhoto: finalUrl,
             photoUrl: finalUrl,
             avatar: finalUrl,
-          });
+            photoUpdatedAt: Date.now(),
+          };
+          const writes: Promise<any>[] = [
+            update(ref(db, `users/${userId}`), photoPayload),
+          ];
+          if (emailAlias) {
+            writes.push(update(ref(db, `users/${emailAlias}`), { ...photoPayload, id: userId, email }));
+            writes.push(update(ref(db, `appUsers/${emailAlias}`), photoPayload));
+          }
+          await Promise.all(writes);
           if (finalUrl !== dataUrl) {
             setProfilePhoto(finalUrl);
             writeProfilePhoto(finalUrl, userId);
           }
+          try {
+            const rawUser = localStorage.getItem("rsanime_user");
+            const parsedUser = rawUser ? JSON.parse(rawUser) : {};
+            localStorage.setItem("rsanime_user", JSON.stringify({ ...parsedUser, profilePhoto: finalUrl, photoUrl: finalUrl, avatar: finalUrl }));
+            window.dispatchEvent(new Event("rs_auth_changed"));
+          } catch {}
         } catch (err) {
           console.error("[profile-photo] Firebase write failed", err);
+          throw err;
         }
       }
       toast.success("✅ Profile photo saved — synced across all your devices");
