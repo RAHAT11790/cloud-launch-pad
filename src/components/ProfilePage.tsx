@@ -535,16 +535,23 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     return null;
   };
 
+  const getLocalAuthUser = (): { id?: string; email?: string; name?: string } => {
+    try { return JSON.parse(localStorage.getItem("rsanime_user") || "{}"); } catch { return {}; }
+  };
+
   const userId = getUserId();
   const premiumDaysLeft = premiumExpiry ? Math.max(0, Math.ceil((premiumExpiry - Date.now()) / 86400000)) : 0;
   const isPremiumExpiringSoon = isPremium && premiumDaysLeft <= 3;
 
   useEffect(() => {
     if (!userId) return;
-    const unsubUser = onValue(ref(db, `users/${userId}`), (snap) => {
-      const data = snap.val() || {};
+    const localUser = getLocalAuthUser();
+    const localEmail = String(localUser.email || "").trim();
+    const emailAlias = buildEmailAliasKey(localEmail);
+    const applyRemoteProfile = (data: any) => {
+      if (!data || typeof data !== "object") return;
       const remotePhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
-      const remoteName = String(data.name || "").trim();
+      const remoteName = String(data.name || localUser.name || "").trim();
 
       if (remotePhoto) {
         setProfilePhoto(remotePhoto);
@@ -555,9 +562,15 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
         setTempName(remoteName);
         writeDisplayName(remoteName, userId);
       }
-    });
+    };
 
-    return () => unsubUser();
+    const unsubUser = onValue(ref(db, `users/${userId}`), (snap) => applyRemoteProfile(snap.val() || {}));
+    let unsubAlias: (() => void) | undefined;
+    if (emailAlias && emailAlias !== userId) {
+      unsubAlias = onValue(ref(db, `users/${emailAlias}`), (snap) => applyRemoteProfile(snap.val() || {}));
+    }
+
+    return () => { unsubUser(); unsubAlias?.(); };
   }, [userId]);
 
   const handleDeleteThisPhoneLogin = useCallback(async () => {
