@@ -304,7 +304,7 @@ div[style*="z-index: 2147483647"],
     align-items: center;
     justify-content: center;
     border-radius: 9999px;
-    animation: petalSpin 1s steps(12, end) infinite;
+    animation: petalSpin 0.9s linear infinite;
     will-change: transform;
     transform: translateZ(0);
   }
