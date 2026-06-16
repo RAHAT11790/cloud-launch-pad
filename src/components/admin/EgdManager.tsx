@@ -182,6 +182,12 @@ export default function EgdManager({
   const [logEndAt, setLogEndAt] = useState("");
   const [projectSecrets, setProjectSecrets] = useState<string[]>([]);
 
+  // --- Bulk deploy ---
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState<Record<string, "pending" | "deploying" | "done" | "skipped" | "error">>({});
+  const [bulkMessages, setBulkMessages] = useState<Record<string, string>>({});
+
+
   // ---------- Load deployer URL ----------
   useEffect(() => {
     const r = ref(db, "egdManager/config/deployerUrl");
