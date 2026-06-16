@@ -3212,6 +3212,7 @@ const Index = () => {
   if (playerState) {
     return (
       <div className="fixed inset-0 z-[100] bg-black animate-in fade-in zoom-in-95 duration-300 ease-out">
+        <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white animate-spin" /></div>}>
         <VideoPlayer
           src={playerState.src}
           title={playerState.title}
