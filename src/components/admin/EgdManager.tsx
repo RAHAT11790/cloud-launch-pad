@@ -346,6 +346,15 @@ export default function EgdManager({
       if (d?.ok) {
         toast.success("Deployed ✔");
         setResultUrl(d.url || "");
+        if (d.url) {
+          await set(ref(db, `settings/functionOverrides/${slugify(slug)}`), {
+            customUrl: d.url,
+            enabled: true,
+            updatedAt: Date.now(),
+            source: "egd-manager",
+          });
+          toast.success("Function URL linked to app router ✔");
+        }
         await loadList();
         await loadProjectSecrets();
       } else {
