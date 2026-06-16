@@ -336,18 +336,26 @@ export default function EgdManager({
     // Refresh project secret names first
     try { await callDeployer("secrets").then((d) => { if (d?.ok && Array.isArray(d.names)) setProjectSecrets(d.names); }); } catch {}
 
-    const have = new Set(projectSecrets);
+    const haveOnProject = new Set(projectSecrets);
     let okCount = 0;
     for (const entry of EDGE_FUNCTION_LIBRARY) {
-      const missing = entry.secrets.filter((s) => !have.has(s));
-      if (missing.length > 0) {
+      // For each required secret: use vault value if present, otherwise rely on
+      // the project already having the secret set. Only skip if neither.
+      const secretsToSend: SecretRow[] = [];
+      const stillMissing: string[] = [];
+      for (const name of entry.secrets) {
+        const v = (vault[name] || "").trim();
+        if (v) secretsToSend.push({ name, value: v });
+        else if (!haveOnProject.has(name)) stillMissing.push(name);
+      }
+      if (stillMissing.length > 0) {
         setBulkStatus((p) => ({ ...p, [entry.slug]: "skipped" }));
-        setBulkMessages((p) => ({ ...p, [entry.slug]: `Skipped — missing secrets: ${missing.join(", ")}` }));
+        setBulkMessages((p) => ({ ...p, [entry.slug]: `Skipped — fill in Secrets Vault: ${stillMissing.join(", ")}` }));
         continue;
       }
       setBulkStatus((p) => ({ ...p, [entry.slug]: "deploying" }));
       try {
-        const d = await callDeployer("deploy", { slug: entry.slug, code: entry.source, secrets: [] });
+        const d = await callDeployer("deploy", { slug: entry.slug, code: entry.source, secrets: secretsToSend });
         if (d?.ok && d.url) {
           await set(ref(db, `settings/functionOverrides/${entry.slug}`), {
             customUrl: d.url, enabled: true, updatedAt: Date.now(), source: "egd-bulk",
