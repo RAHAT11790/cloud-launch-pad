@@ -3247,21 +3247,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
           {/* Loading spinner on top of thumbnail */}
           {showLoaderOverlay && (
-            <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none bg-black/10">
-              <div className="player-loader-shell">
-                <span className="player-loader-petal" />
-                <span className="player-loader-petal" />
-                <span className="player-loader-petal" />
-                <span className="player-loader-petal" />
-                <span className="player-loader-petal" />
-                <span className="player-loader-petal" />
-                <span className="player-loader-petal" />
-                <span className="player-loader-petal" />
-                <span className="player-loader-petal" />
-                <span className="player-loader-petal" />
-                <span className="player-loader-petal" />
-                <span className="player-loader-petal" />
-              </div>
+            <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none">
+              <div className="h-8 w-8 rounded-full border-2 border-white/70 border-t-primary animate-spin" />
             </div>
           )}
 

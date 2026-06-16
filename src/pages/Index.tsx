@@ -387,27 +387,12 @@ import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writ
 const apiCache = new Map<string, { data: any; ts: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 min
 const API_TIMEOUT_MS = 6_000;
-const IMAGE_CACHE = 'rs-image-cache-v2';
 const warmedImageUrls = new Set<string>();
-const ALL_ANIME_BATCH_SIZE = 18;
-
-const cacheImagePersistently = async (src?: string | null) => {
-  const url = String(src || "").trim();
-  if (!url || typeof window === "undefined" || !("caches" in window)) return;
-  try {
-    const cache = await caches.open(IMAGE_CACHE);
-    const cached = await cache.match(url);
-    if (cached) return;
-    const response = await fetch(url, { mode: "no-cors", credentials: "omit", cache: "force-cache" });
-    if (response) await cache.put(url, response.clone());
-  } catch {}
-};
 
 const preloadImage = (src?: string | null) => {
   const url = String(src || "").trim();
   if (!url || warmedImageUrls.has(url) || typeof window === "undefined") return Promise.resolve();
   warmedImageUrls.add(url);
-  void cacheImagePersistently(url);
   return new Promise<void>((resolve) => {
     const img = new Image();
     img.decoding = "async";
@@ -513,6 +498,7 @@ const Index = () => {
   const { webseries, movies, allAnime: firebaseAnime, categories, loading } = useFirebaseData();
   const { items: animeSaltItems, loading: saltLoading } = useSelectedAnimeSalt();
   const brandingConfig = useBranding();
+  const displaySiteName = brandingConfig.siteName || "RS ANIME";
 
   // --- Splash hold ---
   // Hold the splash until hero + first batch of poster images have actually
@@ -544,41 +530,6 @@ const Index = () => {
     return () => { cancelled = true; window.clearTimeout(cap); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // --- Background image prewarm into Service Worker cache ---
-  // Once data is loaded, fire low-priority fetch() for every poster + backdrop URL.
-  // Service worker (public/sw.js) intercepts each and stores it permanently, so
-  // any future scroll/visit serves images from disk cache (0ms, no network flash).
-  useEffect(() => {
-    if (loading) return;
-    const all = [
-      ...webseries.map((a: any) => a?.poster).filter(Boolean),
-      ...webseries.map((a: any) => a?.backdrop).filter(Boolean),
-      ...movies.map((a: any) => a?.poster).filter(Boolean),
-      ...movies.map((a: any) => a?.backdrop).filter(Boolean),
-      ...animeSaltItems.map((a: any) => a?.poster).filter(Boolean),
-    ];
-    const uniq = Array.from(new Set(all)).filter((url) => !warmedImageUrls.has(String(url)));
-    if (uniq.length === 0) return;
-    const run = () => {
-      let i = 0;
-      const tick = () => {
-        const batch = uniq.slice(i, i + 2);
-        if (!batch.length) return;
-        batch.forEach((url) => {
-          warmedImageUrls.add(String(url));
-          try { fetch(url, { mode: "no-cors", credentials: "omit" as RequestCredentials, cache: "force-cache" }).catch(() => {}); } catch {}
-        });
-        i += 2;
-        if (i < uniq.length) setTimeout(tick, 350);
-      };
-      tick();
-    };
-    if ("requestIdleCallback" in window) (window as any).requestIdleCallback(run, { timeout: 5000 });
-    else setTimeout(run, 3000);
-  }, [loading, webseries, movies, animeSaltItems]);
-
-
 
   // --- In-player suggestion switch ---
   // When the user picks a suggestion from within the running player, we want
@@ -1563,14 +1514,6 @@ const Index = () => {
     return randomSlides;
   }, [allAnime, heroRotation, pinnedHeroPosts]);
 
-  // ALL ANIME: deduplicated, loads incrementally every 10s
-  const [allAnimeVisibleCount, setAllAnimeVisibleCount] = useState(ALL_ANIME_BATCH_SIZE);
-  
-  useEffect(() => {
-    if (animeSaltItems.length === 0) return;
-    setAllAnimeVisibleCount((prev) => Math.min(Math.max(prev, ALL_ANIME_BATCH_SIZE), animeSaltItems.length));
-  }, [animeSaltItems.length]);
-
   const allAnimeSaltUnique = useMemo(() => {
     const score = (item: AnimeItem) => {
       const hasBackdrop = item.backdrop ? 1 : 0;
@@ -1598,27 +1541,14 @@ const Index = () => {
         ...continueWatching.slice(0, 8).map((item: any) => item.poster),
         ...trendingSeries.slice(0, 10).map((item) => item.poster),
         ...filteredMovies.slice(0, 10).map((item) => item.poster),
-        ...allAnimeSaltUnique.slice(0, ALL_ANIME_BATCH_SIZE).map((item) => item.poster),
+        ...allAnimeSaltUnique.slice(0, 18).map((item) => item.poster),
       ];
       const allTargets = heroTargets.concat(cardTargets).filter(Boolean) as string[];
       splashAssetTargetsRef.current = allTargets;
       allTargets.forEach((src) => { void preloadImage(src); });
 
-      const warmAnimeSalt = async () => {
-        const targets = activeSaltItems.slice(0, 12);
-        await Promise.allSettled(targets.map(async (item) => {
-          if (!item.slug) return;
-          try {
-            await cachedApiCall(`series_${item.slug}`, () => animeSaltApi.getSeries(item.slug!));
-          } catch {
-            try {
-              await cachedApiCall(`movie_${item.slug}`, () => animeSaltApi.getMovie(item.slug!));
-            } catch {}
-          }
-        }));
-      };
-
-      void warmAnimeSalt();
+      // Do not prefetch AnimeSalt detail APIs on the home screen; it adds
+      // background network/JS pressure while users are scrolling.
     };
 
     const idle = (window as any).requestIdleCallback;
@@ -1630,7 +1560,7 @@ const Index = () => {
     }
     const timer = window.setTimeout(warmHomeAssets, 120);
     return () => window.clearTimeout(timer);
-  }, [heroSlides, continueWatching, trendingSeries, filteredMovies, allAnimeSaltUnique, activeSaltItems]);
+  }, [heroSlides, continueWatching, trendingSeries, filteredMovies, allAnimeSaltUnique]);
 
   async function openPlayerFromAnime(anime: AnimeItem, overrides?: { seasonIdx?: number; epIdx?: number }) {
     const target = {
@@ -3005,7 +2935,7 @@ const Index = () => {
             </a>
           </div>
 
-          <p className="text-[10px] text-muted-foreground mt-6">{brandingConfig.siteName} • Please wait</p>
+          <p className="text-[10px] text-muted-foreground mt-6">{displaySiteName} • Please wait</p>
         </div>
       </div>
     );
@@ -3168,25 +3098,12 @@ const Index = () => {
             <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
           ))}
           {allAnime.length > 0 && (
-            <div className="relative">
-              <AnimeSection title="All Anime" items={allAnime.slice(0, allAnimeVisibleCount)} onCardClick={handleCardClick} />
-              {allAnimeVisibleCount < allAnime.length && (
-                <div className="px-4 -mt-4 mb-4">
-                  <button
-                    data-no-swipe="true"
-                    onClick={() => setAllAnimeVisibleCount((count) => Math.min(count + ALL_ANIME_BATCH_SIZE, allAnime.length))}
-                    className="w-full rounded-xl border border-border bg-card py-2 text-xs font-semibold text-primary"
-                  >
-                    Load More
-                  </button>
-                </div>
-              )}
-            </div>
+            <AnimeSection title="All Anime" items={allAnime.slice(0, 10)} onCardClick={handleCardClick} />
           )}
         </>
       )}
       <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
-        <div className="text-2xl font-black text-primary text-glow tracking-wide mb-2">{brandingConfig.siteName}</div>
+        <div className="text-2xl font-black text-primary text-glow tracking-wide mb-2">{displaySiteName}</div>
         <p className="text-xs text-muted-foreground mb-3">{brandingConfig.footerText}</p>
         <p className="text-[10px] text-muted-foreground">{brandingConfig.footerCopyright}</p>
       </footer>

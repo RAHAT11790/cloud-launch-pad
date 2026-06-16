@@ -4,6 +4,7 @@
  * No HTML/JS/CSS is cached — only images — so app updates remain instant.
  */
 const IMAGE_CACHE = 'rs-image-cache-v2';
+const inFlightImageRequests = new Map();
 
 // Hosts that serve poster/backdrop images we want to keep forever
 const IMG_HOSTS = [
@@ -48,13 +49,21 @@ self.addEventListener('fetch', (event) => {
     const cacheKey = url.href;
     const cached = await cache.match(cacheKey);
 
-    const networkFetch = fetch(event.request).then((resp) => {
-      // Only cache opaque/200 image responses
-      if (resp && (resp.status === 200 || resp.type === 'opaque')) {
-        cache.put(cacheKey, resp.clone()).catch(() => {});
-      }
-      return resp;
-    }).catch(() => null);
+    const networkFetch = (() => {
+      const pending = inFlightImageRequests.get(cacheKey);
+      if (pending) return pending.then((resp) => resp ? resp.clone() : null);
+      const pendingFetch = fetch(event.request).then((resp) => {
+        // Only cache opaque/200 image responses
+        if (resp && (resp.status === 200 || resp.type === 'opaque')) {
+          cache.put(cacheKey, resp.clone()).catch(() => {});
+        }
+        return resp;
+      }).catch(() => null).finally(() => {
+        inFlightImageRequests.delete(cacheKey);
+      });
+      inFlightImageRequests.set(cacheKey, pendingFetch);
+      return pendingFetch.then((resp) => resp ? resp.clone() : null);
+    })();
 
     if (cached) {
       // Serve from cache instantly, refresh in background

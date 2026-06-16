@@ -1,4 +1,4 @@
-import { memo, useState, useEffect } from "react";
+import { memo, useState, useEffect, useMemo } from "react";
 import { Star, Heart } from "lucide-react";
 import type { AnimeItem } from "@/data/animeData";
 import { db, ref, set, remove, get } from "@/lib/firebase";
@@ -11,7 +11,6 @@ interface AnimeCardProps {
 
 const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   const [isInWatchlist, setIsInWatchlist] = useState(false);
-  const [loaded, setLoaded] = useState(false);
   const branding = useBranding();
 
   const getUserId = (): string | null => {
@@ -51,7 +50,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   };
 
   // ---- Compute language label (handles both RS and AnimeSalt; merges audio tracks) ----
-  const languageLabel = (() => {
+  const languageLabel = useMemo(() => {
     const set = new Set<string>();
     const push = (raw?: string) => {
       if (!raw) return;
@@ -74,10 +73,10 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
     if (arr.length === 1) return arr[0];
     if (arr.length === 2) return "Dual";
     return "Multiple";
-  })();
+  }, [anime.availableLanguages, anime.baseLanguage, anime.language, anime.seasons]);
 
   // ---- Episode / season count ----
-  const epInfo = (() => {
+  const epInfo = useMemo(() => {
     if (anime.type === "movie") return "Movie";
     if (anime.seasons && anime.seasons.length > 0) {
       const total = anime.seasons.reduce((sum: number, s: any) => sum + ((s.episodes || []).length), 0);
@@ -91,7 +90,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
       return `${(anime as any).episodeCount} EP`;
     }
     return "";
-  })();
+  }, [anime]);
 
   return (
     <div
@@ -106,12 +105,10 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
       <img
         src={anime.poster}
         alt={anime.title}
-        className={`poster-img w-full h-full object-cover transition-opacity duration-200 ${loaded ? "opacity-100" : "opacity-0"}`}
+        className="poster-img w-full h-full object-cover"
         loading="eager"
         decoding="async"
         fetchPriority="low"
-        onLoad={() => setLoaded(true)}
-        onError={() => setLoaded(true)}
       />
       <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
       <button
@@ -140,7 +137,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
           }`}
           style={{ textShadow: "0 1px 2px rgba(0,0,0,0.35)" }}
         >
-          {anime.source === "animesalt" ? branding.anCardLabel : branding.rsCardLabel}
+          {anime.source === "animesalt" ? (branding.anCardLabel || "AN") : (branding.rsCardLabel || "RS")}
         </span>
       </div>
       <div className="absolute bottom-0 left-0 right-0 p-2">
