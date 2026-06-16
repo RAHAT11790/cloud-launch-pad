@@ -1,6 +1,6 @@
-// Backdrop / Logo generator — Gemini-only (user-supplied key from admin panel).
-// No environment secrets required. Just deploy.
-// Body must include `geminiKey` (sent by admin panel). Flux is used only as a last-resort fallback.
+// Backdrop / Logo generator — Gemini-only.
+// REQUIRED SECRET: GEMINI_API_KEY (set in EGD Manager deploy form).
+// Flux is used only as a last-resort fallback.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
