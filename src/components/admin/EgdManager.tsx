@@ -181,7 +181,8 @@ export default function EgdManager({
   const [logStartAt, setLogStartAt] = useState("");
   const [logEndAt, setLogEndAt] = useState("");
   const [projectSecrets, setProjectSecrets] = useState<string[]>([]);
-  const [projectSecretDrafts, setProjectSecretDrafts] = useState<Record<string, string>>({});
+  const [selectedProjectSecret, setSelectedProjectSecret] = useState<string>("");
+  const [projectSecretDraft, setProjectSecretDraft] = useState<string>("");
   const [showProjectSecretValues, setShowProjectSecretValues] = useState(false);
   const [savingProjectSecret, setSavingProjectSecret] = useState<string | null>(null);
   const [deletingProjectSecret, setDeletingProjectSecret] = useState<string | null>(null);
