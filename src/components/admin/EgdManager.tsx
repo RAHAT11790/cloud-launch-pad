@@ -452,7 +452,26 @@ export default function EgdManager({
   const newDraft = () => {
     setSelected(""); setSlug(""); setCode(STARTER);
     setSecrets([{ name: "", value: "" }]); setResultUrl(""); setErrorLog("");
-    setLogs([]); setSourceHint("");
+    setLogs([]); setSourceHint("Blank draft — pick a function name and paste code, then Deploy.");
+    toast.success("New draft ready");
+    if (typeof window !== "undefined") {
+      setTimeout(() => {
+        document
+          .querySelector('[data-egd-editor-anchor="true"]')
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    }
+  };
+
+  const openSetup = () => {
+    setShowSetup(true);
+    if (typeof window !== "undefined") {
+      setTimeout(() => {
+        document
+          .querySelector('[data-egd-setup-anchor="true"]')
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    }
   };
 
   const loadLogs = async (targetSlug = selected, minutes = logsWindow, startAt = logStartAt, endAt = logEndAt) => {
