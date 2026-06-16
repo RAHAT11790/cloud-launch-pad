@@ -218,16 +218,8 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       setPreviewUrl(data.url as string);
       toast.success(`Preview ready (${data.engine})`);
 
-      if (usePromptOverride && customPrompt.trim()) {
-        payload.customPrompt = customPrompt
-          .replace(/\{title\}/gi, activeItem.title)
-          .replace(/\[WRITE ANIME NAME HERE\]/gi, activeItem.title);
-      }
-      const data = await callGenerateBackdrop(payload);
-      if (!data?.url) throw new Error(data?.error || "no url");
-      setProgress(100);
-      setPreviewUrl(data.url as string);
-      toast.success(`Preview ready (${data.engine})`);
+
+
 
       if (provider === "gemini") {
         // bump usage atomically (best-effort)
