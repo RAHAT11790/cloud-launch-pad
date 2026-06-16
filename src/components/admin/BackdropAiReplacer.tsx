@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { db, ref, onValue, update, get, set } from "@/lib/firebase";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { fuzzyMatch } from "@/lib/fuzzyMatch";
+import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 
 interface Props { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string; }
 
@@ -36,6 +37,23 @@ const DEFAULT_LOGO_PROMPT = `Official anime TITLE LOGO for "{title}", square 1:1
 const todayKey = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const callGenerateBackdrop = async (body: Record<string, any>) => {
+  const endpoint = await getEdgeFunctionUrl("generate-backdrop");
+  if (!endpoint) throw new Error("Generate Backdrop function URL not configured. Deploy it from EGD Manager first.");
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const raw = await res.text();
+  const data = raw ? (() => { try { return JSON.parse(raw); } catch { return { error: raw }; } })() : {};
+  if (!res.ok) throw new Error(data?.error || `Generate Backdrop failed (${res.status})`);
+  return data;
 };
 
 const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }: Props) => {
@@ -133,10 +151,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
     }
     setGeminiStatus((s) => ({ ...s, state: "checking" }));
     try {
-      const { data, error } = await supabase.functions.invoke("generate-backdrop", {
-        body: { action: "check-gemini", geminiKey },
-      });
-      if (error) throw error;
+      const data = await callGenerateBackdrop({ action: "check-gemini", geminiKey });
       if (data?.ok) {
         setGeminiStatus({
           state: "online", model: data.model, message: data.message || "Key verified",
@@ -209,8 +224,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
           .replace(/\{title\}/gi, activeItem.title)
           .replace(/\[WRITE ANIME NAME HERE\]/gi, activeItem.title);
       }
-      const { data, error } = await supabase.functions.invoke("generate-backdrop", { body: payload });
-      if (error) throw error;
+      const data = await callGenerateBackdrop(payload);
       if (!data?.url) throw new Error(data?.error || "no url");
       setProgress(100);
       setPreviewUrl(data.url as string);
