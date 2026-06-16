@@ -104,6 +104,12 @@ function supabaseFallbackUrl(fnName: string): string {
   return `${base.replace(/\/$/, "")}/functions/v1/${fnName}`;
 }
 
+function deriveFromEgdDeployerUrl(deployerUrl: string, fnName: string): string {
+  const u = String(deployerUrl || "").trim();
+  if (!/^https?:\/\//i.test(u)) return "";
+  return u.replace(/\/functions\/v1\/[^/?#]+(?:[?#].*)?$/i, `/functions/v1/${fnName}`);
+}
+
 /** Get URL for a named function — checks per-function overrides first */
 export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
   // Telegram has its own dedicated Supabase URL
@@ -121,7 +127,7 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
     const overrideSnap = await get(ref(db, `settings/functionOverrides/${fnName}`));
     const override = overrideSnap.val();
     if (override?.enabled === false) return "";
-    if (override?.customUrl) return override.customUrl;
+    if (override?.customUrl) return String(override.customUrl).trim();
   } catch {}
 
   const config = await getEdgeRouterConfig();
@@ -129,7 +135,19 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
   const dynFn = Object.values(config.functions).find(f => f.name === fnName || f.endpoint === fnName);
   if (dynFn) return buildFunctionUrl(dynFn.endpoint, config);
   const built = buildFunctionUrl(fnName, config);
-  return built || supabaseFallbackUrl(fnName);
+  if (built) return built;
+
+  // generate-backdrop MUST run from the user's EGD-deployed URL because its
+  // GEMINI_API_KEY lives on that project. Never fall back to this app's backend.
+  if (fnName === "generate-backdrop") {
+    try {
+      const egdSnap = await get(ref(db, "egdManager/config/deployerUrl"));
+      return deriveFromEgdDeployerUrl(egdSnap.val() || "", fnName);
+    } catch {
+      return "";
+    }
+  }
+  return supabaseFallbackUrl(fnName);
 }
 
 /** Call a cloud function */
