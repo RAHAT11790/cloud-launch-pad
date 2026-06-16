@@ -387,7 +387,7 @@ import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writ
 const apiCache = new Map<string, { data: any; ts: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 min
 const API_TIMEOUT_MS = 6_000;
-const IMAGE_CACHE = 'rs-image-cache-v1';
+const IMAGE_CACHE = 'rs-image-cache-v2';
 const warmedImageUrls = new Set<string>();
 const ALL_ANIME_BATCH_SIZE = 18;
 
