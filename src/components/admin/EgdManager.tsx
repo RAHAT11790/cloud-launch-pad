@@ -768,12 +768,12 @@ export default function EgdManager({
               Names starting with SUPABASE_ / SB_ are reserved and skipped automatically.
             </p>
 
-            <div className="mt-3 rounded-lg border border-zinc-700/60 bg-zinc-950/30 p-3 space-y-2 min-w-0">
+            <div className="mt-3 rounded-lg border border-zinc-700/60 bg-zinc-950/30 p-3 space-y-3 min-w-0">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div>
-                  <div className="text-xs text-zinc-300">Project secret names</div>
+                  <div className="text-xs text-zinc-300">Project secrets</div>
                   <div className="text-[10px] text-zinc-500 break-words">
-                    Values stay hidden. Paste a new value to update, or delete unused secrets.
+                    Tap a secret → editor opens below. Paste a new value to update, or delete.
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -797,43 +797,83 @@ export default function EgdManager({
               {projectSecrets.length === 0 ? (
                 <div className="text-[11px] text-zinc-500">No project secrets found.</div>
               ) : (
-                <div className="space-y-2">
-                  {projectSecrets.map((name) => (
-                    <div
-                      key={name}
-                      className="rounded-lg border border-zinc-700/70 bg-zinc-900/60 p-2 min-w-0"
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <code className="text-[10px] text-amber-300 break-all font-semibold">{name}</code>
-                        <button
-                          onClick={() => deleteProjectSecretValue(name)}
-                          disabled={deletingProjectSecret === name || savingProjectSecret === name}
-                          className="rounded-md bg-red-500/15 text-red-300 hover:bg-red-500/25 px-2 py-1 shrink-0 disabled:opacity-50"
-                          title="Delete secret"
-                        >
-                          {deletingProjectSecret === name ? <Loader2 className="animate-spin" size={12} /> : <Trash2 size={12} />}
-                        </button>
-                      </div>
-                      <div className="flex gap-2 min-w-0">
-                        <input
-                          className={inputClass + " flex-1 min-w-0 !text-[11px] font-mono"}
-                          placeholder="paste new value to update"
-                          type={showProjectSecretValues ? "text" : "password"}
-                          value={projectSecretDrafts[name] || ""}
-                          onChange={(e) => setProjectSecretDrafts((p) => ({ ...p, [name]: e.target.value }))}
-                          autoComplete="off"
-                          spellCheck={false}
-                        />
-                        <button
-                          onClick={() => saveProjectSecretValue(name)}
-                          disabled={savingProjectSecret === name || deletingProjectSecret === name || !(projectSecretDrafts[name] || "").trim()}
-                          className={btnPrimary + " !px-3 !py-1.5 text-[11px] shrink-0 disabled:opacity-50"}
-                        >
-                          {savingProjectSecret === name ? <Loader2 className="animate-spin" size={12} /> : "Save"}
-                        </button>
-                      </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {projectSecrets.map((name) => {
+                    const active = selectedProjectSecret === name;
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => {
+                          setSelectedProjectSecret(name);
+                          setProjectSecretDraft("");
+                        }}
+                        className={
+                          "text-left rounded-xl border p-2.5 transition min-w-0 overflow-hidden " +
+                          (active
+                            ? "border-amber-400/70 bg-amber-500/10"
+                            : "border-zinc-700/60 bg-zinc-900/50 hover:border-amber-400/40 hover:bg-amber-500/5")
+                        }
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <KeyRound size={11} className="text-amber-300 shrink-0" />
+                          <code className="text-[10px] text-amber-200 font-semibold break-all leading-tight">{name}</code>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Selected secret editor — Code-Library style */}
+              {selectedProjectSecret && (
+                <div className="rounded-lg border border-amber-400/50 bg-amber-500/5 p-3 space-y-2 min-w-0">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="text-[10px] text-zinc-400 uppercase tracking-wide">Editing secret</div>
+                      <code className="text-[12px] text-amber-200 font-semibold break-all">{selectedProjectSecret}</code>
                     </div>
-                  ))}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => deleteProjectSecretValue(selectedProjectSecret)}
+                        disabled={deletingProjectSecret === selectedProjectSecret || savingProjectSecret === selectedProjectSecret}
+                        className="rounded-md bg-red-500/15 text-red-300 hover:bg-red-500/25 px-2.5 py-1.5 text-[11px] inline-flex items-center gap-1 disabled:opacity-50"
+                        title="Delete this secret"
+                      >
+                        {deletingProjectSecret === selectedProjectSecret ? <Loader2 className="animate-spin" size={12} /> : <Trash2 size={12} />}
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => { setSelectedProjectSecret(""); setProjectSecretDraft(""); }}
+                        className="rounded-md bg-zinc-700/40 text-zinc-300 hover:bg-zinc-700/70 px-2 py-1.5 text-[11px] inline-flex items-center"
+                        title="Close editor"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-zinc-500 break-words">
+                    Existing value is hidden by Supabase for security — it can't be read back. Paste a new value here to overwrite it.
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      className={inputClass + " flex-1 min-w-0 !text-[11px] font-mono"}
+                      placeholder={`new value for ${selectedProjectSecret}`}
+                      type={showProjectSecretValues ? "text" : "password"}
+                      value={projectSecretDraft}
+                      onChange={(e) => setProjectSecretDraft(e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <button
+                      onClick={saveProjectSecretValue}
+                      disabled={savingProjectSecret === selectedProjectSecret || deletingProjectSecret === selectedProjectSecret || !projectSecretDraft.trim()}
+                      className={btnPrimary + " !px-4 !py-2 text-[11px] shrink-0 disabled:opacity-50 inline-flex items-center gap-1.5"}
+                    >
+                      {savingProjectSecret === selectedProjectSecret ? <Loader2 className="animate-spin" size={12} /> : <CheckCircle2 size={12} />}
+                      Save value
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
