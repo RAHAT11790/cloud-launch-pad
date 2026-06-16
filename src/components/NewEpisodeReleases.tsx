@@ -262,19 +262,19 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15, ease: "linear" }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
             onClick={() => setShowModal(false)}
-            className="fixed inset-0 z-[300] bg-black/90 flex items-end sm:items-center justify-center p-0 sm:p-5"
+            className="fixed inset-0 z-[300] bg-black/95 flex items-center justify-center p-3 sm:p-5"
             style={{ willChange: "opacity" }}
           >
             <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "tween", duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ y: 24, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 24, opacity: 0, scale: 0.98 }}
+              transition={{ type: "tween", duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-card w-[calc(100%-16px)] sm:w-full sm:max-w-[520px] mb-2 sm:mb-0 rounded-2xl flex flex-col max-h-[82vh] shadow-2xl border border-border/40 transform-gpu overflow-hidden"
-              style={{ willChange: "transform" }}
+              className="bg-card w-full max-w-[520px] rounded-2xl flex flex-col max-h-[85vh] shadow-2xl border border-border/40 transform-gpu overflow-hidden"
+              style={{ willChange: "transform, opacity" }}
             >
               <div className="flex justify-between items-center gap-3 px-4 py-3 border-b border-border/30 shrink-0">
                 <div className="min-w-0">
