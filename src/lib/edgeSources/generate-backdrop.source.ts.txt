@@ -1,6 +1,5 @@
-// Backdrop / Logo generator — Gemini-only.
+// Backdrop / Logo generator — EGD-deployed Gemini image-edit only.
 // REQUIRED SECRET: GEMINI_API_KEY (set in EGD Manager deploy form).
-// Flux is used only as a last-resort fallback.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,13 +15,12 @@ interface Body {
   year?: string | number;
   mode?: "backdrop" | "logo";
   customPrompt?: string;
-  provider?: "gemini" | "flux";
+  provider?: "gemini";
   model?: string;
   referenceImageUrl?: string;
   useReference?: boolean;
   genres?: string[];
   overview?: string;
-  geminiKey?: string;
   action?: "check-gemini";
 }
 
@@ -114,19 +112,6 @@ STRICT NO-GO:
 - DO NOT replicate the reference image's layout or background — only borrow the characters.
 
 OUTPUT: one ultra-professional 16:9 anime promotional banner, original art-directed composition, official characters preserved from reference, genre-faithful mood, stylized "${upperTitle}" title, RS ANIME crown badge top-right, Telegram + Website chips bottom-left.`;
-}
-
-async function genWithFlux(prompt: string, mode: "backdrop" | "logo"): Promise<string> {
-  const ar = mode === "logo" ? "1:1" : "16:9";
-  const guardedPrompt = mode === "logo"
-    ? `${prompt}\n\nSTRICT: square 1:1, centered title only, NO characters, NO faces. Deep black gradient. Crisp logo typography only.`
-    : `${prompt}\n\nSTRICT: wide cinematic 16:9 landscape (NOT square, NOT portrait). Subject fills frame, no black bars. Official anime characters with canonical hair, eyes, outfit. No deformed anatomy. Professional Crunchyroll / Netflix banner quality. 4K HDR, no watermarks.`;
-  const url = `https://r-gengpt-api.vercel.app/api/image?prompt=${encodeURIComponent(guardedPrompt)}&style=realistic&ar=${ar}`;
-  const res = await fetch(url, { method: "GET" });
-  if (!res.ok) throw new Error(`Flux API ${res.status}`);
-  const j = await res.json();
-  if (j?.status !== "success" || !j?.data?.url) throw new Error(`Flux API: ${j?.message || "no url returned"}`);
-  return j.data.url as string;
 }
 
 async function uploadToImgbb(bytes: Uint8Array, name: string): Promise<string> {
