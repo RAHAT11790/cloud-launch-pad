@@ -41,6 +41,9 @@ const todayKey = () => {
 const callGenerateBackdrop = async (body: Record<string, any>) => {
   const endpoint = await getEdgeFunctionUrl("generate-backdrop");
   if (!endpoint) throw new Error("Generate Backdrop function URL not configured. Deploy it from EGD Manager first.");
+  if (!/\/functions\/v1\/generate-backdrop\/?(?:[?#].*)?$/i.test(endpoint)) {
+    throw new Error("Active URL is not generate-backdrop. Save the EGD deployer URL again, then redeploy generate-backdrop.");
+  }
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -49,7 +52,7 @@ const callGenerateBackdrop = async (body: Record<string, any>) => {
   const raw = await res.text();
   const data = raw ? (() => { try { return JSON.parse(raw); } catch { return { error: raw }; } })() : {};
   if (!res.ok) throw new Error(data?.error || `Generate Backdrop failed (${res.status})`);
-  return data;
+  return { ...data, endpoint };
 };
 
 const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }: Props) => {
@@ -129,11 +132,11 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
   useEffect(() => { setPreviewUrl(null); setProgress(0); }, [activeId, mode, provider]);
 
   useEffect(() => {
-    let alive = true;
-    getEdgeFunctionUrl("generate-backdrop").then((url) => {
-      if (alive) setActiveFunctionUrl(url || "");
-    });
-    return () => { alive = false; };
+    const refresh = () => getEdgeFunctionUrl("generate-backdrop").then((url) => setActiveFunctionUrl(url || ""));
+    void refresh();
+    const off1 = onValue(ref(db, "egdManager/config/deployerUrl"), refresh);
+    const off2 = onValue(ref(db, "settings/functionOverrides/generate-backdrop"), refresh);
+    return () => { off1(); off2(); };
   }, []);
 
   useEffect(() => {
@@ -186,6 +189,10 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
 
   const generate = async () => {
     if (!activeItem || busy) return;
+    if (mode === "backdrop" && !activeItem.backdrop) {
+      toast.error("This title has no reference backdrop. Add a backdrop first so Gemini can edit the correct anime image.");
+      return;
+    }
     if (provider === "gemini" && geminiUsedToday >= geminiDailyLimit) {
       toast.error(`Daily limit reached (${geminiUsedToday}/${geminiDailyLimit}).`);
       return;
@@ -215,6 +222,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       }
       const data = await callGenerateBackdrop(payload);
       if (!data?.url) throw new Error(data?.error || "no url");
+      if (mode === "backdrop" && data.referenceUsed !== true) throw new Error("Reference edit was not used. Generation blocked to prevent random images.");
       setProgress(100);
       setPreviewUrl(data.url as string);
       toast.success(`Preview ready via EGD URL (${data.engine})`);
