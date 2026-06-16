@@ -119,7 +119,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   return (
     <div
       data-anime-card="true"
-      className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover min-w-[120px] max-w-[140px] flex-shrink-0"
+      className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover min-w-[120px] max-w-[140px] flex-shrink-0 transition-transform duration-150 ease-out active:scale-[0.94] active:brightness-90"
       onClick={() => onClick(anime)}
       style={{
         boxShadow: "var(--neu-shadow-sm)",
