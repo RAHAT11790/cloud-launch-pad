@@ -14,7 +14,7 @@ interface LoginPageProps {
   onGuest?: () => void;
 }
 
-const PARTICLE_SEEDS = Array.from({ length: 20 }, (_, i) => ({
+const PARTICLE_SEEDS = Array.from({ length: 0 }, (_, i) => ({
   id: i,
   x: ((i * 73) % 100) / 100,
   y: ((i * 47) % 100) / 100,
@@ -63,7 +63,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showContent, setShowContent] = useState(false);
+  const [showContent, setShowContent] = useState(true);
   const [deviceLimitError, setDeviceLimitError] = useState<{
     message: string;
     deviceNames: string[];
@@ -98,16 +98,10 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     await Promise.all(writes);
   };
 
-  // Intro animation sequence
+  // Keep login instant and typing smooth — no delayed intro/audio work.
   useEffect(() => {
-    const timer = setTimeout(() => setShowContent(true), 800);
-    try {
-      const audio = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgipGTfWBVW3GGhHhqZW55foB7c21udn+EgXx3dHZ7foGAe3h3eHx/gIB+e3l5e36AgH97eXl7fn+Af3t5eXt+f4B/e3l5e35/gH97eXl7fn+Af3t5eXt+f4B/e3l5e35/gH97eXl7fn+Af3t5");
-      audio.volume = 0.3;
-      audio.play().catch(() => {});
-      audioRef.current = audio;
-    } catch {}
-    return () => { clearTimeout(timer); audioRef.current?.pause(); };
+    setShowContent(true);
+    return () => { audioRef.current?.pause(); };
   }, []);
 
   const checkAndRegisterDevice = async (userId: string): Promise<boolean> => {
