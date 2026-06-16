@@ -476,6 +476,8 @@ const isShortenerEnabled = async (): Promise<boolean> => {
 type MainPage = "home" | "series" | "livetv" | "movies";
 
 const MAIN_PAGE_ORDER: MainPage[] = ["home", "series", "livetv", "movies"];
+const TAB_GRID_INITIAL_COUNT = 48;
+const TAB_GRID_BATCH_COUNT = 48;
 
 // Public URL paths for each main page — gives real router routes
 // (back-button works, share-friendly URLs) without dismantling the swipe strip.
@@ -817,6 +819,10 @@ const Index = () => {
     }
   });
   const pageScrollPositions = useRef<Record<MainPage, number>>({ home: 0, series: 0, livetv: 0, movies: 0 });
+  const [tabGridVisibleCount, setTabGridVisibleCount] = useState<Record<"series" | "movies", number>>({
+    series: TAB_GRID_INITIAL_COUNT,
+    movies: TAB_GRID_INITIAL_COUNT,
+  });
   const [activeCategory, setActiveCategory] = useState("All");
   const [dubFilter, setDubFilter] = useState<"all" | "official" | "fandub">("all");
   const [selectedAnime, setSelectedAnime] = useState<AnimeItem | null>(null);
