@@ -359,32 +359,17 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-wide text-white/50 mb-1.5">Engine</div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  onClick={() => setProvider("lovable")}
-                  className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
-                    provider === "lovable" ? "bg-amber-500 text-black border-amber-400" : "bg-white/5 text-white/70 border-white/10"
-                  }`}
-                >
-                  Lovable AI
-                </button>
+              <div className="grid grid-cols-1 gap-1.5">
                 <button
                   onClick={() => setProvider("gemini")}
-                  className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
-                    provider === "gemini" ? "bg-sky-500 text-black border-sky-400" : "bg-white/5 text-white/70 border-white/10"
-                  }`}
+                  className="px-2 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap bg-sky-500 text-black border-sky-400"
                 >
-                  Gemini
+                  Gemini (your key)
                 </button>
               </div>
             </div>
           </div>
 
-          {provider === "lovable" && (
-            <div className="text-[10px] text-white/60 leading-relaxed bg-white/[0.04] border border-white/10 rounded-lg p-2">
-              <span className="text-amber-300 font-semibold">Lovable AI</span> · built-in Lovable credits. When credits run out, switch to Gemini.
-            </div>
-          )}
 
           {provider === "gemini" && (
             <div className="rounded-xl border border-sky-500/25 bg-gradient-to-br from-sky-500/[0.06] to-indigo-500/[0.04] overflow-hidden">
