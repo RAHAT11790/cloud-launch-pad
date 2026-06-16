@@ -181,6 +181,10 @@ export default function EgdManager({
   const [logStartAt, setLogStartAt] = useState("");
   const [logEndAt, setLogEndAt] = useState("");
   const [projectSecrets, setProjectSecrets] = useState<string[]>([]);
+  const [projectSecretDrafts, setProjectSecretDrafts] = useState<Record<string, string>>({});
+  const [showProjectSecretValues, setShowProjectSecretValues] = useState(false);
+  const [savingProjectSecret, setSavingProjectSecret] = useState<string | null>(null);
+  const [deletingProjectSecret, setDeletingProjectSecret] = useState<string | null>(null);
 
   // --- Secrets Vault (one-time values used by bulk deploy) ---
   const allLibrarySecrets = useMemo(() => {
@@ -314,7 +318,14 @@ export default function EgdManager({
     try {
       const d = await callDeployer("secrets");
       if (d?.ok) {
-        setProjectSecrets(Array.isArray(d.names) ? d.names : []);
+        const names = Array.isArray(d.names) ? d.names : [];
+        setProjectSecrets(names);
+        setProjectSecretDrafts((prev) =>
+          names.reduce((acc: Record<string, string>, name: string) => {
+            acc[name] = prev[name] || "";
+            return acc;
+          }, {}),
+        );
       } else {
         appendError("Secrets failed: " + JSON.stringify(d?.error || d));
       }
@@ -323,6 +334,49 @@ export default function EgdManager({
     } finally {
       setLoadingSecrets(false);
     }
+  };
+
+  const saveProjectSecretValue = async (name: string) => {
+    const value = (projectSecretDrafts[name] || "").trim();
+    if (!value) { toast.error(`Paste a new value for ${name}`); return; }
+    setSavingProjectSecret(name);
+    try {
+      const d = await callDeployer("secret-update", { name, value });
+      if (d?.ok) {
+        toast.success(`${name} updated`);
+        setProjectSecretDrafts((p) => ({ ...p, [name]: "" }));
+        await loadProjectSecrets();
+      } else {
+        toast.error("Secret update failed");
+        appendError("Secret update failed: " + JSON.stringify(d?.error || d));
+      }
+    } catch (e: any) {
+      toast.error("Secret update failed");
+      appendError("Secret update network: " + (e?.message || String(e)));
+    } finally { setSavingProjectSecret(null); }
+  };
+
+  const deleteProjectSecretValue = async (name: string) => {
+    if (!confirm(`Delete project secret "${name}"? The functions using it may stop working until you add it again.`)) return;
+    setDeletingProjectSecret(name);
+    try {
+      const d = await callDeployer("secret-delete", { names: [name] });
+      if (d?.ok) {
+        toast.success(`${name} deleted`);
+        setProjectSecretDrafts((p) => {
+          const next = { ...p };
+          delete next[name];
+          return next;
+        });
+        await loadProjectSecrets();
+      } else {
+        toast.error("Secret delete failed");
+        appendError("Secret delete failed: " + JSON.stringify(d?.error || d));
+      }
+    } catch (e: any) {
+      toast.error("Secret delete failed");
+      appendError("Secret delete network: " + (e?.message || String(e)));
+    } finally { setDeletingProjectSecret(null); }
   };
 
   // ---------- Bulk deploy every library function ----------
