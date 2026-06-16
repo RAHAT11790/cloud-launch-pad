@@ -264,7 +264,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15, ease: "linear" }}
             onClick={() => setShowModal(false)}
-            className="fixed inset-0 z-[300] bg-black/90 flex items-end sm:items-center justify-center sm:p-5"
+            className="fixed inset-0 z-[300] bg-black/90 flex items-end sm:items-center justify-center p-0 sm:p-5"
             style={{ willChange: "opacity" }}
           >
             <motion.div
@@ -273,10 +273,10 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
               exit={{ y: "100%" }}
               transition={{ type: "tween", duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-card w-full sm:max-w-[520px] sm:rounded-2xl rounded-t-2xl flex flex-col max-h-[85vh] shadow-2xl border border-border/40 transform-gpu"
+              className="bg-card w-[calc(100%-16px)] sm:w-full sm:max-w-[520px] mb-2 sm:mb-0 rounded-2xl flex flex-col max-h-[82vh] shadow-2xl border border-border/40 transform-gpu overflow-hidden"
               style={{ willChange: "transform" }}
             >
-              <div className="flex justify-between items-center px-5 py-4 border-b border-border/30 shrink-0">
+              <div className="flex justify-between items-center gap-3 px-4 py-3 border-b border-border/30 shrink-0">
                 <div className="min-w-0">
                   <h3 className="text-base sm:text-lg font-bold flex items-center gap-2">
                     <Zap className="w-4 h-4 text-accent" /> All New Releases
@@ -287,13 +287,13 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                 </div>
                 <button
                   onClick={() => setShowModal(false)}
-                  className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 shrink-0"
+                  className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 active:scale-95 shrink-0"
                   aria-label="Close"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="overflow-y-auto flex-1 p-4 space-y-2.5 overscroll-contain">
+              <div className="overflow-y-auto flex-1 p-3 space-y-2.5 overscroll-contain">
                 {groupedReleases.length === 0 ? (
                   <div className="py-12 text-center text-sm text-muted-foreground">
                     No new releases yet — check back soon.
@@ -312,7 +312,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                       <div
                         key={release.id}
                         onClick={() => { handleClick(release, minEp); setShowModal(false); }}
-                        className="flex gap-3 p-2.5 rounded-xl bg-foreground/5 cursor-pointer transition-all hover:bg-primary/15 active:scale-[0.98]"
+                        className="w-full min-w-0 flex items-center gap-3 p-2.5 rounded-xl border border-border/35 bg-secondary/45 cursor-pointer transition-all hover:bg-primary/15 active:scale-[0.98] overflow-hidden"
                       >
                         {poster ? (
                           <img
