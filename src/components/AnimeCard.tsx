@@ -94,11 +94,20 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
 
   return (
     <div
-      className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card min-w-[120px] max-w-[140px] flex-shrink-0"
+      className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover min-w-[120px] max-w-[140px] flex-shrink-0"
       onClick={() => onClick(anime)}
-      style={{ boxShadow: "var(--neu-shadow-sm)" }}
+      style={{
+        boxShadow: "var(--neu-shadow-sm)",
+        background: "linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--card)) 100%)",
+      }}
     >
-      <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover transition-transform duration-400 hover:scale-110" loading="lazy" />
+      <img
+        src={anime.poster}
+        alt={anime.title}
+        className="w-full h-full object-cover transition-transform duration-400 hover:scale-110"
+        loading="lazy"
+        decoding="async"
+      />
       <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
       <button
         className={`absolute top-1.5 left-1.5 w-7 h-7 rounded-full flex items-center justify-center transition-all hover:scale-110 z-10 ${
