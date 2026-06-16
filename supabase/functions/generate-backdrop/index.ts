@@ -421,8 +421,18 @@ Deno.serve(async (req) => {
           engineLabel = msg === "RATE_LIMIT" || msg.includes("429") ? "gemini-rate-limited-lovable-fallback" : "gemini-lovable-fallback";
         } catch (fallbackErr: any) {
           console.warn("[generate-backdrop] Lovable fallback failed, using Flux:", fallbackErr?.message || fallbackErr);
-          url = await genWithFlux(prompt, mode);
-          engineLabel = msg === "RATE_LIMIT" || msg.includes("429") ? "gemini-rate-limited-flux-fallback" : "gemini-flux-fallback";
+          try {
+            url = await genWithFlux(prompt, mode);
+            engineLabel = msg === "RATE_LIMIT" || msg.includes("429") ? "gemini-rate-limited-flux-fallback" : "gemini-flux-fallback";
+          } catch (fluxErr: any) {
+            console.warn("[generate-backdrop] Flux fallback failed:", fluxErr?.message || fluxErr);
+            if (body.referenceImageUrl) {
+              url = body.referenceImageUrl;
+              engineLabel = "reference-safe-fallback";
+            } else {
+              throw new Error("All image providers are temporarily unavailable or quota-limited. Try again later.");
+            }
+          }
         }
       }
     } else if (useRef) {
