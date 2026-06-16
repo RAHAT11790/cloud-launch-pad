@@ -295,52 +295,27 @@ div[style*="z-index: 2147483647"],
     box-shadow: var(--neu-shadow-sm);
   }
 
-  /* Classic iOS-style 12-tick loader — thin ticks, big empty center */
+  /* Clean amber ring spinner — same family as the AN embed loader, bigger size */
   .player-loader-shell {
     position: relative;
-    width: 44px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 64px;
+    height: 64px;
     border-radius: 9999px;
-    animation: petalSpin 0.9s linear infinite;
+    border: 4px solid hsl(35 95% 55% / 0.18);
+    border-top-color: hsl(35 95% 58%);
+    animation: petalSpin 0.85s linear infinite;
     will-change: transform;
     transform: translateZ(0);
+    box-shadow: 0 0 22px hsl(35 95% 55% / 0.35);
   }
-
-  .player-loader-petal {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 2.5px;
-    height: 7px;
-    margin-left: -1.25px;
-    margin-top: -21px;
-    border-radius: 9999px;
-    background: hsl(0 0% 100%);
-    transform-origin: 1.25px 21px;
-    opacity: 0.12;
-  }
-
-  .player-loader-petal:nth-child(1)  { transform: rotate(0deg);   opacity: 1;    }
-  .player-loader-petal:nth-child(2)  { transform: rotate(30deg);  opacity: 0.92; }
-  .player-loader-petal:nth-child(3)  { transform: rotate(60deg);  opacity: 0.82; }
-  .player-loader-petal:nth-child(4)  { transform: rotate(90deg);  opacity: 0.72; }
-  .player-loader-petal:nth-child(5)  { transform: rotate(120deg); opacity: 0.62; }
-  .player-loader-petal:nth-child(6)  { transform: rotate(150deg); opacity: 0.52; }
-  .player-loader-petal:nth-child(7)  { transform: rotate(180deg); opacity: 0.42; }
-  .player-loader-petal:nth-child(8)  { transform: rotate(210deg); opacity: 0.32; }
-  .player-loader-petal:nth-child(9)  { transform: rotate(240deg); opacity: 0.24; }
-  .player-loader-petal:nth-child(10) { transform: rotate(270deg); opacity: 0.18; }
-  .player-loader-petal:nth-child(11) { transform: rotate(300deg); opacity: 0.14; }
-  .player-loader-petal:nth-child(12) { transform: rotate(330deg); opacity: 0.12; }
+  /* Legacy petal markup — hidden (kept harmless for existing JSX) */
+  .player-loader-petal { display: none; }
 
   @keyframes petalSpin {
     to { transform: rotate(360deg); }
   }
 
-  /* Magic-card style click pulse for suggestion cards */
+  /* Suggestion-card pending state — dim + centered amber ring */
   .magic-card-pulse {
     position: relative;
     overflow: hidden;
@@ -348,40 +323,26 @@ div[style*="z-index: 2147483647"],
   .magic-card-pulse::before {
     content: "";
     position: absolute;
-    inset: -2px;
-    border-radius: inherit;
-    background: conic-gradient(from var(--mc-angle, 0deg),
-      hsl(var(--primary) / 0.0),
-      hsl(var(--primary) / 0.9),
-      hsl(var(--primary) / 0.0) 40%,
-      hsl(var(--primary) / 0.0));
-    animation: magicCardSpin 1.2s linear infinite;
+    inset: 0;
+    background: hsl(0 0% 0% / 0.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
     pointer-events: none;
     z-index: 1;
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-            mask-composite: exclude;
-    padding: 2px;
   }
   .magic-card-pulse::after {
     content: "";
     position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: radial-gradient(circle at 50% 50%, hsl(var(--primary) / 0.35), transparent 70%);
-    animation: magicCardGlow 1.2s ease-out infinite;
+    top: 50%; left: 50%;
+    width: 36px; height: 36px;
+    margin: -18px 0 0 -18px;
+    border-radius: 9999px;
+    border: 3px solid hsl(35 95% 55% / 0.22);
+    border-top-color: hsl(35 95% 58%);
+    animation: petalSpin 0.85s linear infinite;
     pointer-events: none;
     z-index: 2;
-  }
-  @keyframes magicCardSpin {
-    to { transform: rotate(360deg); }
-  }
-  @keyframes magicCardGlow {
-    0%   { opacity: 0; transform: scale(0.85); }
-    50%  { opacity: 1; transform: scale(1.05); }
-    100% { opacity: 0; transform: scale(1.15); }
+    box-shadow: 0 0 16px hsl(35 95% 55% / 0.5);
   }
 
 
