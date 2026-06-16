@@ -3272,7 +3272,11 @@ const Index = () => {
           willChange: "transform",
           backfaceVisibility: "hidden",
         }}>
-          {MAIN_PAGE_ORDER.map((page) => (
+          {MAIN_PAGE_ORDER.map((page, idx) => {
+            // Only render the active page + immediate neighbors to keep the DOM light.
+            // Far-away pages mount lazily as the user swipes, cutting initial work massively.
+            const shouldRender = Math.abs(idx - activePageIdx) <= 1;
+            return (
             <div
               key={page}
               ref={(el) => { pageContainerRefs.current[page] = el; }}
@@ -3287,12 +3291,13 @@ const Index = () => {
                 WebkitOverflowScrolling: "touch",
               }}
             >
-              {page === "home" && getPageContent_home()}
-              {page === "series" && getPageContent_series()}
-              {page === "livetv" && <LiveTvPage isActive={activePage === "livetv"} onExitPlayer={() => setActivePage("home")} />}
-              {page === "movies" && getPageContent_movies()}
+              {shouldRender && page === "home" && getPageContent_home()}
+              {shouldRender && page === "series" && getPageContent_series()}
+              {shouldRender && page === "livetv" && <LiveTvPage isActive={activePage === "livetv"} onExitPlayer={() => setActivePage("home")} />}
+              {shouldRender && page === "movies" && getPageContent_movies()}
             </div>
-          ))}
+            );
+          })}
         </div>
       </main>
       <BottomNav activePage={showProfile ? "profile" : visualPage} onNavigate={handleNavigate} />
