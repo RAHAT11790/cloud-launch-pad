@@ -280,7 +280,12 @@ async function uploadToImgbb(bytes: Uint8Array, name: string): Promise<string> {
 }
 
 // ============= Gemini direct API (user-supplied key) =============
-const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image-preview";
+const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image";
+const GEMINI_IMAGE_MODEL_PRIORITY = [
+  "gemini-2.5-flash-image",
+  "gemini-2.5-flash-image-preview",
+  "gemini-2.0-flash-preview-image-generation",
+];
 
 async function probeGemini(apiKey: string): Promise<{ ok: boolean; model?: string; message?: string; error?: string }> {
   // Cheap probe — list models. Confirms the key is valid + reachable.
@@ -292,7 +297,7 @@ async function probeGemini(apiKey: string): Promise<{ ok: boolean; model?: strin
     }
     const j = await r.json();
     const names: string[] = (j?.models || []).map((m: any) => String(m?.name || "").replace("models/", ""));
-    const hasImage = names.find((n) => n.includes("image"));
+    const hasImage = GEMINI_IMAGE_MODEL_PRIORITY.find((m) => names.includes(m)) || names.find((n) => n.includes("image"));
     return {
       ok: true,
       model: hasImage || GEMINI_IMAGE_MODEL,
@@ -301,6 +306,20 @@ async function probeGemini(apiKey: string): Promise<{ ok: boolean; model?: strin
   } catch (e: any) {
     return { ok: false, error: e?.message || String(e) };
   }
+}
+
+async function resolveGeminiImageModel(apiKey: string): Promise<string> {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+  if (!r.ok) return GEMINI_IMAGE_MODEL;
+  const j = await r.json().catch(() => ({}));
+  const models: any[] = Array.isArray(j?.models) ? j.models : [];
+  const candidates = models
+    .map((m) => ({
+      name: String(m?.name || "").replace("models/", ""),
+      methods: Array.isArray(m?.supportedGenerationMethods) ? m.supportedGenerationMethods : [],
+    }))
+    .filter((m) => m.name && m.name.includes("image") && (!m.methods.length || m.methods.includes("generateContent")));
+  return GEMINI_IMAGE_MODEL_PRIORITY.find((name) => candidates.some((m) => m.name === name)) || candidates[0]?.name || GEMINI_IMAGE_MODEL;
 }
 
 async function genWithGemini(prompt: string, referenceDataUrl: string | null, apiKey: string): Promise<Uint8Array> {
@@ -313,7 +332,8 @@ async function genWithGemini(prompt: string, referenceDataUrl: string | null, ap
     contents: [{ role: "user", parts }],
     generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
   };
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const model = await resolveGeminiImageModel(apiKey);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
