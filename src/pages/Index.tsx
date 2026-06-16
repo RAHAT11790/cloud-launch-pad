@@ -387,13 +387,27 @@ import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writ
 const apiCache = new Map<string, { data: any; ts: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 min
 const API_TIMEOUT_MS = 6_000;
+const IMAGE_CACHE = 'rs-image-cache-v1';
 const warmedImageUrls = new Set<string>();
 const ALL_ANIME_BATCH_SIZE = 18;
+
+const cacheImagePersistently = async (src?: string | null) => {
+  const url = String(src || "").trim();
+  if (!url || typeof window === "undefined" || !("caches" in window)) return;
+  try {
+    const cache = await caches.open(IMAGE_CACHE);
+    const cached = await cache.match(url);
+    if (cached) return;
+    const response = await fetch(url, { mode: "no-cors", credentials: "omit", cache: "force-cache" });
+    if (response) await cache.put(url, response.clone());
+  } catch {}
+};
 
 const preloadImage = (src?: string | null) => {
   const url = String(src || "").trim();
   if (!url || warmedImageUrls.has(url) || typeof window === "undefined") return Promise.resolve();
   warmedImageUrls.add(url);
+  void cacheImagePersistently(url);
   return new Promise<void>((resolve) => {
     const img = new Image();
     img.decoding = "async";
