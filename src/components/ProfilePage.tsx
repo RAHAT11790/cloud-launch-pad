@@ -846,6 +846,13 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
   const qualities = ["Auto", "1080p", "720p", "480p", "360p"];
 
   const handleAnimeClick = (item: any) => {
+    // Watch-history items resume from saved position via continue-watching flow.
+    const hasProgress = Number(item?.currentTime) > 0 && Number(item?.duration) > 0;
+    if (hasProgress && onContinueWatching) {
+      onClose();
+      setTimeout(() => onContinueWatching(item), 100);
+      return;
+    }
     if (!onCardClick) return;
     const anime = allAnime.find(a => a.id === item.id);
     if (anime) {
