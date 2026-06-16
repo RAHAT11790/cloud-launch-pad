@@ -3428,7 +3428,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     <Server className="w-3.5 h-3.5" />
                     <span className="text-[10px] font-medium">HLS</span>
                   </button>
-                ) : effectiveVideoServers.length > 1 && !noServerSwitch ? (
+                ) : effectiveVideoServers.length >= 1 && !noServerSwitch ? (
                   <div className="relative">
                     <button onClick={(e) => { e.stopPropagation(); setShowServerPanel(!showServerPanel); setShowCcPanel(false); setShowSettings(false); setShowQualityPanel(false); setShowAudioPanel(false); }} className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${manualServerSelected ? 'ring-1 ring-primary' : ''}`}>
                       <Server className="w-3.5 h-3.5" />
