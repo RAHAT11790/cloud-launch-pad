@@ -3002,9 +3002,9 @@ const Index = () => {
         ))}
       </div>
       <div className="grid grid-cols-3 gap-2.5">
-        {filteredSeries.map((anime) => (
-          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+        {filteredSeries.slice(0, seriesVisibleCount).map((anime) => (
+          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card anime-card" onClick={() => handleCardClick(anime)}>
+            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
             <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
             <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
             {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
@@ -3014,6 +3014,11 @@ const Index = () => {
           </div>
         ))}
       </div>
+      {seriesVisibleCount < filteredSeries.length && (
+        <div className="mt-3 flex justify-center">
+          <button onClick={() => setSeriesVisibleCount((p) => p + GRID_PAGE_BATCH_SIZE)} className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-accent">Load More</button>
+        </div>
+      )}
       {filteredSeries.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
     </div>
   );
