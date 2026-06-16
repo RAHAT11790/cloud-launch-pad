@@ -194,8 +194,8 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         year: activeItem.year,
         mode,
         provider,
-        referenceImageUrl: mode === "backdrop" && useReference ? activeItem.backdrop : undefined,
-        useReference: mode === "backdrop" ? useReference : false,
+        referenceImageUrl: mode === "backdrop" ? activeItem.backdrop : undefined,
+        useReference: mode === "backdrop",
         genres: activeItem.genres,
         overview: activeItem.storyline,
       };
@@ -441,11 +441,12 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
                 <input
                   type="checkbox"
                   className="mt-0.5 shrink-0"
-                  checked={useReference}
-                  onChange={(e) => setUseReference(e.target.checked)}
+                  checked={mode === "backdrop"}
+                  disabled
+                  onChange={() => setUseReference(true)}
                 />
                 <span className="min-w-0 break-words">
-                   <span className="text-emerald-300 font-semibold">Use current reference image</span> — EGD Gemini preserves the exact characters from the current backdrop and remasters it.
+                  <span className="text-emerald-300 font-semibold">Reference required</span> — EGD Gemini always edits the current backdrop so it cannot switch into random text-only image generation.
                 </span>
               </label>
               {useReference && !activeItem.backdrop && (
