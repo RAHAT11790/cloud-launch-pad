@@ -3905,7 +3905,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           disabled={!!pendingSuggestion && !isPending}
                           className={`group text-left transition-transform duration-150 ${isPending ? "scale-95" : "active:scale-95"} ${pendingSuggestion && !isPending ? "opacity-50" : ""}`}
                         >
-                          <div className={`relative aspect-[2/3] rounded-lg overflow-hidden bg-foreground/5 ${isPending ? "ring-2 ring-primary" : ""}`}>
+                          <div className={`relative aspect-[2/3] rounded-lg overflow-hidden bg-foreground/5 ${isPending ? "magic-card-pulse" : ""}`}>
                             {anime.poster ? (
                               <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} loading={idx < 6 ? "eager" : "lazy"} decoding="async" fetchPriority={idx < 3 ? "high" : "auto" as any} className="w-full h-full object-cover" />
                             ) : (
