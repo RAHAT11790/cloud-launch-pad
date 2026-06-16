@@ -92,7 +92,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
     let safePayload = { ...payload };
     const incomingPhoto = String(safePayload.profilePhoto || safePayload.photoUrl || safePayload.avatar || "").trim();
     if (!incomingPhoto) {
-      const paths = [`users/${userId}`, aliasKey ? `users/${aliasKey}` : ""].filter(Boolean);
+      const paths = [`users/${userId}`, aliasKey ? `users/${aliasKey}` : "", aliasKey ? `appUsers/${aliasKey}` : ""].filter(Boolean);
       for (const path of paths) {
         try {
           const snap = await get(ref(db, path));
