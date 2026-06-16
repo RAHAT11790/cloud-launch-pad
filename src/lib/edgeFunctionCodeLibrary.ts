@@ -72,6 +72,8 @@ export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
   entry("link-share-bot", "Link Share Bot", "Telegram bot for shareable unlock / access links.", linkShareBotSource),
   entry("shorten-arolinks", "Shorten Arolinks", "Generic shortener proxy used by ad services.", shortenArolinksSource),
   entry("generate-backdrop", "Generate Backdrop", "AI backdrop generator for missing anime art.", generateBackdropSource),
+  entry("an-api", "AN API (AnimeSalt)", "Standalone AnimeSalt scraper — search, anime, episode endpoints. No secrets required.", anApiSource),
+
 ];
 
 export const getLibraryEntry = (slug: string) =>
