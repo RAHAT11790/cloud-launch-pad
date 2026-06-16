@@ -520,7 +520,7 @@ export default function EgdManager({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => setShowSetup((v) => !v)}
+              onClick={() => (showSetup ? setShowSetup(false) : openSetup())}
               className={btnSecondary + " inline-flex items-center gap-2 text-xs sm:text-sm px-3 py-2"}
             >
               <Settings size={14} /> Setup
