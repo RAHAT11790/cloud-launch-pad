@@ -130,15 +130,8 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
     if (override?.customUrl) return String(override.customUrl).trim();
   } catch {}
 
-  const config = await getEdgeRouterConfig();
-  // Check dynamic functions first
-  const dynFn = Object.values(config.functions).find(f => f.name === fnName || f.endpoint === fnName);
-  if (dynFn) return buildFunctionUrl(dynFn.endpoint, config);
-  const built = buildFunctionUrl(fnName, config);
-  if (built) return built;
-
-  // generate-backdrop MUST run from the user's EGD-deployed URL because its
-  // GEMINI_API_KEY lives on that project. Never fall back to this app's backend.
+  // generate-backdrop uses the GEMINI_API_KEY inside the user's EGD-deployed
+  // project, so it must not use any global Cloudflare/Lovable fallback URL.
   if (fnName === "generate-backdrop") {
     try {
       const egdSnap = await get(ref(db, "egdManager/config/deployerUrl"));
@@ -147,6 +140,14 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
       return "";
     }
   }
+
+  const config = await getEdgeRouterConfig();
+  // Check dynamic functions first
+  const dynFn = Object.values(config.functions).find(f => f.name === fnName || f.endpoint === fnName);
+  if (dynFn) return buildFunctionUrl(dynFn.endpoint, config);
+  const built = buildFunctionUrl(fnName, config);
+  if (built) return built;
+
   return supabaseFallbackUrl(fnName);
 }
 
