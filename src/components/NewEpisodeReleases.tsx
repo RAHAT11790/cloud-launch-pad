@@ -262,45 +262,79 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[300] bg-black/95 flex items-center justify-center p-5"
+            transition={{ duration: 0.18 }}
+            onClick={() => setShowModal(false)}
+            className="fixed inset-0 z-[300] bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-5"
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-card rounded-2xl w-full max-w-[500px] max-h-[80vh] overflow-hidden"
+              initial={{ y: 40, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 40, opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-card w-full sm:max-w-[520px] sm:rounded-2xl rounded-t-2xl flex flex-col max-h-[85vh] shadow-2xl border border-border/40"
             >
-              <div className="flex justify-between items-center px-5 py-4 border-b border-border/30">
-                <h3 className="text-lg font-bold">All New Episode Releases</h3>
-                <button onClick={() => setShowModal(false)} className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+              <div className="flex justify-between items-center px-5 py-4 border-b border-border/30 shrink-0">
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-bold flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-accent" /> All New Releases
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {groupedReleases.length} {groupedReleases.length === 1 ? "release" : "releases"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 shrink-0"
+                  aria-label="Close"
+                >
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="overflow-y-auto max-h-[60vh] p-5 space-y-2.5">
-                {groupedReleases.map(({ latest: release, minEp, maxEp }) => {
-                  const content = getContent(release.contentId);
-                  if (!content) return null;
-                  const fallbackEp = getEpStart(release);
-                  const epStr = minEp && maxEp && minEp !== maxEp
-                    ? `Episode ${minEp}-${maxEp}`
-                    : fallbackEp ? `Episode ${fallbackEp}` : "New";
-                  return (
-                    <div
-                      key={release.id}
-                      onClick={() => { handleClick(release, minEp); setShowModal(false); }}
-                      className="flex gap-4 p-3 rounded-xl bg-foreground/5 cursor-pointer transition-all hover:bg-primary/20 hover:translate-x-1"
-                    >
-                      <img src={content.poster} alt={content.title} className="w-[60px] h-[80px] rounded-lg object-cover flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-semibold mb-1" style={getAnimeTitleStyle(content.title)}>{content.title}</h4>
-                        <p className="text-xs text-muted-foreground mb-1">
-                          {getSeasonName(release) || (getSeason(release) ? `Season ${getSeason(release)}` : "New Season")} • {epStr}
-                        </p>
-                        <span className="text-[10px] text-primary/70">{timeAgo(release.timestamp)}</span>
+              <div className="overflow-y-auto flex-1 p-4 space-y-2.5 overscroll-contain">
+                {groupedReleases.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-muted-foreground">
+                    No new releases yet — check back soon.
+                  </div>
+                ) : (
+                  groupedReleases.map(({ latest: release, minEp, maxEp }) => {
+                    const content = getContent(release.contentId);
+                    const title = content?.title || release.title || "Unknown";
+                    const poster = content?.poster || release.poster || "";
+                    const fallbackEp = getEpStart(release);
+                    const epStr = minEp && maxEp && minEp !== maxEp
+                      ? `Episode ${minEp}-${maxEp}`
+                      : fallbackEp ? `Episode ${fallbackEp}` : "New";
+                    const seasonLabel = getSeasonName(release) || (getSeason(release) ? `Season ${getSeason(release)}` : "New Season");
+                    return (
+                      <div
+                        key={release.id}
+                        onClick={() => { handleClick(release, minEp); setShowModal(false); }}
+                        className="flex gap-3 p-2.5 rounded-xl bg-foreground/5 cursor-pointer transition-all hover:bg-primary/15 active:scale-[0.98]"
+                      >
+                        {poster ? (
+                          <img
+                            src={optimizedImageUrl(poster, "poster")}
+                            alt={title}
+                            className="w-[56px] h-[78px] rounded-lg object-cover flex-shrink-0 bg-muted"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        ) : (
+                          <div className="w-[56px] h-[78px] rounded-lg bg-muted flex-shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                          <h4 className="text-sm font-semibold mb-1 line-clamp-1" style={getAnimeTitleStyle(title)}>{title}</h4>
+                          <p className="text-xs text-muted-foreground line-clamp-1">
+                            {seasonLabel} • {epStr}
+                          </p>
+                          <span className="text-[10px] text-primary/80 mt-0.5">{timeAgo(release.timestamp)}</span>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground self-center shrink-0" />
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </motion.div>
           </motion.div>
