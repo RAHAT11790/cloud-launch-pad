@@ -3,7 +3,7 @@
  * Cache survives reloads. If user clears it, SW re-fills on next view.
  * No HTML/JS/CSS is cached — only images — so app updates remain instant.
  */
-const IMAGE_CACHE = 'rs-image-cache-v1';
+const IMAGE_CACHE = 'rs-image-cache-v2';
 
 // Hosts that serve poster/backdrop images we want to keep forever
 const IMG_HOSTS = [
@@ -45,12 +45,13 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith((async () => {
     const cache = await caches.open(IMAGE_CACHE);
-    const cached = await cache.match(event.request);
+    const cacheKey = url.href;
+    const cached = await cache.match(cacheKey);
 
     const networkFetch = fetch(event.request).then((resp) => {
       // Only cache opaque/200 image responses
       if (resp && (resp.status === 200 || resp.type === 'opaque')) {
-        cache.put(event.request, resp.clone()).catch(() => {});
+        cache.put(cacheKey, resp.clone()).catch(() => {});
       }
       return resp;
     }).catch(() => null);

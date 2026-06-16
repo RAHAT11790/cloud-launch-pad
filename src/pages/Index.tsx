@@ -559,19 +559,19 @@ const Index = () => {
       ...movies.map((a: any) => a?.backdrop).filter(Boolean),
       ...animeSaltItems.map((a: any) => a?.poster).filter(Boolean),
     ];
-    const uniq = Array.from(new Set(all)).slice(0, 120);
+    const uniq = Array.from(new Set(all));
     if (uniq.length === 0) return;
     prewarmedRef.current = true;
     const run = () => {
       let i = 0;
       const tick = () => {
-        const batch = uniq.slice(i, i + 4);
+        const batch = uniq.slice(i, i + 2);
         if (!batch.length) return;
         batch.forEach((url) => {
           try { fetch(url, { mode: "no-cors", credentials: "omit" as RequestCredentials }).catch(() => {}); } catch {}
         });
-        i += 4;
-        if (i < uniq.length) setTimeout(tick, 600);
+        i += 2;
+        if (i < uniq.length) setTimeout(tick, 350);
       };
       tick();
     };
