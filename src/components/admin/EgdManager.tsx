@@ -328,7 +328,7 @@ export default function EgdManager({
   // ---------- Bulk deploy every library function ----------
   const bulkDeployAll = async () => {
     if (!savedDeployerUrl) { toast.error("Configure deployer URL first"); setShowSetup(true); return; }
-    if (!confirm(`Deploy all ${EDGE_FUNCTION_LIBRARY.length} library functions to your Supabase?\n\nFunctions that need secrets you haven't set yet will be skipped.`)) return;
+    if (!confirm(`Deploy all ${EDGE_FUNCTION_LIBRARY.length} library functions to your Supabase?\n\nValues from the Secrets Vault will be injected automatically. Any function whose secret is neither in the vault nor on the project is skipped.`)) return;
     setBulkBusy(true);
     setBulkStatus({});
     setBulkMessages({});
