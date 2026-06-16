@@ -321,15 +321,32 @@ serve(async (req) => {
     if (body?.update_id !== undefined || body?.message || body?.edited_message) {
       const update = body;
       const msg = update.message || update.edited_message;
-      if (msg && (msg.chat?.type === "group" || msg.chat?.type === "supergroup")) {
+      if (msg) {
+        const chatType = msg.chat?.type;
         const text: string = msg.text || msg.caption || "";
-        if (text && !text.startsWith("/") && msg.from?.id) {
+
+        // PRIVATE chat: handle /start and other commands with a welcome message
+        if (chatType === "private" && msg.chat?.id) {
+          const firstName = String(msg.from?.first_name || "there").slice(0, 40);
+          if (text.startsWith("/start") || text.startsWith("/help")) {
+            sendStartMessage(botToken, msg.chat.id, firstName)
+              .catch((e) => console.error("[start message]", e));
+          } else if (text && !text.startsWith("/")) {
+            // any other free-text in DM → also send welcome (acts as discovery)
+            sendStartMessage(botToken, msg.chat.id, firstName)
+              .catch((e) => console.error("[start message]", e));
+          }
+        }
+
+        // GROUP chat: anime-share
+        if ((chatType === "group" || chatType === "supergroup") && text && !text.startsWith("/") && msg.from?.id) {
           handleGroupQuery(botToken, msg.chat.id, msg.from.id, msg.from, text, msg.message_id)
             .catch((e) => console.error("[group anime share]", e));
         }
       }
       return json({ ok: true });
     }
+
 
     const action = String(body?.action || "send");
     const telegramBase = `https://api.telegram.org/bot${botToken}`;
