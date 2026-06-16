@@ -545,24 +545,24 @@ const Index = () => {
       ...movies.map((a: any) => a?.backdrop).filter(Boolean),
       ...animeSaltItems.map((a: any) => a?.poster).filter(Boolean),
     ];
-    const uniq = Array.from(new Set(all)).slice(0, 400);
+    const uniq = Array.from(new Set(all)).slice(0, 120);
     if (uniq.length === 0) return;
     prewarmedRef.current = true;
     const run = () => {
       let i = 0;
       const tick = () => {
-        const batch = uniq.slice(i, i + 8);
+        const batch = uniq.slice(i, i + 4);
         if (!batch.length) return;
         batch.forEach((url) => {
           try { fetch(url, { mode: "no-cors", credentials: "omit" as RequestCredentials }).catch(() => {}); } catch {}
         });
-        i += 8;
-        if (i < uniq.length) setTimeout(tick, 250);
+        i += 4;
+        if (i < uniq.length) setTimeout(tick, 600);
       };
       tick();
     };
-    if ("requestIdleCallback" in window) (window as any).requestIdleCallback(run, { timeout: 3000 });
-    else setTimeout(run, 1500);
+    if ("requestIdleCallback" in window) (window as any).requestIdleCallback(run, { timeout: 5000 });
+    else setTimeout(run, 3000);
   }, [loading, webseries, movies, animeSaltItems]);
 
 
