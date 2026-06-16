@@ -295,7 +295,7 @@ div[style*="z-index: 2147483647"],
     box-shadow: var(--neu-shadow-sm);
   }
 
-  /* Anime-style 12-petal loader (gold flower look) — restored */
+  /* Anime-style 12-petal loader — smooth white flower */
   .player-loader-shell {
     position: relative;
     width: 46px;
@@ -304,9 +304,10 @@ div[style*="z-index: 2147483647"],
     align-items: center;
     justify-content: center;
     border-radius: 9999px;
-    animation: petalSpin 0.9s steps(12, end) infinite;
+    animation: petalSpin 0.72s linear infinite;
     will-change: transform;
-    filter: drop-shadow(0 0 12px hsl(var(--primary) / 0.6));
+    transform: translateZ(0);
+    filter: drop-shadow(0 0 10px hsl(var(--foreground) / 0.55));
   }
 
   .player-loader-petal {
@@ -318,8 +319,8 @@ div[style*="z-index: 2147483647"],
     margin-left: -2.5px;
     margin-top: -22px;
     border-radius: 9999px;
-    background: linear-gradient(to bottom, hsl(var(--premium-gold)), hsl(var(--accent)), hsl(var(--premium-gold-dark)));
-    box-shadow: 0 0 8px hsl(var(--primary) / 0.55);
+    background: linear-gradient(to bottom, hsl(0 0% 100%), hsl(0 0% 90%), hsl(0 0% 72%));
+    box-shadow: 0 0 8px hsl(0 0% 100% / 0.55);
     transform-origin: 2.5px 22px;
     opacity: 0.15;
   }
