@@ -3075,16 +3075,26 @@ const Index = () => {
 
           <NewEpisodeReleases allAnime={allAnime} onCardClick={(anime, seasonIdx, epIdx) => void handlePlay(anime, seasonIdx, epIdx)} />
           {trendingSeries.length > 0 && (
-            <AnimeSection title="🔥 Popular Anime" items={trendingSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("series")} />
+            <AnimeSection title="🔥 Popular Anime" items={trendingSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => navigate("/series")} />
           )}
-          {Object.entries(categoryGroups)
-            .filter(([cat]) => {
-              const c = cat.toLowerCase();
-              return c.includes('adventure') || c.includes('romance');
-            })
-            .map(([cat, items]) => (
+          {(() => {
+            // Keep exactly TWO category rows on home: one Adventure-flavoured (prefer
+            // the combined "Adventure & Fantasy" over a plain "Adventure" duplicate)
+            // and one Romance-flavoured. Total home rows stay at 5.
+            const entries = Object.entries(categoryGroups).filter(([cat]) => cat !== 'AnimeSalt');
+            const pick = (predicate: (c: string) => boolean) => {
+              const matches = entries.filter(([c]) => predicate(c.toLowerCase()));
+              if (matches.length === 0) return null;
+              const combo = matches.find(([c]) => c.includes('&'));
+              return combo || matches[0];
+            };
+            const advRow = pick(c => c.includes('adventure') || c.includes('fantasy'));
+            const romRow = pick(c => c.includes('romance'));
+            const rows = [advRow, romRow].filter(Boolean) as Array<[string, AnimeItem[]]>;
+            return rows.map(([cat, items]) => (
               <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
-            ))}
+            ));
+          })()}
         </>
       )}
       <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
