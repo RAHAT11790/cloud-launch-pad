@@ -3158,6 +3158,7 @@ const Index = () => {
           )}
           {Object.entries(categoryGroups)
             .filter(([cat]) => cat !== 'AnimeSalt')
+            .slice(0, HOME_CATEGORY_LIMIT)
             .map(([cat, items]) => (
             <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
           ))}
