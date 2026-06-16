@@ -3351,7 +3351,7 @@ const Index = () => {
 
       <AnimatePresence>
         {showProfile && (
-          <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
+          <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onContinueWatching={handleContinueWatching} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
         )}
       </AnimatePresence>
 
