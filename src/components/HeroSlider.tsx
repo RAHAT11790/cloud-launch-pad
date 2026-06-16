@@ -150,6 +150,9 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
             src={slide.backdrop}
             alt={slide.title}
             className="w-full h-full object-cover pointer-events-none"
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
             draggable={false}
           />
         </motion.div>

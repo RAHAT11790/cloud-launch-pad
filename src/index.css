@@ -218,12 +218,25 @@ div[style*="z-index: 2147483647"],
   }
 
   .poster-hover {
-    transition: transform 0.4s ease, box-shadow 0.4s ease;
+    background: linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--card)) 100%);
+    isolation: isolate;
+    contain: layout paint style;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
   }
   .poster-hover:hover {
     transform: scale(1.05) translateY(-6px);
     box-shadow: 8px 8px 20px #b8bec7, -8px -8px 20px #ffffff;
     z-index: 10;
+  }
+
+  .poster-img {
+    background: linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--card)) 100%);
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 
   .category-bar::before {
@@ -518,8 +531,9 @@ video, iframe[title="player"] {
 }
 :fullscreen video, :fullscreen iframe { width: 100% !important; height: 100% !important; }
 
-/* Image perf — async decode + lazy paint */
-img { content-visibility: auto; }
+/* Keep images paintable while fast-scrolling; content-visibility on <img>
+   can show black placeholders on Android until scrolling stops. */
+img { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 
 /* ============================================================
    ANDROID TV MODE — zero animations, D-pad focus rings,
