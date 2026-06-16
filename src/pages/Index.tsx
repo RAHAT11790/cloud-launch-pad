@@ -2840,6 +2840,13 @@ const Index = () => {
       return;
     }
     const nextPage = isMainPage(page) ? page : "home";
+
+    // Push real URL so each tab has its own router route (back-button friendly).
+    const targetPath = MAIN_PAGE_PATH[nextPage];
+    if (window.location.pathname !== targetPath) {
+      navigate(targetPath);
+    }
+
     if (showProfile) {
       setShowProfile(false);
       if (nextPage === activePage) { restorePageScroll(activePage); return; }
@@ -2869,7 +2876,18 @@ const Index = () => {
     } else {
       onDone();
     }
-  }, [activePage, showProfile, queueStripTransform, restorePageScroll, isLoggedIn]);
+  }, [activePage, showProfile, queueStripTransform, restorePageScroll, isLoggedIn, navigate]);
+
+  // Browser back/forward + direct URL → sync activePage from pathname.
+  // Skip while a routed overlay (anime details, watch, search, notifications) is open.
+  useEffect(() => {
+    if (isRoutedOverlay) return;
+    const fromPath = pathToMainPage(pathname);
+    if (fromPath && fromPath !== activePage) {
+      setActivePage(fromPath);
+      setVisualPage(fromPath);
+    }
+  }, [pathname, isRoutedOverlay, activePage]);
 
   // Set initial position without animation
   useLayoutEffect(() => {
