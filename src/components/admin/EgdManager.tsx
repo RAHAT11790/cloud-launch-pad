@@ -387,10 +387,18 @@ export default function EgdManager({
     setBulkStatus({});
     setBulkMessages({});
 
-    // Refresh project secret names first
-    try { await callDeployer("secrets").then((d) => { if (d?.ok && Array.isArray(d.names)) setProjectSecrets(d.names); }); } catch {}
+    // Refresh project secret names first and use the fresh result immediately.
+    let freshProjectSecrets = projectSecrets;
+    try {
+      await callDeployer("secrets").then((d) => {
+        if (d?.ok && Array.isArray(d.names)) {
+          freshProjectSecrets = d.names;
+          setProjectSecrets(d.names);
+        }
+      });
+    } catch {}
 
-    const haveOnProject = new Set(projectSecrets);
+    const haveOnProject = new Set(freshProjectSecrets);
     let okCount = 0;
     for (const entry of EDGE_FUNCTION_LIBRARY) {
       // For each required secret: use vault value if present, otherwise rely on
