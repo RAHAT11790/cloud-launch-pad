@@ -89,11 +89,27 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
   const syncCanonicalUserNode = async (userId: string, payload: Record<string, any>, email?: string) => {
     const aliasKey = buildEmailAliasKey(email);
+    let safePayload = { ...payload };
+    const incomingPhoto = String(safePayload.profilePhoto || safePayload.photoUrl || safePayload.avatar || "").trim();
+    if (!incomingPhoto) {
+      const paths = [`users/${userId}`, aliasKey ? `users/${aliasKey}` : ""].filter(Boolean);
+      for (const path of paths) {
+        try {
+          const snap = await get(ref(db, path));
+          const data = snap.val() || {};
+          const existingPhoto = String(data.profilePhoto || data.photoUrl || data.avatar || "").trim();
+          if (existingPhoto) {
+            safePayload = { ...safePayload, profilePhoto: existingPhoto, photoUrl: existingPhoto, avatar: existingPhoto };
+            break;
+          }
+        } catch {}
+      }
+    }
     const writes: Promise<any>[] = [
-      update(ref(db, `users/${userId}`), payload).catch(() => {}),
+      update(ref(db, `users/${userId}`), safePayload).catch(() => {}),
     ];
     if (aliasKey) {
-      writes.push(update(ref(db, `users/${aliasKey}`), { ...payload, id: userId }).catch(() => {}));
+      writes.push(update(ref(db, `users/${aliasKey}`), { ...safePayload, id: userId }).catch(() => {}));
     }
     await Promise.all(writes);
   };
