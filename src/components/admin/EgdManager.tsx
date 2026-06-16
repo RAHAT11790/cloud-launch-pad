@@ -182,6 +182,17 @@ export default function EgdManager({
   const [logEndAt, setLogEndAt] = useState("");
   const [projectSecrets, setProjectSecrets] = useState<string[]>([]);
 
+  // --- Secrets Vault (one-time values used by bulk deploy) ---
+  const allLibrarySecrets = useMemo(() => {
+    const set = new Set<string>();
+    EDGE_FUNCTION_LIBRARY.forEach((e) => e.secrets.forEach((s) => set.add(s)));
+    return Array.from(set).sort();
+  }, []);
+  const [vault, setVault] = useState<Record<string, string>>({});
+  const [vaultDirty, setVaultDirty] = useState(false);
+  const [savingVault, setSavingVault] = useState(false);
+  const [showVaultValues, setShowVaultValues] = useState(false);
+
   // --- Bulk deploy ---
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkStatus, setBulkStatus] = useState<Record<string, "pending" | "deploying" | "done" | "skipped" | "error">>({});
