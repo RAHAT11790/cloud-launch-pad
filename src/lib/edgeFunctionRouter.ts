@@ -107,7 +107,18 @@ function supabaseFallbackUrl(fnName: string): string {
 function deriveFromEgdDeployerUrl(deployerUrl: string, fnName: string): string {
   const u = String(deployerUrl || "").trim();
   if (!/^https?:\/\//i.test(u)) return "";
-  return u.replace(/\/functions\/v1\/[^/?#]+\/?(?:[?#].*)?$/i, `/functions/v1/${fnName}`);
+  try {
+    const url = new URL(u);
+    const match = url.pathname.match(/^(.*\/functions\/v1\/)[^/]+(?:\/.*)?$/i);
+    url.pathname = match
+      ? `${match[1]}${fnName}`
+      : `${url.pathname.replace(/\/+$/, "")}/functions/v1/${fnName}`;
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return "";
+  }
 }
 
 /** Get URL for a named function — checks per-function overrides first */
@@ -122,17 +133,8 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
     return supabaseFallbackUrl(fnName);
   }
 
-  // Check per-function override from Firebase
-  try {
-    const overrideSnap = await get(ref(db, `settings/functionOverrides/${fnName}`));
-    const override = overrideSnap.val();
-    if (override?.enabled === false) return "";
-    const customUrl = String(override?.customUrl || "").trim();
-    if (customUrl) return customUrl;
-  } catch {}
-
-  // generate-backdrop uses the GEMINI_API_KEY inside the user's EGD-deployed
-  // project, so it must not use any global Cloudflare/Lovable fallback URL.
+  // generate-backdrop uses GEMINI_API_KEY inside the user's EGD-deployed
+  // project only. Never allow stale app overrides or Lovable fallbacks here.
   if (fnName === "generate-backdrop") {
     try {
       const egdSnap = await get(ref(db, "egdManager/config/deployerUrl"));
@@ -141,6 +143,15 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
       return "";
     }
   }
+
+  // Check per-function override from Firebase
+  try {
+    const overrideSnap = await get(ref(db, `settings/functionOverrides/${fnName}`));
+    const override = overrideSnap.val();
+    if (override?.enabled === false) return "";
+    const customUrl = String(override?.customUrl || "").trim();
+    if (customUrl) return customUrl;
+  } catch {}
 
   const config = await getEdgeRouterConfig();
   // Check dynamic functions first
