@@ -1397,6 +1397,24 @@ const Index = () => {
     });
   }, [activeCategory, allMovies, dubFilter, getPopularity]);
 
+  useEffect(() => {
+    setTabGridVisibleCount({ series: TAB_GRID_INITIAL_COUNT, movies: TAB_GRID_INITIAL_COUNT });
+  }, [activeCategory, dubFilter]);
+
+  useEffect(() => {
+    if (activePage !== "series" && activePage !== "movies") return;
+    const total = activePage === "series" ? filteredSeries.length : filteredMovies.length;
+    const current = tabGridVisibleCount[activePage];
+    if (current >= total) return;
+    const timer = window.setTimeout(() => {
+      setTabGridVisibleCount((prev) => ({
+        ...prev,
+        [activePage]: Math.min(total, prev[activePage] + TAB_GRID_BATCH_COUNT),
+      }));
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [activePage, filteredSeries.length, filteredMovies.length, tabGridVisibleCount]);
+
   const categoryGroups = useMemo(() => {
     const groups: Record<string, AnimeItem[]> = {};
     filteredAnime.forEach((a) => {
