@@ -142,19 +142,14 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usePromptOverride, mode]);
 
-  // ---- Gemini live status: probe key via edge function ----
+  // ---- Gemini live status: probe key via edge function (server reads GEMINI_API_KEY from env) ----
   const checkGemini = useCallback(async (silent = false) => {
-    if (!geminiKey) {
-      setGeminiStatus({ state: "offline", message: "No API key set", checkedAt: Date.now() });
-      if (!silent) toast.error("Set your Gemini API key first.");
-      return;
-    }
     setGeminiStatus((s) => ({ ...s, state: "checking" }));
     try {
-      const data = await callGenerateBackdrop({ action: "check-gemini", geminiKey });
+      const data = await callGenerateBackdrop({ action: "check-gemini" });
       if (data?.ok) {
         setGeminiStatus({
-          state: "online", model: data.model, message: data.message || "Key verified",
+          state: "online", model: data.model, message: data.message || "Server key verified",
           checkedAt: Date.now(),
         });
         if (!silent) toast.success(`Gemini online · ${data.model}`);
@@ -168,23 +163,21 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       setGeminiStatus({ state: "offline", message: e?.message || String(e), checkedAt: Date.now() });
       if (!silent) toast.error(e?.message || "Probe failed");
     }
-  }, [geminiKey]);
+  }, []);
 
-  // Auto-check whenever provider becomes gemini AND key exists
+  // Auto-check whenever provider becomes gemini
   useEffect(() => {
-    if (provider === "gemini" && geminiKey && geminiStatus.state === "unknown") {
+    if (provider === "gemini" && geminiStatus.state === "unknown") {
       void checkGemini(true);
     }
-  }, [provider, geminiKey, geminiStatus.state, checkGemini]);
+  }, [provider, geminiStatus.state, checkGemini]);
 
   const saveGeminiConfig = async () => {
     try {
       await update(ref(db, "settings/geminiImage"), {
-        apiKey: geminiKeyDraft.trim(),
         dailyLimit: Number(geminiDailyLimit) || 100,
       });
-      toast.success("Gemini config saved");
-      setGeminiStatus({ state: "unknown" });
+      toast.success("Quota saved");
     } catch (e: any) {
       toast.error(`Save failed: ${e?.message || e}`);
     }
@@ -192,10 +185,6 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
 
   const generate = async () => {
     if (!activeItem || busy) return;
-    if (provider === "gemini" && !geminiKey) {
-      toast.error("Set your Gemini API key first.");
-      return;
-    }
     if (provider === "gemini" && geminiUsedToday >= geminiDailyLimit) {
       toast.error(`Daily limit reached (${geminiUsedToday}/${geminiDailyLimit}).`);
       return;
@@ -218,7 +207,17 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         genres: activeItem.genres,
         overview: activeItem.storyline,
       };
-      if (provider === "gemini") payload.geminiKey = geminiKey;
+      if (usePromptOverride && customPrompt.trim()) {
+        payload.customPrompt = customPrompt
+          .replace(/\{title\}/gi, activeItem.title)
+          .replace(/\[WRITE ANIME NAME HERE\]/gi, activeItem.title);
+      }
+      const data = await callGenerateBackdrop(payload);
+      if (!data?.url) throw new Error(data?.error || "no url");
+      setProgress(100);
+      setPreviewUrl(data.url as string);
+      toast.success(`Preview ready (${data.engine})`);
+
       if (usePromptOverride && customPrompt.trim()) {
         payload.customPrompt = customPrompt
           .replace(/\{title\}/gi, activeItem.title)
