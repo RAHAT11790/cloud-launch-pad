@@ -86,13 +86,22 @@ function buildGroundedPrompt(b: Body): string {
   const genreLine = b.genres?.length ? b.genres.join(", ") : "(unknown — infer from reference image)";
   const overview = (b.overview || "").trim().slice(0, 600);
   const upperTitle = (b.title || "").toUpperCase();
-  return `You are designing an ULTRA-PROFESSIONAL 16:9 anime promotional banner for "${b.title}" — Crunchyroll / Netflix / official studio marketing quality.
+  const custom = (b.customPrompt || "").trim();
+  return `You are editing the PROVIDED REFERENCE IMAGE into an ULTRA-PROFESSIONAL 16:9 anime promotional banner for "${b.title}" — Crunchyroll / Netflix / official studio marketing quality.
+
+CRITICAL ROUTING / EDIT LOCK:
+- This is IMAGE-TO-IMAGE EDITING. The supplied reference image is mandatory and is the primary source of truth.
+- DO NOT ignore the reference. DO NOT create a new unrelated anime poster from text/title only.
+- Preserve the existing character identity from the reference: same face, hair, eyes, outfit, weapons, body proportions, species, gender, and age impression.
+- If the text title conflicts with the reference image, FOLLOW THE REFERENCE IMAGE.
+- Improve composition, lighting, background, typography and branding; do not replace the character with random / generic / Western cartoon characters.
 
 ANIME TITLE: "${b.title}"${b.year ? ` (${b.year})` : ""}
 OFFICIAL GENRE(S): ${genreLine}
 OVERVIEW: ${overview || "(none provided)"}
+${custom ? `\nUSER EXTRA REQUEST (apply only if it does not break the edit lock):\n${custom.replace(/\{title\}/gi, b.title || "")}\n` : ""}
 
-REFERENCE IMAGE ROLE: identify the OFFICIAL CHARACTERS only — preserve EXACT hair, eyes, face, body proportions, outfit, weapons. DO NOT copy reference composition, framing, background or lighting. Re-design EVERYTHING ELSE from scratch with original art-direction.
+REFERENCE IMAGE ROLE: preserve EXACT character identity — hair, eyes, face, body proportions, outfit, weapons and recognisable silhouette. You may redraw with higher quality and cinematic polish, but it must still be clearly the same characters from the reference.
 
 DESIGN FREEDOM: choose your own composition, poses, camera angle, depth, lighting, color grading, background, particles, title typography, decorative UI. Quality bar: top-tier official anime marketing.
 
@@ -111,7 +120,7 @@ STRICT NO-GO:
 - ❌ NO childish/silly tone. NO year/date numbers. NO deformed anatomy. NO generic stock typography.
 - DO NOT replicate the reference image's layout or background — only borrow the characters.
 
-OUTPUT: one ultra-professional 16:9 anime promotional banner, original art-directed composition, official characters preserved from reference, genre-faithful mood, stylized "${upperTitle}" title, RS ANIME crown badge top-right, Telegram + Website chips bottom-left.`;
+OUTPUT: one ultra-professional 16:9 anime promotional banner, original art-directed composition, same reference characters preserved, genre-faithful mood, stylized "${upperTitle}" title, RS ANIME crown badge top-right, Telegram + Website chips bottom-left.`;
 }
 
 async function uploadToImgbb(bytes: Uint8Array, name: string): Promise<string> {
@@ -133,10 +142,10 @@ async function uploadToImgbb(bytes: Uint8Array, name: string): Promise<string> {
   throw lastErr instanceof Error ? lastErr : new Error("ImgBB failed");
 }
 
-const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image";
+const GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image-preview";
 const GEMINI_IMAGE_MODEL_PRIORITY = [
-  "gemini-2.5-flash-image",
   "gemini-2.5-flash-image-preview",
+  "gemini-2.5-flash-image",
   "gemini-2.0-flash-preview-image-generation",
 ];
 
@@ -244,17 +253,13 @@ Deno.serve(async (req) => {
 
     const refDataUrl = useRef ? await fetchAsDataUrl(body.referenceImageUrl!).catch(() => null) : null;
     if (mode === "backdrop" && !refDataUrl) throw new Error("Could not load reference backdrop image. Fix the anime backdrop URL first.");
-    const groundedPrompt = useRef
-      ? ((body.customPrompt && body.customPrompt.trim())
-          ? body.customPrompt.replace(/\{title\}/gi, body.title!)
-          : buildGroundedPrompt(body))
-      : prompt;
+    const groundedPrompt = useRef ? buildGroundedPrompt(body) : prompt;
     const bytes = await genWithGemini(groundedPrompt, refDataUrl, GEMINI_KEY);
     url = await uploadToImgbb(bytes, `${mode}_gem_${safe}_${Date.now()}`);
     engineLabel = useRef ? "egd-gemini-edit" : "egd-gemini";
 
 
-    return new Response(JSON.stringify({ ok: true, url, mode, engine: engineLabel }), {
+    return new Response(JSON.stringify({ ok: true, url, mode, engine: engineLabel, source: "egd", referenceUsed: !!refDataUrl }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
