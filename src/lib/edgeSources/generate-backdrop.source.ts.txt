@@ -205,7 +205,7 @@ async function genWithGemini(prompt: string, referenceDataUrl: string | null, ap
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method === "GET") {
-    return new Response(JSON.stringify({ ok: true, service: "generate-backdrop", providers: ["gemini", "flux"] }), {
+    return new Response(JSON.stringify({ ok: true, service: "generate-backdrop", providers: ["gemini"], source: "egd" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
@@ -230,46 +230,28 @@ Deno.serve(async (req) => {
     }
 
     const mode = body.mode === "logo" ? "logo" : "backdrop";
-    const provider: "gemini" | "flux" = body.provider === "flux" ? "flux" : "gemini";
+    const provider: "gemini" = "gemini";
     const prompt = buildPrompt({ ...body, mode } as Body);
     const safe = (body.animeId || "x").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
 
-    const useRef = mode === "backdrop" && provider === "gemini" && !!body.referenceImageUrl && body.useReference !== false;
+    const useRef = mode === "backdrop" && !!body.referenceImageUrl && body.useReference !== false;
 
     let url: string;
     let engineLabel: string = provider;
 
-    if (provider === "flux") {
-      url = await genWithFlux(prompt, mode);
-    } else {
-      if (!GEMINI_KEY) throw new Error("GEMINI_API_KEY not configured on server — add it in EGD Manager deploy form.");
-      const refDataUrl = useRef ? await fetchAsDataUrl(body.referenceImageUrl!).catch(() => null) : null;
-      const groundedPrompt = useRef
-        ? ((body.customPrompt && body.customPrompt.trim())
-            ? body.customPrompt.replace(/\{title\}/gi, body.title!)
-            : buildGroundedPrompt(body))
-        : prompt;
-      try {
-        const bytes = await genWithGemini(groundedPrompt, refDataUrl, GEMINI_KEY);
-        url = await uploadToImgbb(bytes, `${mode}_gem_${safe}_${Date.now()}`);
-        engineLabel = useRef ? "gemini-edit" : "gemini";
-      } catch (e: any) {
-        const msg = String(e?.message || e);
-        console.warn("[generate-backdrop] Gemini failed, trying Flux:", msg);
-        try {
-          url = await genWithFlux(prompt, mode);
-          engineLabel = msg === "RATE_LIMIT" ? "gemini-rate-limited-flux-fallback" : "gemini-flux-fallback";
-        } catch (fluxErr: any) {
-          console.warn("[generate-backdrop] Flux fallback failed:", fluxErr?.message || fluxErr);
-          if (body.referenceImageUrl) {
-            url = body.referenceImageUrl;
-            engineLabel = "reference-safe-fallback";
-          } else {
-            throw new Error("Image providers unavailable. Try again later.");
-          }
-        }
-      }
-    }
+    if (!GEMINI_KEY) throw new Error("GEMINI_API_KEY not configured on this EGD-deployed function — add it in EGD Manager → generate-backdrop → Deploy.");
+    if (mode === "backdrop" && !body.referenceImageUrl) throw new Error("Reference backdrop image is required for accurate anime character editing.");
+
+    const refDataUrl = useRef ? await fetchAsDataUrl(body.referenceImageUrl!).catch(() => null) : null;
+    if (mode === "backdrop" && !refDataUrl) throw new Error("Could not load reference backdrop image. Fix the anime backdrop URL first.");
+    const groundedPrompt = useRef
+      ? ((body.customPrompt && body.customPrompt.trim())
+          ? body.customPrompt.replace(/\{title\}/gi, body.title!)
+          : buildGroundedPrompt(body))
+      : prompt;
+    const bytes = await genWithGemini(groundedPrompt, refDataUrl, GEMINI_KEY);
+    url = await uploadToImgbb(bytes, `${mode}_gem_${safe}_${Date.now()}`);
+    engineLabel = useRef ? "egd-gemini-edit" : "egd-gemini";
 
 
     return new Response(JSON.stringify({ ok: true, url, mode, engine: engineLabel }), {
