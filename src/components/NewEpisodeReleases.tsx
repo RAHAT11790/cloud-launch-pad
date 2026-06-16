@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, remove } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
+import { optimizedImageUrl } from "@/lib/imageCache";
 
 const splitLanguageTokens = (value: string | undefined | null) =>
   String(value || "")
@@ -197,15 +198,15 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                 className="relative flex-shrink-0 w-[124px] cursor-pointer group"
                 onClick={() => handleClick(release, minEp)}
               >
-                <div className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover shadow-md transition-transform group-hover:scale-[1.03]">
+                  <div className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover shadow-md">
                   {/* NEW badge */}
                   <div className="absolute top-1.5 left-1.5 z-10 bg-gradient-to-r from-accent to-pink-500 text-white text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow">
                     <Zap className="w-2.5 h-2.5" /> NEW
                   </div>
-                  <img src={poster} alt={title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="low" />
+                  <img src={optimizedImageUrl(poster, "poster")} alt={title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.35) 45%, transparent 75%)" }} />
                   <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
-                    {languageLabel ? <span className="rounded-md bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold text-white backdrop-blur-sm">{languageLabel}</span> : null}
+                    {languageLabel ? <span className="rounded-md bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold text-white">{languageLabel}</span> : null}
                     <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{year}</span>
                     <span className={`px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider ${content?.source === "animesalt" ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{content?.source === "animesalt" ? "AN" : "RS"}</span>
                   </div>

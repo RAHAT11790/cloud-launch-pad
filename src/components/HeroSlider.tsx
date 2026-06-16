@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Play, Info, Star } from "lucide-react";
 import { getAnimeTitleStyle } from "@/lib/animeFonts";
 import { motion, AnimatePresence } from "framer-motion";
+import { optimizedImageUrl } from "@/lib/imageCache";
 
 export interface HeroSlide {
   id: string;
@@ -147,12 +148,11 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
           style={{ touchAction: "pan-y" }}
         >
           <img
-            src={slide.backdrop}
+            src={optimizedImageUrl(slide.backdrop, "backdrop")}
             alt={slide.title}
             className="w-full h-full object-cover pointer-events-none"
             loading="eager"
             decoding="async"
-            fetchPriority="high"
             draggable={false}
           />
         </motion.div>
@@ -171,9 +171,9 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
         <AnimatePresence mode="wait">
           <motion.div key={slide.id + "-" + current + "-info"} className="max-w-lg">
             <motion.h1
-              initial={{ opacity: 0, y: 30, filter: "blur(8px)" }}
-              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-              exit={{ opacity: 0, y: -20, filter: "blur(4px)" }}
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.4, delay: 0.1 }}
               className="text-[26px] leading-[1.1] font-extrabold mb-3 line-clamp-2 drop-shadow-[0_4px_20px_rgba(0,0,0,0.8)] pointer-events-auto"
               style={{
@@ -201,16 +201,16 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
                 )}
                 {slide.year && <span className="text-white/80 font-medium">{slide.year}</span>}
                 {slide.subtitle && <><span className="text-white/60">•</span><span className="text-white/80 font-medium">{slide.subtitle}</span></>}
-                <span className="bg-white/20 text-white px-2.5 py-1 rounded-md text-[10px] font-bold backdrop-blur-sm">
+                  <span className="bg-white/20 text-white px-2.5 py-1 rounded-md text-[10px] font-bold">
                   {slide.type === "webseries" ? "Series" : "Movie"}
                 </span>
                 {slide.episodeInfo && (
-                  <span className="bg-primary/85 text-primary-foreground px-2.5 py-1 rounded-md text-[10px] font-bold backdrop-blur-sm">
+                  <span className="bg-primary/85 text-primary-foreground px-2.5 py-1 rounded-md text-[10px] font-bold">
                     {slide.episodeInfo}
                   </span>
                 )}
                 {slide.languageInfo && (
-                  <span className="bg-black/55 text-white px-2.5 py-1 rounded-md text-[10px] font-bold backdrop-blur-sm">
+                  <span className="bg-black/55 text-white px-2.5 py-1 rounded-md text-[10px] font-bold">
                     {slide.languageInfo}
                   </span>
                 )}
@@ -246,7 +246,7 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
                 onClick={() => onInfo(current)}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="bg-white/20 text-white px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2 backdrop-blur-lg hover:bg-white/30 transition-colors"
+                className="bg-white/20 text-white px-6 py-3 rounded-xl font-semibold text-sm flex items-center gap-2 hover:bg-white/30 transition-colors"
               >
                 <Info className="w-4 h-4" /> Details
               </motion.button>

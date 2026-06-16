@@ -295,29 +295,32 @@ div[style*="z-index: 2147483647"],
     box-shadow: var(--neu-shadow-sm);
   }
 
-  /* Anime-style 12-petal loader (stainless / steel look) — compact */
+  /* Anime-style 12-petal loader (gold flower look) — restored */
   .player-loader-shell {
     position: relative;
-    width: 40px;
-    height: 40px;
+    width: 46px;
+    height: 46px;
     display: flex;
     align-items: center;
     justify-content: center;
-    animation: petalSpin 1s steps(12, end) infinite;
+    border-radius: 9999px;
+    animation: petalSpin 0.9s steps(12, end) infinite;
     will-change: transform;
+    filter: drop-shadow(0 0 12px hsl(var(--primary) / 0.6));
   }
 
   .player-loader-petal {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 3px;
-    height: 10px;
-    margin-left: -1.5px;
-    margin-top: -19px;
+    width: 5px;
+    height: 14px;
+    margin-left: -2.5px;
+    margin-top: -22px;
     border-radius: 9999px;
-    background: hsl(0 0% 92%);
-    transform-origin: 1.5px 19px;
+    background: linear-gradient(to bottom, hsl(var(--premium-gold)), hsl(var(--accent)), hsl(var(--premium-gold-dark)));
+    box-shadow: 0 0 8px hsl(var(--primary) / 0.55);
+    transform-origin: 2.5px 22px;
     opacity: 0.15;
   }
 
@@ -538,7 +541,23 @@ video, iframe[title="player"] {
 
 /* Keep images paintable while fast-scrolling; content-visibility on <img>
    can show black placeholders on Android until scrolling stops. */
-img { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+img {
+  background: hsl(var(--card));
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+@media (max-width: 768px), (pointer: coarse) {
+  .backdrop-blur,
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur-xl,
+  [class*="backdrop-blur-"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
 
 /* ============================================================
    ANDROID TV MODE — zero animations, D-pad focus rings,

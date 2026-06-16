@@ -3,6 +3,7 @@ import { db, ref, onValue } from "@/lib/firebase";
 import { Play, Radio, Search, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import VideoPlayer from "./VideoPlayer";
+import { optimizedImageUrl } from "@/lib/imageCache";
 
 interface TvChannel {
   id: string;
@@ -179,19 +180,19 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
       {!loading && filtered.length > 0 && (
         <div className="space-y-3">
           {filtered.map((channel) => (
-            <motion.div
+            <div
               key={channel.id}
-              whileTap={{ scale: 0.98 }}
               onClick={() => setActiveChannel(channel)}
               className="relative aspect-video rounded-2xl overflow-hidden cursor-pointer group bg-card border border-border/50"
               style={{ boxShadow: "var(--neu-shadow)" }}
             >
               {/* Background Logo */}
               <img
-                src={channel.banner || channel.logo}
+                src={optimizedImageUrl(channel.banner || channel.logo, "backdrop")}
                 alt={channel.name}
                 className="w-full h-full object-cover"
-                loading="lazy"
+                loading="eager"
+                decoding="async"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = "/placeholder.svg";
                 }}
@@ -210,9 +211,11 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
                   {/* Channel Logo Small */}
                   <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0">
                     <img
-                      src={channel.logo}
+                      src={optimizedImageUrl(channel.logo, "avatar")}
                       alt=""
                       className="w-full h-full object-cover"
+                      loading="eager"
+                      decoding="async"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";
                       }}
@@ -235,7 +238,7 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
                   <Play className="w-5 h-5 text-primary-foreground fill-current ml-0.5" />
                 </div>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
       )}

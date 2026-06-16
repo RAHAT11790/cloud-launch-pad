@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, forwardRef } from "react";
 import { ArrowLeft, Search, Clock, X } from "lucide-react";
 import { type AnimeItem } from "@/data/animeData";
 import { motion } from "framer-motion";
+import { optimizedImageUrl } from "@/lib/imageCache";
 
 interface SearchPageProps {
   allAnime: AnimeItem[];
@@ -139,7 +140,7 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
               <div className="grid grid-cols-3 gap-2.5">
                 {historyAnime.map((anime) => (
                   <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" style={{ boxShadow: "var(--neu-shadow-sm)" }} onClick={() => handleCardClick(anime)}>
-                    <img src={anime.poster} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="low" />
+                    <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 40%, transparent 70%)" }} />
                     <button onClick={(e) => handleRemoveHistory(e, anime.id)}
                       className="absolute top-1 right-1 w-5 h-5 rounded-full bg-white/80 flex items-center justify-center hover:bg-destructive transition-colors z-10">
@@ -181,7 +182,7 @@ const SearchPage = forwardRef<HTMLDivElement, SearchPageProps>(({ allAnime, onCl
           {results.map((anime) => (
             <div key={anime.id} className="w-full">
               <div data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" style={{ boxShadow: "var(--neu-shadow-sm)" }} onClick={() => handleCardClick(anime)}>
-                <img src={anime.poster} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="low" />
+                <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                 <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 40%, transparent 70%)" }} />
                 <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
                   <span className="gradient-primary px-2 py-0.5 rounded text-[9px] font-bold text-primary-foreground">{anime.year}</span>

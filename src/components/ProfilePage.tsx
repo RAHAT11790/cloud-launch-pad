@@ -14,6 +14,7 @@ import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { Progress } from "@/components/ui/progress";
 import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
 import { readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
+import { optimizedImageUrl } from "@/lib/imageCache";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -474,8 +475,12 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   });
 
   // Watchlist & History from Firebase
-  const [watchlist, setWatchlist] = useState<any[]>([]);
-  const [watchHistory, setWatchHistory] = useState<any[]>([]);
+  const [watchlist, setWatchlist] = useState<any[]>(() => {
+    try { return JSON.parse(localStorage.getItem("rs_watchlistCache") || "[]"); } catch { return []; }
+  });
+  const [watchHistory, setWatchHistory] = useState<any[]>(() => {
+    try { return JSON.parse(localStorage.getItem("rs_continueCache") || "[]"); } catch { return []; }
+  });
   const [viewAllMode, setViewAllMode] = useState<null | "history" | "watchlist">(null);
   const [isPremium, setIsPremium] = useState(false);
   const [premiumExpiry, setPremiumExpiry] = useState<number | null>(null);
@@ -606,7 +611,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
 
     Promise.all([get(wlRef), get(whRef)]).then(([wlSnap, whSnap]) => {
       const wlData = wlSnap.val() || {};
-      setWatchlist(Object.values(wlData));
+      const wlItems = Object.values(wlData);
+      setWatchlist(wlItems);
+      try { localStorage.setItem("rs_watchlistCache", JSON.stringify(wlItems.slice(0, 80))); } catch {}
 
       const whData = whSnap.val() || {};
       const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
@@ -616,6 +623,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
         .filter((i: any) => !i.watchedAt || (now - i.watchedAt) <= THIRTY_DAYS);
       items.sort((a: any, b: any) => (b.watchedAt || 0) - (a.watchedAt || 0));
       setWatchHistory(items);
+      try { localStorage.setItem("rs_continueCache", JSON.stringify(items.slice(0, 50))); } catch {}
     }).catch(() => {});
 
     const idle = window.setTimeout(() => {
@@ -1609,7 +1617,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
   return (
     <motion.div className="fixed inset-0 z-[200] bg-background overflow-y-auto pt-[70px] px-4 pb-24"
       initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-      transition={{ type: "tween", duration: 0.4 }}>
+      transition={{ type: "tween", duration: 0.24, ease: [0.32, 0.72, 0, 1] }}>
       <button onClick={onClose} className="flex items-center gap-2 mb-5 text-sm text-secondary-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-5 h-5" />
         <span className="font-medium">Back</span>
@@ -1671,7 +1679,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
               <div key={item.id} onClick={() => handleAnimeClick(item)}
                 className="flex-shrink-0 w-[100px] cursor-pointer">
                 <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
-                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                  <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 50%)" }} />
                   <div className="absolute bottom-1 left-1 right-1">
                     <p className="text-[9px] font-semibold leading-tight line-clamp-2">{item.title}</p>
@@ -1712,7 +1720,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
               <div key={item.id} onClick={() => handleAnimeClick(item)}
                 className="flex-shrink-0 w-[100px] cursor-pointer relative">
                 <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
-                  <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                  <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                   <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 50%)" }} />
                   <button onClick={(e) => { e.stopPropagation(); removeFromWatchlist(item.id); }}
                     className="absolute top-1 right-1 w-5 h-5 rounded-full bg-destructive/80 flex items-center justify-center">
@@ -1775,7 +1783,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
                       className="cursor-pointer relative"
                     >
                       <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-card mb-1">
-                        <img src={item.poster} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                        <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                         <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, transparent 55%)" }} />
                         {viewAllMode === "watchlist" && (
                           <button

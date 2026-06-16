@@ -2,8 +2,31 @@ import { memo, useState, useEffect, useMemo } from "react";
 import { Star, Heart } from "lucide-react";
 import type { AnimeItem } from "@/data/animeData";
 import { db, ref, set, remove, get } from "@/lib/firebase";
-import { useBranding } from "@/hooks/useBranding";
+import { getBrandingSync } from "@/hooks/useBranding";
 import { optimizedImageUrl } from "@/lib/imageCache";
+
+const watchlistCacheByUser = new Map<string, Set<string>>();
+const watchlistLoadByUser = new Map<string, Promise<Set<string>>>();
+
+const loadWatchlistIds = (userId: string) => {
+  const cached = watchlistCacheByUser.get(userId);
+  if (cached) return Promise.resolve(cached);
+  const pending = watchlistLoadByUser.get(userId);
+  if (pending) return pending;
+  const load = get(ref(db, `users/${userId}/watchlist`))
+    .then((snap) => {
+      const ids = new Set<string>(Object.keys(snap.val() || {}));
+      watchlistCacheByUser.set(userId, ids);
+      watchlistLoadByUser.delete(userId);
+      return ids;
+    })
+    .catch(() => {
+      watchlistLoadByUser.delete(userId);
+      return new Set<string>();
+    });
+  watchlistLoadByUser.set(userId, load);
+  return load;
+};
 
 interface AnimeCardProps {
   anime: AnimeItem;
@@ -12,7 +35,7 @@ interface AnimeCardProps {
 
 const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   const [isInWatchlist, setIsInWatchlist] = useState(false);
-  const branding = useBranding();
+  const branding = getBrandingSync();
 
   const getUserId = (): string | null => {
     try { const u = localStorage.getItem("rsanime_user"); if (u) return JSON.parse(u).id; } catch {} return null;
@@ -23,13 +46,16 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
-    void get(ref(db, `users/${userId}/watchlist/${anime.id}`))
-      .then((snap) => {
-        if (!cancelled) setIsInWatchlist(snap.exists());
+    const cached = watchlistCacheByUser.get(userId);
+    if (cached) {
+      if (cached.has(anime.id)) setIsInWatchlist(true);
+      return;
+    }
+    void loadWatchlistIds(userId)
+      .then((ids) => {
+        if (!cancelled && ids.has(anime.id)) setIsInWatchlist(true);
       })
-      .catch(() => {
-        if (!cancelled) setIsInWatchlist(false);
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -40,9 +66,13 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
     if (!userId) return;
     if (isInWatchlist) {
       setIsInWatchlist(false);
+      watchlistCacheByUser.get(userId)?.delete(anime.id);
       remove(ref(db, `users/${userId}/watchlist/${anime.id}`));
     } else {
       setIsInWatchlist(true);
+      const ids = watchlistCacheByUser.get(userId) || new Set<string>();
+      ids.add(anime.id);
+      watchlistCacheByUser.set(userId, ids);
       set(ref(db, `users/${userId}/watchlist/${anime.id}`), {
         id: anime.id, title: anime.title, poster: anime.poster,
         year: anime.year, rating: anime.rating, type: anime.type, addedAt: Date.now(),
@@ -62,19 +92,12 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
     };
     (anime.availableLanguages || []).forEach((lang) => push(lang));
     push(anime.baseLanguage || anime.language);
-    if (anime.seasons) {
-      anime.seasons.forEach((s: any) => {
-        (s.episodes || []).forEach((ep: any) => {
-          (ep.audioTracks || []).forEach((at: any) => push(at.language || at.label));
-        });
-      });
-    }
     const arr = Array.from(set).filter(Boolean);
     if (arr.length === 0) return "";
     if (arr.length === 1) return arr[0];
     if (arr.length === 2) return "Dual";
     return "Multiple";
-  }, [anime.availableLanguages, anime.baseLanguage, anime.language, anime.seasons]);
+  }, [anime.availableLanguages, anime.baseLanguage, anime.language]);
 
   // ---- Episode / season count ----
   const epInfo = useMemo(() => {
@@ -109,7 +132,6 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
         className="poster-img w-full h-full object-cover"
         loading="eager"
         decoding="async"
-        fetchPriority="low"
       />
       <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
       <button
@@ -124,7 +146,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
       <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
         {languageLabel && (
           <span
-            className="px-1.5 py-0.5 rounded-md text-[8px] font-bold bg-black/75 text-white backdrop-blur-sm"
+            className="px-1.5 py-0.5 rounded-md text-[8px] font-bold bg-black/75 text-white"
             style={{ textShadow: "0 1px 2px rgba(0,0,0,0.6)" }}
           >
             {languageLabel}
@@ -151,7 +173,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
             <span className="opacity-60">· {anime.year}</span>
           </p>
           {epInfo && (
-            <span className="text-[8px] font-semibold text-white bg-white/15 backdrop-blur-sm px-1.5 py-0.5 rounded">
+            <span className="text-[8px] font-semibold text-white bg-white/15 px-1.5 py-0.5 rounded">
               {epInfo}
             </span>
           )}

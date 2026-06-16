@@ -382,6 +382,7 @@ import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
 import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
+import { optimizedImageUrl } from "@/lib/imageCache";
 
 // Session cache for API responses to speed up continue watching
 const apiCache = new Map<string, { data: any; ts: number }>();
@@ -402,6 +403,18 @@ const preloadImage = (src?: string | null) => {
     img.src = url;
   });
 };
+
+const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime: AnimeItem) => void }) => (
+  <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" onClick={() => onClick(anime)}>
+    <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
+    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.22) 42%, transparent 72%)" }} />
+    <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
+    {(anime as any).dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
+    <div className="absolute bottom-0 left-0 right-0 p-2">
+      <p className="text-[11px] font-semibold leading-tight line-clamp-2 text-white" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9)" }}>{anime.title}</p>
+    </div>
+  </div>
+);
 
 const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
   return new Promise<T>((resolve, reject) => {
@@ -1536,12 +1549,12 @@ const Index = () => {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const warmHomeAssets = () => {
-      const heroTargets = heroSlides.slice(0, 4).map((slide) => slide.backdrop);
+      const heroTargets = heroSlides.slice(0, 4).map((slide) => optimizedImageUrl(slide.backdrop, "backdrop"));
       const cardTargets = [
-        ...continueWatching.slice(0, 8).map((item: any) => item.poster),
-        ...trendingSeries.slice(0, 10).map((item) => item.poster),
-        ...filteredMovies.slice(0, 10).map((item) => item.poster),
-        ...allAnimeSaltUnique.slice(0, 18).map((item) => item.poster),
+        ...continueWatching.slice(0, 8).map((item: any) => optimizedImageUrl(item.poster, "poster")),
+        ...trendingSeries.slice(0, 10).map((item) => optimizedImageUrl(item.poster, "poster")),
+        ...filteredMovies.slice(0, 10).map((item) => optimizedImageUrl(item.poster, "poster")),
+        ...allAnimeSaltUnique.slice(0, 18).map((item) => optimizedImageUrl(item.poster, "poster")),
       ];
       const allTargets = heroTargets.concat(cardTargets).filter(Boolean) as string[];
       splashAssetTargetsRef.current = allTargets;
@@ -2961,15 +2974,7 @@ const Index = () => {
       </div>
       <div className="grid grid-cols-3 gap-2.5">
         {filteredSeries.map((anime) => (
-          <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" onClick={() => handleCardClick(anime)}>
-            <img src={anime.poster} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="low" />
-            <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-            <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
-            {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
-            <div className="absolute bottom-0 left-0 right-0 p-2">
-              <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
-            </div>
-          </div>
+          <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
         ))}
       </div>
       {filteredSeries.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
@@ -2992,15 +2997,7 @@ const Index = () => {
       </div>
       <div className="grid grid-cols-3 gap-2.5">
         {filteredMovies.map((anime) => (
-          <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" onClick={() => handleCardClick(anime)}>
-            <img src={anime.poster} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="low" />
-            <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-            <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
-            {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
-            <div className="absolute bottom-0 left-0 right-0 p-2">
-              <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
-            </div>
-          </div>
+          <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
         ))}
       </div>
       {filteredMovies.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
@@ -3017,14 +3014,7 @@ const Index = () => {
           {filteredAnime.length > 0 ? (
             <div className="grid grid-cols-3 gap-2.5">
               {filteredAnime.map((anime) => (
-                <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" onClick={() => handleCardClick(anime)}>
-                  <img src={anime.poster} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="low" />
-                  <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                  <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
-                  <div className="absolute bottom-0 left-0 right-0 p-2">
-                    <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
-                  </div>
-                </div>
+                <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
               ))}
             </div>
           ) : (
@@ -3057,14 +3047,14 @@ const Index = () => {
                     <div key={item.id} onClick={() => handleContinueWatching(item)}
                       className="flex-shrink-0 w-[130px] cursor-pointer">
                       <div data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover mb-1">
-                        <img src={item.poster} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="low" />
+                        <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                         <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
                         <span className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider z-10 ${isAn ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{isAn ? "AN" : "RS"}</span>
                         {agoLabel && (
-                          <span className="absolute top-1.5 left-1.5 bg-black/65 text-white text-[8px] font-semibold px-1.5 py-0.5 rounded backdrop-blur-sm z-10">{agoLabel} ago</span>
+                          <span className="absolute top-1.5 left-1.5 bg-black/65 text-white text-[8px] font-semibold px-1.5 py-0.5 rounded z-10">{agoLabel} ago</span>
                         )}
                         {languageLabel && (
-                          <span className="absolute right-1.5 top-6 z-10 rounded-md bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold text-white backdrop-blur-sm">{languageLabel}</span>
+                          <span className="absolute right-1.5 top-6 z-10 rounded-md bg-black/70 px-1.5 py-0.5 text-[8px] font-semibold text-white">{languageLabel}</span>
                         )}
                         {pct > 0 && (
                           <div className="absolute bottom-0 left-0 right-0 h-1 bg-foreground/25">
@@ -3272,7 +3262,7 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background" style={customBgImage ? { backgroundImage: `url(${customBgImage})`, backgroundSize: 'cover', backgroundAttachment: 'fixed', backgroundPosition: 'center' } : undefined}>
+    <div className="min-h-screen bg-background" style={customBgImage ? { backgroundImage: `url(${customBgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
       <Header onSearchClick={() => navigate("/search")} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
       <main
         className="relative overflow-hidden"
@@ -3288,9 +3278,10 @@ const Index = () => {
           backfaceVisibility: "hidden",
         }}>
           {MAIN_PAGE_ORDER.map((page, idx) => {
-            // Only render the active page + immediate neighbors to keep the DOM light.
-            // Far-away pages mount lazily as the user swipes, cutting initial work massively.
-            const shouldRender = Math.abs(idx - activePageIdx) <= 1;
+            // Idle: only current tab is mounted. During a tab slide, mount only
+            // the pages crossed by the animation so there is no black gap.
+            const visualIdx = MAIN_PAGE_ORDER.indexOf(visualPage);
+            const shouldRender = idx >= Math.min(activePageIdx, visualIdx) && idx <= Math.max(activePageIdx, visualIdx);
             return (
             <div
               key={page}
@@ -3302,8 +3293,8 @@ const Index = () => {
                 overflowY: "auto",
                 overflowX: "hidden",
                 backfaceVisibility: "hidden",
-                transform: "translateZ(0)",
                 WebkitOverflowScrolling: "touch",
+                contain: page === activePage ? "none" : "layout paint style",
               }}
             >
               {shouldRender && page === "home" && getPageContent_home()}

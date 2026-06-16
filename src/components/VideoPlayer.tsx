@@ -15,6 +15,7 @@ import { createUnlockLinksForAllServices, createTelegramBotUnlockLink, getCurren
 import { isUnlockBlockActive } from "@/lib/unlockBlock";
 import VideoEngagement from "@/components/VideoEngagement";
 import { guestStore, isGuest } from "@/lib/guestStore";
+import { optimizedImageUrl } from "@/lib/imageCache";
 // Shortener / Unlock-gate master toggle — admin can disable from Firebase (settings/unlockGateEnabled).
 // When OFF: free users get instant access, NO ad gate, NO unlock popup, NO verification flash.
 const isShortenerEnabled = async (): Promise<boolean> => {
@@ -3248,7 +3249,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           {/* Loading spinner on top of thumbnail */}
           {showLoaderOverlay && (
             <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none">
-              <div className="h-8 w-8 rounded-full border-2 border-white/70 border-t-primary animate-spin" />
+              <div className="player-loader-shell" aria-hidden="true">
+                {Array.from({ length: 12 }).map((_, i) => <span key={i} className="player-loader-petal" />)}
+              </div>
             </div>
           )}
 
@@ -3845,7 +3848,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       <button key={anime.id} onClick={() => onSuggestedClick?.(anime)} className="group text-left">
                         <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-foreground/5">
                           {anime.poster ? (
-                            <img src={anime.poster} alt={anime.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                            <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} loading="eager" decoding="async" className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No image</div>
                           )}
@@ -3946,7 +3949,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             <div className="px-4 pt-3 pb-6 space-y-4">
               <div className="flex items-start gap-3">
                 <div className="w-[60px] h-[84px] shrink-0 overflow-hidden rounded-[8px] bg-white/5">
-                  {anime?.poster ? <img src={anime.poster} alt={anime?.title || title} className="w-full h-full object-cover" loading="lazy" /> : null}
+                  {anime?.poster ? <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime?.title || title} className="w-full h-full object-cover" loading="eager" decoding="async" /> : null}
                 </div>
                 <div className="min-w-0 flex-1 space-y-1.5">
                   <h4 className="text-[14px] font-bold leading-tight">{anime?.title || title}</h4>
@@ -4020,7 +4023,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       className="text-left"
                     >
                       <div className="aspect-[2/3] overflow-hidden rounded-[10px] bg-white/[0.06] border border-white/10">
-                        {item?.poster ? <img src={item.poster} alt={item?.title || "Saved item"} className="w-full h-full object-cover" loading="lazy" /> : null}
+                        {item?.poster ? <img src={optimizedImageUrl(item.poster, "poster")} alt={item?.title || "Saved item"} className="w-full h-full object-cover" loading="eager" decoding="async" /> : null}
                       </div>
                       <p className="mt-1.5 text-[11px] font-medium leading-4 text-white line-clamp-2">{item?.title || "Untitled"}</p>
                     </button>
