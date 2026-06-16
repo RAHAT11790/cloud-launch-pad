@@ -3396,7 +3396,11 @@ const Index = () => {
             >
               {page === "home" && getPageContent_home()}
               {page === "series" && getPageContent_series()}
-              {page === "livetv" && <LiveTvPage isActive={activePage === "livetv"} onExitPlayer={() => setActivePage("home")} />}
+              {page === "livetv" && (
+                <Suspense fallback={<div className="pt-[80px] flex justify-center"><div className="w-6 h-6 rounded-full border-2 border-primary/30 border-t-primary animate-spin" /></div>}>
+                  <LiveTvPage isActive={activePage === "livetv"} onExitPlayer={() => setActivePage("home")} />
+                </Suspense>
+              )}
               {page === "movies" && getPageContent_movies()}
             </div>
           ))}
@@ -3406,34 +3410,42 @@ const Index = () => {
 
       <AnimatePresence>
         {isSearchRoute && (
-          <SearchPage
-            allAnime={allAnime}
-            onClose={() => {
-              if (window.history.length > 1) navigate(-1);
-              else navigate("/");
-            }}
-            onCardClick={(anime) => navigate(buildAnimeRoute(anime.id), { replace: true })}
-          />
+          <Suspense fallback={null}>
+            <SearchPage
+              allAnime={allAnime}
+              onClose={() => {
+                if (window.history.length > 1) navigate(-1);
+                else navigate("/");
+              }}
+              onCardClick={(anime) => navigate(buildAnimeRoute(anime.id), { replace: true })}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
-        {isNotificationsRoute && <NotificationsPage />}
+        {isNotificationsRoute && (
+          <Suspense fallback={null}><NotificationsPage /></Suspense>
+        )}
       </AnimatePresence>
 
       <AnimatePresence>
         {showProfile && (
-          <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
+          <Suspense fallback={null}>
+            <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
+          </Suspense>
         )}
       </AnimatePresence>
 
       {/* On-demand login overlay (no more login wall on first visit) */}
       {showLogin && (
         <div className="fixed inset-0 z-[400]">
-          <LoginPage
-            onLogin={(uid) => { handleLogin(uid); setShowLogin(false); }}
-            onGuest={() => setShowLogin(false)}
-          />
+          <Suspense fallback={null}>
+            <LoginPage
+              onLogin={(uid) => { handleLogin(uid); setShowLogin(false); }}
+              onGuest={() => setShowLogin(false)}
+            />
+          </Suspense>
           <button
             onClick={() => setShowLogin(false)}
             aria-label="Close"
