@@ -1629,12 +1629,12 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
                 {initial}
               </div>
             )}
-            <button onClick={() => fileRef.current?.click()} className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg">
-              <Camera className="w-4 h-4 text-primary-foreground" />
+            <button disabled={photoUploading} onClick={() => fileRef.current?.click()} className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg disabled:opacity-70">
+              {photoUploading ? <Loader2 className="w-4 h-4 text-primary-foreground animate-spin" /> : <Camera className="w-4 h-4 text-primary-foreground" />}
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
           </div>
-          <p className="text-[10px] text-muted-foreground mt-2">Max 2MB • JPG, PNG, WebP</p>
+          <p className="text-[10px] text-muted-foreground mt-2">Max 10MB • JPG, PNG, WebP</p>
         </div>
         <div className="mb-6">
           <label className="text-xs text-muted-foreground mb-2 block">Display Name</label>
