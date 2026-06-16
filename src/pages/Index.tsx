@@ -3341,7 +3341,7 @@ const Index = () => {
             >
               {shouldRender && page === "home" && getPageContent_home()}
               {shouldRender && page === "series" && getPageContent_series()}
-              {shouldRender && page === "livetv" && <LiveTvPage isActive={activePage === "livetv"} onExitPlayer={() => setActivePage("home")} />}
+              {shouldRender && page === "livetv" && <LiveTvPage isActive={activePage === "livetv"} onExitPlayer={() => navigate("/")} />}
               {shouldRender && page === "movies" && getPageContent_movies()}
             </div>
             );
