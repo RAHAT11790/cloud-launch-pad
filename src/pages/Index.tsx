@@ -1549,6 +1549,12 @@ const Index = () => {
 
   // ALL ANIME: deduplicated, loads incrementally every 10s
   const [allAnimeVisibleCount, setAllAnimeVisibleCount] = useState(ALL_ANIME_BATCH_SIZE);
+  const [seriesVisibleCount, setSeriesVisibleCount] = useState(GRID_PAGE_BATCH_SIZE);
+  const [moviesVisibleCount, setMoviesVisibleCount] = useState(GRID_PAGE_BATCH_SIZE);
+  const [categoryVisibleCount, setCategoryVisibleCount] = useState(GRID_PAGE_BATCH_SIZE);
+  useEffect(() => { setSeriesVisibleCount(GRID_PAGE_BATCH_SIZE); }, [activeCategory, dubFilter]);
+  useEffect(() => { setMoviesVisibleCount(GRID_PAGE_BATCH_SIZE); }, [activeCategory, dubFilter]);
+  useEffect(() => { setCategoryVisibleCount(GRID_PAGE_BATCH_SIZE); }, [activeCategory]);
   
   useEffect(() => {
     if (animeSaltItems.length === 0) return;
