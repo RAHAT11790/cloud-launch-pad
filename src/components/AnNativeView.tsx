@@ -170,8 +170,10 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, onF
         crossOrigin="anonymous"
       />
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/40 pointer-events-none">
-          <Loader2 className="w-10 h-10 text-white animate-spin" />
+        <div className="absolute inset-0 flex items-center justify-center z-30 bg-black pointer-events-none">
+          <div className="player-loader-shell" aria-hidden="true">
+            {Array.from({ length: 12 }).map((_, i) => <span key={i} className="player-loader-petal" />)}
+          </div>
         </div>
       )}
 
