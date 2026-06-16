@@ -11,6 +11,7 @@ interface AnimeCardProps {
 
 const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
   const [isInWatchlist, setIsInWatchlist] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const branding = useBranding();
 
   const getUserId = (): string | null => {
@@ -94,6 +95,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
 
   return (
     <div
+      data-anime-card="true"
       className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover min-w-[120px] max-w-[140px] flex-shrink-0"
       onClick={() => onClick(anime)}
       style={{
@@ -104,9 +106,12 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
       <img
         src={anime.poster}
         alt={anime.title}
-        className="w-full h-full object-cover transition-transform duration-400 hover:scale-110"
-        loading="lazy"
+        className={`poster-img w-full h-full object-cover transition-opacity duration-200 ${loaded ? "opacity-100" : "opacity-0"}`}
+        loading="eager"
         decoding="async"
+        fetchPriority="low"
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)}
       />
       <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
       <button

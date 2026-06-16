@@ -13,7 +13,7 @@ const AnimeSection = ({ title, items, onCardClick, onViewAll }: AnimeSectionProp
   if (items.length === 0) return null;
 
   return (
-    <div className="py-5 -mt-10 relative z-20 first:mt-0">
+    <section className="py-5 -mt-10 relative z-20 first:mt-0">
       <div className="flex justify-between items-center px-4 mb-3">
         <h3 className="text-base font-bold flex items-center category-bar">{title}</h3>
         {onViewAll && (
@@ -27,7 +27,7 @@ const AnimeSection = ({ title, items, onCardClick, onViewAll }: AnimeSectionProp
           <AnimeCard key={anime.id} anime={anime} onClick={onCardClick} />
         ))}
       </div>
-    </div>
+    </section>
   );
 };
 
