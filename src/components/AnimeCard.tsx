@@ -104,7 +104,7 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
       }}
     >
       <img
-        src={anime.poster}
+        src={optimizedImageUrl(anime.poster, "poster")}
         alt={anime.title}
         className="poster-img w-full h-full object-cover"
         loading="eager"
