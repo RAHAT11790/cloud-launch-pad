@@ -98,6 +98,7 @@ function supabaseFallbackUrl(fnName: string): string {
     "link-share-bot",
     "process-email-queue",
     "shorten-arolinks",
+    "an-api",
   ]);
   if (!ENABLED.has(fnName)) return "";
   return `${base.replace(/\/$/, "")}/functions/v1/${fnName}`;
