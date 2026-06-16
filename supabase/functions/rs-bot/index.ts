@@ -1,4 +1,4 @@
-// RS Bot — Lovable AI powered chat assistant for the RS Anime site.
+// RS Bot — Gemini powered chat assistant for the RS Anime site.
 // Loads the FULL anime catalog (RS webseries + movies + AnimeSalt) from
 // Firebase RTDB on every request (cached 5 min in module scope), then
 // builds a strict system prompt so the model can only return valid
@@ -18,7 +18,8 @@ const FIREBASE_DB =
   Deno.env.get("FIREBASE_DATABASE_URL") ??
   "https://rs-anime-default-rtdb.firebaseio.com";
 const SITE_URL = Deno.env.get("SITE_URL") ?? "https://rsanime03.lovable.app";
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.0-flash";
 
 // ---------- Firebase REST helpers ----------
 async function fbGet<T = any>(path: string): Promise<T | null> {
@@ -178,9 +179,16 @@ Deno.serve(async (req) => {
   }
 
   try {
-    if (!LOVABLE_API_KEY) {
+    const body = await req.json().catch(() => ({}));
+    if (body?.test === true) {
+      return new Response(JSON.stringify({ ok: true, ping: "rs-bot" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!GEMINI_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "LOVABLE_API_KEY is not configured" }),
+        JSON.stringify({ error: "GEMINI_API_KEY is not configured" }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -188,12 +196,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    const body = await req.json().catch(() => ({}));
-    if (body?.test === true) {
-      return new Response(JSON.stringify({ ok: true, ping: "rs-bot" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
     const messages = Array.isArray(body.messages) ? body.messages : [];
     const userContext = typeof body.userContext === "string"
       ? body.userContext
@@ -212,23 +214,24 @@ Deno.serve(async (req) => {
     const catalog = await loadCatalog();
     const systemPrompt = buildSystemPrompt(catalog, userContext);
 
+    const contents = messages.slice(-8).map((m: any) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: String(m.content || "").slice(0, 1000) }],
+    }));
+
     const aiRes = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
       {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...messages.slice(-8).map((m: any) => ({
-              role: m.role === "admin" ? "user" : (m.role || "user"),
-              content: String(m.content || "").slice(0, 1000),
-            })),
-          ],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents,
+          generationConfig: {
+            temperature: 0.55,
+            topP: 0.9,
+            maxOutputTokens: 800,
+          },
         }),
       },
     );
@@ -258,9 +261,9 @@ Deno.serve(async (req) => {
     }
     if (!aiRes.ok) {
       const errText = await aiRes.text();
-      console.error("AI gateway error:", aiRes.status, errText);
+      console.error("Gemini API error:", aiRes.status, errText);
       return new Response(
-        JSON.stringify({ error: "AI gateway error" }),
+        JSON.stringify({ error: "Gemini API error" }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -269,7 +272,10 @@ Deno.serve(async (req) => {
     }
 
     const data = await aiRes.json();
-    const reply = data?.choices?.[0]?.message?.content || "";
+    const reply = data?.candidates?.[0]?.content?.parts
+      ?.map((p: any) => p?.text || "")
+      .join("")
+      .trim() || "";
 
     return new Response(
       JSON.stringify({ reply, catalogSize: catalog.length }),
