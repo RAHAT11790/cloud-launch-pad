@@ -1698,7 +1698,7 @@ const Index = () => {
               }),
             })),
           };
-          detailsCacheRef.current.set(anime.id, fullAnime);
+          cacheAnimeDetails(anime.id, fullAnime);
           // Background pre-warm: kick off the episode-source fetch NOW so by
           // the time handlePlay awaits it, the cache already has the result.
           // Zero visible latency between details fetch and player open.
@@ -1844,7 +1844,7 @@ const Index = () => {
           };
 
           if (requestId !== detailsRequestRef.current) return;
-          detailsCacheRef.current.set(anime.id, fullAnime);
+          cacheAnimeDetails(anime.id, fullAnime);
           // Pre-warm target episode source while player is mounting.
           try {
             const targetSeason = fullAnime.seasons?.[sIdx ?? 0];
@@ -1867,7 +1867,7 @@ const Index = () => {
             year: anime.year || '',
             language: anime.language || '',
           };
-          detailsCacheRef.current.set(anime.id, fallbackAnime);
+          cacheAnimeDetails(anime.id, fallbackAnime);
           await openPlayerFromAnime(fallbackAnime, { seasonIdx: sIdx, epIdx: eIdx });
         }
       } catch (err) {
