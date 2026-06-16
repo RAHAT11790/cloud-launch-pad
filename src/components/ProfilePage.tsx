@@ -800,7 +800,15 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLog
     setProfilePhoto(null);
     removeProfilePhoto(userId);
     if (userId) {
-      update(ref(db, `users/${userId}`), { profilePhoto: null, photoUrl: null, avatar: null }).catch(() => {});
+      const localUser = getLocalAuthUser();
+      const emailAlias = buildEmailAliasKey(localUser.email);
+      const payload = { profilePhoto: null, photoUrl: null, avatar: null, photoUpdatedAt: Date.now() };
+      const writes: Promise<any>[] = [update(ref(db, `users/${userId}`), payload).catch(() => {})];
+      if (emailAlias) {
+        writes.push(update(ref(db, `users/${emailAlias}`), payload).catch(() => {}));
+        writes.push(update(ref(db, `appUsers/${emailAlias}`), payload).catch(() => {}));
+      }
+      Promise.all(writes).catch(() => {});
     }
   };
 
