@@ -465,6 +465,22 @@ type MainPage = "home" | "series" | "livetv" | "movies";
 
 const MAIN_PAGE_ORDER: MainPage[] = ["home", "series", "livetv", "movies"];
 
+// Public URL paths for each main page — gives real router routes
+// (back-button works, share-friendly URLs) without dismantling the swipe strip.
+const MAIN_PAGE_PATH: Record<MainPage, string> = {
+  home: "/",
+  series: "/series",
+  livetv: "/live-tv",
+  movies: "/movies",
+};
+const pathToMainPage = (path: string): MainPage | null => {
+  if (path === "/" || path === "") return "home";
+  if (path === "/series" || path.startsWith("/series/")) return "series";
+  if (path === "/live-tv" || path.startsWith("/live-tv/")) return "livetv";
+  if (path === "/movies" || path.startsWith("/movies/")) return "movies";
+  return null;
+};
+
 const isMainPage = (page: string): page is MainPage => MAIN_PAGE_ORDER.includes(page as MainPage);
 
 const Index = () => {
