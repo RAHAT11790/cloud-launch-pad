@@ -3360,6 +3360,7 @@ const Index = () => {
           }}
           suggestedAnime={suggestedAnimeImmediate}
         />
+        </Suspense>
       </div>
     );
   }
