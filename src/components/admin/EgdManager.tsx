@@ -948,30 +948,66 @@ export default function EgdManager({
                 <div>
                   <div className="text-xs text-zinc-300">Project secret names</div>
                   <div className="text-[10px] text-zinc-500 break-words">
-                    Backend secret values stay hidden for security.
+                    Values stay hidden. Paste a new value to update, or delete unused secrets.
                   </div>
                 </div>
-                <button
-                  onClick={loadProjectSecrets}
-                  disabled={loadingSecrets}
-                  className={btnSecondary + " inline-flex items-center gap-2 !px-3 !py-1.5 text-[11px]"}
-                >
-                  {loadingSecrets ? <Loader2 className="animate-spin" size={12} /> : <RefreshCw size={12} />}
-                  Refresh
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowProjectSecretValues((v) => !v)}
+                    className={btnSecondary + " inline-flex items-center gap-2 !px-3 !py-1.5 text-[11px]"}
+                  >
+                    {showProjectSecretValues ? "Hide" : "Show"}
+                  </button>
+                  <button
+                    onClick={loadProjectSecrets}
+                    disabled={loadingSecrets}
+                    className={btnSecondary + " inline-flex items-center gap-2 !px-3 !py-1.5 text-[11px]"}
+                  >
+                    {loadingSecrets ? <Loader2 className="animate-spin" size={12} /> : <RefreshCw size={12} />}
+                    Refresh
+                  </button>
+                </div>
               </div>
 
               {projectSecrets.length === 0 ? (
                 <div className="text-[11px] text-zinc-500">No project secrets found.</div>
               ) : (
-                <div className="flex flex-wrap gap-2">
+                <div className="space-y-2">
                   {projectSecrets.map((name) => (
-                    <span
+                    <div
                       key={name}
-                      className="rounded-md border border-zinc-700/70 bg-zinc-900/60 px-2.5 py-1 text-[10px] text-zinc-300 break-all"
+                      className="rounded-lg border border-zinc-700/70 bg-zinc-900/60 p-2 min-w-0"
                     >
-                      {name}
-                    </span>
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <code className="text-[10px] text-amber-300 break-all font-semibold">{name}</code>
+                        <button
+                          onClick={() => deleteProjectSecretValue(name)}
+                          disabled={deletingProjectSecret === name || savingProjectSecret === name}
+                          className="rounded-md bg-red-500/15 text-red-300 hover:bg-red-500/25 px-2 py-1 shrink-0 disabled:opacity-50"
+                          title="Delete secret"
+                        >
+                          {deletingProjectSecret === name ? <Loader2 className="animate-spin" size={12} /> : <Trash2 size={12} />}
+                        </button>
+                      </div>
+                      <div className="flex gap-2 min-w-0">
+                        <input
+                          className={inputClass + " flex-1 min-w-0 !text-[11px] font-mono"}
+                          placeholder="paste new value to update"
+                          type={showProjectSecretValues ? "text" : "password"}
+                          value={projectSecretDrafts[name] || ""}
+                          onChange={(e) => setProjectSecretDrafts((p) => ({ ...p, [name]: e.target.value }))}
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                        <button
+                          onClick={() => saveProjectSecretValue(name)}
+                          disabled={savingProjectSecret === name || deletingProjectSecret === name || !(projectSecretDrafts[name] || "").trim()}
+                          className={btnPrimary + " !px-3 !py-1.5 text-[11px] shrink-0 disabled:opacity-50"}
+                        >
+                          {savingProjectSecret === name ? <Loader2 className="animate-spin" size={12} /> : "Save"}
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
