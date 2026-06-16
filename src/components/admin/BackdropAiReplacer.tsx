@@ -3,7 +3,6 @@ import { db, ref, onValue, update, get, set } from "@/lib/firebase";
 import { toast } from "sonner";
 import { fuzzyMatch } from "@/lib/fuzzyMatch";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
-import { SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 
 interface Props { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string; }
 
@@ -44,10 +43,7 @@ const callGenerateBackdrop = async (body: Record<string, any>) => {
   if (!endpoint) throw new Error("Generate Backdrop function URL not configured. Deploy it from EGD Manager first.");
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   const raw = await res.text();
@@ -216,7 +212,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       if (!data?.url) throw new Error(data?.error || "no url");
       setProgress(100);
       setPreviewUrl(data.url as string);
-      toast.success(`Preview ready (${data.engine})`);
+      toast.success(`Preview ready via EGD URL (${data.engine})`);
 
 
 
