@@ -1,30 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { db, ref, onValue } from '@/lib/firebase';
 import type { AnimeItem } from '@/data/animeData';
 
 const normalizeUrl = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
-const CACHE_KEY = 'rs_cache_animesalt_selected_v1';
-
-const readCache = (): AnimeItem[] => {
-  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '[]'); } catch { return []; }
-};
-
-const writeCache = (items: AnimeItem[]) => {
-  const run = () => { try { localStorage.setItem(CACHE_KEY, JSON.stringify(items)); } catch {} };
-  try {
-    const idle = (window as any).requestIdleCallback;
-    if (typeof idle === 'function') idle(run, { timeout: 1500 });
-    else window.setTimeout(run, 0);
-  } catch { run(); }
-};
-
-const signature = (items: AnimeItem[]) =>
-  items.map((item) => `${item.id}:${item.createdAt || 0}:${item.poster || ''}:${item.backdrop || ''}:${item.title || ''}`).join('|');
 
 export function useSelectedAnimeSalt() {
-  const [items, setItems] = useState<AnimeItem[]>(() => readCache());
-  const [loading, setLoading] = useState(() => readCache().length === 0);
-  const sigRef = useRef(signature(items));
+  const [items, setItems] = useState<AnimeItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsub = onValue(ref(db, 'animesaltSelected'), (snap) => {
@@ -56,13 +38,7 @@ export function useSelectedAnimeSalt() {
       });
 
       converted.sort((a, b) => b.sortAt - a.sortAt);
-      const nextItems = converted.map((entry) => entry.anime);
-      const sig = signature(nextItems);
-      if (sig !== sigRef.current) {
-        sigRef.current = sig;
-        setItems(nextItems);
-        writeCache(nextItems);
-      }
+      setItems(converted.map((entry) => entry.anime));
       setLoading(false);
     });
 

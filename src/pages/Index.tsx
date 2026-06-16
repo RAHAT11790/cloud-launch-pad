@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import type { Episode, Season } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
@@ -110,24 +110,6 @@ const AN_API_BASE = SUPABASE_URL ? `${SUPABASE_URL.replace(/\/$/, "")}/functions
 const buildAnProxyUrl = (url: string) => {
   if (!AN_API_BASE || !url) return url;
   return `${AN_API_BASE}/hls?url=${encodeURIComponent(url)}`;
-};
-
-const LANGUAGE_NAME_MAP: Record<string, string> = {
-  hi: "Hindi", hin: "Hindi", hindi: "Hindi",
-  en: "English", eng: "English", english: "English",
-  ja: "Japanese", jp: "Japanese", jpn: "Japanese", japanese: "Japanese",
-  bn: "Bengali", ben: "Bengali", bengali: "Bengali", bangla: "Bengali",
-  ta: "Tamil", tam: "Tamil", tamil: "Tamil",
-  te: "Telugu", tel: "Telugu", telugu: "Telugu",
-  ko: "Korean", kor: "Korean", korean: "Korean",
-};
-
-const normalizeLanguageName = (raw: string | undefined | null): string => {
-  const s = String(raw || "").trim();
-  if (!s) return "";
-  const key = s.toLowerCase().replace(/[^a-z]/g, "");
-  if (LANGUAGE_NAME_MAP[key]) return LANGUAGE_NAME_MAP[key];
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 };
 
 // Prefer Hindi as the default audio track for AnimeSalt content.
@@ -385,17 +367,17 @@ import BottomNav from "@/components/BottomNav";
 import HeroSlider from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
-const VideoPlayer = lazy(() => import("@/components/VideoPlayer"));
-const NotificationsPage = lazy(() => import("@/pages/NotificationsPage"));
-const ProfilePage = lazy(() => import("@/components/ProfilePage"));
-const SearchPage = lazy(() => import("@/components/SearchPage"));
+import VideoPlayer, { normalizeLanguageName } from "@/components/VideoPlayer";
+import NotificationsPage from "@/pages/NotificationsPage";
+import ProfilePage from "@/components/ProfilePage";
+import SearchPage from "@/components/SearchPage";
 import NewEpisodeReleases from "@/components/NewEpisodeReleases";
-const LoginPage = lazy(() => import("@/components/LoginPage"));
+import LoginPage from "@/components/LoginPage";
 import { useFirebaseData } from "@/hooks/useFirebaseData";
 import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
 import { animeSaltApi } from "@/lib/animeSaltApi";
 import LiveSupportChat from "@/components/LiveSupportChat";
-const LiveTvPage = lazy(() => import("@/components/LiveTvPage"));
+import LiveTvPage from "@/components/LiveTvPage";
 import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
@@ -407,23 +389,6 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 min
 const API_TIMEOUT_MS = 6_000;
 const warmedImageUrls = new Set<string>();
 const ALL_ANIME_BATCH_SIZE = 18;
-const GRID_PAGE_BATCH_SIZE = 42;
-const HOME_CATEGORY_LIMIT = 6;
-const AN_DETAILS_CACHE_KEY = "rs_an_details_cache_v1";
-const AN_DETAILS_CACHE_TTL = 24 * 60 * 60 * 1000;
-
-const readAnDetailsCache = (): Record<string, { ts: number; item: AnimeItem }> => {
-  try { return JSON.parse(localStorage.getItem(AN_DETAILS_CACHE_KEY) || "{}"); } catch { return {}; }
-};
-
-const writeAnDetailsCache = (cache: Record<string, { ts: number; item: AnimeItem }>) => {
-  const run = () => { try { localStorage.setItem(AN_DETAILS_CACHE_KEY, JSON.stringify(cache)); } catch {} };
-  try {
-    const idle = (window as any).requestIdleCallback;
-    if (typeof idle === "function") idle(run, { timeout: 1500 });
-    else window.setTimeout(run, 0);
-  } catch { run(); }
-};
 
 const preloadImage = (src?: string | null) => {
   const url = String(src || "").trim();
@@ -578,8 +543,6 @@ const Index = () => {
     combined.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
     return combined;
   }, [firebaseAnime, activeSaltItems]);
-
-  const allAnimeTitles = useMemo(() => allAnime.map((a) => a.title), [allAnime]);
 
   const allSeries = useMemo(() => {
     const saltSeries = activeSaltItems.filter(i => i.type === 'webseries');
@@ -1029,28 +992,8 @@ const Index = () => {
     } catch {}
   }, [playerState, saltPlayerState, selectedAnime, showProfile, activePage]);
 
-  // AnimeSalt details request control + durable cache (instant reopen, less API pressure)
+  // AnimeSalt details request control + cache (avoid stale loading toast on cached reopen)
   const detailsCacheRef = useRef<Map<string, AnimeItem>>(new Map());
-  const persistedDetailsRef = useRef<Record<string, { ts: number; item: AnimeItem }>>({});
-  useEffect(() => {
-    const cache = readAnDetailsCache();
-    persistedDetailsRef.current = cache;
-    const now = Date.now();
-    Object.entries(cache).forEach(([id, entry]) => {
-      if (entry?.item && now - (entry.ts || 0) < AN_DETAILS_CACHE_TTL) {
-        detailsCacheRef.current.set(id, entry.item);
-      }
-    });
-  }, []);
-
-  const cacheAnimeDetails = useCallback((id: string, item: AnimeItem) => {
-    detailsCacheRef.current.set(id, item);
-    persistedDetailsRef.current = {
-      ...persistedDetailsRef.current,
-      [id]: { ts: Date.now(), item },
-    };
-    writeAnDetailsCache(persistedDetailsRef.current);
-  }, []);
   const detailsLoadingToastRef = useRef<string | number | null>(null);
   const detailsLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const detailsRequestRef = useRef(0);
@@ -1087,8 +1030,10 @@ const Index = () => {
     return toastId;
   }, [dismissDetailsLoadingToast]);
 
-  // Keep AN details cache across list refreshes; cached playable episode lists
-  // are source URLs and should not be discarded during normal home updates.
+  // Invalidate cached full details when source list refreshes
+  useEffect(() => {
+    detailsCacheRef.current.clear();
+  }, [animeSaltItems]);
 
   useEffect(() => {
     return () => {
@@ -1551,12 +1496,6 @@ const Index = () => {
 
   // ALL ANIME: deduplicated, loads incrementally every 10s
   const [allAnimeVisibleCount, setAllAnimeVisibleCount] = useState(ALL_ANIME_BATCH_SIZE);
-  const [seriesVisibleCount, setSeriesVisibleCount] = useState(GRID_PAGE_BATCH_SIZE);
-  const [moviesVisibleCount, setMoviesVisibleCount] = useState(GRID_PAGE_BATCH_SIZE);
-  const [categoryVisibleCount, setCategoryVisibleCount] = useState(GRID_PAGE_BATCH_SIZE);
-  useEffect(() => { setSeriesVisibleCount(GRID_PAGE_BATCH_SIZE); }, [activeCategory, dubFilter]);
-  useEffect(() => { setMoviesVisibleCount(GRID_PAGE_BATCH_SIZE); }, [activeCategory, dubFilter]);
-  useEffect(() => { setCategoryVisibleCount(GRID_PAGE_BATCH_SIZE); }, [activeCategory]);
   
   useEffect(() => {
     if (animeSaltItems.length === 0) return;
@@ -1706,7 +1645,7 @@ const Index = () => {
               }),
             })),
           };
-          cacheAnimeDetails(anime.id, fullAnime);
+          detailsCacheRef.current.set(anime.id, fullAnime);
           // Background pre-warm: kick off the episode-source fetch NOW so by
           // the time handlePlay awaits it, the cache already has the result.
           // Zero visible latency between details fetch and player open.
@@ -1852,7 +1791,7 @@ const Index = () => {
           };
 
           if (requestId !== detailsRequestRef.current) return;
-          cacheAnimeDetails(anime.id, fullAnime);
+          detailsCacheRef.current.set(anime.id, fullAnime);
           // Pre-warm target episode source while player is mounting.
           try {
             const targetSeason = fullAnime.seasons?.[sIdx ?? 0];
@@ -1875,7 +1814,7 @@ const Index = () => {
             year: anime.year || '',
             language: anime.language || '',
           };
-          cacheAnimeDetails(anime.id, fallbackAnime);
+          detailsCacheRef.current.set(anime.id, fallbackAnime);
           await openPlayerFromAnime(fallbackAnime, { seasonIdx: sIdx, epIdx: eIdx });
         }
       } catch (err) {
@@ -3004,9 +2943,9 @@ const Index = () => {
         ))}
       </div>
       <div className="grid grid-cols-3 gap-2.5">
-        {filteredSeries.slice(0, seriesVisibleCount).map((anime) => (
-          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card anime-card" onClick={() => handleCardClick(anime)}>
-            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+        {filteredSeries.map((anime) => (
+          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
             <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
             <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
             {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
@@ -3016,11 +2955,6 @@ const Index = () => {
           </div>
         ))}
       </div>
-      {seriesVisibleCount < filteredSeries.length && (
-        <div className="mt-3 flex justify-center">
-          <button onClick={() => setSeriesVisibleCount((p) => p + GRID_PAGE_BATCH_SIZE)} className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-accent">Load More</button>
-        </div>
-      )}
       {filteredSeries.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
     </div>
   );
@@ -3040,9 +2974,9 @@ const Index = () => {
         ))}
       </div>
       <div className="grid grid-cols-3 gap-2.5">
-        {filteredMovies.slice(0, moviesVisibleCount).map((anime) => (
-          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card anime-card" onClick={() => handleCardClick(anime)}>
-            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+        {filteredMovies.map((anime) => (
+          <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+            <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
             <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
             <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
             {anime.dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
@@ -3052,11 +2986,6 @@ const Index = () => {
           </div>
         ))}
       </div>
-      {moviesVisibleCount < filteredMovies.length && (
-        <div className="mt-3 flex justify-center">
-          <button onClick={() => setMoviesVisibleCount((p) => p + GRID_PAGE_BATCH_SIZE)} className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-accent">Load More</button>
-        </div>
-      )}
       {filteredMovies.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">No anime found</p>}
     </div>
   );
@@ -3069,25 +2998,18 @@ const Index = () => {
         <div className="px-4 pb-6">
           <h2 className="text-base font-bold mb-3 flex items-center category-bar">{activeCategory}</h2>
           {filteredAnime.length > 0 ? (
-            <>
-              <div className="grid grid-cols-3 gap-2.5">
-                {filteredAnime.slice(0, categoryVisibleCount).map((anime) => (
-                  <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card anime-card" onClick={() => handleCardClick(anime)}>
-                    <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
-                    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                    <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
-                    <div className="absolute bottom-0 left-0 right-0 p-2">
-                      <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
-                    </div>
+            <div className="grid grid-cols-3 gap-2.5">
+              {filteredAnime.map((anime) => (
+                <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
+                  <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
+                  <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+                  <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
+                  <div className="absolute bottom-0 left-0 right-0 p-2">
+                    <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
                   </div>
-                ))}
-              </div>
-              {categoryVisibleCount < filteredAnime.length && (
-                <div className="mt-3 flex justify-center">
-                  <button onClick={() => setCategoryVisibleCount((p) => p + GRID_PAGE_BATCH_SIZE)} className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-accent">Load More</button>
                 </div>
-              )}
-            </>
+              ))}
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-10">No anime found in this category</p>
           )}
@@ -3160,7 +3082,6 @@ const Index = () => {
           )}
           {Object.entries(categoryGroups)
             .filter(([cat]) => cat !== 'AnimeSalt')
-            .slice(0, HOME_CATEGORY_LIMIT)
             .map(([cat, items]) => (
             <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
           ))}
@@ -3212,7 +3133,6 @@ const Index = () => {
   if (playerState) {
     return (
       <div className="fixed inset-0 z-[100] bg-black animate-in fade-in zoom-in-95 duration-300 ease-out">
-        <Suspense fallback={<div className="absolute inset-0 flex items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white animate-spin" /></div>}>
         <VideoPlayer
           src={playerState.src}
           title={playerState.title}
@@ -3360,14 +3280,13 @@ const Index = () => {
           }}
           suggestedAnime={suggestedAnimeImmediate}
         />
-        </Suspense>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background" style={customBgImage ? { backgroundImage: `url(${customBgImage})`, backgroundSize: 'cover', backgroundAttachment: 'fixed', backgroundPosition: 'center' } : undefined}>
-      <Header onSearchClick={() => navigate("/search")} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnimeTitles} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
+      <Header onSearchClick={() => navigate("/search")} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
       <main
         className="relative overflow-hidden"
         style={{ height: "calc(100vh - 65px)", marginTop: 0, touchAction: "pan-y pinch-zoom" }}
@@ -3398,11 +3317,7 @@ const Index = () => {
             >
               {page === "home" && getPageContent_home()}
               {page === "series" && getPageContent_series()}
-              {page === "livetv" && (
-                <Suspense fallback={<div className="pt-[80px] flex justify-center"><div className="w-6 h-6 rounded-full border-2 border-primary/30 border-t-primary animate-spin" /></div>}>
-                  <LiveTvPage isActive={activePage === "livetv"} onExitPlayer={() => setActivePage("home")} />
-                </Suspense>
-              )}
+              {page === "livetv" && <LiveTvPage isActive={activePage === "livetv"} onExitPlayer={() => setActivePage("home")} />}
               {page === "movies" && getPageContent_movies()}
             </div>
           ))}
@@ -3412,42 +3327,34 @@ const Index = () => {
 
       <AnimatePresence>
         {isSearchRoute && (
-          <Suspense fallback={null}>
-            <SearchPage
-              allAnime={allAnime}
-              onClose={() => {
-                if (window.history.length > 1) navigate(-1);
-                else navigate("/");
-              }}
-              onCardClick={(anime) => navigate(buildAnimeRoute(anime.id), { replace: true })}
-            />
-          </Suspense>
+          <SearchPage
+            allAnime={allAnime}
+            onClose={() => {
+              if (window.history.length > 1) navigate(-1);
+              else navigate("/");
+            }}
+            onCardClick={(anime) => navigate(buildAnimeRoute(anime.id), { replace: true })}
+          />
         )}
       </AnimatePresence>
 
       <AnimatePresence>
-        {isNotificationsRoute && (
-          <Suspense fallback={null}><NotificationsPage /></Suspense>
-        )}
+        {isNotificationsRoute && <NotificationsPage />}
       </AnimatePresence>
 
       <AnimatePresence>
         {showProfile && (
-          <Suspense fallback={null}>
-            <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
-          </Suspense>
+          <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
         )}
       </AnimatePresence>
 
       {/* On-demand login overlay (no more login wall on first visit) */}
       {showLogin && (
         <div className="fixed inset-0 z-[400]">
-          <Suspense fallback={null}>
-            <LoginPage
-              onLogin={(uid) => { handleLogin(uid); setShowLogin(false); }}
-              onGuest={() => setShowLogin(false)}
-            />
-          </Suspense>
+          <LoginPage
+            onLogin={(uid) => { handleLogin(uid); setShowLogin(false); }}
+            onGuest={() => setShowLogin(false)}
+          />
           <button
             onClick={() => setShowLogin(false)}
             aria-label="Close"
