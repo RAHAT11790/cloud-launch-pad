@@ -2827,8 +2827,13 @@ const Index = () => {
 
   const handleNavigate = useCallback((page: string) => {
     if (page === "profile") {
-      void import("@/components/ProfilePage");
-      setShowProfile(true);
+      if (!isLoggedIn) {
+        setShowProfile(false);
+        setShowLogin(true);
+      } else {
+        setShowLogin(false);
+        setShowProfile(true);
+      }
       return;
     }
     const nextPage = isMainPage(page) ? page : "home";
@@ -2852,11 +2857,11 @@ const Index = () => {
     setVisualPage(nextPage);
     // Animate strip to target
     isSwipeAnimatingRef.current = true;
+    setActivePage(nextPage);
     queueStripTransform(nextIdx, 0, true);
 
     const onDone = () => {
       isSwipeAnimatingRef.current = false;
-      setActivePage(nextPage);
       restorePageScroll(nextPage);
     };
     const track = swipeTrackRef.current;
