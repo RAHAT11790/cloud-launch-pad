@@ -3868,19 +3868,40 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
                 {bottomTab === "foryou" && suggestedAnime && suggestedAnime.length > 0 && (
                   <div className="grid grid-cols-3 gap-2.5">
-                    {suggestedAnime.slice(0, 15).map((anime) => (
-                      <button key={anime.id} onClick={() => onSuggestedClick?.(anime)} className="group text-left">
-                        <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-foreground/5">
-                          {anime.poster ? (
-                            <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} loading="eager" decoding="async" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No image</div>
-                          )}
-                          {anime.language && <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/70 text-[10px] font-semibold text-white">{anime.language}</span>}
-                        </div>
-                        <p className="text-xs font-medium text-foreground line-clamp-2 leading-tight mt-1.5">{anime.title}</p>
-                      </button>
-                    ))}
+                    {suggestedAnime.slice(0, 15).map((anime, idx) => {
+                      const isPending = pendingSuggestion?.id === anime.id;
+                      return (
+                        <button
+                          key={anime.id}
+                          onClick={() => {
+                            if (pendingSuggestion) return; // ignore rapid double-taps
+                            setPendingSuggestion(anime);
+                            // Scroll player into view so the user sees the loader
+                            try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+                            onSuggestedClick?.(anime);
+                          }}
+                          disabled={!!pendingSuggestion && !isPending}
+                          className={`group text-left transition-transform duration-150 ${isPending ? "scale-95" : "active:scale-95"} ${pendingSuggestion && !isPending ? "opacity-50" : ""}`}
+                        >
+                          <div className={`relative aspect-[2/3] rounded-lg overflow-hidden bg-foreground/5 ${isPending ? "ring-2 ring-primary" : ""}`}>
+                            {anime.poster ? (
+                              <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} loading={idx < 6 ? "eager" : "lazy"} decoding="async" fetchPriority={idx < 3 ? "high" : "auto" as any} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No image</div>
+                            )}
+                            {anime.language && <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/70 text-[10px] font-semibold text-white">{anime.language}</span>}
+                            {isPending && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-[1px]">
+                                <div className="player-loader-shell scale-50" aria-hidden="true">
+                                  {Array.from({ length: 12 }).map((_, i) => <span key={i} className="player-loader-petal" />)}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <p className={`text-xs font-medium line-clamp-2 leading-tight mt-1.5 ${isPending ? "text-primary" : "text-foreground"}`}>{anime.title}</p>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
