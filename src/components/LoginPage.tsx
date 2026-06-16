@@ -907,7 +907,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                       >
                         <div className="relative mb-3">
                           <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} maxLength={100}
+                          <input name="email" type="email" placeholder="Email" defaultValue={email} onChange={e => setEmail(e.target.value)} maxLength={100}
                             className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                         </div>
                       </motion.div>
@@ -917,7 +917,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
                     <div className="relative">
                       <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <input type="text" placeholder={isRegister ? "Username" : "Email or Username"} value={name} onChange={e => setName(e.target.value)} maxLength={100}
+                      <input name="name" type="text" placeholder={isRegister ? "Username" : "Email or Username"} defaultValue={name} onChange={e => setName(e.target.value)} maxLength={100}
                         className="w-full py-3 pl-10 pr-4 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                     </div>
                   </motion.div>
@@ -925,7 +925,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
                   <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.25 }}>
                     <div className="relative">
                       <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <input type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
+                      <input name="password" type={showPassword ? "text" : "password"} placeholder="Password" defaultValue={password} onChange={e => setPassword(e.target.value)}
                         className="w-full py-3 pl-10 pr-10 rounded-xl bg-secondary border border-border text-foreground text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-muted-foreground" style={{ boxShadow: "var(--neu-shadow-inset)" }} />
                       <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2">
                         {showPassword ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
