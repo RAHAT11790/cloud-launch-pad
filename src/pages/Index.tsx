@@ -531,6 +531,42 @@ const Index = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // --- Background image prewarm into Service Worker cache ---
+  // Once data is loaded, fire low-priority fetch() for every poster + backdrop URL.
+  // Service worker (public/sw.js) intercepts each and stores it permanently, so
+  // any future scroll/visit serves images from disk cache (0ms, no network flash).
+  const prewarmedRef = useRef(false);
+  useEffect(() => {
+    if (prewarmedRef.current || loading) return;
+    const all = [
+      ...webseries.map((a: any) => a?.poster).filter(Boolean),
+      ...webseries.map((a: any) => a?.backdrop).filter(Boolean),
+      ...movies.map((a: any) => a?.poster).filter(Boolean),
+      ...movies.map((a: any) => a?.backdrop).filter(Boolean),
+      ...animeSaltItems.map((a: any) => a?.poster).filter(Boolean),
+    ];
+    const uniq = Array.from(new Set(all)).slice(0, 400);
+    if (uniq.length === 0) return;
+    prewarmedRef.current = true;
+    const run = () => {
+      let i = 0;
+      const tick = () => {
+        const batch = uniq.slice(i, i + 8);
+        if (!batch.length) return;
+        batch.forEach((url) => {
+          try { fetch(url, { mode: "no-cors", credentials: "omit" as RequestCredentials }).catch(() => {}); } catch {}
+        });
+        i += 8;
+        if (i < uniq.length) setTimeout(tick, 250);
+      };
+      tick();
+    };
+    if ("requestIdleCallback" in window) (window as any).requestIdleCallback(run, { timeout: 3000 });
+    else setTimeout(run, 1500);
+  }, [loading, webseries, movies, animeSaltItems]);
+
+
+
   // --- In-player suggestion switch ---
   // When the user picks a suggestion from within the running player, we want
   // the player to STAY mounted and just swap its content. stopAllPlayback()
