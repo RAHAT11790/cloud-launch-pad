@@ -792,7 +792,11 @@ const Index = () => {
   }, [isLoggedIn, unlockBlocked, saltIsPremium, hasFreeAccess, redirectToUnlockRequired]);
 
   const [activePage, setActivePage] = useState<MainPage>(() => {
+    // Priority: URL path → sessionStorage → "home". This makes /series, /movies,
+    // /live-tv real routes — refresh, share, browser-back all work correctly.
     try {
+      const fromPath = pathToMainPage(window.location.pathname);
+      if (fromPath) return fromPath;
       const savedPage = sessionStorage.getItem("rs_activePage") || "home";
       return isMainPage(savedPage) ? savedPage : "home";
     } catch {
