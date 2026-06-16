@@ -37,8 +37,20 @@ interface NewEpisodeReleasesProps {
   onCardClick: (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => void;
 }
 
+const RELEASE_CACHE_KEY = "rs_cache_newReleases_v1";
+const readReleaseCache = (): EpisodeRelease[] => {
+  try {
+    const raw = localStorage.getItem(RELEASE_CACHE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+};
+
 const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>(({ allAnime, onCardClick }, _ref) => {
-  const [releases, setReleases] = useState<EpisodeRelease[]>([]);
+  // Seed from localStorage so the section paints instantly on first load
+  // instead of waiting 3-5s for Firebase's first onValue snapshot.
+  const [releases, setReleases] = useState<EpisodeRelease[]>(() => readReleaseCache());
   const [showModal, setShowModal] = useState(false);
   const [tick, setTick] = useState(0);
 
@@ -58,9 +70,11 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
       });
       items.sort((a, b) => b.timestamp - a.timestamp);
       setReleases(items);
+      try { localStorage.setItem(RELEASE_CACHE_KEY, JSON.stringify(items)); } catch {}
     });
     return () => unsub();
   }, []);
+
 
   // Live countdown tick every 60s — also triggers cleanup re-evaluation
   useEffect(() => {
