@@ -65,9 +65,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
   const [progress, setProgress] = useState(0);
   const [useReference, setUseReference] = useState(true);
 
-  // ---- Gemini key + status ----
-  const [geminiKey, setGeminiKey] = useState("");
-  const [geminiKeyDraft, setGeminiKeyDraft] = useState("");
+  // ---- EGD Gemini status ----
   const [geminiDailyLimit, setGeminiDailyLimit] = useState<number>(100);
   const [geminiUsedToday, setGeminiUsedToday] = useState<number>(0);
   const [geminiStatus, setGeminiStatus] = useState<{
@@ -100,11 +98,9 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       }));
       setItems((prev) => [...prev.filter((p) => p.type !== "movies"), ...mv]);
     });
-    // Load Gemini config
+    // Load Gemini quota config only. API key stays inside the EGD-deployed function.
     const u3 = onValue(ref(db, "settings/geminiImage"), (snap) => {
       const v = snap.val() || {};
-      setGeminiKey(v.apiKey || "");
-      setGeminiKeyDraft(v.apiKey || "");
       setGeminiDailyLimit(Number(v.dailyLimit) || 100);
     });
     const u4 = onValue(ref(db, `settings/geminiImage/usage/${todayKey()}`), (snap) => {
@@ -260,7 +256,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
           <h3 className="text-[13px] font-bold text-white tracking-wide">Backdrop & Logo AI Generator</h3>
         </div>
         <p className="text-[10.5px] text-white/55 leading-relaxed break-words">
-          Pick an anime → preview → regenerate or save. Uses your saved Gemini Image API key only.
+          Pick an anime → preview → regenerate or save. Calls only your EGD-deployed generate-backdrop URL.
         </p>
       </div>
 
@@ -348,7 +344,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
                   onClick={() => setProvider("gemini")}
                   className="px-2 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap bg-sky-500 text-black border-sky-400"
                 >
-                  Gemini (your key)
+                  EGD Gemini
                 </button>
               </div>
             </div>
@@ -392,7 +388,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
               <div className="px-3 py-3 space-y-2.5">
                 <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.06] px-2.5 py-2">
                   <div className="text-[10.5px] text-emerald-200/90 leading-snug">
-                    🔒 <b>GEMINI_API_KEY</b> is configured server-side via <b>EGD Manager → generate-backdrop → Deploy</b>. No key needed here.
+                    🔒 This panel sends requests only to the <b>EGD Manager saved generate-backdrop URL</b>. <b>GEMINI_API_KEY</b> stays inside that deployed function.
                   </div>
                 </div>
 
@@ -449,7 +445,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
                   onChange={(e) => setUseReference(e.target.checked)}
                 />
                 <span className="min-w-0 break-words">
-                  <span className="text-emerald-300 font-semibold">Use TMDB reference image</span> — AI preserves the EXACT characters from the current backdrop and remasters (works on both engines).
+                   <span className="text-emerald-300 font-semibold">Use current reference image</span> — EGD Gemini preserves the exact characters from the current backdrop and remasters it.
                 </span>
               </label>
               {useReference && !activeItem.backdrop && (
