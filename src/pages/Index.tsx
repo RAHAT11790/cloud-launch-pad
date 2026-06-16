@@ -3075,44 +3075,16 @@ const Index = () => {
 
           <NewEpisodeReleases allAnime={allAnime} onCardClick={(anime, seasonIdx, epIdx) => void handlePlay(anime, seasonIdx, epIdx)} />
           {trendingSeries.length > 0 && (
-            <AnimeSection title="🔥 Trending Anime Series" items={trendingSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("series")} />
-          )}
-          {filteredMovies.length > 0 && (
-            <AnimeSection title="Popular Anime Movies" items={filteredMovies.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("movies")} />
+            <AnimeSection title="🔥 Popular Anime" items={trendingSeries.slice(0, 10)} onCardClick={handleCardClick} onViewAll={() => setActivePage("series")} />
           )}
           {Object.entries(categoryGroups)
-            .filter(([cat]) => cat !== 'AnimeSalt')
+            .filter(([cat]) => {
+              const c = cat.toLowerCase();
+              return c.includes('adventure') || c.includes('romance');
+            })
             .map(([cat, items]) => (
-            <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
-          ))}
-
-          {allAnimeSaltUnique.length > 0 && (
-            <div className="px-4 mb-6">
-              <h3 className="text-base font-bold mb-3 flex items-center category-bar">🔥 ALL ANIME</h3>
-              <div className="grid grid-cols-3 gap-2.5">
-                {allAnimeSaltUnique.slice(0, allAnimeVisibleCount).map((anime) => (
-                  <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-                    <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
-                    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                    {anime.year && <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>}
-                    <div className="absolute bottom-0 left-0 right-0 p-2">
-                      <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {allAnimeVisibleCount < allAnimeSaltUnique.length && (
-                <div className="mt-3 flex justify-center">
-                  <button
-                    onClick={() => setAllAnimeVisibleCount((prev) => Math.min(prev + ALL_ANIME_BATCH_SIZE, allAnimeSaltUnique.length))}
-                    className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-accent"
-                  >
-                    Load More
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+              <AnimeSection key={cat} title={cat} items={items.slice(0, 10)} onCardClick={handleCardClick} />
+            ))}
         </>
       )}
       <footer className="text-center py-8 pb-24 px-4 border-t border-border/30 mt-8">
