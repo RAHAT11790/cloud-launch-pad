@@ -388,10 +388,14 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setDeviceLimitError(null);
-    const loginInput = isRegister ? email.trim() : name.trim();
-    if (!loginInput || !password.trim()) { toast.error("Please fill in all fields"); return; }
-    if (isRegister && !name.trim()) { toast.error("Please enter a username"); return; }
-    if (password.length < 4) { toast.error("Password must be at least 4 characters"); return; }
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    const formEmail = String(formData.get("email") || "").trim();
+    const formName = String(formData.get("name") || "").trim();
+    const formPassword = String(formData.get("password") || "");
+    const loginInput = isRegister ? formEmail : formName;
+    if (!loginInput || !formPassword.trim()) { toast.error("Please fill in all fields"); return; }
+    if (isRegister && !formName) { toast.error("Please enter a username"); return; }
+    if (formPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; }
 
     setLoading(true);
     try {
@@ -450,31 +454,31 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
 
       if (isRegister) {
         if (anyMatch) { toast.error("This email/username is already taken!"); setLoading(false); return; }
-        const emailKey = email.trim().toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
+        const emailKey = formEmail.toLowerCase().replace(/\./g, ",").replace(/[^a-z0-9@,_-]/g, "_");
         const userId = "user_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9);
         
         await registerDeviceAfterLogin(userId);
 
         await set(ref(db, `appUsers/${emailKey}`), {
-          id: userId, name: name.trim(), email: email.trim(), password: password, createdAt: Date.now(),
+          id: userId, name: formName, email: formEmail, password: formPassword, createdAt: Date.now(),
         });
         await syncCanonicalUserNode(userId, {
           id: userId,
-          name: name.trim(),
-          email: email.trim(),
+          name: formName,
+          email: formEmail,
           createdAt: Date.now(),
           online: true,
           lastSeen: Date.now(),
           authProvider: "email",
-        }, email.trim());
-        localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: name.trim(), email: email.trim() })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
+        }, formEmail);
+        localStorage.setItem("rsanime_user", JSON.stringify({ id: userId, name: formName, email: formEmail })); try { window.dispatchEvent(new Event("rs_auth_changed")); } catch {}
         localStorage.setItem(SESSION_STARTED_AT_KEY, Date.now().toString());
-        writeDisplayName(name.trim(), userId);
+        writeDisplayName(formName, userId);
         toast.success("Account created successfully!");
         onLogin(userId);
       } else {
         if (!anyMatch) { toast.error("User not found!"); setLoading(false); return; }
-        if (finalUserData.password && finalUserData.password !== password) { toast.error("Wrong password!"); setLoading(false); return; }
+        if (finalUserData.password && finalUserData.password !== formPassword) { toast.error("Wrong password!"); setLoading(false); return; }
 
         const uid = finalUserId || commaKey;
         const deviceOk = await checkAndRegisterDevice(uid);
@@ -487,7 +491,7 @@ const LoginPage = ({ onLogin, onGuest }: LoginPageProps) => {
           try {
             await set(ref(db, `appUsers/${commaKey}`), {
               id: finalUserId || commaKey, name: finalUserData.name || input,
-              password: password, createdAt: finalUserData.createdAt || Date.now(),
+              password: formPassword, createdAt: finalUserData.createdAt || Date.now(),
             });
           } catch (e) {}
         }
