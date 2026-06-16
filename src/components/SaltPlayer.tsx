@@ -449,33 +449,34 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
       >
         <div className={isFullscreen ? 'w-full h-full overflow-hidden' : 'overflow-hidden'} style={isFullscreen ? {} : { paddingBottom: getAspectPadding(), position: 'relative' }}>
           {saltPlayerState.loading && (
-            <div className="absolute inset-0 flex items-center justify-center z-20">
-              <div className="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center z-20 bg-black">
+              <div className="player-loader-shell" aria-hidden="true">
+                {Array.from({ length: 12 }).map((_, i) => <span key={i} className="player-loader-petal" />)}
+              </div>
             </div>
           )}
-          {!nativeFailed && saltPlayerState.embedUrl ? (
+          {saltPlayerState.embedUrl && !nativeFailed && (
             <AnNativeView
               embedUrl={saltPlayerState.embedUrl}
               videoClassName={`${isFullscreen ? 'w-full h-full' : 'absolute inset-0 w-full h-full'} bg-black`}
               videoStyle={getIframeStyle()}
               onFail={(reason) => {
-                console.warn('[AnNative] fallback to iframe:', reason);
+                console.warn('[AnNative] native extraction failed:', reason);
                 setNativeFailed(true);
               }}
             />
-          ) : (
-            <>
-              <iframe
-                src={saltPlayerState.cleanEmbedUrl || saltPlayerState.embedUrl}
-                className={`${isFullscreen ? 'w-full h-full' : 'absolute inset-0 w-full h-full'} border-0`}
-                style={{ ...getIframeStyle(), pointerEvents: 'none' }}
-                allow="autoplay; encrypted-media; picture-in-picture"
-                referrerPolicy="no-referrer"
-                sandbox="allow-scripts allow-same-origin allow-presentation"
-              />
-              {/* Transparent overlay — blocks remote iframe's native controls so only our controls open. */}
-              <div className="absolute inset-0 z-10" style={{ background: 'transparent' }} />
-            </>
+          )}
+          {nativeFailed && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black text-center px-6">
+              <p className="text-white text-sm font-semibold mb-1">Server unavailable</p>
+              <p className="text-white/60 text-[11px] mb-3">This episode source could not be extracted. Try another episode.</p>
+              <button
+                onClick={() => setNativeFailed(false)}
+                className="px-4 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-semibold"
+              >
+                Retry
+              </button>
+            </div>
           )}
 
 
