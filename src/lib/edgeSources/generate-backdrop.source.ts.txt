@@ -226,14 +226,15 @@ Deno.serve(async (req) => {
   }
   try {
     const body = (await req.json()) as Body;
+    const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY");
 
     if (body.action === "check-gemini") {
-      if (!body.geminiKey) {
-        return new Response(JSON.stringify({ ok: false, error: "geminiKey required" }), {
+      if (!GEMINI_KEY) {
+        return new Response(JSON.stringify({ ok: false, error: "GEMINI_API_KEY not configured on server" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const r = await probeGemini(body.geminiKey);
+      const r = await probeGemini(GEMINI_KEY);
       return new Response(JSON.stringify(r), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -256,7 +257,7 @@ Deno.serve(async (req) => {
     if (provider === "flux") {
       url = await genWithFlux(prompt, mode);
     } else {
-      if (!body.geminiKey) throw new Error("Gemini API key missing — add it in admin panel.");
+      if (!GEMINI_KEY) throw new Error("GEMINI_API_KEY not configured on server — add it in EGD Manager deploy form.");
       const refDataUrl = useRef ? await fetchAsDataUrl(body.referenceImageUrl!).catch(() => null) : null;
       const groundedPrompt = useRef
         ? ((body.customPrompt && body.customPrompt.trim())
@@ -264,7 +265,7 @@ Deno.serve(async (req) => {
             : buildGroundedPrompt(body))
         : prompt;
       try {
-        const bytes = await genWithGemini(groundedPrompt, refDataUrl, body.geminiKey);
+        const bytes = await genWithGemini(groundedPrompt, refDataUrl, GEMINI_KEY);
         url = await uploadToImgbb(bytes, `${mode}_gem_${safe}_${Date.now()}`);
         engineLabel = useRef ? "gemini-edit" : "gemini";
       } catch (e: any) {
@@ -284,6 +285,7 @@ Deno.serve(async (req) => {
         }
       }
     }
+
 
     return new Response(JSON.stringify({ ok: true, url, mode, engine: engineLabel }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
