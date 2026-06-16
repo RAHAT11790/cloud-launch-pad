@@ -549,9 +549,8 @@ const Index = () => {
   // Once data is loaded, fire low-priority fetch() for every poster + backdrop URL.
   // Service worker (public/sw.js) intercepts each and stores it permanently, so
   // any future scroll/visit serves images from disk cache (0ms, no network flash).
-  const prewarmedRef = useRef(false);
   useEffect(() => {
-    if (prewarmedRef.current || loading) return;
+    if (loading) return;
     const all = [
       ...webseries.map((a: any) => a?.poster).filter(Boolean),
       ...webseries.map((a: any) => a?.backdrop).filter(Boolean),
@@ -559,16 +558,16 @@ const Index = () => {
       ...movies.map((a: any) => a?.backdrop).filter(Boolean),
       ...animeSaltItems.map((a: any) => a?.poster).filter(Boolean),
     ];
-    const uniq = Array.from(new Set(all));
+    const uniq = Array.from(new Set(all)).filter((url) => !warmedImageUrls.has(String(url)));
     if (uniq.length === 0) return;
-    prewarmedRef.current = true;
     const run = () => {
       let i = 0;
       const tick = () => {
         const batch = uniq.slice(i, i + 2);
         if (!batch.length) return;
         batch.forEach((url) => {
-          try { fetch(url, { mode: "no-cors", credentials: "omit" as RequestCredentials }).catch(() => {}); } catch {}
+          warmedImageUrls.add(String(url));
+          try { fetch(url, { mode: "no-cors", credentials: "omit" as RequestCredentials, cache: "force-cache" }).catch(() => {}); } catch {}
         });
         i += 2;
         if (i < uniq.length) setTimeout(tick, 350);
