@@ -419,8 +419,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const effectiveVideoServers = useMemo(() => {
     if (noServerSwitch || isRawHlsSource) return [];
-    if (videoServers.length > 0) return videoServers;
-    return buildFallbackServers(src).slice(0, PROXY_SERVER_LIMIT);
+    const list = videoServers.length > 0 ? videoServers : buildFallbackServers(src);
+    // Permanent: single-server only — Server 2 logic removed per product decision.
+    return list.slice(0, 1);
   }, [isRawHlsSource, noServerSwitch, src, videoServers]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
