@@ -13,7 +13,7 @@ import PrivacyPolicyPage from "./PrivacyPolicyPage";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { Progress } from "@/components/ui/progress";
 import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
-import { readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
+import { buildEmailAliasKey, readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
 
 import VideoPlayer from "@/components/VideoPlayer";
@@ -73,7 +73,7 @@ interface ProfilePageProps {
   onLoginClick?: () => void;
 }
 
-const MAX_PHOTO_SIZE = 2 * 1024 * 1024;
+const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 const PAYMENT_REVIEW_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const AccessTimer = () => {
