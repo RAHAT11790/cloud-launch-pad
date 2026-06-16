@@ -13,6 +13,8 @@
 //   /deploy   { slug, code, secrets }  -> deploy/update + set secrets
 //   /delete   { slug }                 -> delete function
 //   /secrets                           -> list project secret names
+//   /secret-update { name, value }      -> update one project secret value
+//   /secret-delete { names:[name] }     -> delete project secret values
 
 export const EGD_DEPLOYER_CODE = String.raw`// EGD Deployer — deploys arbitrary edge functions to THIS Supabase project
 // using the Supabase Management API.
@@ -27,6 +29,8 @@ export const EGD_DEPLOYER_CODE = String.raw`// EGD Deployer — deploys arbitrar
 //   POST /deploy   { slug, code, secrets:[{name,value}] }
 //   POST /delete   { slug }
 //   POST /secrets
+//   POST /secret-update { name, value }
+//   POST /secret-delete { names:[name] }
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -123,6 +127,21 @@ async function setSecrets(secrets) {
   });
 }
 
+async function updateOneSecret(name, value) {
+  return setSecrets([{ name, value }]);
+}
+
+async function deleteSecrets(names) {
+  const clean = (Array.isArray(names) ? names : [names])
+    .map((n) => String(n || "").trim())
+    .filter((n) => n && !/^(SUPABASE_|SB_)/i.test(n));
+  if (clean.length === 0) return { ok: false, status: 400, data: "secret name required" };
+  return mgmt("/projects/" + PROJECT_REF + "/secrets", {
+    method: "DELETE",
+    body: JSON.stringify(clean),
+  });
+}
+
 async function listSecrets() {
   return mgmt("/projects/" + PROJECT_REF + "/secrets");
 }
@@ -195,6 +214,19 @@ Deno.serve(async (req) => {
       const r = await listSecrets();
       const names = Array.isArray(r.data) ? r.data.map((s) => s.name) : [];
       return json({ ok: r.ok, names, error: r.ok ? undefined : r.data });
+    }
+
+    if (action === "secret-update") {
+      const name = String(body.name || "").trim();
+      const value = String(body.value || "");
+      if (!name || !value) return json({ ok: false, error: "name and value required" }, 400);
+      const r = await updateOneSecret(name, value);
+      return json({ ok: r.ok, error: r.ok ? undefined : r.data, status: r.status });
+    }
+
+    if (action === "secret-delete") {
+      const r = await deleteSecrets(body.names || body.name);
+      return json({ ok: r.ok, error: r.ok ? undefined : r.data, status: r.status });
     }
 
     if (action === "logs") {
