@@ -3912,13 +3912,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                               <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No image</div>
                             )}
                             {anime.language && <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/70 text-[10px] font-semibold text-white">{anime.language}</span>}
-                            {isPending && (
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-[1px]">
-                                <div className="player-loader-shell scale-50" aria-hidden="true">
-                                  {Array.from({ length: 12 }).map((_, i) => <span key={i} className="player-loader-petal" />)}
-                                </div>
-                              </div>
-                            )}
+                            {/* Gemini-style border pulse handled by magic-card-pulse class on the wrapper above — no extra spinner here */}
+
                           </div>
                           <p className={`text-xs font-medium line-clamp-2 leading-tight mt-1.5 ${isPending ? "text-primary" : "text-foreground"}`}>{anime.title}</p>
                         </button>
