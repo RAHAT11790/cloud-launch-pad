@@ -1576,6 +1576,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
   const instantSwitchRef = useRef(false);
+  const [serverSwitching, setServerSwitching] = useState(false);
 
   // NOTE: Aggressive next-episode preload removed — it caused CORS fetches
   // and wasted bandwidth that slowed the *current* video load. Browser will
@@ -1594,6 +1595,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
+    setServerSwitching(true);
     setVideoError(false);
 
     setManualServerSelected(true);
@@ -1626,6 +1628,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         const nextIdx = effectiveVideoServers.findIndex((s, i) => i !== serverIndex && (!s.locked || isPremium));
         if (nextIdx >= 0 && nextIdx !== serverIndex) {
           serverSwitchingRef.current = false;
+          setServerSwitching(false);
           switchServer(nextIdx);
         }
       }
@@ -1633,7 +1636,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
-    }, 400);
+      setServerSwitching(false);
+    }, 180);
   }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isEmbedPlayback, isPremium, playing]);
 
   // Auto-switch to premium server for premium users
@@ -2566,7 +2570,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [videoError, clearHideTimer]);
 
   // Only show loader overlay during initial fixed load period; hide during server switch for seamless experience
-  const showLoaderOverlay = !!currentSrc && !videoError && !isEmbedPlayback && (showFixedLoader || serverSwitchingRef.current);
+  const showLoaderOverlay = !!currentSrc && !videoError && !isEmbedPlayback && (showFixedLoader || serverSwitching);
 
   // ===== AUTO NEXT EPISODE OVERLAY =====
   useEffect(() => {
