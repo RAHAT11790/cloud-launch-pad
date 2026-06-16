@@ -64,6 +64,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [useReference, setUseReference] = useState(true);
+  const [activeFunctionUrl, setActiveFunctionUrl] = useState("");
 
   // ---- EGD Gemini status ----
   const [geminiDailyLimit, setGeminiDailyLimit] = useState<number>(100);
@@ -126,6 +127,14 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
   }, [activeId, items]);
 
   useEffect(() => { setPreviewUrl(null); setProgress(0); }, [activeId, mode, provider]);
+
+  useEffect(() => {
+    let alive = true;
+    getEdgeFunctionUrl("generate-backdrop").then((url) => {
+      if (alive) setActiveFunctionUrl(url || "");
+    });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     if (usePromptOverride && !customPrompt) {
@@ -389,6 +398,9 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
                 <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.06] px-2.5 py-2">
                   <div className="text-[10.5px] text-emerald-200/90 leading-snug">
                     🔒 This panel sends requests only to the <b>EGD Manager saved generate-backdrop URL</b>. <b>GEMINI_API_KEY</b> stays inside that deployed function.
+                  </div>
+                  <div className="mt-1.5 text-[9.5px] text-emerald-100/60 break-all">
+                    Active URL: {activeFunctionUrl || "Not configured"}
                   </div>
                 </div>
 
