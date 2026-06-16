@@ -20,7 +20,7 @@ type Item = {
   addedAt?: number;
 };
 type Mode = "backdrop" | "logo";
-type Provider = "lovable" | "gemini";
+type Provider = "gemini";
 
 const DEFAULT_BACKDROP_PROMPT = `CREATE A PROFESSIONAL 16:9 CINEMATIC ANIME PROMOTIONAL BANNER FOR "{title}" IN ULTRA DETAILED 4K HDR QUALITY.
 
@@ -240,10 +240,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       }
     } catch (e: any) {
       const msg = e?.message || String(e);
-      toast.error(
-        msg.includes("PAYMENT") ? "Lovable AI credits exhausted — switch to Gemini." :
-        msg.includes("RATE") ? "Rate limited — try again shortly." : msg
-      );
+      toast.error(msg.includes("RATE") ? "Rate limited — try again shortly." : msg);
     } finally {
       clearInterval(tick);
       setBusy(false);
@@ -276,7 +273,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
           <h3 className="text-[13px] font-bold text-white tracking-wide">Backdrop & Logo AI Generator</h3>
         </div>
         <p className="text-[10.5px] text-white/55 leading-relaxed break-words">
-          Pick an anime → preview → regenerate or save. Two engines: <b>Lovable AI</b> (built-in) &amp; <b>Gemini</b> (your own key).
+          Pick an anime → preview → regenerate or save. Uses your saved Gemini Image API key only.
         </p>
       </div>
 
@@ -518,7 +515,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
             ) : busy ? (
               <div className="w-full px-3 py-6 text-center">
                 <div className="text-[11px] text-white/70 mb-2">
-                  Generating with {provider === "lovable" ? "Lovable AI" : "Gemini"}…
+                  Generating with Gemini…
                 </div>
                 <div className="h-1.5 bg-white/10 rounded-full overflow-hidden mx-auto max-w-[280px]">
                   <div className="h-full bg-gradient-to-r from-emerald-400 to-cyan-400 transition-all" style={{ width: `${progress}%` }} />

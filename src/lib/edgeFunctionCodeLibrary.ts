@@ -6,8 +6,8 @@
 // list of secrets the user must populate when deploying it to their own
 // Supabase project from the admin panel.
 //
-// Functions whose secrets/values cannot be re-created outside Lovable
-// (e.g. the AI Gateway proxy) are intentionally excluded.
+// Library sources are self-deployable from EGD Manager; no Lovable-only
+// private API keys are required by these entries.
 // ============================================================
 
 import videoProxySource from "../../supabase/functions/video-proxy/index.ts?raw";
@@ -77,7 +77,7 @@ export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
   entry("video-download", "Video Download", "Dedicated, retry-hardened download proxy (recommended for downloads).", videoDownloadSource),
   entry("video-proxy",    "Video Proxy",    "Universal streaming proxy used by the video player.", videoProxySource),
   entry("telegram-post",  "Telegram Post",  "Posts new episodes to your Telegram channel.", telegramPostSource),
-  entry("rs-bot",         "RS Bot (AI)",    "In-app AI chat — requires LOVABLE_API_KEY.", rsBotSource),
+  entry("rs-bot",         "RS Bot (AI)",    "In-app AI chat powered by your GEMINI_API_KEY.", rsBotSource),
   entry("send-otp-email", "Send OTP Email", "Sends 6-digit OTP via Resend.", sendOtpEmailSource),
   entry("process-email-queue", "Process Email Queue", "Background queue worker that flushes pending OTP emails.", processEmailQueueSource),
   entry("apk-download",   "APK Download",   "Serves the user-facing APK with proper headers.", apkDownloadSource),
