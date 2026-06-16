@@ -443,7 +443,7 @@ const DownloadsPanel = ({ onBack }: { onBack: () => void }) => {
   );
 };
 
-const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onLogout, onLoginClick }: ProfilePageProps) => {
+const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatching, onLogout, onLoginClick }: ProfilePageProps) => {
   const isGuestUser = (() => {
     try {
       const u = JSON.parse(localStorage.getItem("rsanime_user") || "{}");
