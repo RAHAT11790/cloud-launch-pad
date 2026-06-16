@@ -282,12 +282,11 @@ export default function EgdManager({
       if (d?.ok) {
         const names = Array.isArray(d.names) ? d.names : [];
         setProjectSecrets(names);
-        setProjectSecretDrafts((prev) =>
-          names.reduce((acc: Record<string, string>, name: string) => {
-            acc[name] = prev[name] || "";
-            return acc;
-          }, {}),
-        );
+        // If the currently-selected secret was removed, clear selection
+        if (selectedProjectSecret && !names.includes(selectedProjectSecret)) {
+          setSelectedProjectSecret("");
+          setProjectSecretDraft("");
+        }
       } else {
         appendError("Secrets failed: " + JSON.stringify(d?.error || d));
       }
@@ -298,15 +297,17 @@ export default function EgdManager({
     }
   };
 
-  const saveProjectSecretValue = async (name: string) => {
-    const value = (projectSecretDrafts[name] || "").trim();
+  const saveProjectSecretValue = async () => {
+    const name = selectedProjectSecret;
+    const value = projectSecretDraft.trim();
+    if (!name) { toast.error("Pick a secret first"); return; }
     if (!value) { toast.error(`Paste a new value for ${name}`); return; }
     setSavingProjectSecret(name);
     try {
       const d = await callDeployer("secret-update", { name, value });
       if (d?.ok) {
         toast.success(`${name} updated`);
-        setProjectSecretDrafts((p) => ({ ...p, [name]: "" }));
+        setProjectSecretDraft("");
         await loadProjectSecrets();
       } else {
         toast.error("Secret update failed");
@@ -325,11 +326,10 @@ export default function EgdManager({
       const d = await callDeployer("secret-delete", { names: [name] });
       if (d?.ok) {
         toast.success(`${name} deleted`);
-        setProjectSecretDrafts((p) => {
-          const next = { ...p };
-          delete next[name];
-          return next;
-        });
+        if (selectedProjectSecret === name) {
+          setSelectedProjectSecret("");
+          setProjectSecretDraft("");
+        }
         await loadProjectSecrets();
       } else {
         toast.error("Secret delete failed");
