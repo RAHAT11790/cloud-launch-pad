@@ -382,78 +382,96 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
           )}
 
           {provider === "gemini" && (
-            <div className="bg-sky-500/[0.06] border border-sky-500/25 rounded-lg p-2.5 space-y-2">
-              <div className="flex items-center gap-2">
+            <div className="rounded-xl border border-sky-500/25 bg-gradient-to-br from-sky-500/[0.06] to-indigo-500/[0.04] overflow-hidden">
+              {/* Header strip */}
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-white/[0.03]">
                 <span className={`w-2 h-2 rounded-full ${dotColor}`} />
-                <span className="text-[11px] font-semibold text-white">
-                  Gemini status:{" "}
-                  <span className={
-                    geminiStatus.state === "online" ? "text-emerald-300" :
-                    geminiStatus.state === "offline" ? "text-rose-300" :
-                    geminiStatus.state === "checking" ? "text-amber-300" : "text-white/50"
-                  }>
-                    {geminiStatus.state}
-                  </span>
+                <div className="text-[11px] font-bold text-white tracking-wide">Gemini Image API</div>
+                <span className={
+                  "ml-auto text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md " +
+                  (geminiStatus.state === "online" ? "bg-emerald-500/15 text-emerald-300" :
+                   geminiStatus.state === "offline" ? "bg-rose-500/15 text-rose-300" :
+                   geminiStatus.state === "checking" ? "bg-amber-500/15 text-amber-300" :
+                   "bg-white/10 text-white/50")
+                }>
+                  {geminiStatus.state}
                 </span>
-                <button
-                  onClick={() => checkGemini(false)}
-                  disabled={!geminiKey || geminiStatus.state === "checking"}
-                  className={btnSecondary + " !text-[10px] !px-2 !py-1 ml-auto disabled:opacity-40"}
-                >
-                  {geminiStatus.state === "checking" ? "Checking…" : "Test key"}
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[10px] text-white/70">
-                <div>Model: <span className="text-white/90">{geminiStatus.model || "—"}</span></div>
-                <div>Today: <span className="text-white/90">{geminiUsedToday} / {geminiDailyLimit}</span></div>
-                <div className="col-span-2">
-                  Last check: <span className="text-white/90">{geminiStatus.checkedAt ? new Date(geminiStatus.checkedAt).toLocaleTimeString() : "—"}</span>
-                </div>
-                {geminiStatus.message && (
-                  <div className="col-span-2 text-white/60 break-words">↳ {geminiStatus.message}</div>
-                )}
-                <div className="col-span-2 text-white/50">
-                  Quota resets daily at midnight UTC (Gemini free tier).
-                </div>
               </div>
 
-              <div className="pt-1 border-t border-white/10 space-y-1.5">
-                <div className="text-[10px] uppercase tracking-wide text-white/50">API key</div>
-                <input
-                  type="password"
-                  value={geminiKeyDraft}
-                  onChange={(e) => setGeminiKeyDraft(e.target.value)}
-                  placeholder="AIza..."
-                  className={inputClass + " w-full text-[11px]"}
-                />
-                <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-1.5 text-[10px] text-white/60">
-                    Daily limit:
-                    <input
-                      type="number"
-                      min={1}
-                      value={geminiDailyLimit}
-                      onChange={(e) => setGeminiDailyLimit(Number(e.target.value) || 0)}
-                      className={inputClass + " !w-20 !text-[11px] !py-1"}
-                    />
+              {/* Status grid */}
+              <div className="px-3 py-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[10.5px] border-b border-white/10">
+                <div className="text-white/50">Model</div>
+                <div className="text-white/90 truncate text-right">{geminiStatus.model || "—"}</div>
+                <div className="text-white/50">Today</div>
+                <div className="text-white/90 text-right">{geminiUsedToday} / {geminiDailyLimit}</div>
+                <div className="text-white/50">Last check</div>
+                <div className="text-white/90 text-right">{geminiStatus.checkedAt ? new Date(geminiStatus.checkedAt).toLocaleTimeString() : "—"}</div>
+                {geminiStatus.message && (
+                  <>
+                    <div className="text-white/50">Message</div>
+                    <div className="text-white/70 text-right break-words">{geminiStatus.message}</div>
+                  </>
+                )}
+              </div>
+
+              {/* Form */}
+              <div className="px-3 py-3 space-y-2.5">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-wider text-white/55 font-semibold">
+                    API Key
                   </label>
+                  <input
+                    type="password"
+                    value={geminiKeyDraft}
+                    onChange={(e) => setGeminiKeyDraft(e.target.value)}
+                    placeholder="AIzaSy…"
+                    className={inputClass + " w-full !text-[12px] !font-mono"}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-wider text-white/55 font-semibold">
+                    Daily Quota
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={geminiDailyLimit}
+                    onChange={(e) => setGeminiDailyLimit(Number(e.target.value) || 0)}
+                    className={inputClass + " w-full !text-[12px]"}
+                  />
+                  <div className="text-[9.5px] text-white/40">Free tier resets at midnight UTC.</div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => checkGemini(false)}
+                    disabled={!geminiKey || geminiStatus.state === "checking"}
+                    className={btnSecondary + " flex-1 !text-[11px] !py-1.5 disabled:opacity-40"}
+                  >
+                    {geminiStatus.state === "checking" ? "Testing…" : "Test Key"}
+                  </button>
                   <button
                     onClick={saveGeminiConfig}
-                    className={btnPrimary + " ml-auto !text-[10px] !px-3 !py-1.5"}
+                    className={btnPrimary + " flex-1 !text-[11px] !py-1.5"}
                   >
-                    Save config
+                    Save Config
                   </button>
                 </div>
+
                 <a
                   href="https://aistudio.google.com/app/apikey"
                   target="_blank" rel="noopener noreferrer"
-                  className="text-[10px] text-sky-300/80 hover:text-sky-300 underline"
+                  className="block text-center text-[10px] text-sky-300/80 hover:text-sky-300 underline pt-0.5"
                 >
                   Get a Gemini API key →
                 </a>
               </div>
             </div>
           )}
+
 
           {mode === "backdrop" && (
             <div className="bg-emerald-500/[0.06] border border-emerald-500/25 rounded-lg p-2.5 space-y-1.5">
