@@ -262,17 +262,19 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
+            transition={{ duration: 0.15, ease: "linear" }}
             onClick={() => setShowModal(false)}
-            className="fixed inset-0 z-[300] bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-5"
+            className="fixed inset-0 z-[300] bg-black/90 flex items-end sm:items-center justify-center sm:p-5"
+            style={{ willChange: "opacity" }}
           >
             <motion.div
-              initial={{ y: 40, opacity: 0, scale: 0.98 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: 40, opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "tween", duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-card w-full sm:max-w-[520px] sm:rounded-2xl rounded-t-2xl flex flex-col max-h-[85vh] shadow-2xl border border-border/40"
+              className="bg-card w-full sm:max-w-[520px] sm:rounded-2xl rounded-t-2xl flex flex-col max-h-[85vh] shadow-2xl border border-border/40 transform-gpu"
+              style={{ willChange: "transform" }}
             >
               <div className="flex justify-between items-center px-5 py-4 border-b border-border/30 shrink-0">
                 <div className="min-w-0">
