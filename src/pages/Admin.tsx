@@ -23,6 +23,7 @@ const WeeklyEpManager = () => null;
 // AdminNotificationBell removed
 
 import EgdManager from "@/components/admin/EgdManager";
+import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
 import AdsterraConfig from "@/components/admin/AdsterraConfig";
 import BackdropAiReplacer from "@/components/admin/BackdropAiReplacer";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
