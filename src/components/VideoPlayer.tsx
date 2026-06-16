@@ -600,6 +600,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [saved, setSaved] = useState(() => (animeId ? guestStore.watchlist.has(animeId) : false));
   const [watchlistItems, setWatchlistItems] = useState<any[]>([]);
   const [bottomTab, setBottomTab] = useState<"foryou" | "comments">("foryou");
+  // Tracks the suggestion the user just tapped so we can show instant feedback
+  // (highlight on the card + a loading overlay on the player) until the new
+  // anime's src actually mounts. Cleared when the player's `anime.id` changes.
+  const [pendingSuggestion, setPendingSuggestion] = useState<AnimeItem | null>(null);
+  useEffect(() => {
+    // New anime loaded → clear the pending overlay. Small delay lets the
+    // buffering loader take over seamlessly.
+    if (!pendingSuggestion) return;
+    if (anime?.id && anime.id !== pendingSuggestion.id) return; // wait for switch
+    if (anime?.id === pendingSuggestion.id) {
+      const t = window.setTimeout(() => setPendingSuggestion(null), 250);
+      return () => window.clearTimeout(t);
+    }
+  }, [anime?.id, pendingSuggestion]);
+  // Safety: never let the pending overlay get stuck.
+  useEffect(() => {
+    if (!pendingSuggestion) return;
+    const t = window.setTimeout(() => setPendingSuggestion(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [pendingSuggestion]);
   const [commentCount, setCommentCount] = useState(0);
   const [selectedLanguageLabel, setSelectedLanguageLabel] = useState<string>("");
   const [selectedDownloadLanguageLabel, setSelectedDownloadLanguageLabel] = useState<string>("");
