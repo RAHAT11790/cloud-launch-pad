@@ -284,6 +284,51 @@ export default function EgdManager({
     }
   };
 
+  // ---------- Bulk deploy every library function ----------
+  const bulkDeployAll = async () => {
+    if (!savedDeployerUrl) { toast.error("Configure deployer URL first"); setShowSetup(true); return; }
+    if (!confirm(`Deploy all ${EDGE_FUNCTION_LIBRARY.length} library functions to your Supabase?\n\nFunctions that need secrets you haven't set yet will be skipped.`)) return;
+    setBulkBusy(true);
+    setBulkStatus({});
+    setBulkMessages({});
+
+    // Refresh project secret names first
+    try { await callDeployer("secrets").then((d) => { if (d?.ok && Array.isArray(d.names)) setProjectSecrets(d.names); }); } catch {}
+
+    const have = new Set(projectSecrets);
+    let okCount = 0;
+    for (const entry of EDGE_FUNCTION_LIBRARY) {
+      const missing = entry.secrets.filter((s) => !have.has(s));
+      if (missing.length > 0) {
+        setBulkStatus((p) => ({ ...p, [entry.slug]: "skipped" }));
+        setBulkMessages((p) => ({ ...p, [entry.slug]: `Skipped — missing secrets: ${missing.join(", ")}` }));
+        continue;
+      }
+      setBulkStatus((p) => ({ ...p, [entry.slug]: "deploying" }));
+      try {
+        const d = await callDeployer("deploy", { slug: entry.slug, code: entry.source, secrets: [] });
+        if (d?.ok && d.url) {
+          await set(ref(db, `settings/functionOverrides/${entry.slug}`), {
+            customUrl: d.url, enabled: true, updatedAt: Date.now(), source: "egd-bulk",
+          });
+          setBulkStatus((p) => ({ ...p, [entry.slug]: "done" }));
+          setBulkMessages((p) => ({ ...p, [entry.slug]: d.url }));
+          okCount++;
+        } else {
+          setBulkStatus((p) => ({ ...p, [entry.slug]: "error" }));
+          setBulkMessages((p) => ({ ...p, [entry.slug]: typeof d?.error === "string" ? d.error : JSON.stringify(d?.error || d) }));
+        }
+      } catch (e: any) {
+        setBulkStatus((p) => ({ ...p, [entry.slug]: "error" }));
+        setBulkMessages((p) => ({ ...p, [entry.slug]: e?.message || String(e) }));
+      }
+    }
+    setBulkBusy(false);
+    await loadList();
+    toast.success(`Bulk deploy finished — ${okCount} succeeded`);
+  };
+
+
   useEffect(() => {
     if (!savedDeployerUrl) return;
     loadList();
