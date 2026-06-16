@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { lazy, Suspense, useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
 import type { Episode, Season } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
@@ -110,6 +110,24 @@ const AN_API_BASE = SUPABASE_URL ? `${SUPABASE_URL.replace(/\/$/, "")}/functions
 const buildAnProxyUrl = (url: string) => {
   if (!AN_API_BASE || !url) return url;
   return `${AN_API_BASE}/hls?url=${encodeURIComponent(url)}`;
+};
+
+const LANGUAGE_NAME_MAP: Record<string, string> = {
+  hi: "Hindi", hin: "Hindi", hindi: "Hindi",
+  en: "English", eng: "English", english: "English",
+  ja: "Japanese", jp: "Japanese", jpn: "Japanese", japanese: "Japanese",
+  bn: "Bengali", ben: "Bengali", bengali: "Bengali", bangla: "Bengali",
+  ta: "Tamil", tam: "Tamil", tamil: "Tamil",
+  te: "Telugu", tel: "Telugu", telugu: "Telugu",
+  ko: "Korean", kor: "Korean", korean: "Korean",
+};
+
+const normalizeLanguageName = (raw: string | undefined | null): string => {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const key = s.toLowerCase().replace(/[^a-z]/g, "");
+  if (LANGUAGE_NAME_MAP[key]) return LANGUAGE_NAME_MAP[key];
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 };
 
 // Prefer Hindi as the default audio track for AnimeSalt content.
@@ -367,17 +385,17 @@ import BottomNav from "@/components/BottomNav";
 import HeroSlider from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
-import VideoPlayer, { normalizeLanguageName } from "@/components/VideoPlayer";
-import NotificationsPage from "@/pages/NotificationsPage";
-import ProfilePage from "@/components/ProfilePage";
-import SearchPage from "@/components/SearchPage";
+const VideoPlayer = lazy(() => import("@/components/VideoPlayer"));
+const NotificationsPage = lazy(() => import("@/pages/NotificationsPage"));
+const ProfilePage = lazy(() => import("@/components/ProfilePage"));
+const SearchPage = lazy(() => import("@/components/SearchPage"));
 import NewEpisodeReleases from "@/components/NewEpisodeReleases";
-import LoginPage from "@/components/LoginPage";
+const LoginPage = lazy(() => import("@/components/LoginPage"));
 import { useFirebaseData } from "@/hooks/useFirebaseData";
 import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
 import { animeSaltApi } from "@/lib/animeSaltApi";
 import LiveSupportChat from "@/components/LiveSupportChat";
-import LiveTvPage from "@/components/LiveTvPage";
+const LiveTvPage = lazy(() => import("@/components/LiveTvPage"));
 import { initializeUiTheme } from "@/lib/uiTheme";
 import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
@@ -389,6 +407,23 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 min
 const API_TIMEOUT_MS = 6_000;
 const warmedImageUrls = new Set<string>();
 const ALL_ANIME_BATCH_SIZE = 18;
+const GRID_PAGE_BATCH_SIZE = 42;
+const HOME_CATEGORY_LIMIT = 6;
+const AN_DETAILS_CACHE_KEY = "rs_an_details_cache_v1";
+const AN_DETAILS_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+const readAnDetailsCache = (): Record<string, { ts: number; item: AnimeItem }> => {
+  try { return JSON.parse(localStorage.getItem(AN_DETAILS_CACHE_KEY) || "{}"); } catch { return {}; }
+};
+
+const writeAnDetailsCache = (cache: Record<string, { ts: number; item: AnimeItem }>) => {
+  const run = () => { try { localStorage.setItem(AN_DETAILS_CACHE_KEY, JSON.stringify(cache)); } catch {} };
+  try {
+    const idle = (window as any).requestIdleCallback;
+    if (typeof idle === "function") idle(run, { timeout: 1500 });
+    else window.setTimeout(run, 0);
+  } catch { run(); }
+};
 
 const preloadImage = (src?: string | null) => {
   const url = String(src || "").trim();
@@ -992,8 +1027,28 @@ const Index = () => {
     } catch {}
   }, [playerState, saltPlayerState, selectedAnime, showProfile, activePage]);
 
-  // AnimeSalt details request control + cache (avoid stale loading toast on cached reopen)
+  // AnimeSalt details request control + durable cache (instant reopen, less API pressure)
   const detailsCacheRef = useRef<Map<string, AnimeItem>>(new Map());
+  const persistedDetailsRef = useRef<Record<string, { ts: number; item: AnimeItem }>>({});
+  useEffect(() => {
+    const cache = readAnDetailsCache();
+    persistedDetailsRef.current = cache;
+    const now = Date.now();
+    Object.entries(cache).forEach(([id, entry]) => {
+      if (entry?.item && now - (entry.ts || 0) < AN_DETAILS_CACHE_TTL) {
+        detailsCacheRef.current.set(id, entry.item);
+      }
+    });
+  }, []);
+
+  const cacheAnimeDetails = useCallback((id: string, item: AnimeItem) => {
+    detailsCacheRef.current.set(id, item);
+    persistedDetailsRef.current = {
+      ...persistedDetailsRef.current,
+      [id]: { ts: Date.now(), item },
+    };
+    writeAnDetailsCache(persistedDetailsRef.current);
+  }, []);
   const detailsLoadingToastRef = useRef<string | number | null>(null);
   const detailsLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const detailsRequestRef = useRef(0);
@@ -1030,10 +1085,8 @@ const Index = () => {
     return toastId;
   }, [dismissDetailsLoadingToast]);
 
-  // Invalidate cached full details when source list refreshes
-  useEffect(() => {
-    detailsCacheRef.current.clear();
-  }, [animeSaltItems]);
+  // Keep AN details cache across list refreshes; cached playable episode lists
+  // are source URLs and should not be discarded during normal home updates.
 
   useEffect(() => {
     return () => {

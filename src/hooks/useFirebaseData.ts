@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { db, ref, onValue } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 
@@ -14,13 +14,24 @@ const readCache = <T,>(key: string, fallback: T): T => {
   } catch { return fallback; }
 };
 const writeCache = (key: string, value: unknown) => {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  const run = () => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
+  try {
+    const idle = (window as any).requestIdleCallback;
+    if (typeof idle === "function") idle(run, { timeout: 1500 });
+    else window.setTimeout(run, 0);
+  } catch { run(); }
 };
+
+const listSignature = (items: AnimeItem[]) =>
+  items.map((item) => `${item.id}:${item.updatedAt || item.createdAt || 0}:${item.poster || ""}:${item.title || ""}`).join("|");
 
 export function useFirebaseData() {
   const [webseries, setWebseries] = useState<AnimeItem[]>(() => readCache<AnimeItem[]>(LS_WS, []));
   const [movies, setMovies] = useState<AnimeItem[]>(() => readCache<AnimeItem[]>(LS_MOV, []));
   const [categories, setCategories] = useState<string[]>(() => readCache<string[]>(LS_CATS, []));
+  const webseriesSigRef = useRef(listSignature(webseries));
+  const moviesSigRef = useRef(listSignature(movies));
+  const categoriesSigRef = useRef(categories.join("|"));
   const [loading, setLoading] = useState(() => {
     // If we already have cached data, treat as ready immediately for zero-latency UI
     return !(readCache<AnimeItem[]>(LS_WS, []).length || readCache<AnimeItem[]>(LS_MOV, []).length);
@@ -41,8 +52,12 @@ export function useFirebaseData() {
       Object.values(data).forEach((cat: any) => {
         if (cat.name) cats.push(cat.name);
       });
-      setCategories(cats);
-      writeCache(LS_CATS, cats);
+      const sig = cats.join("|");
+      if (sig !== categoriesSigRef.current) {
+        categoriesSigRef.current = sig;
+        setCategories(cats);
+        writeCache(LS_CATS, cats);
+      }
       checkLoaded();
     });
 
@@ -143,8 +158,12 @@ export function useFirebaseData() {
         publicItems.push(mappedItem);
       });
       publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      setWebseries(publicItems);
-      writeCache(LS_WS, publicItems);
+      const sig = listSignature(publicItems);
+      if (sig !== webseriesSigRef.current) {
+        webseriesSigRef.current = sig;
+        setWebseries(publicItems);
+        writeCache(LS_WS, publicItems);
+      }
       checkLoaded();
     });
 
@@ -193,8 +212,12 @@ export function useFirebaseData() {
         publicItems.push(mappedItem);
       });
       publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      setMovies(publicItems);
-      writeCache(LS_MOV, publicItems);
+      const sig = listSignature(publicItems);
+      if (sig !== moviesSigRef.current) {
+        moviesSigRef.current = sig;
+        setMovies(publicItems);
+        writeCache(LS_MOV, publicItems);
+      }
       checkLoaded();
     });
 
