@@ -512,7 +512,57 @@ export default function EgdManager({
         </div>
       </div>
 
+      {/* ===== Bulk Deploy ===== */}
+      <div className={glassCard + " p-4 sm:p-5"}>
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+          <div className="min-w-0">
+            <h3 className="font-bold flex items-center gap-2 text-sm sm:text-base">
+              <Rocket size={16} className="text-emerald-400" /> Bulk Deploy to Your Supabase
+            </h3>
+            <p className="text-[11px] text-zinc-500 mt-1 break-words">
+              One click → deploys every library function to your project and auto-registers each URL in the app router. Functions whose secrets aren't set yet are skipped.
+            </p>
+          </div>
+          <button
+            onClick={bulkDeployAll}
+            disabled={!isConfigured || bulkBusy}
+            className={btnPrimary + " inline-flex items-center gap-2 shrink-0 disabled:opacity-50"}
+          >
+            {bulkBusy ? <Loader2 className="animate-spin" size={14} /> : <Rocket size={14} />}
+            {bulkBusy ? "Deploying…" : `Deploy ALL (${EDGE_FUNCTION_LIBRARY.length})`}
+          </button>
+        </div>
+        {Object.keys(bulkStatus).length > 0 && (
+          <div className="space-y-1.5 max-h-[260px] overflow-auto pr-1">
+            {EDGE_FUNCTION_LIBRARY.map((e) => {
+              const st = bulkStatus[e.slug];
+              if (!st) return null;
+              const color =
+                st === "done" ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/30" :
+                st === "error" ? "text-rose-300 bg-rose-500/10 border-rose-500/30" :
+                st === "skipped" ? "text-amber-300 bg-amber-500/10 border-amber-500/30" :
+                st === "deploying" ? "text-sky-300 bg-sky-500/10 border-sky-500/30" :
+                "text-zinc-400 bg-zinc-800/40 border-zinc-700/50";
+              return (
+                <div key={e.slug} className={`rounded-md border px-2.5 py-1.5 text-[11px] ${color} min-w-0`}>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="font-semibold truncate">{e.slug}</span>
+                    <span className="uppercase text-[9px] tracking-wider shrink-0">
+                      {st === "deploying" ? "deploying…" : st}
+                    </span>
+                  </div>
+                  {bulkMessages[e.slug] && (
+                    <div className="text-[10px] opacity-80 break-all mt-0.5">{bulkMessages[e.slug]}</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* ===== Code Library — one click loads source + secret slots ===== */}
+
       <div className={glassCard + " p-4 sm:p-5"}>
         <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
           <h3 className="font-bold flex items-center gap-2 text-sm sm:text-base">
