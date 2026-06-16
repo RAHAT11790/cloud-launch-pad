@@ -3271,10 +3271,32 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           )}
 
           {/* Loading spinner on top of thumbnail */}
-          {showLoaderOverlay && (
+          {showLoaderOverlay && !pendingSuggestion && (
             <div className="absolute inset-0 flex items-center justify-center z-[6] pointer-events-none">
               <div className="player-loader-shell" aria-hidden="true">
                 {Array.from({ length: 12 }).map((_, i) => <span key={i} className="player-loader-petal" />)}
+              </div>
+            </div>
+          )}
+
+          {/* Switching to a suggested anime — instant feedback overlay */}
+          {pendingSuggestion && (
+            <div className="absolute inset-0 z-[8] flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+              {pendingSuggestion.poster && (
+                <img
+                  src={optimizedImageUrl(pendingSuggestion.poster, "poster")}
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute inset-0 w-full h-full object-cover opacity-25 blur-xl scale-110"
+                />
+              )}
+              <div className="relative flex flex-col items-center gap-3 px-4 text-center">
+                <div className="player-loader-shell" aria-hidden="true">
+                  {Array.from({ length: 12 }).map((_, i) => <span key={i} className="player-loader-petal" />)}
+                </div>
+                <p className="text-[13px] font-semibold text-white/90 line-clamp-2 max-w-[80%]">
+                  Loading <span className="text-primary">{pendingSuggestion.title}</span>…
+                </p>
               </div>
             </div>
           )}
