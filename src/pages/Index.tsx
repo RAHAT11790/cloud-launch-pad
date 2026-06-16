@@ -3067,18 +3067,25 @@ const Index = () => {
         <div className="px-4 pb-6">
           <h2 className="text-base font-bold mb-3 flex items-center category-bar">{activeCategory}</h2>
           {filteredAnime.length > 0 ? (
-            <div className="grid grid-cols-3 gap-2.5">
-              {filteredAnime.map((anime) => (
-                <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card" onClick={() => handleCardClick(anime)}>
-                  <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" />
-                  <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
-                  <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
-                  <div className="absolute bottom-0 left-0 right-0 p-2">
-                    <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
+            <>
+              <div className="grid grid-cols-3 gap-2.5">
+                {filteredAnime.slice(0, categoryVisibleCount).map((anime) => (
+                  <div key={anime.id} className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover bg-card anime-card" onClick={() => handleCardClick(anime)}>
+                    <img src={anime.poster} alt={anime.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 70%)" }} />
+                    <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
+                    <div className="absolute bottom-0 left-0 right-0 p-2">
+                      <p className="text-[11px] font-semibold leading-tight line-clamp-2">{anime.title}</p>
+                    </div>
                   </div>
+                ))}
+              </div>
+              {categoryVisibleCount < filteredAnime.length && (
+                <div className="mt-3 flex justify-center">
+                  <button onClick={() => setCategoryVisibleCount((p) => p + GRID_PAGE_BATCH_SIZE)} className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-accent">Load More</button>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-10">No anime found in this category</p>
           )}
