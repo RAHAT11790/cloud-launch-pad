@@ -459,6 +459,31 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
 
 
 
+          {/* Lovable Gateway status card */}
+          <div className="rounded-xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/[0.06] to-pink-500/[0.04] overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-white/[0.03]">
+              <span className={`w-2 h-2 rounded-full ${lovDot}`} />
+              <div className="text-[11px] font-bold text-white tracking-wide">Lovable AI Gateway (fallback)</div>
+              <span className={
+                "ml-auto text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md " +
+                (lovableStatus.state === "online" ? "bg-emerald-500/15 text-emerald-300" :
+                 lovableStatus.state === "offline" ? "bg-rose-500/15 text-rose-300" :
+                 lovableStatus.state === "checking" ? "bg-amber-500/15 text-amber-300" :
+                 "bg-white/10 text-white/50")
+              }>{lovableStatus.state}</span>
+            </div>
+            <div className="px-3 py-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[10.5px]">
+              <div className="text-white/50">Model</div>
+              <div className="text-white/90 truncate text-right">{lovableStatus.model || "google/gemini-3.1-flash-image-preview"}</div>
+              <div className="text-white/50">Last check</div>
+              <div className="text-white/90 text-right">{lovableStatus.checkedAt ? new Date(lovableStatus.checkedAt).toLocaleTimeString() : "—"}</div>
+              {lovableStatus.message && (<><div className="text-white/50">Message</div><div className="text-white/70 text-right break-words">{lovableStatus.message}</div></>)}
+            </div>
+            <div className="px-3 pb-3 text-[10px] text-fuchsia-200/80 leading-relaxed">
+              Used automatically when Gemini fails or hits 429. Resets monthly with your Lovable workspace credits.
+            </div>
+          </div>
+
           {provider === "gemini" && (
             <div className="rounded-xl border border-sky-500/25 bg-gradient-to-br from-sky-500/[0.06] to-indigo-500/[0.04] overflow-hidden">
               {/* Header strip */}
