@@ -403,17 +403,60 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
               </div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-wide text-white/50 mb-1.5">Engine</div>
-              <div className="grid grid-cols-1 gap-1.5">
-                <button
-                  onClick={() => setProvider("gemini")}
-                  className="px-2 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap bg-sky-500 text-black border-sky-400"
-                >
-                  EGD Gemini
-                </button>
+              <div className="text-[10px] uppercase tracking-wide text-white/50 mb-1.5">Engine (auto-fallback enabled)</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="px-2 py-1.5 rounded-lg text-[11px] font-semibold border bg-sky-500/15 text-sky-200 border-sky-400/30 flex items-center justify-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} /> Gemini (1st)
+                </div>
+                <div className="px-2 py-1.5 rounded-lg text-[11px] font-semibold border bg-fuchsia-500/15 text-fuchsia-200 border-fuchsia-400/30 flex items-center justify-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${lovDot}`} /> Lovable (fallback)
+                </div>
               </div>
             </div>
           </div>
+
+
+          {/* Last-result / Last-error panel */}
+          {(lastResult || lastError) && (
+            <div className={`rounded-xl border overflow-hidden ${lastError ? "border-rose-500/30 bg-rose-500/[0.05]" : lastResult?.fallbackUsed ? "border-amber-500/30 bg-amber-500/[0.05]" : "border-emerald-500/25 bg-emerald-500/[0.05]"}`}>
+              <div className="px-3 py-2 border-b border-white/10 flex items-center gap-2">
+                <span className="text-[11px] font-bold text-white">
+                  {lastError ? "❌ Last Error" : lastResult?.fallbackUsed ? "⚠️ Gemini failed → Lovable used" : "✅ Last Generation"}
+                </span>
+                <span className="ml-auto text-[9.5px] text-white/50">
+                  {new Date((lastError?.at || lastResult?.at) as number).toLocaleTimeString()}
+                </span>
+              </div>
+              <div className="px-3 py-2 grid grid-cols-[80px_1fr] gap-x-2 gap-y-1 text-[10.5px]">
+                {lastResult && (
+                  <>
+                    <div className="text-white/50">Engine</div><div className="text-white/90 break-all">{lastResult.provider} · {lastResult.model}</div>
+                  </>
+                )}
+                {lastResult?.geminiError && (
+                  <>
+                    <div className="text-rose-300/80">Gemini err</div>
+                    <div className="text-rose-200/90 break-words">{lastResult.geminiError.message}</div>
+                    {lastResult.geminiError.quota?.quotaId && (<><div className="text-white/50">Quota ID</div><div className="text-white/80 break-all">{lastResult.geminiError.quota.quotaId}</div></>)}
+                    {lastResult.geminiError.quota?.perModel && (<><div className="text-white/50">On model</div><div className="text-white/80">{lastResult.geminiError.quota.perModel}</div></>)}
+                    {lastResult.geminiError.quota?.retryAfterSec && (<><div className="text-white/50">Retry after</div><div className="text-amber-300">{lastResult.geminiError.quota.retryAfterSec}s (per-min cap)</div></>)}
+                  </>
+                )}
+                {lastError && (
+                  <>
+                    <div className="text-white/50">Status</div><div className="text-rose-200">{lastError.status || "?"}</div>
+                    <div className="text-white/50">Message</div><div className="text-rose-100 break-words">{lastError.message}</div>
+                    {lastError.quota?.quotaId && (<><div className="text-white/50">Quota ID</div><div className="text-white/80 break-all">{lastError.quota.quotaId}</div></>)}
+                    {lastError.quota?.perModel && (<><div className="text-white/50">On model</div><div className="text-white/80">{lastError.quota.perModel}</div></>)}
+                    {lastError.quota?.retryAfterSec && (<><div className="text-white/50">Retry in</div><div className="text-amber-300">{lastError.quota.retryAfterSec}s</div></>)}
+                    {lastError.quota?.helpUrl && (<><div className="text-white/50">Help</div><a href={lastError.quota.helpUrl} target="_blank" rel="noreferrer" className="text-sky-300 underline truncate">docs</a></>)}
+                  </>
+                )}
+                <div className="text-white/50">Daily reset</div><div className="text-white/80">{nextResetText}</div>
+              </div>
+            </div>
+          )}
+
 
 
           {provider === "gemini" && (
