@@ -169,8 +169,8 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
           exit={{ opacity: 0 }}
           transition={{ duration: 0.14, ease: "easeOut" }}
           onClick={() => setShowModal(false)}
-          className="fixed inset-0 z-[5000] bg-background/82 backdrop-blur-sm flex items-center justify-center px-3 py-4 overflow-hidden"
-          style={{ willChange: "opacity", touchAction: "manipulation" }}
+          className="fixed inset-0 z-[5000] flex items-center justify-center px-3 py-4 overflow-hidden"
+          style={{ willChange: "opacity", touchAction: "manipulation", background: "hsl(var(--background) / 0.94)" }}
           data-no-swipe="true"
         >
           <motion.div
@@ -182,10 +182,10 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
             exit={{ y: 14, opacity: 0, scale: 0.985 }}
             transition={{ type: "tween", duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[520px] max-h-[calc(100dvh-32px)] rounded-2xl flex flex-col shadow-2xl border border-border/60 bg-card/98 transform-gpu overflow-hidden"
-            style={{ willChange: "transform, opacity", contain: "layout paint" }}
+            className="w-full max-w-[520px] max-h-[calc(100dvh-32px)] rounded-2xl flex flex-col shadow-2xl border border-border/70 transform-gpu overflow-hidden"
+            style={{ willChange: "transform, opacity", contain: "layout paint", background: "hsl(var(--card))" }}
           >
-            <div className="relative shrink-0 px-4 py-3 border-b border-border/40 bg-secondary/35">
+            <div className="relative shrink-0 px-4 py-3 border-b border-border/40" style={{ background: "hsl(var(--secondary))" }}>
               <div className="min-w-0 pr-12">
                 <h3 className="text-base font-bold flex items-center gap-2 leading-tight">
                   <span className="inline-flex w-8 h-8 rounded-xl bg-primary/15 items-center justify-center border border-primary/25">
@@ -205,7 +205,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="overflow-y-auto flex-1 p-3 space-y-2.5 overscroll-contain bg-background/20">
+            <div className="overflow-y-auto flex-1 p-3 space-y-2.5 overscroll-contain" style={{ background: "hsl(var(--background) / 0.35)" }}>
               {groupedReleases.length === 0 ? (
                 <div className="py-12 text-center text-sm text-muted-foreground">
                   No new releases yet — check back soon.
@@ -225,7 +225,8 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
                       type="button"
                       key={release.id}
                       onClick={() => { handleClick(release, minEp); setShowModal(false); }}
-                      className="w-full min-w-0 flex items-center gap-3 p-2.5 rounded-xl border border-border/45 bg-card/80 cursor-pointer text-left transition-transform hover:bg-secondary/70 active:scale-[0.985] overflow-hidden"
+                      className="w-full min-w-0 flex items-center gap-3 p-2.5 rounded-xl border border-border/45 cursor-pointer text-left transition-transform hover:bg-secondary active:scale-[0.985] overflow-hidden"
+                      style={{ background: "hsl(var(--card))" }}
                     >
                       {poster ? (
                         <img
