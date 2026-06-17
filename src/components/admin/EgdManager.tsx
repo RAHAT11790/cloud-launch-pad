@@ -664,15 +664,21 @@ export default function EgdManager({
                 setCode(entry.source);
                 setSecrets(
                   entry.secrets.length > 0
-                    ? entry.secrets.map((name) => ({ name, value: "" }))
+                    ? entry.secrets.map((name) => ({
+                        name,
+                        value: AUTO_MANAGED_SECRETS.has(name) ? lovableKey : "",
+                      }))
                     : [{ name: "", value: "" }],
                 );
                 setResultUrl("");
                 setErrorLog("");
+                const manualSecrets = entry.secrets.filter((n) => !AUTO_MANAGED_SECRETS.has(n));
                 setSourceHint(
-                  entry.secrets.length > 0
-                    ? `Loaded "${entry.label}" — fill ${entry.secrets.length} secret(s) below, then Deploy.`
-                    : `Loaded "${entry.label}" — no secrets required.`,
+                  entry.secrets.length === 0
+                    ? `Loaded "${entry.label}" — no secrets required.`
+                    : manualSecrets.length === 0
+                      ? `Loaded "${entry.label}" — all secrets auto-managed by Lovable. Just hit Deploy.`
+                      : `Loaded "${entry.label}" — fill ${manualSecrets.length} secret(s) below, then Deploy.${entry.secrets.length - manualSecrets.length > 0 ? ` (${entry.secrets.length - manualSecrets.length} auto-managed)` : ""}`,
                 );
                 toast.success(`Loaded: ${entry.label}`);
                 if (typeof window !== "undefined") {
