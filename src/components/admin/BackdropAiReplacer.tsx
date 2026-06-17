@@ -78,6 +78,20 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
     message?: string;
     checkedAt?: number;
   }>({ state: "unknown" });
+  const [lovableStatus, setLovableStatus] = useState<{
+    state: "unknown" | "checking" | "online" | "offline";
+    model?: string;
+    message?: string;
+    checkedAt?: number;
+  }>({ state: "unknown" });
+  const [lastResult, setLastResult] = useState<{
+    engine?: string; provider?: string; model?: string; fallbackUsed?: boolean; geminiError?: any; at?: number;
+  } | null>(null);
+  const [lastError, setLastError] = useState<{
+    message?: string; status?: number;
+    quota?: { retryAfterSec?: number; quotaId?: string; perModel?: string; helpUrl?: string };
+    at?: number;
+  } | null>(null);
 
   useEffect(() => {
     const u1 = onValue(ref(db, "webseries"), (snap) => {
