@@ -797,7 +797,7 @@ const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: 
           <Send size={14} className="text-blue-400" /> Telegram Post URL
         </h3>
         <p className="text-[10px] text-zinc-400 mb-3">
-          এখানে শুধু Telegram Post function URL থাকবে। remaining কাটা দেওয়া সব router block বাদ দেওয়া হয়েছে।
+          খানে শুধু Telegram Post function URL থাকবে। remaining কা দে andয়া all router block orদ দে andয়া হয়েছে।
         </p>
         <div className="space-y-2">
           <input
@@ -3272,7 +3272,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         year: data.first_air_date?.split("-")[0] || "", rating: data.vote_average?.toFixed(1) || "",
         language: "Hindi", baseLanguage: "Hindi", selectedAdminLanguage: "Hindi", availableLanguages: ["Hindi"], category: autoCategory, dubType: "official", storyline: data.overview || "", visibility: "public", weeklyEnabled: false, weeklyEveryDays: 7, audioTracks: []
       };
-      if (autoCategory) toast.info(`অটো Category: ${autoCategory}`);
+      if (autoCategory) toast.info(`auto Category: ${autoCategory}`);
       setSeriesCast(cast);
       setSeriesResults([]);
       setSeriesEditId("");
@@ -3497,7 +3497,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         year: data.release_date?.split("-")[0] || "", rating: data.vote_average?.toFixed(1) || "",
         language: "Hindi", category: autoCategory, dubType: "official", storyline: data.overview || "", movieLink: "", downloadLink: "", visibility: "public", audioTracks: []
       });
-      if (autoCategory) toast.info(`অটো Category: ${autoCategory}`);
+      if (autoCategory) toast.info(`auto Category: ${autoCategory}`);
       setMovieCast(cast);
       setMovieResults([]);
       setMovieEditId("");
@@ -4080,7 +4080,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
           setExpandedSeasons(p => ({ ...p, ...expandMap }));
           return updated;
         });
-        toast.success(`${newSeasons.length}টি Season JSON থেকে ইমপোর্ট হয়েছে!`);
+        toast.success(`${newSeasons.length} Season JSON from import done!`);
         setWsJsonImportMode(false);
         setWsJsonPasteText('');
         return;
@@ -4485,7 +4485,7 @@ ${tgHashtags}`;
 
     const remaining = pool.filter(it => !tgBulkSentIds[it.id]);
     if (remaining.length === 0) {
-      toast.error("সব anime already sent! Reset করুন বা নতুন anime যোগ করুন।");
+      toast.error("All anime already sent! Reset or add new anime।");
       return;
     }
 
@@ -4559,7 +4559,7 @@ ${tgBulkFooter}
       }
 
       if (failures.length === 0) {
-        toast.success(`✅ ${picked.length} anime, ${okCount}টা channels sent! (${remaining.length - picked.length}টা remaining)`);
+        toast.success(`✅ ${picked.length} anime, ${okCount} channels sent! (${remaining.length - picked.length} remaining)`);
       } else if (okCount > 0) {
         toast.success(`✅ ${okCount}/${channelIds.length} channels succeeded`);
         failures.slice(0, 3).forEach(f => toast.error(f));
@@ -4574,10 +4574,10 @@ ${tgBulkFooter}
   };
 
   const resetBulkSentIds = async () => {
-    if (!confirm("Reset করলে সব anime আবার পাঠানো যাবে। নিশ্চিত?")) return;
+    if (!confirm("Reset করলে all anime আorর send will go। Are you sure?")) return;
     try {
       await set(ref(db, "telegramBulkBroadcast/sentIds"), null);
-      toast.success("✅ Reset complete — সব anime আবার পাঠানো যাবে");
+      toast.success("✅ Reset complete — all anime আorর send will go");
     } catch (err: any) {
       toast.error("Reset failed: " + (err.message || ""));
     }
@@ -5185,7 +5185,7 @@ ${tgBulkFooter}
                     updates[path] = catBulkCategory;
                   });
                   update(ref(db), updates)
-                    .then(() => { toast.success(`${catBulkSelected.length}টি anime "${catBulkCategory}" Categoryতে সেট হয়েছে!`); setCatBulkSelected([]); })
+                    .then(() => { toast.success(`${catBulkSelected.length} anime "${catBulkCategory}" Categoryতে set done!`); setCatBulkSelected([]); })
                     .catch(err => toast.error("Error: " + err.message));
                 }} className={`${btnPrimary} w-full py-2.5 text-[12px] mb-3 flex items-center justify-center gap-2`}>
                   <Save size={14} /> {catBulkSelected.length} selected → "{catBulkCategory}" Set
@@ -5546,7 +5546,7 @@ ${tgBulkFooter}
                               <textarea
                                 value={wsSeasonPasteText}
                                 onChange={e => setWsSeasonPasteText(e.target.value)}
-                                placeholder='{ "episodes": [...] } অথবা [{ "episodeNumber": 1, "link": "..." }]'
+                                placeholder='{ "episodes": [...] } or [{ "episodeNumber": 1, "link": "..." }]'
                                 className="w-full bg-black/30 border border-white/5 rounded-lg px-2.5 py-2 text-[10px] text-white placeholder:text-green-400/30 focus:border-green-500/50 focus:outline-none min-h-[70px] resize-none font-mono mb-2"
                               />
                               <div className="flex gap-2">
@@ -5652,17 +5652,17 @@ ${tgBulkFooter}
 
                         const handleInlineQP = () => {
                           const t = inlineQP.trim();
-                          if (!t) { toast.error("লিংক পেস্ট করো!"); return; }
+                          if (!t) { toast.error("link পেস্ট !"); return; }
                           try {
                             const u = new URL(t.split('\n')[0].trim());
                             setInlineOldDomain(`${u.protocol}//${u.host}`);
-                            toast.success(`✅ ডোমেইন সেট: ${u.protocol}//${u.host}`);
+                            toast.success(`✅ domain set: ${u.protocol}//${u.host}`);
                             setShowInlineQP(false); setInlineQP("");
-                          } catch { toast.error("সঠিক URL পেস্ট করো!"); }
+                          } catch { toast.error("সঠিক URL পেস্ট !"); }
                         };
 
                         const replaceInSeasonsData = () => {
-                          if (!inlineOldDomain.trim() || !inlineNewDomain.trim()) { toast.error("দুটো ডোমেইনই দিতে হবে!"); return; }
+                          if (!inlineOldDomain.trim() || !inlineNewDomain.trim()) { toast.error("দুটো domainই দিতে হবে!"); return; }
                           const old = inlineOldDomain.trim();
                           const nw = inlineNewDomain.trim();
                           let totalLinks = 0, replacedLinks = 0;
@@ -5687,7 +5687,7 @@ ${tgBulkFooter}
 
                           setSeasonsData(updatedSeasons);
                           setInlineResult({ total: totalLinks, replaced: replacedLinks });
-                          toast.success(`✅ ${replacedLinks}/${totalLinks} লিংক replaced! (সেভ করতে ভুলো না)`);
+                          toast.success(`✅ ${replacedLinks}/${totalLinks} link replaced! (save to do ভুলো না)`);
                         };
 
                         return (
@@ -5703,21 +5703,21 @@ ${tgBulkFooter}
                             {showInlineQP && (
                               <div className="mb-3 bg-black/20 rounded-xl border border-cyan-500/20 p-2.5">
                                 <textarea value={inlineQP} onChange={e => setInlineQP(e.target.value)}
-                                  placeholder="যেকোনো ভিডিও লিংক পেস্ট করো — ডোমেইন অটো সেট হবে"
+                                  placeholder="যেany ভিডি and link পেস্ট  — domain auto set হবে"
                                   className={`${inputClass} w-full min-h-[50px] resize-none text-[10px] font-mono mb-2`} />
                                 <button onClick={handleInlineQP} disabled={!inlineQP.trim()}
                                   className={`${btnPrimary} w-full py-1.5 text-[10px] flex items-center justify-center gap-1 disabled:opacity-30`}>
-                                  <Check size={11} /> ডোমেইন সেট করো
+                                  <Check size={11} /> domain set 
                                 </button>
                               </div>
                             )}
 
                             <div className="grid grid-cols-1 gap-2 mb-3">
-                              <input value={inlineOldDomain} onChange={e => setInlineOldDomain(e.target.value)} placeholder="পুরাতন: http://fi3.bot-hosting.net:22854" className={`${inputClass} !text-[10px]`} />
-                              <input value={inlineNewDomain} onChange={e => setInlineNewDomain(e.target.value)} placeholder="নতুন: https://rahat1102-video-hosting-bot.hf.space" className={`${inputClass} !text-[10px]`} />
+                              <input value={inlineOldDomain} onChange={e => setInlineOldDomain(e.target.value)} placeholder="old: http://fi3.bot-hosting.net:22854" className={`${inputClass} !text-[10px]`} />
+                              <input value={inlineNewDomain} onChange={e => setInlineNewDomain(e.target.value)} placeholder="new: https://rahat1102-video-hosting-bot.hf.space" className={`${inputClass} !text-[10px]`} />
                             </div>
                             <button onClick={replaceInSeasonsData} className={`${btnPrimary} w-full py-2 text-[11px] flex items-center justify-center gap-1.5`}>
-                              <RefreshCw size={12} /> রিপ্লেস করো
+                              <RefreshCw size={12} /> replace 
                             </button>
                             {inlineResult && <p className="text-[10px] text-green-400 mt-2">✅ {inlineResult.replaced}/{inlineResult.total} replaced</p>}
                             
@@ -5747,7 +5747,7 @@ ${tgBulkFooter}
                     {seasonsData.length > 0 && (
                       <div className={`${glassCard} p-4 mb-4`}>
                         <h4 className="text-xs font-bold text-white mb-2 flex items-center gap-2"><Download size={12} className="text-green-400" /> 📦 Export JSON</h4>
-                        <p className="text-[9px] text-zinc-400 mb-3">এই seriesের সব Season ও এপিসোডের JSON ডাউনলোড করো।</p>
+                        <p className="text-[9px] text-zinc-400 mb-3">ই series all Season  and episode JSON ডাউনload ।</p>
                         <button onClick={() => {
                           const exportData = {
                             title: seriesForm?.title || "Unknown",
@@ -5776,7 +5776,7 @@ ${tgBulkFooter}
                           a.download = `${(seriesForm?.title || "series").replace(/[^a-zA-Z0-9]/g, "_")}_export.json`;
                           a.click();
                           URL.revokeObjectURL(url);
-                          toast.success("✅ JSON ডাউনলোড হয়েছে!");
+                          toast.success("✅ JSON ডাউনload done!");
                         }} className={`${btnPrimary} w-full py-2.5 text-[11px] flex items-center justify-center gap-1.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500`}>
                           <Download size={12} /> Export JSON
                         </button>
@@ -5872,7 +5872,7 @@ ${tgBulkFooter}
               {wsNotifyStep === "release" ? (
                 <div>
                   <h3 className="text-sm font-bold mb-3 flex items-center gap-2"><Zap size={14} className="text-pink-500" /> Create New Release</h3>
-                  <p className="text-[11px] text-zinc-400 mb-3">{ctxForm?.title ? `"${ctxForm.title}" — Season ও এপিসোড Select` : "Season ও এপিসোড সিলেক্ট করে New Release Post"}</p>
+                  <p className="text-[11px] text-zinc-400 mb-3">{ctxForm?.title ? `"${ctxForm.title}" — Season  and episode Select` : "Season  and episode select করে New Release Post"}</p>
 
                   {/* Auto-detected ranges hint (filled by Save+Notify diff) */}
                   {wsAutoRanges.length > 0 && (
@@ -5917,8 +5917,8 @@ ${tgBulkFooter}
                     </div>
                   </div>
                   <button onClick={async () => {
-                    if (wsNotifySeason === "" || wsNotifyEpisode === "") { toast.error("Season ও এপিসোড Select"); return; }
-                    if (!ctxSeriesId || !ctxForm?.title) { toast.error("series কন্টেক্সট পাওয়া যায়নি"); return; }
+                    if (wsNotifySeason === "" || wsNotifyEpisode === "") { toast.error("Season  and episode Select"); return; }
+                    if (!ctxSeriesId || !ctxForm?.title) { toast.error("series কন্text পা andয়া যায়নি"); return; }
                     const season = ctxSeasons[parseInt(wsNotifySeason)];
                     const episode = season?.episodes?.[parseInt(wsNotifyEpisode)];
                     const episodeEnd = wsNotifyEpisodeEnd !== "" ? season?.episodes?.[parseInt(wsNotifyEpisodeEnd)] : null;
@@ -6039,7 +6039,7 @@ ${tgBulkFooter}
                 </div>
               ) : (
                 <div>
-                  <h3 className="text-sm font-bold mb-3 flex items-center gap-2"><Send size={14} className="text-blue-400" /> টেলিগ্রামে Post</h3>
+                  <h3 className="text-sm font-bold mb-3 flex items-center gap-2"><Send size={14} className="text-blue-400" /> Telegramে Post</h3>
                   <div className="space-y-3">
                     <div>
                       <label className="block text-xs text-zinc-400 mb-1.5">Channel ID</label>
@@ -6072,7 +6072,7 @@ ${tgBulkFooter}
                         // Step 2: Auto-redirect to Telegram Post section with anime preselected
                         const ctx = wsNotifyContextRef.current;
                         const seriesId = ctx?.seriesId || "";
-                        toast.success("✅ নোটিফিকেশন পাঠানো হয়েছে — টেলিগ্রাম পোস্টে রিডাইরেক্ট হচ্ছে...");
+                        toast.success("✅ Notification sent — redirecting to Telegram post...");
                         setWsSaveNotifyModal(false);
                         setWsNotifyStep("release");
                         setWsNotifySeason("");
@@ -6600,7 +6600,7 @@ ${tgBulkFooter}
                             value={releaseContentSearch}
                             onChange={e => setReleaseContentSearch(e.target.value)}
                             className="w-full pl-8 pr-3 py-2 bg-[#151521] border border-white/10 rounded-lg text-white text-[12px] focus:border-purple-500 focus:outline-none placeholder:text-[#957DAD]"
-                            placeholder="🔍 কন্টেন্ট সার্চ করুন..."
+                            placeholder="🔍 content search ..."
                             autoFocus
                             onClick={e => e.stopPropagation()}
                           />
@@ -6612,7 +6612,7 @@ ${tgBulkFooter}
                           ? contentOptions.filter(o => o.label.toLowerCase().includes(releaseContentSearch.toLowerCase()))
                           : contentOptions;
                         return filtered.length === 0 ? (
-                          <p className="text-[#957DAD] text-[11px] text-center py-4">কোনো কন্টেন্ট পাওয়া যায়নি</p>
+                          <p className="text-[#957DAD] text-[11px] text-center py-4">any content পা andয়া যায়নি</p>
                         ) : filtered.map(o => (
                         <div key={o.value} className={`flex items-center gap-2.5 p-2 cursor-pointer hover:bg-purple-500/20 rounded-lg m-1 ${releaseContent === o.value ? "bg-purple-500/30" : ""}`}
                           onClick={() => { handleReleaseContentChange(o.value); setReleaseDropdownOpen(false); setReleaseContentSearch(''); }}>
@@ -6661,7 +6661,7 @@ ${tgBulkFooter}
                   value={releaseSearchQuery}
                   onChange={e => setReleaseSearchQuery(e.target.value)}
                   className={`${inputClass} pl-9`}
-                  placeholder="🔍 সার্চ করুন (Title, এপিসোড)..."
+                  placeholder="🔍 search  (Title, episode)..."
                 />
               </div>
               {(() => {
@@ -6673,7 +6673,7 @@ ${tgBulkFooter}
                   return title.includes(q) || epInfo.includes(q);
                 });
                 return filtered.length === 0 ? (
-                <p className="text-[#957DAD] text-[13px] text-center py-5">{releaseSearchQuery ? 'কোনো রিলিজ পাওয়া যায়নি' : 'No new releases yet'}</p>
+                <p className="text-[#957DAD] text-[13px] text-center py-5">{releaseSearchQuery ? 'any রিলিজ পা andয়া যায়নি' : 'No new releases yet'}</p>
               ) : filtered.map(release => {
                 let episodeText = "";
                 if (release.episodeInfo) {
@@ -6864,15 +6864,15 @@ ${tgBulkFooter}
             {/* Settings Card */}
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <Settings size={14} className="text-pink-500" /> bKash সেটিংস
+                <Settings size={14} className="text-pink-500" /> bKash settings
               </h3>
               <div className="space-y-3">
                 <div>
-                  <label className="text-[11px] text-zinc-400 mb-1 block">bKash নাম্বার</label>
+                  <label className="text-[11px] text-zinc-400 mb-1 block">bKash name্orর</label>
                   <input value={bkashSettings.phoneNumber || ""} onChange={e => setBkashSettings((p: any) => ({ ...p, phoneNumber: e.target.value }))} className={inputClass} placeholder="01XXXXXXXXX" />
                 </div>
                 <div>
-                  <label className="text-[11px] text-zinc-400 mb-1 block">অ্যাকাউন্ট টাইপ</label>
+                  <label className="text-[11px] text-zinc-400 mb-1 block">অ্যাcount type</label>
                   <select value={bkashSettings.accountType || "Agent"} onChange={e => setBkashSettings((p: any) => ({ ...p, accountType: e.target.value }))} className={selectClass}>
                     <option value="Agent">Agent</option>
                     <option value="Personal">Personal</option>
@@ -6880,22 +6880,22 @@ ${tgBulkFooter}
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] text-zinc-400 mb-1 block">QR কোড লিংক (ছবির URL)</label>
+                  <label className="text-[11px] text-zinc-400 mb-1 block">QR code link (imageর URL)</label>
                   <input value={bkashSettings.qrCodeLink || ""} onChange={e => setBkashSettings((p: any) => ({ ...p, qrCodeLink: e.target.value }))} className={inputClass} placeholder="https://example.com/qr.png" />
                 </div>
                 <div>
-                  <label className="text-[11px] text-zinc-400 mb-1 block">নির্দেশনা (ইউজারদের users্য)</label>
-                  <textarea value={bkashSettings.instructions || ""} onChange={e => setBkashSettings((p: any) => ({ ...p, instructions: e.target.value }))} className={inputClass + " min-h-[80px] resize-none"} placeholder="Send Money করুন..." />
+                  <label className="text-[11px] text-zinc-400 mb-1 block">নির্দেশনা (userদ users্য)</label>
+                  <textarea value={bkashSettings.instructions || ""} onChange={e => setBkashSettings((p: any) => ({ ...p, instructions: e.target.value }))} className={inputClass + " min-h-[80px] resize-none"} placeholder="Send Money ..." />
                 </div>
 
                 {/* Plans */}
                 <div>
-                  <label className="text-[11px] text-zinc-400 mb-2 block font-semibold">সাবস্ক্রিপশন প্ল্যান (3টি)</label>
+                  <label className="text-[11px] text-zinc-400 mb-2 block font-semibold">subscription প্ল্যান (3)</label>
                   {(bkashSettings.plans || []).map((plan: any, idx: number) => (
                     <div key={plan.id || idx} className="bg-[#141422] rounded-lg p-3 mb-2 border border-white/6">
                       <div className="grid grid-cols-2 gap-2 mb-2">
                         <div>
-                          <label className="text-[10px] text-zinc-500 block">প্ল্যান নাম</label>
+                          <label className="text-[10px] text-zinc-500 block">প্ল্যান name</label>
                           <input value={plan.name} onChange={e => {
                             const plans = [...(bkashSettings.plans || [])];
                             plans[idx] = { ...plans[idx], name: e.target.value };
@@ -6913,7 +6913,7 @@ ${tgBulkFooter}
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <label className="text-[10px] text-zinc-500 block">দিন</label>
+                          <label className="text-[10px] text-zinc-500 block">day</label>
                           <input type="number" value={plan.days} onChange={e => {
                             const plans = [...(bkashSettings.plans || [])];
                             plans[idx] = { ...plans[idx], days: Number(e.target.value) };
@@ -6921,7 +6921,7 @@ ${tgBulkFooter}
                           }} className={inputClass + " !py-1.5 !text-xs"} />
                         </div>
                         <div>
-                          <label className="text-[10px] text-zinc-500 block">ডিভাইস</label>
+                          <label className="text-[10px] text-zinc-500 block">device</label>
                           <input type="number" value={plan.maxDevices || 1} onChange={e => {
                             const plans = [...(bkashSettings.plans || [])];
                             plans[idx] = { ...plans[idx], maxDevices: Number(e.target.value) || 1 };
@@ -6945,10 +6945,10 @@ ${tgBulkFooter}
 
                 <button onClick={() => {
                   set(ref(db, "bkashSettings"), bkashSettings)
-                    .then(() => toast.success("bKash সেটিংস সেভ হয়েছে"))
+                    .then(() => toast.success("bKash settings save done"))
                     .catch(err => toast.error("Error: " + err.message));
                 }} className={`${btnPrimary} w-full py-3.5 flex items-center justify-center gap-2`}>
-                  <Save size={16} /> সেটিংস সেভ করুন
+                  <Save size={16} /> settings save 
                 </button>
               </div>
             </div>
@@ -6956,10 +6956,10 @@ ${tgBulkFooter}
             {/* Payment Requests */}
             <div className={`${glassCard} p-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <List size={14} className="text-green-500" /> পেমেন্ট রিকোয়েস্ট ({bkashPaymentRequests.filter((r: any) => r.status === "pending").length} পেন্ডিং)
+                <List size={14} className="text-green-500" /> payment request ({bkashPaymentRequests.filter((r: any) => r.status === "pending").length} pending)
               </h3>
               <div className="space-y-2.5">
-                {bkashPaymentRequests.length === 0 && <p className="text-center text-zinc-500 text-sm py-6">কোন পেমেন্ট রিকোয়েস্ট নেই</p>}
+                {bkashPaymentRequests.length === 0 && <p className="text-center text-zinc-500 text-sm py-6">any payment request none</p>}
                 {bkashPaymentRequests.map((req: any) => (
                   <div key={req.id} className={`p-3 rounded-xl border transition-colors ${
                     req.status === "approved" ? "bg-green-500/10 border-green-500/30" :
@@ -7010,13 +7010,13 @@ ${tgBulkFooter}
                           const userNotifRef = push(ref(db, `notifications/${req.userId}`));
                           await set(userNotifRef, {
                             title: "Premium Activated! 🎉",
-                            message: `আপনার ${req.planName} প্ল্যান অ্যাক্টিভেট হয়েছে। ${days} দিন Ad-free উপভোগ করুন!`,
+                            message: `আপনার ${req.planName} প্ল্যান অ্যাক্ভেট done। ${days} day Ad-free উপভোগ !`,
                             type: "success",
                             timestamp: Date.now(),
                             read: false,
                           });
                           // FCM push removed — in-app notification (above) is enough
-                          toast.success(`${req.userName} এর প্রিমিয়াম অ্যাক্টিভেট হয়েছে (${days} দিন)`);
+                          toast.success(`${req.userName}  of premium অ্যাক্ভেট done (${days} day)`);
                         }} className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors">
                           <Check size={12} /> Approve
                         </button>
@@ -7025,13 +7025,13 @@ ${tgBulkFooter}
                           const userNotifRef = push(ref(db, `notifications/${req.userId}`));
                           await set(userNotifRef, {
                             title: "Payment Rejected ❌",
-                            message: "আপনার পেমেন্ট রিকোয়েস্ট গ্রহণ হয়নি। সঠিক Transaction ID দিয়ে আবার চেষ্টা করুন।",
+                            message: "আপনার payment request গ্রহণ not done। সঠিক Transaction ID with আorর চেষ্ ।",
                             type: "error",
                             timestamp: Date.now(),
                             read: false,
                           });
                           // FCM push removed — in-app notification (above) is enough
-                          toast.success("রিকোয়েস্ট রিজেক্ট করা হয়েছে");
+                          toast.success("request reject ক done");
                         }} className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center justify-center gap-1 transition-colors">
                           <X size={12} /> Reject
                         </button>
@@ -7064,7 +7064,7 @@ ${tgBulkFooter}
                 </button>
               </div>
               <p className="text-[11px] text-zinc-400 mb-3">
-                Android SMS-forwarder app থেকে আসা SMS এখানে দেখাবে। User TrxID submit করলেই auto-match হবে।
+                Android SMS-forwarder app from আসা SMS খানে shows। User TrxID submit করলেই auto-match হবে।
                 Total: <span className="text-white font-semibold">{bkashSmsFeed.length}</span> ·
                 Consumed: <span className="text-green-400 font-semibold">{bkashSmsFeed.filter((s:any)=>s.consumed).length}</span> ·
                 Unmatched: <span className="text-yellow-400 font-semibold">{bkashSmsFeed.filter((s:any)=>!s.consumed).length}</span>
@@ -7072,8 +7072,8 @@ ${tgBulkFooter}
               <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
                 {bkashSmsFeed.length === 0 && (
                   <div className="text-center py-8 text-zinc-500 text-xs">
-                    <p>📭 কোনো SMS এখনো forward হয়নি।</p>
-                    <p className="mt-1 text-[10px]">Android app টি ফোনে install করুন এবং Auto Add Money Service চালু করুন।</p>
+                    <p>📭 any SMS খনো forward not done।</p>
+                    <p className="mt-1 text-[10px]">Android app  phones — install and enable Auto Add Money Service।</p>
                   </div>
                 )}
                 {bkashSmsFeed.slice(0, 50).map((sms: any) => {
@@ -7118,13 +7118,13 @@ ${tgBulkFooter}
           <div className="pb-52 scroll-mb-52">
             <div className={`${glassCard} relative z-[80] overflow-visible p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <Send size={14} className="text-blue-400" /> টেলিগ্রাম পোস্ট তৈরি করুন
+                <Send size={14} className="text-blue-400" /> Telegram post তৈরি 
               </h3>
               <p className="text-[11px] text-zinc-400 mb-4">
-                নিউ রিলিজ থেকে Select অথবা ম্যানুয়ালি ফিল্ড পূরণ করুন।
+                নিউ রিলিজ from Select or manualি ফিল্ড পূরণ ।
               </p>
               <div className="mb-4" ref={tgDropdownRef}>
-                <label className="block text-xs text-zinc-400 mb-2 font-medium">anime / মুভি Select (latest update টপে)</label>
+                <label className="block text-xs text-zinc-400 mb-2 font-medium">anime / movie Select (latest update টপে)</label>
                 <div className="relative z-[130]">
                   <button type="button" onClick={() => setTgDropdownOpen(!tgDropdownOpen)}
                     className={`${selectClass} w-full text-left flex items-center gap-2`}>
@@ -7150,7 +7150,7 @@ ${tgBulkFooter}
                       <div className="p-2 border-b border-white/10 flex-shrink-0">
                         <input value={tgContentSearch} onChange={e => setTgContentSearch(e.target.value)}
                           className="w-full px-3 py-2 bg-[#141422] border border-white/10 rounded-lg text-white text-[12px] focus:border-blue-500 focus:outline-none placeholder:text-zinc-500"
-                          placeholder="🔍 সার্চ করুন..." autoFocus onClick={e => e.stopPropagation()} />
+                          placeholder="🔍 search ..." autoFocus onClick={e => e.stopPropagation()} />
                       </div>
                       <div className="overflow-y-auto max-h-[260px]">
                         {filtered.map(r => {
@@ -7216,7 +7216,7 @@ ${tgBulkFooter}
               </div>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1.5">Channel ID (কমা দিয়ে একাধিক)</label>
+                  <label className="block text-xs text-zinc-400 mb-1.5">Channel ID (lessা with কাধিক)</label>
                   <textarea value={tgChannelId} onChange={e => setTgChannelId(e.target.value)} onBlur={e => { try { set(ref(db, "admin/telegramChannel"), e.target.value.trim()); } catch {} }} className={`${inputClass} min-h-[60px] resize-y`} placeholder={`${TELEGRAM_CHANNEL}, @channel2, -1001234567890`} rows={2} />
                 </div>
                 <div>
@@ -7225,9 +7225,9 @@ ${tgBulkFooter}
                 </div>
                 {/* IMDB/TMDB ID for auto genres */}
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1.5">IMDB/TMDB ID (অটো Genres ও Rating)</label>
+                  <label className="block text-xs text-zinc-400 mb-1.5">IMDB/TMDB ID (auto Genres  and Rating)</label>
                   <div className="flex gap-2">
-                    <input value={tgImdbId} onChange={e => setTgImdbId(e.target.value)} className={`${inputClass} flex-1`} placeholder="tt12345678 বা 12345" />
+                    <input value={tgImdbId} onChange={e => setTgImdbId(e.target.value)} className={`${inputClass} flex-1`} placeholder="tt12345678 or 12345" />
                     <button type="button" onClick={() => fetchTmdbGenres(tgImdbId)} disabled={tgImdbLoading || !tgImdbId.trim()}
                       className={`${btnPrimary} !px-3 !py-2 !text-[11px] disabled:opacity-50`}>
                       {tgImdbLoading ? <RefreshCw size={12} className="animate-spin" /> : "Fetch"}
@@ -7240,17 +7240,17 @@ ${tgBulkFooter}
                     <input value={tgSeason} onChange={e => setTgSeason(e.target.value)} className={inputClass} placeholder="Season 01" />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1.5">মোট এপিসোড</label>
+                    <label className="block text-xs text-zinc-400 mb-1.5">Total episode</label>
                     <input value={tgTotalEpisodes} onChange={e => setTgTotalEpisodes(e.target.value)} className={inputClass} placeholder="12" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1.5">কোয়ালিটি</label>
+                    <label className="block text-xs text-zinc-400 mb-1.5">কোয়ালি</label>
                     <input value={tgQuality} onChange={e => setTgQuality(e.target.value)} className={inputClass} placeholder="480p,720p,1080p,4K" />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1.5">রেটিং ⭐</label>
+                    <label className="block text-xs text-zinc-400 mb-1.5">রেং ⭐</label>
                     <input value={tgRating} onChange={e => setTgRating(e.target.value)} className={inputClass} placeholder="8.5" />
                   </div>
                 </div>
@@ -7259,7 +7259,7 @@ ${tgBulkFooter}
                   <input value={tgGenres} onChange={e => setTgGenres(e.target.value)} className={inputClass} placeholder="Animation, Action & Adventure" />
                 </div>
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1.5">অডিও ল্যাঙ্গুয়েজ 🎧</label>
+                  <label className="block text-xs text-zinc-400 mb-1.5">অডি and ল্যাঙ্গুয়েজ 🎧</label>
                   <input value={tgLanguages} onChange={e => setTgLanguages(e.target.value)} className={inputClass} placeholder="Bengali,English,Hindi,Japanese" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -7268,12 +7268,12 @@ ${tgBulkFooter}
                     <input value={tgSeason} onChange={e => setTgSeason(e.target.value)} className={inputClass} placeholder="01" />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1.5">নতুন এপিসোড নম্বর</label>
+                    <label className="block text-xs text-zinc-400 mb-1.5">new episode নম্বর</label>
                     <input value={tgNewEpAdded} onChange={e => setTgNewEpAdded(e.target.value)} className={inputClass} placeholder="03" />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1.5">অডিও টাইপ</label>
+                  <label className="block text-xs text-zinc-400 mb-1.5">অডি and type</label>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setTgDubType("official")}
                       className={`flex-1 py-2.5 rounded-lg text-[12px] font-semibold border transition-all ${tgDubType === "official" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400"}`}>
@@ -7316,29 +7316,29 @@ ${tgBulkFooter}
                   <input value={tgPosterUrl} onChange={e => setTgPosterUrl(e.target.value)} className={inputClass} placeholder="https://image.tmdb.org/..." />
                 </div>
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1.5">ডাউনলোড/ওয়াচ লিংক (ঐচ্ছিক)</label>
+                  <label className="block text-xs text-zinc-400 mb-1.5">ডাউনload/ andয়াচ link (ঐচ্ছিক)</label>
                   <input value={tgButtonLink} onChange={e => setTgButtonLink(e.target.value)} className={inputClass} placeholder={SITE_URL} />
                 </div>
                 {tgButtonLink && (
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1.5">ডিফল্ট বাটন নাম</label>
+                    <label className="block text-xs text-zinc-400 mb-1.5">default button name</label>
                     <input value={tgDefaultButtonName} onChange={e => setTgDefaultButtonName(e.target.value)} className={inputClass} placeholder="📥 𝐖𝐀𝐓𝐂𝐇 𝐀𝐍𝐃 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃 📥" />
                   </div>
                 )}
                 {/* Extra buttons */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs text-zinc-400 font-medium">অতিরিক্ত বাটন (ঐচ্ছিক)</label>
+                    <label className="block text-xs text-zinc-400 font-medium">অতিরিক্ত button (ঐচ্ছিক)</label>
                     <button type="button" onClick={() => setTgButtons([...tgButtons, { name: "", url: "" }])}
                       className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1">
-                      <Plus size={12} /> বাটন যোগ করুন
+                      <Plus size={12} /> button add 
                     </button>
                   </div>
                   {tgButtons.map((btn, i) => (
                     <div key={i} className="flex gap-2 mb-2 items-start">
                       <div className="flex-1 space-y-1.5">
                         <input value={btn.name} onChange={e => { const nb = [...tgButtons]; nb[i].name = e.target.value; setTgButtons(nb); }}
-                          className={inputClass} placeholder="বাটন নাম" />
+                          className={inputClass} placeholder="button name" />
                         <input value={btn.url} onChange={e => { const nb = [...tgButtons]; nb[i].url = e.target.value; setTgButtons(nb); }}
                           className={inputClass} placeholder="https://..." />
                       </div>
@@ -7354,14 +7354,14 @@ ${tgBulkFooter}
             <div className={`${glassCard} p-4 mb-4`}>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Link size={14} className="text-purple-400" /> ফুটার লিংক (TG পোস্টে দেখাবে)
+                  <Link size={14} className="text-purple-400" /> ফুর link (TG postে shows)
                 </h3>
                 <button type="button" onClick={() => {
                   const newLinks = [...tgFooterLinks, { label: "New Link", url: "https://t.me/", emoji: "🔰" }];
                   setTgFooterLinks(newLinks);
                   set(ref(db, "admin/tgFooterLinks"), newLinks);
                 }} className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1">
-                  <Plus size={12} /> লিংক যোগ
+                  <Plus size={12} /> link add
                 </button>
               </div>
               <div className="space-y-2.5">
@@ -7395,7 +7395,7 @@ ${tgBulkFooter}
                 ))}
                 <button type="button" onClick={() => set(ref(db, "admin/tgFooterLinks"), tgFooterLinks)}
                   className={`${btnSecondary} w-full !py-2 !text-[11px] flex items-center justify-center gap-1.5`}>
-                  <Save size={12} /> ফুটার লিংক সেভ করুন
+                  <Save size={12} /> ফুর link save 
                 </button>
               </div>
             </div>
@@ -7403,7 +7403,7 @@ ${tgBulkFooter}
             {/* Preview */}
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <Eye size={14} className="text-green-400" /> প্রিভিউ
+                <Eye size={14} className="text-green-400" /> preview
               </h3>
               <div className="bg-[#0E1621] rounded-xl p-4 border border-white/5">
                 {tgPosterUrl && (
@@ -7445,11 +7445,11 @@ ${tgBulkFooter}
               {tgSending ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                  পাঠানো হচ্ছে...
+                  send in progress...
                 </>
               ) : (
                 <>
-                  <Send size={18} /> টেলিগ্রামে পোস্ট পাঠান
+                  <Send size={18} /> Telegramে post পাঠান
                 </>
               )}
             </button>
@@ -7465,7 +7465,7 @@ ${tgBulkFooter}
                     <Send size={14} className="text-purple-400" /> Bulk Catalog Broadcast
                   </h3>
                   <p className="text-[11px] text-zinc-400 mb-3">
-                    এক ক্লিকে আপনার ওয়েবসাইটের সব anime থেকে random ব্যাচ Telegram-এ পাঠান। কোনো anime ডুপ্লিকেট হবে না — প্রতিটা ভিন্ন পোস্টে যাবে।
+                    Send a random batch from all anime to Telegram with one click। any anime duplicate হবে না — প্রতি ভিন্ন postে will go।
                   </p>
 
                   <div className="grid grid-cols-3 gap-2 mb-3">
@@ -7525,7 +7525,7 @@ ${tgBulkFooter}
                     {tgBulkSending ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        পাঠানো হচ্ছে...
+                        send in progress...
                       </>
                     ) : (
                       <>
@@ -7534,7 +7534,7 @@ ${tgBulkFooter}
                     )}
                   </button>
                   <p className="text-[10px] text-zinc-500 mt-2 text-center">
-                    উপরের "Channel ID" ফিল্ডের সব চ্যানেলে পাঠানো হবে। প্রতিটা title clickable link হিসেবে যাবে।
+                    উafterর "Channel ID" ফিল্ড all channelে send হবে। প্রতি title clickable link হিসেবে will go।
                   </p>
                 </div>
               );
@@ -7579,7 +7579,7 @@ ${tgBulkFooter}
 
             // Bulk replace all telegram post button URLs
             const runBulkReplace = async () => {
-              if (!tgOldDomain.trim() || !tgNewDomain.trim()) { toast.error("Old ও New Domain দিন"); return; }
+              if (!tgOldDomain.trim() || !tgNewDomain.trim()) { toast.error("Old  and New Domain day"); return; }
               setTgBulkRunning(true);
               setTgBulkResults([]);
               setTgBulkProgress(0);
@@ -7641,42 +7641,42 @@ ${tgBulkFooter}
 
               setTgBulkRunning(false);
               const successCount = results.filter(r => r.ok).length;
-              if (successCount > 0) toast.success(`✅ ${successCount}/${results.length} পোস্টের বাটন URL আপডেট হয়েছে!`);
-              else if (results.length > 0) toast.error("কোনো পোস্ট আপডেট হয়নি");
-              else toast.info("কোনো পরিবর্তনের দরকার নেই");
+              if (successCount > 0) toast.success(`✅ ${successCount}/${results.length} post button URL update done!`);
+              else if (results.length > 0) toast.error("any post update not done");
+              else toast.info("any change দরকার none");
             };
 
             // Delete a single post record
             const deletePostRecord = async (key: string) => {
               await set(ref(db, `telegramPosts/${key}`), null);
-              toast.success("রেকর্ড ডিলিট হয়েছে");
+              toast.success("রেকর্ড delete done");
             };
 
             const clearAllPostRecords = async () => {
               if (tgPosts.length === 0) {
-                toast.info("কোনো পোস্ট রেকর্ড নেই");
+                toast.info("any post রেকর্ড none");
                 return;
               }
-              if (!window.confirm(`সব ${tgPosts.length}টি পোস্ট রেকর্ড একসাথে মুছে ফেলতে চান?`)) return;
+              if (!window.confirm(`all ${tgPosts.length} post রেকর্ড কwith মুছে ফেলতে want?`)) return;
               await set(ref(db, "telegramPosts"), null);
               setTgBulkResults([]);
               setTgSelectedPost("all");
-              toast.success("সব পোস্ট রেকর্ড ক্লিয়ার হয়েছে");
+              toast.success("all post রেকর্ড clear done");
             };
 
             return (
               <div>
                 <div className={`${glassCard} p-4 mb-4`}>
                   <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                    <RefreshCw size={14} className="text-orange-400" /> টেলিগ্রাম পোস্ট বাটন URL চেঞ্জার
+                    <RefreshCw size={14} className="text-orange-400" /> Telegram post button URL changeার
                   </h3>
                   <p className="text-[11px] text-zinc-400 mb-4">
-                    পাঠানো সব টেলিগ্রাম পোস্টের ইনলাইন বাটন URL বাল্কে পরিবর্তন করুন। ডোমেইন এক্সপায়ার বা ব্লক হলে এক ক্লিকে সব লিংক আপডেট করুন।
+                    Bulk-update inline button URLs of all sent Telegram posts। Update all links in one click when a domain expires or is blocked।
                   </p>
 
                   {/* Quick Paste */}
                   <div className="mb-3">
-                    <label className="block text-xs text-zinc-400 mb-1">⚡ Quick Paste (লিংক পেস্ট করলে ডোমেইন অটো-সেট)</label>
+                    <label className="block text-xs text-zinc-400 mb-1">⚡ Quick Paste (link পেস্ট করলে domain auto-set)</label>
                     <input value={tgQuickPaste} onChange={e => handleQuickPaste(e.target.value)}
                       className={inputClass} placeholder="https://old-domain.com/path/video.mp4" />
                   </div>
@@ -7696,7 +7696,7 @@ ${tgBulkFooter}
 
                   {/* Post selector */}
                   <div className="mb-3">
-                    <label className="block text-xs text-zinc-400 mb-1">পোস্ট সিলেক্ট</label>
+                    <label className="block text-xs text-zinc-400 mb-1">post select</label>
                     <select value={tgSelectedPost} onChange={e => {
                       const key = e.target.value;
                       setTgSelectedPost(key);
@@ -7712,7 +7712,7 @@ ${tgBulkFooter}
                         }
                       }
                     }} className={selectClass}>
-                      <option value="all">📦 সব পোস্ট ({tgPosts.length}টি)</option>
+                      <option value="all">📦 all post ({tgPosts.length})</option>
                       {tgPosts.map(p => (
                         <option key={p.firebaseKey} value={p.firebaseKey}>
                           {p.title} ({p.chatId})
@@ -7726,11 +7726,11 @@ ${tgBulkFooter}
                     {tgBulkRunning ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                        আপডেট হচ্ছে... {tgBulkProgress}%
+                        update in progress... {tgBulkProgress}%
                       </>
                     ) : (
                       <>
-                        <RefreshCw size={16} /> বাটন URL আপডেট করুন
+                        <RefreshCw size={16} /> button URL update 
                       </>
                     )}
                   </button>
@@ -7747,7 +7747,7 @@ ${tgBulkFooter}
                 {tgBulkResults.length > 0 && (
                   <div className={`${glassCard} p-4 mb-4`}>
                     <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                      <CheckCircle size={14} className="text-green-400" /> আপডেট রেজাল্ট
+                      <CheckCircle size={14} className="text-green-400" /> update result
                     </h3>
                     <div className="space-y-2 max-h-[300px] overflow-y-auto">
                       {tgBulkResults.map((r, i) => (
@@ -7768,7 +7768,7 @@ ${tgBulkFooter}
                 <div className={`${glassCard} p-4`}>
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <h3 className="text-sm font-semibold flex items-center gap-2">
-                      <Send size={14} className="text-blue-400" /> সেভ করা পোস্ট ({tgPosts.length}টি)
+                      <Send size={14} className="text-blue-400" /> save ক post ({tgPosts.length})
                     </h3>
                     <button
                       onClick={clearAllPostRecords}
@@ -7781,7 +7781,7 @@ ${tgBulkFooter}
                   {tgPostsLoading ? (
                     <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>
                   ) : tgPosts.length === 0 ? (
-                    <p className="text-zinc-500 text-[11px] text-center py-4">কোনো পোস্ট রেকর্ড নেই। টেলিগ্রাম পোস্ট পাঠানোর পর এখানে দেখাবে।</p>
+                    <p className="text-zinc-500 text-[11px] text-center py-4">any post রেকর্ড none। Telegram post sendর পর খানে shows।</p>
                   ) : (
                     <div className="space-y-2 max-h-[400px] overflow-y-auto">
                       {tgPosts.map(post => (
@@ -7827,7 +7827,7 @@ ${tgBulkFooter}
                 <Zap size={14} className="text-yellow-500" /> Free Access for All Users
               </h3>
               <p className="text-[11px] text-[#D1C4E9] mb-4">
-                সব ইউজারকে নির্দিষ্ট সময়ের users্য ফ্রী এক্সেস দিন। এই সময়ের মধ্যে কোনো অ্যাড গেট থাকবে না।
+                all user specific time users্য free access day। ই time মধ্যে any ad গেট থাকবে না।
               </p>
 
               {/* Current status */}
@@ -7835,13 +7835,13 @@ ${tgBulkFooter}
                 <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 mb-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-semibold text-green-400 flex items-center gap-2">
-                      <Zap size={14} /> গ্লোবাল ফ্রী এক্সেস অ্যাক্টিভ
+                      <Zap size={14} /> গ্লোorল free access অ্যাক্ভ
                     </span>
                     <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full">LIVE</span>
                   </div>
                   <div className="text-[11px] text-[#D1C4E9] space-y-1">
-                    <p>শুরু: {new Date(globalFreeAccess.activatedAt).toLocaleString("bn-BD", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
-                    <p>শেষ: {new Date(globalFreeAccess.expiresAt).toLocaleString("bn-BD", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                    <p>start: {new Date(globalFreeAccess.activatedAt).toLocaleString("bn-BD", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                    <p>done: {new Date(globalFreeAccess.expiresAt).toLocaleString("bn-BD", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
                     {(() => {
                       const rem = globalFreeAccess.expiresAt - Date.now();
                       const h = Math.floor(rem / 3600000);
@@ -7851,15 +7851,15 @@ ${tgBulkFooter}
                   </div>
                   <button
                     onClick={() => {
-                      if (confirm("গ্লোবাল ফ্রী এক্সেস বন্ধ করতে চান?")) {
+                      if (confirm("গ্লোorল free access off Continue??")) {
                         set(ref(db, "globalFreeAccess"), { active: false, expiresAt: 0, activatedAt: 0 })
-                          .then(() => toast.success("গ্লোবাল ফ্রী এক্সেস বন্ধ করা হয়েছে"))
+                          .then(() => toast.success("গ্লোorল free access off ক done"))
                           .catch((err) => toast.error("Error: " + err.message));
                       }
                     }}
                     className={`${btnSecondary} mt-3 w-full py-2.5 text-sm flex items-center justify-center gap-2 text-red-400 border-red-500/30 hover:border-red-500`}
                   >
-                    <X size={14} /> ফ্রী এক্সেস বন্ধ করুন
+                    <X size={14} /> free access off 
                   </button>
                 </div>
               ) : (
@@ -7878,7 +7878,7 @@ ${tgBulkFooter}
                       />
                     </div>
                     <div className="flex-1">
-                      <label className="text-[11px] text-[#957DAD] mb-1 block">মিনিট</label>
+                      <label className="text-[11px] text-[#957DAD] mb-1 block">minute</label>
                       <input
                         type="number"
                         min="0"
@@ -7896,22 +7896,22 @@ ${tgBulkFooter}
                       const minutes = parseInt(globalFreeMinutes) || 0;
                       const totalMs = (hours * 3600000) + (minutes * 60000);
                       if (totalMs < 60000) {
-                        toast.error("কমপক্ষে 1 মিনিট সময় দিন");
+                        toast.error("lessপক্ষে 1 minute time day");
                         return;
                       }
-                      if (!confirm(`সব ইউজারকে ${hours > 0 ? hours + " hours " : ""}${minutes > 0 ? minutes + " মিনিট " : ""}ফ্রী এক্সেস দিতে চান?`)) return;
+                      if (!confirm(`all user ${hours > 0 ? hours + " hours " : ""}${minutes > 0 ? minutes + " minute " : ""}free access দিতে want?`)) return;
                       const now = Date.now();
                       set(ref(db, "globalFreeAccess"), {
                         active: true,
                         activatedAt: now,
                         expiresAt: now + totalMs,
                       })
-                        .then(() => toast.success("গ্লোবাল ফ্রী এক্সেস চালু হয়েছে!"))
+                        .then(() => toast.success("গ্লোorল free access on done!"))
                         .catch((err) => toast.error("Error: " + err.message));
                     }}
                     className={`${btnPrimary} w-full py-3 text-sm flex items-center justify-center gap-2`}
                   >
-                    <Zap size={14} /> সব ইউজারকে ফ্রী এক্সেস দিন
+                    <Zap size={14} /> all user free access day
                   </button>
                 </div>
               )}
@@ -7931,10 +7931,10 @@ ${tgBulkFooter}
                 </button>
               </div>
               <p className="text-[11px] text-[#D1C4E9] mb-4">
-                যারা AroLinks অ্যাড গেট দিয়ে ফ্রী 24 hoursর এক্সেস নিয়েছে তাদের লিস্ট। এক্সেস শেষ হলে স্বয়ংক্রিয়ভাবে মুছে যাবে।
+                List of users who took free 24-hour access through the AroLinks ad gate। access done হলে স্বয়ংক্রিয়ভাবে মুছে will go।
               </p>
               {freeAccessUsers.length === 0 ? (
-                <p className="text-[#957DAD] text-[13px] text-center py-8">কোনো অ্যাক্টিভ ফ্রী এক্সেস ইউজার নেই</p>
+                <p className="text-[#957DAD] text-[13px] text-center py-8">any অ্যাক্ভ free access user none</p>
               ) : (
                 <div className="space-y-2.5">
                   {freeAccessUsers.map((user) => {
@@ -7969,12 +7969,12 @@ ${tgBulkFooter}
                           </div>
                         </div>
                         <div className="mt-2.5 flex justify-between items-center text-[10px] text-[#957DAD]">
-                          <span>আনলক: {new Date(user.unlockedAt).toLocaleString("bn-BD", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
-                          <span>শেষ: {new Date(user.expiresAt).toLocaleString("bn-BD", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                          <span>unlock: {new Date(user.unlockedAt).toLocaleString("bn-BD", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                          <span>done: {new Date(user.expiresAt).toLocaleString("bn-BD", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
                         </div>
                         {user.suspiciousBypass ? (
                           <div className="mt-2 text-[10px] text-red-300">
-                            ⚠️ 30 second-এর আগেই token নেওয়া হয়েছে — bypass suspect
+                            ⚠️ 30 second- of beforeই token নে andয়া done — bypass suspect
                           </div>
                         ) : null}
                       </div>
@@ -7990,10 +7990,10 @@ ${tgBulkFooter}
                 <Star size={14} className="text-yellow-400" /> 🎁 Prize Pool ({prizePoolUsers.length})
               </h3>
               <p className="text-[11px] text-muted-foreground mb-4">
-                যারা Random Prize লিংক থেকে ফ্রি এক্সেস নিয়েছে তাদের লিস্ট।
+                List of users who got free access from a Random Prize link।
               </p>
               {prizePoolUsers.length === 0 ? (
-                <p className="text-muted-foreground text-[13px] text-center py-8">কোনো প্রাইজ ক্লেইম হয়নি</p>
+                <p className="text-muted-foreground text-[13px] text-center py-8">any প্ইজ ক্লেইম not done</p>
               ) : (
                 <div className="space-y-2.5">
                   {prizePoolUsers.map((user) => {
@@ -8127,10 +8127,10 @@ ${tgBulkFooter}
             {/* Authorized Google Emails for Admin */}
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <Shield size={14} className="text-green-500" /> অ্যাডমিন Google অ্যাকাউন্ট
+                <Shield size={14} className="text-green-500" /> admin Google অ্যাcount
               </h3>
               <p className="text-[11px] text-zinc-400 mb-4">
-                যেসব Google ইমেইল অ্যাডমিন প্যানেলে লগইন করতে পারবে সেগুলো এখানে যোগ করুন।
+                Add the Google emails allowed to log in to the admin panel।
               </p>
               <AdminAuthorizedEmails glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
             </div>
@@ -8138,7 +8138,7 @@ ${tgBulkFooter}
             {/* Telegram Channel Settings */}
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <Send size={14} className="text-blue-400" /> টেলিগ্রাম চ্যানেল সেটিং
+                <Send size={14} className="text-blue-400" /> Telegram channel সেং
               </h3>
               <div className="flex gap-2">
                 <input
@@ -8151,7 +8151,7 @@ ${tgBulkFooter}
                   onClick={async () => {
                     try {
                       await set(ref(db, "admin/telegramChannel"), tgChannelId.trim());
-                      toast.success("চ্যানেল সেভ হয়েছে!");
+                      toast.success("channel save done!");
                     } catch { toast.error("Save failed"); }
                   }}
                   className={`${btnPrimary} !px-4`}
@@ -8167,10 +8167,10 @@ ${tgBulkFooter}
             {/* Proxy Server Selector */}
             <div className={`${glassCard} p-4 mb-4`}>
               <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-                <Activity size={14} className="text-cyan-400" /> ভিডিও প্রক্সি সার্ভার
+                <Activity size={14} className="text-cyan-400" /> ভিডি and প্রক্সি server
               </h3>
               <p className="text-[11px] text-zinc-400 mb-4">
-                CDN বন্ধ থাকলে কোন প্রক্সি সার্ভার দিয়ে ভিডিও স্ট্রিম হবে সেটা সিলেক্ট করো। বিভিন্ন সার্ভার টেস্ট করে দেখো কোনটাতে ভালো স্পিড পাও।
+                CDN When off, choose which proxy server streams the video। বিভিন্ন server test করে দেখো anyতে goodো স্পিড পা and।
               </p>
               <ProxyServerSelector glassCard={glassCard} />
             </div>
@@ -8269,8 +8269,8 @@ ${tgBulkFooter}
                 const { uploadToImgbb } = await import("@/lib/imgbbUpload");
                 const url = await uploadToImgbb(file);
                 setter(url);
-                toast.success("✅ ছবি আপলোড হয়েছে!");
-              } catch { toast.error("❌ আপলোড ব্যর্থ!"); }
+                toast.success("✅ image আপload done!");
+              } catch { toast.error("❌ আপload failed!"); }
               setLoading(false);
             };
 
@@ -8309,25 +8309,25 @@ ${tgBulkFooter}
               await set(ref(db, "liveTvCategories"), updated);
               setNewCatName("");
               setShowAddCat(false);
-              toast.success("✅ Category যোগ হয়েছে!");
+              toast.success("✅ Category add done!");
             };
 
             const deleteCategory = async (cat: string) => {
               const updated = categories.filter(c => c !== cat);
               await set(ref(db, "liveTvCategories"), updated.length ? updated : ["General"]);
-              toast.success("🗑️ Category মুছে ফেলা হয়েছে!");
+              toast.success("🗑️ Category মুছে ফেলা done!");
             };
 
             const saveChannel = async () => {
-              if (!name.trim() || !streamUrl.trim()) { toast.error("নাম ও Stream URL দাও!"); return; }
+              if (!name.trim() || !streamUrl.trim()) { toast.error("name  and Stream URL দা and!"); return; }
               const data = { name: name.trim(), logo: logo.trim(), banner: banner.trim(), streamUrl: streamUrl.trim(), category: category.trim() || "General", order: channels.length };
               if (editId) {
                 await update(ref(db, `liveTvChannels/${editId}`), data);
-                toast.success("✅ চ্যানেল আপডেট হয়েছে!");
+                toast.success("✅ channel update done!");
                 setEditId(null);
               } else {
                 await push(ref(db, "liveTvChannels"), data);
-                toast.success("✅ চ্যানেল যোগ হয়েছে!");
+                toast.success("✅ channel add done!");
               }
               setName(""); setLogo(""); setBanner(""); setStreamUrl(""); setCategory("General");
             };
@@ -8335,7 +8335,7 @@ ${tgBulkFooter}
             const deleteChannel = async (id: string) => {
               if (!confirm("Delete this channel?")) return;
               await remove(ref(db, `liveTvChannels/${id}`));
-              toast.success("🗑️ চ্যানেল ডিলিট হয়েছে!");
+              toast.success("🗑️ channel delete done!");
             };
 
             const startEdit = (ch: any) => {
@@ -8365,7 +8365,7 @@ ${tgBulkFooter}
                           className={`${btnSecondary} px-3 py-2 text-[10px] flex items-center gap-1`}
                         >
                           {uploadingLogo ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                          আপলোড
+                          আপload
                         </button>
                         <input ref={logoFileRef} type="file" accept="image/*" className="hidden"
                           onChange={e => { const f = e.target.files?.[0]; if (f) handleImgUpload(f, setLogo, setUploadingLogo); e.target.value = ""; }} />
@@ -8388,7 +8388,7 @@ ${tgBulkFooter}
                           className={`${btnSecondary} px-3 py-2 text-[10px] flex items-center gap-1`}
                         >
                           {uploadingBanner ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
-                          আপলোড
+                          আপload
                         </button>
                         <input ref={bannerFileRef} type="file" accept="image/*" className="hidden"
                           onChange={e => { const f = e.target.files?.[0]; if (f) handleImgUpload(f, setBanner, setUploadingBanner); e.target.value = ""; }} />
@@ -8413,13 +8413,13 @@ ${tgBulkFooter}
                           ))}
                         </select>
                         <button onClick={() => setShowAddCat(!showAddCat)} className={`${btnSecondary} px-3 py-2 text-[10px]`}>
-                          {showAddCat ? "✕" : "+ নতুন"}
+                          {showAddCat ? "✕" : "+ new"}
                         </button>
                       </div>
                       {showAddCat && (
                         <div className="flex gap-2 mt-2">
-                          <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="নতুন Category নাম" className={`${inputClass} flex-1`} />
-                          <button onClick={addCategory} className={`${btnPrimary} px-3 py-2 text-[10px]`}>যোগ করো</button>
+                          <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="new Category name" className={`${inputClass} flex-1`} />
+                          <button onClick={addCategory} className={`${btnPrimary} px-3 py-2 text-[10px]`}>add </button>
                         </div>
                       )}
                       {categories.length > 0 && (
@@ -8437,12 +8437,12 @@ ${tgBulkFooter}
                     </div>
                     <div className="flex gap-2">
                       <button onClick={saveChannel} className={`${btnPrimary} flex-1 py-2.5 flex items-center justify-center gap-2`}>
-                        <Save size={14} /> {editId ? "আপডেট করো" : "যোগ করো"}
+                        <Save size={14} /> {editId ? "update " : "add "}
                       </button>
                       {editId && (
                         <button onClick={() => { setEditId(null); setName(""); setLogo(""); setBanner(""); setStreamUrl(""); setCategory("General"); }}
                           className={`${btnSecondary} px-4 py-2.5`}>
-                          বাতিল
+                          cancel
                         </button>
                       )}
                     </div>
@@ -8452,7 +8452,7 @@ ${tgBulkFooter}
                 <div className={`${glassCard} p-4`}>
                   <h3 className="text-sm font-semibold mb-3">📺 All Channels ({channels.length})</h3>
                   {channels.length === 0 ? (
-                    <p className="text-xs text-zinc-500 text-center py-6">কোনো চ্যানেল নেই</p>
+                    <p className="text-xs text-zinc-500 text-center py-6">any channel none</p>
                   ) : (
                     <div className="space-y-2">
                       {channels.map(ch => (
@@ -8533,16 +8533,16 @@ ${tgBulkFooter}
             }, [seriesSeasons, selectedSeason]);
 
             const replaceUrls = async () => {
-              if (!selectedSeriesId) { toast.error("series সিলেক্ট করো!"); return; }
-              if (!oldDomain.trim() || !newDomain.trim()) { toast.error("Old ও New Domain দিতে হবে!"); return; }
-              if (!confirm(`"${oldDomain.trim()}" → "${newDomain.trim()}" — রিপ্লেস করবে?`)) return;
+              if (!selectedSeriesId) { toast.error("series select !"); return; }
+              if (!oldDomain.trim() || !newDomain.trim()) { toast.error("Old  and New Domain দিতে হবে!"); return; }
+              if (!confirm(`"${oldDomain.trim()}" → "${newDomain.trim()}" — replace ?`)) return;
 
               setReplacing(true);
               setReplaceResult(null);
               try {
                 const snap = await get(ref(db, `webseries/${selectedSeriesId}`));
                 const data = snap.val();
-                if (!data?.seasons) { toast.error("এই seriesে কোনো Season নেই!"); setReplacing(false); return; }
+                if (!data?.seasons) { toast.error("ই seriesে any Season none!"); setReplacing(false); return; }
 
                 const old = oldDomain.trim();
                 const nw = newDomain.trim();
@@ -8646,42 +8646,42 @@ ${tgBulkFooter}
 
                 await update(ref(db, `webseries/${selectedSeriesId}`), { seasons: updatedSeasons });
                 setReplaceResult({ total: totalLinks, replaced: replacedLinks });
-                toast.success(`✅ ${replacedLinks}/${totalLinks} লিংক replaced!`);
+                toast.success(`✅ ${replacedLinks}/${totalLinks} link replaced!`);
               } catch (err: any) {
-                toast.error("এরর: " + err.message);
+                toast.error(" ofর: " + err.message);
               }
               setReplacing(false);
             };
 
             const handleQuickPaste = () => {
               const text = quickPasteText.trim();
-              if (!text) { toast.error("লিংক পেস্ট করো!"); return; }
+              if (!text) { toast.error("link পেস্ট !"); return; }
               try {
                 const url = new URL(text.split('\n')[0].trim());
                 const domain = `${url.protocol}//${url.host}`;
                 setOldDomain(domain);
-                toast.success(`✅ ডোমেইন সেট হয়েছে: ${domain}`);
+                toast.success(`✅ domain set done: ${domain}`);
                 setShowQuickPaste(false); setQuickPasteText("");
-              } catch { toast.error("সঠিক URL পেস্ট করো!"); }
+              } catch { toast.error("সঠিক URL পেস্ট !"); }
             };
 
             const handleBulkQP = () => {
               const t = bulkQP.trim();
-              if (!t) { toast.error("লিংক পেস্ট করো!"); return; }
+              if (!t) { toast.error("link পেস্ট !"); return; }
               try {
                 const u = new URL(t.split('\n')[0].trim());
                 setBulkOldDomain(`${u.protocol}//${u.host}`);
-                toast.success(`✅ ডোমেইন সেট: ${u.protocol}//${u.host}`);
+                toast.success(`✅ domain set: ${u.protocol}//${u.host}`);
                 setShowBulkQP(false); setBulkQP("");
-              } catch { toast.error("সঠিক URL পেস্ট করো!"); }
+              } catch { toast.error("সঠিক URL পেস্ট !"); }
             };
 
             // Bulk replace all series or all movies
             const bulkReplace = async () => {
-              if (!bulkOldDomain.trim() || !bulkNewDomain.trim()) { toast.error("Old ও New Domain দিতে হবে!"); return; }
+              if (!bulkOldDomain.trim() || !bulkNewDomain.trim()) { toast.error("Old  and New Domain দিতে হবে!"); return; }
               const targetType = bulkMode === "all-series" ? "webseries" : "movies";
               const items = bulkMode === "all-series" ? webseriesData : moviesData;
-              if (!confirm(`${items.length}টি ${targetType === "webseries" ? "series" : "মুভি"}-র সব লিংক রিপ্লেস করবে?`)) return;
+              if (!confirm(`${items.length} ${targetType === "webseries" ? "series" : "movie"}-র all link replace ?`)) return;
 
               setBulkReplacing(true);
               setBulkResults([]);
@@ -8757,8 +8757,8 @@ ${tgBulkFooter}
               }
 
               setBulkReplacing(false);
-              if (results.length === 0) toast.info("কোনো লিংকে এই ডোমেইন পাওয়া যায়নি — সব স্কিপ হয়েছে");
-              else toast.success(`✅ ${results.length}টি ${targetType === "webseries" ? "series" : "মুভি"}-তে লিংক replaced!`);
+              if (results.length === 0) toast.info("any linkে ই domain পা andয়া যায়নি — all skip done");
+              else toast.success(`✅ ${results.length} ${targetType === "webseries" ? "series" : "movie"}-তে link replaced!`);
             };
 
             return (
@@ -8769,11 +8769,11 @@ ${tgBulkFooter}
                     <Link size={16} className="text-cyan-400" /> 🔗 URL Changer
                   </h3>
                   <p className="text-[10px] text-zinc-400 mb-4">
-                    নির্দিষ্ট seriesের সব বা নির্দিষ্ট Season/এপিসোডের লিংকে ডোমেইন রিপ্লেস করো।
+                    Replace domains for all or selected Season/Episode links of a series।
                   </p>
 
                   {/* Series Selector */}
-                  <label className="text-[10px] text-zinc-400 block mb-1">series সিলেক্ট করো</label>
+                  <label className="text-[10px] text-zinc-400 block mb-1">series select </label>
                   <button onClick={() => setShowSelector(!showSelector)}
                     className={`${inputClass} w-full mb-2 text-left flex items-center gap-3 py-2`}>
                     {selectedSeries ? (
@@ -8785,7 +8785,7 @@ ${tgBulkFooter}
                         </div>
                       </>
                     ) : (
-                      <span className="text-[11px] text-zinc-500">-- series সিলেক্ট করো --</span>
+                      <span className="text-[11px] text-zinc-500">-- series select  --</span>
                     )}
                     <ChevronDown size={14} className={`text-zinc-400 transition-transform ${showSelector ? 'rotate-180' : ''}`} />
                   </button>
@@ -8794,7 +8794,7 @@ ${tgBulkFooter}
                     <div className="mb-3 bg-zinc-900/95 border border-zinc-700/50 rounded-xl max-h-[300px] overflow-y-auto">
                       <div className="sticky top-0 bg-zinc-900 p-2 border-b border-zinc-700/30">
                         <input value={searchFilter} onChange={e => setSearchFilter(e.target.value)}
-                          placeholder="🔍 সার্চ করো..." className={`${inputClass} text-[10px] w-full`} autoFocus />
+                          placeholder="🔍 search ..." className={`${inputClass} text-[10px] w-full`} autoFocus />
                       </div>
                       {sortedSeries.map(s => (
                         <button key={s.id} onClick={() => { setSelectedSeriesId(s.id); setShowSelector(false); setSearchFilter(""); setSelectedSeason("all"); setSelectedEpisode("all"); }}
@@ -8807,7 +8807,7 @@ ${tgBulkFooter}
                           {selectedSeriesId === s.id && <Check size={14} className="text-cyan-400 flex-shrink-0" />}
                         </button>
                       ))}
-                      {sortedSeries.length === 0 && <p className="text-[10px] text-zinc-500 p-4 text-center">কিছু পাওয়া যায়নি</p>}
+                      {sortedSeries.length === 0 && <p className="text-[10px] text-zinc-500 p-4 text-center">some পা andয়া যায়নি</p>}
                     </div>
                   )}
 
@@ -8818,7 +8818,7 @@ ${tgBulkFooter}
                         <label className="text-[9px] text-zinc-500 block mb-1">Season</label>
                         <select value={selectedSeason} onChange={e => { setSelectedSeason(e.target.value); setSelectedEpisode("all"); }}
                           className={`${inputClass} text-[10px] w-full`}>
-                          <option value="all">সব Season</option>
+                          <option value="all">all Season</option>
                           {seriesSeasons.map((s: any, i: number) => (
                             <option key={i} value={String(i)}>
                               {s.name || `Season ${s.seasonNumber || i + 1}`}
@@ -8827,10 +8827,10 @@ ${tgBulkFooter}
                         </select>
                       </div>
                       <div>
-                        <label className="text-[9px] text-zinc-500 block mb-1">এপিসোড</label>
+                        <label className="text-[9px] text-zinc-500 block mb-1">episode</label>
                         <select value={selectedEpisode} onChange={e => setSelectedEpisode(e.target.value)}
                           className={`${inputClass} text-[10px] w-full`} disabled={selectedSeason === "all"}>
-                          <option value="all">সব এপিসোড</option>
+                          <option value="all">all episode</option>
                           {seasonEpisodes.map((ep: any, i: number) => (
                             <option key={i} value={String(i)}>
                               EP {ep.episodeNumber || i + 1} - {ep.title || ''}
@@ -8849,31 +8849,31 @@ ${tgBulkFooter}
                   {showQuickPaste && (
                     <div className="mb-3 bg-black/20 rounded-xl border border-cyan-500/20 p-3">
                       <textarea value={quickPasteText} onChange={e => setQuickPasteText(e.target.value)}
-                        placeholder="যেকোনো ভিডিও লিংক পেস্ট করো — ডোমেইন অটো সেট হবে"
+                        placeholder="যেany ভিডি and link পেস্ট  — domain auto set হবে"
                         className={`${inputClass} w-full min-h-[60px] resize-none text-[10px] font-mono mb-2`} />
                       <button onClick={handleQuickPaste} disabled={!quickPasteText.trim()}
                         className={`${btnPrimary} w-full py-2 text-[10px] flex items-center justify-center gap-1 disabled:opacity-30`}>
-                        <Check size={11} /> ডোমেইন সেট করো
+                        <Check size={11} /> domain set 
                       </button>
                     </div>
                   )}
 
-                  <label className="text-[10px] text-zinc-400 block mb-1">পুরাতন Domain/URL</label>
+                  <label className="text-[10px] text-zinc-400 block mb-1">old Domain/URL</label>
                   <input value={oldDomain} onChange={e => setOldDomain(e.target.value)}
                     placeholder="http://fi3.bot-hosting.net:22854" className={`${inputClass} mb-3 text-[10px]`} />
-                  <label className="text-[10px] text-zinc-400 block mb-1">নতুন Domain/URL</label>
+                  <label className="text-[10px] text-zinc-400 block mb-1">new Domain/URL</label>
                   <input value={newDomain} onChange={e => setNewDomain(e.target.value)}
                     placeholder="https://rahat1102-video-hosting-bot.hf.space" className={`${inputClass} mb-4 text-[10px]`} />
 
                   <button onClick={replaceUrls} disabled={replacing || !selectedSeriesId}
                     className={`${btnPrimary} w-full py-3 text-sm flex items-center justify-center gap-2`}>
-                    {replacing ? <><Loader2 size={14} className="animate-spin" /> রিপ্লেস হচ্ছে...</> : <><RefreshCw size={14} /> রিপ্লেস করো</>}
+                    {replacing ? <><Loader2 size={14} className="animate-spin" /> replace in progress...</> : <><RefreshCw size={14} /> replace </>}
                   </button>
 
                   {replaceResult && (
                     <div className="mt-3 p-3 rounded-xl bg-green-500/10 border border-green-500/30">
                       <p className="text-[11px] font-semibold text-green-400">
-                        ✅ মোট {replaceResult.total}টি লিংকের মধ্যে {replaceResult.replaced}টি replaced!
+                        ✅ Total {replaceResult.total} link মধ্যে {replaceResult.replaced} replaced!
                         {selectedSeason !== "all" && <span className="text-zinc-400 ml-1">(Season {Number(selectedSeason) + 1}{selectedEpisode !== "all" ? `, EP ${Number(selectedEpisode) + 1}` : ""})</span>}
                       </p>
                     </div>
@@ -8899,8 +8899,8 @@ ${tgBulkFooter}
 
                 {/* ===== BULK ALL SERIES / ALL MOVIES ===== */}
                 <div className={`${glassCard} p-4`}>
-                  <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">🚀 Bulk Replace — All Series / সব মুভি</h4>
-                  <p className="text-[9px] text-zinc-400 mb-3">একসাথে All Series বা সব মুভির লিংক ডোমেইন রিপ্লেস করো। যেটাতে ডোমেইন নেই সেটা স্কিপ হবে।</p>
+                  <h4 className="text-xs font-bold text-white mb-3 flex items-center gap-2">🚀 Bulk Replace — All Series / all movie</h4>
+                  <p className="text-[9px] text-zinc-400 mb-3">কwith All Series or all movieর link domain replace । যেতে domain none সে skip হবে।</p>
 
                   <div className="flex gap-2 mb-3">
                     <button onClick={() => setBulkMode(bulkMode === "all-series" ? "off" : "all-series")}
@@ -8923,34 +8923,34 @@ ${tgBulkFooter}
                       {showBulkQP && (
                         <div className="bg-black/20 rounded-xl border border-purple-500/20 p-2.5">
                           <textarea value={bulkQP} onChange={e => setBulkQP(e.target.value)}
-                            placeholder="যেকোনো ভিডিও লিংক পেস্ট করো" className={`${inputClass} w-full min-h-[50px] resize-none text-[10px] font-mono mb-2`} />
+                            placeholder="যেany ভিডি and link পেস্ট " className={`${inputClass} w-full min-h-[50px] resize-none text-[10px] font-mono mb-2`} />
                           <button onClick={handleBulkQP} disabled={!bulkQP.trim()}
                             className={`${btnPrimary} w-full py-1.5 text-[10px] flex items-center justify-center gap-1 disabled:opacity-30`}>
-                            <Check size={11} /> ডোমেইন সেট করো
+                            <Check size={11} /> domain set 
                           </button>
                         </div>
                       )}
 
                       <input value={bulkOldDomain} onChange={e => setBulkOldDomain(e.target.value)}
-                        placeholder="পুরাতন Domain" className={`${inputClass} text-[10px]`} />
+                        placeholder="old Domain" className={`${inputClass} text-[10px]`} />
                       <input value={bulkNewDomain} onChange={e => setBulkNewDomain(e.target.value)}
-                        placeholder="নতুন Domain" className={`${inputClass} text-[10px]`} />
+                        placeholder="new Domain" className={`${inputClass} text-[10px]`} />
 
                       <button onClick={bulkReplace} disabled={bulkReplacing}
                         className={`${btnPrimary} w-full py-3 text-sm flex items-center justify-center gap-2 ${bulkMode === "all-series" ? "bg-gradient-to-r from-purple-600 to-indigo-600" : "bg-gradient-to-r from-orange-600 to-red-600"}`}>
-                        {bulkReplacing ? <><Loader2 size={14} className="animate-spin" /> রিপ্লেস হচ্ছে...</> : <><RefreshCw size={14} /> {bulkMode === "all-series" ? "All Seriesে" : "সব মুভিতে"} রিপ্লেস করো</>}
+                        {bulkReplacing ? <><Loader2 size={14} className="animate-spin" /> replace in progress...</> : <><RefreshCw size={14} /> {bulkMode === "all-series" ? "All Seriesে" : "all movieতে"} replace </>}
                       </button>
 
                       {/* Bulk Results */}
                       {bulkResults.length > 0 && (
                         <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
-                          <p className="text-[10px] text-green-400 font-bold">✅ {bulkResults.length}টি কন্টেন্টে replaced:</p>
+                          <p className="text-[10px] text-green-400 font-bold">✅ {bulkResults.length} contentে replaced:</p>
                           {bulkResults.map((r, i) => (
                             <div key={i} className="flex items-center gap-2.5 bg-green-500/10 border border-green-500/20 rounded-lg p-2">
                               {r.poster && <img src={r.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
                               <div className="flex-1 min-w-0">
                                 <p className="text-[10px] font-semibold text-white truncate">{r.title}</p>
-                                <p className="text-[9px] text-green-400">{r.replaced}/{r.total} লিংক রিপ্লেস</p>
+                                <p className="text-[9px] text-green-400">{r.replaced}/{r.total} link replace</p>
                               </div>
                             </div>
                           ))}
@@ -9034,16 +9034,16 @@ ${tgBulkFooter}
               <div>
                 <div className={`${glassCard} p-4 mb-4`}>
                   <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                    <Activity size={14} className="text-cyan-400" /> ভিডিও সার্ভার ম্যানেজার
+                    <Activity size={14} className="text-cyan-400" /> ভিডি and server manageার
                   </h3>
                   <p className="text-[11px] text-zinc-400 mb-4">
-                    ভিডিও প্লেয়ারে সার্ভার চেঞ্জ বাটন দেখানোর users্য কমপক্ষে 2টি সার্ভার যোগ করুন। শুধু ডোমেইন পরিবর্তন হবে, ফাইল পাথ একই থাকবে।
+                    Add at least 2 servers to show the server-switch button in the video player। শুধু domain change হবে, file পাথ কই থাকবে।
                   </p>
 
                   {vsLoading ? (
                     <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>
                   ) : servers.length === 0 ? (
-                    <p className="text-zinc-500 text-[11px] text-center py-4 mb-4">কোনো সার্ভার নেই। নিচে থেকে যোগ করুন।</p>
+                    <p className="text-zinc-500 text-[11px] text-center py-4 mb-4">any server none। নিচে from add ।</p>
                   ) : (
                     <div className="space-y-2 mb-4">
                       {servers.map((srv, idx) => (
@@ -9079,11 +9079,11 @@ ${tgBulkFooter}
                   )}
 
                   <div className="border border-dashed border-zinc-700 rounded-xl p-3 space-y-2">
-                    <p className="text-[11px] text-zinc-400 font-medium">➕ নতুন সার্ভার যোগ করুন</p>
-                    <input value={newName} onChange={e => setNewName(e.target.value)} className={inputClass} placeholder="সার্ভারের নাম (যেমন: Server 1)" />
-                    <input value={newDomain} onChange={e => setNewDomain(e.target.value)} className={inputClass} placeholder="ডোমেইন (যেমন: https://example.com)" />
+                    <p className="text-[11px] text-zinc-400 font-medium">➕ new server add </p>
+                    <input value={newName} onChange={e => setNewName(e.target.value)} className={inputClass} placeholder="server name (such as: Server 1)" />
+                    <input value={newDomain} onChange={e => setNewDomain(e.target.value)} className={inputClass} placeholder="domain (such as: https://example.com)" />
                     <button onClick={addServer} className={`${btnPrimary} w-full py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2`}>
-                      <Plus size={14} /> সার্ভার যোগ করুন
+                      <Plus size={14} /> server add 
                     </button>
                   </div>
                 </div>
@@ -9091,8 +9091,8 @@ ${tgBulkFooter}
                 <div className={`${glassCard} p-4`}>
                   <h4 className="text-xs font-semibold mb-2 text-zinc-300">📖 কিভাবে কাজ করে?</h4>
                   <ul className="text-[11px] text-zinc-400 space-y-1.5 list-disc list-inside">
-                    <li>কমপক্ষে 2টি সার্ভার থাকলে প্লেয়ারে "Server" বাটন দেখাবে</li>
-                    <li>সার্ভার চেঞ্জ করলে শুধু ডোমেইন বদলাবে, চ্যানেল/ফাইল আইডি একই থাকবে</li>
+                    <li>With at least 2 servers, the player shows a "Server" button</li>
+                    <li>Switching server only changes the domain — channel/file ID stays the same</li>
                     <li>উদাহরণ: <code className="text-cyan-400">https://s1.example.com</code>/8866/file.mkv → <code className="text-cyan-400">https://s2.example.com</code>/8866/file.mkv</li>
                   </ul>
                 </div>
@@ -9646,20 +9646,20 @@ const AdminLiveSupportSection = ({
         lastTimestamp: Date.now(),
       });
       setReplyText("");
-      toast.success("রিপ্লাই পাঠানো হয়েছে");
+      toast.success("রিপ্লাই send done");
     } catch {
-      toast.error("রিপ্লাই পাঠাতে ব্যর্থ");
+      toast.error("রিপ্লাই পাঠাতে failed");
     }
   };
 
   const deleteChat = async (userId: string) => {
-    if (!confirm("এই চ্যাট মুছে ফেলবেন?")) return;
+    if (!confirm("ই চ্যাট মুছে ফেলবেন?")) return;
     try {
       await remove(ref(db, `supportChats/${userId}`));
       if (selectedChat === userId) setSelectedChat(null);
-      toast.success("চ্যাট মুছে ফেলা হয়েছে");
+      toast.success("চ্যাট মুছে ফেলা done");
     } catch {
-      toast.error("মুছতে ব্যর্থ");
+      toast.error("মুছতে failed");
     }
   };
 
@@ -9683,7 +9683,7 @@ const AdminLiveSupportSection = ({
               onClick={() => setSelectedChat(null)}
               className="text-xs text-indigo-400 hover:text-indigo-300 mb-3 flex items-center gap-1"
             >
-              <ChevronLeft size={14} /> সব চ্যাটে ফিরুন
+              <ChevronLeft size={14} /> all চ্যাটে ফিরুন
             </button>
             <div className="text-sm font-medium mb-3 text-white/80">
               {chats.find(c => c.userId === selectedChat)?.userName || selectedChat}
@@ -9717,7 +9717,7 @@ const AdminLiveSupportSection = ({
                 value={replyText}
                 onChange={e => setReplyText(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }}
-                placeholder="অ্যাডমিন রিপ্লাই লিখুন..."
+                placeholder="admin রিপ্লাই লিখুন..."
                 className={`${inputClass} flex-1`}
               />
               <button
@@ -9732,7 +9732,7 @@ const AdminLiveSupportSection = ({
         ) : (
           <div className="space-y-2">
             {chats.length === 0 && (
-              <p className="text-xs text-zinc-500 text-center py-6">কোনো সাপোর্ট মেসেজ নেই</p>
+              <p className="text-xs text-zinc-500 text-center py-6">any support message none</p>
             )}
             {chats.map((chat) => (
               <div
@@ -10113,7 +10113,7 @@ const AutoImportSection = ({
           <Zap size={14} className="text-yellow-500" /> Auto Import Settings
         </h3>
         <p className="text-[11px] text-[#D1C4E9] mb-4">
-          TMDB থেকে anime ব্রাউজ করুন এবং এক ক্লিকে Firebase-এ অটো ইম্পোর্ট করুন। ভিডিও লিঙ্ক পরে ম্যানুয়ালি এড করতে হবে।
+          TMDB Browse anime and auto-import to the database with one click। ভিডি and link after manualি ড to do হবে।
         </p>
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
@@ -10326,14 +10326,14 @@ const AnimeSaltManagerSection = ({
   const saveAsConfig = async () => {
     await set(ref(db, "settings/animesaltConfig"), { enabled: asEnabled, customUrl: asCustomUrlInput.trim() });
     setAsCustomUrl(asCustomUrlInput.trim());
-    toast.success("✅ AnimeSalt কনফিগ সেভ হয়েছে!");
+    toast.success("✅ AnimeSalt config save done!");
   };
 
   const toggleAs = async () => {
     const next = !asEnabled;
     setAsEnabled(next);
     await set(ref(db, "settings/animesaltConfig/enabled"), next);
-    toast.success(next ? "AnimeSalt চালু" : "AnimeSalt বন্ধ");
+    toast.success(next ? "AnimeSalt on" : "AnimeSalt off");
   };
 
   const loadItems = async () => {
@@ -10345,7 +10345,7 @@ const AnimeSaltManagerSection = ({
       }
     } catch (err) {
       console.error('AnimeSalt load failed:', err);
-      toast.error('AnimeSalt ডাটা লোড করতে সমস্যা');
+      toast.error('AnimeSalt data load to do সমস্যা');
     }
     setLoading(false);
   };
@@ -10358,7 +10358,7 @@ const AnimeSaltManagerSection = ({
     try { localStorage.removeItem('animesalt_all_v3'); } catch {}
     await loadItems();
     setRefreshing(false);
-    toast.success('AnimeSalt ডাটা রিফ্রেশ হয়েছে!');
+    toast.success('AnimeSalt data refresh done!');
   };
 
   useEffect(() => {
@@ -10444,7 +10444,7 @@ const AnimeSaltManagerSection = ({
         tmdbId,
         addedAt: item._rematch ? (selectedItems[item.slug]?.addedAt || Date.now()) : Date.now(),
       });
-      toast.success(item._rematch ? `✅ "${item.title}" TMDB আপডেট হয়েছে!` : `✅ "${item.title}" যোগ করা হয়েছে!`);
+      toast.success(item._rematch ? `✅ "${item.title}" TMDB update done!` : `✅ "${item.title}" add ক done!`);
       setTmdbResults([]);
       setTmdbModalItem(null);
     } catch (err: any) {
@@ -10484,10 +10484,10 @@ const AnimeSaltManagerSection = ({
       if (data.results?.length > 0) {
         setEditTmdbResults(data.results.slice(0, 12));
       } else {
-        toast.info('TMDB তে কোনো রেজাল্ট পাওয়া যায়নি');
+        toast.info('TMDB তে any result পা andয়া যায়নি');
       }
     } catch {
-      toast.error('TMDB সার্চ ব্যর্থ');
+      toast.error('TMDB search failed');
     }
     setEditTmdbSearching(false);
   };
@@ -10502,7 +10502,7 @@ const AnimeSaltManagerSection = ({
       rating: tmdbItem.vote_average?.toFixed(1) || f.rating,
     }));
     setEditTmdbResults([]);
-    toast.success('✅ TMDB ডাটা প্রয়োগ হয়েছে! সেভ করুন।');
+    toast.success('✅ TMDB data প্রয়োগ done! save ।');
   };
 
   const saveEditForm = async () => {
@@ -10518,7 +10518,7 @@ const AnimeSaltManagerSection = ({
         rating: editForm.rating,
         trailer: editForm.trailer,
       });
-      toast.success('✅ আপডেট সেভ হয়েছে!');
+      toast.success('✅ update save done!');
       setEditItem(null);
     } catch (err: any) {
       toast.error('Error: ' + err.message);
@@ -10571,7 +10571,7 @@ const AnimeSaltManagerSection = ({
         toast.error('No episodes found');
       }
     } catch (err: any) {
-      toast.error('এপিসোড লোড ব্যর্থ: ' + err.message);
+      toast.error('episode load failed: ' + err.message);
     }
     setEpEditorLoading(false);
   };
@@ -10596,17 +10596,17 @@ const AnimeSaltManagerSection = ({
           const existingNames = new Set(prev.map(s => s.name));
           const newSeasons = apiSeasons.filter((s: any) => !existingNames.has(s.name));
           if (newSeasons.length === 0) {
-            toast.info('সব Season already exists');
+            toast.info('all Season already exists');
             return prev;
           }
-          toast.success(`${newSeasons.length}টি Season লোড হয়েছে!`);
+          toast.success(`${newSeasons.length} Season load done!`);
           return [...prev, ...newSeasons];
         });
       } else {
-        toast.error('AnimeSalt থেকে Season পাওয়া যায়নি');
+        toast.error('AnimeSalt from Season পা andয়া যায়নি');
       }
     } catch {
-      toast.error('AnimeSalt লোড ব্যর্থ');
+      toast.error('AnimeSalt load failed');
     }
   };
 
@@ -10651,7 +10651,7 @@ const AnimeSaltManagerSection = ({
           setEpEditorExpandedSeason(prev.length);
           return updated;
         });
-        toast.success(`${newSeasons.length}টি Season JSON থেকে ইমপোর্ট হয়েছে!`);
+        toast.success(`${newSeasons.length} Season JSON from import done!`);
         setJsonImportMode(false);
         setJsonPasteText('');
         return;
@@ -10690,7 +10690,7 @@ const AnimeSaltManagerSection = ({
       setJsonImportMode(false);
       setJsonPasteText('');
     } catch (err: any) {
-      toast.error('JSON পার্স ব্যর্থ: ' + err.message);
+      toast.error('JSON পার্স failed: ' + err.message);
     }
   };
 
@@ -10700,7 +10700,7 @@ const AnimeSaltManagerSection = ({
       const parsed = JSON.parse(jsonPasteText.trim());
       parseJsonEpisodes(parsed);
     } catch {
-      toast.error('অবৈধ JSON। সঠিক JSON ফরম্যাটে দিন।');
+      toast.error('invalid JSON। সঠিক JSON formatে day।');
     }
   };
 
@@ -10720,8 +10720,8 @@ const AnimeSaltManagerSection = ({
           failed++;
         }
         if (processed + failed === totalFiles) {
-          if (failed > 0) toast.error(`${failed}টি ফাইল পার্স ব্যর্থ`);
-          if (processed > 0) toast.success(`${processed}টি ফাইল সফলভাবে ইমপোর্ট হয়েছে`);
+          if (failed > 0) toast.error(`${failed} file পার্স failed`);
+          if (processed > 0) toast.success(`${processed} file successfully import done`);
         }
       };
       reader.readAsText(file);
@@ -10770,9 +10770,9 @@ const AnimeSaltManagerSection = ({
         return copy;
       });
       setEpEditorExpandedSeason(sIdx);
-      toast.success(`${mapped.length}টি এপিসোড "${epEditorSeasons[sIdx]?.name}" Seasonে ইমপোর্ট হয়েছে!`);
+      toast.success(`${mapped.length} episode "${epEditorSeasons[sIdx]?.name}" Seasonে import done!`);
     } catch (err: any) {
-      toast.error('JSON পার্স ব্যর্থ: ' + err.message);
+      toast.error('JSON পার্স failed: ' + err.message);
     }
   };
 
@@ -10822,8 +10822,8 @@ const AnimeSaltManagerSection = ({
             });
             setEpEditorExpandedSeason(targetIdx);
           }
-          if (failed > 0) toast.error(`${failed}টি ফাইল পার্স ব্যর্থ`);
-          toast.success(`${allEpisodes.length}টি এপিসোড ইমপোর্ট হয়েছে (${processed}টি ফাইল থেকে)`);
+          if (failed > 0) toast.error(`${failed} file পার্স failed`);
+          toast.success(`${allEpisodes.length} episode import done (${processed} file from)`);
         }
       };
       reader.readAsText(file);
@@ -10833,7 +10833,7 @@ const AnimeSaltManagerSection = ({
   };
 
   const epRemoveSeason = (sIdx: number) => {
-    if (!confirm(`"${epEditorSeasons[sIdx]?.name}" Season ডিলিট করতে চান?`)) return;
+    if (!confirm(`"${epEditorSeasons[sIdx]?.name}" Season delete Continue??`)) return;
     setEpEditorSeasons(prev => prev.filter((_, i) => i !== sIdx));
     if (epEditorExpandedSeason === sIdx) setEpEditorExpandedSeason(-1);
     else if (epEditorExpandedSeason > sIdx) setEpEditorExpandedSeason(prev => prev - 1);
@@ -10857,7 +10857,7 @@ const AnimeSaltManagerSection = ({
   };
 
   const epRemoveEpisode = (sIdx: number, eIdx: number) => {
-    if (!confirm('এই এপিসোড ডিলিট করতে চান?')) return;
+    if (!confirm('ই episode delete Continue??')) return;
     setEpEditorSeasons(prev => {
       const copy = [...prev];
       const s = { ...copy[sIdx], episodes: copy[sIdx].episodes.filter((_: any, i: number) => i !== eIdx) };
@@ -10895,7 +10895,7 @@ const AnimeSaltManagerSection = ({
         });
       });
       await set(ref(db, `animesaltSelected/${epEditorSlug}/episodeOverrides`), Object.keys(overrides).length > 0 ? overrides : null);
-      toast.success('✅ এপিসোড ডাটা সেভ হয়েছে!');
+      toast.success('✅ episode data save done!');
     } catch (err: any) {
       toast.error('Error: ' + err.message);
     }
@@ -10904,24 +10904,24 @@ const AnimeSaltManagerSection = ({
 
   const deleteAllEpisodeData = async () => {
     if (!epEditorSlug) return;
-    if (!confirm('সব Season ও এপিসোড ডিলিট করে AnimeSalt ডিফল্টে ফিরতে চান?')) return;
+    if (!confirm('Delete all Seasons & Episodes and return to AnimeSalt defaults??')) return;
     try {
       await remove(ref(db, `animesaltSelected/${epEditorSlug}/customSeasons`));
       await remove(ref(db, `animesaltSelected/${epEditorSlug}/episodeOverrides`));
       setEpEditorSeasons([]);
-      toast.success('সব ডিলিট হয়েছে! পরের বার ওপেন করলে AnimeSalt থেকে লোড হবে।');
+      toast.success('All deleted! Next open will load fresh from AnimeSalt।');
     } catch (err: any) {
       toast.error('Error: ' + err.message);
     }
   };
 
   const removeItem = async (slug: string) => {
-    if (!confirm('এই আইটেমটি রিমুভ করতে চান?')) return;
+    if (!confirm('ই আইটেম remove Continue??')) return;
     setRemovingSlug(slug);
     try {
       // Remove entire node including customSeasons and episodeOverrides
       await remove(ref(db, `animesaltSelected/${slug}`));
-      toast.success('রিমুভ করা হয়েছে! এখন আবার এড করতে পারবেন।');
+      toast.success('remove ক done! খন আorর ড to do পারবেন।');
     } catch {
       toast.error('Error removing');
     }
@@ -10930,10 +10930,10 @@ const AnimeSaltManagerSection = ({
 
   // URL-based import
   const fetchFromUrl = async () => {
-    if (!urlInput.trim()) { toast.error('লিংক দিন!'); return; }
+    if (!urlInput.trim()) { toast.error('link day!'); return; }
     // Parse URL: https://animesalt.ac/series/slug/ or https://animesalt.ac/movies/slug/ (also supports old .top domain)
     const urlMatch = urlInput.trim().match(/animesalt\.(?:top|ac)\/(series|movies)\/([^/?#]+)/);
-    if (!urlMatch) { toast.error('ভুল লিংক! AnimeSalt series বা মুভির লিংক দিন।'); return; }
+    if (!urlMatch) { toast.error('ভুল link! AnimeSalt series or movieর link day।'); return; }
     const urlType = urlMatch[1]; // 'series' or 'movies'
     const urlSlug = urlMatch[2];
 
@@ -10955,12 +10955,12 @@ const AnimeSaltManagerSection = ({
           title: result.data.title || urlSlug.replace(/-/g, ' '),
           year: result.data.year || '',
         });
-        toast.success(`"${result.data.title || urlSlug}" পাওয়া গেছে!`);
+        toast.success(`"${result.data.title || urlSlug}" পা andয়া gone!`);
       } else {
-        toast.error('এই লিংক থেকে ডাটা পাওয়া যায়নি');
+        toast.error('ই link from data পা andয়া যায়নি');
       }
     } catch (err: any) {
-      toast.error('ফেচ ব্যর্থ: ' + err.message);
+      toast.error('ফেচ failed: ' + err.message);
     }
     setUrlFetching(false);
   };
@@ -10989,7 +10989,7 @@ const AnimeSaltManagerSection = ({
   const updateItemCategory = async (slug: string, category: string) => {
     try {
       await update(ref(db, `animesaltSelected/${slug}`), { category });
-      toast.success('Category আপডেট!');
+      toast.success('Category update!');
     } catch {
       toast.error('Error updating');
     }
@@ -11029,10 +11029,10 @@ const AnimeSaltManagerSection = ({
   const runEpisodePreloader = async () => {
     const entries = Object.entries(selectedItems);
     if (entries.length === 0) {
-      toast.error("কোনো এড করা আইটেম নেই");
+      toast.error("any ড ক আইটেম none");
       return;
     }
-    if (!confirm(`${entries.length}টি আইটেমের এপিসোড চেক করা হবে। কিছু সময় লাগতে পারে। শুরু করব?`)) return;
+    if (!confirm(`${entries.length} আইটেম episode চেক ক হবে। some time লাগতে পারে। start করব?`)) return;
     setPreloading(true);
     setPreloadDone(false);
     setPreloadFailed([]);
@@ -11055,16 +11055,16 @@ const AnimeSaltManagerSection = ({
         const data2 = result?.data;
         const hasEpisodes = !!(data2?.seasons?.length && data2.seasons.some((s: any) => s?.episodes?.length > 0));
         const hasEmbed = !!(data2?.embedUrl || data2?.embedUrls?.length || data2?.allEmbeds?.length || data2?.links?.length);
-        if (!result?.success) failed.push({ slug, title, reason: "ফেচ ব্যর্থ" });
-        else if (!hasEpisodes && !hasEmbed) failed.push({ slug, title, reason: "কোনো এপিসোড/লিংক পাওয়া যায়নি" });
+        if (!result?.success) failed.push({ slug, title, reason: "ফেচ failed" });
+        else if (!hasEpisodes && !hasEmbed) failed.push({ slug, title, reason: "any episode/link পা andয়া যায়নি" });
       } catch (e: any) {
-        failed.push({ slug, title, reason: e?.message || "ফেচ এরর" });
+        failed.push({ slug, title, reason: e?.message || "ফেচ  ofর" });
       }
     }
     setPreloadFailed(failed);
     setPreloadDone(true);
     setPreloading(false);
-    toast.success(`✅ চেক সম্পন্ন: ${entries.length - failed.length} OK, ${failed.length} ব্যর্থ`);
+    toast.success(`✅ চেক সম্পন্ন: ${entries.length - failed.length} OK, ${failed.length} failed`);
   };
 
   const downloadFailedAsText = () => {
@@ -11084,7 +11084,7 @@ const AnimeSaltManagerSection = ({
 
   const deleteAllFailed = async () => {
     if (preloadFailed.length === 0) return;
-    if (!confirm(`${preloadFailed.length}টি ব্যর্থ পোস্ট সম্পূর্ণভাবে ডিলিট হবে (ইউজার + অ্যাডমিন প্যানেল থেকে)। নিশ্চিত?`)) return;
+    if (!confirm(`${preloadFailed.length} failed posts will be fully deleted (from user + admin panel)। Are you sure?`)) return;
     setPreloadDeleting(true);
     let ok = 0;
     for (const f of preloadFailed) {
@@ -11096,7 +11096,7 @@ const AnimeSaltManagerSection = ({
     setPreloadDeleting(false);
     setPreloadFailed([]);
     setPreloadDone(false);
-    toast.success(`✅ ${ok}টি Post deleted!`);
+    toast.success(`✅ ${ok} Post deleted!`);
   };
 
 
@@ -11108,10 +11108,10 @@ const AnimeSaltManagerSection = ({
         <div className="fixed inset-0 z-[300] bg-black/80 flex items-center justify-center p-4" onClick={() => { setTmdbModalItem(null); setTmdbResults([]); }}>
           <div className="bg-[#1A1A2E] border border-purple-500/40 rounded-2xl max-w-md w-full max-h-[80vh] overflow-y-auto p-4" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-3">
-              <h3 className="text-sm font-semibold">🎯 সঠিক ছবি Select</h3>
+              <h3 className="text-sm font-semibold">🎯 সঠিক image Select</h3>
               <button onClick={() => { setTmdbModalItem(null); setTmdbResults([]); }} className="text-[#957DAD] hover:text-white"><X size={18} /></button>
             </div>
-            <p className="text-[11px] text-[#D1C4E9] mb-3">"{tmdbModalItem.title}" এর users্য {tmdbResults.length}টি রেজাল্ট পাওয়া গেছে:</p>
+            <p className="text-[11px] text-[#D1C4E9] mb-3">"{tmdbModalItem.title}"  of users্য {tmdbResults.length} result পা andয়া gone:</p>
             <div className="grid grid-cols-2 gap-3">
               {tmdbResults.map((r: any) => (
                 <button key={r.id} onClick={() => saveWithTmdb(tmdbModalItem, r)}
@@ -11127,7 +11127,7 @@ const AnimeSaltManagerSection = ({
             </div>
             <button onClick={() => saveWithTmdb(tmdbModalItem, null)}
               className="w-full mt-3 py-2 rounded-lg text-[11px] bg-[#151521] border border-white/10 text-[#D1C4E9] hover:bg-purple-500/20 transition-all">
-              TMDB ছাড়া এড করুন (অরিজিনাল ছবি)
+              TMDB without ড  (অরিজিনাল image)
             </button>
           </div>
         </div>
@@ -11153,13 +11153,13 @@ const AnimeSaltManagerSection = ({
             <button onClick={searchTmdbForEdit} disabled={editTmdbSearching}
               className="w-full py-2 mb-3 rounded-lg text-[11px] font-bold bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/30 transition-all flex items-center justify-center gap-1.5">
               {editTmdbSearching ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-              🔍 TMDB থেকে ছবি রিফ্রেশ করুন
+              🔍 TMDB from image refresh 
             </button>
 
             {/* TMDB Results Grid */}
             {editTmdbResults.length > 0 && (
               <div className="mb-3 bg-[#151521] rounded-xl border border-cyan-500/20 p-3">
-                <p className="text-[10px] text-cyan-400 mb-2 font-semibold">সঠিক ছবি Select ({editTmdbResults.length}টি রেজাল্ট):</p>
+                <p className="text-[10px] text-cyan-400 mb-2 font-semibold">সঠিক image Select ({editTmdbResults.length} result):</p>
                 <div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-y-auto">
                   {editTmdbResults.map((r: any) => (
                     <button key={r.id} onClick={() => applyTmdbToEdit(r)}
@@ -11174,7 +11174,7 @@ const AnimeSaltManagerSection = ({
                   ))}
                 </div>
                 <button onClick={() => setEditTmdbResults([])} className="w-full mt-2 py-1 rounded text-[10px] text-[#957DAD] hover:text-white transition-all">
-                  বন্ধ করুন
+                  off 
                 </button>
               </div>
             )}
@@ -11230,10 +11230,10 @@ const AnimeSaltManagerSection = ({
 
             <div className="flex gap-2 mt-4">
               <button onClick={saveEditForm} className="flex-1 py-2 rounded-lg text-[12px] font-bold bg-gradient-to-r from-purple-600 to-purple-800 text-white flex items-center justify-center gap-1.5">
-                <Save size={12} /> সেভ করুন
+                <Save size={12} /> save 
               </button>
               <button onClick={() => setEditItem(null)} className="px-4 py-2 rounded-lg text-[12px] bg-[#151521] border border-white/10 text-[#D1C4E9]">
-                বাতিল
+                cancel
               </button>
             </div>
           </div>
@@ -11246,12 +11246,12 @@ const AnimeSaltManagerSection = ({
           <div className="bg-[#1A1A2E] border border-purple-500/40 rounded-t-2xl sm:rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col p-4" onClick={e => e.stopPropagation()}>
             {/* Fixed header */}
             <div className="flex justify-between items-center mb-3 flex-shrink-0">
-              <h3 className="text-sm font-semibold flex items-center gap-2">🎬 এপিসোড এডিটর - {selectedItems[epEditorSlug]?.title || epEditorSlug}</h3>
+              <h3 className="text-sm font-semibold flex items-center gap-2">🎬 episode ডিটর - {selectedItems[epEditorSlug]?.title || epEditorSlug}</h3>
               <button onClick={() => setEpEditorSlug(null)} className="text-[#957DAD] hover:text-white"><X size={18} /></button>
             </div>
             <p className="text-[10px] text-[#D1C4E9] mb-3 flex-shrink-0">
-              <span className="text-yellow-400">AnimeSalt লিংক</span> = ওদের সার্ভার থেকে প্লে হবে (SaltPlayer)।
-              <span className="text-green-400 ml-1">কাস্টম লিংক</span> = আপনার ভিডিও প্লেয়ারে প্লে হবে।
+              <span className="text-yellow-400">AnimeSalt link</span> =  andদ server from প্লে হবে (SaltPlayer)।
+              <span className="text-green-400 ml-1">custom link</span> = আপনার ভিডি and playerে প্লে হবে।
             </p>
 
             {epEditorLoading ? (
@@ -11330,7 +11330,7 @@ const AnimeSaltManagerSection = ({
                   <input type="file" ref={epSeasonJsonFileRef} accept=".json,application/json" multiple onChange={epHandleSeasonJsonFile} className="hidden" />
 
                   {epEditorSeasons.length === 0 ? (
-                    <p className="text-[#957DAD] text-[13px] text-center py-8">কোনো Season নেই। "JSON ইমপোর্ট", "+ Season" বা "AnimeSalt লোড" ক্লিক করুন।</p>
+                    <p className="text-[#957DAD] text-[13px] text-center py-8">any Season none। "JSON import", "+ Season" or "AnimeSalt load" click ।</p>
                   ) : (
                     <div className="space-y-3">
                       {epEditorSeasons.map((season, sIdx) => (
@@ -11373,12 +11373,12 @@ const AnimeSaltManagerSection = ({
                                       <div className="flex items-center gap-1.5">
                                         {ep.hasAnimeSaltLink && (
                                           <span className="text-[9px] bg-yellow-500/15 text-yellow-400 px-2 py-0.5 rounded-full">
-                                            AnimeSalt লিংক আছে
+                                            AnimeSalt link exists
                                           </span>
                                         )}
                                         {hasCustomLink && (
                                           <span className="text-[9px] bg-green-500/15 text-green-400 px-2 py-0.5 rounded-full">
-                                            কাস্টম লিংক
+                                            custom link
                                           </span>
                                         )}
                                         <button onClick={() => epRemoveEpisode(sIdx, eIdx)}
@@ -11394,7 +11394,7 @@ const AnimeSaltManagerSection = ({
                                           value={ep.link || ''}
                                           onChange={e => epUpdateEpisodeField(sIdx, eIdx, 'link', e.target.value)}
                                           className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`}
-                                          placeholder={ep.hasAnimeSaltLink ? 'AnimeSalt লিংক ব্যবহার হবে' : 'লিংক দিন...'}
+                                          placeholder={ep.hasAnimeSaltLink ? 'AnimeSalt link ব্যবহার হবে' : 'link day...'}
                                           rows={2}
                                         />
                                       </div>
@@ -11433,15 +11433,15 @@ const AnimeSaltManagerSection = ({
                 <div className="flex gap-2 mt-4 flex-shrink-0 pt-2 border-t border-white/5">
                   <button onClick={saveEpisodeData} disabled={epEditorSaving}
                     className="flex-1 py-2.5 rounded-lg text-[12px] font-bold bg-gradient-to-r from-purple-600 to-purple-800 text-white flex items-center justify-center gap-1.5">
-                    {epEditorSaving ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />} সেভ করুন
+                    {epEditorSaving ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />} save 
                   </button>
                   <button onClick={deleteAllEpisodeData}
                     className="px-4 py-2.5 rounded-lg text-[12px] font-bold bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/40 transition-all flex items-center gap-1">
-                    <Trash2 size={12} /> সব ডিলিট
+                    <Trash2 size={12} /> all delete
                   </button>
                   <button onClick={() => setEpEditorSlug(null)}
                     className="px-4 py-2.5 rounded-lg text-[12px] bg-[#151521] border border-white/10 text-[#D1C4E9]">
-                    বন্ধ
+                    off
                   </button>
                 </div>
               </>
@@ -11456,13 +11456,13 @@ const AnimeSaltManagerSection = ({
           <RefreshCw size={14} className="text-amber-400" /> 🚀 Episode Preloader
         </h3>
         <p className="text-[10px] text-zinc-400 mb-3">
-          প্রত্যেক এড করা series/মুভির এপিসোড AnimeSalt থেকে রিফ্রেশ করে চেক করবে। যেগুলোর এপিসোড লোড হয়নি সেগুলোর লিস্ট দেখাবে, টেক্সট ফাইল ডাউনলোড করা যাবে, এবং এক ক্লিকে ডিলিট করা যাবে।
+          Refreshes and checks every added series/movie episode from AnimeSalt। Shows the list of items whose episodes failed to load; you can download a text file and delete with one click।
         </p>
 
         {preloading && (
           <div className="mb-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
             <div className="flex items-center justify-between text-[11px] mb-2">
-              <span className="text-amber-300 font-semibold">চলছে... {preloadProgress.current}/{preloadProgress.total}</span>
+              <span className="text-amber-300 font-semibold">running... {preloadProgress.current}/{preloadProgress.total}</span>
               <span className="text-amber-400">{Math.round((preloadProgress.current / Math.max(preloadProgress.total, 1)) * 100)}%</span>
             </div>
             <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
@@ -11479,7 +11479,7 @@ const AnimeSaltManagerSection = ({
               ? "bg-zinc-700/50 text-zinc-500 cursor-not-allowed"
               : "bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:shadow-[0_4px_15px_rgba(245,158,11,0.4)]"
           }`}>
-          {preloading ? <><RefreshCw size={14} className="animate-spin" /> চেক হচ্ছে...</> : <><Zap size={14} /> সব এপিসোড চেক করুন ({addedCount})</>}
+          {preloading ? <><RefreshCw size={14} className="animate-spin" /> চেক in progress...</> : <><Zap size={14} /> all episode চেক  ({addedCount})</>}
         </button>
 
         {preloadDone && (
@@ -11487,8 +11487,8 @@ const AnimeSaltManagerSection = ({
             <div className="flex items-center justify-between mb-2">
               <p className="text-[12px] font-semibold">
                 {preloadFailed.length === 0
-                  ? <span className="text-green-400">✅ সব এপিসোড ঠিকঠাক লোড হচ্ছে!</span>
-                  : <span className="text-red-400">❌ {preloadFailed.length}টি আইটেমের এপিসোড লোড হয়নি</span>}
+                  ? <span className="text-green-400">✅ all episode ঠিকঠাক load in progress!</span>
+                  : <span className="text-red-400">❌ {preloadFailed.length} আইটেম episode load not done</span>}
               </p>
             </div>
 
@@ -11508,12 +11508,12 @@ const AnimeSaltManagerSection = ({
                 <div className="flex gap-2">
                   <button onClick={downloadFailedAsText}
                     className="flex-1 py-2 rounded-lg text-[11px] font-bold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/40 transition-all flex items-center justify-center gap-1.5">
-                    <Download size={12} /> টেক্সট ফাইল
+                    <Download size={12} /> text file
                   </button>
                   <button onClick={deleteAllFailed} disabled={preloadDeleting}
                     className="flex-1 py-2 rounded-lg text-[11px] font-bold bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/40 transition-all flex items-center justify-center gap-1.5">
                     {preloadDeleting ? <RefreshCw size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                    সব ডিলিট করুন
+                    all delete 
                   </button>
                 </div>
               </>
@@ -11528,12 +11528,12 @@ const AnimeSaltManagerSection = ({
           ⚙️ AnimeSalt Source Config
         </h3>
         <p className="text-[10px] text-zinc-400 mb-3">
-          কাস্টম URL দিলে সেটা থেকে AnimeSalt ডাটা আসবে। Cloudflare, Supabase, বা যেকোনো সাইটের URL দিন।
+          custom URL দিলে সে from AnimeSalt data আallে। Cloudflare, Supabase, or যেany site URL day।
         </p>
         <div className="flex items-center justify-between mb-3 bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40">
           <div className="flex items-center gap-3">
             <div className={`w-3 h-3 rounded-full ${asEnabled ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-xs font-medium">{asEnabled ? 'চালু' : 'বন্ধ'}</span>
+            <span className="text-xs font-medium">{asEnabled ? 'on' : 'off'}</span>
           </div>
           <button onClick={toggleAs}
             className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors ${asEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
@@ -11544,10 +11544,10 @@ const AnimeSaltManagerSection = ({
           <input value={asCustomUrlInput} onChange={e => setAsCustomUrlInput(e.target.value)}
             placeholder="https://your-worker.dev/animesalt" className={`${inputClass} flex-1`} />
           <button onClick={saveAsConfig} className={`${btnPrimary} !px-3`}>
-            <Save size={12} /> সেভ
+            <Save size={12} /> save
           </button>
         </div>
-        {asCustomUrl && <p className="text-[9px] text-cyan-400">⚡ কাস্টম URL: {asCustomUrl}</p>}
+        {asCustomUrl && <p className="text-[9px] text-cyan-400">⚡ custom URL: {asCustomUrl}</p>}
       </div>
 
       {/* Global AnimeSalt ON/OFF Toggle */}
@@ -11555,19 +11555,19 @@ const AnimeSaltManagerSection = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={`w-3 h-3 rounded-full ${animeSaltGlobalEnabled ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-            <span className="text-xs font-semibold">{animeSaltGlobalEnabled ? 'AnimeSalt কন্টেন্ট চালু আছে' : 'AnimeSalt কন্টেন্ট বন্ধ আছে'}</span>
+            <span className="text-xs font-semibold">{animeSaltGlobalEnabled ? 'AnimeSalt content on exists' : 'AnimeSalt content off exists'}</span>
           </div>
           <button onClick={async () => {
             const next = !animeSaltGlobalEnabled;
             setAnimeSaltGlobalEnabled(next);
             await set(ref(db, "settings/animeSaltEnabled"), next);
-            toast.success(next ? "✅ AnimeSalt কন্টেন্ট চালু হয়েছে" : "AnimeSalt কন্টেন্ট বন্ধ হয়েছে");
+            toast.success(next ? "✅ AnimeSalt content enabled" : "AnimeSalt content disabled");
           }}
             className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${animeSaltGlobalEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
             <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${animeSaltGlobalEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
         </div>
-        <p className="text-[10px] text-zinc-400 mt-2">বন্ধ করলে সাইটে AnimeSalt-এর সকল কন্টেন্ট হাইড হয়ে যাবে। শুধু সাইট কন্টেন্ট দেখাবে।</p>
+        <p className="text-[10px] text-zinc-400 mt-2">Turning off hides all AnimeSalt content on the site। শুধু site content shows।</p>
       </div>
 
       <div className={`${glassCard} p-4 mb-4`}>
@@ -11580,22 +11580,22 @@ const AnimeSaltManagerSection = ({
               refreshing ? 'bg-purple-500/30 text-purple-300' : 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/40'
             }`}>
             <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
-            {refreshing ? 'রিফ্রেশ...' : 'রিফ্রেশ'}
+            {refreshing ? 'refresh...' : 'refresh'}
           </button>
         </div>
         <p className="text-[11px] text-[#D1C4E9] mb-3">
-          AnimeSalt থেকে কন্টেন্ট ব্রাউজ করুন, যেটা পছন্দ সেটা এড করুন। TMDB থেকে সঠিক পোস্টার ও মেটাডাটা অটো আসবে।
+          AnimeSalt from content browse , যে পছন্দ সে ড । TMDB from সঠিক postার  and মেdata auto আallে।
         </p>
         <div className="flex items-center gap-3 mb-3">
           <div className="bg-purple-500/20 text-purple-400 px-3 py-1.5 rounded-full text-xs font-bold">
-            মোট: {allItems.length}
+            Total: {allItems.length}
           </div>
           <div className="bg-green-500/20 text-green-400 px-3 py-1.5 rounded-full text-xs font-bold">
-            এড করা: {addedCount}
+            ড ক: {addedCount}
           </div>
         </div>
         <div className="mb-3">
-          <label className="text-[11px] text-[#957DAD] mb-1 block">Category (এড করার users্য) <span className="text-red-400">*</span></label>
+          <label className="text-[11px] text-[#957DAD] mb-1 block">Category (ড কর users্য) <span className="text-red-400">*</span></label>
           <select value={addCategory} onChange={e => setAddCategory(e.target.value)} className={selectClass}>
             <option value="">Select</option>
             {categoryList.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
@@ -11604,17 +11604,17 @@ const AnimeSaltManagerSection = ({
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-500" />
           <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            className={`${inputClass} pl-9`} placeholder="সার্চ করুন..." />
+            className={`${inputClass} pl-9`} placeholder="search ..." />
         </div>
       </div>
 
       {/* URL Import Section */}
       <div className={`${glassCard} p-4 mb-4`}>
         <h4 className="text-[13px] font-semibold flex items-center gap-2 mb-2">
-          <Link size={14} className="text-cyan-400" /> লিংক দিয়ে এড করুন
+          <Link size={14} className="text-cyan-400" /> link with ড 
         </h4>
         <p className="text-[10px] text-[#D1C4E9] mb-2">
-          AnimeSalt ওয়েবসাইট থেকে series/মুভির লিংক পেস্ট করুন। যেসব anime ক্যাটালগে নেই সেগুলো এভাবে এড করুন।
+          AnimeSalt  andয়েবsite from series/movieর link পেস্ট । যেall anime ক্যাlogে none সেগুলো ভাবে ড ।
         </p>
         <div className="flex gap-2 mb-2">
           <input
@@ -11650,7 +11650,7 @@ const AnimeSaltManagerSection = ({
               {isAdded(urlFetchedItem.slug) ? (
                 <div className="mt-2 space-y-1.5">
                   <div className="flex items-center gap-1.5 text-[11px] text-green-400">
-                    <Check size={12} /> আগে থেকেই এড করা আছে
+                    <Check size={12} /> before fromই ড ক exists
                   </div>
                   <div className="flex gap-1.5">
                     <button onClick={() => { openEditModal(urlFetchedItem.slug); }}
@@ -11659,7 +11659,7 @@ const AnimeSaltManagerSection = ({
                     </button>
                     <button onClick={() => removeItem(urlFetchedItem.slug)}
                       className="flex-1 py-1.5 rounded-lg text-[10px] font-bold bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/40 flex items-center justify-center gap-1">
-                      <Trash2 size={10} /> ডিলিট করে আবার এড করুন
+                      <Trash2 size={10} /> delete করে আorর ড 
                     </button>
                   </div>
                 </div>
@@ -11672,7 +11672,7 @@ const AnimeSaltManagerSection = ({
                   }`}>
                   {addingSlug === urlFetchedItem.slug ? <><RefreshCw size={10} className="animate-spin" /> Adding...</> :
                    !addCategory ? <><AlertTriangle size={10} /> প্রথমে Category Select</> :
-                   <><Download size={10} /> এড করুন</>}
+                   <><Download size={10} /> ড </>}
                 </button>
               )}
             </div>
@@ -11685,10 +11685,10 @@ const AnimeSaltManagerSection = ({
       {/* Filter Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-2.5 mb-4 scrollbar-hide">
         {([
-          { key: "all", label: "📋 সব", count: allItems.length },
+          { key: "all", label: "📋 all", count: allItems.length },
           { key: "series", label: "📺 series", count: allItems.filter(i => i.type === 'series').length },
-          { key: "movies", label: "🎬 মুভি", count: allItems.filter(i => i.type === 'movies').length },
-          { key: "added", label: "✅ এড করা", count: addedCount },
+          { key: "movies", label: "🎬 movie", count: allItems.filter(i => i.type === 'movies').length },
+          { key: "added", label: "✅ ড ক", count: addedCount },
         ] as const).map(tab => (
           <button key={tab.key} onClick={() => setFilterType(tab.key as any)}
             className={`flex-shrink-0 px-4 py-2 rounded-full text-[12px] font-medium transition-all ${
@@ -11707,7 +11707,7 @@ const AnimeSaltManagerSection = ({
           <div className="w-10 h-10 border-4 border-[#151521] border-t-purple-500 rounded-full animate-spin" />
         </div>
       ) : filteredItems.length === 0 ? (
-        <p className="text-[#957DAD] text-[13px] text-center py-8">কোনো আইটেম পাওয়া যায়নি</p>
+        <p className="text-[#957DAD] text-[13px] text-center py-8">any আইটেম পা andয়া যায়নি</p>
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {filteredItems.map(item => {
@@ -11771,7 +11771,7 @@ const AnimeSaltManagerSection = ({
                         className="w-full py-1.5 rounded-lg text-[10px] font-bold bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/40 transition-all flex items-center justify-center gap-1"
                       >
                         {removing ? <RefreshCw size={10} className="animate-spin" /> : <Trash2 size={10} />}
-                        বাতিল করুন
+                        cancel 
                       </button>
                     </div>
                   ) : (
@@ -11789,7 +11789,7 @@ const AnimeSaltManagerSection = ({
                       {importing ? (
                         <><RefreshCw size={10} className="animate-spin" /> Adding...</>
                       ) : (
-                        <><Download size={10} /> এড করুন</>
+                        <><Download size={10} /> ড </>
                       )}
                     </button>
                   )}
@@ -11870,34 +11870,34 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
   };
 
   const removeDeviceHandler = async (userId: string, deviceId: string) => {
-    if (!confirm("এই ডিভাইস রিমুভ করতে চান?")) return;
+    if (!confirm("ই device remove Continue??")) return;
     try {
       const { removeDevice: rmDev } = await import("@/lib/premiumDevice");
       await rmDev(userId, deviceId);
       setUserDevices(prev => ({ ...prev, [userId]: (prev[userId] || []).filter(d => d.id !== deviceId) }));
-      toast.success("ডিভাইস রিমুভ হয়েছে");
+      toast.success("device remove done");
     } catch { toast.error("Error removing device"); }
   };
 
   const cancelSubscription = async (userId: string, userName: string) => {
-    if (!confirm(`"${userName}" এর সাবস্ক্রিপশন বাতিল করতে চান? ডিভাইস লিস্টও ক্লিয়ার হবে।`)) return;
+    if (!confirm(`"${userName}" Cancel this subscription? The device list will also be cleared।`)) return;
     try {
       await remove(ref(db, `users/${userId}/premium`));
       setUserDevices(prev => { const copy = { ...prev }; delete copy[userId]; return copy; });
       const notifRef = push(ref(db, `notifications/${userId}`));
       await set(notifRef, {
         title: "Subscription Cancelled ❌",
-        message: "আপনার প্রিমিয়াম সাবস্ক্রিপশন অ্যাডমিন কর্তৃক বাতিল করা হয়েছে।",
+        message: "Your premium subscription has been canceled by an admin।",
         type: "warning",
         timestamp: Date.now(),
         read: false,
       });
-      toast.success("সাবস্ক্রিপশন বাতিল ও ইউজারকে নোটিফাই করা হয়েছে");
+      toast.success("subscription cancel  and user নোফাই ক done");
     } catch { toast.error("Error cancelling"); }
   };
 
   const setDeviceAsOnly = async (userId: string, allowedDeviceId: string) => {
-    if (!confirm("শুধুমাত্র এই ডিভাইসে অ্যাক্সেস দিতে চান? remaining সব ডিভাইস রিমুভ হবে।")) return;
+    if (!confirm("Grant access only to this device? All remaining devices will be removed।")) return;
     try {
       const devices = userDevices[userId] || [];
       for (const dev of devices) {
@@ -11909,24 +11909,24 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
         ...prev,
         [userId]: (prev[userId] || []).filter(d => d.id === allowedDeviceId),
       }));
-      toast.success("শুধুমাত্র নির্বাচিত ডিভাইসে অ্যাক্সেস দেওয়া হয়েছে");
+      toast.success("শুধুমাত্র নির্orচিত deviceে access দে andয়া done");
     } catch { toast.error("Error updating devices"); }
   };
 
   const updateMaxDevices = async (userId: string, maxDevices: number) => {
     try {
       await update(ref(db, `users/${userId}/premium`), { maxDevices });
-      toast.success(`ডিভাইস লিমিট ${maxDevices} এ আপডেট হয়েছে`);
+      toast.success(`device limit ${maxDevices}  update done`);
     } catch { toast.error("Error updating"); }
   };
 
   const updateExpiryDays = async (userId: string) => {
     const days = parseInt(expiryDaysInput);
-    if (isNaN(days) || days < 0) { toast.error("সঠিক দিন সংখ্যা দিন"); return; }
+    if (isNaN(days) || days < 0) { toast.error("সঠিক day count day"); return; }
     try {
       const newExpiry = Date.now() + days * 86400000;
       await update(ref(db, `users/${userId}/premium`), { expiresAt: newExpiry });
-      toast.success(`প্রিমিয়াম ${days} দিনে আপডেট হয়েছে`);
+      toast.success(`premium ${days} dayে update done`);
       setEditingExpiry(null);
       setExpiryDaysInput("");
     } catch { toast.error("Error updating expiry"); }
@@ -11947,7 +11947,7 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
           <Lock size={14} className="text-yellow-500" /> Premium Device Limits ({premiumUsers.length} active)
         </h3>
         <p className="text-[11px] text-[#D1C4E9] mb-4">
-          প্রিমিয়াম ইউজারদের ডিভাইস লিমিট ম্যানেজ করুন। নির্দিষ্ট ডিভাইসে অ্যাক্সেস দিন, remainingগুলো ব্লক করুন, বা সাবস্ক্রিপশন বাতিল করুন।
+          premium userদ device limit manage । Grant access to specific devices, block the rest, or cancel the subscription।
         </p>
 
         {premiumUsers.length > 0 && (
@@ -11957,14 +11957,14 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className={`${inputClass} pl-9`}
-              placeholder="ইউজার সার্চ করুন (নাম, ইমেইল)..."
+              placeholder="user search  (name, email)..."
             />
           </div>
         )}
 
         {filteredPremiumUsers.length === 0 ? (
           <p className="text-[#957DAD] text-[13px] text-center py-8">
-            {searchQuery ? "কোন ইউজার পাওয়া যায়নি" : "কোন প্রিমিয়াম ইউজার নেই"}
+            {searchQuery ? "any user পা andয়া যায়নি" : "any premium user none"}
           </p>
         ) : (
           <div className="space-y-2.5">
@@ -12011,7 +12011,7 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
                       <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold ${
                         daysLeft <= 3 ? "bg-red-500/20 text-red-400" : daysLeft <= 7 ? "bg-yellow-500/20 text-yellow-400" : "bg-green-500/20 text-green-400"
                       }`}>
-                        ⏳ {daysLeft} দিন remaining
+                        ⏳ {daysLeft} day remaining
                       </div>
                       <span className="text-[9px] text-zinc-500">{prem.method || "redeem"} • {new Date(prem.expiresAt).toLocaleDateString("bn-BD")}</span>
                       <ChevronDown size={12} className={`text-zinc-500 transition-transform ml-auto ${isExpanded ? "rotate-180" : ""}`} />
@@ -12032,12 +12032,12 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
                           {/* Expiry Edit */}
                           <div className="mb-3 bg-black/20 rounded-lg p-2">
                             <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-[10px] text-zinc-400 font-semibold">⏳ প্রিমিয়াম মেয়াদ: {daysLeft} দিন remaining</span>
+                              <span className="text-[10px] text-zinc-400 font-semibold">⏳ premium মেয়াদ: {daysLeft} day remaining</span>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); setEditingExpiry(editingExpiry === user.id ? null : user.id); setExpiryDaysInput(String(daysLeft)); }}
                                 className="text-[10px] text-yellow-400 hover:text-yellow-300 font-semibold"
                               >
-                                {editingExpiry === user.id ? "বাতিল" : "✏️ এডিট"}
+                                {editingExpiry === user.id ? "cancel" : "✏️ ডিট"}
                               </button>
                             </div>
                             {editingExpiry === user.id && (
@@ -12048,15 +12048,15 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
                                   onChange={e => setExpiryDaysInput(e.target.value)}
                                   onClick={e => e.stopPropagation()}
                                   className={`${inputClass} !py-1.5 flex-1`}
-                                  placeholder="দিন সংখ্যা..."
+                                  placeholder="day count..."
                                   min="0"
                                 />
-                                <span className="text-[10px] text-zinc-500">দিন</span>
+                                <span className="text-[10px] text-zinc-500">day</span>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); updateExpiryDays(user.id); }}
                                   className="px-3 py-1.5 rounded-lg bg-yellow-500/20 text-yellow-400 text-[10px] font-bold hover:bg-yellow-500/40 transition-colors"
                                 >
-                                  সেভ
+                                  save
                                 </button>
                               </div>
                             )}
@@ -12076,9 +12076,9 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
                             </div>
                           </div>
 
-                          <p className="text-[10px] text-zinc-400 mb-2 font-semibold">রেজিস্টার্ড ডিভাইস ({(userDevices[user.id] || []).length}):</p>
+                          <p className="text-[10px] text-zinc-400 mb-2 font-semibold">রেজিস্র্ড device ({(userDevices[user.id] || []).length}):</p>
                           {(userDevices[user.id] || []).length === 0 ? (
-                            <p className="text-[10px] text-zinc-500 text-center py-2">কোন ডিভাইস রেজিস্টার্ড নেই</p>
+                            <p className="text-[10px] text-zinc-500 text-center py-2">any device রেজিস্র্ড none</p>
                           ) : (
                             <div className="space-y-1.5 mb-3">
                               {(userDevices[user.id] || []).map((dev, idx) => (
@@ -12093,12 +12093,12 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
                                   </div>
                                   <div className="flex gap-1 flex-shrink-0">
                                     <button onClick={(e) => { e.stopPropagation(); setDeviceAsOnly(user.id, dev.id); }}
-                                      title="শুধু এই ডিভাইসে অ্যাক্সেস দিন"
+                                      title="শুধু ই deviceে access day"
                                       className="bg-green-500/20 text-green-400 p-1.5 rounded-lg hover:bg-green-500/40 transition-colors">
                                       <Check size={12} />
                                     </button>
                                     <button onClick={(e) => { e.stopPropagation(); removeDeviceHandler(user.id, dev.id); }}
-                                      title="এই ডিভাইস রিমুভ করুন"
+                                      title="ই device remove "
                                       className="bg-red-500/20 text-red-400 p-1.5 rounded-lg hover:bg-red-500/40 transition-colors">
                                       <Trash2 size={12} />
                                     </button>
@@ -12112,20 +12112,20 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
                           <div className="flex gap-2">
                             <button onClick={(e) => { e.stopPropagation(); cancelSubscription(user.id, user.name || user.id); }}
                               className="flex-1 py-2 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 text-[10px] font-semibold hover:bg-red-500/40 transition-colors flex items-center justify-center gap-1">
-                              <X size={11} /> সাবস্ক্রিপশন বাতিল
+                              <X size={11} /> subscription cancel
                             </button>
                             <button onClick={(e) => {
                               e.stopPropagation();
-                              if (!confirm("সব ডিভাইস রিমুভ করতে চান?")) return;
+                              if (!confirm("all device remove Continue??")) return;
                               const devices = userDevices[user.id] || [];
                               Promise.all(devices.map(d => remove(ref(db, `users/${user.id}/premium/devices/${d.id}`))))
                                 .then(() => {
                                   setUserDevices(prev => ({ ...prev, [user.id]: [] }));
-                                  toast.success("সব ডিভাইস রিমুভ হয়েছে");
+                                  toast.success("all device remove done");
                                 }).catch(() => toast.error("Error"));
                             }}
                               className="flex-1 py-2 rounded-lg bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 text-[10px] font-semibold hover:bg-yellow-500/40 transition-colors flex items-center justify-center gap-1">
-                              <Trash2 size={11} /> সব ডিভাইস ক্লিয়ার
+                              <Trash2 size={11} /> all device clear
                             </button>
                           </div>
                         </>
@@ -12155,17 +12155,17 @@ const AdminAuthorizedEmails = ({ glassCard, inputClass, btnPrimary, btnSecondary
   }, []);
 
   const addEmail = async () => {
-    if (!newEmail.trim() || !newEmail.includes("@")) { toast.error("সঠিক ইমেইল দিন"); return; }
+    if (!newEmail.trim() || !newEmail.includes("@")) { toast.error("সঠিক email day"); return; }
     const key = push(ref(db, "admin/authorizedEmails")).key;
     if (!key) return;
     await set(ref(db, `admin/authorizedEmails/${key}`), newEmail.trim());
     setNewEmail("");
-    toast.success("ইমেইল যোগ হয়েছে!");
+    toast.success("email add done!");
   };
 
   const removeEmail = async (key: string) => {
     await remove(ref(db, `admin/authorizedEmails/${key}`));
-    toast.success("ইমেইল মুছে ফেলা হয়েছে");
+    toast.success("email মুছে ফেলা done");
   };
 
   return (
@@ -12178,7 +12178,7 @@ const AdminAuthorizedEmails = ({ glassCard, inputClass, btnPrimary, btnSecondary
         </button>
       </div>
       {Object.entries(emails).length === 0 ? (
-        <p className="text-[11px] text-zinc-500 text-center py-3">কোনো Google ইমেইল যোগ করা হয়নি</p>
+        <p className="text-[11px] text-zinc-500 text-center py-3">any Google email add ক not done</p>
       ) : (
         <div className="space-y-2">
           {Object.entries(emails).map(([key, email]) => (
@@ -12214,7 +12214,7 @@ const CdnToggle = ({ glassCard }: { glassCard: string }) => {
     try {
       await set(ref(db, "settings/cdnEnabled"), newVal);
       setCdnEnabled(newVal);
-      toast.success(newVal ? "Cloudflare CDN চালু হয়েছে" : "Cloudflare CDN বন্ধ হয়েছে");
+      toast.success(newVal ? "Cloudflare CDN on done" : "Cloudflare CDN off done");
     } catch {
       toast.error("Save failed");
     }
@@ -12224,7 +12224,7 @@ const CdnToggle = ({ glassCard }: { glassCard: string }) => {
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-3">
         <div className={`w-3 h-3 rounded-full ${cdnEnabled ? 'bg-green-500' : 'bg-red-500'}`} />
-        <span className="text-sm font-medium">{cdnEnabled ? 'CDN চালু আছে' : 'CDN বন্ধ আছে'}</span>
+        <span className="text-sm font-medium">{cdnEnabled ? 'CDN on exists' : 'CDN off exists'}</span>
       </div>
       <button
         onClick={toggle}
@@ -12302,7 +12302,7 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
   };
 
   const addCustomProxy = async () => {
-    if (!newProxyName.trim() || !newProxyUrl.trim()) { toast.error("নাম ও URL দাও"); return; }
+    if (!newProxyName.trim() || !newProxyUrl.trim()) { toast.error("name  and URL দা and"); return; }
     try {
       const id = `custom_${Date.now()}`;
       await set(ref(db, `settings/customProxies/${id}`), {
@@ -12314,7 +12314,7 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
       setNewProxyUrl('');
       setNewProxyApiKey('');
       setShowAddForm(false);
-      toast.success("কাস্টম প্রক্সি যোগ হয়েছে");
+      toast.success("custom প্রক্সি add done");
     } catch {
       toast.error("Save failed");
     }
@@ -12327,9 +12327,9 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
         await set(ref(db, "settings/proxyServer"), { id: 'supabase', url: null, apiKey: null });
         setActiveProxy('supabase');
       }
-      toast.success("প্রক্সি মুছে ফেলা হয়েছে");
+      toast.success("প্রক্সি মুছে ফেলা done");
     } catch {
-      toast.error("মুছতে ব্যর্থ");
+      toast.error("মুছতে failed");
     }
   };
 
@@ -12349,7 +12349,7 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
     setTesting(null);
   };
 
-  if (loading) return <div className="text-xs text-zinc-500">লোড হচ্ছে...</div>;
+  if (loading) return <div className="text-xs text-zinc-500">load in progress...</div>;
 
   return (
     <div className="space-y-2">
@@ -12369,14 +12369,14 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
               <div className="text-xs font-medium truncate">{proxy.name}</div>
               <div className="text-[10px] text-zinc-500">{'region' in proxy ? (proxy as any).region : '⚙️ Custom'}</div>
               {'apiKey' in proxy && (proxy as any).apiKey && (
-                <div className="text-[9px] text-yellow-500/70 mt-0.5">🔑 API Key সেট আছে</div>
+                <div className="text-[9px] text-yellow-500/70 mt-0.5">🔑 API Key set exists</div>
               )}
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {testResults[proxy.id] && (
               <span className={`text-[10px] font-mono ${testResults[proxy.id].status === 'ok' ? 'text-green-400' : 'text-red-400'}`}>
-                {testResults[proxy.id].status === 'ok' ? `${testResults[proxy.id].speed}ms` : 'ব্যর্থ'}
+                {testResults[proxy.id].status === 'ok' ? `${testResults[proxy.id].speed}ms` : 'failed'}
               </span>
             )}
             {proxy.id.startsWith('custom_') && (
@@ -12392,7 +12392,7 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
               disabled={testing === proxy.id}
               className="px-2 py-1 text-[10px] rounded bg-zinc-700 hover:bg-zinc-600 transition-colors disabled:opacity-50"
             >
-              {testing === proxy.id ? '...' : 'টেস্ট'}
+              {testing === proxy.id ? '...' : 'test'}
             </button>
           </div>
         </div>
@@ -12405,21 +12405,21 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
             type="text"
             value={newProxyName}
             onChange={e => setNewProxyName(e.target.value)}
-            placeholder="প্রক্সি নাম (যেমন: My Supabase Proxy)"
+            placeholder="প্রক্সি name (such as: My Supabase Proxy)"
             className="w-full text-xs bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500 focus:border-cyan-500 outline-none"
           />
           <input
             type="text"
             value={newProxyUrl}
             onChange={e => setNewProxyUrl(e.target.value)}
-            placeholder="প্রক্সি URL (যেমন: https://xxx.supabase.co/functions/v1/rs-video-proxy?url=)"
+            placeholder="প্রক্সি URL (such as: https://xxx.supabase.co/functions/v1/rs-video-proxy?url=)"
             className="w-full text-xs bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500 focus:border-cyan-500 outline-none"
           />
           <input
             type="text"
             value={newProxyApiKey}
             onChange={e => setNewProxyApiKey(e.target.value)}
-            placeholder="🔑 API Key (না থাকলে খালি রাখো)"
+            placeholder="🔑 API Key (না থাকলে খালি খো)"
             className="w-full text-xs bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500 focus:border-yellow-500 outline-none"
           />
           <p className="text-[10px] text-zinc-500 leading-relaxed">
@@ -12428,10 +12428,10 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
           </p>
           <div className="flex gap-2">
             <button onClick={addCustomProxy} className="flex-1 py-2 text-xs bg-cyan-600 hover:bg-cyan-500 rounded-lg transition-colors">
-              ✅ যোগ করো
+              ✅ add 
             </button>
             <button onClick={() => { setShowAddForm(false); setNewProxyName(''); setNewProxyUrl(''); setNewProxyApiKey(''); }} className="px-3 py-2 text-xs bg-zinc-700 hover:bg-zinc-600 rounded-lg transition-colors">
-              বাতিল
+              cancel
             </button>
           </div>
         </div>
@@ -12440,7 +12440,7 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
           onClick={() => setShowAddForm(true)}
           className="w-full py-2 text-xs font-medium border border-dashed border-zinc-600 hover:border-cyan-500 rounded-lg transition-colors flex items-center justify-center gap-1.5"
         >
-          <Plus size={12} /> কাস্টম প্রক্সি যোগ করো
+          <Plus size={12} /> custom প্রক্সি add 
         </button>
       )}
 
@@ -12450,7 +12450,7 @@ const ProxyServerSelector = ({ glassCard }: { glassCard: string }) => {
         disabled={testing !== null}
         className="w-full mt-2 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors disabled:opacity-50"
       >
-        {testing ? 'টেস্ট চলছে...' : '🚀 সব প্রক্সি টেস্ট করো'}
+        {testing ? 'test running...' : '🚀 all প্রক্সি test '}
       </button>
     </div>
   );
@@ -12521,7 +12521,7 @@ const ImageRefreshSection = ({
         const result = searchData.results?.[0];
 
         if (!result) {
-          errorList.push(`❌ [${item.source}] ${item.title} — TMDB তে পাওয়া যায়নি`);
+          errorList.push(`❌ [${item.source}] ${item.title} — TMDB তে পা andয়া যায়নি`);
           setErrors([...errorList]);
           continue;
         }
@@ -12548,7 +12548,7 @@ const ImageRefreshSection = ({
 
     setDone(true);
     setRefreshing(false);
-    toast.success(`ইমেজ রিফ্রেশ সম্পন্ন! ${success}/${allContent.length} আপডেট হয়েছে`);
+    toast.success(`image refresh সম্পন্ন! ${success}/${allContent.length} update done`);
   };
 
   const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
@@ -12557,10 +12557,10 @@ const ImageRefreshSection = ({
   return (
     <div className={`${glassCard} p-4 mb-4`}>
       <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-        <RefreshCw size={14} className="text-emerald-400" /> ইমেজ রিফ্রেশ (TMDB)
+        <RefreshCw size={14} className="text-emerald-400" /> image refresh (TMDB)
       </h3>
       <p className="text-[11px] text-zinc-400 mb-3">
-        সব কন্টেন্টের Poster ও Backdrop ইমেজ TMDB থেকে নতুন করে আপডেট করবে।
+        Re-fetches Poster and Backdrop images for all content from TMDB।
       </p>
 
       {!refreshing && !done && (
@@ -12569,12 +12569,12 @@ const ImageRefreshSection = ({
             {(["animesalt", "rs", "all"] as const).map(m => (
               <button key={m} onClick={() => setMode(m)}
                 className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-colors ${mode === m ? "bg-indigo-600 border-indigo-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400 hover:text-white"}`}>
-                {m === "animesalt" ? `P2 (${asCount})` : m === "rs" ? `Primary (${rsCount})` : `সব (${rsCount + asCount})`}
+                {m === "animesalt" ? `P2 (${asCount})` : m === "rs" ? `Primary (${rsCount})` : `all (${rsCount + asCount})`}
               </button>
             ))}
           </div>
           <button onClick={startRefresh} className={`${btnPrimary} w-full py-3 flex items-center justify-center gap-2 text-sm`}>
-            <RefreshCw size={16} /> Start Refresh ({totalCount}টি কন্টেন্ট)
+            <RefreshCw size={16} /> Start Refresh ({totalCount} content)
           </button>
         </div>
       )}
@@ -12589,7 +12589,7 @@ const ImageRefreshSection = ({
             <div className="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
           </div>
           <p className="text-[11px] text-zinc-300 truncate">🔄 {progress.currentTitle}</p>
-          <p className="text-[10px] text-zinc-500 animate-pulse">⏳ ব্রাউজার বন্ধ করবেন না...</p>
+          <p className="text-[10px] text-zinc-500 animate-pulse">⏳ browser off ন না...</p>
         </div>
       )}
 
@@ -12597,18 +12597,18 @@ const ImageRefreshSection = ({
         <div className="space-y-3">
           <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
             <p className="text-sm text-emerald-400 font-semibold flex items-center gap-2">
-              <Check size={16} /> সম্পন্ন! {successCount}/{progress.total} আপডেট হয়েছে
+              <Check size={16} /> সম্পন্ন! {successCount}/{progress.total} update done
             </p>
           </div>
           <button onClick={() => { setDone(false); setErrors([]); }} className={`${btnPrimary} w-full py-2.5 text-sm flex items-center justify-center gap-2`}>
-            <RefreshCw size={14} /> আবার রিফ্রেশ করুন
+            <RefreshCw size={14} /> আorর refresh 
           </button>
         </div>
       )}
 
       {errors.length > 0 && (
         <div className="mt-3 bg-red-500/10 border border-red-500/20 rounded-lg p-3 max-h-[200px] overflow-y-auto">
-          <p className="text-xs text-red-400 font-semibold mb-2">⚠️ {errors.length}টি সমস্যা:</p>
+          <p className="text-xs text-red-400 font-semibold mb-2">⚠️ {errors.length} সমস্যা:</p>
           {errors.map((err, i) => (
             <p key={i} className="text-[11px] text-red-300/80 py-0.5">{err}</p>
           ))}
@@ -12646,7 +12646,7 @@ const EpisodeNameRefreshSection = ({
       ? webseriesData.filter(w => w.id === selectedId)
       : webseriesData;
 
-    if (targetList.length === 0) { toast.error("কন্টেন্ট Select"); return; }
+    if (targetList.length === 0) { toast.error("content Select"); return; }
 
     setRefreshing(true);
     setErrors([]);
@@ -12672,7 +12672,7 @@ const EpisodeNameRefreshSection = ({
         const tmdbShow = searchData.results?.[0];
 
         if (!tmdbShow) {
-          errorList.push(`❌ ${ws.title} — TMDB তে পাওয়া যায়নি`);
+          errorList.push(`❌ ${ws.title} — TMDB তে পা andয়া যায়নি`);
           setErrors([...errorList]);
           continue;
         }
@@ -12735,7 +12735,7 @@ const EpisodeNameRefreshSection = ({
 
     setDone(true);
     setRefreshing(false);
-    toast.success(`এপিসোড নাম রিফ্রেশ সম্পন্ন! ${totalEpsUpdated}টি এপিসোড আপডেট হয়েছে`);
+    toast.success(`episode name refresh সম্পন্ন! ${totalEpsUpdated} episode update done`);
   };
 
   const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
@@ -12743,10 +12743,10 @@ const EpisodeNameRefreshSection = ({
   return (
     <div className={`${glassCard} p-4 mb-4`}>
       <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-        <List size={14} className="text-amber-400" /> এপিসোড নাম রিফ্রেশ (TMDB)
+        <List size={14} className="text-amber-400" /> episode name refresh (TMDB)
       </h3>
       <p className="text-[11px] text-zinc-400 mb-3">
-        ওয়েবseriesের এপিসোডের নাম TMDB থেকে আপডেট করবে। শুধু খালি বা জেনেরিক নাম আপডেট হবে।
+         andয়েবseries episode name TMDB from update । শুধু খালি or জেনিক name update হবে।
       </p>
 
       {!refreshing && !done && (
@@ -12759,7 +12759,7 @@ const EpisodeNameRefreshSection = ({
             </button>
             <button onClick={() => setMode("single")}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-colors ${mode === "single" ? "bg-amber-600 border-amber-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400 hover:text-white"}`}>
-              নির্দিষ্ট series
+              specific series
             </button>
           </div>
 
@@ -12771,7 +12771,7 @@ const EpisodeNameRefreshSection = ({
                 <input
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="series সার্চ করুন..."
+                  placeholder="series search ..."
                   className="w-full text-xs bg-zinc-800 border border-zinc-700 rounded-lg pl-8 pr-3 py-2.5 text-white placeholder-zinc-500 focus:border-amber-500 outline-none"
                 />
               </div>
@@ -12788,7 +12788,7 @@ const EpisodeNameRefreshSection = ({
                     <span className="truncate">{ws.title}</span>
                   </button>
                 ))}
-                {filteredSeries.length === 0 && <p className="text-[11px] text-zinc-500 text-center py-3">কোনো series পাওয়া যায়নি</p>}
+                {filteredSeries.length === 0 && <p className="text-[11px] text-zinc-500 text-center py-3">any series পা andয়া যায়নি</p>}
               </div>
             </div>
           )}
@@ -12798,7 +12798,7 @@ const EpisodeNameRefreshSection = ({
             disabled={mode === "single" && !selectedId}
             className={`${btnPrimary} w-full py-3 flex items-center justify-center gap-2 text-sm disabled:opacity-40`}
           >
-            <RefreshCw size={16} /> Start Refresh ({mode === "single" ? (selectedId ? "1টি" : "Select") : `${webseriesData.length}টি`} series)
+            <RefreshCw size={16} /> Start Refresh ({mode === "single" ? (selectedId ? "1" : "Select") : `${webseriesData.length}`} series)
           </button>
         </div>
       )}
@@ -12813,8 +12813,8 @@ const EpisodeNameRefreshSection = ({
             <div className="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
           </div>
           <p className="text-[11px] text-zinc-300 truncate">🔄 {progress.currentTitle}</p>
-          <p className="text-[10px] text-emerald-400">{updatedEps}টি এপিসোড আপডেট হয়েছে</p>
-          <p className="text-[10px] text-zinc-500 animate-pulse">⏳ ব্রাউজার বন্ধ করবেন না...</p>
+          <p className="text-[10px] text-emerald-400">{updatedEps} episode update done</p>
+          <p className="text-[10px] text-zinc-500 animate-pulse">⏳ browser off ন না...</p>
         </div>
       )}
 
@@ -12822,18 +12822,18 @@ const EpisodeNameRefreshSection = ({
         <div className="space-y-3">
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
             <p className="text-sm text-amber-400 font-semibold flex items-center gap-2">
-              <Check size={16} /> সম্পন্ন! {successCount}টি seriesে মোট {updatedEps}টি এপিসোড আপডেট হয়েছে
+              <Check size={16} /> সম্পন্ন! {successCount} seriesে Total {updatedEps} episode update done
             </p>
           </div>
           <button onClick={() => { setDone(false); setErrors([]); setSelectedId(""); }} className={`${btnPrimary} w-full py-2.5 text-sm flex items-center justify-center gap-2`}>
-            <RefreshCw size={14} /> আবার রিফ্রেশ করুন
+            <RefreshCw size={14} /> আorর refresh 
           </button>
         </div>
       )}
 
       {errors.length > 0 && (
         <div className="mt-3 bg-red-500/10 border border-red-500/20 rounded-lg p-3 max-h-[200px] overflow-y-auto">
-          <p className="text-xs text-red-400 font-semibold mb-2">⚠️ {errors.length}টি সমস্যা:</p>
+          <p className="text-xs text-red-400 font-semibold mb-2">⚠️ {errors.length} সমস্যা:</p>
           {errors.map((err, i) => (
             <p key={i} className="text-[11px] text-red-300/80 py-0.5">{err}</p>
           ))}
@@ -13020,7 +13020,7 @@ const LinkCheckerSection = ({
       ? allContent.filter(c => c.id === selectedId)
       : allContent;
 
-    if (targetContent.length === 0) { toast.error("কন্টেন্ট Select"); return; }
+    if (targetContent.length === 0) { toast.error("content Select"); return; }
 
     abortRef.current = false;
     setChecking(true);
@@ -13140,7 +13140,7 @@ const LinkCheckerSection = ({
       setDone(true);
       const contentIds = new Set(broken.map(b => b.contentId));
       setExpandedContent(contentIds);
-      toast.info(`চেক বাতিল হয়েছে। ${broken.length}টি ব্রোকেন লিংক পাওয়া গেছে`);
+      toast.info(`চেক cancel done। ${broken.length} ব্রোন link পা andয়া gone`);
       return;
     }
 
@@ -13149,7 +13149,7 @@ const LinkCheckerSection = ({
     // Auto expand all content groups
     const contentIds = new Set(broken.map(b => b.contentId));
     setExpandedContent(contentIds);
-    toast.success(`লিংক চেক সম্পন্ন! ${broken.length}টি ব্রোকেন লিংক পাওয়া গেছে`);
+    toast.success(`link চেক সম্পন্ন! ${broken.length} ব্রোন link পা andয়া gone`);
   };
 
   const deleteBrokenLink = async (item: typeof brokenLinks[0], idx: number) => {
@@ -13158,21 +13158,21 @@ const LinkCheckerSection = ({
     try {
       await set(ref(db, item.fbPath), null);
       setBrokenLinks(prev => prev.filter((_, i) => i !== idx));
-      toast.success(`লিংক মুছে ফেলা হয়েছে`);
+      toast.success(`link মুছে ফেলা done`);
     } catch (err: any) {
-      toast.error(`মুছতে ব্যর্থ: ${err.message}`);
+      toast.error(`মুছতে failed: ${err.message}`);
     }
     setDeleting(prev => ({ ...prev, [key]: false }));
   };
 
   const deleteAllBroken = async () => {
-    if (!confirm(`${brokenLinks.length}টি ব্রোকেন লিংক মুছে ফেলতে চান?`)) return;
+    if (!confirm(`${brokenLinks.length} ব্রোন link মুছে ফেলতে want?`)) return;
     let deleted = 0;
     for (const item of brokenLinks) {
       try { await set(ref(db, item.fbPath), null); deleted++; } catch {}
     }
     setBrokenLinks([]);
-    toast.success(`${deleted}টি ব্রোকেন লিংক মুছে ফেলা হয়েছে`);
+    toast.success(`${deleted} ব্রোন link মুছে ফেলা done`);
   };
 
   const saveEditedUrl = async (item: typeof brokenLinks[0], idx: number) => {
@@ -13182,16 +13182,16 @@ const LinkCheckerSection = ({
       setBrokenLinks(prev => prev.map((b, i) => i === idx ? { ...b, url: editUrl.trim() } : b));
       setEditingIdx(null);
       setEditUrl("");
-      toast.success("লিংক আপডেট হয়েছে");
+      toast.success("link update done");
     } catch (err: any) {
-      toast.error(`আপডেট ব্যর্থ: ${err.message}`);
+      toast.error(`update failed: ${err.message}`);
     }
   };
 
   const applyJsonFix = async () => {
     try {
       const fixes = JSON.parse(jsonInput.trim());
-      if (!Array.isArray(fixes)) { toast.error("JSON অবশ্যই একটি Array হতে হবে"); return; }
+      if (!Array.isArray(fixes)) { toast.error("JSON অবশ্যই ক Array হতে হবে"); return; }
       let applied = 0;
       for (const fix of fixes) {
         if (fix.fbPath && fix.newUrl) {
@@ -13207,7 +13207,7 @@ const LinkCheckerSection = ({
       });
       setJsonMode(false);
       setJsonInput("");
-      toast.success(`${applied}টি লিংক আপডেট হয়েছে`);
+      toast.success(`${applied} link update done`);
     } catch {
       toast.error("Invalid JSON format");
     }
@@ -13255,10 +13255,10 @@ const LinkCheckerSection = ({
   return (
     <div className={`${glassCard} p-4 mb-4`}>
       <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
-        <Link size={14} className="text-red-400" /> লিংক চেকার
+        <Link size={14} className="text-red-400" /> link চেকার
       </h3>
       <p className="text-[11px] text-zinc-400 mb-3">
-        ইউজার প্লেয়ারের মতো CDN/Direct/Proxy রুটে ভিডিও চালিয়ে রিয়েল প্লেব্যাক টেস্ট করবে। যেগুলো কোনো রুটেই প্লে হবে না সেগুলোই ব্রোকেন দেখাবে।
+        Tests real playback through CDN/Direct/Proxy routes like the user player। যেগুলো any routeেই প্লে হবে না সেগুলোই ব্রোন shows।
       </p>
 
       {!checking && !done && (
@@ -13266,11 +13266,11 @@ const LinkCheckerSection = ({
           <div className="flex gap-2">
             <button onClick={() => setMode("all")}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-colors ${mode === "all" ? "bg-red-600 border-red-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400 hover:text-white"}`}>
-              সব কন্টেন্ট ({allContent.length})
+              all content ({allContent.length})
             </button>
             <button onClick={() => setMode("single")}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg border transition-colors ${mode === "single" ? "bg-red-600 border-red-500 text-white" : "bg-[#141422] border-white/8 text-zinc-400 hover:text-white"}`}>
-              নির্দিষ্ট কন্টেন্ট
+              specific content
             </button>
           </div>
 
@@ -13281,7 +13281,7 @@ const LinkCheckerSection = ({
                 <input
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="কন্টেন্ট সার্চ করুন..."
+                  placeholder="content search ..."
                   className="w-full text-xs bg-zinc-800 border border-zinc-700 rounded-lg pl-8 pr-3 py-2.5 text-white placeholder-zinc-500 focus:border-red-500 outline-none"
                 />
               </div>
@@ -13299,7 +13299,7 @@ const LinkCheckerSection = ({
                     <span className="text-[10px] text-zinc-500 ml-auto flex-shrink-0">{c._type === 'webseries' ? '📺' : '🎬'}</span>
                   </button>
                 ))}
-                {filteredContent.length === 0 && <p className="text-[11px] text-zinc-500 text-center py-3">কোনো কন্টেন্ট পাওয়া যায়নি</p>}
+                {filteredContent.length === 0 && <p className="text-[11px] text-zinc-500 text-center py-3">any content পা andয়া যায়নি</p>}
               </div>
 
               {/* Season/Episode Filter for selected webseries */}
@@ -13307,7 +13307,7 @@ const LinkCheckerSection = ({
                 <div className="grid grid-cols-2 gap-2 mt-2">
                   <select value={filterSeason} onChange={e => { setFilterSeason(e.target.value); setFilterEpisode("all"); }}
                     className="text-[10px] bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white">
-                    <option value="all">সব Season</option>
+                    <option value="all">all Season</option>
                     {selectedSeasons.map((s: any, i: number) => (
                       <option key={i} value={String(i)}>{s.name || `Season ${s.seasonNumber || i + 1}`}</option>
                     ))}
@@ -13315,7 +13315,7 @@ const LinkCheckerSection = ({
                   <select value={filterEpisode} onChange={e => setFilterEpisode(e.target.value)}
                     disabled={filterSeason === "all"}
                     className="text-[10px] bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white disabled:opacity-40">
-                    <option value="all">সব এপিসোড</option>
+                    <option value="all">all episode</option>
                     {selectedSeasonEpisodes.map((ep: any, i: number) => (
                       <option key={i} value={String(i)}>EP {ep.episodeNumber || i + 1}</option>
                     ))}
@@ -13330,7 +13330,7 @@ const LinkCheckerSection = ({
             disabled={mode === "single" && !selectedId}
             className={`${btnPrimary} w-full py-3 flex items-center justify-center gap-2 text-sm disabled:opacity-40`}
           >
-            <Link size={16} /> লিংক চেক শুরু
+            <Link size={16} /> link চেক start
           </button>
         </div>
       )}
@@ -13338,7 +13338,7 @@ const LinkCheckerSection = ({
       {checking && (
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs text-zinc-400">
-            <span>{progress.current}/{progress.total} লিংক</span>
+            <span>{progress.current}/{progress.total} link</span>
             <span>{pct}%</span>
           </div>
           <div className="w-full h-3 bg-[#141422] rounded-full overflow-hidden">
@@ -13346,14 +13346,14 @@ const LinkCheckerSection = ({
           </div>
           <p className="text-[11px] text-zinc-300 truncate">🔍 {progress.currentTitle}</p>
           {brokenLinks.length > 0 && (
-            <p className="text-[10px] text-red-400">❌ {brokenLinks.length}টি ব্রোকেন লিংক পাওয়া গেছে</p>
+            <p className="text-[10px] text-red-400">❌ {brokenLinks.length} ব্রোন link পা andয়া gone</p>
           )}
-          <p className="text-[10px] text-zinc-500 animate-pulse">⏳ ভিডিও প্লেব্যাক টেস্ট চলছে, ব্রাউজার বন্ধ করবেন না...</p>
+          <p className="text-[10px] text-zinc-500 animate-pulse">⏳ ভিডি and প্লেব্যাক test running, browser off ন না...</p>
           <button
             onClick={() => { abortRef.current = true; }}
             className="w-full py-2 text-xs font-semibold bg-red-600/80 hover:bg-red-500 rounded-lg transition-colors flex items-center justify-center gap-1.5 mt-2"
           >
-            <X size={12} /> চেক বাতিল করুন
+            <X size={12} /> চেক cancel 
           </button>
         </div>
       )}
@@ -13364,8 +13364,8 @@ const LinkCheckerSection = ({
             <p className={`text-sm font-semibold flex items-center gap-2 ${brokenLinks.length > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
               <Check size={16} />
               {brokenLinks.length > 0
-                ? `${brokenLinks.length}টি ব্রোকেন লিংক পাওয়া গেছে (${groupedBroken.length}টি কন্টেন্টে)`
-                : 'সব লিংক ঠিক আছে! ✅'}
+                ? `${brokenLinks.length} ব্রোন link পা andয়া gone (${groupedBroken.length} contentে)`
+                : 'all link ঠিক exists! ✅'}
             </p>
             <button onClick={() => { setDone(false); setBrokenLinks([]); setSelectedId(""); setExpandedContent(new Set()); }} className="p-1.5 rounded-lg hover:bg-zinc-700/50 transition-colors text-zinc-400 hover:text-white">
               <X size={16} />
@@ -13395,12 +13395,12 @@ const LinkCheckerSection = ({
                 onClick={() => setJsonMode(!jsonMode)}
                 className="w-full py-2 text-xs font-semibold bg-indigo-600/20 border border-indigo-500/30 hover:bg-indigo-600/30 rounded-lg transition-colors flex items-center justify-center gap-1.5 text-indigo-300"
               >
-                <Edit size={12} /> JSON দিয়ে ফিক্স করুন
+                <Edit size={12} /> JSON with ফিক্স 
               </button>
               {jsonMode && (
                 <div className="space-y-2 bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-3">
                   <p className="text-[10px] text-zinc-400">
-                    নিচে JSON পেস্ট করুন — ফরম্যাট: [&#123;"fbPath":"...", "newUrl":"..."&#125;]
+                    নিচে JSON পেস্ট  — format: [&#123;"fbPath":"...", "newUrl":"..."&#125;]
                   </p>
                   <textarea
                     value={jsonInput}
@@ -13410,7 +13410,7 @@ const LinkCheckerSection = ({
                     className="w-full text-xs bg-zinc-900 border border-zinc-700 rounded-lg p-2.5 text-white placeholder-zinc-600 focus:border-indigo-500 outline-none resize-none font-mono"
                   />
                   <button onClick={applyJsonFix} className="w-full py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors">
-                    JSON Apply করুন
+                    JSON Apply 
                   </button>
                 </div>
               )}
@@ -13430,7 +13430,7 @@ const LinkCheckerSection = ({
                       <div className="flex-1 min-w-0 text-left">
                         <p className="text-xs font-semibold text-white truncate">{group.title}</p>
                         <p className="text-[10px] text-zinc-500">
-                          {group.type === 'webseries' ? '📺 Series' : '🎬 Movie'} • {group.items.length}টি ব্রোকেন লিংক
+                          {group.type === 'webseries' ? '📺 Series' : '🎬 Movie'} • {group.items.length} ব্রোন link
                         </p>
                       </div>
                       <ChevronDown size={14} className={`text-zinc-500 transition-transform ${expandedContent.has(group.id) ? 'rotate-180' : ''}`} />
@@ -13456,7 +13456,7 @@ const LinkCheckerSection = ({
                                   onClick={() => { setEditingIdx(item.originalIdx); setEditUrl(item.url); }}
                                   className="px-2 py-1 text-[9px] font-semibold bg-indigo-600/60 hover:bg-indigo-500 rounded-md transition-colors flex items-center gap-0.5"
                                 >
-                                  <Edit size={9} /> এডিট
+                                  <Edit size={9} /> ডিট
                                 </button>
                                 <button
                                   onClick={() => deleteBrokenLink(item, item.originalIdx)}
@@ -13474,9 +13474,9 @@ const LinkCheckerSection = ({
                                   value={editUrl}
                                   onChange={e => setEditUrl(e.target.value)}
                                   className="flex-1 text-[10px] bg-zinc-800 border border-zinc-600 rounded-md px-2 py-1.5 text-white focus:border-indigo-500 outline-none"
-                                  placeholder="নতুন URL দিন..."
+                                  placeholder="new URL day..."
                                 />
-                                <button onClick={() => saveEditedUrl(item, item.originalIdx)} className="px-2.5 py-1.5 text-[9px] bg-emerald-600 hover:bg-emerald-500 rounded-md font-semibold">সেভ</button>
+                                <button onClick={() => saveEditedUrl(item, item.originalIdx)} className="px-2.5 py-1.5 text-[9px] bg-emerald-600 hover:bg-emerald-500 rounded-md font-semibold">save</button>
                                 <button onClick={() => { setEditingIdx(null); setEditUrl(""); }} className="px-2 py-1.5 text-[9px] bg-zinc-700 hover:bg-zinc-600 rounded-md">✕</button>
                               </div>
                             )}
@@ -13491,7 +13491,7 @@ const LinkCheckerSection = ({
           )}
 
           <button onClick={() => { setDone(false); setBrokenLinks([]); setSelectedId(""); setExpandedContent(new Set()); }} className={`${btnPrimary} w-full py-2.5 text-sm flex items-center justify-center gap-2`}>
-            <RefreshCw size={14} /> আবার চেক করুন
+            <RefreshCw size={14} /> আorর চেক 
           </button>
         </div>
       )}
@@ -13630,8 +13630,8 @@ const WsInlineLinkChecker = ({
       }
     }
     setDone(true); setChecking(false);
-    if (broken.length === 0 && !abortRef.current) toast.success("✅ সব লিংক ঠিক আছে!");
-    else if (broken.length > 0) toast.warning(`⚠️ ${broken.length}টি ব্রোকেন লিংক পাওয়া গেছে`);
+    if (broken.length === 0 && !abortRef.current) toast.success("✅ all link ঠিক exists!");
+    else if (broken.length > 0) toast.warning(`⚠️ ${broken.length} ব্রোন link পা andয়া gone`);
   };
 
   // Count total links
@@ -13645,15 +13645,15 @@ const WsInlineLinkChecker = ({
   return (
     <div className={`${glassCard} p-4 mb-4`}>
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-xs font-bold flex items-center gap-2"><Link size={12} className="text-amber-400" /> Link Checker ({totalLinks} লিংক)</h4>
+        <h4 className="text-xs font-bold flex items-center gap-2"><Link size={12} className="text-amber-400" /> Link Checker ({totalLinks} link)</h4>
         {!checking && !done && (
           <button onClick={startCheck} className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-amber-500/20 border border-amber-500/30 text-amber-400 hover:bg-amber-500/40 flex items-center gap-1">
-            <Search size={10} /> চেক করুন
+            <Search size={10} /> চেক 
           </button>
         )}
         {checking && (
           <button onClick={() => { abortRef.current = true; }} className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/40 flex items-center gap-1">
-            <X size={10} /> বাতিল
+            <X size={10} /> cancel
           </button>
         )}
       </div>
@@ -13662,7 +13662,7 @@ const WsInlineLinkChecker = ({
         <div className="grid grid-cols-2 gap-2 mb-3">
           <select value={filterSeason} onChange={e => { setFilterSeason(e.target.value); setFilterEpisode("all"); }}
             className="text-[10px] bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white">
-            <option value="all">সব Season</option>
+            <option value="all">all Season</option>
             {seasonsData.map((s: any, i: number) => (
               <option key={i} value={String(i)}>{s.name || `Season ${i + 1}`}</option>
             ))}
@@ -13670,7 +13670,7 @@ const WsInlineLinkChecker = ({
           <select value={filterEpisode} onChange={e => setFilterEpisode(e.target.value)}
             disabled={filterSeason === "all"}
             className="text-[10px] bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-white disabled:opacity-40">
-            <option value="all">সব এপিসোড</option>
+            <option value="all">all episode</option>
             {filteredEpisodes.map((ep: any, i: number) => (
               <option key={i} value={String(i)}>EP {ep.episodeNumber || i + 1}</option>
             ))}
@@ -13690,12 +13690,12 @@ const WsInlineLinkChecker = ({
       )}
       {done && brokenLinks.length === 0 && (
         <div className="text-center py-3">
-          <p className="text-emerald-400 text-xs font-semibold">✅ সব লিংক কাজ করছে! ({goodCount}/{goodCount + brokenLinks.length})</p>
+          <p className="text-emerald-400 text-xs font-semibold">✅ all link কাজ করছে! ({goodCount}/{goodCount + brokenLinks.length})</p>
         </div>
       )}
       {brokenLinks.length > 0 && (
         <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
-          <p className="text-[10px] text-red-400 font-bold mb-1">❌ {brokenLinks.length}টি ব্রোকেন লিংক:</p>
+          <p className="text-[10px] text-red-400 font-bold mb-1">❌ {brokenLinks.length} ব্রোন link:</p>
           {brokenLinks.map((b, i) => (
             <div key={i} className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-[10px]">
               <span className="text-white font-semibold">{b.season} EP{b.episode}</span>
@@ -13707,7 +13707,7 @@ const WsInlineLinkChecker = ({
       )}
       {done && (
         <button onClick={() => { setDone(false); setBrokenLinks([]); setGoodCount(0); }} className="mt-2 w-full py-2 rounded-lg text-[10px] font-bold bg-zinc-700 text-zinc-300 hover:bg-zinc-600 flex items-center justify-center gap-1">
-          <RefreshCw size={10} /> আবার চেক করুন
+          <RefreshCw size={10} /> আorর চেক 
         </button>
       )}
     </div>
