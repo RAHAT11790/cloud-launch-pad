@@ -243,7 +243,10 @@ async function probeLovable(apiKey: string) {
   try {
     // Lightweight check: list models
     const r = await fetch("https://ai.gateway.lovable.dev/v1/models", {
-      headers: { Authorization: `Bearer ${apiKey}` },
+      headers: {
+        "Lovable-API-Key": apiKey,
+        "X-Lovable-AIG-SDK": "edge-fetch",
+      },
     });
     if (!r.ok) {
       const t = await r.text().catch(() => "");
@@ -269,7 +272,8 @@ async function genWithLovable(prompt: string, referenceDataUrl: string | null, a
       const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          "Lovable-API-Key": apiKey,
+          "X-Lovable-AIG-SDK": "edge-fetch",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
