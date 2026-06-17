@@ -2157,6 +2157,20 @@ const RandomPrizeLinkGenerator = ({ glassCard, inputClass, btnPrimary }: { glass
 
 const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const adminBranding = useBranding();
+  useEffect(() => {
+    applyAdminEnglish(document.body);
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.TEXT_NODE) {
+            applyAdminEnglish(node.nodeType === Node.TEXT_NODE ? node.parentNode || document.body : (node as Element));
+          }
+        });
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     try {
@@ -3829,7 +3843,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     });
     return guests;
   }, [usersData]);
-  const recentContent = useMemo(() => [...webseriesData, ...moviesData].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 3), [webseriesData, moviesData]);
+  const recentContent = useMemo(() => [
+    ...webseriesData.map((item) => ({ ...item, _adminKind: "series" as const })),
+    ...moviesData.map((item) => ({ ...item, _adminKind: "movie" as const })),
+  ].sort((a, b) => (b.createdAt || b.updatedAt || 0) - (a.createdAt || a.updatedAt || 0)).slice(0, 3), [webseriesData, moviesData]);
 
   // Weekly schedule (for dashboard preview)
   const [weeklyScheduleData, setWeeklyScheduleData] = useState<Record<string, any>>({});
