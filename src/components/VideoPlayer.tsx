@@ -559,26 +559,38 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return;
     }
 
-    setPlaybackRouteReady(true);
+    // Wait for BOTH cdn + proxy snapshots before marking route ready,
+    // so the first <video> src already uses the admin-configured proxy
+    // and we don't trigger a wasted reload after Firebase resolves.
+    let gotCdn = false;
+    let gotProxy = false;
+    const maybeReady = () => { if (gotCdn && gotProxy) setPlaybackRouteReady(true); };
+
+    // Safety: never block playback longer than 1.2s waiting on Firebase.
+    const safety = window.setTimeout(() => setPlaybackRouteReady(true), 1200);
 
     const unsub1 = onValue(ref(db, "settings/cdnEnabled"), (snap) => {
       const val = snap.val();
-      const enabled = val !== false;
-      setCdnEnabled(enabled);
+      setCdnEnabled(val !== false);
+      gotCdn = true;
+      maybeReady();
     });
 
     const unsub2 = onValue(ref(db, "settings/proxyServer"), (snap) => {
       const val = snap.val();
       if (val && val.url) {
-        setProxyUrl(val.url);
-        setProxyApiKey(val.apiKey || '');
+        setProxyUrl(String(val.url));
+        setProxyApiKey(String(val.apiKey || ''));
       } else {
         setProxyUrl('');
         setProxyApiKey('');
       }
+      gotProxy = true;
+      maybeReady();
     });
 
     return () => {
+      window.clearTimeout(safety);
       unsub1();
       unsub2();
     };
