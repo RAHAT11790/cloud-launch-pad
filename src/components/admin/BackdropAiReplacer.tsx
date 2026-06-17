@@ -51,7 +51,14 @@ const callGenerateBackdrop = async (body: Record<string, any>) => {
   });
   const raw = await res.text();
   const data = raw ? (() => { try { return JSON.parse(raw); } catch { return { error: raw }; } })() : {};
-  if (!res.ok) throw new Error(data?.error || `Generate Backdrop failed (${res.status})`);
+  if (!res.ok) {
+    const err = new Error(data?.error || `Generate Backdrop failed (${res.status})`) as any;
+    err.status = res.status;
+    err.quota = data?.quota;
+    err.model = data?.model;
+    err.raw = data;
+    throw err;
+  }
   return { ...data, endpoint };
 };
 
