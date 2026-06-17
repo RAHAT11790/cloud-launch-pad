@@ -1,4 +1,5 @@
 import { useState, useEffect, forwardRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Zap, ChevronRight, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db, ref, onValue, remove } from "@/lib/firebase";
@@ -158,6 +159,104 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
     }
   };
 
+  const releaseModal = (
+    <AnimatePresence>
+      {showModal && (
+        <motion.div
+          key="new-release-view-all"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.14, ease: "easeOut" }}
+          onClick={() => setShowModal(false)}
+          className="fixed inset-0 z-[5000] bg-background/82 backdrop-blur-sm flex items-center justify-center px-3 py-4 overflow-hidden"
+          style={{ willChange: "opacity", touchAction: "manipulation" }}
+          data-no-swipe="true"
+        >
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="All New Releases"
+            initial={{ y: 18, opacity: 0, scale: 0.985 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 14, opacity: 0, scale: 0.985 }}
+            transition={{ type: "tween", duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[520px] max-h-[calc(100dvh-32px)] rounded-2xl flex flex-col shadow-2xl border border-border/60 bg-card/98 transform-gpu overflow-hidden"
+            style={{ willChange: "transform, opacity", contain: "layout paint" }}
+          >
+            <div className="relative shrink-0 px-4 py-3 border-b border-border/40 bg-secondary/35">
+              <div className="min-w-0 pr-12">
+                <h3 className="text-base font-bold flex items-center gap-2 leading-tight">
+                  <span className="inline-flex w-8 h-8 rounded-xl bg-primary/15 items-center justify-center border border-primary/25">
+                    <Zap className="w-4 h-4 text-accent" />
+                  </span>
+                  All New Releases
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {groupedReleases.length} {groupedReleases.length === 1 ? "release" : "releases"}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowModal(false)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-background/70 border border-border/60 flex items-center justify-center hover:bg-secondary active:scale-95 shrink-0"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-3 space-y-2.5 overscroll-contain bg-background/20">
+              {groupedReleases.length === 0 ? (
+                <div className="py-12 text-center text-sm text-muted-foreground">
+                  No new releases yet — check back soon.
+                </div>
+              ) : (
+                groupedReleases.map(({ latest: release, minEp, maxEp }) => {
+                  const content = getContent(release.contentId);
+                  const title = content?.title || release.title || "Unknown";
+                  const poster = content?.poster || release.poster || "";
+                  const fallbackEp = getEpStart(release);
+                  const epStr = minEp && maxEp && minEp !== maxEp
+                    ? `Episode ${minEp}-${maxEp}`
+                    : fallbackEp ? `Episode ${fallbackEp}` : "New";
+                  const seasonLabel = getSeasonName(release) || (getSeason(release) ? `Season ${getSeason(release)}` : "New Season");
+                  return (
+                    <button
+                      type="button"
+                      key={release.id}
+                      onClick={() => { handleClick(release, minEp); setShowModal(false); }}
+                      className="w-full min-w-0 flex items-center gap-3 p-2.5 rounded-xl border border-border/45 bg-card/80 cursor-pointer text-left transition-transform hover:bg-secondary/70 active:scale-[0.985] overflow-hidden"
+                    >
+                      {poster ? (
+                        <img
+                          src={optimizedImageUrl(poster, "poster")}
+                          alt={title}
+                          className="w-[58px] h-[82px] rounded-lg object-cover flex-shrink-0 bg-muted border border-border/35"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <div className="w-[58px] h-[82px] rounded-lg bg-muted flex-shrink-0 border border-border/35" />
+                      )}
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <h4 className="text-sm font-semibold mb-1 line-clamp-1" style={getAnimeTitleStyle(title)}>{title}</h4>
+                        <p className="text-xs text-muted-foreground line-clamp-1">
+                          {seasonLabel} • {epStr}
+                        </p>
+                        <span className="text-[10px] text-primary/80 mt-1 inline-flex w-fit rounded-md bg-primary/10 px-1.5 py-0.5">{timeAgo(release.timestamp)}</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground self-center shrink-0" />
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   return (
     <>
       <div className="px-4 mb-6">
@@ -255,93 +354,7 @@ const NewEpisodeReleases = forwardRef<HTMLDivElement, NewEpisodeReleasesProps>((
 
       </div>
 
-      {/* View All Modal */}
-      <AnimatePresence>
-        {showModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-            onClick={() => setShowModal(false)}
-            className="fixed inset-0 z-[300] bg-black/95 flex items-center justify-center p-3 sm:p-5"
-            style={{ willChange: "opacity" }}
-          >
-            <motion.div
-              initial={{ y: 24, opacity: 0, scale: 0.98 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: 24, opacity: 0, scale: 0.98 }}
-              transition={{ type: "tween", duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-card w-full max-w-[520px] rounded-2xl flex flex-col max-h-[85vh] shadow-2xl border border-border/40 transform-gpu overflow-hidden"
-              style={{ willChange: "transform, opacity" }}
-            >
-              <div className="flex justify-between items-center gap-3 px-4 py-3 border-b border-border/30 shrink-0">
-                <div className="min-w-0">
-                  <h3 className="text-base sm:text-lg font-bold flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-accent" /> All New Releases
-                  </h3>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {groupedReleases.length} {groupedReleases.length === 1 ? "release" : "releases"}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 active:scale-95 shrink-0"
-                  aria-label="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="overflow-y-auto flex-1 p-3 space-y-2.5 overscroll-contain">
-                {groupedReleases.length === 0 ? (
-                  <div className="py-12 text-center text-sm text-muted-foreground">
-                    No new releases yet — check back soon.
-                  </div>
-                ) : (
-                  groupedReleases.map(({ latest: release, minEp, maxEp }) => {
-                    const content = getContent(release.contentId);
-                    const title = content?.title || release.title || "Unknown";
-                    const poster = content?.poster || release.poster || "";
-                    const fallbackEp = getEpStart(release);
-                    const epStr = minEp && maxEp && minEp !== maxEp
-                      ? `Episode ${minEp}-${maxEp}`
-                      : fallbackEp ? `Episode ${fallbackEp}` : "New";
-                    const seasonLabel = getSeasonName(release) || (getSeason(release) ? `Season ${getSeason(release)}` : "New Season");
-                    return (
-                      <div
-                        key={release.id}
-                        onClick={() => { handleClick(release, minEp); setShowModal(false); }}
-                        className="w-full min-w-0 flex items-center gap-3 p-2.5 rounded-xl border border-border/35 bg-secondary/45 cursor-pointer transition-all hover:bg-primary/15 active:scale-[0.98] overflow-hidden"
-                      >
-                        {poster ? (
-                          <img
-                            src={optimizedImageUrl(poster, "poster")}
-                            alt={title}
-                            className="w-[56px] h-[78px] rounded-lg object-cover flex-shrink-0 bg-muted"
-                            loading="lazy"
-                            decoding="async"
-                          />
-                        ) : (
-                          <div className="w-[56px] h-[78px] rounded-lg bg-muted flex-shrink-0" />
-                        )}
-                        <div className="flex-1 min-w-0 flex flex-col justify-center">
-                          <h4 className="text-sm font-semibold mb-1 line-clamp-1" style={getAnimeTitleStyle(title)}>{title}</h4>
-                          <p className="text-xs text-muted-foreground line-clamp-1">
-                            {seasonLabel} • {epStr}
-                          </p>
-                          <span className="text-[10px] text-primary/80 mt-0.5">{timeAgo(release.timestamp)}</span>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground self-center shrink-0" />
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {typeof document !== "undefined" ? createPortal(releaseModal, document.body) : releaseModal}
     </>
   );
 });
