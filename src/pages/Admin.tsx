@@ -41,6 +41,47 @@ const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: numbe
 
 type Section = "dashboard" | "categories" | "webseries" | "weekly-episode" | "movies" | "users" | "notifications" | "new-releases" | "tmdb-fetch" | "add-content" | "redeem-codes" | "bkash-payments" | "device-limits" | "maintenance" | "free-access" | "settings" | "comments" | "analytics" | "auto-import" | "animesalt-manager" | "telegram-post" | "tg-url-changer" | "live-support" | "ui-themes" | "hero-pinned" | "edge-router" | "branding" | "ai-config" | "live-tv" | "url-changer" | "link-checker" | "video-servers" | "unlock-duration" | "email-service" | "apk-dw" | "egd-manager" | "fb-cleanup" | "adsterra" | "backdrop-ai";
 
+const ADMIN_BN_TRANSLATIONS: Array<[RegExp, string]> = [
+  [/AI সেটিংস সেভ হয়েছে/g, "AI settings saved"], [/AI চালু হয়েছে/g, "AI enabled"], [/AI বন্ধ হয়েছে/g, "AI disabled"], [/AI চালু আছে/g, "AI is enabled"], [/AI বন্ধ আছে/g, "AI is disabled"], [/AI URL দাও আগে/g, "Enter the AI URL first"],
+  [/থিম অ্যাক্টিভ হয়েছে/g, "theme activated"], [/থিম সেভ ব্যর্থ/g, "Theme save failed"], [/২০টি থিম থেকে পছন্দের থিম সিলেক্ট করো। সব ইউজারের UI একসাথে চেঞ্জ হবে।/g, "Choose a theme preset. The UI updates for every user instantly."],
+  [/ব্যাকগ্রাউন্ড ইমেজ সেট হয়েছে/g, "Background image set"], [/ব্যাকগ্রাউন্ড ইমেজ রিমুভ হয়েছে/g, "Background image removed"], [/ব্যাকগ্রাউন্ড ছবির URL/g, "Background image URL"], [/কাস্টম ব্যাকগ্রাউন্ড ইমেজ/g, "Custom Background Image"], [/ব্যাকগ্রাউন্ড সেভ করুন/g, "Save Background"],
+  [/সেভ ব্যর্থ/g, "Save failed"], [/টাইটেল দিন/g, "Enter a title"], [/ছবি দিন \(URL বা আপলোড\)/g, "Add an image URL or upload an image"], [/হিরো স্লাইডারে পোস্ট করা হয়েছে/g, "posted to the hero slider"], [/পোস্ট করা ব্যর্থ/g, "Post failed"], [/পোস্ট ডিলিট হয়েছে/g, "Post deleted"], [/ডিলিট ব্যর্থ/g, "Delete failed"],
+  [/কাস্টম হিরো পোস্ট তৈরি করুন/g, "Create Custom Hero Post"], [/ছবি আপলোড করুন বা লিংক দিন, টাইটেল ও বিবরণ লিখুন। কালার ও ফন্ট কাস্টমাইজ করুন।/g, "Upload an image or paste a link, then add title, description, colors, and font."], [/ব্যানার ছবি/g, "Banner Image"], [/ছবির URL দিন/g, "Enter image URL"], [/টাইটেল কালার/g, "Title Color"], [/টাইটেল ফন্ট/g, "Title Font"], [/বিবরণ \/ ডেসক্রিপশন/g, "Description"], [/পোস্টের টাইটেল/g, "Post title"], [/বিস্তারিত বিবরণ লিখুন\.\.\. \(ক্লিক করলে ডিটেইল পেজে এটা দেখাবে\)/g, "Write the full description shown on the detail page"], [/পোস্ট করুন/g, "Post"], [/পোস্ট করা আইটেম/g, "Posted Items"], [/কোনো পোস্ট নেই/g, "No posts yet"],
+  [/সব এনিমে ক্যাটাগরি অ্যাসাইন/g, "Bulk Anime Category Assignment"], [/একাধিক এনিমে সিলেক্ট করে একসাথে ক্যাটাগরি সেট করুন।/g, "Select multiple anime and set their category together."], [/এনিমে সার্চ/g, "Search anime"], [/ক্যাটাগরি/g, "Category"], [/টি সিলেক্টেড/g, "selected"], [/সেট করুন/g, "Set"], [/সব সিলেকশন বাতিল/g, "Clear all selections"], [/কোনো এনিমে নেই/g, "No anime found"], [/ক্যাটাগরিতে সেট হয়েছে/g, "category set"],
+  [/টেলিগ্রামে পোস্ট করুন/g, "Post to Telegram"], [/চ্যানেল আইডি/g, "Channel ID"], [/সিজন/g, "Season"], [/নতুন EP/g, "New EP"], [/পোস্টার URL/g, "Poster URL"], [/বাদ দিন/g, "Cancel"], [/পোস্টে যান/g, "Go to Post"], [/চ্যানেলে পোস্ট পাঠানো হয়েছে/g, "channel posts sent"], [/চ্যানেলে পাঠানো হয়েছে/g, "channels sent"], [/সব চ্যানেলে পোস্ট ব্যর্থ হয়েছে/g, "Posting failed for all channels"], [/সব চ্যানেলে ব্যর্থ/g, "All channels failed"], [/চ্যানেলে সফল/g, "channels succeeded"],
+  [/Send Money করুন নিচের নাম্বারে এবং Transaction ID সাবমিট করুন।/g, "Send Money to the number below and submit the Transaction ID."], [/Anime-specific genres ও rating লোড হয়েছে/g, "Anime-specific genres and rating loaded"], [/এই ID থেকে genre data পাওয়া যায়নি/g, "No genre data found for this ID"],
+  [/সব active free access cancel করতে চান\?/g, "Cancel all active free access?"], [/সব free access বাতিল করা হয়েছে/g, "All free access has been canceled"], [/এর free access বাতিল করতে চান\?/g, "free access should be canceled?"], [/নির্দিষ্ট user-এর free access বাতিল করা হয়েছে/g, "Selected user's free access has been canceled"],
+  [/এপিসোড নাম TMDB থেকে লোড হয়েছে/g, "episode names loaded from TMDB"], [/অটো ক্যাটাগরি/g, "Auto category"], [/আগে থেকেই আছে/g, "already exists"], [/AnimeSalt কন্টেন্ট New Release এ সাপোর্ট করা হয় না/g, "AnimeSalt content is not supported in New Releases"],
+  [/JSON টেক্সট পেস্ট করুন/g, "Paste JSON text"], [/অবৈধ JSON ফরম্যাট। episodes বা seasons array থাকা দরকার।/g, "Invalid JSON format. An episodes or seasons array is required."], [/অবৈধ JSON। episodes array থাকা দরকার।/g, "Invalid JSON. An episodes array is required."], [/কোনো এপিসোড পাওয়া যায়নি JSON-এ/g, "No episodes found in the JSON"], [/টি সিজন JSON থেকে ইমপোর্ট হয়েছে/g, "seasons imported from JSON"], [/টি এপিসোড JSON থেকে ইমপোর্ট হয়েছে/g, "episodes imported from JSON"],
+  [/এই সিরিজের সব লিংকে ডোমেইন রিপ্লেস করো। সেভ করলেই Firebase-এ যাবে।/g, "Replace domains in every link for this series. Saving writes the changes to the database."], [/লিংক থেকে ডোমেইন বের করো/g, "extract domain from links"], [/রিপ্লেস হয়েছে/g, "replaced"], [/এই সিরিজের সব সিজন ও এপিসোডের JSON ডাউনলোড করো।/g, "Download JSON for all seasons and episodes in this series."],
+  [/New Release তৈরি করুন/g, "Create New Release"], [/সিজন ও এপিসোড সিলেক্ট করুন/g, "select season and episode"], [/মোট FCM টোকেন/g, "Total FCM Tokens"], [/পিং/g, "Ping"], [/জন/g, "users"], [/সব মুছুন/g, "Clear All"], [/কেউ এখনো পাসওয়ার্ড পরিবর্তন করেনি/g, "No password reset logs yet"],
+  [/এই লিংক যেকোনো জায়গায় শেয়ার করুন। প্রতিটি ইউজার ওপেন করলে ভিন্ন ভিন্ন র‍্যান্ডম সময় পাবে \(২৪h - ৪৮h\)।/g, "Share this link anywhere. Each user gets a different random free-access duration (24h–48h)."], [/চান্স/g, "chance"], [/ঘন্টা/g, "hours"], [/টি/g, ""],
+  [/Webhook সেট করলে কেউ বটে \/start দিলে সুন্দর Welcome মেসেজ পাবে — ওয়েবসাইটের ডিটেলস, চ্যানেল লিংক সহ।/g, "Set the webhook so /start sends a polished welcome message with website details and channel links."], [/এখানে শুধু Telegram Post function URL থাকবে। বাকি কাটা দেওয়া সব router block বাদ দেওয়া হয়েছে।/g, "Only the Telegram Post function URL stays here. The old router blocks were removed."], [/function হিসেবে এটা ব্যবহার করো/g, "function"],
+  [/সব সিরিজ/g, "All Series"], [/রিফ্রেশ শুরু/g, "Start Refresh"], [/সিলেক্ট করুন/g, "Select"], [/সিরিজ/g, "series"], [/এনিমে/g, "anime"], [/বাকি/g, "remaining"], [/পাঠানো হয়ে গেছে/g, "already sent"], [/Reset করলে সব এনিমে আবার পাঠানো যাবে। নিশ্চিত\?/g, "Reset lets every anime be sent again. Continue?"], [/সব এনিমে আবার পাঠানো যাবে/g, "all anime can be sent again"],
+  [/০/g, "0"], [/১/g, "1"], [/২/g, "2"], [/৩/g, "3"], [/৪/g, "4"], [/৫/g, "5"], [/৬/g, "6"], [/৭/g, "7"], [/৮/g, "8"], [/৯/g, "9"],
+];
+
+const translateAdminText = (value: string) => ADMIN_BN_TRANSLATIONS.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value);
+const applyAdminEnglish = (root: ParentNode) => {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
+  textNodes.forEach((node) => {
+    const next = translateAdminText(node.nodeValue || "");
+    if (next !== node.nodeValue) node.nodeValue = next;
+  });
+  if (root instanceof Element || root instanceof Document) {
+    root.querySelectorAll?.("input, textarea, button, [title], [aria-label]").forEach((el) => {
+      ["placeholder", "title", "aria-label"].forEach((attr) => {
+        const current = el.getAttribute(attr);
+        if (!current) return;
+        const next = translateAdminText(current);
+        if (next !== current) el.setAttribute(attr, next);
+      });
+    });
+  }
+};
+
 interface CastMember {
   name: string;
   character?: string;
