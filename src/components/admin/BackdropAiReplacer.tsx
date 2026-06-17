@@ -163,22 +163,26 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
   // ---- Gemini live status: probe key via edge function (server reads GEMINI_API_KEY from env) ----
   const checkGemini = useCallback(async (silent = false) => {
     setGeminiStatus((s) => ({ ...s, state: "checking" }));
+    setLovableStatus((s) => ({ ...s, state: "checking" }));
     try {
-      const data = await callGenerateBackdrop({ action: "check-gemini" });
-      if (data?.ok) {
-        setGeminiStatus({
-          state: "online", model: data.model, message: data.message || "Server key verified",
-          checkedAt: Date.now(),
-        });
-        if (!silent) toast.success(`Gemini online · ${data.model}`);
-      } else {
-        setGeminiStatus({
-          state: "offline", message: data?.error || "Probe failed", checkedAt: Date.now(),
-        });
-        if (!silent) toast.error(data?.error || "Probe failed");
+      const data = await callGenerateBackdrop({ action: "check-all" });
+      const g = data?.gemini || {};
+      const l = data?.lovable || {};
+      setGeminiStatus(g?.ok
+        ? { state: "online", model: g.model, message: g.message || "Server key verified", checkedAt: Date.now() }
+        : { state: "offline", message: g?.error || "Probe failed", checkedAt: Date.now() });
+      setLovableStatus(l?.ok
+        ? { state: "online", model: l.model, message: l.message || "Gateway reachable", checkedAt: Date.now() }
+        : { state: "offline", message: l?.error || "Probe failed", checkedAt: Date.now() });
+      if (!silent) {
+        if (g?.ok && l?.ok) toast.success(`Gemini ✓ · Lovable ✓ (fallback ready)`);
+        else if (g?.ok) toast.warning(`Gemini ✓ · Lovable ✗`);
+        else if (l?.ok) toast.warning(`Gemini ✗ · Lovable ✓ (fallback ready)`);
+        else toast.error(`Both engines offline`);
       }
     } catch (e: any) {
       setGeminiStatus({ state: "offline", message: e?.message || String(e), checkedAt: Date.now() });
+      setLovableStatus({ state: "offline", message: e?.message || String(e), checkedAt: Date.now() });
       if (!silent) toast.error(e?.message || "Probe failed");
     }
   }, []);
