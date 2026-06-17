@@ -2158,9 +2158,16 @@ const RandomPrizeLinkGenerator = ({ glassCard, inputClass, btnPrimary }: { glass
 const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   const adminBranding = useBranding();
   useEffect(() => {
+    const nativeConfirm = window.confirm.bind(window);
+    const nativeAlert = window.alert.bind(window);
+    window.confirm = (message?: string) => nativeConfirm(translateAdminText(String(message ?? "")));
+    window.alert = (message?: any) => nativeAlert(typeof message === "string" ? translateAdminText(message) : message);
     applyAdminEnglish(document.body);
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
+        if (mutation.type === "characterData" && mutation.target.parentNode) {
+          applyAdminEnglish(mutation.target.parentNode);
+        }
         mutation.addedNodes.forEach((node) => {
           if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.TEXT_NODE) {
             applyAdminEnglish(node.nodeType === Node.TEXT_NODE ? node.parentNode || document.body : (node as Element));
@@ -2168,8 +2175,12 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         });
       });
     });
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      window.confirm = nativeConfirm;
+      window.alert = nativeAlert;
+    };
   }, []);
   // Auth states
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -2290,7 +2301,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
     phoneNumber: "",
     accountType: "Agent",
     qrCodeLink: "",
-    instructions: "Send Money করুন নিচের নাম্বারে এবং Transaction ID সাবমিট করুন।",
+    instructions: "Send Money to the number below and submit the Transaction ID.",
     plans: [
       { id: "plan1", name: "1 Month", days: 30, price: 100, active: true },
       { id: "plan2", name: "3 Months", days: 90, price: 250, active: true },
