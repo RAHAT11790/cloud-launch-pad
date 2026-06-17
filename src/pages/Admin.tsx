@@ -5091,13 +5091,19 @@ ${tgBulkFooter}
                 <p className="text-zinc-500 text-[13px] text-center py-4">No recent content</p>
               ) : (
                 recentContent.map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2.5 bg-black/20 rounded-lg mb-2">
-                    <img src={item.poster || ""} className="w-10 h-[55px] rounded-md object-cover" onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/40x55/141422/6366f1?text=N"; }} />
+                  <button
+                    type="button"
+                    key={`${item._adminKind}-${item.id || i}`}
+                    onClick={() => item._adminKind === "movie" ? editMovie(item.id) : editSeries(item.id)}
+                    className="w-full text-left flex items-center gap-3 p-2.5 bg-black/20 rounded-lg mb-2 border border-transparent hover:border-indigo-500/35 hover:bg-indigo-500/10 active:scale-[0.99] transition-all"
+                  >
+                    <img src={item.poster || ""} alt={item.title || "Recent content"} className="w-10 h-[55px] rounded-md object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/40x55/141422/6366f1?text=N"; }} />
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-medium truncate">{item.title || "Untitled"}</p>
-                      <p className="text-[11px] text-zinc-500">{item.type || (item.seasons ? "Series" : "Movie")} • {item.year || "N/A"}</p>
+                      <p className="text-[11px] text-zinc-500">{item._adminKind === "movie" ? "Movie" : "Series"} • {item.year || "N/A"}</p>
                     </div>
-                  </div>
+                    <ChevronRight size={14} className="text-zinc-500 flex-shrink-0" />
+                  </button>
                 ))
               )}
             </div>
