@@ -296,6 +296,22 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
     geminiStatus.state === "offline" ? "bg-rose-400" :
     geminiStatus.state === "checking" ? "bg-amber-400 animate-pulse" :
     "bg-white/30";
+  const lovDot =
+    lovableStatus.state === "online" ? "bg-emerald-400" :
+    lovableStatus.state === "offline" ? "bg-rose-400" :
+    lovableStatus.state === "checking" ? "bg-amber-400 animate-pulse" :
+    "bg-white/30";
+
+  // Estimate next reset for Gemini Free Tier daily quota (midnight Pacific = 08:00 UTC)
+  const nextResetText = (() => {
+    const now = new Date();
+    const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 8, 0, 0));
+    if (utc.getTime() <= now.getTime()) utc.setUTCDate(utc.getUTCDate() + 1);
+    const diffMs = utc.getTime() - now.getTime();
+    const h = Math.floor(diffMs / 3_600_000);
+    const m = Math.floor((diffMs % 3_600_000) / 60_000);
+    return `in ${h}h ${m}m (≈ ${utc.toLocaleString()})`;
+  })();
 
   return (
     <div className={glassCard + " space-y-4 overflow-hidden"}>
