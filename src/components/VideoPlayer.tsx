@@ -123,7 +123,7 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
   const encoded = encodeURIComponent(url);
   const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  const prefersDirectPlayback = isDirectPlaybackUrl(url);
+  const builtinProxyCandidate = BUILTIN_STREAM_PROXY ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url) : null;
   const mustUseProxy = isInsecureHttpSource(url);
 
   if (isBypassSource(url)) {
@@ -131,17 +131,21 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
     return candidates;
   }
 
-  if (prefersDirectPlayback && !mustUseProxy) {
-    addCandidate(url);
-    return candidates;
+  // If admin configured a custom proxy, ALWAYS route through it first
+  // (covers both HTTP mixed-content AND HTTPS hosts that block direct hot-linking).
+  if (customProxyCandidate) {
+    addCandidate(customProxyCandidate);
   }
 
   if (mustUseProxy) {
-    if (BUILTIN_STREAM_PROXY) addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url));
-    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    // HTTP source — must go through some proxy. Add built-in + CDN fallbacks.
+    addCandidate(builtinProxyCandidate);
     if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
   } else {
+    // HTTPS source — direct playback as fallback after admin proxy.
     addCandidate(url);
+    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+    addCandidate(builtinProxyCandidate);
   }
 
   if (candidates.length === 0) {
