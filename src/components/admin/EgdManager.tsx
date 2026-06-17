@@ -208,6 +208,12 @@ export default function EgdManager({
     return () => { cancelled = true; };
   }, []);
 
+  // Backfill auto-managed rows once the key resolves
+  useEffect(() => {
+    if (!lovableKey) return;
+    setSecrets((prev) => prev.map((r) => (AUTO_MANAGED_SECRETS.has(r.name) && !r.value ? { ...r, value: lovableKey } : r)));
+  }, [lovableKey]);
+
 
 
 
