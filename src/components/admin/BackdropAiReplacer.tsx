@@ -218,12 +218,13 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       toast.error("This title has no reference backdrop. Add a backdrop first so Gemini can edit the correct anime image.");
       return;
     }
+    // Soft block only when user explicitly forces gemini and quota hit
     if (provider === "gemini" && geminiUsedToday >= geminiDailyLimit) {
-      toast.error(`Daily limit reached (${geminiUsedToday}/${geminiDailyLimit}).`);
-      return;
+      toast.warning(`Local counter says ${geminiUsedToday}/${geminiDailyLimit} — server will still try (and auto-fall back to Lovable).`);
     }
     setBusy(true);
     setProgress(8);
+    setLastError(null);
     const tick = setInterval(() => {
       setProgress((p) => (p >= 90 ? p : Math.min(90, p + Math.random() * 7 + 2)));
     }, 500);
@@ -234,7 +235,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         type: activeItem.type,
         year: activeItem.year,
         mode,
-        provider,
+        provider: "auto", // Gemini first, Lovable fallback
         referenceImageUrl: mode === "backdrop" ? activeItem.backdrop : undefined,
         useReference: mode === "backdrop",
         genres: activeItem.genres,
@@ -250,13 +251,18 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       if (mode === "backdrop" && data.referenceUsed !== true) throw new Error("Reference edit was not used. Generation blocked to prevent random images.");
       setProgress(100);
       setPreviewUrl(data.url as string);
-      toast.success(`Preview ready via EGD URL (${data.engine})`);
+      setLastResult({
+        engine: data.engine, provider: data.provider, model: data.model,
+        fallbackUsed: data.fallbackUsed, geminiError: data.geminiError, at: Date.now(),
+      });
+      if (data.fallbackUsed) {
+        toast.warning(`Gemini failed → Lovable fallback used (${data.model})`);
+      } else {
+        toast.success(`Preview ready via ${data.provider} · ${data.model}`);
+      }
 
-
-
-
-      if (provider === "gemini") {
-        // bump usage atomically (best-effort)
+      // Bump local Gemini counter only when Gemini was actually used
+      if (data.provider === "gemini") {
         try {
           const k = `settings/geminiImage/usage/${todayKey()}`;
           const snap = await get(ref(db, k));
@@ -265,7 +271,8 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       }
     } catch (e: any) {
       const msg = e?.message || String(e);
-      toast.error(msg.includes("RATE") ? "Rate limited — try again shortly." : msg);
+      setLastError({ message: msg, status: e?.status, quota: e?.quota, at: Date.now() });
+      toast.error(e?.status === 429 ? "Rate limited on both engines — see error panel." : msg);
     } finally {
       clearInterval(tick);
       setBusy(false);
