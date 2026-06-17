@@ -8,6 +8,10 @@ import { toast } from "sonner";
 import { db, ref, onValue, set } from "@/lib/firebase";
 import { EGD_DEPLOYER_CODE } from "@/lib/egdDeployerCode";
 import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
+import { supabase } from "@/integrations/supabase/client";
+
+// Secrets that Lovable auto-provisions; the admin never needs to paste a value.
+const AUTO_MANAGED_SECRETS = new Set<string>(["LOVABLE_API_KEY"]);
 
 /**
  * EGD MANAGER
