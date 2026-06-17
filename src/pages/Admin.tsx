@@ -2168,6 +2168,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         if (mutation.type === "characterData" && mutation.target.parentNode) {
           applyAdminEnglish(mutation.target.parentNode);
         }
+        if (mutation.type === "attributes") {
+          applyAdminEnglish(mutation.target as Element);
+        }
         mutation.addedNodes.forEach((node) => {
           if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.TEXT_NODE) {
             applyAdminEnglish(node.nodeType === Node.TEXT_NODE ? node.parentNode || document.body : (node as Element));
@@ -2175,7 +2178,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
         });
       });
     });
-    observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+    observer.observe(document.body, { childList: true, characterData: true, attributes: true, attributeFilter: ["placeholder", "title", "aria-label"], subtree: true });
     return () => {
       observer.disconnect();
       window.confirm = nativeConfirm;
