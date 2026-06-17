@@ -765,36 +765,52 @@ export default function EgdManager({
               </button>
             </div>
             <div className="space-y-2">
-              {secrets.map((s, i) => (
-                <div key={i} className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    className={inputClass + " flex-1 min-w-0"}
-                    placeholder="SECRET_NAME"
-                    value={s.name}
-                    onChange={(e) => updateSecret(i, "name", e.target.value)}
-                  />
-                  <div className="flex gap-2">
-                    <input
-                      className={inputClass + " flex-1 min-w-0"}
-                      placeholder="value"
-                      type="password"
-                      value={s.value}
-                      onChange={(e) => updateSecret(i, "value", e.target.value)}
-                    />
-                    <button
-                      onClick={() => removeSecretRow(i)}
-                      className="px-3 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 shrink-0"
-                      title="Remove"
-                    >
-                      <X size={14} />
-                    </button>
+              {secrets.map((s, i) => {
+                const isAuto = AUTO_MANAGED_SECRETS.has(s.name);
+                return (
+                  <div key={i} className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex-1 min-w-0 relative">
+                      <input
+                        className={inputClass + " w-full" + (isAuto ? " pr-20" : "")}
+                        placeholder="SECRET_NAME"
+                        value={s.name}
+                        onChange={(e) => updateSecret(i, "name", e.target.value)}
+                        readOnly={isAuto}
+                      />
+                      {isAuto && (
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          AUTO
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        className={inputClass + " flex-1 min-w-0"}
+                        placeholder={isAuto ? (lovableKeyLoading ? "Loading Lovable key…" : lovableKey ? "Auto-filled by Lovable" : "Lovable key unavailable") : "value"}
+                        type="password"
+                        value={isAuto ? (lovableKey || "") : s.value}
+                        onChange={(e) => updateSecret(i, "value", e.target.value)}
+                        readOnly={isAuto}
+                        disabled={isAuto && !lovableKey}
+                      />
+                      <button
+                        onClick={() => removeSecretRow(i)}
+                        className="px-3 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 shrink-0 disabled:opacity-40"
+                        title={isAuto ? "Auto-managed — cannot remove" : "Remove"}
+                        disabled={isAuto}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <p className="text-[11px] text-zinc-500 mt-1 break-words">
               Names starting with SUPABASE_ / SB_ are reserved and skipped automatically.
+              {" "}<span className="text-emerald-400">LOVABLE_API_KEY</span> is auto-managed — Lovable injects it for you and refreshes if the project changes.
             </p>
+
 
             <div className="mt-3 rounded-lg border border-zinc-700/60 bg-zinc-950/30 p-3 space-y-3 min-w-0">
               <div className="flex items-center justify-between gap-2 flex-wrap">
