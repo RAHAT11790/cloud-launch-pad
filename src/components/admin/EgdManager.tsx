@@ -191,6 +191,24 @@ export default function EgdManager({
   const [savingProjectSecret, setSavingProjectSecret] = useState<string | null>(null);
   const [deletingProjectSecret, setDeletingProjectSecret] = useState<string | null>(null);
 
+  // --- Auto-managed Lovable key (auto-injected into deploy form when needed) ---
+  const [lovableKey, setLovableKey] = useState<string>("");
+  const [lovableKeyLoading, setLovableKeyLoading] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setLovableKeyLoading(true);
+    supabase.functions.invoke("get-lovable-key").then(({ data, error }) => {
+      if (cancelled) return;
+      if (!error) {
+        const k = (data as any)?.key as string | undefined;
+        if (k) setLovableKey(k);
+      }
+      setLovableKeyLoading(false);
+    }).catch(() => { if (!cancelled) setLovableKeyLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+
 
 
 
