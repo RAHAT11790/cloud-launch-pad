@@ -60,7 +60,7 @@ class DownloadManager {
   private finishTimer: number | null = null;
 
   private isProxyDownloadUrl(url: string) {
-    return /\/functions\/v1\/video-proxy\?/i.test(String(url || ""));
+    return /\/functions\/v1\/(video-download|video-proxy)\?/i.test(String(url || ""));
   }
 
   private async fetchContentLength(url: string, init?: RequestInit): Promise<number> {
