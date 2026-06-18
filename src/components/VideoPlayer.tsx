@@ -1608,7 +1608,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // naturally prefetch via the video element when user switches.
 
   const switchServer = useCallback((serverIndex: number) => {
-    if (serverIndex === activeServerIndex || !effectiveVideoServers[serverIndex]) return;
+    if ((serverIndex === activeServerIndex && manualServerSelected) || !effectiveVideoServers[serverIndex]) return;
     if (effectiveVideoServers[serverIndex].locked && !isPremium) return;
     if (serverSwitchingRef.current) return;
     const v = videoRef.current;
@@ -1663,7 +1663,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       serverSwitchingRef.current = false;
       setServerSwitching(false);
     }, 180);
-  }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, getServerScopedSource, isEmbedPlayback, isPremium, playing]);
+  }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, getServerScopedSource, isEmbedPlayback, isPremium, playing, manualServerSelected]);
 
   // Auto-switch to premium server for premium users
   useEffect(() => {
