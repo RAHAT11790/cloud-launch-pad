@@ -120,35 +120,25 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
     candidates.push(candidate);
   };
 
-  const encoded = encodeURIComponent(url);
-  const cloudflareCandidate = CLOUDFLARE_CDN ? `${CLOUDFLARE_CDN}/video-proxy?url=${encoded}` : null;
-  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  const builtinProxyCandidate = BUILTIN_STREAM_PROXY ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url) : null;
-  const mustUseProxy = isInsecureHttpSource(url);
-
   if (isBypassSource(url)) {
     addCandidate(url);
     return candidates;
   }
 
-  // If admin configured a custom proxy, ALWAYS route through it first
-  // (covers both HTTP mixed-content AND HTTPS hosts that block direct hot-linking).
-  if (customProxyCandidate) {
-    addCandidate(customProxyCandidate);
-  }
+  const isHttp = isInsecureHttpSource(url);
 
-  if (mustUseProxy) {
-    // HTTP source — must go through some proxy. Add built-in + CDN fallbacks.
-    addCandidate(builtinProxyCandidate);
-    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
+  if (isHttp) {
+    // HTTP source — MUST use admin proxy only. No direct playback (mixed-content block).
+    const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+    const builtinProxyCandidate = BUILTIN_STREAM_PROXY ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url) : null;
+    
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
+    
+    // If no proxy is configured, we have to fallback to the original URL but it will likely fail.
+    if (candidates.length === 0) addCandidate(url);
   } else {
-    // HTTPS source — direct playback as fallback after admin proxy.
-    addCandidate(url);
-    if (cdnEnabled && cloudflareCandidate) addCandidate(cloudflareCandidate);
-    addCandidate(builtinProxyCandidate);
-  }
-
-  if (candidates.length === 0) {
+    // HTTPS source — direct ONLY (no proxy overhead).
     addCandidate(url);
   }
 
@@ -3277,8 +3267,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   <X className="w-4 h-4 text-destructive" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold text-white truncate">Video unavailable</p>
-                  <p className="text-[10px] text-white/70 truncate">Tap a different server below</p>
+                  <p className="text-[11px] font-semibold text-white truncate">Link Expired</p>
+                  <p className="text-[10px] text-white/70 truncate">Switch server to continue</p>
                 </div>
                 <button onClick={(e) => { e.stopPropagation(); setVideoError(false); setIsBuffering(true); const v = videoRef.current; if (v) { v.load(); } }} className="px-2.5 py-1 rounded-md gradient-primary text-[10px] font-semibold shrink-0">
                   Retry
