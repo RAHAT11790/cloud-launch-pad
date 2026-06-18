@@ -3450,26 +3450,39 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     <span className="text-[10px] font-medium">HLS</span>
                   </button>
                 ) : effectiveVideoServers.length >= 1 && !noServerSwitch ? (
-                  <div className="flex max-w-[56vw] items-center gap-1 overflow-x-auto scrollbar-hide" onClick={(e) => e.stopPropagation()}>
-                    {effectiveVideoServers.map((srv, idx) => {
-                      const isLocked = srv.locked && !isPremium;
-                      const isActive = activeServerIndex === idx;
-                      return (
-                        <button
-                          key={`${srv.name || "server"}-${idx}`}
-                          onClick={(e) => { e.stopPropagation(); if (!isLocked) switchServer(idx); }}
-                          disabled={isLocked}
-                          className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${
-                            isActive ? "ring-1 ring-primary bg-primary/25" : isLocked ? "opacity-45" : ""
-                          }`}
-                        >
-                          {idx === 0 && <Server className="w-3.5 h-3.5" />}
-                          {srv.locked && <Lock className="w-3 h-3 text-accent" />}
-                          <span className="text-[10px] font-medium whitespace-nowrap">{srv.name || `Server ${idx + 1}`}</span>
-                          {!isLocked && isActive && <Check className="w-3 h-3" />}
-                        </button>
-                      );
-                    })}
+                  <div className="relative">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowServerPanel((p) => !p); setShowQualityPanel(false); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); }}
+                      className={`player-touch-button h-7 px-2.5 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 ${manualServerSelected ? 'ring-1 ring-primary bg-primary/25' : ''}`}
+                    >
+                      <Server className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-medium whitespace-nowrap">{effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`}</span>
+                    </button>
+                    {showServerPanel && (
+                      <div data-player-panel="true" className={`absolute top-9 right-0 ${panelBaseClass} min-w-[150px] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
+                        <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
+                        {effectiveVideoServers.map((srv, idx) => {
+                          const isLocked = srv.locked && !isPremium;
+                          const isActive = activeServerIndex === idx;
+                          return (
+                            <button
+                              key={`${srv.name || "server"}-${idx}`}
+                              onClick={() => { if (!isLocked) { switchServer(idx); } }}
+                              disabled={isLocked}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-1 ${
+                                isActive ? "gradient-primary font-bold text-white" : isLocked ? "opacity-45 cursor-not-allowed" : "hover:bg-foreground/10"
+                              }`}
+                            >
+                              <span className="flex items-center gap-1.5">
+                                {srv.locked && <Lock className="w-3 h-3 text-accent" />}
+                                {srv.name || `Server ${idx + 1}`}
+                              </span>
+                              {!isLocked && isActive && <Check className="w-3 h-3" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 ) : null}
                 {isHlsSrc && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
