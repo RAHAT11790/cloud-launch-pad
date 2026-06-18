@@ -3033,7 +3033,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     sourceBaseRef.current = option.src;
-    const finalOptionSrc = manualServerSelected ? applyServerDomain(option.src, activeServerIndex) : option.src;
+    const finalOptionSrc = getServerScopedSource(option.src);
     activeSourceBaseRef.current = finalOptionSrc;
     const newSrc = resolvePlaybackSrc(finalOptionSrc);
 
@@ -3049,7 +3049,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setCurrentQuality(option.label);
     setShowSettings(false);
 
-  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain, isEmbedPlayback]);
+  }, [currentQuality, currentSrc, isPremium, resolvePlaybackSrc, getServerScopedSource, isEmbedPlayback]);
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
