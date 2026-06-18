@@ -40,6 +40,9 @@ export type DownloadParams = {
 
 type Subscriber = (snapshot: DownloadQueueSnapshot) => void;
 
+// Allow several downloads in parallel. Browsers handle this fine.
+const MAX_CONCURRENT = 4;
+
 const createFileSafeName = (value: string) =>
   value.replace(/[^a-zA-Z0-9\s\-_]/g, "").replace(/\s+/g, " ").trim();
 
@@ -50,14 +53,19 @@ const buildFileName = (title: string, subtitle?: string, quality?: string) => {
   return `${parts.join(" - ") || "video"}.mp4`;
 };
 
+interface ItemTimers {
+  trigger?: number;
+  finish?: number;
+}
+
 class DownloadManager {
   private downloads = new Map<string, ActiveDownload>();
   private listeners = new Set<Subscriber>();
   private queue: string[] = [];
-  private activeId: string | null = null;
+  private activeIds = new Set<string>();
+  private lastStartedId: string | null = null;
+  private timers = new Map<string, ItemTimers>();
   private sequence = 0;
-  private triggerTimer: number | null = null;
-  private finishTimer: number | null = null;
 
   private isProxyDownloadUrl(url: string) {
     return /\/functions\/v1\/(video-download|video-proxy)\?/i.test(String(url || ""));
@@ -81,7 +89,7 @@ class DownloadManager {
     const values = Array.from(this.downloads.values());
     return {
       downloads: new Map(this.downloads),
-      activeId: this.activeId,
+      activeId: this.lastStartedId,
       queuedCount: values.filter((item) => item.status === "queued" || item.status === "paused").length,
       completedCount: values.filter((item) => item.status === "complete").length,
       totalCount: values.filter((item) => item.status !== "cancelled").length,
@@ -100,30 +108,29 @@ class DownloadManager {
     this.emit();
   }
 
-  private clearTimers() {
-    if (this.triggerTimer !== null) window.clearTimeout(this.triggerTimer);
-    if (this.finishTimer !== null) window.clearTimeout(this.finishTimer);
-    this.triggerTimer = null;
-    this.finishTimer = null;
+  private clearItemTimers(id: string) {
+    const t = this.timers.get(id);
+    if (!t) return;
+    if (t.trigger !== undefined) window.clearTimeout(t.trigger);
+    if (t.finish !== undefined) window.clearTimeout(t.finish);
+    this.timers.delete(id);
   }
 
-  private settleActive(status: DownloadStatus, patch: Partial<ActiveDownload> = {}) {
-    const id = this.activeId;
-    this.clearTimers();
-    if (id) {
-      const current = this.downloads.get(id);
-      if (current) {
-        this.downloads.set(id, {
-          ...current,
-          status,
-          percent: status === "complete" ? 100 : current.percent,
-          loadedMB: status === "complete" ? Math.max(current.loadedMB, current.totalMB || 1) : current.loadedMB,
-          totalMB: Math.max(current.totalMB, current.loadedMB, 1),
-          ...patch,
-        });
-      }
+  private settleItem(id: string, status: DownloadStatus, patch: Partial<ActiveDownload> = {}) {
+    this.clearItemTimers(id);
+    const current = this.downloads.get(id);
+    if (current) {
+      this.downloads.set(id, {
+        ...current,
+        status,
+        percent: status === "complete" ? 100 : current.percent,
+        loadedMB: status === "complete" ? Math.max(current.loadedMB, current.totalMB || 1) : current.loadedMB,
+        totalMB: Math.max(current.totalMB, current.loadedMB, 1),
+        ...patch,
+      });
     }
-    this.activeId = null;
+    this.activeIds.delete(id);
+    if (this.lastStartedId === id) this.lastStartedId = null;
     this.emit();
     this.pump();
   }
@@ -152,12 +159,13 @@ class DownloadManager {
   private startItem(id: string) {
     const item = this.downloads.get(id);
     if (!item || item.status === "cancelled") {
-      this.activeId = null;
+      this.activeIds.delete(id);
       this.pump();
       return;
     }
 
-    this.activeId = id;
+    this.activeIds.add(id);
+    this.lastStartedId = id;
     this.downloads.set(id, {
       ...item,
       status: "downloading",
@@ -167,7 +175,6 @@ class DownloadManager {
     });
     this.emit();
 
-    // Probe true file size in background and update UI when known.
     if (item.url) {
       this.fetchTotalSize(item.url).then((bytes) => {
         if (bytes > 0) {
@@ -177,40 +184,46 @@ class DownloadManager {
       }).catch(() => {});
     }
 
-    this.triggerTimer = window.setTimeout(() => {
+    const timers: ItemTimers = {};
+    this.timers.set(id, timers);
+
+    // Stagger trigger slightly per item so the browser registers each
+    // download dialog as a distinct user-initiated download.
+    const offset = (this.activeIds.size - 1) * 140;
+    timers.trigger = window.setTimeout(() => {
       const latest = this.downloads.get(id);
       if (!latest || latest.status !== "downloading") return;
       const ok = triggerBackgroundVideoDownload(latest.url as unknown as string, latest.fileName || buildFileName(latest.title, latest.subtitle, latest.quality));
       if (!ok) {
-        this.settleActive("error", { error: "Download link is invalid" });
+        this.settleItem(id, "error", { error: "Download link is invalid" });
         return;
       }
 
       const t = latest.totalMB > 1 ? latest.totalMB : 1;
       this.update(id, { percent: 72, loadedMB: t * 0.72, totalMB: t });
-      this.finishTimer = window.setTimeout(() => {
+      timers.finish = window.setTimeout(() => {
         const final = this.downloads.get(id);
         const fT = final && final.totalMB > 1 ? final.totalMB : 1;
-        this.settleActive("complete", { percent: 100, loadedMB: fT, totalMB: fT });
+        this.settleItem(id, "complete", { percent: 100, loadedMB: fT, totalMB: fT });
       }, 900);
-    }, 220);
+    }, 220 + offset);
   }
 
   private pump() {
-    if (this.activeId) return;
-    const nextId = this.queue.find((id) => {
-      const item = this.downloads.get(id);
-      return item && item.status === "queued";
-    });
-    if (!nextId) {
-      this.queue = this.queue.filter((id) => {
+    while (this.activeIds.size < MAX_CONCURRENT) {
+      const nextId = this.queue.find((id) => {
         const item = this.downloads.get(id);
-        return item && item.status === "paused";
+        return item && item.status === "queued" && !this.activeIds.has(id);
       });
-      return;
+      if (!nextId) break;
+      this.queue = this.queue.filter((id) => id !== nextId);
+      this.startItem(nextId);
     }
-    this.queue = this.queue.filter((id) => id !== nextId);
-    this.startItem(nextId);
+    // Compact queue: drop ids that are no longer queued/paused.
+    this.queue = this.queue.filter((id) => {
+      const item = this.downloads.get(id);
+      return item && (item.status === "queued" || item.status === "paused");
+    });
   }
 
   subscribe(fn: Subscriber) {
@@ -235,10 +248,11 @@ class DownloadManager {
   }
 
   pauseDownload(id: string) {
-    if (this.activeId === id) {
+    if (this.activeIds.has(id)) {
+      this.clearItemTimers(id);
+      this.activeIds.delete(id);
+      if (this.lastStartedId === id) this.lastStartedId = null;
       this.update(id, { status: "paused" });
-      this.activeId = null;
-      this.clearTimers();
       this.queue.unshift(id);
       this.emit();
       return;
@@ -258,12 +272,13 @@ class DownloadManager {
   }
 
   cancelDownload(id: string) {
-    if (this.activeId === id) {
-      this.settleActive("cancelled", { percent: 0, loadedMB: 0, totalMB: 0 });
+    if (this.activeIds.has(id)) {
+      this.settleItem(id, "cancelled", { percent: 0, loadedMB: 0, totalMB: 0 });
       return;
     }
     const item = this.downloads.get(id);
     if (!item) return;
+    this.clearItemTimers(id);
     this.downloads.set(id, { ...item, status: "cancelled", percent: 0, loadedMB: 0, totalMB: 0 });
     this.queue = this.queue.filter((queuedId) => queuedId !== id);
     this.emit();
@@ -302,7 +317,7 @@ class DownloadManager {
 
   async enqueueDownload(params: DownloadParams) {
     const fileName = params.fileName || buildFileName(params.title, params.subtitle, params.quality);
-    const batchSize = this.queue.length + (this.activeId ? 1 : 0) + 1;
+    const batchSize = this.queue.length + this.activeIds.size + 1;
     this.sequence += 1;
     this.downloads.set(params.id, {
       id: params.id,
