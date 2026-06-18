@@ -3068,7 +3068,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return;
     }
     const v = videoRef.current;
-    pendingSeek.current = isEmbedPlayback ? (embedTimeRef.current.currentTime || 0) : (v?.currentTime || 0);
+    const liveTime = isEmbedPlayback ? (embedTimeRef.current.currentTime || 0) : (v?.currentTime || 0);
+    const pendingResume = typeof pendingSeek.current === "number" && pendingSeek.current > 0 ? pendingSeek.current : 0;
+    pendingSeek.current = Math.max(liveTime, pendingResume);
     setIsBuffering(true);
     setCurrentSrc(newSrc);
     setCurrentQuality(option.label);
