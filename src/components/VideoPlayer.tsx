@@ -1578,7 +1578,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const url = new URL(rawUrl);
       return `${domainTrim}${url.pathname}${url.search}${url.hash}`;
     } catch {
-      const match = rawUrl.match(/^https?:\/\/[^\/]+(\/.*)/);
+      const match = rawUrl.match(/^https?:\/\/[^/]+(\/.*)/);
       return `${domainTrim}${match ? match[1] : rawUrl}`;
     }
   }, [effectiveVideoServers]);
