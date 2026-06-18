@@ -668,3 +668,37 @@ html.tv-mode [data-anime-card] {
   contain: none;
   transform: none !important;
 }
+
+/* ============================================================
+   Security hardening — anti-copy / anti-drag / anti-save UX
+   ============================================================
+   Determined attackers can disable these, but they block
+   casual right-click save, drag-to-download, text scraping. */
+html, body {
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none; /* disable iOS long-press image menu */
+  -webkit-tap-highlight-color: transparent;
+}
+img, video, picture, svg {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+  -webkit-touch-callout: none;
+}
+/* Re-enable selection where users legitimately need it */
+input, textarea, select, [contenteditable="true"], [contenteditable=""],
+.allow-select, .allow-select * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
+}
+/* Admin route — let admins copy IDs / paste data normally */
+html[data-route="/admin"] body, html[data-route="/admin"] body * {
+  -webkit-user-select: auto;
+  user-select: auto;
+  -webkit-touch-callout: default;
+}
