@@ -1572,14 +1572,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
-    if (isDirectPlaybackUrl(trimmed) && !/\.m3u8(\?|#|$)/i.test(trimmed)) {
-      return trimmed;
-    }
-    // Old iframe server flow is disabled for episode/video switching speed.
-    // Everything non-direct is routed through the fast stream proxy path instead.
-    if (shouldForceDirectProxy(trimmed) && BUILTIN_STREAM_PROXY) {
-      return buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, trimmed);
-    }
+    // HTTP => admin proxy route first. HTTPS/blob/data => direct-only.
     return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
   }, [cdnEnabled, proxyUrl, proxyApiKey]);
 
@@ -1599,6 +1592,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return `${domainTrim}${match ? match[1] : rawUrl}`;
     }
   }, [effectiveVideoServers]);
+
+  const getServerScopedSource = useCallback((rawUrl: string, serverIndex = activeServerIndex) => {
+    if (!effectiveVideoServers.length) return rawUrl;
+    return applyServerDomain(rawUrl, serverIndex);
+  }, [activeServerIndex, applyServerDomain, effectiveVideoServers]);
 
   const preloadLinkRef = useRef<HTMLLinkElement | null>(null);
   const serverSwitchingRef = useRef(false);
