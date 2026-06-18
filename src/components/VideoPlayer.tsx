@@ -2307,6 +2307,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => clearTimeout(t);
   }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, getServerScopedSource, initialSeekTime, currentSeasonIdx, currentEpisodeIdx]);
 
+  useEffect(() => {
+    if (!playbackRouteReady || !activeSourceBaseRef.current) return;
+    const nextResolved = resolvePlaybackSrc(activeSourceBaseRef.current);
+    setCurrentSrc((prev) => (prev === nextResolved ? prev : nextResolved));
+  }, [playbackRouteReady, proxyUrl, proxyApiKey, cdnEnabled, resolvePlaybackSrc]);
+
   const applyPendingSeek = useCallback((targetVideo?: HTMLVideoElement | null) => {
     const v = targetVideo || videoRef.current;
     const target = pendingSeek.current;
