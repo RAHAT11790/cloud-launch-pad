@@ -4278,20 +4278,30 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  };
 
  // ==================== AUTH HANDLERS ====================
- const handlePinLogin = () => {
- if (!loginPinInput) { toast.error("Enter PIN"); return; }
- if (loginPinInput === currentPin) {
- setIsAuthenticated(true);
- try {
- localStorage.setItem("rs_admin_session", JSON.stringify({ pin: currentPin, ts: Date.now() }));
- } catch {}
- toast.success("Login successful!");
- setLoginPinInput("");
- } else {
- toast.error("Wrong PIN");
- setLoginPinInput("");
- }
- };
+  const handlePinLogin = async () => {
+  if (!loginPinInput) { toast.error("Enter PIN"); return; }
+  // Block check (device/IP) — owner-emails not relevant for PIN flow.
+  const blk = await isBlocked(null);
+  if (blk.blocked) {
+    await logAdminAccess({ method: "pin", success: false, reason: "blocked: " + (blk.reason || "") });
+    toast.error("Access denied: " + (blk.reason || "blocked"));
+    setLoginPinInput("");
+    return;
+  }
+  if (loginPinInput === currentPin) {
+  setIsAuthenticated(true);
+  try {
+  localStorage.setItem("rs_admin_session", JSON.stringify({ pin: currentPin, ts: Date.now() }));
+  } catch {}
+  logAdminAccess({ method: "pin", success: true });
+  toast.success("Login successful!");
+  setLoginPinInput("");
+  } else {
+  logAdminAccess({ method: "pin", success: false, reason: "wrong-pin" });
+  toast.error("Wrong PIN");
+  setLoginPinInput("");
+  }
+  };
 
  const handleCreatePin = () => {
  if (createPinInput.length < 4) { toast.error("PIN must be at least 4 digits"); return; }
