@@ -429,10 +429,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     [currentSrc],
   );
 
-  // Iframe is the active playback surface when currentSrc points to hf.space
-  // (BUT not for direct .m3u8 — those play natively via hls.js).
+  // Iframe playback is only for explicitly forced embed pages (AnimeSalt etc.).
+  // RS direct servers, including hf.space/render HTTPS file URLs, must stay in
+  // the native <video> element; loading those URLs in an iframe can trigger a
+  // browser download instead of playback.
   const isEmbedPlayback = useMemo(
-    () => !!currentSrc && !isHlsSrc && (forceEmbedMode || /hf\.space|huggingface/i.test(currentSrc)),
+    () => !!currentSrc && !isHlsSrc && !!forceEmbedMode,
     [currentSrc, forceEmbedMode, isHlsSrc],
   );
 
