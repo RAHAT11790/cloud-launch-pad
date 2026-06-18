@@ -2275,7 +2275,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     sourceBaseRef.current = src;
     activeSourceBaseRef.current = src;
     premiumServerApplied.current = false;
-    const resolvedSrc = resolvePlaybackSrc(src);
+    const initialRawSrc = getServerScopedSource(src, 0);
+    const resolvedSrc = resolvePlaybackSrc(initialRawSrc);
+    activeSourceBaseRef.current = initialRawSrc;
     setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
     setManualServerSelected(false);
@@ -2303,7 +2305,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSwitchingEpisode(false);
     }, 80);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, initialSeekTime, currentSeasonIdx, currentEpisodeIdx]);
+  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, getServerScopedSource, initialSeekTime, currentSeasonIdx, currentEpisodeIdx]);
 
   const applyPendingSeek = useCallback((targetVideo?: HTMLVideoElement | null) => {
     const v = targetVideo || videoRef.current;
