@@ -6,6 +6,7 @@ import { db, ref, onValue } from "@/lib/firebase";
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
 const isManagedVideoDownloadUrl = (value: string) => /\/functions\/v1\/video-download\?/i.test(String(value || ""));
+const isManagedVideoProxyUrl = (value: string) => /\/functions\/v1\/video-proxy\?/i.test(String(value || ""));
 
 const buildSafeFileName = (rawName: string) => {
   const cleaned = String(rawName || "video")
@@ -41,13 +42,13 @@ const resolveBaseSync = (): string => {
 export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): string | null {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return null;
-
-  // HTTPS direct only (no proxy)
-  if (trimmedUrl.toLowerCase().startsWith("https://")) {
-    return trimmedUrl;
-  }
-
   if (isManagedVideoDownloadUrl(trimmedUrl)) return trimmedUrl;
+  if (isManagedVideoProxyUrl(trimmedUrl)) {
+    try {
+      const inner = new URL(trimmedUrl).searchParams.get("url");
+      if (inner) return buildVideoDownloadUrl(inner, rawFileName);
+    } catch {}
+  }
   const base = resolveBaseSync();
   if (!base) return null;
   const fileName = buildSafeFileName(rawFileName);
