@@ -3174,8 +3174,10 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  "egd-manager": "EGD MANAGER",
  "fb-cleanup": "Firebase Add",
  "adsterra": "Adsterra Ads",
- "backdrop-ai": "Backdrop AI Replacer",
- };
+    "adsterra": "Adsterra Ads",
+    "backdrop-ai": "Backdrop AI Replacer",
+    "security-center": "Security & Access",
+  };
 
  // ==================== CATEGORIES ====================
  const saveCategory = () => {
