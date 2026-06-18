@@ -2703,14 +2703,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         }
 
         const nextOption = availableQualities.find((q) => {
-          const candidateSrc = getPrimaryPlaybackSrc(q.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+          const candidateRaw = getServerScopedSource(q.src);
+          const candidateSrc = getPrimaryPlaybackSrc(candidateRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
           return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
         });
 
         if (nextOption) {
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          const newFallbackSrc = getPrimaryPlaybackSrc(nextOption.src, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-          activeSourceBaseRef.current = nextOption.src;
+          const nextRaw = getServerScopedSource(nextOption.src);
+          const newFallbackSrc = getPrimaryPlaybackSrc(nextRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
+          activeSourceBaseRef.current = nextRaw;
           if (newFallbackSrc === currentSrc) {
             v.currentTime = pendingSeek.current;
             pendingSeek.current = null;
@@ -2868,7 +2870,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [applyPendingSeek, currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex]);
+  }, [applyPendingSeek, currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex, getServerScopedSource, proxyApiKey]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
