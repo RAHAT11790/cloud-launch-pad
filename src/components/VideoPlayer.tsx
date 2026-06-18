@@ -1615,6 +1615,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     setManualServerSelected(true);
     setActiveServerIndex(serverIndex);
+    setCurrentQuality("Auto");
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
 
