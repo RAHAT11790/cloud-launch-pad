@@ -40,6 +40,7 @@ const App = () => (
     <TooltipProvider>
       <DynamicMeta />
       <BrowserRouter>
+        <RouteAttrSync />
         <ManifestManager />
         
         <Toaster />
