@@ -3269,8 +3269,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   <X className="w-4 h-4 text-destructive" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold text-white truncate">Link Expired</p>
-                  <p className="text-[10px] text-white/70 truncate">Switch server to continue</p>
+                  <p className="text-[11px] font-semibold text-white truncate">Link expired</p>
+                  <p className="text-[10px] text-white/70 truncate">All servers failed. Update this episode link.</p>
                 </div>
                 <button onClick={(e) => { e.stopPropagation(); setVideoError(false); setIsBuffering(true); const v = videoRef.current; if (v) { v.load(); } }} className="px-2.5 py-1 rounded-md gradient-primary text-[10px] font-semibold shrink-0">
                   Retry
