@@ -1615,7 +1615,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     const savedTime = isEmbedPlayback ? (embedTimeRef.current.currentTime || 0) : (v?.currentTime || 0);
     const wasPlaying = isEmbedPlayback ? playing : !!v && !v.paused;
-    const newRawSrc = applyServerDomain(sourceBaseRef.current, serverIndex);
+    const newRawSrc = getServerScopedSource(sourceBaseRef.current, serverIndex);
     const resolved = resolvePlaybackSrc(newRawSrc);
 
     setShowServerPanel(false);
@@ -1663,7 +1663,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       serverSwitchingRef.current = false;
       setServerSwitching(false);
     }, 180);
-  }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, applyServerDomain, isEmbedPlayback, isPremium, playing]);
+  }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, getServerScopedSource, isEmbedPlayback, isPremium, playing]);
 
   // Auto-switch to premium server for premium users
   useEffect(() => {
