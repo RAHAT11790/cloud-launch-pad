@@ -4462,10 +4462,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             }
           };
 
-          const qualityChoices = availableDownloadQualities;
+          // "Default" বাটন hide — শুধু explicit quality (480/720/1080/4K) বাটন থাকবে
+          const qualityChoices = availableDownloadQualities.filter((q) => q !== "Default");
           const activeQuality = selectedDownloadQuality && qualityChoices.includes(selectedDownloadQuality)
             ? selectedDownloadQuality
-            : (preferredDownloadQuality || qualityChoices[0] || "");
+            : (qualityChoices.find((q) => q !== "Default") || "");
 
           return (
             <div className="w-full">
