@@ -1613,6 +1613,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setShowServerPanel(false);
     serverSwitchingRef.current = true;
     setServerSwitching(true);
+    setIsBuffering(true);
     setVideoError(false);
 
     setManualServerSelected(true);
@@ -1624,12 +1625,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     failedSrcsRef.current.clear();
     retryAttemptsRef.current.clear();
 
-    // Fast swap — just change src, browser handles the rest. Avoid forcing a
-    // fresh load() here because it restarts the pipeline and adds seconds.
+    // Server swap must force a fresh media pipeline. Some hosts keep the old
+    // range request alive unless load() is called, which makes the UI look like
+    // it switched while the browser is still attached to the previous server.
     setCurrentSrc(resolved);
     if (v) {
       try {
+        v.pause();
         if (v.src !== resolved) v.src = resolved;
+        v.load();
         if (savedTime > 0) {
           const onMeta = () => { try { v.currentTime = savedTime; } catch {} v.removeEventListener("loadedmetadata", onMeta); };
           v.addEventListener("loadedmetadata", onMeta);
