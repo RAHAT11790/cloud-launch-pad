@@ -3173,10 +3173,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  "apk-dw": "APK Download Center",
  "egd-manager": "EGD MANAGER",
  "fb-cleanup": "Firebase Add",
- "adsterra": "Adsterra Ads",
-    "adsterra": "Adsterra Ads",
-    "backdrop-ai": "Backdrop AI Replacer",
-    "security-center": "Security & Access",
+  "adsterra": "Adsterra Ads",
+  "backdrop-ai": "Backdrop AI Replacer",
+  "security-center": "Security & Access",
   };
 
  // ==================== CATEGORIES ====================
