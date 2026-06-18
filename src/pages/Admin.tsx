@@ -30,6 +30,8 @@ import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseMultiManager from "@/components/admin/FirebaseMultiManager";
 import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
 import WeeklyEpisodeManager from "@/components/admin/WeeklyEpisodeManager";
+import SecurityCenter from "@/components/admin/SecurityCenter";
+import { logAdminAccess, isBlocked, isOwnerEmail } from "@/lib/securityGuard";
 
 const buildEpisodeShareUrl = (animeId: string, seasonIdx?: number, epIdx?: number) => {
  const params = new URLSearchParams();
