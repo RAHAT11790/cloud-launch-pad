@@ -2,14 +2,26 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Suspense, lazy, useEffect } from "react";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Unlock from "./pages/Unlock";
 import UnlockRequired from "./pages/UnlockRequired";
 import DynamicMeta from "./components/DynamicMeta";
 import ManifestManager from "./components/ManifestManager";
+import { installUiGuard } from "@/lib/uiGuard";
+
+const RouteAttrSync = () => {
+  const loc = useLocation();
+  useEffect(() => {
+    try { document.documentElement.setAttribute("data-route", loc.pathname); } catch {}
+  }, [loc.pathname]);
+  return null;
+};
+
+// Install global anti-copy / anti-save / anti-devtools guard once.
+installUiGuard();
 
 
 
