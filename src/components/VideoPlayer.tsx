@@ -3452,15 +3452,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     {showServerPanel && (
                       <div data-player-panel="true" className="absolute top-9 right-0 player-glass rounded-xl p-2 z-30 min-w-[140px] max-h-[min(70dvh,320px)] overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]" style={{ WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y" }} onClick={stopPanelPointerPropagation} onTouchStart={stopPanelPointerPropagation} onTouchMove={stopPanelPointerPropagation} onTouchEnd={stopPanelPointerPropagation} onWheel={stopPanelWheelPropagation}>
                         <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
-                        {!isPremium && (
-                          <button onClick={() => switchServer(0)}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 ${
-                              activeServerIndex === 0 ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                            }`}>
-                            <span>{effectiveVideoServers[0]?.name || "Server 1"}</span>
-                            {activeServerIndex === 0 && <Check className="w-3 h-3" />}
-                          </button>
-                        )}
                         {effectiveVideoServers.map((srv, idx) => {
                           const isLocked = srv.locked && !isPremium;
                           return (
