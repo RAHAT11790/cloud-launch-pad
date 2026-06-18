@@ -3241,7 +3241,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             <video
               ref={videoRef}
               src={adGateActive || (isHlsSrc && Hls.isSupported()) ? undefined : currentSrc}
-              crossOrigin="anonymous"
+              crossOrigin={isHlsSrc ? "anonymous" : undefined}
               className="w-full h-full bg-black"
               style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
               playsInline
