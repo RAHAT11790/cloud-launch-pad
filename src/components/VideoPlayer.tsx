@@ -1662,16 +1662,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }, 180);
   }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, getServerScopedSource, isEmbedPlayback, isPremium, playing, manualServerSelected]);
 
-  // Auto-switch to premium server for premium users
+  // Auto-switch to premium server for premium users (only if user hasn't picked one)
   useEffect(() => {
-    if (isPremium && effectiveVideoServers.length > 0 && !premiumServerApplied.current) {
-      const premIdx = effectiveVideoServers.findIndex(s => s.locked);
-      if (premIdx >= 0 && premIdx !== activeServerIndex) {
-        premiumServerApplied.current = true;
-        setTimeout(() => switchServer(premIdx), 300);
-      }
-    }
-  }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer]);
+    if (!isPremium || effectiveVideoServers.length === 0) return;
+    if (premiumServerApplied.current || manualServerSelected) return;
+    const premIdx = effectiveVideoServers.findIndex(s => s.locked);
+    if (premIdx < 0 || premIdx === activeServerIndex) return;
+    // Mark BEFORE the async switch so a manual click during the delay
+    // doesn't get clobbered by a late auto-switch.
+    premiumServerApplied.current = true;
+    const t = window.setTimeout(() => {
+      if (manualServerSelected) return;
+      switchServer(premIdx);
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer, manualServerSelected]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
   const [hlsAudioOptions, setHlsAudioOptions] = useState<AudioTrackOption[]>([]);
