@@ -4319,14 +4319,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           const isAlreadySaved = !!savedEpisode;
 
           const deriveServerDownloadCandidates = (rawUrl: string) => {
-            const baseCandidates = [rawUrl];
-            if (manualServerSelected) {
-              baseCandidates.push(applyServerDomain(rawUrl, activeServerIndex));
+            const seen = new Set<string>();
+            const ordered: string[] = [];
+            const push = (value?: string | null) => {
+              const clean = String(value || "").trim();
+              if (!clean || seen.has(clean)) return;
+              seen.add(clean);
+              ordered.push(clean);
+            };
+            if (effectiveVideoServers.length > 0) {
+              push(applyServerDomain(rawUrl, activeServerIndex));
+              effectiveVideoServers.forEach((_, index) => push(applyServerDomain(rawUrl, index)));
             }
-            effectiveVideoServers.forEach((_, index) => {
-              baseCandidates.push(applyServerDomain(rawUrl, index));
-            });
-            return baseCandidates;
+            push(rawUrl);
+            return ordered;
           };
           const buildDownloadFileName = (label: string, quality?: string) => {
             const parts = [label, quality && quality !== "Auto" ? quality : ""]
