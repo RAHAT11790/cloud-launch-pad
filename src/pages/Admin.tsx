@@ -8232,6 +8232,12 @@ ${tgBulkFooter}
  <BackdropAiReplacer glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
  )}
 
+ {/* ==================== SECURITY & ACCESS ==================== */}
+ {activeSection === "security-center" && (
+ <SecurityCenter glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+ )}
+
+
  {/* ==================== FIREBASE CLEANUP ==================== */}
  {activeSection === "fb-cleanup" && (
  <FirebaseMultiManager glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
