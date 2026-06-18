@@ -92,9 +92,30 @@ const fetchWithRetry = async (
   throw lastErr ?? new Error("Upstream fetch failed");
 };
 
+// Domain allowlist — block embed/scrape from non-RS sites.
+const ALLOWED_HOST_RX = [
+  /\.lovable\.app$/i, /^lovable\.app$/i,
+  /^localhost(?::\d+)?$/i, /^127\.0\.0\.1(?::\d+)?$/i,
+];
+const hostAllowed = (s: string | null) => {
+  if (!s) return false;
+  try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(s).host)); } catch { return false; }
+};
+const isAllowedRequest = (req: Request) => {
+  const o = req.headers.get("origin"), r = req.headers.get("referer");
+  if (!o && !r) return false;
+  return hostAllowed(o) || hostAllowed(r);
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
+  }
+  if (!isAllowedRequest(req)) {
+    return new Response(
+      JSON.stringify({ error: "Access denied", message: "Download only available from the official RS Anime site." }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
   if (req.method !== "GET" && req.method !== "HEAD") {
     return new Response("Method not allowed", { status: 405, headers: corsHeaders });
