@@ -74,11 +74,6 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   return url;
 };
 
-const isDirectPlaybackUrl = (url: string): boolean => {
-  const normalized = url.trim().toLowerCase();
-  return normalized.startsWith("https://") || normalized.startsWith("blob:") || normalized.startsWith("data:");
-};
-
 const isDataHlsUrl = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
   return normalized.startsWith("data:application/vnd.apple.mpegurl");
@@ -111,7 +106,7 @@ const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
   }
 };
 
-const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
+const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
   if (!url) return [];
 
   const candidates: string[] = [];
@@ -147,11 +142,6 @@ const buildPlaybackCandidates = (url: string, cdnEnabled: boolean, proxyUrl?: st
 
 const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
   return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
-};
-
-const shouldForceDirectProxy = (url: string): boolean => {
-  const value = String(url || "").trim().toLowerCase();
-  return value.startsWith("http://");
 };
 
 const isDirectDownloadCandidate = (url: string): boolean => {
