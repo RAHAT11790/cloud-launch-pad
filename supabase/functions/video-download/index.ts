@@ -61,6 +61,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const fetchWithRetry = async (
   target: URL,
+  method: "GET" | "HEAD",
   range: string | null,
   signal: AbortSignal,
 ): Promise<Response> => {
@@ -68,7 +69,7 @@ const fetchWithRetry = async (
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const res = await fetch(target.toString(), {
-        method: "GET",
+        method,
         headers: buildUpstreamHeaders(target, range),
         redirect: "follow",
         signal,
@@ -128,7 +129,11 @@ Deno.serve(async (req) => {
 
   let upstream: Response;
   try {
-    upstream = await fetchWithRetry(targetUrl, req.headers.get("range"), ac.signal);
+    upstream = await fetchWithRetry(targetUrl, req.method as "GET" | "HEAD", req.headers.get("range"), ac.signal);
+    if (req.method === "HEAD" && !upstream.ok && upstream.status !== 206) {
+      try { await upstream.body?.cancel(); } catch {}
+      upstream = await fetchWithRetry(targetUrl, "GET", "bytes=0-0", ac.signal);
+    }
   } catch (e) {
     const msg = (e as Error)?.message || "Upstream unreachable";
     return new Response(
@@ -168,7 +173,7 @@ Deno.serve(async (req) => {
     `attachment; filename="${asciiFilename.replace(/"/g, "")}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
   );
 
-  return new Response(upstream.body, {
+  return new Response(req.method === "HEAD" ? null : upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText || "OK",
     headers: out,
