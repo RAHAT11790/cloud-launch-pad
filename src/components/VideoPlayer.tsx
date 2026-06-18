@@ -2031,6 +2031,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
 
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      hlsFatalRetriesRef.current = 0;
       refreshHlsAudio();
       refreshHlsSubs();
       v.play().catch(() => {});
@@ -2059,6 +2060,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           setSubtitleStatusMessage("This subtitle track could not be loaded from the stream.");
           setSubtitleOverlayText("");
         }
+        return;
+      }
+
+      hlsFatalRetriesRef.current += 1;
+      if (hlsFatalRetriesRef.current > 2) {
+        try { hls.destroy(); } catch {}
+        hlsRef.current = null;
+        setVideoError(true);
         return;
       }
 
