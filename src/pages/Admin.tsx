@@ -4334,34 +4334,44 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  toast.success("Logged out");
  };
 
- // Google Sign-In for Admin
- const handleGoogleAdminLogin = async () => {
- setGoogleAuthLoading(true);
- try {
- const result = await signInWithPopup(auth, googleProvider);
- const email = result.user.email;
- if (!email) { toast.error("Could not get email from Google account"); return; }
- // Check if this Google email is authorized as admin
- const adminSnap = await get(ref(db, "admin/authorizedEmails"));
- const authorizedEmails = adminSnap.val() || {};
- const isAuthorized = Object.values(authorizedEmails).some((e: any) => e === email);
- if (!isAuthorized) {
- toast.error("❌ This Google account is not authorized as admin");
- return;
- }
- setIsAuthenticated(true);
- setAdminGoogleEmail(email);
- try {
- localStorage.setItem("rs_admin_session", JSON.stringify({ google: email, ts: Date.now() }));
- localStorage.setItem("rs_admin_google", email);
- } catch {}
- toast.success(`✅ Google Login successful! (${email})`);
- } catch (err: any) {
- toast.error(err.message || "Google Login failed");
- } finally {
- setGoogleAuthLoading(false);
- }
- };
+  // Google Sign-In for Admin
+  const handleGoogleAdminLogin = async () => {
+  setGoogleAuthLoading(true);
+  try {
+  const result = await signInWithPopup(auth, googleProvider);
+  const email = result.user.email;
+  if (!email) { toast.error("Could not get email from Google account"); return; }
+  // Block check — owner emails skip the block list.
+  const blk = await isBlocked(email);
+  if (blk.blocked) {
+    await logAdminAccess({ email, method: "google", success: false, reason: "blocked: " + (blk.reason || "") });
+    toast.error("Access denied: " + (blk.reason || "blocked"));
+    return;
+  }
+  // Check if this Google email is authorized as admin (owners always allowed)
+  const adminSnap = await get(ref(db, "admin/authorizedEmails"));
+  const authorizedEmails = adminSnap.val() || {};
+  const isAuthorized = isOwnerEmail(email) || Object.values(authorizedEmails).some((e: any) => e === email);
+  if (!isAuthorized) {
+  await logAdminAccess({ email, method: "google", success: false, reason: "not-authorized" });
+  toast.error("❌ This Google account is not authorized as admin");
+  return;
+  }
+  setIsAuthenticated(true);
+  setAdminGoogleEmail(email);
+  try {
+  localStorage.setItem("rs_admin_session", JSON.stringify({ google: email, ts: Date.now() }));
+  localStorage.setItem("rs_admin_google", email);
+  } catch {}
+  logAdminAccess({ email, method: "google", success: true });
+  toast.success(`✅ Google Login successful! (${email})`);
+  } catch (err: any) {
+  logAdminAccess({ method: "google", success: false, reason: err?.message || "google-error" });
+  toast.error(err.message || "Google Login failed");
+  } finally {
+  setGoogleAuthLoading(false);
+  }
+  };
 
  // Send Telegram Post
  const sendTelegramPost = async () => {
