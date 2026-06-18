@@ -38,10 +38,43 @@ const PASSTHROUGH_RESP = [
   "cache-control",
 ];
 
+// ============================================================
+// Domain allowlist — block embed theft / API scraping
+// ============================================================
+const ALLOWED_HOST_RX = [
+  /\.lovable\.app$/i,
+  /^lovable\.app$/i,
+  /^localhost(?::\d+)?$/i,
+  /^127\.0\.0\.1(?::\d+)?$/i,
+];
+const hostAllowed = (urlStr: string | null): boolean => {
+  if (!urlStr) return false;
+  try {
+    const h = new URL(urlStr).host;
+    return ALLOWED_HOST_RX.some((rx) => rx.test(h));
+  } catch {
+    return false;
+  }
+};
+const isAllowedRequest = (req: Request): boolean => {
+  const origin = req.headers.get("origin");
+  const referer = req.headers.get("referer");
+  // Block anonymous server-to-server scrapers (no Origin AND no Referer).
+  if (!origin && !referer) return false;
+  return hostAllowed(origin) || hostAllowed(referer);
+};
+
 Deno.serve(async (req) => {
   // CORS preflight — answer instantly
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
+  if (!isAllowedRequest(req)) {
+    return new Response(
+      JSON.stringify({ error: "Access denied", message: "This stream can only be played on the official RS Anime site." }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 
   if (req.method !== "GET" && req.method !== "HEAD") {
