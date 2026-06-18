@@ -2199,7 +2199,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       else if (q.includes('480')) audioUrl = track.src480 || track.src;
       // Switch to a different URL for this language
       sourceBaseRef.current = audioUrl;
-      const finalAudioUrl = manualServerSelected ? applyServerDomain(audioUrl, activeServerIndex) : audioUrl;
+      const finalAudioUrl = getServerScopedSource(audioUrl);
       const proxiedSrc = resolvePlaybackSrc(finalAudioUrl);
       activeSourceBaseRef.current = finalAudioUrl;
       setCurrentSrc(proxiedSrc);
@@ -2216,7 +2216,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       v.addEventListener("loadedmetadata", restoreTime);
     }
     setShowAudioPanel(false);
-  }, [currentQuality, resolvePlaybackSrc, manualServerSelected, activeServerIndex, applyServerDomain]);
+  }, [currentQuality, resolvePlaybackSrc, getServerScopedSource]);
 
   const resetToDefaultAudio = useCallback(() => {
     const v = videoRef.current;
@@ -2239,7 +2239,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setSelectedLanguageLabel(fallbackLanguage);
     setShowAudioPanel(false);
 
-    const finalDefaultSrc = manualServerSelected ? applyServerDomain(defaultRawSrc, activeServerIndex) : defaultRawSrc;
+    const finalDefaultSrc = getServerScopedSource(defaultRawSrc);
     const finalResolvedSrc = resolvePlaybackSrc(finalDefaultSrc);
 
     if (v && currentSrc !== finalResolvedSrc) {
@@ -2256,7 +2256,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setCurrentSrc(finalResolvedSrc);
     }
 
-  }, [activeServerIndex, anime?.language, applyServerDomain, currentSrc, manualServerSelected, propAudioTracks, resolvePlaybackSrc, src]);
+  }, [anime?.language, currentSrc, getServerScopedSource, propAudioTracks, resolvePlaybackSrc, src]);
 
   // Track the last `src` we actually reacted to. Without this guard the effect
   // re-runs whenever qualityOptions / resolvePlaybackSrc identity changes
