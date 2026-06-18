@@ -1605,7 +1605,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (serverSwitchingRef.current) return;
     const v = videoRef.current;
 
-    const savedTime = isEmbedPlayback ? (embedTimeRef.current.currentTime || 0) : (v?.currentTime || 0);
+    const liveTime = isEmbedPlayback ? (embedTimeRef.current.currentTime || 0) : (v?.currentTime || 0);
+    // Preserve a higher pending resume (e.g. Continue-Watching seek that hasn't
+    // been applied yet because the video just mounted) so the premium / failover
+    // auto-switch doesn't clobber it back to 0.
+    const pendingResume = typeof pendingSeek.current === "number" && pendingSeek.current > 0 ? pendingSeek.current : 0;
+    const savedTime = Math.max(liveTime, pendingResume);
     const wasPlaying = isEmbedPlayback ? playing : !!v && !v.paused;
     const newRawSrc = getServerScopedSource(sourceBaseRef.current, serverIndex);
     const resolved = resolvePlaybackSrc(newRawSrc);
