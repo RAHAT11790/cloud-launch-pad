@@ -1570,10 +1570,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const server = effectiveVideoServers[serverIndex];
     if (!server?.domain) return rawUrl;
     const domainTrim = server.domain.trim().replace(/\/$/, "");
-    const isHfDomain = /hf\.space|huggingface/i.test(domainTrim);
-    if (isHfDomain) return rawUrl;
 
-    // Regular host-swap servers (e.g. fi3.bot-hosting.net swap, render mirror)
+    // Universal domain swap — keep path + query + hash (channel id / file id / hash) intact.
+    // Works for ANY server in admin settings: render.com (https), hf.space (https),
+    // bot-hosting.net (http via proxy), etc. Each server is independent.
     try {
       const url = new URL(rawUrl);
       return `${domainTrim}${url.pathname}${url.search}${url.hash}`;
