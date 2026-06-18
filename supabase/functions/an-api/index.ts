@@ -459,12 +459,36 @@ async function hlsProxy(req: Request, target: string, proxyPrefix: string): Prom
 }
 
 // ---------- ROUTER ----------
+// Domain allowlist — block third-party scrapers/embeds.
+const _ALLOWED_HOST_RX = [
+  /\.lovable\.app$/i, /^lovable\.app$/i,
+  /^localhost(?::\d+)?$/i, /^127\.0\.0\.1(?::\d+)?$/i,
+];
+const _hostAllowed = (s: string | null) => {
+  if (!s) return false;
+  try { return _ALLOWED_HOST_RX.some((rx) => rx.test(new URL(s).host)); } catch { return false; }
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
   const url = new URL(req.url);
   const path = url.pathname.replace(/^.*?\/an-api/i, "") || "/";
   const proxyPrefix = `https://${url.host}/functions/v1/an-api/hls`;
+
+  // Allowlist guard — root HTML UI is exempt (direct visit allowed).
+  // All data/proxy endpoints require Origin or Referer from official site.
+  if (path !== "/" && path !== "") {
+    const origin = req.headers.get("origin");
+    const referer = req.headers.get("referer");
+    const allowed = (origin || referer) && (_hostAllowed(origin) || _hostAllowed(referer));
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ error: "Access denied", message: "API only available from the official RS Anime site." }),
+        { status: 403, headers: { ...cors, "Content-Type": "application/json" } },
+      );
+    }
+  }
 
   try {
     if (path === "/" || path === "") {
