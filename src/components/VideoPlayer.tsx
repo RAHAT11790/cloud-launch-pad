@@ -3002,6 +3002,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [muted, isEmbedPlayback, sendEmbedCmd]);
 
   const getSafeSeekTime = useCallback((v: HTMLVideoElement, target: number) => {
+    if (isLiveMode) return v.currentTime || 0;
     if (!Number.isFinite(v.duration) || v.duration <= 0) return 0;
 
     let clamped = Math.min(Math.max(target, 0), v.duration);
@@ -3014,7 +3015,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
 
     return clamped;
-  }, []);
+  }, [isLiveMode]);
 
   const seek = useCallback((seconds: number) => {
     if (isEmbedPlayback) {
@@ -3030,6 +3031,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
     const v = videoRef.current;
     if (!v) return;
+    if (isLiveMode) {
+      resetHideTimer();
+      return;
+    }
 
     const nextTime = getSafeSeekTime(v, v.currentTime + seconds);
     v.currentTime = nextTime;
@@ -3037,7 +3042,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
     setTimeout(() => setSkipIndicator(null), 600);
     resetHideTimer();
-  }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd]);
+  }, [getSafeSeekTime, isEmbedPlayback, isLiveMode, resetHideTimer, sendEmbedCmd]);
 
   const toggleFullscreen = useCallback(async () => {
     const el = videoContainerRef.current || containerRef.current || videoRef.current;
@@ -3094,12 +3099,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
-    if (!v) return;
+    if (!v || isLiveMode) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     v.currentTime = getSafeSeekTime(v, pct * v.duration);
     resetHideTimer();
-  }, [getSafeSeekTime, resetHideTimer]);
+  }, [getSafeSeekTime, isLiveMode, resetHideTimer]);
 
   // Touch drag seeking on progress bar
   const progressBarRef = useRef<HTMLDivElement>(null);
@@ -3107,6 +3112,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const handleProgressTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
+    if (isLiveMode) return;
     isSeeking.current = true;
     const v = videoRef.current;
     if (!v) return;
@@ -3117,11 +3123,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       progressRef.current.style.width = `${pct * 100}%`;
     }
     resetHideTimer();
-  }, [getSafeSeekTime, resetHideTimer]);
+  }, [getSafeSeekTime, isLiveMode, resetHideTimer]);
 
   const handleProgressTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    if (!isSeeking.current) return;
+    if (!isSeeking.current || isLiveMode) return;
     const v = videoRef.current;
     if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -3135,7 +3141,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (timeDisplayRef.current && v.duration > 0) {
       timeDisplayRef.current.textContent = `${formatTime(target)} / ${formatTime(v.duration)}`;
     }
-  }, [getSafeSeekTime]);
+  }, [getSafeSeekTime, isLiveMode]);
 
   const handleProgressTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
