@@ -1973,7 +1973,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     const hls = new Hls({
       enableWorker: true,
-      lowLatencyMode: false,
+      lowLatencyMode: isLiveMode,
+      liveDurationInfinity: isLiveMode,
+      liveSyncDurationCount: isLiveMode ? 2 : undefined,
+      liveMaxLatencyDurationCount: isLiveMode ? 6 : undefined,
       // Ultra-fast start: skip Hls.js's initial bandwidth probe and assume a
       // healthy bitrate so playback begins on the first fragment instead of
       // waiting ~3-5s for the bandwidth test to finish.
@@ -1982,13 +1985,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // Smaller buffers → faster first frame & faster seek response. The big
       // 180s buffer here was forcing the player to fetch ~3 minutes of video
       // before signalling canplay on slow connections.
-      backBufferLength: 30,
-      maxBufferLength: 20,
-      maxMaxBufferLength: 60,
+      backBufferLength: isLiveMode ? 10 : 30,
+      maxBufferLength: isLiveMode ? 10 : 20,
+      maxMaxBufferLength: isLiveMode ? 30 : 60,
       maxBufferSize: 60 * 1000 * 1000,
       // Start at the lowest quality so the very first fragment lands in <1s,
       // then ABR climbs to the best level the user's bandwidth supports.
-      startLevel: 0,
+      startLevel: isLiveMode ? -1 : 0,
       startFragPrefetch: true,
       // Aggressive but bounded retries so a single dead fragment never stalls
       // playback for tens of seconds.
