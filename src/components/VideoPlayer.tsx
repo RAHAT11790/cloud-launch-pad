@@ -2057,6 +2057,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       hlsFatalRetriesRef.current = 0;
       refreshHlsAudio();
       refreshHlsSubs();
+      if (isLiveMode) {
+        try { hls.currentLevel = -1; hls.nextLevel = -1; hls.startLoad(-1); } catch {}
+      }
       v.play().catch(() => {});
     });
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, refreshHlsAudio);
@@ -2108,7 +2111,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       try { hls.destroy(); } catch {}
       if (hlsRef.current === hls) hlsRef.current = null;
     };
-  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive]);
+  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive, isLiveMode]);
 
   // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
   // users reported when returning to home. Detaches HLS, clears <video>, kills timers.
