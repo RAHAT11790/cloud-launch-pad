@@ -1350,6 +1350,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   // Ad gate - only run after premium AND freeAccess data have loaded
   useEffect(() => {
+    if (isLiveMode) { setAdGateActive(false); return; }
     if (isPremium === null) return; // still loading premium status
     if (!freeAccessLoaded) return; // wait for Firebase freeAccess snapshot — prevents unlock-button flash
     let cancelled = false;
@@ -1408,7 +1409,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
+  }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded, isLiveMode]);
 
   const handleToggleWatchlist = useCallback(() => {
     if (!animeId) {
@@ -1494,7 +1495,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   // Save progress for both native video and embed playback.
   useEffect(() => {
-    if (!onSaveProgress) return;
+    if (!onSaveProgress || isLiveMode) return;
     const v = videoRef.current;
     const saveNow = () => {
       if (isEmbedPlayback) {
@@ -1518,7 +1519,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       window.removeEventListener("pagehide", saveNow);
       saveNow();
     };
-  }, [currentSrc, isEmbedPlayback, onSaveProgress]);
+  }, [currentSrc, isEmbedPlayback, isLiveMode, onSaveProgress]);
 
   // Restore watch position (per-account)
   useEffect(() => {
