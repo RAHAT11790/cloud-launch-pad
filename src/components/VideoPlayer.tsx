@@ -3224,7 +3224,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const panelBaseClass = "player-glass rounded-xl p-2 z-30 overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]";
   const panelBaseStyle = { WebkitOverflowScrolling: "touch" as const, overscrollBehavior: "contain" as const, touchAction: "pan-y" as const };
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progress = !isLiveMode && duration > 0 ? (currentTime / duration) * 100 : 100;
   // Crop scale tuned to fully eliminate the small black side-bars left by AN's
   // letterboxed iframe. Slightly higher than before in both windowed + fullscreen.
   const embedTransform = cropIndex === 1
@@ -3623,13 +3623,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       className="h-full gradient-primary rounded-full relative"
                       style={{ width: `${progress}%` }}
                     >
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary shadow-[0_0_10px_hsla(355,85%,55%,0.6)]" />
+                      {!isLiveMode && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary shadow-[0_0_10px_hsla(355,85%,55%,0.6)]" />}
                     </div>
                   </div>
                 </div>
                 <div className="flex justify-between items-center gap-2 flex-nowrap">
                   <div className="flex items-center gap-2 shrink-0 min-w-0">
-                    <span ref={timeDisplayRef} className="text-[11px] font-medium whitespace-nowrap tabular-nums leading-none">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                    <span ref={timeDisplayRef} className="text-[11px] font-medium whitespace-nowrap tabular-nums leading-none">{isLiveMode ? "LIVE" : `${formatTime(currentTime)} / ${formatTime(duration)}`}</span>
                     <button onClick={(e) => {
                       e.stopPropagation();
                       applyPlayerVolume(boostedVolume, !muted);
