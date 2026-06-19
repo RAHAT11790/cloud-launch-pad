@@ -3958,7 +3958,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         >
                           <div className={`relative aspect-[2/3] rounded-lg overflow-hidden bg-foreground/5 ${isPending ? "magic-card-pulse" : ""}`}>
                             {anime.poster ? (
-                              <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} loading={idx < 9 ? "eager" : "lazy"} decoding="async" fetchpriority={idx < 6 ? "high" : "auto"} className="w-full h-full object-cover" />
+                              <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} loading={idx < 9 ? "eager" : "lazy"} decoding="async" className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No image</div>
                             )}
