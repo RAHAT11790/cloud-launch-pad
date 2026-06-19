@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { db, ref, onValue } from "@/lib/firebase";
 import { Play, Radio, Search, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { createPortal } from "react-dom";
 import VideoPlayer from "./VideoPlayer";
 import { optimizedImageUrl } from "@/lib/imageCache";
 
@@ -98,7 +99,7 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
   };
 
   if (activeChannel) {
-    return (
+    return createPortal(
       <VideoPlayer
         src={activeChannel.streamUrl}
         title={activeChannel.name}
@@ -130,7 +131,8 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
           const ch = channels.find(c => c.id === anime.id);
           if (ch) openChannel(ch);
         }}
-      />
+      />,
+      document.body,
     );
   }
 
