@@ -106,11 +106,13 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
         poster={activeChannel.logo}
         onClose={() => {
           setActiveChannel(null);
+          sessionStorage.removeItem(LIVE_TV_PLAYER_KEY);
           onExitPlayer?.();
         }}
         hideDownload
         noProxy
         noServerSwitch
+        liveMode
         suggestedAnime={suggestedChannels.map(ch => ({
           id: ch.id,
           title: ch.name,
@@ -126,7 +128,7 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
         }))}
         onSuggestedClick={(anime) => {
           const ch = channels.find(c => c.id === anime.id);
-          if (ch) setActiveChannel(ch);
+          if (ch) openChannel(ch);
         }}
       />
     );
@@ -198,7 +200,7 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
           {filtered.map((channel) => (
             <div
               key={channel.id}
-              onClick={() => setActiveChannel(channel)}
+              onClick={() => openChannel(channel)}
               className="relative aspect-video rounded-2xl overflow-hidden cursor-pointer group bg-card border border-border/50"
               style={{ boxShadow: "var(--neu-shadow)" }}
             >
