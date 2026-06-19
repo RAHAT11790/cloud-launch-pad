@@ -3234,7 +3234,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       : "scale(1)";
 
   return (
-    <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
+    <div className={`fixed inset-0 z-[300] ${isLiveMode ? "bg-black" : "bg-background/[0.98]"} flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
       {/* Back arrow lives inside the controls overlay below, so it hides/shows with controls */}
 
 
@@ -3633,7 +3633,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 </div>
                 <div className="flex justify-between items-center gap-2 flex-nowrap">
                   <div className="flex items-center gap-2 shrink-0 min-w-0">
-                    <span ref={timeDisplayRef} className="text-[11px] font-medium whitespace-nowrap tabular-nums leading-none">{isLiveMode ? "LIVE" : `${formatTime(currentTime)} / ${formatTime(duration)}`}</span>
+                    <span ref={timeDisplayRef} className={`text-[11px] font-bold whitespace-nowrap tabular-nums leading-none ${isLiveMode ? "text-destructive" : ""}`}>{isLiveMode ? "● LIVE" : `${formatTime(currentTime)} / ${formatTime(duration)}`}</span>
                     <button onClick={(e) => {
                       e.stopPropagation();
                       applyPlayerVolume(boostedVolume, !muted);
