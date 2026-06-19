@@ -2663,9 +2663,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     // Track last known good position for fallback recovery
     let lastKnownTime = 0;
+    const syncDuration = () => {
+      const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
+      setDuration(isLiveMode ? 0 : dur);
+      return dur;
+    };
     const onLoaded = () => {
-      setDuration(v.duration);
-      applyPendingSeek(v);
+      syncDuration();
+      if (!isLiveMode) applyPendingSeek(v);
       // Only autoplay if ad gate is not active
       if (!adGateActive) {
         // Keep native audio path; do not force muted autoplay fallback
@@ -2679,21 +2684,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (!v.paused && !v.ended) {
           const ct = v.currentTime;
           if (ct > 0) lastKnownTime = ct;
-          const dur = v.duration;
+          const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
           // Direct DOM updates for progress bar — 60fps, no React re-render
-          if (progressRef.current && dur > 0) {
+          if (progressRef.current && dur > 0 && !isLiveMode) {
             progressRef.current.style.width = `${(ct / dur) * 100}%`;
           }
-          if (timeDisplayRef.current && dur > 0) {
-            timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
+          if (timeDisplayRef.current) {
+            timeDisplayRef.current.textContent = isLiveMode ? "LIVE" : `${formatTime(ct)} / ${formatTime(dur)}`;
           }
           // Throttle React state to ~1 Hz so the giant component doesn't
           // re-render every frame. UI buttons stay smooth via DOM refs above.
           const now = performance.now();
           if (now - lastNativeSyncRef.current >= 1000) {
             lastNativeSyncRef.current = now;
-            setCurrentTime(ct);
-            if (Number.isFinite(dur) && dur > 0) setDuration(dur);
+            setCurrentTime(isLiveMode ? 0 : ct);
+            if (dur > 0 && !isLiveMode) setDuration(dur);
           }
           rafId.current = requestAnimationFrame(tick);
         }
@@ -2802,7 +2807,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setVideoError(false);
       setIsBuffering(false);
       // Also apply pending seek here in case loadedmetadata didn't fire
-      applyPendingSeek(v);
+      if (!isLiveMode) applyPendingSeek(v);
       if (v.paused && !adGateActive) {
         // Keep native audio path; manual user interaction will start playback if autoplay is blocked
         v.play().catch(() => {});
@@ -2843,23 +2848,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
     const onTimeUpdate = () => {
       const ct = v.currentTime;
-      const dur = v.duration;
+      const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
       if (ct > 0) lastKnownTime = ct;
-      if (progressRef.current && dur > 0) {
+      if (progressRef.current && dur > 0 && !isLiveMode) {
         progressRef.current.style.width = `${(ct / dur) * 100}%`;
       }
-      if (timeDisplayRef.current && dur > 0) {
-        timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
+      if (timeDisplayRef.current) {
+        timeDisplayRef.current.textContent = isLiveMode ? "LIVE" : `${formatTime(ct)} / ${formatTime(dur)}`;
       }
       const now = performance.now();
       if (now - lastNativeSyncRef.current >= 1000) {
         lastNativeSyncRef.current = now;
-        setCurrentTime(ct);
-        if (Number.isFinite(dur) && dur > 0) setDuration(dur);
+        setCurrentTime(isLiveMode ? 0 : ct);
+        if (dur > 0 && !isLiveMode) setDuration(dur);
       }
     };
     const onDurationChange = () => {
-      if (Number.isFinite(v.duration) && v.duration > 0) setDuration(v.duration);
+      syncDuration();
     };
     v.addEventListener("loadedmetadata", onLoaded);
     v.addEventListener("timeupdate", onTimeUpdate);
@@ -2902,7 +2907,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [applyPendingSeek, currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex, getServerScopedSource, proxyApiKey]);
+  }, [applyPendingSeek, currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex, getServerScopedSource, proxyApiKey, isLiveMode]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
