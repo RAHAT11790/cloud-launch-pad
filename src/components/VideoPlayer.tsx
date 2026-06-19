@@ -3831,7 +3831,58 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           )}
         </div>
 
-        {!isFullscreen && !adGateActive && !deviceBlocked && !unlockBlocked && (
+        {!isFullscreen && isLiveMode && !adGateActive && !deviceBlocked && !unlockBlocked && (
+          <div className="w-full px-5 pt-4 pb-24">
+            <div className="flex items-start gap-3">
+              {poster && (
+                <img
+                  src={optimizedImageUrl(poster, "avatar")}
+                  alt=""
+                  className="w-12 h-12 rounded-xl object-cover bg-foreground/10 shrink-0"
+                  loading="eager"
+                  decoding="async"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[16px] font-bold text-foreground leading-snug truncate">{title}</h2>
+                <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-destructive/15 px-2.5 py-1 text-[11px] font-bold text-destructive">
+                  <span className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+                  LIVE TV
+                </div>
+              </div>
+            </div>
+            {suggestedAnime && suggestedAnime.length > 0 && (
+              <div className="mt-5">
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
+                  <span className="text-[13px] font-bold px-3 py-1.5 rounded-full bg-primary text-primary-foreground">Channels</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {suggestedAnime.slice(0, 15).map((anime) => (
+                    <button
+                      key={anime.id}
+                      onClick={() => {
+                        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+                        onSuggestedClick?.(anime);
+                      }}
+                      className="group text-left transition-transform duration-150 active:scale-95"
+                    >
+                      <div className="relative aspect-square rounded-lg overflow-hidden bg-foreground/5">
+                        {anime.poster ? (
+                          <img src={optimizedImageUrl(anime.poster, "avatar")} alt={anime.title} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No image</div>
+                        )}
+                      </div>
+                      <p className="text-xs font-medium line-clamp-2 leading-tight mt-1.5 text-foreground">{anime.title}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!isFullscreen && !isLiveMode && !adGateActive && !deviceBlocked && !unlockBlocked && (
           <div className="w-full px-5 pt-4 pb-2">
             <button
               type="button"
