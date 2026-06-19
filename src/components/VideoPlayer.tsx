@@ -404,11 +404,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const isRawHlsSource = useMemo(() => /\.m3u8(\?|#|$)/i.test(String(src || "")), [src]);
 
   const effectiveVideoServers = useMemo(() => {
-    if (noServerSwitch || isRawHlsSource) return [];
+    if (noServerSwitch || isRawHlsSource || isLiveMode) return [];
     const list = videoServers.length > 0 ? videoServers : buildFallbackServers(src);
     // Show ALL configured servers so the user can switch between them.
     return list;
-  }, [isRawHlsSource, noServerSwitch, src, videoServers]);
+  }, [isLiveMode, isRawHlsSource, noServerSwitch, src, videoServers]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
   // The branded `req.html` page on the embed server posts video events to us
@@ -906,7 +906,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [activeEpisodeIdx, currentSeasonIdx, sharePanelSeasonIdx, shareSeason]);
 
   useEffect(() => {
-    if (!animeId) return;
+    if (!animeId || isLiveMode) return;
     if (isGuest()) {
       setSaved(guestStore.watchlist.has(animeId));
       return;
@@ -1551,7 +1551,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         });
       });
     } catch {}
-  }, [animeId, currentEpisodeIdx, currentSeasonIdx, initialSeekTime]);
+  }, [animeId, currentEpisodeIdx, currentSeasonIdx, initialSeekTime, isLiveMode]);
 
   // Build quality list - 4K is premium-only
   const is4KLabel = (label: string) => /4k|2160|uhd/i.test(label);
