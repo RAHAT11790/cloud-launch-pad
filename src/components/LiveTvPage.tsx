@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import VideoPlayer from "./VideoPlayer";
 import { optimizedImageUrl } from "@/lib/imageCache";
 
+const LIVE_TV_PLAYER_KEY = "rs_live_tv_active_channel";
+
 interface TvChannel {
   id: string;
   name: string;
@@ -55,8 +57,17 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
   useEffect(() => {
     if (!isActive && activeChannel) {
       setActiveChannel(null);
+      sessionStorage.removeItem(LIVE_TV_PLAYER_KEY);
     }
   }, [isActive, activeChannel]);
+
+  useEffect(() => {
+    if (!activeChannel) return;
+    sessionStorage.setItem(LIVE_TV_PLAYER_KEY, activeChannel.id);
+    return () => {
+      sessionStorage.removeItem(LIVE_TV_PLAYER_KEY);
+    };
+  }, [activeChannel]);
 
   const categories = useMemo(() => {
     const cats = new Set<string>();
@@ -80,6 +91,11 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
     if (!activeChannel) return [];
     return channels.filter(ch => ch.id !== activeChannel.id).slice(0, 12);
   }, [activeChannel, channels]);
+
+  const openChannel = (channel: TvChannel) => {
+    setActiveChannel(channel);
+    sessionStorage.setItem(LIVE_TV_PLAYER_KEY, channel.id);
+  };
 
   if (activeChannel) {
     return (
