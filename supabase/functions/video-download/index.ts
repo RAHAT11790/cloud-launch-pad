@@ -103,8 +103,11 @@ const hostAllowed = (s: string | null) => {
 };
 const isAllowedRequest = (req: Request) => {
   const o = req.headers.get("origin"), r = req.headers.get("referer");
-  if (!o && !r) return false;
-  return hostAllowed(o) || hostAllowed(r);
+  // Allow when both headers stripped by browser (legit media fetch).
+  if (!o && !r) return true;
+  if (o && !hostAllowed(o)) return false;
+  if (r && !hostAllowed(r)) return !!(o && hostAllowed(o));
+  return true;
 };
 
 Deno.serve(async (req) => {
