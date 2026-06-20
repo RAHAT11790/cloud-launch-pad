@@ -4496,11 +4496,12 @@ ${tgHashtags}`;
  // Save to Firebase for future button URL editing
  const msgId = data?.result?.message_id || data?.message_id;
  if (msgId) {
- const postRecord = {
+                const postRecord = {
  chatId,
  messageId: msgId,
  title: tgTitle,
  poster: tgPosterUrl || "",
+ caption,
  buttons: inlineButtons,
  sentAt: Date.now(),
  };
