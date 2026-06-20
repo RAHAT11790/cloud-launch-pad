@@ -160,26 +160,18 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   const isHttp = isInsecureHttpSource(url);
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
   const builtinProxyCandidate = BUILTIN_STREAM_PROXY ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url) : null;
-  const mirrorSources = buildManagedMirrorSources(url);
-  const addMirrorCandidates = () => {
-    mirrorSources.forEach((mirrorUrl) => {
-      if (isInsecureHttpSource(mirrorUrl)) {
-        if (proxyUrl) addCandidate(buildProxyPlaybackUrl(proxyUrl, mirrorUrl, proxyApiKey));
-        if (BUILTIN_STREAM_PROXY) addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, mirrorUrl));
-      } else {
-        if (proxyUrl) addCandidate(buildProxyPlaybackUrl(proxyUrl, mirrorUrl, proxyApiKey));
-        if (BUILTIN_STREAM_PROXY) addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, mirrorUrl));
-        addCandidate(mirrorUrl);
-      }
-    });
-  };
+
+  // STRICT SERVER ISOLATION: each server in the admin panel uses ONLY its own
+  // configured URL. We never silently mirror across servers — that previously
+  // caused the "Premium" tab to play from a free origin when its own server
+  // (e.g. Render) was down, hiding the failure. Per-server failover is handled
+  // explicitly by switchServer() using the admin-defined server list.
 
   if (preferProxy) {
     // Live TV / fragile HLS streams should use the admin-selected proxy first,
     // then fall back to direct only if proxy is unavailable.
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
-    addMirrorCandidates();
     addCandidate(url);
     return candidates;
   }
@@ -188,7 +180,7 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     // HTTP source — MUST use admin proxy only. No direct playback (mixed-content block).
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
-    
+
     // If no proxy is configured, we have to fallback to the original URL but it will likely fail.
     if (candidates.length === 0) addCandidate(url);
   } else {
