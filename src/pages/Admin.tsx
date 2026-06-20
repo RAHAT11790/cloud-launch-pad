@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo, forwardRef, memo } from "react";
+import CachedImg from "@/components/CachedImg";
 import { db, ref, onValue, push, set, remove, update, get, auth, googleProvider, signInWithPopup } from "@/lib/firebase";
 import { supabase } from "@/integrations/supabase/client";
 import { animeSaltApi } from '@/lib/animeSaltApi';
