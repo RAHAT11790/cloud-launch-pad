@@ -106,7 +106,7 @@ const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
   }
 };
 
-const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string[] => {
+const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
   if (!url) return [];
 
   const candidates: string[] = [];
@@ -121,27 +121,38 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   }
 
   const isHttp = isInsecureHttpSource(url);
+  const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+  const builtinProxyCandidate = BUILTIN_STREAM_PROXY ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url) : null;
+
+  if (preferProxy) {
+    // Live TV / fragile HLS streams should use the admin-selected proxy first,
+    // then fall back to direct only if proxy is unavailable.
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
+    addCandidate(url);
+    return candidates;
+  }
 
   if (isHttp) {
     // HTTP source — MUST use admin proxy only. No direct playback (mixed-content block).
-    const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-    const builtinProxyCandidate = BUILTIN_STREAM_PROXY ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url) : null;
-    
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
     
     // If no proxy is configured, we have to fallback to the original URL but it will likely fail.
     if (candidates.length === 0) addCandidate(url);
   } else {
-    // HTTPS source — direct ONLY (no proxy overhead).
+    // HTTPS source — direct first for speed, then proxy fallback for hosts that
+    // block browser playback/CORS/hotlinking (Render, Hugging Face, etc.).
     addCandidate(url);
+    if (customProxyCandidate) addCandidate(customProxyCandidate);
+    if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
   }
 
   return candidates;
 };
 
-const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string): string => {
-  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey)[0] || url;
+const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string => {
+  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey, preferProxy)[0] || url;
 };
 
 const isDirectDownloadCandidate = (url: string): boolean => {
@@ -203,6 +214,7 @@ interface VideoPlayerProps {
   buildShareLinkForEpisode?: (seasonIdx?: number, epIdx?: number) => string;
   onInfoClick?: () => void;
   onLibraryClick?: (animeId?: string) => void;
+  preferProxy?: boolean;
 }
 
 type DownloadEpisodeOption = {
@@ -309,7 +321,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = false }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
   // Removed preload anime character image - no longer needed
