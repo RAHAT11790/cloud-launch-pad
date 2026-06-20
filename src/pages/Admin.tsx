@@ -4663,6 +4663,7 @@ ${tgBulkFooter}
    .split(/\s+/)
    .map(tag => tag.trim())
    .filter(Boolean)
+   .filter(tag => !/(official|fandub|ᴏғғɪᴄɪᴀʟ|ғᴀɴᴅᴜʙ)/i.test(tag))
    .filter(tag => normalizeTelegramTitleKey(tag) !== titleKey)
    .join(" ");
  }
