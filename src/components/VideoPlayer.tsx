@@ -2738,7 +2738,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           cdnEnabled,
           proxyUrl || undefined,
           proxyApiKey || undefined,
-          preferProxy
+          preferProxy || isManagedServerSource(activeSourceBaseRef.current)
         ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
 
         if (sameQualityRouteFallback) {
@@ -2749,14 +2749,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
         const nextOption = availableQualities.find((q) => {
           const candidateRaw = getServerScopedSource(q.src);
-          const candidateSrc = getPrimaryPlaybackSrc(candidateRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy);
+          const candidateSrc = getPrimaryPlaybackSrc(candidateRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy || isManagedServerSource(candidateRaw));
           return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
         });
 
         if (nextOption) {
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
           const nextRaw = getServerScopedSource(nextOption.src);
-          const newFallbackSrc = getPrimaryPlaybackSrc(nextRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy);
+          const newFallbackSrc = getPrimaryPlaybackSrc(nextRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy || isManagedServerSource(nextRaw));
           activeSourceBaseRef.current = nextRaw;
           if (newFallbackSrc === currentSrc) {
             v.currentTime = pendingSeek.current;
