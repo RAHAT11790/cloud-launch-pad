@@ -115,12 +115,9 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
   useEffect(() => { setPreviewUrl(null); setProgress(0); }, [activeId, mode]);
 
   useEffect(() => {
-    const refresh = () => getEdgeFunctionUrl("generate-backdrop").then((url) => setActiveFunctionUrl(url || ""));
-    void refresh();
-    const off1 = onValue(ref(db, "egdManager/config/deployerUrl"), refresh);
-    const off2 = onValue(ref(db, "settings/functionOverrides/generate-backdrop"), refresh);
-    return () => { off1(); off2(); };
+    setActiveFunctionUrl("lovable-backdrop (Lovable Cloud)");
   }, []);
+
 
   useEffect(() => {
     if (usePromptOverride && !customPrompt) {
