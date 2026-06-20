@@ -413,6 +413,28 @@ serve(async (req) => {
       return json({ ok: !!username, username });
     }
 
+    // ========== DELETE MESSAGE ==========
+    if (action === "delete-message") {
+      const chatId = body?.chatId;
+      const messageId = body?.messageId;
+      if (!chatId || !messageId) return json({ error: "chatId, messageId required" }, 400);
+      const res = await fetch(`${telegramBase}/deleteMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        // Treat already-deleted / not-found as success for idempotency
+        const desc = String(data?.description || "").toLowerCase();
+        if (desc.includes("message to delete not found") || desc.includes("message can't be deleted")) {
+          return json({ ok: true, alreadyGone: true });
+        }
+        return json({ error: data?.description || "Telegram API error" }, 400);
+      }
+      return json({ ok: true, result: data.result });
+    }
+
     // ========== EDIT BUTTONS ==========
     if (action === "edit-buttons") {
       const chatId = body?.chatId;
