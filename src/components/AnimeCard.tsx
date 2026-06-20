@@ -136,12 +136,12 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
       <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
       <button
         className={`absolute top-1.5 left-1.5 w-7 h-7 rounded-full flex items-center justify-center transition-all hover:scale-110 z-10 ${
-          isInWatchlist ? "bg-primary" : "bg-white/80 hover:bg-primary"
+          isInWatchlist ? "bg-primary" : "bg-white/85 hover:bg-primary"
         }`}
         onClick={toggleWatchlist}
         style={{ boxShadow: "var(--neu-shadow-sm)" }}
       >
-        <Heart className={`w-3.5 h-3.5 ${isInWatchlist ? "fill-white text-white" : "text-foreground"}`} />
+        <Heart className={`w-3.5 h-3.5 ${isInWatchlist ? "fill-white text-white" : "text-zinc-900 fill-zinc-900/20"}`} />
       </button>
       <div className="absolute top-1.5 right-1.5 flex flex-col items-end gap-1 z-10">
         {languageLabel && (
