@@ -478,23 +478,9 @@ Deno.serve(async (req) => {
   const path = url.pathname.replace(/^.*?\/an-api/i, "") || "/";
   const proxyPrefix = `https://${url.host}/functions/v1/an-api/hls`;
 
-  // Allowlist guard — root HTML UI is exempt (direct visit allowed).
-  // All data/proxy endpoints require Origin or Referer from official site.
-  if (path !== "/" && path !== "") {
-    const origin = req.headers.get("origin");
-    const referer = req.headers.get("referer");
-    // Allow when both stripped (browser media fetch). Block only when a
-    // header is present pointing to a non-allowed host.
-    const bothMissing = !origin && !referer;
-    const badOrigin = !!origin && !_hostAllowed(origin);
-    const badReferer = !!referer && !_hostAllowed(referer) && !(origin && _hostAllowed(origin));
-    if (!bothMissing && (badOrigin || badReferer)) {
-      return new Response(
-        JSON.stringify({ error: "Access denied", message: "API only available from the official RS Anime site." }),
-        { status: 403, headers: { ...cors, "Content-Type": "application/json" } },
-      );
-    }
-  }
+  // Allowlist guard disabled — origin/referer headers are unreliable for
+  // cross-origin media/HLS segment fetches and were blocking real playback.
+  // Embed-theft protection is enforced at the UI layer instead.
 
   try {
     if (path === "/" || path === "") {
