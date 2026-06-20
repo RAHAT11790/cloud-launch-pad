@@ -11,7 +11,10 @@ import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
 
 // Slugs whose source was just updated and need to be re-deployed by the user.
 // A green "NEW" badge highlights them in the deploy grid below.
-const NEW_EDGE_DEPLOYS = new Set<string>(["video-proxy", "video-download", "an-api", "apk-download"]);
+// (rs-bot, send-otp-email, process-email-queue are auto-deployed by Lovable — no NEW tag.)
+const NEW_EDGE_DEPLOYS = new Set<string>(["video-proxy", "video-download", "an-api", "apk-download", "generate-backdrop"]);
+// Slugs that are deployed/managed by Lovable Cloud (admin doesn't deploy them).
+const LOVABLE_MANAGED = new Set<string>(["rs-bot", "send-otp-email", "process-email-queue"]);
 import { supabase } from "@/integrations/supabase/client";
 
 // Secrets that Lovable auto-provisions; the admin never needs to paste a value.
