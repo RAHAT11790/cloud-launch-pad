@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
   const ac = new AbortController();
   req.signal.addEventListener("abort", () => ac.abort(), { once: true });
 
-  let upstream: Response;
+  let upstream: Response | null = null;
   let effectiveTargetUrl = targetUrl;
   try {
     let lastError: unknown = null;
@@ -218,12 +218,16 @@ Deno.serve(async (req) => {
         lastError = e;
       }
     }
-    if (!upstream!) throw lastError || new Error("All upstream mirrors failed");
+    if (!upstream) throw lastError || new Error("All upstream mirrors failed");
   } catch (e) {
     return new Response(
       `Upstream fetch failed: ${(e as Error).message}`,
       { status: 502, headers: corsHeaders },
     );
+  }
+
+  if (!upstream) {
+    return new Response("Upstream fetch failed: all mirrors failed", { status: 502, headers: corsHeaders });
   }
 
   const respHeaders = new Headers(corsHeaders);
