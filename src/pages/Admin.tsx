@@ -7616,11 +7616,69 @@ ${tgBulkFooter}
  const [tgBulkProgress, setTgBulkProgress] = useState(0);
  const [tgQuickPaste, setTgQuickPaste] = useState("");
  const [tgSelectedPost, setTgSelectedPost] = useState<string>("all");
- const [expandedChannel, setExpandedChannel] = useState<string>("");
+  const [expandedChannel, setExpandedChannel] = useState<string>("");
  const [channelTargets, setChannelTargets] = useState<Record<string, string>>({});
  const [busyChannel, setBusyChannel] = useState<string>("");
  const [busyAction, setBusyAction] = useState<"send"|"delete"|"">("");
  const [busyProgress, setBusyProgress] = useState<{done:number; total:number}>({done:0,total:0});
+ const cancelRef = useRef(false);
+
+ // === Build FRESH caption from latest series/movie data (mirrors sendTelegramPost template) ===
+ const buildFreshCaptionForTitle = (savedTitle: string): { caption: string; poster: string; matched: boolean } => {
+ const norm = (s: string) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+ const target = norm(savedTitle);
+ const ws = webseriesData.find((s: any) => norm(s.title) === target);
+ const mv = !ws ? moviesData.find((m: any) => norm(m.title) === target) : null;
+ const item: any = ws || mv;
+ if (!item) return { caption: "", poster: "", matched: false };
+
+ const isSeries = !!ws;
+ const seasons = Array.isArray(item.seasons) ? item.seasons : [];
+ const lastSeasonIdx = isSeries && seasons.length > 0 ? seasons.length - 1 : 0;
+ const lastSeason = seasons[lastSeasonIdx];
+ const totalEps = isSeries ? (lastSeason?.episodes?.length || 0) : 1;
+ const seasonNum = isSeries ? String(lastSeasonIdx + 1).padStart(2, "0") : "01";
+ const newEpNum = isSeries && totalEps > 0 ? String(totalEps).padStart(2, "0") : "01";
+
+ const rating = item.rating ? String(item.rating) : "N/A";
+ const genres = item.category || item.genres || "Animation";
+ const languages = String(item.language || "Bengali, English").replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", ");
+ const dubType = item.dubType === "fandub" ? "fandub" : "official";
+ const quality = item.quality || "480p,720p,1080p";
+ const status = item.status === "complete" ? "complete" : "ongoing";
+ const hashtags = `#${String(item.title || "").replace(/[^a-zA-Z0-9]/g, "_")} #anime`;
+ const poster = ((item.backdrop || item.poster || "") as string).replace("/original/", "/w1280/").replace("/w780/", "/w1280/");
+
+ const footerLinksHtml = tgFooterLinks.map(l => `๏ ${l.emoji} <a href="${l.url}">${l.label}</a> ${l.emoji}`).join("\n");
+
+ const caption = `♨️ <b>Tɪᴛᴇʟ;-</b> ${item.title}
+┌──────────────────
+│ ✦ <b>Sᴇᴀsᴏɴ :</b> ${seasonNum}
+│ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> ${totalEps || 'N/A'}
+│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${languages} ${dubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}
+│ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> ${quality}
+│ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ ${rating}/10
+│ ✦ <b>Gᴇɴʀᴇs :</b> ${genres}
+│ ✦ <b>Sᴛᴀᴛᴜs :</b> ${status === "complete" ? "Cᴏᴍᴘʟᴇᴛᴇ ✅" : "Oɴɢᴏɪɴɢ 🟢"}
+└──────────────────
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+📌 ${formatEpisodeRangeLabel(seasonNum, newEpNum)}
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+${footerLinksHtml}
+▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
+${hashtags}`;
+
+ // Rebuild watch button URL with fresh latest-episode pointer
+ const buttonUrl = isSeries
+ ? buildEpisodeShareUrl(item.id, lastSeasonIdx, Math.max(0, totalEps - 1))
+ : buildEpisodeShareUrl(item.id);
+ return { caption, poster, matched: true, buttonUrl } as any;
+ };
+
+ const cancelCurrent = () => {
+ cancelRef.current = true;
+ toast.info("Cancelling…");
+ };
 
  // Load saved posts
  useEffect(() => {
