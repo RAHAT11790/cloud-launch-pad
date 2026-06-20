@@ -623,7 +623,7 @@ const ROUTER_FUNCTIONS: Array<{ slug: string; label: string }> = EDGE_FUNCTION_L
 
 // Functions whose source was just updated — user must paste the freshly-deployed
 // URL from EGD Manager into these fields. A green "NEW" badge highlights them.
-const NEW_ROUTER_PASTE = new Set<string>(["video-proxy", "video-download", "an-api", "apk-download"]);
+const NEW_ROUTER_PASTE = new Set<string>(["video-proxy", "video-download", "an-api", "apk-download", "telegram-post"]);
 
 const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
  const defaultBase = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1";
