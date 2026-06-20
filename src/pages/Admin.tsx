@@ -7797,15 +7797,26 @@ ${footerLinksHtml}
  if (!target) { toast.error("Enter a target channel ID"); return; }
  const posts = channelGroups.find(g => g.chatId === sourceChannelId)?.posts || [];
  if (posts.length === 0) { toast.info("no posts"); return; }
-  // No dedup, no skip — user can repost as many times as they want.
- // Newly sent message IDs are saved so Delete All can remove them later.
- const toSend = [...posts].sort((a, b) => (Number(a.sentAt) || 0) - (Number(b.sentAt) || 0));
+  const seenTitles = new Set<string>();
+  const skippedTitles: string[] = [];
+  const toSend = [...posts]
+   .sort((a, b) => (Number(b.sentAt) || 0) - (Number(a.sentAt) || 0))
+   .filter((p) => {
+    const fresh = buildFreshCaptionForTitle(p.title) as any;
+    const key = fresh.titleKey || normalizeTelegramTitleKey(p.title || "");
+    if (!key) return true;
+    if (seenTitles.has(key)) { skippedTitles.push(String(p.title || "Untitled")); return false; }
+    seenTitles.add(key);
+    return true;
+   })
+   .sort((a, b) => (Number(a.sentAt) || 0) - (Number(b.sentAt) || 0));
+  if (toSend.length === 0) { toast.info("All saved posts are duplicate records — nothing to send"); return; }
  const targetKey = String(target).replace(/[^a-zA-Z0-9_-]/g, '_');
- if (!window.confirm(`Send ${toSend.length} post(s) with LATEST details to ${target}?`)) return;
+  if (!window.confirm(`Send ${toSend.length} unique anime post(s) with LATEST details to ${target}?${skippedTitles.length ? `\n${skippedTitles.length} duplicate record(s) will be skipped.` : ""}`)) return;
 
  cancelRef.current = false;
- setBusyChannel(sourceChannelId); setBusyAction("send"); setBusyProgress({done:0,total:toSend.length});
- let ok = 0, fail = 0, skipped = 0; let firstError = "";
+  setBusyChannel(sourceChannelId); setBusyAction("send"); setBusyProgress({done:0,total:toSend.length,skipped:skippedTitles.length});
+  let ok = 0, fail = 0; let firstError = "";
  for (let i = 0; i < toSend.length; i++) {
  if (cancelRef.current) break;
  const p = toSend[i];
@@ -7839,8 +7850,8 @@ ${footerLinksHtml}
  const wasCancelled = cancelRef.current;
  cancelRef.current = false;
  setBusyChannel(""); setBusyAction(""); setBusyProgress({done:0,total:0});
- if (wasCancelled) toast.info(`Cancelled — sent ${ok}, failed ${fail}`);
- else if (ok > 0) toast.success(`✅ Sent ${ok}/${toSend.length} to ${target}${fail?`, ${fail} failed`:""}`);
+  if (wasCancelled) toast.info(`Cancelled — sent ${ok}, failed ${fail}, skipped ${skippedTitles.length} duplicate`);
+  else if (ok > 0) toast.success(`✅ Sent ${ok}/${toSend.length} unique to ${target}${skippedTitles.length?`, skipped ${skippedTitles.length} duplicate`:""}${fail?`, ${fail} failed`:""}`);
  if (!wasCancelled && fail > 0 && firstError) toast.error(`Send error: ${firstError}`);
  };
 
