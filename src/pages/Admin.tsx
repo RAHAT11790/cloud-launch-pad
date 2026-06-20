@@ -7772,63 +7772,6 @@ ${hashtags}`;
  else toast.info("no changes needed");
  };
 
-  // === SEND ALL to target channel (re-post saved posts one by one) ===
- const sendAllToChannel = async (sourceChannelId: string) => {
- const target = (channelTargets[sourceChannelId] || sourceChannelId).trim();
- if (!target) { toast.error("Enter a target channel ID"); return; }
- const posts = channelGroups.find(g => g.chatId === sourceChannelId)?.posts || [];
- if (posts.length === 0) { toast.info("no posts"); return; }
- // Deduplicate by title — only send the LATEST (highest sentAt) record per title
- const latestByTitle = new Map<string, any>();
- for (const p of posts) {
- const key = String(p.title || p.messageId || Math.random()).trim().toLowerCase();
- const prev = latestByTitle.get(key);
- if (!prev || (Number(p.sentAt) || 0) > (Number(prev.sentAt) || 0)) latestByTitle.set(key, p);
- }
- // Skip titles already present on the target channel
- const targetKey = String(target).replace(/[^a-zA-Z0-9_-]/g, '_');
- const alreadyOnTarget = new Set(
- tgPosts
- .filter(p => String(p.chatId) === String(target) || p.firebaseKey?.startsWith(`${targetKey}_`))
- .map(p => String(p.title || "").trim().toLowerCase())
- );
- const toSend = Array.from(latestByTitle.values())
- .filter(p => !alreadyOnTarget.has(String(p.title || "").trim().toLowerCase()))
- .sort((a, b) => (Number(b.sentAt) || 0) - (Number(a.sentAt) || 0));
- if (toSend.length === 0) { toast.info("All posts already on target — nothing new"); return; }
- if (!window.confirm(`Send ${toSend.length} unique post(s) to ${target}?\n(${posts.length - toSend.length} duplicates skipped)`)) return;
-
- setBusyChannel(sourceChannelId); setBusyAction("send"); setBusyProgress({done:0,total:toSend.length});
- let ok = 0, fail = 0; let firstError = "";
- for (let i = 0; i < toSend.length; i++) {
- const p = toSend[i];
- const caption = (p.caption && String(p.caption).trim())
- ? String(p.caption)
- : `<b>${String(p.title || "").replace(/[<>&]/g, "")}</b>`;
- const payload: any = {
- chatId: target,
- caption,
- photoUrl: p.poster || undefined,
- inlineButtons: Array.isArray(p.buttons) && p.buttons.length ? p.buttons : undefined,
- };
- try {
- const r = await callTgApi(payload);
- if (r.ok) {
- ok++;
- const msgId = r.data?.result?.message_id || r.data?.message_id;
- if (msgId) {
- const rec = { chatId: target, messageId: Number(msgId), title: p.title, poster: p.poster || "", caption, buttons: p.buttons || [], sentAt: Date.now() };
- try { await set(ref(db, `telegramPosts/${targetKey}_${msgId}`), rec); } catch {}
- }
- } else {
- fail++;
- if (!firstError) firstError = r.data?.error || r.data?.description || `HTTP ${r.status}`;
- }
- } catch (e:any) { fail++; if (!firstError) firstError = e?.message || "network error"; }
- setBusyProgress({done:i+1,total:toSend.length});
- await new Promise(r => setTimeout(r, 1200));
- }
- setBusyChannel(""); setBusyAction(""); setBusyProgress({done:0,total:0});
   // === SEND ALL to target channel (re-post with LATEST fresh details) ===
  const sendAllToChannel = async (sourceChannelId: string) => {
  const target = (channelTargets[sourceChannelId] || sourceChannelId).trim();
