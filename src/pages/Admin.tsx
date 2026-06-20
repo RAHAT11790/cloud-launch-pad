@@ -7863,7 +7863,7 @@ ${footerLinksHtml}
  ok++;
  const msgId = r.data?.result?.message_id || r.data?.message_id;
  if (msgId) {
- const rec = { chatId: target, messageId: Number(msgId), title: p.title, poster: poster || "", caption, buttons: baseButtons, sentAt: Date.now() };
+  const rec = { chatId: target, messageId: Number(msgId), title: fresh.title || p.title, poster: poster || "", caption, buttons: baseButtons, sentAt: Date.now() };
  try { await set(ref(db, `telegramPosts/${targetKey}_${msgId}`), rec); } catch {}
  }
  } else {
@@ -7871,7 +7871,7 @@ ${footerLinksHtml}
  if (!firstError) firstError = r.data?.error || r.data?.description || `HTTP ${r.status}`;
  }
  } catch (e:any) { fail++; if (!firstError) firstError = e?.message || "network error"; }
- setBusyProgress({done:i+1,total:toSend.length});
+  setBusyProgress({done:i+1,total:toSend.length,skipped:skippedTitles.length});
  if (i < toSend.length - 1) await new Promise(r => setTimeout(r, 1200));
  }
  const wasCancelled = cancelRef.current;
