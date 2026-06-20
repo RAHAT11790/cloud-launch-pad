@@ -141,9 +141,15 @@ Deno.serve(async (req) => {
     Accept: req.headers.get("accept") || "*/*",
     "Accept-Encoding": "identity", // disable gzip → proper Range support
     Connection: "keep-alive",
-    Referer: `${targetUrl.protocol}//${targetUrl.hostname}/`,
-    Origin: `${targetUrl.protocol}//${targetUrl.hostname}`,
   };
+
+  // Some live TV / CDN HLS origins reject synthetic Origin/Referer headers.
+  // Use minimal headers for HLS manifests/segments; keep referer/origin only
+  // for normal file servers that require basic hotlink context.
+  if (!looksLikeHlsRequest(targetUrl)) {
+    fwd.Referer = `${targetUrl.protocol}//${targetUrl.hostname}/`;
+    fwd.Origin = `${targetUrl.protocol}//${targetUrl.hostname}`;
+  }
 
   const range = req.headers.get("range");
   if (range) fwd["Range"] = range;
@@ -181,6 +187,23 @@ Deno.serve(async (req) => {
     const v = upstream.headers.get(h);
     if (v) respHeaders.set(h, v);
   }
+
+  const upstreamType = (upstream.headers.get("content-type") || "").toLowerCase();
+  const isM3u8 = /mpegurl|m3u8/.test(upstreamType) || /\.m3u8(\?|#|$)/i.test(targetUrl.toString());
+  if (isM3u8 && req.method !== "HEAD") {
+    const text = await upstream.text();
+    const proxyPrefix = `${url.origin}${url.pathname}?url=`;
+    respHeaders.delete("content-length");
+    respHeaders.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
+    respHeaders.set("cache-control", "no-store");
+    respHeaders.set("content-disposition", "inline");
+    return new Response(rewriteM3U8(text, targetUrl.toString(), proxyPrefix), {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: respHeaders,
+    });
+  }
+
   if (!respHeaders.has("accept-ranges")) {
     respHeaders.set("accept-ranges", "bytes");
   }
