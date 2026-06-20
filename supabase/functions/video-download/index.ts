@@ -95,6 +95,8 @@ const fetchWithRetry = async (
 // Domain allowlist — block embed/scrape from non-RS sites.
 const ALLOWED_HOST_RX = [
   /\.lovable\.app$/i, /^lovable\.app$/i,
+  /\.lovableproject\.com$/i, /^lovableproject\.com$/i,
+  /^rsanime03\.lovable\.app$/i,
   /^localhost(?::\d+)?$/i, /^127\.0\.0\.1(?::\d+)?$/i,
 ];
 const hostAllowed = (s: string | null) => {
