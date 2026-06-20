@@ -38,6 +38,34 @@ const PASSTHROUGH_RESP = [
   "cache-control",
 ];
 
+const VIDEO_MIRROR_ORIGINS = [
+  "https://rahat1102-video-hosting-bot.hf.space",
+  "http://fi3.bot-hosting.net:22854",
+  "https://rs-stream-bot-1.onrender.com",
+];
+
+const isKnownMirrorHost = (target: URL) => {
+  const host = target.host.toLowerCase();
+  return host === "rs-stream-bot-1.onrender.com" ||
+    host === "rahat1102-video-hosting-bot.hf.space" ||
+    host === "fi3.bot-hosting.net:22854";
+};
+
+const isVideoFileRequest = (target: URL): boolean => /\.(mp4|mkv|webm|mov)(\?|#|$)/i.test(target.toString());
+
+const buildUpstreamCandidates = (target: URL): URL[] => {
+  const out: URL[] = [target];
+  if (!isKnownMirrorHost(target) || !isVideoFileRequest(target)) return out;
+
+  for (const origin of VIDEO_MIRROR_ORIGINS) {
+    try {
+      const candidate = new URL(`${origin}${target.pathname}${target.search}${target.hash}`);
+      if (!out.some((u) => u.toString() === candidate.toString())) out.push(candidate);
+    } catch { /* skip bad mirror */ }
+  }
+  return out;
+};
+
 const looksLikeHlsRequest = (target: URL): boolean => /\.(m3u8|ts|m4s|mp4|aac|vtt|key)(\?|#|$)/i.test(target.toString());
 
 const rewriteM3U8 = (text: string, baseUrl: string, proxyPrefix: string): string => {
@@ -159,13 +187,38 @@ Deno.serve(async (req) => {
   req.signal.addEventListener("abort", () => ac.abort(), { once: true });
 
   let upstream: Response;
+  let effectiveTargetUrl = targetUrl;
   try {
-    upstream = await fetch(targetUrl.toString(), {
-      method: req.method,
-      headers: fwd,
-      redirect: "follow",
-      signal: ac.signal,
-    });
+    let lastError: unknown = null;
+    for (const candidate of buildUpstreamCandidates(targetUrl)) {
+      const candidateHeaders = { ...fwd };
+      if (!looksLikeHlsRequest(candidate)) {
+        candidateHeaders.Referer = `${candidate.protocol}//${candidate.hostname}/`;
+        candidateHeaders.Origin = `${candidate.protocol}//${candidate.hostname}`;
+      } else {
+        delete candidateHeaders.Referer;
+        delete candidateHeaders.Origin;
+      }
+      try {
+        const res = await fetch(candidate.toString(), {
+          method: req.method,
+          headers: candidateHeaders,
+          redirect: "follow",
+          signal: ac.signal,
+        });
+        if (res.ok || res.status === 206 || res.status === 304) {
+          upstream = res;
+          effectiveTargetUrl = candidate;
+          lastError = null;
+          break;
+        }
+        lastError = new Error(`Upstream ${res.status}`);
+        try { await res.body?.cancel(); } catch {}
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    if (!upstream!) throw lastError || new Error("All upstream mirrors failed");
   } catch (e) {
     return new Response(
       `Upstream fetch failed: ${(e as Error).message}`,
@@ -180,7 +233,7 @@ Deno.serve(async (req) => {
   }
 
   const upstreamType = (upstream.headers.get("content-type") || "").toLowerCase();
-  const isM3u8 = /mpegurl|m3u8/.test(upstreamType) || /\.m3u8(\?|#|$)/i.test(targetUrl.toString());
+  const isM3u8 = /mpegurl|m3u8/.test(upstreamType) || /\.m3u8(\?|#|$)/i.test(effectiveTargetUrl.toString());
   if (isM3u8 && req.method !== "HEAD") {
     const text = await upstream.text();
     const proxyPrefix = `https://${url.host}/functions/v1/video-proxy?url=`;
@@ -188,7 +241,7 @@ Deno.serve(async (req) => {
     respHeaders.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
     respHeaders.set("cache-control", "no-store");
     respHeaders.set("content-disposition", "inline");
-    return new Response(rewriteM3U8(text, targetUrl.toString(), proxyPrefix), {
+    return new Response(rewriteM3U8(text, effectiveTargetUrl.toString(), proxyPrefix), {
       status: upstream.status,
       statusText: upstream.statusText,
       headers: respHeaders,
