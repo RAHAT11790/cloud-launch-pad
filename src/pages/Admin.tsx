@@ -4425,7 +4425,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 ┌──────────────────
 │ ✦ <b>Sᴇᴀsᴏɴ :</b> ${tgSeason || 'N/A'}
 │ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> ${tgTotalEpisodes || 'N/A'}
-│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${tgLanguages} ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}
+│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${tgLanguages} ${tgDubType === "fandub" ? "𝐅𝐚𝐧𝐝𝐮𝐛" : "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥"}
 │ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> ${tgQuality}
 │ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ ${tgRating}/10
 │ ✦ <b>Gᴇɴʀᴇs :</b> ${tgGenres}
@@ -4436,7 +4436,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
 ${footerLinksHtml}
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
-${tgHashtags}`;
+${sanitizeTelegramHashtags(tgHashtags, tgTitle)}`;
 
  // Support multiple channel IDs separated by comma, newline, or space
  const channelIds = tgChannelId
@@ -4646,6 +4646,25 @@ ${tgBulkFooter}
 
  function escapeHtmlBasic(s: string): string {
  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+ }
+
+ function normalizeTelegramTitleKey(s: string): string {
+  return String(s || "")
+   .toLowerCase()
+   .replace(/#[a-z0-9_\u0980-\u09ff-]+/gi, " ")
+   .replace(/[^a-z0-9\u0980-\u09ff]+/g, " ")
+   .replace(/\s+/g, " ")
+   .trim();
+ }
+
+ function sanitizeTelegramHashtags(tags: string, title: string): string {
+  const titleKey = normalizeTelegramTitleKey(title);
+  return String(tags || "")
+   .split(/\s+/)
+   .map(tag => tag.trim())
+   .filter(Boolean)
+   .filter(tag => normalizeTelegramTitleKey(tag) !== titleKey)
+   .join(" ");
  }
 
 
