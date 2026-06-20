@@ -620,6 +620,10 @@ const ROUTER_FUNCTIONS: Array<{ slug: string; label: string }> = EDGE_FUNCTION_L
  (e) => ({ slug: e.slug, label: e.label })
 );
 
+// Functions whose source was just updated — user must paste the freshly-deployed
+// URL from EGD Manager into these fields. A green "NEW" badge highlights them.
+const NEW_ROUTER_PASTE = new Set<string>(["video-proxy", "video-download", "an-api"]);
+
 const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
  const defaultBase = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1";
  const [urls, setUrls] = useState<Record<string, string>>({});
@@ -709,12 +713,22 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  {ROUTER_FUNCTIONS.map(({ slug, label }) => {
  const recommended = `${defaultBase}/${slug}`;
  const res = testResult[slug];
+ const isNew = NEW_ROUTER_PASTE.has(slug);
  return (
- <div key={slug} className="rounded-xl border border-zinc-700/50 bg-zinc-900/40 p-3 min-w-0">
+ <div key={slug} className={`rounded-xl border bg-zinc-900/40 p-3 min-w-0 ${isNew ? "border-emerald-400/70 ring-1 ring-emerald-400/40" : "border-zinc-700/50"}`}>
  <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+ <div className="min-w-0 flex items-center gap-2">
  <div className="min-w-0">
- <div className="text-xs font-semibold text-white truncate">{label}</div>
+ <div className="text-xs font-semibold text-white truncate flex items-center gap-1.5">
+ {label}
+ {isNew && (
+ <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500 text-black tracking-wider animate-pulse">
+ NEW · paste URL
+ </span>
+ )}
+ </div>
  <div className="text-[10px] text-zinc-500 truncate">{slug}</div>
+ </div>
  </div>
  <button
  onClick={() => setEnabled((p) => ({ ...p, [slug]: !(p[slug] !== false) }))}

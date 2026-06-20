@@ -8,6 +8,10 @@ import { toast } from "sonner";
 import { db, ref, onValue, set } from "@/lib/firebase";
 import { EGD_DEPLOYER_CODE } from "@/lib/egdDeployerCode";
 import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
+
+// Slugs whose source was just updated and need to be re-deployed by the user.
+// A green "NEW" badge highlights them in the deploy grid below.
+const NEW_EDGE_DEPLOYS = new Set<string>(["video-proxy", "video-download", "an-api"]);
 import { supabase } from "@/integrations/supabase/client";
 
 // Secrets that Lovable auto-provisions; the admin never needs to paste a value.
@@ -660,7 +664,9 @@ export default function EgdManager({
           </span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-          {EDGE_FUNCTION_LIBRARY.map((entry) => (
+          {EDGE_FUNCTION_LIBRARY.map((entry) => {
+            const isNew = NEW_EDGE_DEPLOYS.has(entry.slug);
+            return (
             <button
               key={entry.slug}
               type="button"
@@ -695,8 +701,13 @@ export default function EgdManager({
                   }, 50);
                 }
               }}
-              className="text-left rounded-xl border border-zinc-700/60 bg-zinc-900/50 hover:border-amber-400/60 hover:bg-amber-500/5 transition p-3 min-w-0 overflow-hidden"
+              className={`relative text-left rounded-xl border bg-zinc-900/50 hover:bg-amber-500/5 transition p-3 min-w-0 overflow-hidden ${isNew ? "border-emerald-400/70 ring-1 ring-emerald-400/40" : "border-zinc-700/60 hover:border-amber-400/60"}`}
             >
+              {isNew && (
+                <span className="absolute top-1.5 right-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500 text-black tracking-wider animate-pulse">
+                  NEW
+                </span>
+              )}
               <div className="font-semibold text-xs text-white truncate">{entry.label}</div>
               <div className="text-[10px] text-zinc-500 truncate mt-0.5">{entry.slug}</div>
               <div className="text-[10px] text-zinc-400 mt-1 line-clamp-2 break-words">{entry.description}</div>
@@ -706,8 +717,10 @@ export default function EgdManager({
                 </div>
               )}
             </button>
-          ))}
+            );
+          })}
         </div>
+
       </div>
 
 
