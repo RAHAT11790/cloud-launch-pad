@@ -59,9 +59,17 @@ const hostAllowed = (urlStr: string | null): boolean => {
 const isAllowedRequest = (req: Request): boolean => {
   const origin = req.headers.get("origin");
   const referer = req.headers.get("referer");
-  // Block anonymous server-to-server scrapers (no Origin AND no Referer).
-  if (!origin && !referer) return false;
-  return hostAllowed(origin) || hostAllowed(referer);
+  // Browser <video> Range/HLS segment requests often strip BOTH Origin and
+  // Referer (cross-origin media + strict-origin policy). Allow that case so
+  // legitimate playback works. Block only when a header IS present but points
+  // to a non-allowed site (embed theft on attacker domain).
+  if (!origin && !referer) return true;
+  if (origin && !hostAllowed(origin)) return false;
+  if (referer && !hostAllowed(referer)) {
+    // Allow if origin is present and valid, otherwise reject.
+    return !!(origin && hostAllowed(origin));
+  }
+  return true;
 };
 
 Deno.serve(async (req) => {
