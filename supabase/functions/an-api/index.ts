@@ -462,6 +462,8 @@ async function hlsProxy(req: Request, target: string, proxyPrefix: string): Prom
 // Domain allowlist — block third-party scrapers/embeds.
 const _ALLOWED_HOST_RX = [
   /\.lovable\.app$/i, /^lovable\.app$/i,
+  /\.lovableproject\.com$/i, /^lovableproject\.com$/i,
+  /^rsanime03\.lovable\.app$/i,
   /^localhost(?::\d+)?$/i, /^127\.0\.0\.1(?::\d+)?$/i,
 ];
 const _hostAllowed = (s: string | null) => {
