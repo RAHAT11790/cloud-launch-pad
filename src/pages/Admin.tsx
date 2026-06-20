@@ -4651,7 +4651,7 @@ ${tgBulkFooter}
  function normalizeTelegramTitleKey(s: string): string {
   return String(s || "")
    .toLowerCase()
-   .replace(/#[a-z0-9_\u0980-\u09ff-]+/gi, " ")
+   .replace(/#/g, " ")
    .replace(/[^a-z0-9\u0980-\u09ff]+/g, " ")
    .replace(/\s+/g, " ")
    .trim();
