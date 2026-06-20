@@ -8519,12 +8519,13 @@ ${tgBulkFooter}
  setEditId(ch.id); setName(ch.name); setLogo(ch.logo); setBanner(ch.banner || ""); setStreamUrl(ch.streamUrl); setCategory(ch.category);
  };
 
- return (
- <div>
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
- 📺 {editId ? "Edit Channel" : "Add New Channel"}
- </h3>
+  return (
+  <div>
+  <LiveTvProxyConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+  <div className={`${glassCard} p-4 mb-4`}>
+  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+  📺 {editId ? "Edit Channel" : "Add New Channel"}
+  </h3>
  <div className="space-y-3">
  <div>
  <label className="text-[10px] text-zinc-400 block mb-1">Channel Name *</label>
