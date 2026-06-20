@@ -614,11 +614,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       maybeReady();
     });
 
-    const unsub2 = onValue(ref(db, "settings/proxyServer"), (snap) => {
+    // Live TV uses a dedicated proxy (settings/liveTvProxy). Fall back to the
+    // normal proxy (settings/proxyServer) when no Live TV proxy is configured.
+    const proxyPath = preferProxy ? "settings/liveTvProxy" : "settings/proxyServer";
+    const unsub2 = onValue(ref(db, proxyPath), (snap) => {
       const val = snap.val();
       if (val && val.url) {
         setProxyUrl(String(val.url));
         setProxyApiKey(String(val.apiKey || ''));
+      } else if (preferProxy) {
+        // No Live TV proxy set — fall back to the regular proxy so playback still works.
+        get(ref(db, "settings/proxyServer")).then((s) => {
+          const v = s.val();
+          if (v && v.url) {
+            setProxyUrl(String(v.url));
+            setProxyApiKey(String(v.apiKey || ''));
+          } else {
+            setProxyUrl('');
+            setProxyApiKey('');
+          }
+        }).catch(() => { setProxyUrl(''); setProxyApiKey(''); });
       } else {
         setProxyUrl('');
         setProxyApiKey('');
