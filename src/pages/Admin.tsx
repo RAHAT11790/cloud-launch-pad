@@ -8018,9 +8018,9 @@ ${footerLinksHtml}
  {isBusy && (
  <div className="space-y-2 pt-1">
  <div className="flex items-center justify-between gap-2">
- <div className="text-[10px] text-amber-300 font-medium">
-  {busyAction === "send" ? "📤 Sending" : "🗑️ Deleting"} {busyProgress.done}/{busyProgress.total}{busyProgress.skipped ? ` • skipped ${busyProgress.skipped}` : ""}
- </div>
+  <div className="text-[10px] text-amber-300 font-medium">
+   📤 Sending {busyProgress.done}/{busyProgress.total}{busyProgress.skipped ? ` • skipped ${busyProgress.skipped}` : ""}
+  </div>
  <button onClick={cancelCurrent}
  className="px-3 py-1 rounded-md bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 text-[10px] font-semibold flex items-center gap-1 transition-all">
  <XCircle size={12} /> Cancel
