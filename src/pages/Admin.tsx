@@ -7878,45 +7878,6 @@ ${footerLinksHtml}
  if (!wasCancelled && fail > 0 && firstError) toast.error(`Send error: ${firstError}`);
  };
 
- // === DELETE ALL from a channel on Telegram ===
- const deleteAllFromChannel = async (sourceChannelId: string) => {
- const posts = channelGroups.find(g => g.chatId === sourceChannelId)?.posts || [];
- if (posts.length === 0) { toast.info("no posts"); return; }
- const deletable = posts.filter(p => p.messageId != null && !isNaN(Number(p.messageId)));
- const skipped = posts.length - deletable.length;
- if (deletable.length === 0) { toast.error("No records have a valid messageId"); return; }
- if (!window.confirm(`Delete ${deletable.length} post(s) from Telegram channel ${sourceChannelId}?\n${skipped ? "(" + skipped + " skipped — missing messageId) " : ""}Bot must be admin with delete permission.`)) return;
-
- cancelRef.current = false;
- setBusyChannel(sourceChannelId); setBusyAction("delete"); setBusyProgress({done:0,total:deletable.length});
- let ok = 0, fail = 0; let firstError = "";
- for (let i = 0; i < deletable.length; i++) {
- if (cancelRef.current) break;
- const p = deletable[i];
- try {
- const chatIdRaw = p.chatId;
- const chatIdNum = typeof chatIdRaw === "string" && /^-?\d+$/.test(chatIdRaw) ? Number(chatIdRaw) : chatIdRaw;
- const r = await callTgApi({ action: "delete-message", chatId: chatIdNum, messageId: Number(p.messageId) });
- if (r.ok) {
- ok++;
- try { await set(ref(db, `telegramPosts/${p.firebaseKey}`), null); } catch {}
- } else {
- fail++;
- if (!firstError) firstError = r.data?.error || r.data?.description || `HTTP ${r.status}`;
- }
- } catch (e:any) { fail++; if (!firstError) firstError = e?.message || "network error"; }
- setBusyProgress({done:i+1,total:deletable.length});
- if (i < deletable.length - 1) await new Promise(r => setTimeout(r, 400));
- }
- const wasCancelled = cancelRef.current;
- cancelRef.current = false;
- setBusyChannel(""); setBusyAction(""); setBusyProgress({done:0,total:0});
- if (wasCancelled) toast.info(`Cancelled — deleted ${ok}, failed ${fail}`);
- else if (ok > 0) toast.success(`🗑️ Deleted ${ok}/${deletable.length}${fail?`, ${fail} failed`:""}`);
- if (!wasCancelled && fail > 0 && firstError) toast.error(`Delete error: ${firstError}`);
- if (!wasCancelled && ok === 0 && fail === 0) toast.error("Delete failed — check bot permissions");
- };
-
  // === CLEAR records only (not Telegram) ===
  const clearChannelRecords = async (sourceChannelId: string) => {
  const posts = channelGroups.find(g => g.chatId === sourceChannelId)?.posts || [];
