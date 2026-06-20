@@ -3020,51 +3020,73 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  return () => unsub();
  }, [activeSection]);
 
- // Lazy-load ANALYTICS data + nightly cleanup of old date-buckets
+ // Lazy-load ANALYTICS data — fast subscription, deferred one-shot cleanup.
  useEffect(() => {
  if (activeSection !== "analytics") return;
  const unsubs: (() => void)[] = [];
- unsubs.push(onValue(ref(db, "analytics/views"), (snap) => {
- const data = snap.val() || {};
- setAnalyticsViews(data);
-
- // 🧹 Auto-cleanup: delete every date bucket older than today.
- // Today's bucket is preserved so the dashboard always shows fresh stats.
- try {
  const today = new Date().toISOString().split("T")[0];
- Object.entries(data).forEach(([animeId, byDate]: any) => {
- if (!byDate || typeof byDate !== "object") return;
- Object.keys(byDate).forEach((dateKey) => {
- if (dateKey !== today) {
- remove(ref(db, `analytics/views/${animeId}/${dateKey}`)).catch(() => {});
+
+ // Throttle setState so a rapid burst of Firebase updates doesn't trash React.
+ let viewsRaf: number | null = null;
+ let viewsPending: any = null;
+ const flushViews = () => {
+ viewsRaf = null;
+ if (viewsPending) {
+ setAnalyticsViews(viewsPending);
+ viewsPending = null;
  }
- });
- });
- } catch {}
+ };
+ unsubs.push(onValue(ref(db, "analytics/views"), (snap) => {
+ viewsPending = snap.val() || {};
+ if (viewsRaf == null) viewsRaf = requestAnimationFrame(flushViews);
  }));
  unsubs.push(onValue(ref(db, "analytics/activeViewers"), (snap) => {
  setActiveViewers(snap.val() || {});
  }));
  unsubs.push(onValue(ref(db, "analytics/dailyActive"), (snap) => {
- const data = snap.val() || {};
- setDailyActiveUsers(data);
-
- // 🧹 Cleanup older daily-active buckets too (keep today only)
- try {
- const today = new Date().toISOString().split("T")[0];
- Object.keys(data).forEach((dateKey) => {
- if (dateKey !== today) {
- remove(ref(db, `analytics/dailyActive/${dateKey}`)).catch(() => {});
- }
- });
- } catch {}
+ setDailyActiveUsers(snap.val() || {});
  }));
- // Subscribe to persistent all-time totals (never reset)
  unsubs.push(onValue(ref(db, "analytics/totals/views"), (snap) => {
  setAllTimeTotals(snap.val() || {});
  }));
- return () => unsubs.forEach(u => u());
+
+ // Defer cleanup completely off the render path — runs once when browser is idle.
+ const idle: any = (window as any).requestIdleCallback || ((fn: any) => setTimeout(fn, 2000));
+ const idleCancel: any = (window as any).cancelIdleCallback || clearTimeout;
+ const idleId = idle(async () => {
+ try {
+ const [vSnap, daSnap] = await Promise.all([
+ get(ref(db, "analytics/views")),
+ get(ref(db, "analytics/dailyActive")),
+ ]);
+ const v = vSnap.val() || {};
+ const d = daSnap.val() || {};
+ // Chunk deletes so we never block the main thread.
+ const ops: Array<() => Promise<any>> = [];
+ Object.entries(v).forEach(([animeId, byDate]: any) => {
+ if (!byDate || typeof byDate !== "object") return;
+ Object.keys(byDate).forEach((dk) => {
+ if (dk !== today) ops.push(() => remove(ref(db, `analytics/views/${animeId}/${dk}`)));
+ });
+ });
+ Object.keys(d).forEach((dk) => {
+ if (dk !== today) ops.push(() => remove(ref(db, `analytics/dailyActive/${dk}`)));
+ });
+ // Fire in small batches so the UI stays smooth.
+ for (let i = 0; i < ops.length; i += 20) {
+ await Promise.all(ops.slice(i, i + 20).map(fn => fn().catch(() => {})));
+ await new Promise(r => setTimeout(r, 0));
+ }
+ } catch {}
+ }, { timeout: 5000 });
+
+ return () => {
+ unsubs.forEach(u => u());
+ if (viewsRaf != null) cancelAnimationFrame(viewsRaf);
+ try { idleCancel(idleId); } catch {}
+ };
  }, [activeSection]);
+
 
  // Build content options for notifications/releases (newest first by updatedAt/createdAt)
  useEffect(() => {
