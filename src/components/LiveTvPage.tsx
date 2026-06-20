@@ -2,11 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { db, ref, onValue } from "@/lib/firebase";
 import { Play, Radio, Search, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { createPortal } from "react-dom";
 import VideoPlayer from "./VideoPlayer";
 import { optimizedImageUrl } from "@/lib/imageCache";
-
-const LIVE_TV_PLAYER_KEY = "rs_live_tv_active_channel";
 
 interface TvChannel {
   id: string;
@@ -58,17 +55,8 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
   useEffect(() => {
     if (!isActive && activeChannel) {
       setActiveChannel(null);
-      sessionStorage.removeItem(LIVE_TV_PLAYER_KEY);
     }
   }, [isActive, activeChannel]);
-
-  useEffect(() => {
-    if (!activeChannel) return;
-    sessionStorage.setItem(LIVE_TV_PLAYER_KEY, activeChannel.id);
-    return () => {
-      sessionStorage.removeItem(LIVE_TV_PLAYER_KEY);
-    };
-  }, [activeChannel]);
 
   const categories = useMemo(() => {
     const cats = new Set<string>();
@@ -93,13 +81,8 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
     return channels.filter(ch => ch.id !== activeChannel.id).slice(0, 12);
   }, [activeChannel, channels]);
 
-  const openChannel = (channel: TvChannel) => {
-    setActiveChannel(channel);
-    sessionStorage.setItem(LIVE_TV_PLAYER_KEY, channel.id);
-  };
-
   if (activeChannel) {
-    return createPortal(
+    return (
       <VideoPlayer
         src={activeChannel.streamUrl}
         title={activeChannel.name}
@@ -107,13 +90,11 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
         poster={activeChannel.logo}
         onClose={() => {
           setActiveChannel(null);
-          sessionStorage.removeItem(LIVE_TV_PLAYER_KEY);
           onExitPlayer?.();
         }}
         hideDownload
         noProxy
         noServerSwitch
-        liveMode
         suggestedAnime={suggestedChannels.map(ch => ({
           id: ch.id,
           title: ch.name,
@@ -129,10 +110,9 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
         }))}
         onSuggestedClick={(anime) => {
           const ch = channels.find(c => c.id === anime.id);
-          if (ch) openChannel(ch);
+          if (ch) setActiveChannel(ch);
         }}
-      />,
-      document.body,
+      />
     );
   }
 
@@ -202,7 +182,7 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
           {filtered.map((channel) => (
             <div
               key={channel.id}
-              onClick={() => openChannel(channel)}
+              onClick={() => setActiveChannel(channel)}
               className="relative aspect-video rounded-2xl overflow-hidden cursor-pointer group bg-card border border-border/50"
               style={{ boxShadow: "var(--neu-shadow)" }}
             >

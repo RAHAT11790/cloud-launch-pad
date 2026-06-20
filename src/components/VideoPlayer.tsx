@@ -203,7 +203,6 @@ interface VideoPlayerProps {
   buildShareLinkForEpisode?: (seasonIdx?: number, epIdx?: number) => string;
   onInfoClick?: () => void;
   onLibraryClick?: (animeId?: string) => void;
-  liveMode?: boolean;
 }
 
 type DownloadEpisodeOption = {
@@ -310,10 +309,9 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, liveMode }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
-  const isLiveMode = !!liveMode || /(^|\s)live(\s|$)/i.test(String(subtitle || ""));
   // Removed preload anime character image - no longer needed
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -404,11 +402,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const isRawHlsSource = useMemo(() => /\.m3u8(\?|#|$)/i.test(String(src || "")), [src]);
 
   const effectiveVideoServers = useMemo(() => {
-    if (noServerSwitch || isRawHlsSource || isLiveMode) return [];
+    if (noServerSwitch || isRawHlsSource) return [];
     const list = videoServers.length > 0 ? videoServers : buildFallbackServers(src);
     // Show ALL configured servers so the user can switch between them.
     return list;
-  }, [isLiveMode, isRawHlsSource, noServerSwitch, src, videoServers]);
+  }, [isRawHlsSource, noServerSwitch, src, videoServers]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
   // The branded `req.html` page on the embed server posts video events to us
@@ -906,7 +904,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [activeEpisodeIdx, currentSeasonIdx, sharePanelSeasonIdx, shareSeason]);
 
   useEffect(() => {
-    if (!animeId || isLiveMode) return;
+    if (!animeId) return;
     if (isGuest()) {
       setSaved(guestStore.watchlist.has(animeId));
       return;
@@ -1350,7 +1348,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   // Ad gate - only run after premium AND freeAccess data have loaded
   useEffect(() => {
-    if (isLiveMode) { setAdGateActive(false); return; }
     if (isPremium === null) return; // still loading premium status
     if (!freeAccessLoaded) return; // wait for Firebase freeAccess snapshot — prevents unlock-button flash
     let cancelled = false;
@@ -1409,7 +1406,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded, isLiveMode]);
+  }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
 
   const handleToggleWatchlist = useCallback(() => {
     if (!animeId) {
@@ -1495,7 +1492,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   // Save progress for both native video and embed playback.
   useEffect(() => {
-    if (!onSaveProgress || isLiveMode) return;
+    if (!onSaveProgress) return;
     const v = videoRef.current;
     const saveNow = () => {
       if (isEmbedPlayback) {
@@ -1519,7 +1516,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       window.removeEventListener("pagehide", saveNow);
       saveNow();
     };
-  }, [currentSrc, isEmbedPlayback, isLiveMode, onSaveProgress]);
+  }, [currentSrc, isEmbedPlayback, onSaveProgress]);
 
   // Restore watch position (per-account)
   useEffect(() => {
@@ -1552,7 +1549,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         });
       });
     } catch {}
-  }, [animeId, currentEpisodeIdx, currentSeasonIdx, initialSeekTime, isLiveMode]);
+  }, [animeId, currentEpisodeIdx, currentSeasonIdx, initialSeekTime]);
 
   // Build quality list - 4K is premium-only
   const is4KLabel = (label: string) => /4k|2160|uhd/i.test(label);
@@ -1973,10 +1970,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     const hls = new Hls({
       enableWorker: true,
-      lowLatencyMode: isLiveMode,
-      liveDurationInfinity: isLiveMode,
-      liveSyncDurationCount: isLiveMode ? 2 : undefined,
-      liveMaxLatencyDurationCount: isLiveMode ? 6 : undefined,
+      lowLatencyMode: false,
       // Ultra-fast start: skip Hls.js's initial bandwidth probe and assume a
       // healthy bitrate so playback begins on the first fragment instead of
       // waiting ~3-5s for the bandwidth test to finish.
@@ -1985,13 +1979,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // Smaller buffers → faster first frame & faster seek response. The big
       // 180s buffer here was forcing the player to fetch ~3 minutes of video
       // before signalling canplay on slow connections.
-      backBufferLength: isLiveMode ? 10 : 30,
-      maxBufferLength: isLiveMode ? 10 : 20,
-      maxMaxBufferLength: isLiveMode ? 30 : 60,
+      backBufferLength: 30,
+      maxBufferLength: 20,
+      maxMaxBufferLength: 60,
       maxBufferSize: 60 * 1000 * 1000,
       // Start at the lowest quality so the very first fragment lands in <1s,
       // then ABR climbs to the best level the user's bandwidth supports.
-      startLevel: isLiveMode ? -1 : 0,
+      startLevel: 0,
       startFragPrefetch: true,
       // Aggressive but bounded retries so a single dead fragment never stalls
       // playback for tens of seconds.
@@ -2057,9 +2051,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       hlsFatalRetriesRef.current = 0;
       refreshHlsAudio();
       refreshHlsSubs();
-      if (isLiveMode) {
-        try { hls.currentLevel = -1; hls.nextLevel = -1; hls.startLoad(-1); } catch {}
-      }
       v.play().catch(() => {});
     });
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, refreshHlsAudio);
@@ -2111,7 +2102,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       try { hls.destroy(); } catch {}
       if (hlsRef.current === hls) hlsRef.current = null;
     };
-  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive, isLiveMode]);
+  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive]);
 
   // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
   // users reported when returning to home. Detaches HLS, clears <video>, kills timers.
@@ -2663,14 +2654,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     // Track last known good position for fallback recovery
     let lastKnownTime = 0;
-    const syncDuration = () => {
-      const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
-      setDuration(isLiveMode ? 0 : dur);
-      return dur;
-    };
     const onLoaded = () => {
-      syncDuration();
-      if (!isLiveMode) applyPendingSeek(v);
+      setDuration(v.duration);
+      applyPendingSeek(v);
       // Only autoplay if ad gate is not active
       if (!adGateActive) {
         // Keep native audio path; do not force muted autoplay fallback
@@ -2684,21 +2670,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (!v.paused && !v.ended) {
           const ct = v.currentTime;
           if (ct > 0) lastKnownTime = ct;
-          const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
+          const dur = v.duration;
           // Direct DOM updates for progress bar — 60fps, no React re-render
-          if (progressRef.current && dur > 0 && !isLiveMode) {
+          if (progressRef.current && dur > 0) {
             progressRef.current.style.width = `${(ct / dur) * 100}%`;
           }
-          if (timeDisplayRef.current) {
-            timeDisplayRef.current.textContent = isLiveMode ? "LIVE" : `${formatTime(ct)} / ${formatTime(dur)}`;
+          if (timeDisplayRef.current && dur > 0) {
+            timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
           }
           // Throttle React state to ~1 Hz so the giant component doesn't
           // re-render every frame. UI buttons stay smooth via DOM refs above.
           const now = performance.now();
           if (now - lastNativeSyncRef.current >= 1000) {
             lastNativeSyncRef.current = now;
-            setCurrentTime(isLiveMode ? 0 : ct);
-            if (dur > 0 && !isLiveMode) setDuration(dur);
+            setCurrentTime(ct);
+            if (Number.isFinite(dur) && dur > 0) setDuration(dur);
           }
           rafId.current = requestAnimationFrame(tick);
         }
@@ -2807,7 +2793,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setVideoError(false);
       setIsBuffering(false);
       // Also apply pending seek here in case loadedmetadata didn't fire
-      if (!isLiveMode) applyPendingSeek(v);
+      applyPendingSeek(v);
       if (v.paused && !adGateActive) {
         // Keep native audio path; manual user interaction will start playback if autoplay is blocked
         v.play().catch(() => {});
@@ -2848,23 +2834,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
     const onTimeUpdate = () => {
       const ct = v.currentTime;
-      const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
+      const dur = v.duration;
       if (ct > 0) lastKnownTime = ct;
-      if (progressRef.current && dur > 0 && !isLiveMode) {
+      if (progressRef.current && dur > 0) {
         progressRef.current.style.width = `${(ct / dur) * 100}%`;
       }
-      if (timeDisplayRef.current) {
-        timeDisplayRef.current.textContent = isLiveMode ? "LIVE" : `${formatTime(ct)} / ${formatTime(dur)}`;
+      if (timeDisplayRef.current && dur > 0) {
+        timeDisplayRef.current.textContent = `${formatTime(ct)} / ${formatTime(dur)}`;
       }
       const now = performance.now();
       if (now - lastNativeSyncRef.current >= 1000) {
         lastNativeSyncRef.current = now;
-        setCurrentTime(isLiveMode ? 0 : ct);
-        if (dur > 0 && !isLiveMode) setDuration(dur);
+        setCurrentTime(ct);
+        if (Number.isFinite(dur) && dur > 0) setDuration(dur);
       }
     };
     const onDurationChange = () => {
-      syncDuration();
+      if (Number.isFinite(v.duration) && v.duration > 0) setDuration(v.duration);
     };
     v.addEventListener("loadedmetadata", onLoaded);
     v.addEventListener("timeupdate", onTimeUpdate);
@@ -2907,7 +2893,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [applyPendingSeek, currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex, getServerScopedSource, proxyApiKey, isLiveMode]);
+  }, [applyPendingSeek, currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex, getServerScopedSource, proxyApiKey]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
@@ -3002,7 +2988,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [muted, isEmbedPlayback, sendEmbedCmd]);
 
   const getSafeSeekTime = useCallback((v: HTMLVideoElement, target: number) => {
-    if (isLiveMode) return v.currentTime || 0;
     if (!Number.isFinite(v.duration) || v.duration <= 0) return 0;
 
     let clamped = Math.min(Math.max(target, 0), v.duration);
@@ -3015,7 +3000,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
 
     return clamped;
-  }, [isLiveMode]);
+  }, []);
 
   const seek = useCallback((seconds: number) => {
     if (isEmbedPlayback) {
@@ -3031,10 +3016,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
     const v = videoRef.current;
     if (!v) return;
-    if (isLiveMode) {
-      resetHideTimer();
-      return;
-    }
 
     const nextTime = getSafeSeekTime(v, v.currentTime + seconds);
     v.currentTime = nextTime;
@@ -3042,7 +3023,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
     setTimeout(() => setSkipIndicator(null), 600);
     resetHideTimer();
-  }, [getSafeSeekTime, isEmbedPlayback, isLiveMode, resetHideTimer, sendEmbedCmd]);
+  }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd]);
 
   const toggleFullscreen = useCallback(async () => {
     const el = videoContainerRef.current || containerRef.current || videoRef.current;
@@ -3099,12 +3080,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
-    if (!v || isLiveMode) return;
+    if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     v.currentTime = getSafeSeekTime(v, pct * v.duration);
     resetHideTimer();
-  }, [getSafeSeekTime, isLiveMode, resetHideTimer]);
+  }, [getSafeSeekTime, resetHideTimer]);
 
   // Touch drag seeking on progress bar
   const progressBarRef = useRef<HTMLDivElement>(null);
@@ -3112,7 +3093,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const handleProgressTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    if (isLiveMode) return;
     isSeeking.current = true;
     const v = videoRef.current;
     if (!v) return;
@@ -3123,11 +3103,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       progressRef.current.style.width = `${pct * 100}%`;
     }
     resetHideTimer();
-  }, [getSafeSeekTime, isLiveMode, resetHideTimer]);
+  }, [getSafeSeekTime, resetHideTimer]);
 
   const handleProgressTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    if (!isSeeking.current || isLiveMode) return;
+    if (!isSeeking.current) return;
     const v = videoRef.current;
     if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -3141,7 +3121,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (timeDisplayRef.current && v.duration > 0) {
       timeDisplayRef.current.textContent = `${formatTime(target)} / ${formatTime(v.duration)}`;
     }
-  }, [getSafeSeekTime, isLiveMode]);
+  }, [getSafeSeekTime]);
 
   const handleProgressTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -3224,7 +3204,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const panelBaseClass = "player-glass rounded-xl p-2 z-30 overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]";
   const panelBaseStyle = { WebkitOverflowScrolling: "touch" as const, overscrollBehavior: "contain" as const, touchAction: "pan-y" as const };
 
-  const progress = !isLiveMode && duration > 0 ? (currentTime / duration) * 100 : 100;
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
   // Crop scale tuned to fully eliminate the small black side-bars left by AN's
   // letterboxed iframe. Slightly higher than before in both windowed + fullscreen.
   const embedTransform = cropIndex === 1
@@ -3234,7 +3214,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       : "scale(1)";
 
   return (
-    <div className={`fixed inset-0 z-[300] ${isLiveMode ? "bg-black" : "bg-background/[0.98]"} flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
+    <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
       {/* Back arrow lives inside the controls overlay below, so it hides/shows with controls */}
 
 
@@ -3290,7 +3270,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               onDragStart={(e) => e.preventDefault()}
             />
           )}
-          {!isLiveMode && <AdsterraAdManager isPremium={isPremium} videoEl={videoRef.current} />}
+          <AdsterraAdManager isPremium={isPremium} videoEl={videoRef.current} />
 
           {subtitleOverlayText && !isEmbedPlayback && (
             <div
@@ -3595,19 +3575,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
               {/* Center play */}
               <div className="flex items-center justify-center gap-8">
-                {!isLiveMode && (
-                  <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
-                    <SkipBack className="w-5 h-5" />
-                  </button>
-                )}
+                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                  <SkipBack className="w-5 h-5" />
+                </button>
                 <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary w-14 h-14 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   {playing ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
                 </button>
-                {!isLiveMode && (
-                  <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
-                    <SkipForward className="w-5 h-5" />
-                  </button>
-                )}
+                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-10 h-10 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                  <SkipForward className="w-5 h-5" />
+                </button>
               </div>
 
               {/* Bottom controls */}
@@ -3627,13 +3603,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       className="h-full gradient-primary rounded-full relative"
                       style={{ width: `${progress}%` }}
                     >
-                      {!isLiveMode && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary shadow-[0_0_10px_hsla(355,85%,55%,0.6)]" />}
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-primary shadow-[0_0_10px_hsla(355,85%,55%,0.6)]" />
                     </div>
                   </div>
                 </div>
                 <div className="flex justify-between items-center gap-2 flex-nowrap">
                   <div className="flex items-center gap-2 shrink-0 min-w-0">
-                    <span ref={timeDisplayRef} className={`text-[11px] font-bold whitespace-nowrap tabular-nums leading-none ${isLiveMode ? "text-destructive" : ""}`}>{isLiveMode ? "● LIVE" : `${formatTime(currentTime)} / ${formatTime(duration)}`}</span>
+                    <span ref={timeDisplayRef} className="text-[11px] font-medium whitespace-nowrap tabular-nums leading-none">{formatTime(currentTime)} / {formatTime(duration)}</span>
                     <button onClick={(e) => {
                       e.stopPropagation();
                       applyPlayerVolume(boostedVolume, !muted);
@@ -3831,58 +3807,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           )}
         </div>
 
-        {!isFullscreen && isLiveMode && !adGateActive && !deviceBlocked && !unlockBlocked && (
-          <div className="w-full px-5 pt-4 pb-24">
-            <div className="flex items-start gap-3">
-              {poster && (
-                <img
-                  src={optimizedImageUrl(poster, "avatar")}
-                  alt=""
-                  className="w-12 h-12 rounded-xl object-cover bg-foreground/10 shrink-0"
-                  loading="eager"
-                  decoding="async"
-                />
-              )}
-              <div className="min-w-0 flex-1">
-                <h2 className="text-[16px] font-bold text-foreground leading-snug truncate">{title}</h2>
-                <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-destructive/15 px-2.5 py-1 text-[11px] font-bold text-destructive">
-                  <span className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
-                  LIVE TV
-                </div>
-              </div>
-            </div>
-            {suggestedAnime && suggestedAnime.length > 0 && (
-              <div className="mt-5">
-                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
-                  <span className="text-[13px] font-bold px-3 py-1.5 rounded-full bg-primary text-primary-foreground">Channels</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2.5">
-                  {suggestedAnime.slice(0, 15).map((anime) => (
-                    <button
-                      key={anime.id}
-                      onClick={() => {
-                        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
-                        onSuggestedClick?.(anime);
-                      }}
-                      className="group text-left transition-transform duration-150 active:scale-95"
-                    >
-                      <div className="relative aspect-square rounded-lg overflow-hidden bg-foreground/5">
-                        {anime.poster ? (
-                          <img src={optimizedImageUrl(anime.poster, "avatar")} alt={anime.title} loading="lazy" decoding="async" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No image</div>
-                        )}
-                      </div>
-                      <p className="text-xs font-medium line-clamp-2 leading-tight mt-1.5 text-foreground">{anime.title}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!isFullscreen && !isLiveMode && !adGateActive && !deviceBlocked && !unlockBlocked && (
+        {!isFullscreen && !adGateActive && !deviceBlocked && !unlockBlocked && (
           <div className="w-full px-5 pt-4 pb-2">
             <button
               type="button"
@@ -4009,7 +3934,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         >
                           <div className={`relative aspect-[2/3] rounded-lg overflow-hidden bg-foreground/5 ${isPending ? "magic-card-pulse" : ""}`}>
                             {anime.poster ? (
-                              <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} loading={idx < 9 ? "eager" : "lazy"} decoding="async" className="w-full h-full object-cover" />
+                              <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} loading={idx < 9 ? "eager" : "lazy"} decoding="async" fetchPriority={idx < 6 ? "high" : "auto" as any} className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No image</div>
                             )}
