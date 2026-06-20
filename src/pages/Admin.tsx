@@ -8422,6 +8422,46 @@ ${tgBulkFooter}
 
  {/* ==================== LIVE TV ==================== */}
  {activeSection === "live-tv" && (() => {
+ const LiveTvProxyConfig = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
+ const [url, setUrl] = useState("");
+ const [apiKey, setApiKey] = useState("");
+ const [saving, setSaving] = useState(false);
+ useEffect(() => {
+ const unsub = onValue(ref(db, "settings/liveTvProxy"), (snap) => {
+ const v = snap.val() || {};
+ setUrl(String(v.url || ""));
+ setApiKey(String(v.apiKey || ""));
+ });
+ return () => unsub();
+ }, []);
+ const save = async () => {
+ setSaving(true);
+ try {
+ await set(ref(db, "settings/liveTvProxy"), { url: url.trim(), apiKey: apiKey.trim() });
+ toast.success("✅ Live TV proxy saved");
+ } catch { toast.error("❌ Save failed"); }
+ setSaving(false);
+ };
+ const clear = async () => {
+ await remove(ref(db, "settings/liveTvProxy"));
+ setUrl(""); setApiKey("");
+ toast.success("🗑️ Cleared — using default");
+ };
+ return (
+ <div className={`${glassCard} p-4 mb-4`}>
+ <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">📡 Live TV Proxy</h3>
+ <p className="text-[10px] text-zinc-400 mb-3">Paste the deployed <code>live-tv-proxy</code> URL from EGD Manager. Leave blank to use the default video proxy.</p>
+ <div className="space-y-2">
+ <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://xxx.supabase.co/functions/v1/live-tv-proxy?url=" className={inputClass} />
+ <input value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="API key (optional)" className={inputClass} />
+ <div className="flex gap-2">
+ <button onClick={save} disabled={saving} className={`${btnPrimary} flex-1`}>{saving ? "Saving..." : "💾 Save"}</button>
+ <button onClick={clear} className="px-3 py-2 rounded-lg bg-zinc-800 text-xs text-zinc-300 hover:bg-zinc-700">Clear</button>
+ </div>
+ </div>
+ </div>
+ );
+ };
  const LiveTvAdmin = () => {
  const [channels, setChannelsState] = useState<{id: string; name: string; logo: string; banner: string; streamUrl: string; category: string; order: number}[]>([]);
  const [name, setName] = useState("");
