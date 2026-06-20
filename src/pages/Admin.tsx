@@ -7844,7 +7844,7 @@ ${footerLinksHtml}
  const fresh = buildFreshCaptionForTitle(p.title) as any;
  const caption = fresh.matched
  ? fresh.caption
- : (p.caption && String(p.caption).trim() ? String(p.caption) : `<b>${String(p.title || "").replace(/[<>&]/g, "")}</b>`);
+  : (p.caption && String(p.caption).trim() ? sanitizeTelegramCaption(String(p.caption), String(p.title || "")) : `<b>${String(p.title || "").replace(/[<>&]/g, "")}</b>`);
  const poster = (fresh.matched && fresh.poster) ? fresh.poster : (p.poster || undefined);
  // Replace the first inline button URL with latest episode URL when available
  const baseButtons: { text: string; url: string }[] = Array.isArray(p.buttons) ? p.buttons.map((b: any) => ({ ...b })) : [];
