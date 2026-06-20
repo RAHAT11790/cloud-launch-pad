@@ -8006,7 +8006,7 @@ ${footerLinksHtml}
  </button>
  </div>
  <p className="text-[11px] text-zinc-400 mb-3">
- Posts grouped by saved channel. <b>Send All</b> reposts every saved post to the target channel one by one. <b>Delete All</b> removes them from Telegram (bot must be admin with delete permission).
+ Posts grouped by saved channel. <b>Send All</b> sends only unique anime with latest details and skips duplicates. <b>Delete All</b> removes them from Telegram (bot must be admin with delete permission).
  </p>
 
  {tgPostsLoading ? (
@@ -8043,7 +8043,7 @@ ${footerLinksHtml}
  <button disabled={!!busyChannel} onClick={() => sendAllToChannel(chatId)}
  className="w-full py-2.5 px-2 rounded-lg bg-gradient-to-br from-indigo-500/90 to-purple-600/90 hover:from-indigo-500 hover:to-purple-600 text-white text-[11px] font-semibold flex flex-col items-center justify-center gap-1 shadow-md shadow-purple-900/30 border border-purple-400/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
  <Send size={14} />
- <span className="leading-none">Send All</span>
+  <span className="leading-none">Send Unique</span>
  </button>
  <button disabled={!!busyChannel} onClick={() => deleteAllFromChannel(chatId)}
  className="w-full py-2.5 px-2 rounded-lg bg-gradient-to-br from-red-500/90 to-rose-600/90 hover:from-red-500 hover:to-rose-600 text-white text-[11px] font-semibold flex flex-col items-center justify-center gap-1 shadow-md shadow-red-900/30 border border-red-400/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
@@ -8060,7 +8060,7 @@ ${footerLinksHtml}
  <div className="space-y-2 pt-1">
  <div className="flex items-center justify-between gap-2">
  <div className="text-[10px] text-amber-300 font-medium">
- {busyAction === "send" ? "📤 Sending" : "🗑️ Deleting"} {busyProgress.done}/{busyProgress.total}
+  {busyAction === "send" ? "📤 Sending" : "🗑️ Deleting"} {busyProgress.done}/{busyProgress.total}{busyProgress.skipped ? ` • skipped ${busyProgress.skipped}` : ""}
  </div>
  <button onClick={cancelCurrent}
  className="px-3 py-1 rounded-md bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 text-[10px] font-semibold flex items-center gap-1 transition-all">
