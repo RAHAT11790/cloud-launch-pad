@@ -77,6 +77,7 @@ const entry = (
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
   entry("video-download", "Video Download", "Dedicated, retry-hardened download proxy (recommended for downloads).", videoDownloadSource),
   entry("video-proxy",    "Video Proxy",    "Universal streaming proxy used by the video player.", videoProxySource),
+  entry("live-tv-proxy",  "Live TV Proxy",  "Dedicated HLS proxy for Live TV channels.", liveTvProxySource),
   entry("telegram-post",  "Telegram Post",  "Posts new episodes to your Telegram channel.", telegramPostSource),
   entry("rs-bot",         "RS Bot (AI)",    "In-app AI chat powered by your GEMINI_API_KEY.", rsBotSource),
   entry("send-otp-email", "Send OTP Email", "Sends 6-digit OTP via Resend.", sendOtpEmailSource),
