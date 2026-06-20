@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
   const isM3u8 = /mpegurl|m3u8/.test(upstreamType) || /\.m3u8(\?|#|$)/i.test(targetUrl.toString());
   if (isM3u8 && req.method !== "HEAD") {
     const text = await upstream.text();
-    const proxyPrefix = `${url.origin}${url.pathname}?url=`;
+    const proxyPrefix = `https://${url.host}/functions/v1/video-proxy?url=`;
     respHeaders.delete("content-length");
     respHeaders.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
     respHeaders.set("cache-control", "no-store");
