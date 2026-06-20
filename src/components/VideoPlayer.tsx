@@ -189,7 +189,6 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     addCandidate(url);
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
-    addMirrorCandidates();
   }
 
   return candidates;
