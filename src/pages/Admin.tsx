@@ -7714,67 +7714,100 @@ ${tgBulkFooter}
  else toast.info("no changes needed");
  };
 
- // === SEND ALL to target channel (re-post saved posts one by one) ===
+  // === SEND ALL to target channel (re-post saved posts one by one) ===
  const sendAllToChannel = async (sourceChannelId: string) => {
  const target = (channelTargets[sourceChannelId] || sourceChannelId).trim();
  if (!target) { toast.error("Enter a target channel ID"); return; }
  const posts = channelGroups.find(g => g.chatId === sourceChannelId)?.posts || [];
  if (posts.length === 0) { toast.info("no posts"); return; }
- if (!window.confirm(`Send ${posts.length} post(s) to ${target}?`)) return;
+ // Deduplicate by title — only send the LATEST (highest sentAt) record per title
+ const latestByTitle = new Map<string, any>();
+ for (const p of posts) {
+ const key = String(p.title || p.messageId || Math.random()).trim().toLowerCase();
+ const prev = latestByTitle.get(key);
+ if (!prev || (Number(p.sentAt) || 0) > (Number(prev.sentAt) || 0)) latestByTitle.set(key, p);
+ }
+ // Skip titles already present on the target channel
+ const targetKey = String(target).replace(/[^a-zA-Z0-9_-]/g, '_');
+ const alreadyOnTarget = new Set(
+ tgPosts
+ .filter(p => String(p.chatId) === String(target) || p.firebaseKey?.startsWith(`${targetKey}_`))
+ .map(p => String(p.title || "").trim().toLowerCase())
+ );
+ const toSend = Array.from(latestByTitle.values())
+ .filter(p => !alreadyOnTarget.has(String(p.title || "").trim().toLowerCase()))
+ .sort((a, b) => (Number(b.sentAt) || 0) - (Number(a.sentAt) || 0));
+ if (toSend.length === 0) { toast.info("All posts already on target — nothing new"); return; }
+ if (!window.confirm(`Send ${toSend.length} unique post(s) to ${target}?\n(${posts.length - toSend.length} duplicates skipped)`)) return;
 
- setBusyChannel(sourceChannelId); setBusyAction("send"); setBusyProgress({done:0,total:posts.length});
- let ok = 0, fail = 0;
- for (let i = 0; i < posts.length; i++) {
- const p = posts[i];
- try {
+ setBusyChannel(sourceChannelId); setBusyAction("send"); setBusyProgress({done:0,total:toSend.length});
+ let ok = 0, fail = 0; let firstError = "";
+ for (let i = 0; i < toSend.length; i++) {
+ const p = toSend[i];
+ const caption = (p.caption && String(p.caption).trim())
+ ? String(p.caption)
+ : `<b>${String(p.title || "").replace(/[<>&]/g, "")}</b>`;
  const payload: any = {
  chatId: target,
- caption: p.caption || `<b>${p.title || ""}</b>`,
+ caption,
  photoUrl: p.poster || undefined,
  inlineButtons: Array.isArray(p.buttons) && p.buttons.length ? p.buttons : undefined,
  };
+ try {
  const r = await callTgApi(payload);
  if (r.ok) {
  ok++;
  const msgId = r.data?.result?.message_id || r.data?.message_id;
  if (msgId) {
- const rec = { chatId: target, messageId: msgId, title: p.title, poster: p.poster || "", caption: p.caption || "", buttons: p.buttons || [], sentAt: Date.now() };
- try { await set(ref(db, `telegramPosts/${String(target).replace(/[^a-zA-Z0-9_-]/g,'_')}_${msgId}`), rec); } catch {}
+ const rec = { chatId: target, messageId: Number(msgId), title: p.title, poster: p.poster || "", caption, buttons: p.buttons || [], sentAt: Date.now() };
+ try { await set(ref(db, `telegramPosts/${targetKey}_${msgId}`), rec); } catch {}
  }
- } else { fail++; }
- } catch { fail++; }
- setBusyProgress({done:i+1,total:posts.length});
- // small delay to respect Telegram rate-limits
+ } else {
+ fail++;
+ if (!firstError) firstError = r.data?.error || r.data?.description || `HTTP ${r.status}`;
+ }
+ } catch (e:any) { fail++; if (!firstError) firstError = e?.message || "network error"; }
+ setBusyProgress({done:i+1,total:toSend.length});
  await new Promise(r => setTimeout(r, 1200));
  }
  setBusyChannel(""); setBusyAction(""); setBusyProgress({done:0,total:0});
- if (ok > 0) toast.success(`✅ Sent ${ok}/${posts.length} to ${target}${fail?`, ${fail} failed`:""}`);
- else toast.error("Send failed");
+ if (ok > 0) toast.success(`✅ Sent ${ok}/${toSend.length} to ${target}${fail?`, ${fail} failed`:""}`);
+ if (fail > 0 && firstError) toast.error(`Send error: ${firstError}`);
  };
 
  // === DELETE ALL from a channel on Telegram ===
  const deleteAllFromChannel = async (sourceChannelId: string) => {
  const posts = channelGroups.find(g => g.chatId === sourceChannelId)?.posts || [];
  if (posts.length === 0) { toast.info("no posts"); return; }
- if (!window.confirm(`Delete ${posts.length} post(s) from Telegram channel ${sourceChannelId}?\n(Bot must be admin with delete permission)`)) return;
+ const deletable = posts.filter(p => p.messageId != null && !isNaN(Number(p.messageId)));
+ const skipped = posts.length - deletable.length;
+ if (deletable.length === 0) { toast.error("No records have a valid messageId"); return; }
+ if (!window.confirm(`Delete ${deletable.length} post(s) from Telegram channel ${sourceChannelId}?\n${skipped ? "(" + skipped + " skipped — missing messageId) " : ""}Bot must be admin with delete permission.`)) return;
 
- setBusyChannel(sourceChannelId); setBusyAction("delete"); setBusyProgress({done:0,total:posts.length});
- let ok = 0, fail = 0;
- for (let i = 0; i < posts.length; i++) {
- const p = posts[i];
+ setBusyChannel(sourceChannelId); setBusyAction("delete"); setBusyProgress({done:0,total:deletable.length});
+ let ok = 0, fail = 0; let firstError = "";
+ for (let i = 0; i < deletable.length; i++) {
+ const p = deletable[i];
  try {
- const r = await callTgApi({ action: "delete-message", chatId: p.chatId, messageId: p.messageId });
+ // Coerce numeric chatIds (-100…) to Number; @usernames stay as strings
+ const chatIdRaw = p.chatId;
+ const chatIdNum = typeof chatIdRaw === "string" && /^-?\d+$/.test(chatIdRaw) ? Number(chatIdRaw) : chatIdRaw;
+ const r = await callTgApi({ action: "delete-message", chatId: chatIdNum, messageId: Number(p.messageId) });
  if (r.ok) {
  ok++;
  try { await set(ref(db, `telegramPosts/${p.firebaseKey}`), null); } catch {}
- } else { fail++; }
- } catch { fail++; }
- setBusyProgress({done:i+1,total:posts.length});
+ } else {
+ fail++;
+ if (!firstError) firstError = r.data?.error || r.data?.description || `HTTP ${r.status}`;
+ }
+ } catch (e:any) { fail++; if (!firstError) firstError = e?.message || "network error"; }
+ setBusyProgress({done:i+1,total:deletable.length});
  await new Promise(r => setTimeout(r, 400));
  }
  setBusyChannel(""); setBusyAction(""); setBusyProgress({done:0,total:0});
- if (ok > 0) toast.success(`🗑️ Deleted ${ok}/${posts.length}${fail?`, ${fail} failed`:""}`);
- else toast.error("Delete failed — check bot permissions");
+ if (ok > 0) toast.success(`🗑️ Deleted ${ok}/${deletable.length}${fail?`, ${fail} failed`:""}`);
+ if (fail > 0 && firstError) toast.error(`Delete error: ${firstError}`);
+ if (ok === 0 && fail === 0) toast.error("Delete failed — check bot permissions");
  };
 
  // === CLEAR records only (not Telegram) ===
