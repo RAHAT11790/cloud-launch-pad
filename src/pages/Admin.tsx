@@ -1917,7 +1917,7 @@ const HeroPinnedPostsSection = ({
  </div>
  {bgImagePreview && (
  <div className="relative rounded-lg overflow-hidden mb-2">
- <img src={bgImagePreview} alt="BG Preview" className="w-full h-24 object-cover rounded-lg opacity-60" loading="lazy" decoding="async" />
+ <CachedImg src={bgImagePreview} alt="BG Preview" className="w-full h-24 object-cover rounded-lg opacity-60" loading="lazy" decoding="async" />
  <button onClick={() => { setBgImageUrl(""); setBgImagePreview(""); }} className="absolute top-1.5 right-1.5 bg-red-500/80 rounded-full p-1">
  <X size={12} className="text-white" />
  </button>
@@ -1957,7 +1957,7 @@ const HeroPinnedPostsSection = ({
  </div>
  {imagePreview && (
  <div className="relative rounded-lg overflow-hidden mb-2">
- <img src={imagePreview} alt="Preview" className="w-full h-32 object-cover rounded-lg" loading="lazy" decoding="async" />
+ <CachedImg src={imagePreview} alt="Preview" className="w-full h-32 object-cover rounded-lg" loading="lazy" decoding="async" />
  <button
  onClick={() => { setImageUrl(""); setImagePreview(""); }}
  className="absolute top-1.5 right-1.5 bg-red-500/80 rounded-full p-1"
@@ -2060,7 +2060,7 @@ const HeroPinnedPostsSection = ({
  {pinnedPosts.map((post, idx) => (
  <div key={post._key} className="flex items-start gap-3 p-2.5 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
  <span className="text-xs font-bold text-yellow-500 w-5 mt-1">#{idx + 1}</span>
- <img src={post.backdrop} alt="" className="w-16 h-10 rounded object-cover shrink-0" loading="lazy" decoding="async" />
+ <CachedImg src={post.backdrop} alt="" className="w-16 h-10 rounded object-cover shrink-0" loading="lazy" decoding="async" />
  <div className="flex-1 min-w-0">
  <p className="text-xs font-medium truncate" style={{ color: post.titleColor || "#fff", fontFamily: post.titleFont || undefined }}>{post.title}</p>
  {post.description && (
@@ -4897,7 +4897,7 @@ ${tgBulkFooter}
  <div className={`${glassCard} p-8 w-full max-w-[400px]`}>
  <div className="text-center mb-8">
  {adminBranding.logoUrl ? (
- <img src={adminBranding.logoUrl} alt={adminBranding.siteName || "Logo"} className="w-14 h-14 rounded-2xl object-cover mx-auto mb-4 ring-1 ring-white/10" loading="lazy" decoding="async" />
+ <CachedImg src={adminBranding.logoUrl} alt={adminBranding.siteName || "Logo"} className="w-14 h-14 rounded-2xl object-cover mx-auto mb-4 ring-1 ring-white/10" loading="lazy" decoding="async" />
  ) : (
  <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4">{(adminBranding.siteName || "A").charAt(0)}</div>
  )}
@@ -4983,7 +4983,7 @@ ${tgBulkFooter}
  <div className="p-4 border-b border-white/6">
  <div className="flex items-center gap-3">
  {adminBranding.logoUrl ? (
- <img src={adminBranding.logoUrl} alt={adminBranding.siteName || "Logo"} className="w-10 h-10 rounded-xl object-cover ring-1 ring-white/10" loading="lazy" decoding="async" />
+ <CachedImg src={adminBranding.logoUrl} alt={adminBranding.siteName || "Logo"} className="w-10 h-10 rounded-xl object-cover ring-1 ring-white/10" loading="lazy" decoding="async" />
  ) : (
  <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-lg font-black">{(adminBranding.siteName || "A").charAt(0)}</div>
  )}
@@ -5135,7 +5135,7 @@ ${tgBulkFooter}
  {todayScheduled.slice(0, 8).map((it: any) => (
  <button key={it.seriesId} onClick={() => editSeries(it.seriesId)}
  className="flex-shrink-0 w-[78px] group">
- <img src={it.poster || ""} className="w-[78px] h-[108px] rounded-lg object-cover border border-white/8 group-hover:border-indigo-500/50 transition"
+ <CachedImg src={it.poster || ""} className="w-[78px] h-[108px] rounded-lg object-cover border border-white/8 group-hover:border-indigo-500/50 transition"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/78x108/141422/6366f1?text=N"; }} />
  <p className="text-[10px] text-zinc-300 truncate mt-1">{it.title}</p>
  </button>
@@ -5171,7 +5171,7 @@ ${tgBulkFooter}
  onClick={() => item._adminKind === "movie" ? editMovie(item.id) : editSeries(item.id)}
  className="w-full text-left flex items-center gap-3 p-2.5 bg-black/20 rounded-lg mb-2 border border-transparent hover:border-indigo-500/35 hover:bg-indigo-500/10 active:scale-[0.99] transition-all"
  >
- <img src={item.poster || ""} alt={item.title || "Recent content"} className="w-10 h-[55px] rounded-md object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/40x55/141422/6366f1?text=N"; }} />
+ <CachedImg src={item.poster || ""} alt={item.title || "Recent content"} className="w-10 h-[55px] rounded-md object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/40x55/141422/6366f1?text=N"; }} />
  <div className="flex-1 min-w-0">
  <p className="text-[13px] font-medium truncate">{item.title || "Untitled"}</p>
  <p className="text-[11px] text-zinc-500">{item._adminKind === "movie" ? "Movie" : "Series"} • {item.year || "N/A"}</p>
@@ -5270,7 +5270,7 @@ ${tgBulkFooter}
  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${isSelected ? "bg-indigo-600 border-indigo-500" : "border-zinc-600"}`}>
  {isSelected && <Check size={12} />}
  </div>
- <img src={item.poster || ""} className="w-8 h-11 rounded object-cover flex-shrink-0 bg-[#1E1E32]"
+ <CachedImg src={item.poster || ""} className="w-8 h-11 rounded object-cover flex-shrink-0 bg-[#1E1E32]"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/32x44/141422/6366f1?text=N"; }} />
  <div className="flex-1 min-w-0">
  <p className="text-[12px] font-medium truncate">{item.title || "Untitled"}</p>
@@ -5349,7 +5349,7 @@ ${tgBulkFooter}
  ) : filtered.map(item => (
  <div key={item.id} className="bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-all">
  <div className="flex gap-3.5">
- <img src={item.poster || ""} className="w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
+ <CachedImg src={item.poster || ""} className="w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/80x115/1A1A2E/9D4EDD?text=N"; }} />
  <div className="flex-1 min-w-0">
  <h4 className="text-sm font-semibold mb-1 truncate">{item.title || "Untitled"}</h4>
@@ -5392,7 +5392,7 @@ ${tgBulkFooter}
  {seriesResults.map(item => (
  <div key={item.id} onClick={() => fetchSeriesDetails(item.id)}
  className="bg-[#1A1A2E] rounded-xl overflow-hidden cursor-pointer border-2 border-transparent hover:border-purple-500 hover:scale-[1.03] transition-all">
- <img src={item.poster_path ? TMDB_IMG_BASE + "w342" + item.poster_path : ""} className="w-full aspect-[2/3] object-cover"
+ <CachedImg src={item.poster_path ? TMDB_IMG_BASE + "w342" + item.poster_path : ""} className="w-full aspect-[2/3] object-cover"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/200x300/1A1A2E/9D4EDD?text=No+Image"; }} />
  <div className="p-2.5">
  <p className="text-[11px] font-semibold leading-tight line-clamp-2">{item.name}</p>
@@ -5410,7 +5410,7 @@ ${tgBulkFooter}
  <>
  {seriesForm.backdrop && (
  <div className="relative rounded-[14px] overflow-hidden mb-5">
- <img src={seriesForm.backdrop || seriesForm.poster} className="w-full aspect-video object-cover" loading="lazy" decoding="async" />
+ <CachedImg src={seriesForm.backdrop || seriesForm.poster} className="w-full aspect-video object-cover" loading="lazy" decoding="async" />
  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
  <div className="absolute bottom-4 left-4 right-4">
  <div className="text-lg font-bold">{seriesForm.title}</div>
@@ -5510,7 +5510,7 @@ ${tgBulkFooter}
  <div className="flex gap-3 overflow-x-auto pb-2.5 scrollbar-hide">
  {seriesCast.map((c, i) => (
  <div key={i} className="flex-shrink-0 w-[70px] text-center">
- <img src={c.photo || ""} className="w-[60px] h-[60px] rounded-[10px] object-cover mb-1.5 mx-auto"
+ <CachedImg src={c.photo || ""} className="w-[60px] h-[60px] rounded-[10px] object-cover mb-1.5 mx-auto"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/60x60/1A1A2E/9D4EDD?text=N"; }} />
  <p className="text-[10px] font-medium truncate">{c.name}</p>
  </div>
@@ -6221,7 +6221,7 @@ ${tgBulkFooter}
  ) : filtered.map(item => (
  <div key={item.id} className="bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-all">
  <div className="flex gap-3.5">
- <img src={item.poster || ""} className="w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
+ <CachedImg src={item.poster || ""} className="w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/80x115/1A1A2E/9D4EDD?text=N"; }} />
  <div className="flex-1 min-w-0">
  <h4 className="text-sm font-semibold mb-1 truncate">{item.title || "Untitled"}</h4>
@@ -6262,7 +6262,7 @@ ${tgBulkFooter}
  {movieResults.map(item => (
  <div key={item.id} onClick={() => fetchMovieDetails(item.id)}
  className="bg-[#1A1A2E] rounded-xl overflow-hidden cursor-pointer border-2 border-transparent hover:border-purple-500 hover:scale-[1.03] transition-all">
- <img src={item.poster_path ? TMDB_IMG_BASE + "w342" + item.poster_path : ""} className="w-full aspect-[2/3] object-cover"
+ <CachedImg src={item.poster_path ? TMDB_IMG_BASE + "w342" + item.poster_path : ""} className="w-full aspect-[2/3] object-cover"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/200x300/1A1A2E/9D4EDD?text=No+Image"; }} />
  <div className="p-2.5">
  <p className="text-[11px] font-semibold leading-tight line-clamp-2">{item.title}</p>
@@ -6280,7 +6280,7 @@ ${tgBulkFooter}
  <>
  {movieForm.backdrop && (
  <div className="relative rounded-[14px] overflow-hidden mb-5">
- <img src={movieForm.backdrop || movieForm.poster} className="w-full aspect-video object-cover" loading="lazy" decoding="async" />
+ <CachedImg src={movieForm.backdrop || movieForm.poster} className="w-full aspect-video object-cover" loading="lazy" decoding="async" />
  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
  <div className="absolute bottom-4 left-4 right-4">
  <div className="text-lg font-bold">{movieForm.title}</div>
@@ -6409,7 +6409,7 @@ ${tgBulkFooter}
  <div className="flex gap-3 overflow-x-auto pb-2.5 scrollbar-hide">
  {movieCast.map((c, i) => (
  <div key={i} className="flex-shrink-0 w-[70px] text-center">
- <img src={c.photo || ""} className="w-[60px] h-[60px] rounded-[10px] object-cover mb-1.5 mx-auto"
+ <CachedImg src={c.photo || ""} className="w-[60px] h-[60px] rounded-[10px] object-cover mb-1.5 mx-auto"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/60x60/1A1A2E/9D4EDD?text=N"; }} />
  <p className="text-[10px] font-medium truncate">{c.name}</p>
  </div>
@@ -6645,7 +6645,7 @@ ${tgBulkFooter}
  className={`${selectClass} w-full text-left flex items-center gap-2`}>
  {releaseContent ? (
  <>
- <img src={contentOptions.find(o => o.value === releaseContent)?.poster} alt="" className="w-7 h-10 rounded object-cover flex-shrink-0" />
+ <CachedImg src={contentOptions.find(o => o.value === releaseContent)?.poster} alt="" className="w-7 h-10 rounded object-cover flex-shrink-0" />
  <span className="truncate text-sm">{contentOptions.find(o => o.value === releaseContent)?.label}</span>
  </>
  ) : <span className="text-[#957DAD]">Select Content</span>}
@@ -6676,7 +6676,7 @@ ${tgBulkFooter}
  ) : filtered.map(o => (
  <div key={o.value} className={`flex items-center gap-2.5 p-2 cursor-pointer hover:bg-purple-500/20 rounded-lg m-1 ${releaseContent === o.value ? "bg-purple-500/30" : ""}`}
  onClick={() => { handleReleaseContentChange(o.value); setReleaseDropdownOpen(false); setReleaseContentSearch(''); }}>
- <img src={o.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0 bg-[#2A2A3E]" loading="lazy" decoding="async" />
+ <CachedImg src={o.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0 bg-[#2A2A3E]" loading="lazy" decoding="async" />
  <span className="text-sm truncate">{o.label}</span>
  </div>
  ));
@@ -6758,7 +6758,7 @@ ${tgBulkFooter}
  </div>
  </div>
  <div className="flex gap-3 items-center">
- <img src={release.poster || ""} className="w-[50px] h-[75px] rounded-lg object-cover"
+ <CachedImg src={release.poster || ""} className="w-[50px] h-[75px] rounded-lg object-cover"
  onError={e => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/50x75/1A1A2E/9D4EDD?text=N"; }} />
  <div className="flex-1">
  <h4 className="text-[13px] font-semibold mb-1">{release.title || "Untitled"}</h4>
@@ -7259,7 +7259,7 @@ ${tgBulkFooter}
  }
  setTgDropdownOpen(false); setTgContentSearch('');
  }}>
- <img src={r.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0 bg-[#1E1E32]" loading="lazy" decoding="async" />
+ <CachedImg src={r.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0 bg-[#1E1E32]" loading="lazy" decoding="async" />
  <div className="flex-1 min-w-0">
  <span className="text-sm truncate block">{r.title}</span>
  <span className="text-[9px] text-zinc-500">{r.type === "webseries" ? "📺 Series" : "🎬 Movie"}{matching ? " • 🆕 New EP" : ""}</span>
@@ -7467,7 +7467,7 @@ ${tgBulkFooter}
  </h3>
  <div className="bg-[#0E1621] rounded-xl p-4 border border-white/5">
  {tgPosterUrl && (
- <img src={tgPosterUrl} alt="poster" className="w-full h-[200px] object-cover rounded-lg mb-3"
+ <CachedImg src={tgPosterUrl} alt="poster" className="w-full h-[200px] object-cover rounded-lg mb-3"
  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
  )}
  <div className="font-mono text-[11px] text-zinc-300 whitespace-pre-line leading-relaxed">
@@ -7812,7 +7812,7 @@ ${tgBulkFooter}
  <div className="space-y-2 max-h-[300px] overflow-y-auto">
  {tgBulkResults.map((r, i) => (
  <div key={i} className={`flex items-center gap-2.5 p-2 rounded-lg border ${r.ok ? 'border-green-500/20 bg-green-500/5' : 'border-red-500/20 bg-red-500/5'}`}>
- {r.poster && <img src={r.poster} alt="" className="w-8 h-10 rounded object-cover flex-shrink-0" loading="lazy" decoding="async" />}
+ {r.poster && <CachedImg src={r.poster} alt="" className="w-8 h-10 rounded object-cover flex-shrink-0" loading="lazy" decoding="async" />}
  <div className="flex-1 min-w-0">
  <span className="text-[12px] truncate block">{r.title}</span>
  {r.error && <span className="text-[10px] text-red-400">{r.error}</span>}
@@ -7846,7 +7846,7 @@ ${tgBulkFooter}
  <div className="space-y-2 max-h-[400px] overflow-y-auto">
  {tgPosts.map(post => (
  <div key={post.firebaseKey} className="flex items-center gap-2.5 p-2.5 bg-zinc-800/40 rounded-xl border border-zinc-700/30">
- {post.poster && <img src={post.poster} alt="" className="w-10 h-13 rounded object-cover flex-shrink-0" loading="lazy" decoding="async" />}
+ {post.poster && <CachedImg src={post.poster} alt="" className="w-10 h-13 rounded object-cover flex-shrink-0" loading="lazy" decoding="async" />}
  <div className="flex-1 min-w-0">
  <span className="text-[12px] font-medium truncate block">{post.title}</span>
  <span className="text-[10px] text-zinc-500 block">Chat: {post.chatId} | MSG: {post.messageId}</span>
@@ -8438,7 +8438,7 @@ ${tgBulkFooter}
  </div>
  {logo && (
  <div className="mt-2 w-16 h-16 rounded-xl overflow-hidden bg-zinc-800/50 border border-zinc-700/40">
- <img src={logo} alt="Logo" className="w-full h-full object-contain" loading="lazy" decoding="async" />
+ <CachedImg src={logo} alt="Logo" className="w-full h-full object-contain" loading="lazy" decoding="async" />
  </div>
  )}
  </div>
@@ -8461,7 +8461,7 @@ ${tgBulkFooter}
  </div>
  {banner && (
  <div className="mt-2 aspect-video rounded-xl overflow-hidden bg-zinc-800/50 border border-zinc-700/40">
- <img src={banner} alt="Banner" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+ <CachedImg src={banner} alt="Banner" className="w-full h-full object-cover" loading="lazy" decoding="async" />
  </div>
  )}
  </div>
@@ -8524,7 +8524,7 @@ ${tgBulkFooter}
  {channels.map(ch => (
  <div key={ch.id} className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/40 border border-zinc-700/30">
  <div className="w-12 h-8 rounded-lg overflow-hidden bg-zinc-700/50 flex-shrink-0">
- {ch.logo && <img src={ch.logo} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />}
+ {ch.logo && <CachedImg src={ch.logo} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />}
  </div>
  <div className="flex-1 min-w-0">
  <p className="text-xs font-semibold text-white truncate">{ch.name}</p>
@@ -8844,7 +8844,7 @@ ${tgBulkFooter}
  className={`${inputClass} w-full mb-2 text-left flex items-center gap-3 py-2`}>
  {selectedSeries ? (
  <>
- <img src={selectedSeries.poster} alt="" className="w-10 h-14 rounded object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+ <CachedImg src={selectedSeries.poster} alt="" className="w-10 h-14 rounded object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
  <div className="flex-1 min-w-0">
  <p className="text-[11px] font-semibold text-white truncate">{selectedSeries.title}</p>
  <p className="text-[9px] text-zinc-500">{seriesSeasons.length} seasons</p>
@@ -8865,7 +8865,7 @@ ${tgBulkFooter}
  {sortedSeries.map(s => (
  <button key={s.id} onClick={() => { setSelectedSeriesId(s.id); setShowSelector(false); setSearchFilter(""); setSelectedSeason("all"); setSelectedEpisode("all"); }}
  className={`w-full flex items-center gap-3 p-2.5 hover:bg-zinc-800/60 transition-all border-b border-zinc-800/30 ${selectedSeriesId === s.id ? 'bg-cyan-500/10 border-cyan-500/20' : ''}`}>
- <img src={s.poster} alt="" className="w-9 h-12 rounded object-cover flex-shrink-0 bg-zinc-800" onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }} />
+ <CachedImg src={s.poster} alt="" className="w-9 h-12 rounded object-cover flex-shrink-0 bg-zinc-800" onError={(e) => { (e.target as HTMLImageElement).src = '/placeholder.svg'; }} />
  <div className="flex-1 text-left min-w-0">
  <p className="text-[11px] font-semibold text-white truncate">{s.title}</p>
  <p className="text-[9px] text-zinc-500">{s.seasons ? (Array.isArray(s.seasons) ? s.seasons.length : Object.keys(s.seasons).length) : 0} seasons</p>
@@ -9013,7 +9013,7 @@ ${tgBulkFooter}
  <p className="text-[10px] text-green-400 font-bold">✅ {bulkResults.length} contentে replaced:</p>
  {bulkResults.map((r, i) => (
  <div key={i} className="flex items-center gap-2.5 bg-green-500/10 border border-green-500/20 rounded-lg p-2">
- {r.poster && <img src={r.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+ {r.poster && <CachedImg src={r.poster} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
  <div className="flex-1 min-w-0">
  <p className="text-[10px] font-semibold text-white truncate">{r.title}</p>
  <p className="text-[9px] text-green-400">{r.replaced}/{r.total} link replace</p>
@@ -9397,7 +9397,7 @@ const AnalyticsSection = memo(({
  <div key={item.animeId} className="flex items-center gap-3 bg-[#1A1A2E] rounded-xl p-3 border border-white/5">
  <span className="text-[11px] text-[#957DAD] font-bold w-5">#{idx + 1}</span>
  {item.poster ? (
- <img src={item.poster} loading="lazy" decoding="async" className="w-9 h-[52px] rounded-lg object-cover flex-shrink-0"
+ <CachedImg src={item.poster} loading="lazy" decoding="async" className="w-9 h-[52px] rounded-lg object-cover flex-shrink-0"
  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
  ) : (
  <div className="w-9 h-[52px] rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
@@ -11227,7 +11227,7 @@ const AnimeSaltManagerSection = ({
  {tmdbResults.map((r: any) => (
  <button key={r.id} onClick={() => saveWithTmdb(tmdbModalItem, r)}
  className="text-left rounded-xl overflow-hidden border-2 border-transparent hover:border-purple-500 transition-all bg-[#151521]">
- <img src={r.poster_path ? TMDB_IMG_BASE + 'w342' + r.poster_path : 'https://via.placeholder.com/200x300/1A1A2E/9D4EDD?text=No+Image'}
+ <CachedImg src={r.poster_path ? TMDB_IMG_BASE + 'w342' + r.poster_path : 'https://via.placeholder.com/200x300/1A1A2E/9D4EDD?text=No+Image'}
  className="w-full aspect-[2/3] object-cover" loading="lazy" decoding="async" />
  <div className="p-2">
  <p className="text-[11px] font-semibold line-clamp-2">{r.name || r.title}</p>
@@ -11255,9 +11255,9 @@ const AnimeSaltManagerSection = ({
 
  {/* Preview */}
  <div className="flex gap-3 mb-3">
- {editForm.poster && <img src={editForm.poster} className="w-16 h-24 object-cover rounded-lg" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
- {editForm.backdrop && <img src={editForm.backdrop} className="flex-1 h-24 object-cover rounded-lg" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
- {editForm.logo && <img src={editForm.logo} className="w-20 h-12 object-contain rounded-lg bg-black/30" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+ {editForm.poster && <CachedImg src={editForm.poster} className="w-16 h-24 object-cover rounded-lg" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+ {editForm.backdrop && <CachedImg src={editForm.backdrop} className="flex-1 h-24 object-cover rounded-lg" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+ {editForm.logo && <CachedImg src={editForm.logo} className="w-20 h-12 object-contain rounded-lg bg-black/30" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
  </div>
 
  {/* TMDB Photo Refresh */}
@@ -11275,7 +11275,7 @@ const AnimeSaltManagerSection = ({
  {editTmdbResults.map((r: any) => (
  <button key={r.id} onClick={() => applyTmdbToEdit(r)}
  className="text-left rounded-lg overflow-hidden border-2 border-transparent hover:border-cyan-500 transition-all bg-black/30">
- <img src={r.poster_path ? TMDB_IMG_BASE + 'w185' + r.poster_path : 'https://via.placeholder.com/100x150/1A1A2E/9D4EDD?text=N/A'}
+ <CachedImg src={r.poster_path ? TMDB_IMG_BASE + 'w185' + r.poster_path : 'https://via.placeholder.com/100x150/1A1A2E/9D4EDD?text=N/A'}
  className="w-full aspect-[2/3] object-cover" loading="lazy" decoding="async" />
  <div className="p-1">
  <p className="text-[9px] font-semibold line-clamp-1">{r.name || r.title}</p>
@@ -11746,7 +11746,7 @@ const AnimeSaltManagerSection = ({
  {urlFetchedItem && (
  <div className="bg-[#151521] rounded-xl border border-cyan-500/20 p-3 flex gap-3 items-start">
  {urlFetchedItem.poster && (
- <img src={urlFetchedItem.poster} className="w-16 h-24 object-cover rounded-lg flex-shrink-0"
+ <CachedImg src={urlFetchedItem.poster} className="w-16 h-24 object-cover rounded-lg flex-shrink-0"
  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
  )}
  <div className="flex-1 min-w-0">
@@ -12100,7 +12100,7 @@ const DeviceLimitsSection = ({ glassCard, inputClass, btnPrimary, btnSecondary, 
  <div className="flex justify-between items-start">
  <div className="flex items-center gap-2 flex-1 min-w-0">
  {user.photoURL || user.photo ? (
- <img src={user.photoURL || user.photo} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" loading="lazy" decoding="async" />
+ <CachedImg src={user.photoURL || user.photo} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" loading="lazy" decoding="async" />
  ) : (
  <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0 text-[11px] font-bold text-yellow-400">
  {(user.name || user.email || "?").charAt(0).toUpperCase()}
@@ -12895,7 +12895,7 @@ const EpisodeNameRefreshSection = ({
  selectedId === ws.id ? 'bg-amber-600/20 border border-amber-500/40 text-amber-300' : 'hover:bg-zinc-700/50 text-zinc-300'
  }`}
  >
- {ws.poster && <img src={ws.poster} className="w-6 h-8 rounded object-cover flex-shrink-0" loading="lazy" decoding="async" />}
+ {ws.poster && <CachedImg src={ws.poster} className="w-6 h-8 rounded object-cover flex-shrink-0" loading="lazy" decoding="async" />}
  <span className="truncate">{ws.title}</span>
  </button>
  ))}
@@ -13405,7 +13405,7 @@ const LinkCheckerSection = ({
  selectedId === c.id ? 'bg-red-600/20 border border-red-500/40 text-red-300' : 'hover:bg-zinc-700/50 text-zinc-300'
  }`}
  >
- {c.poster && <img src={c.poster} className="w-6 h-8 rounded object-cover flex-shrink-0" loading="lazy" decoding="async" />}
+ {c.poster && <CachedImg src={c.poster} className="w-6 h-8 rounded object-cover flex-shrink-0" loading="lazy" decoding="async" />}
  <span className="truncate">{c.title}</span>
  <span className="text-[10px] text-zinc-500 ml-auto flex-shrink-0">{c._type === 'webseries' ? '📺' : '🎬'}</span>
  </button>
