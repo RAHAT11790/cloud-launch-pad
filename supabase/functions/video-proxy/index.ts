@@ -38,6 +38,21 @@ const PASSTHROUGH_RESP = [
   "cache-control",
 ];
 
+const looksLikeHlsRequest = (target: URL): boolean => /\.(m3u8|ts|m4s|mp4|aac|vtt|key)(\?|#|$)/i.test(target.toString());
+
+const rewriteM3U8 = (text: string, baseUrl: string, proxyPrefix: string): string => {
+  const base = new URL(baseUrl);
+  const toAbsolute = (value: string) => {
+    try { return new URL(value, base).toString(); } catch { return value; }
+  };
+  const wrap = (value: string) => `${proxyPrefix}${encodeURIComponent(toAbsolute(value))}`;
+  return text.split(/\r?\n/).map((line) => {
+    if (!line.trim()) return line;
+    if (line.startsWith("#")) return line.replace(/URI="([^"]+)"/g, (_m, uri) => `URI="${wrap(uri)}"`);
+    return wrap(line.trim());
+  }).join("\n");
+};
+
 // ============================================================
 // Domain allowlist — block embed theft / API scraping
 // ============================================================
