@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { db, ref, onValue, update, get, set } from "@/lib/firebase";
+import { db, ref, onValue, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import { fuzzyMatch } from "@/lib/fuzzyMatch";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
@@ -19,7 +19,6 @@ type Item = {
   addedAt?: number;
 };
 type Mode = "backdrop" | "logo";
-type Provider = "gemini";
 
 const DEFAULT_BACKDROP_PROMPT = `CREATE A PROFESSIONAL 16:9 CINEMATIC ANIME PROMOTIONAL BANNER FOR "{title}" IN ULTRA DETAILED 4K HDR QUALITY.
 
@@ -32,11 +31,6 @@ Style: Netflix / Crunchyroll promotional banner quality, sharp focus, perfect an
 The final result must look like an OFFICIAL anime poster remastered into a premium cinematic banner.`;
 
 const DEFAULT_LOGO_PROMPT = `Official anime TITLE LOGO for "{title}", square 1:1. Title "{title}" rendered in the canonical official logo treatment of the real anime (matching font, colors, glow, ornaments). Japanese kanji of the title below in small elegant typography. Deep black radial gradient background. High resolution, perfect kerning, no foreground characters, no extra text.`;
-
-const todayKey = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
 
 const callGenerateBackdrop = async (body: Record<string, any>) => {
   const endpoint = await getEdgeFunctionUrl("generate-backdrop");
@@ -54,8 +48,6 @@ const callGenerateBackdrop = async (body: Record<string, any>) => {
   if (!res.ok) {
     const err = new Error(data?.error || `Generate Backdrop failed (${res.status})`) as any;
     err.status = res.status;
-    err.quota = data?.quota;
-    err.model = data?.model;
     err.raw = data;
     throw err;
   }
@@ -67,24 +59,13 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
   const [filter, setFilter] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("backdrop");
-  const [provider, setProvider] = useState<Provider>("gemini");
   const [customPrompt, setCustomPrompt] = useState("");
   const [usePromptOverride, setUsePromptOverride] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [useReference, setUseReference] = useState(true);
   const [activeFunctionUrl, setActiveFunctionUrl] = useState("");
 
-  // ---- EGD Gemini status ----
-  const [geminiDailyLimit, setGeminiDailyLimit] = useState<number>(100);
-  const [geminiUsedToday, setGeminiUsedToday] = useState<number>(0);
-  const [geminiStatus, setGeminiStatus] = useState<{
-    state: "unknown" | "checking" | "online" | "offline";
-    model?: string;
-    message?: string;
-    checkedAt?: number;
-  }>({ state: "unknown" });
   const [lovableStatus, setLovableStatus] = useState<{
     state: "unknown" | "checking" | "online" | "offline";
     model?: string;
@@ -92,12 +73,10 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
     checkedAt?: number;
   }>({ state: "unknown" });
   const [lastResult, setLastResult] = useState<{
-    engine?: string; provider?: string; model?: string; fallbackUsed?: boolean; geminiError?: any; at?: number;
+    model?: string; at?: number;
   } | null>(null);
   const [lastError, setLastError] = useState<{
-    message?: string; status?: number;
-    quota?: { retryAfterSec?: number; quotaId?: string; perModel?: string; helpUrl?: string };
-    at?: number;
+    message?: string; status?: number; at?: number;
   } | null>(null);
 
   useEffect(() => {
@@ -123,23 +102,12 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       }));
       setItems((prev) => [...prev.filter((p) => p.type !== "movies"), ...mv]);
     });
-    // Load Gemini quota config only. API key stays inside the EGD-deployed function.
-    const u3 = onValue(ref(db, "settings/geminiImage"), (snap) => {
-      const v = snap.val() || {};
-      setGeminiDailyLimit(Number(v.dailyLimit) || 100);
-    });
-    const u4 = onValue(ref(db, `settings/geminiImage/usage/${todayKey()}`), (snap) => {
-      setGeminiUsedToday(Number(snap.val()) || 0);
-    });
-    return () => { u1(); u2(); u3(); u4(); };
+    return () => { u1(); u2(); };
   }, []);
 
-  // Fuzzy + latest-first
   const visible = useMemo(() => {
     const q = filter.trim();
-    const scored = items
-      .filter((i) => fuzzyMatch(q, i.title, 0.5))
-      .slice();
+    const scored = items.filter((i) => fuzzyMatch(q, i.title, 0.5)).slice();
     scored.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
     return scored;
   }, [items, filter]);
@@ -150,7 +118,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
     return items.find((i) => i.type === t && i.id === id) || null;
   }, [activeId, items]);
 
-  useEffect(() => { setPreviewUrl(null); setProgress(0); }, [activeId, mode, provider]);
+  useEffect(() => { setPreviewUrl(null); setProgress(0); }, [activeId, mode]);
 
   useEffect(() => {
     const refresh = () => getEdgeFunctionUrl("generate-backdrop").then((url) => setActiveFunctionUrl(url || ""));
@@ -167,60 +135,33 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usePromptOverride, mode]);
 
-  // ---- Gemini live status: probe key via edge function (server reads GEMINI_API_KEY from env) ----
-  const checkGemini = useCallback(async (silent = false) => {
-    setGeminiStatus((s) => ({ ...s, state: "checking" }));
+  const checkLovable = useCallback(async (silent = false) => {
     setLovableStatus((s) => ({ ...s, state: "checking" }));
     try {
-      const data = await callGenerateBackdrop({ action: "check-all" });
-      const g = data?.gemini || {};
+      const data = await callGenerateBackdrop({ action: "check-lovable" });
       const l = data?.lovable || {};
-      setGeminiStatus(g?.ok
-        ? { state: "online", model: g.model, message: g.message || "Server key verified", checkedAt: Date.now() }
-        : { state: "offline", message: g?.error || "Probe failed", checkedAt: Date.now() });
       setLovableStatus(l?.ok
         ? { state: "online", model: l.model, message: l.message || "Gateway reachable", checkedAt: Date.now() }
         : { state: "offline", message: l?.error || "Probe failed", checkedAt: Date.now() });
       if (!silent) {
-        if (g?.ok && l?.ok) toast.success(`Gemini ✓ · Lovable ✓ (fallback ready)`);
-        else if (g?.ok) toast.warning(`Gemini ✓ · Lovable ✗`);
-        else if (l?.ok) toast.warning(`Gemini ✗ · Lovable ✓ (fallback ready)`);
-        else toast.error(`Both engines offline`);
+        if (l?.ok) toast.success(`Lovable AI ✓ (${l.model || "ready"})`);
+        else toast.error(`Lovable AI offline — out of credits or not configured`);
       }
     } catch (e: any) {
-      setGeminiStatus({ state: "offline", message: e?.message || String(e), checkedAt: Date.now() });
       setLovableStatus({ state: "offline", message: e?.message || String(e), checkedAt: Date.now() });
       if (!silent) toast.error(e?.message || "Probe failed");
     }
   }, []);
 
-  // Auto-check whenever provider becomes gemini
   useEffect(() => {
-    if (provider === "gemini" && geminiStatus.state === "unknown") {
-      void checkGemini(true);
-    }
-  }, [provider, geminiStatus.state, checkGemini]);
-
-  const saveGeminiConfig = async () => {
-    try {
-      await update(ref(db, "settings/geminiImage"), {
-        dailyLimit: Number(geminiDailyLimit) || 100,
-      });
-      toast.success("Quota saved");
-    } catch (e: any) {
-      toast.error(`Save failed: ${e?.message || e}`);
-    }
-  };
+    if (lovableStatus.state === "unknown") void checkLovable(true);
+  }, [lovableStatus.state, checkLovable]);
 
   const generate = async () => {
     if (!activeItem || busy) return;
     if (mode === "backdrop" && !activeItem.backdrop) {
-      toast.error("This title has no reference backdrop. Add a backdrop first so Gemini can edit the correct anime image.");
+      toast.error("This title has no reference backdrop. Add one first so AI can edit the correct anime image.");
       return;
-    }
-    // Soft block only when user explicitly forces gemini and quota hit
-    if (provider === "gemini" && geminiUsedToday >= geminiDailyLimit) {
-      toast.warning(`Local counter says ${geminiUsedToday}/${geminiDailyLimit} — server will still try (and auto-fall back to Lovable).`);
     }
     setBusy(true);
     setProgress(8);
@@ -235,7 +176,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
         type: activeItem.type,
         year: activeItem.year,
         mode,
-        provider: "auto", // Gemini first, Lovable fallback
+        provider: "lovable",
         referenceImageUrl: mode === "backdrop" ? activeItem.backdrop : undefined,
         useReference: mode === "backdrop",
         genres: activeItem.genres,
@@ -248,31 +189,16 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
       }
       const data = await callGenerateBackdrop(payload);
       if (!data?.url) throw new Error(data?.error || "no url");
-      if (mode === "backdrop" && data.referenceUsed !== true) throw new Error("Reference edit was not used. Generation blocked to prevent random images.");
       setProgress(100);
       setPreviewUrl(data.url as string);
-      setLastResult({
-        engine: data.engine, provider: data.provider, model: data.model,
-        fallbackUsed: data.fallbackUsed, geminiError: data.geminiError, at: Date.now(),
-      });
-      if (data.fallbackUsed) {
-        toast.warning(`Gemini failed → Lovable fallback used (${data.model})`);
-      } else {
-        toast.success(`Preview ready via ${data.provider} · ${data.model}`);
-      }
-
-      // Bump local Gemini counter only when Gemini was actually used
-      if (data.provider === "gemini") {
-        try {
-          const k = `settings/geminiImage/usage/${todayKey()}`;
-          const snap = await get(ref(db, k));
-          await set(ref(db, k), (Number(snap.val()) || 0) + 1);
-        } catch {}
-      }
+      setLastResult({ model: data.model, at: Date.now() });
+      toast.success(`Preview ready · ${data.model || "lovable"}`);
     } catch (e: any) {
       const msg = e?.message || String(e);
-      setLastError({ message: msg, status: e?.status, quota: e?.quota, at: Date.now() });
-      toast.error(e?.status === 429 ? "Rate limited on both engines — see error panel." : msg);
+      setLastError({ message: msg, status: e?.status, at: Date.now() });
+      toast.error(e?.status === 429
+        ? "Lovable AI rate-limited or out of credits. It will resume automatically when credits refill."
+        : msg);
     } finally {
       clearInterval(tick);
       setBusy(false);
@@ -291,27 +217,11 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
     }
   };
 
-  const dotColor =
-    geminiStatus.state === "online" ? "bg-emerald-400" :
-    geminiStatus.state === "offline" ? "bg-rose-400" :
-    geminiStatus.state === "checking" ? "bg-amber-400 animate-pulse" :
-    "bg-white/30";
   const lovDot =
     lovableStatus.state === "online" ? "bg-emerald-400" :
     lovableStatus.state === "offline" ? "bg-rose-400" :
     lovableStatus.state === "checking" ? "bg-amber-400 animate-pulse" :
     "bg-white/30";
-
-  // Estimate next reset for Gemini Free Tier daily quota (midnight Pacific = 08:00 UTC)
-  const nextResetText = (() => {
-    const now = new Date();
-    const utc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 8, 0, 0));
-    if (utc.getTime() <= now.getTime()) utc.setUTCDate(utc.getUTCDate() + 1);
-    const diffMs = utc.getTime() - now.getTime();
-    const h = Math.floor(diffMs / 3_600_000);
-    const m = Math.floor((diffMs % 3_600_000) / 60_000);
-    return `in ${h}h ${m}m (≈ ${utc.toLocaleString()})`;
-  })();
 
   return (
     <div className={glassCard + " space-y-4 overflow-hidden"}>
@@ -321,7 +231,7 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
           <h3 className="text-[13px] font-bold text-white tracking-wide">Backdrop & Logo AI Generator</h3>
         </div>
         <p className="text-[10.5px] text-white/55 leading-relaxed break-words">
-          Pick an anime → preview → regenerate or save. Calls only your EGD-deployed generate-backdrop URL.
+          Powered by Lovable AI Gateway. Works while Lovable credits are available; pauses automatically when they run out.
         </p>
       </div>
 
@@ -385,85 +295,28 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
             </button>
           </div>
 
-          <div className="space-y-2">
-            <div>
-              <div className="text-[10px] uppercase tracking-wide text-white/50 mb-1.5">Type</div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {(["backdrop", "logo"] as Mode[]).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setMode(m)}
-                    className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
-                      mode === m ? "bg-emerald-500 text-black border-emerald-400" : "bg-white/5 text-white/70 border-white/10"
-                    }`}
-                  >
-                    {m === "backdrop" ? "Backdrop 16:9" : "Logo 1:1"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-wide text-white/50 mb-1.5">Engine (auto-fallback enabled)</div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <div className="px-2 py-1.5 rounded-lg text-[11px] font-semibold border bg-sky-500/15 text-sky-200 border-sky-400/30 flex items-center justify-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} /> Gemini (1st)
-                </div>
-                <div className="px-2 py-1.5 rounded-lg text-[11px] font-semibold border bg-fuchsia-500/15 text-fuchsia-200 border-fuchsia-400/30 flex items-center justify-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${lovDot}`} /> Lovable (fallback)
-                </div>
-              </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-white/50 mb-1.5">Type</div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {(["backdrop", "logo"] as Mode[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold border whitespace-nowrap ${
+                    mode === m ? "bg-emerald-500 text-black border-emerald-400" : "bg-white/5 text-white/70 border-white/10"
+                  }`}
+                >
+                  {m === "backdrop" ? "Backdrop 16:9" : "Logo 1:1"}
+                </button>
+              ))}
             </div>
           </div>
 
-
-          {/* Last-result / Last-error panel */}
-          {(lastResult || lastError) && (
-            <div className={`rounded-xl border overflow-hidden ${lastError ? "border-rose-500/30 bg-rose-500/[0.05]" : lastResult?.fallbackUsed ? "border-amber-500/30 bg-amber-500/[0.05]" : "border-emerald-500/25 bg-emerald-500/[0.05]"}`}>
-              <div className="px-3 py-2 border-b border-white/10 flex items-center gap-2">
-                <span className="text-[11px] font-bold text-white">
-                  {lastError ? "❌ Last Error" : lastResult?.fallbackUsed ? "⚠️ Gemini failed → Lovable used" : "✅ Last Generation"}
-                </span>
-                <span className="ml-auto text-[9.5px] text-white/50">
-                  {new Date((lastError?.at || lastResult?.at) as number).toLocaleTimeString()}
-                </span>
-              </div>
-              <div className="px-3 py-2 grid grid-cols-[80px_1fr] gap-x-2 gap-y-1 text-[10.5px]">
-                {lastResult && (
-                  <>
-                    <div className="text-white/50">Engine</div><div className="text-white/90 break-all">{lastResult.provider} · {lastResult.model}</div>
-                  </>
-                )}
-                {lastResult?.geminiError && (
-                  <>
-                    <div className="text-rose-300/80">Gemini err</div>
-                    <div className="text-rose-200/90 break-words">{lastResult.geminiError.message}</div>
-                    {lastResult.geminiError.quota?.quotaId && (<><div className="text-white/50">Quota ID</div><div className="text-white/80 break-all">{lastResult.geminiError.quota.quotaId}</div></>)}
-                    {lastResult.geminiError.quota?.perModel && (<><div className="text-white/50">On model</div><div className="text-white/80">{lastResult.geminiError.quota.perModel}</div></>)}
-                    {lastResult.geminiError.quota?.retryAfterSec && (<><div className="text-white/50">Retry after</div><div className="text-amber-300">{lastResult.geminiError.quota.retryAfterSec}s (per-min cap)</div></>)}
-                  </>
-                )}
-                {lastError && (
-                  <>
-                    <div className="text-white/50">Status</div><div className="text-rose-200">{lastError.status || "?"}</div>
-                    <div className="text-white/50">Message</div><div className="text-rose-100 break-words">{lastError.message}</div>
-                    {lastError.quota?.quotaId && (<><div className="text-white/50">Quota ID</div><div className="text-white/80 break-all">{lastError.quota.quotaId}</div></>)}
-                    {lastError.quota?.perModel && (<><div className="text-white/50">On model</div><div className="text-white/80">{lastError.quota.perModel}</div></>)}
-                    {lastError.quota?.retryAfterSec && (<><div className="text-white/50">Retry in</div><div className="text-amber-300">{lastError.quota.retryAfterSec}s</div></>)}
-                    {lastError.quota?.helpUrl && (<><div className="text-white/50">Help</div><a href={lastError.quota.helpUrl} target="_blank" rel="noreferrer" className="text-sky-300 underline truncate">docs</a></>)}
-                  </>
-                )}
-                <div className="text-white/50">Daily reset</div><div className="text-white/80">{nextResetText}</div>
-              </div>
-            </div>
-          )}
-
-
-
-          {/* Lovable Gateway status card */}
+          {/* Lovable Gateway status card — the ONLY engine */}
           <div className="rounded-xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/[0.06] to-pink-500/[0.04] overflow-hidden">
             <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-white/[0.03]">
               <span className={`w-2 h-2 rounded-full ${lovDot}`} />
-              <div className="text-[11px] font-bold text-white tracking-wide">Lovable AI Gateway (fallback)</div>
+              <div className="text-[11px] font-bold text-white tracking-wide">Lovable AI Gateway</div>
               <span className={
                 "ml-auto text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md " +
                 (lovableStatus.state === "online" ? "bg-emerald-500/15 text-emerald-300" :
@@ -479,116 +332,52 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
               <div className="text-white/90 text-right">{lovableStatus.checkedAt ? new Date(lovableStatus.checkedAt).toLocaleTimeString() : "—"}</div>
               {lovableStatus.message && (<><div className="text-white/50">Message</div><div className="text-white/70 text-right break-words">{lovableStatus.message}</div></>)}
             </div>
+            <div className="px-3 pb-3 flex items-center gap-2">
+              <button
+                onClick={() => checkLovable(false)}
+                disabled={lovableStatus.state === "checking"}
+                className={btnSecondary + " flex-1 !text-[11px] !py-1.5 disabled:opacity-40"}
+              >
+                {lovableStatus.state === "checking" ? "Testing…" : "Test Connection"}
+              </button>
+            </div>
             <div className="px-3 pb-3 text-[10px] text-fuchsia-200/80 leading-relaxed">
-              Used automatically when Gemini fails or hits 429. Resets monthly with your Lovable workspace credits.
+              🔒 Calls only your EGD-deployed <code className="text-white/70 bg-white/10 px-1 rounded">generate-backdrop</code> URL. Works while Lovable credits last and pauses when they run out — no extra setup needed.
+              <div className="mt-1 text-[9.5px] text-fuchsia-100/60 break-all">Active URL: {activeFunctionUrl || "Not configured"}</div>
             </div>
           </div>
 
-          {provider === "gemini" && (
-            <div className="rounded-xl border border-sky-500/25 bg-gradient-to-br from-sky-500/[0.06] to-indigo-500/[0.04] overflow-hidden">
-              {/* Header strip */}
-              <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-white/[0.03]">
-                <span className={`w-2 h-2 rounded-full ${dotColor}`} />
-                <div className="text-[11px] font-bold text-white tracking-wide">Gemini Image API</div>
-                <span className={
-                  "ml-auto text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md " +
-                  (geminiStatus.state === "online" ? "bg-emerald-500/15 text-emerald-300" :
-                   geminiStatus.state === "offline" ? "bg-rose-500/15 text-rose-300" :
-                   geminiStatus.state === "checking" ? "bg-amber-500/15 text-amber-300" :
-                   "bg-white/10 text-white/50")
-                }>
-                  {geminiStatus.state}
+          {(lastResult || lastError) && (
+            <div className={`rounded-xl border overflow-hidden ${lastError ? "border-rose-500/30 bg-rose-500/[0.05]" : "border-emerald-500/25 bg-emerald-500/[0.05]"}`}>
+              <div className="px-3 py-2 border-b border-white/10 flex items-center gap-2">
+                <span className="text-[11px] font-bold text-white">
+                  {lastError ? "❌ Last Error" : "✅ Last Generation"}
+                </span>
+                <span className="ml-auto text-[9.5px] text-white/50">
+                  {new Date((lastError?.at || lastResult?.at) as number).toLocaleTimeString()}
                 </span>
               </div>
-
-              {/* Status grid */}
-              <div className="px-3 py-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[10.5px] border-b border-white/10">
-                <div className="text-white/50">Model</div>
-                <div className="text-white/90 truncate text-right">{geminiStatus.model || "—"}</div>
-                <div className="text-white/50">Today</div>
-                <div className="text-white/90 text-right">{geminiUsedToday} / {geminiDailyLimit}</div>
-                <div className="text-white/50">Last check</div>
-                <div className="text-white/90 text-right">{geminiStatus.checkedAt ? new Date(geminiStatus.checkedAt).toLocaleTimeString() : "—"}</div>
-                {geminiStatus.message && (
+              <div className="px-3 py-2 grid grid-cols-[80px_1fr] gap-x-2 gap-y-1 text-[10.5px]">
+                {lastResult && (<><div className="text-white/50">Model</div><div className="text-white/90 break-all">{lastResult.model}</div></>)}
+                {lastError && (
                   <>
-                    <div className="text-white/50">Message</div>
-                    <div className="text-white/70 text-right break-words">{geminiStatus.message}</div>
+                    <div className="text-white/50">Status</div><div className="text-rose-200">{lastError.status || "?"}</div>
+                    <div className="text-white/50">Message</div><div className="text-rose-100 break-words">{lastError.message}</div>
                   </>
                 )}
-              </div>
-
-              {/* Form */}
-              <div className="px-3 py-3 space-y-2.5">
-                <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.06] px-2.5 py-2">
-                  <div className="text-[10.5px] text-emerald-200/90 leading-snug">
-                    🔒 This panel sends requests only to the <b>EGD Manager saved generate-backdrop URL</b>. <b>GEMINI_API_KEY</b> stays inside that deployed function.
-                  </div>
-                  <div className="mt-1.5 text-[9.5px] text-emerald-100/60 break-all">
-                    Active URL: {activeFunctionUrl || "Not configured"}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase tracking-wider text-white/55 font-semibold">
-                    Daily Quota (client-side counter)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={geminiDailyLimit}
-                    onChange={(e) => setGeminiDailyLimit(Number(e.target.value) || 0)}
-                    className={inputClass + " w-full !text-[12px]"}
-                  />
-                  <div className="text-[9.5px] text-white/40">Free tier resets at midnight UTC.</div>
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    onClick={() => checkGemini(false)}
-                    disabled={geminiStatus.state === "checking"}
-                    className={btnSecondary + " flex-1 !text-[11px] !py-1.5 disabled:opacity-40"}
-                  >
-                    {geminiStatus.state === "checking" ? "Testing…" : "Test Connection"}
-                  </button>
-                  <button
-                    onClick={saveGeminiConfig}
-                    className={btnPrimary + " flex-1 !text-[11px] !py-1.5"}
-                  >
-                    Save Quota
-                  </button>
-                </div>
-
-
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank" rel="noopener noreferrer"
-                  className="block text-center text-[10px] text-sky-300/80 hover:text-sky-300 underline pt-0.5"
-                >
-                  Get a Gemini API key →
-                </a>
               </div>
             </div>
           )}
 
-
           {mode === "backdrop" && (
             <div className="bg-emerald-500/[0.06] border border-emerald-500/25 rounded-lg p-2.5 space-y-1.5">
-              <label className="flex items-start gap-2 text-[11px] text-white/85 leading-relaxed cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 shrink-0"
-                  checked={mode === "backdrop"}
-                  disabled
-                  onChange={() => setUseReference(true)}
-                />
-                <span className="min-w-0 break-words">
-                  <span className="text-emerald-300 font-semibold">Reference required</span> — EGD Gemini always edits the current backdrop so it cannot switch into random text-only image generation.
-                </span>
-              </label>
-              {useReference && !activeItem.backdrop && (
-                <div className="text-[10px] text-amber-300 pl-5">⚠ No reference backdrop on this title. Generation is blocked until a backdrop is added.</div>
+              <div className="text-[11px] text-white/85 leading-relaxed">
+                <span className="text-emerald-300 font-semibold">Reference required</span> — Lovable AI always edits the current backdrop so it cannot return a random unrelated image.
+              </div>
+              {!activeItem.backdrop && (
+                <div className="text-[10px] text-amber-300">⚠ No reference backdrop on this title. Generation is blocked until a backdrop is added.</div>
               )}
-              {useReference && activeItem.backdrop && (
+              {activeItem.backdrop && (
                 <img src={activeItem.backdrop} alt="ref" className="w-full rounded border border-emerald-500/30 mt-1" />
               )}
             </div>
@@ -626,11 +415,9 @@ const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }:
               />
             ) : busy ? (
               <div className="w-full px-3 py-6 text-center">
-                <div className="text-[11px] text-white/70 mb-2">
-                  Generating with Gemini…
-                </div>
+                <div className="text-[11px] text-white/70 mb-2">Generating with Lovable AI…</div>
                 <div className="h-1.5 bg-white/10 rounded-full overflow-hidden mx-auto max-w-[280px]">
-                  <div className="h-full bg-gradient-to-r from-emerald-400 to-cyan-400 transition-all" style={{ width: `${progress}%` }} />
+                  <div className="h-full bg-gradient-to-r from-fuchsia-400 to-pink-400 transition-all" style={{ width: `${progress}%` }} />
                 </div>
                 <div className="text-[10px] text-white/40 mt-1">{Math.round(progress)}%</div>
               </div>
