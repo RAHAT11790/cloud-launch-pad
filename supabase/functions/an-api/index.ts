@@ -481,8 +481,12 @@ Deno.serve(async (req) => {
   if (path !== "/" && path !== "") {
     const origin = req.headers.get("origin");
     const referer = req.headers.get("referer");
-    const allowed = (origin || referer) && (_hostAllowed(origin) || _hostAllowed(referer));
-    if (!allowed) {
+    // Allow when both stripped (browser media fetch). Block only when a
+    // header is present pointing to a non-allowed host.
+    const bothMissing = !origin && !referer;
+    const badOrigin = !!origin && !_hostAllowed(origin);
+    const badReferer = !!referer && !_hostAllowed(referer) && !(origin && _hostAllowed(origin));
+    if (!bothMissing && (badOrigin || badReferer)) {
       return new Response(
         JSON.stringify({ error: "Access denied", message: "API only available from the official RS Anime site." }),
         { status: 403, headers: { ...cors, "Content-Type": "application/json" } },
