@@ -43,7 +43,10 @@ const PASSTHROUGH_RESP = [
 // ============================================================
 const ALLOWED_HOST_RX = [
   /\.lovable\.app$/i,
+  /\.lovableproject\.com$/i,
   /^lovable\.app$/i,
+  /^lovableproject\.com$/i,
+  /^rsanime03\.lovable\.app$/i,
   /^localhost(?::\d+)?$/i,
   /^127\.0\.0\.1(?::\d+)?$/i,
 ];
