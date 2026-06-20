@@ -8035,7 +8035,7 @@ ${footerLinksHtml}
  </button>
  {isBusy && (
  <div className="text-[10px] text-amber-300 whitespace-nowrap">
- {busyAction === "send" ? "Sending" : "Deleting"} {busyProgress.done}/{busyProgress.total}
+ {busyAction === "send" ? "Sending" : "Deleting"} {busyProgress.done}/{busyProgress.total}{busyProgress.skipped ? ` • skip ${busyProgress.skipped}` : ""}
  </div>
  )}
  </div>
