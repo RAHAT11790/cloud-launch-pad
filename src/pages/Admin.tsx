@@ -7496,7 +7496,7 @@ ${tgBulkFooter}
 ┌──────────────────
 │ ✦ Sᴇᴀsᴏɴ : ${tgSeason || '{season}'}
 │ ✦ Eᴘɪsᴏᴅᴇs : ${tgTotalEpisodes || '{total}'}
-│ ✦ Aᴜᴅɪᴏ : 🎧 ${tgLanguages} ${tgDubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}
+│ ✦ Aᴜᴅɪᴏ : 🎧 ${tgLanguages} ${tgDubType === "fandub" ? "𝐅𝐚𝐧𝐝𝐮𝐛" : "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥"}
 │ ✦ Qᴜᴀʟɪᴛʏ : ${tgQuality}
 │ ✦ Rᴀᴛɪɴɢ : ⭐ ${tgRating}/10
 │ ✦ Gᴇɴʀᴇs : ${tgGenres}
@@ -7506,7 +7506,7 @@ ${tgBulkFooter}
 📌 ${formatEpisodeRangeLabel(tgSeason, ...(String(tgNewEpAdded || '01').split('-').map(v => v.trim()) as [string, string?]))}
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰`}
 {tgFooterLinks.map(l => `\n๏ ${l.emoji} ${l.label} ${l.emoji}\n ${l.url}`).join("")}
-{`\n▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n${tgHashtags}`}
+{`\n▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰\n${sanitizeTelegramHashtags(tgHashtags, tgTitle)}`}
  </div>
  {tgButtonLink && (
  <div className="mt-3 bg-blue-500/20 border border-blue-500/40 rounded-lg py-2.5 text-center text-[12px] font-bold text-blue-300">
