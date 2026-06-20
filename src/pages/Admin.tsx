@@ -7813,11 +7813,15 @@ ${footerLinksHtml}
  if (!target) { toast.error("Enter a target channel ID"); return; }
  const posts = channelGroups.find(g => g.chatId === sourceChannelId)?.posts || [];
  if (posts.length === 0) { toast.info("no posts"); return; }
-  const targetExistingKeys = new Set(
-   (channelGroups.find(g => g.chatId === target)?.posts || [])
-    .map((p: any) => normalizeTelegramTitleKey(p.title || ""))
-    .filter(Boolean)
-  );
+   // Match target loosely so @username and -100xxx point to the same registry
+   const normChat = (c: any) => String(c || "").toLowerCase().replace(/^@/, "").trim();
+   const targetNorm = normChat(target);
+   const targetExistingKeys = new Set(
+    tgPosts
+     .filter((p: any) => normChat(p.chatId) === targetNorm)
+     .map((p: any) => normalizeTelegramTitleKey(p.title || ""))
+     .filter(Boolean)
+   );
   const freshCache = new Map<string, any>();
   const getFresh = (p: any) => {
    const cacheKey = String(p.firebaseKey || `${p.chatId || ""}_${p.messageId || ""}_${p.title || ""}`);
