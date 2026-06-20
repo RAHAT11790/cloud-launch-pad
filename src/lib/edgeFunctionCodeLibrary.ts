@@ -11,6 +11,7 @@
 // ============================================================
 
 import videoProxySource from "../../supabase/functions/video-proxy/index.ts?raw";
+import liveTvProxySource from "../../supabase/functions/live-tv-proxy/index.ts?raw";
 import videoDownloadSource from "../../supabase/functions/video-download/index.ts?raw";
 import telegramPostSource from "../../supabase/functions/telegram-post/index.ts?raw";
 import rsBotSource from "../../supabase/functions/rs-bot/index.ts?raw";
