@@ -7639,12 +7639,12 @@ ${tgBulkFooter}
  const [channelTargets, setChannelTargets] = useState<Record<string, string>>({});
  const [busyChannel, setBusyChannel] = useState<string>("");
  const [busyAction, setBusyAction] = useState<"send"|"delete"|"">("");
- const [busyProgress, setBusyProgress] = useState<{done:number; total:number}>({done:0,total:0});
+ const [busyProgress, setBusyProgress] = useState<{done:number; total:number; skipped?:number}>({done:0,total:0});
  const cancelRef = useRef(false);
 
  // === Build FRESH caption from latest series/movie data (mirrors sendTelegramPost template) ===
- const buildFreshCaptionForTitle = (savedTitle: string): { caption: string; poster: string; matched: boolean } => {
- const norm = (s: string) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+ const buildFreshCaptionForTitle = (savedTitle: string): { caption: string; poster: string; matched: boolean; titleKey?: string; sourceId?: string; buttonUrl?: string } => {
+ const norm = normalizeTelegramTitleKey;
  const target = norm(savedTitle);
  const ws = webseriesData.find((s: any) => norm(s.title) === target);
  const mv = !ws ? moviesData.find((m: any) => norm(m.title) === target) : null;
@@ -7663,9 +7663,9 @@ ${tgBulkFooter}
  const genres = item.category || item.genres || "Animation";
  const languages = String(item.language || "Bengali, English").replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", ");
  const dubType = item.dubType === "fandub" ? "fandub" : "official";
+ const audioBadge = dubType === "fandub" ? "𝐅𝐚𝐧𝐝𝐮𝐛" : "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥";
  const quality = item.quality || "480p,720p,1080p";
  const status = item.status === "complete" ? "complete" : "ongoing";
- const hashtags = `#${String(item.title || "").replace(/[^a-zA-Z0-9]/g, "_")} #anime`;
  const poster = ((item.backdrop || item.poster || "") as string).replace("/original/", "/w1280/").replace("/w780/", "/w1280/");
 
  const footerLinksHtml = tgFooterLinks.map(l => `๏ ${l.emoji} <a href="${l.url}">${l.label}</a> ${l.emoji}`).join("\n");
@@ -7674,7 +7674,7 @@ ${tgBulkFooter}
 ┌──────────────────
 │ ✦ <b>Sᴇᴀsᴏɴ :</b> ${seasonNum}
 │ ✦ <b>Eᴘɪsᴏᴅᴇs :</b> ${totalEps || 'N/A'}
-│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${languages} ${dubType === "fandub" ? "#ғᴀɴᴅᴜʙ" : "#ᴏғғɪᴄɪᴀʟ"}
+│ ✦ <b>Aᴜᴅɪᴏ :</b> 🎧 ${languages} ${audioBadge}
 │ ✦ <b>Qᴜᴀʟɪᴛʏ :</b> ${quality}
 │ ✦ <b>Rᴀᴛɪɴɢ :</b> ⭐ ${rating}/10
 │ ✦ <b>Gᴇɴʀᴇs :</b> ${genres}
@@ -7685,13 +7685,13 @@ ${tgBulkFooter}
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
 ${footerLinksHtml}
 ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▰
-${hashtags}`;
+#anime`;
 
  // Rebuild watch button URL with fresh latest-episode pointer
  const buttonUrl = isSeries
  ? buildEpisodeShareUrl(item.id, lastSeasonIdx, Math.max(0, totalEps - 1))
  : buildEpisodeShareUrl(item.id);
- return { caption, poster, matched: true, buttonUrl } as any;
+ return { caption, poster, matched: true, buttonUrl, titleKey: norm(item.title), sourceId: String(item.id || "") } as any;
  };
 
  const cancelCurrent = () => {
