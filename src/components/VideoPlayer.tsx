@@ -88,6 +88,15 @@ const isBypassSource = (url: string): boolean => {
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
 };
 
+const isManagedServerSource = (url: string): boolean => {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host.includes("onrender.com") || host.includes("hf.space") || host.includes("bot-hosting.net");
+  } catch {
+    return false;
+  }
+};
+
 const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
   try {
     const parsed = new URL(rawUrl);
@@ -1577,7 +1586,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
-    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy);
+    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy || isManagedServerSource(trimmed));
   }, [cdnEnabled, proxyUrl, proxyApiKey, preferProxy]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
