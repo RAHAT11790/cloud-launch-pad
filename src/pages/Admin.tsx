@@ -7654,7 +7654,6 @@ ${tgBulkFooter}
   const [expandedChannel, setExpandedChannel] = useState<string>("");
  const [channelTargets, setChannelTargets] = useState<Record<string, string>>({});
  const [busyChannel, setBusyChannel] = useState<string>("");
-  const [busyAction, setBusyAction] = useState<"send"|"">("");
  const [busyProgress, setBusyProgress] = useState<{done:number; total:number; skipped?:number}>({done:0,total:0});
  const cancelRef = useRef(false);
 
@@ -7837,7 +7836,7 @@ ${footerLinksHtml}
    if (!window.confirm(`Send ${toSend.length} unique anime post(s) with LATEST details to ${target}?${skippedTitles.length ? `\n${skippedTitles.length} duplicate saved record(s) will be skipped.` : ""}\n\nTarget channel history will NOT be checked.`)) return;
 
  cancelRef.current = false;
-  setBusyChannel(sourceChannelId); setBusyAction("send"); setBusyProgress({done:0,total:toSend.length,skipped:skippedTitles.length});
+   setBusyChannel(sourceChannelId); setBusyProgress({done:0,total:toSend.length,skipped:skippedTitles.length});
   let ok = 0, fail = 0; let firstError = "";
  for (let i = 0; i < toSend.length; i++) {
  if (cancelRef.current) break;
@@ -7872,7 +7871,7 @@ ${footerLinksHtml}
  }
  const wasCancelled = cancelRef.current;
  cancelRef.current = false;
- setBusyChannel(""); setBusyAction(""); setBusyProgress({done:0,total:0});
+ setBusyChannel(""); setBusyProgress({done:0,total:0});
   if (wasCancelled) toast.info(`Cancelled — sent ${ok}, failed ${fail}, skipped ${skippedTitles.length} duplicate`);
   else if (ok > 0) toast.success(`✅ Sent ${ok}/${toSend.length} unique to ${target}${skippedTitles.length?`, skipped ${skippedTitles.length} duplicate`:""}${fail?`, ${fail} failed`:""}`);
  if (!wasCancelled && fail > 0 && firstError) toast.error(`Send error: ${firstError}`);
