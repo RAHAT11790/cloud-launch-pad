@@ -11,7 +11,7 @@ import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
 
 // Slugs whose source was just updated and need to be re-deployed by the user.
 // A green "NEW" badge highlights them in the deploy grid below.
-const NEW_EDGE_DEPLOYS = new Set<string>(["video-proxy", "video-download", "an-api"]);
+const NEW_EDGE_DEPLOYS = new Set<string>(["video-proxy", "video-download", "an-api", "apk-download"]);
 import { supabase } from "@/integrations/supabase/client";
 
 // Secrets that Lovable auto-provisions; the admin never needs to paste a value.
