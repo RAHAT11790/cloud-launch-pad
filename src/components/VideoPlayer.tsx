@@ -127,10 +127,17 @@ const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
 
     const port = parsed.port ? `:${parsed.port}` : "";
     const protocol = parsed.protocol || "http:";
-    return Array.from({ length: PROXY_SERVER_LIMIT }, (_, index) => ({
+    const builtInMirrors = VIDEO_MIRROR_ORIGINS.map((domain, index) => ({
+      name: index === 0 ? "RS FR 01" : index === 1 ? "RS FR 02" : "RS Backup",
+      domain,
+    }));
+    const legacyMirrors = Array.from({ length: PROXY_SERVER_LIMIT }, (_, index) => ({
       name: `Server ${index + 1}`,
       domain: `${protocol}//fi${index + 1}.bot-hosting.net${port}`,
     }));
+    return [...builtInMirrors, ...legacyMirrors].filter((server, index, all) =>
+      all.findIndex((item) => item.domain === server.domain) === index,
+    );
   } catch {
     return [];
   }
