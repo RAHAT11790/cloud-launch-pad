@@ -7818,12 +7818,18 @@ ${footerLinksHtml}
     .map((p: any) => normalizeTelegramTitleKey(p.title || ""))
     .filter(Boolean)
   );
+  const freshCache = new Map<string, any>();
+  const getFresh = (p: any) => {
+   const cacheKey = String(p.firebaseKey || `${p.chatId || ""}_${p.messageId || ""}_${p.title || ""}`);
+   if (!freshCache.has(cacheKey)) freshCache.set(cacheKey, buildFreshCaptionForTitle(p.title) as any);
+   return freshCache.get(cacheKey);
+  };
   const seenTitles = new Set<string>();
   const skippedTitles: string[] = [];
   const toSend = [...posts]
    .sort((a, b) => (Number(b.sentAt) || 0) - (Number(a.sentAt) || 0))
    .filter((p) => {
-    const fresh = buildFreshCaptionForTitle(p.title) as any;
+    const fresh = getFresh(p);
     const key = fresh.titleKey || normalizeTelegramTitleKey(p.title || "");
     if (!key) return true;
     if (seenTitles.has(key) || targetExistingKeys.has(key)) { skippedTitles.push(String(p.title || "Untitled")); return false; }
@@ -7842,7 +7848,7 @@ ${footerLinksHtml}
  if (cancelRef.current) break;
  const p = toSend[i];
  // Build FRESH caption from latest series data
- const fresh = buildFreshCaptionForTitle(p.title) as any;
+  const fresh = getFresh(p);
  const caption = fresh.matched
  ? fresh.caption
   : (p.caption && String(p.caption).trim() ? sanitizeTelegramCaption(String(p.caption), String(p.title || "")) : `<b>${String(p.title || "").replace(/[<>&]/g, "")}</b>`);
