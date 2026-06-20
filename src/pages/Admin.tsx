@@ -8003,23 +8003,37 @@ ${hashtags}`;
  <input value={target} onChange={e => setChannelTargets(prev => ({ ...prev, [chatId]: e.target.value }))}
  className={inputClass} placeholder="@channel or -100..." />
  </div>
- <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
  <button disabled={!!busyChannel} onClick={() => sendAllToChannel(chatId)}
- className={`${btnPrimary} !py-2 text-[11px] flex items-center justify-center gap-1 disabled:opacity-50`}>
- <Send size={12} /> Send All
+ className="w-full py-2.5 px-2 rounded-lg bg-gradient-to-br from-indigo-500/90 to-purple-600/90 hover:from-indigo-500 hover:to-purple-600 text-white text-[11px] font-semibold flex flex-col items-center justify-center gap-1 shadow-md shadow-purple-900/30 border border-purple-400/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+ <Send size={14} />
+ <span className="leading-none">Send All</span>
  </button>
  <button disabled={!!busyChannel} onClick={() => deleteAllFromChannel(chatId)}
- className={`${btnSecondary} !py-2 text-[11px] text-red-300 border-red-500/30 flex items-center justify-center gap-1 disabled:opacity-50`}>
- <Trash2 size={12} /> Delete All TG
+ className="w-full py-2.5 px-2 rounded-lg bg-gradient-to-br from-red-500/90 to-rose-600/90 hover:from-red-500 hover:to-rose-600 text-white text-[11px] font-semibold flex flex-col items-center justify-center gap-1 shadow-md shadow-red-900/30 border border-red-400/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+ <Trash2 size={14} />
+ <span className="leading-none">Delete TG</span>
  </button>
  <button disabled={!!busyChannel} onClick={() => clearChannelRecords(chatId)}
- className={`${btnSecondary} !py-2 text-[11px] flex items-center justify-center gap-1 disabled:opacity-50`}>
- <XCircle size={12} /> Clear Records
+ className="w-full py-2.5 px-2 rounded-lg bg-zinc-700/70 hover:bg-zinc-700 text-zinc-100 text-[11px] font-semibold flex flex-col items-center justify-center gap-1 border border-zinc-600/40 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+ <XCircle size={14} />
+ <span className="leading-none">Clear</span>
  </button>
  </div>
  {isBusy && (
+ <div className="space-y-2 pt-1">
+ <div className="flex items-center justify-between gap-2">
+ <div className="text-[10px] text-amber-300 font-medium">
+ {busyAction === "send" ? "📤 Sending" : "🗑️ Deleting"} {busyProgress.done}/{busyProgress.total}
+ </div>
+ <button onClick={cancelCurrent}
+ className="px-3 py-1 rounded-md bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 text-[10px] font-semibold flex items-center gap-1 transition-all">
+ <XCircle size={12} /> Cancel
+ </button>
+ </div>
  <div className="bg-zinc-800 rounded-full h-1.5 overflow-hidden">
  <div className="bg-gradient-to-r from-amber-500 to-pink-500 h-full transition-all" style={{ width: `${busyProgress.total ? (busyProgress.done/busyProgress.total)*100 : 0}%` }} />
+ </div>
  </div>
  )}
  <div className="space-y-1.5 max-h-[260px] overflow-y-auto pt-1">
