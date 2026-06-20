@@ -19,9 +19,9 @@ import processEmailQueueSource from "../../supabase/functions/process-email-queu
 import apkDownloadSource from "../../supabase/functions/apk-download/index.ts?raw";
 import linkShareBotSource from "../../supabase/functions/link-share-bot/index.ts?raw";
 import shortenArolinksSource from "../../supabase/functions/shorten-arolinks/index.ts?raw";
-// generate-backdrop is NOT auto-deployed by Lovable — its source lives outside
-// supabase/functions/ so the user deploys it themselves via EGD Manager.
-import generateBackdropSource from "./edgeSources/generate-backdrop.source.ts.txt?raw";
+// generate-backdrop is removed — backdrop AI now runs on Lovable Cloud
+// via the auto-deployed `lovable-backdrop` edge function.
+
 import anApiSource from "../../supabase/functions/an-api/index.ts?raw";
 
 
