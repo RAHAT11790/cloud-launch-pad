@@ -7970,7 +7970,7 @@ ${footerLinksHtml}
  </button>
  </div>
  <p className="text-[11px] text-zinc-400 mb-3">
- Posts grouped by saved channel. <b>Send All</b> sends only unique anime with latest details and skips duplicates. <b>Delete All</b> removes them from Telegram (bot must be admin with delete permission).
+ Posts grouped by saved channel. <b>Send All</b> sends only one latest post per anime from saved Firebase records. It does not check your Telegram channel history. <b>Clear</b> removes saved records only.
  </p>
 
  {tgPostsLoading ? (
@@ -7990,11 +7990,11 @@ ${footerLinksHtml}
  <div className="text-[13px] font-semibold truncate">{chatId}</div>
  <div className="text-[10px] text-zinc-400">{posts.length} post{posts.length===1?"":"s"} saved</div>
  </button>
- {isBusy && (
- <div className="text-[10px] text-amber-300 whitespace-nowrap">
- {busyAction === "send" ? "Sending" : "Deleting"} {busyProgress.done}/{busyProgress.total}{busyProgress.skipped ? ` • skip ${busyProgress.skipped}` : ""}
- </div>
- )}
+  {isBusy && (
+  <div className="text-[10px] text-amber-300 whitespace-nowrap">
+  Sending {busyProgress.done}/{busyProgress.total}{busyProgress.skipped ? ` • skip ${busyProgress.skipped}` : ""}
+  </div>
+  )}
  </div>
  {isOpen && (
  <div className="px-3 pb-3 space-y-2">
@@ -8003,16 +8003,11 @@ ${footerLinksHtml}
  <input value={target} onChange={e => setChannelTargets(prev => ({ ...prev, [chatId]: e.target.value }))}
  className={inputClass} placeholder="@channel or -100..." />
  </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
  <button disabled={!!busyChannel} onClick={() => sendAllToChannel(chatId)}
  className="w-full py-2.5 px-2 rounded-lg bg-gradient-to-br from-indigo-500/90 to-purple-600/90 hover:from-indigo-500 hover:to-purple-600 text-white text-[11px] font-semibold flex flex-col items-center justify-center gap-1 shadow-md shadow-purple-900/30 border border-purple-400/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
  <Send size={14} />
-  <span className="leading-none">Send Unique</span>
- </button>
- <button disabled={!!busyChannel} onClick={() => deleteAllFromChannel(chatId)}
- className="w-full py-2.5 px-2 rounded-lg bg-gradient-to-br from-red-500/90 to-rose-600/90 hover:from-red-500 hover:to-rose-600 text-white text-[11px] font-semibold flex flex-col items-center justify-center gap-1 shadow-md shadow-red-900/30 border border-red-400/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
- <Trash2 size={14} />
- <span className="leading-none">Delete TG</span>
+   <span className="leading-none">Send All</span>
  </button>
  <button disabled={!!busyChannel} onClick={() => clearChannelRecords(chatId)}
  className="w-full py-2.5 px-2 rounded-lg bg-zinc-700/70 hover:bg-zinc-700 text-zinc-100 text-[11px] font-semibold flex flex-col items-center justify-center gap-1 border border-zinc-600/40 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
