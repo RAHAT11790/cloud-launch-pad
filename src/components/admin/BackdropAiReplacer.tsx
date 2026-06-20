@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { db, ref, onValue, update } from "@/lib/firebase";
 import { toast } from "sonner";
 import { fuzzyMatch } from "@/lib/fuzzyMatch";
-import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Props { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string; }
 
@@ -33,26 +33,20 @@ The final result must look like an OFFICIAL anime poster remastered into a premi
 const DEFAULT_LOGO_PROMPT = `Official anime TITLE LOGO for "{title}", square 1:1. Title "{title}" rendered in the canonical official logo treatment of the real anime (matching font, colors, glow, ornaments). Japanese kanji of the title below in small elegant typography. Deep black radial gradient background. High resolution, perfect kerning, no foreground characters, no extra text.`;
 
 const callGenerateBackdrop = async (body: Record<string, any>) => {
-  const endpoint = await getEdgeFunctionUrl("generate-backdrop");
-  if (!endpoint) throw new Error("Generate Backdrop function URL not configured. Deploy it from EGD Manager first.");
-  if (!/\/functions\/v1\/generate-backdrop\/?(?:[?#].*)?$/i.test(endpoint)) {
-    throw new Error("Active URL is not generate-backdrop. Save the EGD deployer URL again, then redeploy generate-backdrop.");
-  }
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const raw = await res.text();
-  const data = raw ? (() => { try { return JSON.parse(raw); } catch { return { error: raw }; } })() : {};
-  if (!res.ok) {
-    const err = new Error(data?.error || `Generate Backdrop failed (${res.status})`) as any;
-    err.status = res.status;
-    err.raw = data;
+  const { data, error } = await supabase.functions.invoke("lovable-backdrop", { body });
+  if (error) {
+    const err = new Error(error.message || "Lovable AI call failed") as any;
+    err.status = (error as any)?.context?.status;
     throw err;
   }
-  return { ...data, endpoint };
+  if (data?.error) {
+    const err = new Error(data.error) as any;
+    err.status = data.status;
+    throw err;
+  }
+  return data;
 };
+
 
 const BackdropAiReplacer = ({ glassCard, btnPrimary, btnSecondary, inputClass }: Props) => {
   const [items, setItems] = useState<Item[]>([]);
