@@ -97,6 +97,27 @@ const isManagedServerSource = (url: string): boolean => {
   }
 };
 
+const VIDEO_MIRROR_ORIGINS = [
+  "https://rahat1102-video-hosting-bot.hf.space",
+  "http://fi3.bot-hosting.net:22854",
+  "https://rs-stream-bot-1.onrender.com",
+];
+
+const buildManagedMirrorSources = (rawUrl: string): string[] => {
+  try {
+    const parsed = new URL(rawUrl);
+    const host = parsed.host.toLowerCase();
+    if (!isManagedServerSource(rawUrl)) return [];
+    return VIDEO_MIRROR_ORIGINS
+      .filter((origin) => {
+        try { return new URL(origin).host.toLowerCase() !== host; } catch { return false; }
+      })
+      .map((origin) => `${origin}${parsed.pathname}${parsed.search}${parsed.hash}`);
+  } catch {
+    return [];
+  }
+};
+
 const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
   try {
     const parsed = new URL(rawUrl);
@@ -132,12 +153,26 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   const isHttp = isInsecureHttpSource(url);
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
   const builtinProxyCandidate = BUILTIN_STREAM_PROXY ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url) : null;
+  const mirrorSources = buildManagedMirrorSources(url);
+  const addMirrorCandidates = () => {
+    mirrorSources.forEach((mirrorUrl) => {
+      if (isInsecureHttpSource(mirrorUrl)) {
+        if (proxyUrl) addCandidate(buildProxyPlaybackUrl(proxyUrl, mirrorUrl, proxyApiKey));
+        if (BUILTIN_STREAM_PROXY) addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, mirrorUrl));
+      } else {
+        if (proxyUrl) addCandidate(buildProxyPlaybackUrl(proxyUrl, mirrorUrl, proxyApiKey));
+        if (BUILTIN_STREAM_PROXY) addCandidate(buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, mirrorUrl));
+        addCandidate(mirrorUrl);
+      }
+    });
+  };
 
   if (preferProxy) {
     // Live TV / fragile HLS streams should use the admin-selected proxy first,
     // then fall back to direct only if proxy is unavailable.
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
+    addMirrorCandidates();
     addCandidate(url);
     return candidates;
   }
@@ -155,6 +190,7 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     addCandidate(url);
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
+    addMirrorCandidates();
   }
 
   return candidates;
