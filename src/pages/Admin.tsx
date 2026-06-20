@@ -7866,9 +7866,13 @@ ${footerLinksHtml}
  if (r.ok) {
  ok++;
  const msgId = r.data?.result?.message_id || r.data?.message_id;
+ const realChatId = r.data?.result?.chat?.id ?? r.data?.result?.chat?.username ?? target;
  if (msgId) {
-  const rec = { chatId: target, messageId: Number(msgId), title: fresh.title || p.title, poster: poster || "", caption, buttons: baseButtons, sentAt: Date.now() };
+  const rec = { chatId: realChatId, messageId: Number(msgId), title: fresh.title || p.title, poster: poster || "", caption, buttons: baseButtons, sentAt: Date.now() };
  try { await set(ref(db, `telegramPosts/${targetKey}_${msgId}`), rec); } catch {}
+ }
+ const sentKey = fresh.titleKey || normalizeTelegramTitleKey(p.title || "");
+ if (sentKey) targetExistingKeys.add(sentKey);
  }
  } else {
  fail++;
