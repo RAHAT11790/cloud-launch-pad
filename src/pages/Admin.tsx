@@ -7654,7 +7654,7 @@ ${tgBulkFooter}
   const [expandedChannel, setExpandedChannel] = useState<string>("");
  const [channelTargets, setChannelTargets] = useState<Record<string, string>>({});
  const [busyChannel, setBusyChannel] = useState<string>("");
- const [busyAction, setBusyAction] = useState<"send"|"delete"|"">("");
+  const [busyAction, setBusyAction] = useState<"send"|"">("");
  const [busyProgress, setBusyProgress] = useState<{done:number; total:number; skipped?:number}>({done:0,total:0});
  const cancelRef = useRef(false);
 
@@ -7807,21 +7807,12 @@ ${footerLinksHtml}
  else toast.info("no changes needed");
  };
 
-  // === SEND ALL to target channel (re-post with LATEST fresh details) ===
+  // === SEND ALL to target channel (dedupe ONLY saved Firebase records by anime title) ===
  const sendAllToChannel = async (sourceChannelId: string) => {
  const target = (channelTargets[sourceChannelId] || sourceChannelId).trim();
  if (!target) { toast.error("Enter a target channel ID"); return; }
  const posts = channelGroups.find(g => g.chatId === sourceChannelId)?.posts || [];
  if (posts.length === 0) { toast.info("no posts"); return; }
-   // Match target loosely so @username and -100xxx point to the same registry
-   const normChat = (c: any) => String(c || "").toLowerCase().replace(/^@/, "").trim();
-   const targetNorm = normChat(target);
-   const targetExistingKeys = new Set(
-    tgPosts
-     .filter((p: any) => normChat(p.chatId) === targetNorm)
-     .map((p: any) => normalizeTelegramTitleKey(p.title || ""))
-     .filter(Boolean)
-   );
   const freshCache = new Map<string, any>();
   const getFresh = (p: any) => {
    const cacheKey = String(p.firebaseKey || `${p.chatId || ""}_${p.messageId || ""}_${p.title || ""}`);
@@ -7836,14 +7827,14 @@ ${footerLinksHtml}
     const fresh = getFresh(p);
     const key = fresh.titleKey || normalizeTelegramTitleKey(p.title || "");
     if (!key) return true;
-    if (seenTitles.has(key) || targetExistingKeys.has(key)) { skippedTitles.push(String(p.title || "Untitled")); return false; }
+    if (seenTitles.has(key)) { skippedTitles.push(String(p.title || "Untitled")); return false; }
     seenTitles.add(key);
     return true;
    })
    .sort((a, b) => (Number(a.sentAt) || 0) - (Number(b.sentAt) || 0));
   if (toSend.length === 0) { toast.info("All saved posts are duplicate records — nothing to send"); return; }
  const targetKey = String(target).replace(/[^a-zA-Z0-9_-]/g, '_');
-  if (!window.confirm(`Send ${toSend.length} unique anime post(s) with LATEST details to ${target}?${skippedTitles.length ? `\n${skippedTitles.length} duplicate record(s) will be skipped.` : ""}`)) return;
+   if (!window.confirm(`Send ${toSend.length} unique anime post(s) with LATEST details to ${target}?${skippedTitles.length ? `\n${skippedTitles.length} duplicate saved record(s) will be skipped.` : ""}\n\nTarget channel history will NOT be checked.`)) return;
 
  cancelRef.current = false;
   setBusyChannel(sourceChannelId); setBusyAction("send"); setBusyProgress({done:0,total:toSend.length,skipped:skippedTitles.length});
@@ -7871,8 +7862,6 @@ ${footerLinksHtml}
   const rec = { chatId: realChatId, messageId: Number(msgId), title: fresh.title || p.title, poster: poster || "", caption, buttons: baseButtons, sentAt: Date.now() };
  try { await set(ref(db, `telegramPosts/${targetKey}_${msgId}`), rec); } catch {}
  }
-  const sentKey = fresh.titleKey || normalizeTelegramTitleKey(p.title || "");
-  if (sentKey) targetExistingKeys.add(sentKey);
  } else {
  fail++;
  if (!firstError) firstError = r.data?.error || r.data?.description || `HTTP ${r.status}`;
