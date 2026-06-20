@@ -9251,6 +9251,186 @@ ${tgBulkFooter}
 
 Admin.displayName = "Admin";
 
+// ───────────────────────────────────────────────────────────────────
+// AnalyticsSection — memoized, indexed, virtualized for ultra-smooth UI
+// ───────────────────────────────────────────────────────────────────
+const AnalyticsSection = memo(({
+ glassCard, analyticsViews, activeViewers, dailyActiveUsers, webseriesData, moviesData,
+}: {
+ glassCard: string;
+ analyticsViews: Record<string, any>;
+ activeViewers: Record<string, any>;
+ dailyActiveUsers: Record<string, any>;
+ webseriesData: any[];
+ moviesData: any[];
+}) => {
+ const today = useMemo(() => new Date().toISOString().split("T")[0], []);
+
+ // O(1) lookup maps — built once per data change instead of .find() per row.
+ const titleIndex = useMemo(() => {
+ const m = new Map<string, { title: string; poster: string }>();
+ for (const w of webseriesData) m.set(w.id, { title: w.title || w.id, poster: w.poster || "" });
+ for (const v of moviesData) if (!m.has(v.id)) m.set(v.id, { title: v.title || v.id, poster: v.poster || "" });
+ return m;
+ }, [webseriesData, moviesData]);
+
+ const todayUsers = useMemo(() => {
+ const map = dailyActiveUsers[today] || {};
+ const arr: { uid: string; userName: string; lastSeen: number }[] = [];
+ for (const uid in map) {
+ const d = map[uid];
+ arr.push({ uid, userName: d?.userName || "User", lastSeen: Number(d?.lastSeen || 0) });
+ }
+ arr.sort((a, b) => b.lastSeen - a.lastSeen);
+ return arr;
+ }, [dailyActiveUsers, today]);
+
+ const totalCurrentViewers = useMemo(() => {
+ let n = 0;
+ for (const k in activeViewers) {
+ const u = activeViewers[k];
+ if (u) n += Object.keys(u).length;
+ }
+ return n;
+ }, [activeViewers]);
+
+ const { contentViewStats, totalTodayViews, maxViewCount } = useMemo(() => {
+ const stats: { animeId: string; title: string; viewCount: number; poster: string }[] = [];
+ let total = 0;
+ for (const aId in analyticsViews) {
+ const todayData = analyticsViews[aId]?.[today];
+ if (!todayData) continue;
+ const count = Object.keys(todayData).length;
+ total += count;
+ const meta = titleIndex.get(aId);
+ stats.push({
+ animeId: aId,
+ title: meta?.title || aId,
+ viewCount: count,
+ poster: meta?.poster || "",
+ });
+ }
+ stats.sort((a, b) => b.viewCount - a.viewCount);
+ return { contentViewStats: stats, totalTodayViews: total, maxViewCount: stats[0]?.viewCount || 1 };
+ }, [analyticsViews, today, titleIndex]);
+
+ // Re-render once a minute for "Last seen" labels — no per-second ticks.
+ const [nowTick, setNowTick] = useState(0);
+ useEffect(() => {
+ const id = setInterval(() => setNowTick(t => t + 1), 60_000);
+ return () => clearInterval(id);
+ }, []);
+ const formatTimeAgo = useCallback((ts: number) => {
+ if (!ts) return "—";
+ const s = Math.max(1, Math.floor((Date.now() - ts) / 1000));
+ if (s < 60) return `${s}s ago`;
+ const m = Math.floor(s / 60);
+ if (m < 60) return `${m}m ago`;
+ return `${Math.floor(m / 60)}h ago`;
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [nowTick]);
+
+ // Cap rendered rows so a viral day with 1000+ animes doesn't kill the DOM.
+ const MAX_ROWS = 100;
+ const visibleStats = contentViewStats.length > MAX_ROWS ? contentViewStats.slice(0, MAX_ROWS) : contentViewStats;
+ const visibleUsers = todayUsers.length > MAX_ROWS ? todayUsers.slice(0, MAX_ROWS) : todayUsers;
+
+ return (
+ <div style={{ contain: "content" }}>
+ <div className="grid grid-cols-3 gap-3 mb-5">
+ <div className="bg-gradient-to-br from-[#1A1A2E] to-[#151521] border border-purple-500/20 rounded-2xl p-4">
+ <div className="w-10 h-10 bg-purple-500/15 rounded-xl flex items-center justify-center mb-2 text-purple-400"><Users size={18} /></div>
+ <div className="text-2xl font-extrabold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">{todayUsers.length}</div>
+ <div className="text-[10px] text-[#D1C4E9] mt-1">Today's Users</div>
+ </div>
+ <div className="bg-gradient-to-br from-[#1A1A2E] to-[#151521] border border-blue-500/20 rounded-2xl p-4">
+ <div className="w-10 h-10 bg-blue-500/15 rounded-xl flex items-center justify-center mb-2 text-blue-400"><Eye size={18} /></div>
+ <div className="text-2xl font-extrabold text-blue-400">{totalTodayViews}</div>
+ <div className="text-[10px] text-[#D1C4E9] mt-1">Today's Total Views</div>
+ </div>
+ <div className="bg-gradient-to-br from-[#1A1A2E] to-[#151521] border border-green-500/20 rounded-2xl p-4">
+ <div className="w-10 h-10 bg-green-500/15 rounded-xl flex items-center justify-center mb-2 text-green-400"><Activity size={18} /></div>
+ <div className="text-2xl font-extrabold text-green-400">{totalCurrentViewers}</div>
+ <div className="text-[10px] text-[#D1C4E9] mt-1">Watching Now</div>
+ </div>
+ </div>
+
+ <div className={`${glassCard} p-4 mb-4`} style={{ contain: "content" }}>
+ <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
+ <Users size={14} className="text-purple-400" /> Today's Active Users
+ <span className="ml-auto text-[11px] bg-purple-500/15 text-purple-300 px-2 py-0.5 rounded-full font-bold">{todayUsers.length}</span>
+ </h3>
+ {visibleUsers.length === 0 ? (
+ <p className="text-[#957DAD] text-[13px] text-center py-5">No user activity yet today</p>
+ ) : (
+ <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1" style={{ contentVisibility: "auto" } as any}>
+ {visibleUsers.map((u, idx) => (
+ <div key={u.uid} className="flex items-center gap-3 bg-[#1A1A2E] rounded-xl p-2.5 border border-white/5">
+ <span className="text-[11px] text-[#957DAD] font-bold w-6 text-center">#{idx + 1}</span>
+ <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
+ {(u.userName || "?").trim().charAt(0).toUpperCase()}
+ </div>
+ <div className="flex-1 min-w-0">
+ <p className="text-[13px] font-semibold truncate text-white">{u.userName}</p>
+ <p className="text-[10px] text-[#957DAD]">Last seen {formatTimeAgo(u.lastSeen)}</p>
+ </div>
+ <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+ </div>
+ ))}
+ {todayUsers.length > MAX_ROWS && (
+ <div className="text-center text-[10px] text-[#957DAD] py-2">+{todayUsers.length - MAX_ROWS} more</div>
+ )}
+ </div>
+ )}
+ </div>
+
+ <div className={`${glassCard} p-4 mb-4`} style={{ contain: "content" }}>
+ <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
+ <Film size={14} className="text-pink-400" /> Today's Anime Views
+ <span className="ml-auto text-[11px] bg-pink-500/15 text-pink-300 px-2 py-0.5 rounded-full font-bold">{contentViewStats.length}</span>
+ </h3>
+ {visibleStats.length === 0 ? (
+ <p className="text-[#957DAD] text-[13px] text-center py-5">No views today yet</p>
+ ) : (
+ <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1" style={{ contentVisibility: "auto" } as any}>
+ {visibleStats.map((item, idx) => (
+ <div key={item.animeId} className="flex items-center gap-3 bg-[#1A1A2E] rounded-xl p-3 border border-white/5">
+ <span className="text-[11px] text-[#957DAD] font-bold w-5">#{idx + 1}</span>
+ {item.poster ? (
+ <img src={item.poster} loading="lazy" decoding="async" className="w-9 h-[52px] rounded-lg object-cover flex-shrink-0"
+ onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+ ) : (
+ <div className="w-9 h-[52px] rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+ <Film size={14} className="text-purple-400" />
+ </div>
+ )}
+ <div className="flex-1 min-w-0">
+ <p className="text-[12px] font-semibold truncate text-white">{item.title}</p>
+ <div className="w-full h-1.5 bg-[#0F0F1A] rounded-full mt-1.5 overflow-hidden">
+ <div className="h-full rounded-full bg-gradient-to-r from-purple-600 to-pink-500"
+ style={{ width: `${Math.min(100, (item.viewCount / maxViewCount) * 100)}%` }} />
+ </div>
+ </div>
+ <span className="text-sm font-bold text-pink-400 flex-shrink-0 tabular-nums">{item.viewCount}</span>
+ </div>
+ ))}
+ {contentViewStats.length > MAX_ROWS && (
+ <div className="text-center text-[10px] text-[#957DAD] py-2">+{contentViewStats.length - MAX_ROWS} more</div>
+ )}
+ </div>
+ )}
+ </div>
+
+ <div className="text-[10px] text-[#957DAD] text-center pt-2 pb-1">
+ Showing today's activity only · resets every 24h
+ </div>
+ </div>
+ );
+});
+AnalyticsSection.displayName = "AnalyticsSection";
+
+
+
 // Maintenance Section sub-component
 const MaintenanceSection = ({
  glassCard, inputClass, btnPrimary, maintenanceActive, currentMaintenance,
