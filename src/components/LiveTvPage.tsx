@@ -83,7 +83,10 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
   }, [activeChannel, channels]);
 
   if (activeChannel) {
-    return (
+    // Render via portal to document.body — ancestors using CSS transforms
+    // (e.g. the swipe-nav `translate3d` strip) create a containing block
+    // that breaks `position: fixed`, causing the player to render inline.
+    return createPortal(
       <VideoPlayer
         src={activeChannel.streamUrl}
         title={activeChannel.name}
@@ -113,7 +116,8 @@ const LiveTvPage = ({ onBack, onExitPlayer, isActive = true }: LiveTvPageProps) 
           const ch = channels.find(c => c.id === anime.id);
           if (ch) setActiveChannel(ch);
         }}
-      />
+      />,
+      document.body,
     );
   }
 
