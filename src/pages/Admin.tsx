@@ -4669,16 +4669,16 @@ ${tgBulkFooter}
  }
 
  function sanitizeTelegramCaption(caption: string, title: string): string {
-  const titleKey = normalizeTelegramTitleKey(title);
   return String(caption || "")
    .replace(/#ғᴀɴᴅᴜʙ/gi, "𝐅𝐚𝐧𝐝𝐮𝐛")
    .replace(/#ᴏғғɪᴄɪᴀʟ/gi, "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥")
    .split("\n")
-   .filter(line => {
+   .map(line => {
     const trimmed = line.trim();
-    if (!trimmed.startsWith("#")) return true;
-    return normalizeTelegramTitleKey(trimmed) !== titleKey;
+    if (!trimmed.startsWith("#")) return line;
+    return sanitizeTelegramHashtags(trimmed, title);
    })
+   .filter(line => line.trim().length > 0)
    .join("\n")
    .trim();
  }
