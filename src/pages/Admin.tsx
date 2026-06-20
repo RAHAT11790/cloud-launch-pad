@@ -4667,6 +4667,21 @@ ${tgBulkFooter}
    .join(" ");
  }
 
+ function sanitizeTelegramCaption(caption: string, title: string): string {
+  const titleKey = normalizeTelegramTitleKey(title);
+  return String(caption || "")
+   .replace(/#ғᴀɴᴅᴜʙ/gi, "𝐅𝐚𝐧𝐝𝐮𝐛")
+   .replace(/#ᴏғғɪᴄɪᴀʟ/gi, "𝐎𝐟𝐟𝐢𝐜𝐢𝐚𝐥")
+   .split("\n")
+   .filter(line => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("#")) return true;
+    return normalizeTelegramTitleKey(trimmed) !== titleKey;
+   })
+   .join("\n")
+   .trim();
+ }
+
 
  // Fill telegram fields from release
  const fillTelegramFromRelease = async (releaseId: string) => {
