@@ -92,6 +92,7 @@ function supabaseFallbackUrl(fnName: string): string {
     "generate-backdrop",
     "rs-bot",
     "video-proxy",
+    "live-tv-proxy",
     "video-download",
     "apk-download",
     "send-otp-email",
