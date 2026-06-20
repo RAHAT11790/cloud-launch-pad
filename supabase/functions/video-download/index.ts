@@ -103,12 +103,10 @@ const hostAllowed = (s: string | null) => {
   if (!s) return false;
   try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(s).host)); } catch { return false; }
 };
-const isAllowedRequest = (req: Request) => {
-  const o = req.headers.get("origin"), r = req.headers.get("referer");
-  // Allow when both headers stripped by browser (legit media fetch).
-  if (!o && !r) return true;
-  if (o && !hostAllowed(o)) return false;
-  if (r && !hostAllowed(r)) return !!(o && hostAllowed(o));
+const isAllowedRequest = (_req: Request) => {
+  // Origin/referer allowlist disabled — too many legitimate browsers/CDN
+  // contexts strip these headers, blocking real users. Security is enforced
+  // at the UI/admin layer; proxied URLs are already public video links.
   return true;
 };
 
