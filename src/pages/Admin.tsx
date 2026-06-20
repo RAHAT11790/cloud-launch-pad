@@ -7659,7 +7659,7 @@ ${tgBulkFooter}
  const cancelRef = useRef(false);
 
  // === Build FRESH caption from latest series/movie data (mirrors sendTelegramPost template) ===
- const buildFreshCaptionForTitle = (savedTitle: string): { caption: string; poster: string; matched: boolean; titleKey?: string; sourceId?: string; buttonUrl?: string } => {
+ const buildFreshCaptionForTitle = (savedTitle: string): { caption: string; poster: string; matched: boolean; titleKey?: string; sourceId?: string; buttonUrl?: string; title?: string } => {
  const norm = normalizeTelegramTitleKey;
  const target = norm(savedTitle);
  const ws = webseriesData.find((s: any) => norm(s.title) === target);
@@ -7707,7 +7707,7 @@ ${footerLinksHtml}
  const buttonUrl = isSeries
  ? buildEpisodeShareUrl(item.id, lastSeasonIdx, Math.max(0, totalEps - 1))
  : buildEpisodeShareUrl(item.id);
- return { caption, poster, matched: true, buttonUrl, titleKey: norm(item.title), sourceId: String(item.id || "") } as any;
+ return { caption, poster, matched: true, buttonUrl, titleKey: norm(item.title), sourceId: String(item.id || ""), title: String(item.title || savedTitle || "") } as any;
  };
 
  const cancelCurrent = () => {
