@@ -7797,6 +7797,11 @@ ${footerLinksHtml}
  if (!target) { toast.error("Enter a target channel ID"); return; }
  const posts = channelGroups.find(g => g.chatId === sourceChannelId)?.posts || [];
  if (posts.length === 0) { toast.info("no posts"); return; }
+  const targetExistingKeys = new Set(
+   (channelGroups.find(g => g.chatId === target)?.posts || [])
+    .map((p: any) => normalizeTelegramTitleKey(p.title || ""))
+    .filter(Boolean)
+  );
   const seenTitles = new Set<string>();
   const skippedTitles: string[] = [];
   const toSend = [...posts]
@@ -7805,7 +7810,7 @@ ${footerLinksHtml}
     const fresh = buildFreshCaptionForTitle(p.title) as any;
     const key = fresh.titleKey || normalizeTelegramTitleKey(p.title || "");
     if (!key) return true;
-    if (seenTitles.has(key)) { skippedTitles.push(String(p.title || "Untitled")); return false; }
+    if (seenTitles.has(key) || targetExistingKeys.has(key)) { skippedTitles.push(String(p.title || "Untitled")); return false; }
     seenTitles.add(key);
     return true;
    })
