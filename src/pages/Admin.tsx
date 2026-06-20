@@ -7778,25 +7778,11 @@ ${hashtags}`;
  if (!target) { toast.error("Enter a target channel ID"); return; }
  const posts = channelGroups.find(g => g.chatId === sourceChannelId)?.posts || [];
  if (posts.length === 0) { toast.info("no posts"); return; }
- // Deduplicate by title — only send the LATEST (highest sentAt) record per title
- const latestByTitle = new Map<string, any>();
- for (const p of posts) {
- const key = String(p.title || p.messageId || Math.random()).trim().toLowerCase();
- const prev = latestByTitle.get(key);
- if (!prev || (Number(p.sentAt) || 0) > (Number(prev.sentAt) || 0)) latestByTitle.set(key, p);
- }
- // Skip titles already present on the target channel
+  // No dedup, no skip — user can repost as many times as they want.
+ // Newly sent message IDs are saved so Delete All can remove them later.
+ const toSend = [...posts].sort((a, b) => (Number(a.sentAt) || 0) - (Number(b.sentAt) || 0));
  const targetKey = String(target).replace(/[^a-zA-Z0-9_-]/g, '_');
- const alreadyOnTarget = new Set(
- tgPosts
- .filter(p => String(p.chatId) === String(target) || p.firebaseKey?.startsWith(`${targetKey}_`))
- .map(p => String(p.title || "").trim().toLowerCase())
- );
- const toSend = Array.from(latestByTitle.values())
- .filter(p => !alreadyOnTarget.has(String(p.title || "").trim().toLowerCase()))
- .sort((a, b) => (Number(b.sentAt) || 0) - (Number(a.sentAt) || 0));
- if (toSend.length === 0) { toast.info("All posts already on target — nothing new"); return; }
- if (!window.confirm(`Send ${toSend.length} post(s) with LATEST details to ${target}?\n(${posts.length - toSend.length} duplicates skipped)`)) return;
+ if (!window.confirm(`Send ${toSend.length} post(s) with LATEST details to ${target}?`)) return;
 
  cancelRef.current = false;
  setBusyChannel(sourceChannelId); setBusyAction("send"); setBusyProgress({done:0,total:toSend.length});
