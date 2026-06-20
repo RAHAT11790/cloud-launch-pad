@@ -9213,152 +9213,17 @@ ${tgBulkFooter}
  )}
 
 
- {activeSection === "analytics" && (() => {
- const today = new Date().toISOString().split("T")[0];
+  {activeSection === "analytics" && (
+  <AnalyticsSection
+  glassCard={glassCard}
+  analyticsViews={analyticsViews}
+  activeViewers={activeViewers}
+  dailyActiveUsers={dailyActiveUsers}
+  webseriesData={webseriesData}
+  moviesData={moviesData}
+  />
+  )}
 
- // ---- Today's logged-in users (from analytics/dailyActive/{today}) ----
- const todayUsersMap = dailyActiveUsers[today] || {};
- const todayUsers = Object.entries(todayUsersMap)
- .map(([uid, data]: [string, any]) => ({
- uid,
- userName: data?.userName || "User",
- lastSeen: Number(data?.lastSeen || 0),
- }))
- .sort((a, b) => b.lastSeen - a.lastSeen);
- const todayUserCount = todayUsers.length;
-
- // ---- Currently watching (live presence) ----
- let totalCurrentViewers = 0;
- Object.values(activeViewers).forEach((users: any) => {
- totalCurrentViewers += users ? Object.keys(users).length : 0;
- });
-
- // ---- Today's per-anime view counts ----
- const contentViewStats: { animeId: string; title: string; viewCount: number; poster: string }[] = [];
- let totalTodayViews = 0;
- Object.entries(analyticsViews).forEach(([aId, dates]: [string, any]) => {
- const todayData = dates?.[today];
- if (todayData) {
- const count = Object.keys(todayData).length;
- totalTodayViews += count;
- const ws = webseriesData.find(w => w.id === aId);
- const mv = moviesData.find(m => m.id === aId);
- contentViewStats.push({
- animeId: aId,
- title: ws?.title || mv?.title || aId,
- viewCount: count,
- poster: ws?.poster || mv?.poster || "",
- });
- }
- });
- contentViewStats.sort((a, b) => b.viewCount - a.viewCount);
- const maxViewCount = contentViewStats[0]?.viewCount || 1;
-
- const formatTimeAgo = (ts: number) => {
- if (!ts) return "—";
- const s = Math.max(1, Math.floor((Date.now() - ts) / 1000));
- if (s < 60) return `${s}s ago`;
- const m = Math.floor(s / 60);
- if (m < 60) return `${m}m ago`;
- const h = Math.floor(m / 60);
- return `${h}h ago`;
- };
-
- return (
- <div>
- {/* Top KPI cards */}
- <div className="grid grid-cols-3 gap-3 mb-5">
- <div className="bg-gradient-to-br from-[#1A1A2E] to-[#151521] border border-purple-500/20 rounded-2xl p-4">
- <div className="w-10 h-10 bg-purple-500/15 rounded-xl flex items-center justify-center mb-2 text-purple-400">
- <Users size={18} />
- </div>
- <div className="text-2xl font-extrabold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">{todayUserCount}</div>
- <div className="text-[10px] text-[#D1C4E9] mt-1">Today's Users</div>
- </div>
- <div className="bg-gradient-to-br from-[#1A1A2E] to-[#151521] border border-blue-500/20 rounded-2xl p-4">
- <div className="w-10 h-10 bg-blue-500/15 rounded-xl flex items-center justify-center mb-2 text-blue-400">
- <Eye size={18} />
- </div>
- <div className="text-2xl font-extrabold text-blue-400">{totalTodayViews}</div>
- <div className="text-[10px] text-[#D1C4E9] mt-1">Today's Total Views</div>
- </div>
- <div className="bg-gradient-to-br from-[#1A1A2E] to-[#151521] border border-green-500/20 rounded-2xl p-4">
- <div className="w-10 h-10 bg-green-500/15 rounded-xl flex items-center justify-center mb-2 text-green-400">
- <Activity size={18} />
- </div>
- <div className="text-2xl font-extrabold text-green-400">{totalCurrentViewers}</div>
- <div className="text-[10px] text-[#D1C4E9] mt-1">Watching Now</div>
- </div>
- </div>
-
- {/* Section A — Today's Active Users */}
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
- <Users size={14} className="text-purple-400" /> Today's Active Users
- <span className="ml-auto text-[11px] bg-purple-500/15 text-purple-300 px-2 py-0.5 rounded-full font-bold">{todayUserCount}</span>
- </h3>
- {todayUsers.length === 0 ? (
- <p className="text-[#957DAD] text-[13px] text-center py-5">No user activity yet today</p>
- ) : (
- <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
- {todayUsers.map((u, idx) => (
- <div key={u.uid} className="flex items-center gap-3 bg-[#1A1A2E] rounded-xl p-2.5 border border-white/5">
- <span className="text-[11px] text-[#957DAD] font-bold w-6 text-center">#{idx + 1}</span>
- <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
- {(u.userName || "?").trim().charAt(0).toUpperCase()}
- </div>
- <div className="flex-1 min-w-0">
- <p className="text-[13px] font-semibold truncate text-white">{u.userName}</p>
- <p className="text-[10px] text-[#957DAD]">Last seen {formatTimeAgo(u.lastSeen)}</p>
- </div>
- <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
- </div>
- ))}
- </div>
- )}
- </div>
-
- {/* Section B — Today's Anime Views */}
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
- <Film size={14} className="text-pink-400" /> Today's Anime Views
- <span className="ml-auto text-[11px] bg-pink-500/15 text-pink-300 px-2 py-0.5 rounded-full font-bold">{contentViewStats.length}</span>
- </h3>
- {contentViewStats.length === 0 ? (
- <p className="text-[#957DAD] text-[13px] text-center py-5">No views today yet</p>
- ) : (
- <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
- {contentViewStats.map((item, idx) => (
- <div key={item.animeId} className="flex items-center gap-3 bg-[#1A1A2E] rounded-xl p-3 border border-white/5">
- <span className="text-[11px] text-[#957DAD] font-bold w-5">#{idx + 1}</span>
- {item.poster ? (
- <img src={item.poster} className="w-9 h-[52px] rounded-lg object-cover flex-shrink-0"
- onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
- ) : (
- <div className="w-9 h-[52px] rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
- <Film size={14} className="text-purple-400" />
- </div>
- )}
- <div className="flex-1 min-w-0">
- <p className="text-[12px] font-semibold truncate text-white">{item.title}</p>
- <div className="w-full h-1.5 bg-[#0F0F1A] rounded-full mt-1.5 overflow-hidden">
- <div className="h-full rounded-full bg-gradient-to-r from-purple-600 to-pink-500 transition-all"
- style={{ width: `${Math.min(100, (item.viewCount / maxViewCount) * 100)}%` }} />
- </div>
- </div>
- <span className="text-sm font-bold text-pink-400 flex-shrink-0 tabular-nums">{item.viewCount}</span>
- </div>
- ))}
- </div>
- )}
- </div>
-
- <div className="text-[10px] text-[#957DAD] text-center pt-2 pb-1">
- Showing today's activity only · resets every 24h
- </div>
- </div>
- );
- })()}
  </main>
 
  {/* Bottom Navigation */}
