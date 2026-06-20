@@ -669,6 +669,7 @@ export default function EgdManager({
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
           {EDGE_FUNCTION_LIBRARY.map((entry) => {
             const isNew = NEW_EDGE_DEPLOYS.has(entry.slug);
+            const isLovable = LOVABLE_MANAGED.has(entry.slug);
             return (
             <button
               key={entry.slug}
@@ -689,11 +690,13 @@ export default function EgdManager({
                 setErrorLog("");
                 const manualSecrets = entry.secrets.filter((n) => !AUTO_MANAGED_SECRETS.has(n));
                 setSourceHint(
-                  entry.secrets.length === 0
-                    ? `Loaded "${entry.label}" — no secrets required.`
-                    : manualSecrets.length === 0
-                      ? `Loaded "${entry.label}" — all secrets auto-managed by Lovable. Just hit Deploy.`
-                      : `Loaded "${entry.label}" — fill ${manualSecrets.length} secret(s) below, then Deploy.${entry.secrets.length - manualSecrets.length > 0 ? ` (${entry.secrets.length - manualSecrets.length} auto-managed)` : ""}`,
+                  isLovable
+                    ? `Loaded "${entry.label}" — managed by Lovable Cloud (auto-deployed). View only.`
+                    : entry.secrets.length === 0
+                      ? `Loaded "${entry.label}" — no secrets required.`
+                      : manualSecrets.length === 0
+                        ? `Loaded "${entry.label}" — all secrets auto-managed by Lovable. Just hit Deploy.`
+                        : `Loaded "${entry.label}" — fill ${manualSecrets.length} secret(s) below, then Deploy.${entry.secrets.length - manualSecrets.length > 0 ? ` (${entry.secrets.length - manualSecrets.length} auto-managed)` : ""}`,
                 );
                 toast.success(`Loaded: ${entry.label}`);
                 if (typeof window !== "undefined") {
@@ -704,9 +707,14 @@ export default function EgdManager({
                   }, 50);
                 }
               }}
-              className={`relative text-left rounded-xl border bg-zinc-900/50 hover:bg-amber-500/5 transition p-3 min-w-0 overflow-hidden ${isNew ? "border-emerald-400/70 ring-1 ring-emerald-400/40" : "border-zinc-700/60 hover:border-amber-400/60"}`}
+              className={`relative text-left rounded-xl border bg-zinc-900/50 hover:bg-amber-500/5 transition p-3 min-w-0 overflow-hidden ${isLovable ? "border-sky-400/60 ring-1 ring-sky-400/30" : isNew ? "border-emerald-400/70 ring-1 ring-emerald-400/40" : "border-zinc-700/60 hover:border-amber-400/60"}`}
             >
-              {isNew && (
+              {isLovable && (
+                <span className="absolute top-1.5 right-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded bg-sky-500 text-black tracking-wider">
+                  LOVABLE
+                </span>
+              )}
+              {isNew && !isLovable && (
                 <span className="absolute top-1.5 right-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500 text-black tracking-wider animate-pulse">
                   NEW
                 </span>
