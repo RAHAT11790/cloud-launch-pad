@@ -543,9 +543,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
   
-  // Load CDN + proxy settings from Firebase (skip if noProxy)
+  // Load CDN + proxy settings from Firebase. noProxy keeps normal RS playback
+  // direct, but Live TV can still pass preferProxy to use admin proxy first.
   useEffect(() => {
-    if (noProxy) {
+    if (noProxy && !preferProxy) {
       setCdnEnabled(false);
       setProxyUrl('');
       setProxyApiKey('');
@@ -588,7 +589,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       unsub1();
       unsub2();
     };
-  }, [noProxy, src]);
+  }, [noProxy, preferProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
   const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
@@ -1576,9 +1577,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
-    // HTTP => admin proxy route first. HTTPS/blob/data => direct-only.
-    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined);
-  }, [cdnEnabled, proxyUrl, proxyApiKey]);
+    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy);
+  }, [cdnEnabled, proxyUrl, proxyApiKey, preferProxy]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     const server = effectiveVideoServers[serverIndex];
