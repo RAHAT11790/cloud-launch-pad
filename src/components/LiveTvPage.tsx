@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { db, ref, onValue } from "@/lib/firebase";
 import { Play, Radio, Search, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
