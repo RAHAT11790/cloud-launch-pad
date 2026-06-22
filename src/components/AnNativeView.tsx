@@ -29,10 +29,15 @@ interface Props {
   embedUrl: string;
   videoStyle?: React.CSSProperties;
   videoClassName?: string;
+  /** Resume position in seconds — passed to hls.startLoad so we don't waste
+   *  bandwidth fetching from 0 then seeking. Critical for slow networks. */
+  resumeTime?: number;
   /** Called when extraction fails or hls fatally errors so parent can show iframe. */
   onFail?: (reason: string) => void;
   /** Called after streams successfully resolve so the parent can hide its own loader. */
   onReady?: () => void;
+  /** Bubble currentTime/duration up so parent can persist progress. */
+  onTimeUpdate?: (currentTime: number, duration: number) => void;
 }
 
 const proxied = (u: string) => `${HLS_PROXY}?url=${encodeURIComponent(u)}`;
