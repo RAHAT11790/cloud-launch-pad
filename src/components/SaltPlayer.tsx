@@ -473,6 +473,7 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
                 setNativeFailed(true);
               }}
               onTimeUpdate={(currentTime, duration) => {
+                lastPosRef.current = currentTime;
                 if (saltPlayerState.anime) {
                   try {
                     const uid = JSON.parse(localStorage.getItem("rsanime_user") || "null")?.id;
