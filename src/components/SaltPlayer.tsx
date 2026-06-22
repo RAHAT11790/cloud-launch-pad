@@ -333,12 +333,13 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
       {/* Close button - auto-hides with controls in fullscreen */}
       <button
         onClick={handleClose}
-        className={`absolute top-3 right-3 z-[60] w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center hover:bg-destructive/80 transition-all duration-300 shadow-lg ${
-          isFullscreen && !showControls ? 'opacity-0 pointer-events-none -translate-y-4' : 'opacity-100 translate-y-0'
+        aria-label="Close player"
+        className={`absolute top-3 right-3 z-[60] w-9 h-9 rounded-xl bg-black/70 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-destructive/80 active:scale-90 transition-all duration-200 shadow-lg ${
+          isFullscreen && !showControls ? 'opacity-0 pointer-events-none -translate-y-2' : 'opacity-100 translate-y-0'
         }`}
         style={{ pointerEvents: isFullscreen && !showControls ? 'none' : 'auto' }}
       >
-        <X className="w-5 h-5 text-white" />
+        <X className="w-[18px] h-[18px] text-white" strokeWidth={2.4} />
       </button>
 
       {/* Top bar - toggles on tap */}
@@ -354,25 +355,30 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
           <p className="text-sm font-semibold text-foreground truncate">{saltPlayerState.title}</p>
           <p className="text-xs text-muted-foreground truncate">{saltPlayerState.subtitle}</p>
         </div>
-        <div className="flex items-center gap-1.5 mr-10">
+        {/* Unified control cluster — every pill is the same size/shape so
+            nothing looks crooked next to the close button on the right. */}
+        <div className="flex items-center gap-1.5 mr-12">
+          {!nativeFailed && (
+            <span className="h-9 px-2.5 inline-flex items-center rounded-xl bg-primary/15 text-primary text-[10px] font-bold tracking-wider border border-primary/30">
+              HLS
+            </span>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); setShowCropPanel(!showCropPanel); resetHideTimer(); }}
-            className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showCropPanel || cropLabel ? 'bg-primary/20 text-primary' : 'bg-secondary hover:bg-primary/20'}`}
-            title="Crop"
+            aria-label="Crop"
+            className={`relative w-9 h-9 rounded-xl flex items-center justify-center border transition-all active:scale-90 ${
+              showCropPanel || cropLabel
+                ? 'bg-primary/20 text-primary border-primary/40'
+                : 'bg-secondary border-border/40 hover:bg-primary/15 hover:border-primary/30'
+            }`}
           >
-            <Crop className="w-4 h-4" />
+            <Crop className="w-[18px] h-[18px]" />
             {cropLabel && (
               <span className="absolute -bottom-1 -right-1 text-[8px] bg-primary text-primary-foreground rounded px-0.5 font-bold leading-none py-0.5">
                 {cropLabel}
               </span>
             )}
           </button>
-          {!nativeFailed && (
-            <span className="px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-bold tracking-wider border border-primary/30">
-              HLS
-            </span>
-          )}
-
           {(saltPlayerState.allEmbeds?.length ?? 0) > 1 && (
             <button
               onClick={() => {
@@ -384,25 +390,27 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
                   currentEmbedIdx: nextIdx,
                   loading: false,
                   cleanEmbedUrl: getCleanEmbedUrl(nextUrl),
-                  // Preserve current position across server switches.
                   resumeTime: lastPosRef.current || saltPlayerState.resumeTime || 0,
                 });
                 toast.info(`Server ${nextIdx + 1}`);
                 resetHideTimer();
               }}
-              className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center hover:bg-primary/20 transition-colors"
+              aria-label="Switch server"
+              className="w-9 h-9 rounded-xl bg-secondary border border-border/40 flex items-center justify-center hover:bg-primary/15 hover:border-primary/30 active:scale-90 transition-all"
             >
-              <Monitor className="w-4 h-4 text-foreground" />
+              <Monitor className="w-[18px] h-[18px] text-foreground" />
             </button>
           )}
           <button
             onClick={() => { toggleFullscreen(); resetHideTimer(); }}
-            className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center hover:bg-primary/20 transition-colors"
+            aria-label="Fullscreen"
+            className="w-9 h-9 rounded-xl bg-secondary border border-border/40 flex items-center justify-center hover:bg-primary/15 hover:border-primary/30 active:scale-90 transition-all"
           >
-            {isFullscreen ? <Minimize className="w-4 h-4 text-foreground" /> : <Maximize className="w-4 h-4 text-foreground" />}
+            {isFullscreen ? <Minimize className="w-[18px] h-[18px] text-foreground" /> : <Maximize className="w-[18px] h-[18px] text-foreground" />}
           </button>
         </div>
       </div>
+
 
       {/* Crop panel */}
       {showCropPanel && (
