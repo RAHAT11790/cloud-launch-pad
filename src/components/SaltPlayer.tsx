@@ -376,6 +376,8 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
                   currentEmbedIdx: nextIdx,
                   loading: false,
                   cleanEmbedUrl: getCleanEmbedUrl(nextUrl),
+                  // Preserve current position across server switches.
+                  resumeTime: lastPosRef.current || saltPlayerState.resumeTime || 0,
                 });
                 toast.info(`Server ${nextIdx + 1}`);
                 resetHideTimer();
