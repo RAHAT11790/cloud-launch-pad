@@ -2368,6 +2368,7 @@ const Index = () => {
                   anime: fullAnime, seasonIdx: sIdx, epIdx: eIdx,
                   allEmbeds: resolved.allEmbeds,
                   currentEmbedIdx: 0, cropMode: 'contain', cropW: 0, cropH: 0, loading: false,
+                  resumeTime: item.currentTime || 0,
                 });
                 return;
               }
