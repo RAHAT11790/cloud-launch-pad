@@ -311,14 +311,22 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
     }
   };
 
-  // Close player
-  const handleClose = () => {
-    if (document.fullscreenElement) {
-      try { (screen.orientation as any).unlock?.(); } catch {}
-      document.exitFullscreen().catch(() => {});
-    }
+  // Close player — unmount IMMEDIATELY so home screen reappears with zero
+  // perceived latency. Fullscreen exit + orientation unlock are kicked off
+  // in parallel (fire-and-forget) instead of awaited.
+  const handleClose = useCallback(() => {
+    // Clear timers first so nothing fires post-unmount.
+    if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null; }
+    // Unmount synchronously — React swaps to home in the same frame.
     setSaltPlayerState(null);
-  };
+    // Then release fullscreen / orientation in the background.
+    queueMicrotask(() => {
+      try { (screen.orientation as any).unlock?.(); } catch {}
+      if (document.fullscreenElement) {
+        try { document.exitFullscreen().catch(() => {}); } catch {}
+      }
+    });
+  }, [setSaltPlayerState]);
 
   return (
     <div ref={containerRef} className="fixed inset-0 z-[9999] bg-background flex flex-col overflow-hidden">
