@@ -60,7 +60,7 @@ function buildMaster(stream: Stream, audios: Audio[], defaultAudioIdx: number): 
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(text)))}`;
 }
 
-export default function AnNativeView({ embedUrl, videoStyle, videoClassName, onFail, onReady }: Props) {
+export default function AnNativeView({ embedUrl, videoStyle, videoClassName, resumeTime, onFail, onReady, onTimeUpdate }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [streams, setStreams] = useState<Stream[]>([]);
@@ -71,11 +71,15 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, onF
   const [showQ, setShowQ]     = useState(false);
   const [showA, setShowA]     = useState(false);
   const failedRef = useRef(false);
+  // Track whether we've already applied the initial resume — so quality
+  // switching mid-playback keeps current position, not the original resume.
+  const resumedRef = useRef(false);
 
   // 1. Fetch streams + audio from edge function
   useEffect(() => {
     let cancelled = false;
     failedRef.current = false;
+    resumedRef.current = false;
     setLoading(true);
     setStreams([]); setAudios([]);
     (async () => {
@@ -88,7 +92,12 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, onF
         if (s.length === 0) { onFail?.("no-streams"); return; }
         setStreams(s);
         setAudios(a);
-        setQIdx(0);
+        // Pick a sensible default quality: prefer 720p if available,
+        // otherwise the highest available. This avoids starting at 1080p
+        // on weak networks (the user explicitly mentioned 5-6 MB pulls).
+        const preferred = s.findIndex((x) => x.height === 720);
+        const fallback  = s.findIndex((x) => x.height <= 720);
+        setQIdx(preferred >= 0 ? preferred : (fallback >= 0 ? fallback : 0));
         setAIdx(0);
         onReady?.();
       } catch (e) {
@@ -106,33 +115,67 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, onF
     const stream = streams[qIdx];
     if (!stream) return;
     const master = buildMaster(stream, audios, aIdx);
-    const resumeAt = video.currentTime || 0;
+    // First mount → use the resumeTime prop (continue-watching). After that,
+    // preserve the live currentTime across quality swaps.
+    const initialStart = !resumedRef.current
+      ? Math.max(0, Number(resumeTime || 0))
+      : (video.currentTime || 0);
     const wasPaused = video.paused;
 
     // Native HLS (Safari / iOS)
     if (video.canPlayType("application/vnd.apple.mpegurl") && !Hls.isSupported()) {
       video.src = master;
-      const onLoaded = () => { if (resumeAt) video.currentTime = resumeAt; if (!wasPaused) video.play().catch(() => {}); setLoading(false); };
+      const onLoaded = () => {
+        if (initialStart) video.currentTime = initialStart;
+        resumedRef.current = true;
+        if (!wasPaused) video.play().catch(() => {});
+        setLoading(false);
+      };
       video.addEventListener("loadedmetadata", onLoaded, { once: true });
       return () => video.removeEventListener("loadedmetadata", onLoaded);
     }
 
-    // hls.js path
+    // hls.js path — tuned for FAST first-frame + slow-network resilience.
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
+      // Start small so first segment arrives fast, then ramp up.
+      maxBufferLength: 30,
+      maxMaxBufferLength: 300,
+      maxBufferSize: 60 * 1000 * 1000,
       backBufferLength: 30,
-      maxBufferLength: 60,
-      maxMaxBufferLength: 180,
-      // Fixed quality — but we only ever feed one variant, so ABR is moot
+      // Aggressive retries for flaky connections — instead of giving up,
+      // retry quickly so playback recovers without user action.
+      manifestLoadingTimeOut: 15000,
+      manifestLoadingMaxRetry: 4,
+      manifestLoadingRetryDelay: 500,
+      levelLoadingTimeOut: 15000,
+      levelLoadingMaxRetry: 4,
+      levelLoadingRetryDelay: 500,
+      fragLoadingTimeOut: 30000,
+      fragLoadingMaxRetry: 6,
+      fragLoadingRetryDelay: 500,
+      nudgeMaxRetry: 10,
+      // We feed exactly one variant, so ABR is irrelevant.
       capLevelToPlayerSize: false,
+      // Start loading from the resume position — does NOT pull bytes from 0.
+      startPosition: initialStart > 0 ? initialStart : -1,
+      // Pre-fetch the first frag for instant playback start.
+      startFragPrefetch: true,
+      // Tolerate small gaps in fragments without stalling.
+      maxBufferHole: 0.5,
     });
     hlsRef.current = hls;
     hls.attachMedia(video);
     hls.on(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(master));
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      if (resumeAt) video.currentTime = resumeAt;
+      // startPosition handles the seek for hls.js automatically; only
+      // touch currentTime as a safety net if it didn't land near target.
+      if (initialStart > 0 && Math.abs(video.currentTime - initialStart) > 2) {
+        try { video.currentTime = initialStart; } catch {}
+      }
+      resumedRef.current = true;
       if (!wasPaused) video.play().catch(() => {});
       setLoading(false);
     });
@@ -141,12 +184,40 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, onF
     });
     hls.on(Hls.Events.ERROR, (_, data) => {
       if (!data.fatal) return;
+      // Try non-destructive recovery before giving up — many "fatal" media
+      // errors on slow networks are actually recoverable buffer stalls.
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        try { hls.startLoad(); return; } catch {}
+      }
+      if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        try { hls.recoverMediaError(); return; } catch {}
+      }
       if (failedRef.current) return;
       failedRef.current = true;
       onFail?.(`hls-${data.type}-${data.details}`);
     });
     return () => { hls.destroy(); hlsRef.current = null; };
+    // resumeTime intentionally NOT in deps — re-running on resume change
+    // would tear down hls mid-playback. Only embed/quality/audio rebuilds.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streams, qIdx, audios, aIdx, onFail]);
+
+  // Bubble timeupdate to parent for progress persistence (continue-watching).
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !onTimeUpdate) return;
+    let last = 0;
+    const handler = () => {
+      const now = Date.now();
+      if (now - last < 1500) return; // throttle to ~every 1.5s
+      last = now;
+      if (v.duration && isFinite(v.duration)) {
+        onTimeUpdate(v.currentTime, v.duration);
+      }
+    };
+    v.addEventListener("timeupdate", handler);
+    return () => v.removeEventListener("timeupdate", handler);
+  }, [onTimeUpdate]);
 
   // Audio switching — instant via hls.js API; no rebuild needed
   const changeAudio = useCallback((i: number) => {
