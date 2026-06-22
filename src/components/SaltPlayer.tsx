@@ -460,11 +460,41 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
           {saltPlayerState.embedUrl && !nativeFailed && (
             <AnNativeView
               embedUrl={saltPlayerState.embedUrl}
+              resumeTime={saltPlayerState.resumeTime}
               videoClassName={`${isFullscreen ? 'w-full h-full' : 'absolute inset-0 w-full h-full'} bg-black`}
               videoStyle={getIframeStyle()}
               onFail={(reason) => {
                 console.warn('[AnNative] native extraction failed:', reason);
                 setNativeFailed(true);
+              }}
+              onTimeUpdate={(currentTime, duration) => {
+                if (saltPlayerState.anime) {
+                  try {
+                    const uid = JSON.parse(localStorage.getItem("rsanime_user") || "null")?.id;
+                    if (uid) {
+                      import("@/lib/firebase").then(({ db: fdb, ref: fref, update: fupdate }) => {
+                        const animeId = saltPlayerState.anime!.id;
+                        fupdate(fref(fdb, `users/${uid}/watchHistory/${animeId}`), {
+                          currentTime, duration, watchedAt: Date.now(),
+                        }).catch(() => {});
+                      });
+                    } else {
+                      // Guest mode — localStorage only
+                      import("@/lib/guestStore").then(({ guestStore }) => {
+                        guestStore.continue.upsert({
+                          animeId: saltPlayerState.anime!.id,
+                          seasonIdx: saltPlayerState.seasonIdx,
+                          epIdx: saltPlayerState.epIdx,
+                          position: currentTime,
+                          duration,
+                          title: saltPlayerState.anime!.title,
+                          poster: saltPlayerState.anime!.poster,
+                          updatedAt: Date.now(),
+                        });
+                      });
+                    }
+                  } catch {}
+                }
               }}
             />
           )}
