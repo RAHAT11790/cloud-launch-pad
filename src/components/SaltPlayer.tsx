@@ -266,6 +266,7 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
             allEmbeds: result.allEmbeds || [result.embedUrl],
             currentEmbedIdx: 0,
             loading: false,
+            resumeTime: 0,
           });
         } else {
           toast.error("This episode source is not available right now. Try another server.");
