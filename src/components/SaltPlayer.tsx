@@ -65,6 +65,8 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   const containerRef = useRef<HTMLDivElement>(null);
   const cropPanelRef = useRef<HTMLDivElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track latest playback position so server-switch resumes from the same point.
+  const lastPosRef = useRef<number>(0);
 
 
   // Premium status — disables ads for paid users.
