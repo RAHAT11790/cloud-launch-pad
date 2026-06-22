@@ -22,6 +22,8 @@ interface SaltPlayerState {
   cropW?: number;
   cropH?: number;
   loading?: boolean;
+  /** Seconds to resume playback from (continue-watching). */
+  resumeTime?: number;
 }
 
 interface SaltPlayerProps {
