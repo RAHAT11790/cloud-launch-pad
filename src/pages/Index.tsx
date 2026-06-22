@@ -951,6 +951,7 @@ const Index = () => {
     cropW?: number;
     cropH?: number;
     loading?: boolean;
+    resumeTime?: number;
   } | null>(() => {
     try {
       const saved = sessionStorage.getItem("rs_saltPlayerState");
