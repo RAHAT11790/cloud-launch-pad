@@ -1,32 +1,8 @@
 // ============================================
-// AccessGate — multi-stage ad trap before video playback.
-//
-// Flow (designed to maximize verified Adsterra ad views per user):
-//   STAGE 1 — Intro Popup (mandatory 5s wait)
-//     Modal with Native Banner + Social Bar combo. Close button labeled
-//     "Click here to close this ad" is disabled for 5 seconds.
-//     On close → fires popunder/social script + opens directLink.
-//
-//   STAGE 2 — Main Trap (clicksRequired cycles)
-//     Each cycle = TWO taps on ACCESS:
-//       Tap A (primary)   → opens directLink (stream-link style).
-//                           NO count, NO timer. Toast: "Ad not counted yet,
-//                           please return and tap ACCESS again."
-//       Tap B (secondary) → fires popunder + opens directLink again.
-//                           Starts dwell timer (admin-configured seconds).
-//                           Toast: "Ad clicked. Stay for Xs to count this view."
-//
-//   STAGE 3 — Verification (visibility-based)
-//     On return to the tab:
-//       • If elapsed >= dwellSec → +1 count. Toast success.
-//       • If elapsed <  dwellSec → no count. Toast failure (back too early).
-//
-//   Total per user ≈ 1 intro ad + (clicksRequired × 2) ad opens.
-//   Admin sets clicksRequired = 5 → user sees ~11 real ad interactions.
-//
-// Ad-blocker / DNS guard runs only inside this gate (never on the player).
-// All ad scripts and floating layers are torn down on unmount so they
-// never leak into Home / Profile / Player.
+// AccessGate — scoped ad verification before video playback.
+// Timers are intentionally background-only: no visible countdown UI.
+// Floating/push ad layers are capped and made non-blocking so scrolling
+// and the ACCESS button always remain usable.
 // ============================================
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Lock, MousePointerClick, ShieldCheck, ShieldAlert, X, Sparkles, AlertTriangle } from "lucide-react";
@@ -81,16 +57,27 @@ function openExternal(url: string) {
 
 /* ─── Ad layer containment ────────────────────────────────────────── */
 const ADSTER_HINTS = ["adsterra","effectivecpmnetwork","highperformanceformat","profitabledisplaynetwork","profitableratecpm","cpmrevenuegate","onclkds","onclick","container-"];
+const INTRO_DWELL_SECONDS = 5;
+const MAX_FLOATING_AD_LAYERS = 2;
+
 function looksLikeGateAdNode(el: Element) {
   const meta = [el.tagName, el.id, typeof el.className === "string" ? el.className : "", el.getAttribute("src") || "", el.getAttribute("data-zone") || ""].join(" ").toLowerCase();
   let html = ""; try { html = el.outerHTML.slice(0, 2000).toLowerCase(); } catch {}
   return ADSTER_HINTS.some((h) => meta.includes(h) || html.includes(h));
 }
 
+function shouldSkipFloatingNode(node: HTMLElement) {
+  return node.id === "root" ||
+    node.dataset.accessGateRoot === "true" ||
+    node.hasAttribute("data-sonner-toaster") ||
+    node.closest("[data-access-gate-root='true']");
+}
+
 function clampFloatingAdLayers(initial: Set<Element>, touched: Map<HTMLElement, { pe: string; z: string }>) {
   if (typeof document === "undefined") return;
+  const floatingCandidates: HTMLElement[] = [];
   Array.from(document.body.children).forEach((node) => {
-    if (!(node instanceof HTMLElement) || node.id === "root") return;
+    if (!(node instanceof HTMLElement) || shouldSkipFloatingNode(node)) return;
     if (!looksLikeGateAdNode(node) && initial.has(node)) return;
     const cs = window.getComputedStyle(node);
     const rect = node.getBoundingClientRect();
@@ -98,11 +85,18 @@ function clampFloatingAdLayers(initial: Set<Element>, touched: Map<HTMLElement, 
     const floating = cs.position === "fixed" || cs.position === "sticky" || z > 1000 || node.tagName === "IFRAME";
     const large = rect.width > window.innerWidth * 0.45 && rect.height > 80;
     if (floating || large || looksLikeGateAdNode(node)) {
+      floatingCandidates.push(node);
       if (!touched.has(node)) touched.set(node, { pe: node.style.pointerEvents, z: node.style.zIndex });
       node.dataset.accessGateRuntime = "1";
       node.style.pointerEvents = "none";
       node.style.zIndex = "2147482000";
+      node.style.touchAction = "none";
+      node.style.overscrollBehavior = "none";
     }
+  });
+
+  floatingCandidates.slice(MAX_FLOATING_AD_LAYERS).forEach((node) => {
+    try { node.remove(); } catch {}
   });
 }
 
@@ -154,12 +148,11 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
   const [loaded, setLoaded] = useState(false);
   const [unlocked, setUnlocked] = useState<boolean>(() => hasGateAccess());
   const [progress, setProgress] = useState<number>(() => getGateProgress());
-  const [countdown, setCountdown] = useState<number>(0);
   const [awaitingReturn, setAwaitingReturn] = useState(false);
   const [clickStep, setClickStep] = useState<ClickStep>("primary");
 
   const [intro, setIntro] = useState(true);
-  const [introWait, setIntroWait] = useState(5);
+  const [introAwaiting, setIntroAwaiting] = useState(false);
   const [counted, setCounted] = useState<number | null>(null);
   const [blocker, setBlocker] = useState<boolean | null>(null);
 
@@ -178,6 +171,11 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
   const dwellStartRef = useRef<number>(0);
   const leftPageRef = useRef<boolean>(false);
   const dwellResolvedRef = useRef<boolean>(false);
+
+  const introDwellEndRef = useRef<number>(0);
+  const introDwellStartRef = useRef<number>(0);
+  const introLeftPageRef = useRef<boolean>(false);
+  const introResolvedRef = useRef<boolean>(false);
 
   /* Load config */
   useEffect(() => {
@@ -239,19 +237,6 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
     return () => { alive = false; window.clearInterval(id); };
   }, [shouldShow]);
 
-  /* Intro 5s countdown */
-  useEffect(() => {
-    if (!shouldShow || !intro || blocker !== false) return;
-    setIntroWait(5);
-    const id = window.setInterval(() => {
-      setIntroWait((n) => {
-        if (n <= 1) { window.clearInterval(id); return 0; }
-        return n - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [shouldShow, intro, blocker]);
-
   /* Inject intro ads */
   useEffect(() => {
     if (!shouldShow || !intro || blocker !== false) return;
@@ -306,7 +291,6 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
       return next;
     });
     setAwaitingReturn(false);
-    setCountdown(0);
     setClickStep("primary");
   }, [cfg.clicksRequired, cfg.accessHours, onUnlocked]);
 
@@ -314,42 +298,32 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
     if (dwellResolvedRef.current) return;
     dwellResolvedRef.current = true;
     setAwaitingReturn(false);
-    setCountdown(0);
     setClickStep("secondary"); // let them retry the popunder leg
-    toast.error(`Ad not counted — closed after ${elapsedSec}s`, {
+    toast.error("Ad not counted — closed too early", {
       description: `You need to keep the ad open for ${cfg.dwellSeconds}s. Please tap ACCESS again to retry.`,
       duration: 4500,
       icon: "⚠️",
     });
   }, [cfg.dwellSeconds]);
 
-  /* Dwell countdown — runs alongside visibility tracking */
+  /* Background dwell guard — no visible countdown UI */
   useEffect(() => {
     if (!awaitingReturn) return;
     let timer = 0;
-    const tick = () => {
-      const remaining = Math.max(0, Math.ceil((dwellEndRef.current - Date.now()) / 1000));
-      setCountdown(remaining);
-      if (remaining > 0) {
-        timer = window.setTimeout(tick, 250) as unknown as number;
-      } else {
-        // timer hit zero — if user is still on tab (never left), count it
-        if (!leftPageRef.current && document.visibilityState === "visible") {
-          finalizeSuccess();
-        }
-        // otherwise wait for visibilitychange to resolve
-      }
-    };
-    tick();
+    timer = window.setTimeout(() => {
+      // Intentionally silent: the count resolves only when the user returns
+      // from the sponsor page/focus cycle.
+    }, Math.max(0, dwellEndRef.current - Date.now())) as unknown as number;
     return () => { window.clearTimeout(timer); };
-  }, [awaitingReturn, finalizeSuccess]);
+  }, [awaitingReturn]);
 
   /* Visibility detection during dwell */
   useEffect(() => {
     if (!awaitingReturn) return;
+    const markLeft = () => { leftPageRef.current = true; };
     const onVis = () => {
       if (document.visibilityState === "hidden") {
-        leftPageRef.current = true;
+        markLeft();
         return;
       }
       // returned visible
@@ -359,28 +333,83 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
       else finalizeFailure(elapsed);
     };
     document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("blur", markLeft);
     window.addEventListener("focus", onVis);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("blur", markLeft);
       window.removeEventListener("focus", onVis);
     };
   }, [awaitingReturn, finalizeSuccess, finalizeFailure]);
+
+  const finishIntroSuccess = useCallback(() => {
+    if (introResolvedRef.current) return;
+    introResolvedRef.current = true;
+    setIntroAwaiting(false);
+    clearHost(introNativeRef.current);
+    clearHost(introBannerRef.current);
+    setIntro(false);
+    toast.success("Sponsor verified. Continue to ACCESS.", { duration: 2600 });
+  }, []);
+
+  const finishIntroFailure = useCallback(() => {
+    if (introResolvedRef.current) return;
+    introResolvedRef.current = true;
+    setIntroAwaiting(false);
+    toast.error("Ad closed too early", {
+      description: `Please keep the sponsor page open for at least ${INTRO_DWELL_SECONDS}s, then return.`,
+      duration: 4200,
+      icon: "⚠️",
+    });
+  }, []);
+
+  /* Intro verification also runs fully in the background. */
+  useEffect(() => {
+    if (!introAwaiting) return;
+    const markLeft = () => { introLeftPageRef.current = true; };
+    const onReturn = () => {
+      if (document.visibilityState === "hidden") {
+        markLeft();
+        return;
+      }
+      if (!introLeftPageRef.current) return;
+      if (Date.now() >= introDwellEndRef.current) finishIntroSuccess();
+      else finishIntroFailure();
+    };
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("blur", markLeft);
+    window.addEventListener("focus", onReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("blur", markLeft);
+      window.removeEventListener("focus", onReturn);
+    };
+  }, [introAwaiting, finishIntroSuccess, finishIntroFailure]);
 
   if (!shouldShow) return null;
 
   /* Intro close — fires ads then enters main */
   const dismissIntro = () => {
-    if (introWait > 0) return;
-    // fire initial popunder + open direct link
+    if (introAwaiting) return;
+    // Fire the initial sponsor link and start hidden verification.
     if (popunderRef.current && cfg.popunder && !popunderRef.current.dataset.mounted) {
       injectSnippet(cfg.popunder, popunderRef.current);
       popunderRef.current.dataset.mounted = "1";
     }
     if (cfg.directLink) openExternal(cfg.directLink);
-    toast.success("Intro ad loaded. Now tap ACCESS to start unlocking.", { duration: 3000 });
-    clearHost(introNativeRef.current);
-    clearHost(introBannerRef.current);
-    setIntro(false);
+    clampFloatingAdLayers(initialBodyChildrenRef.current, touchedBodyLayersRef.current);
+
+    introDwellStartRef.current = Date.now();
+    introDwellEndRef.current = Date.now() + INTRO_DWELL_SECONDS * 1000;
+    introLeftPageRef.current = false;
+    introResolvedRef.current = false;
+    setIntroAwaiting(true);
+
+    toast.message("Sponsor opened", {
+      description: "Return after the sponsor page finishes loading. Closing too early will not continue.",
+      duration: 3600,
+      icon: "↗️",
+    });
   };
 
   /* Main ACCESS click — 2-step trap */
@@ -420,10 +449,9 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
     leftPageRef.current = false;
     dwellResolvedRef.current = false;
     setAwaitingReturn(true);
-    setCountdown(cfg.dwellSeconds);
 
-    toast.success(`Ad clicked — wait ${cfg.dwellSeconds}s for the view to count`, {
-      description: "Stay on the ad page until the timer ends. Closing early will not count.",
+    toast.success("Ad opened for verification", {
+      description: `Keep the sponsor page open for at least ${cfg.dwellSeconds}s, then return to count it.`,
       duration: 4000,
       icon: "⏳",
     });
@@ -431,31 +459,26 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
 
   const pct = Math.min(100, Math.round((progress / cfg.clicksRequired) * 100));
   const ringSize = 168;
-  const ringStroke = 10;
-  const radius = (ringSize - ringStroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const timerRatio = awaitingReturn ? Math.max(0, Math.min(1, (cfg.dwellSeconds - countdown) / Math.max(1, cfg.dwellSeconds))) : 0;
-  const dashOffset = circumference * (1 - timerRatio);
 
   const buttonLabel = awaitingReturn
-    ? `${countdown}`
+    ? "VERIFYING"
     : clickStep === "primary"
       ? "ACCESS"
       : "TAP AGAIN";
 
   const buttonHint = awaitingReturn
-    ? `wait ${cfg.dwellSeconds}s`
+    ? "return after ad"
     : clickStep === "primary"
       ? `${progress}/${cfg.clicksRequired}`
       : "verify view";
 
   return (
-    <div data-access-gate-root="true" className="fixed inset-0 z-[2147483647] bg-background flex flex-col overflow-y-auto isolate">
+    <div data-access-gate-root="true" className="fixed inset-0 z-[2147483647] bg-background flex flex-col overflow-y-auto overscroll-y-contain touch-pan-y isolate">
       {/* Hidden popunder host */}
       <div ref={popunderRef} className="absolute" style={{ left: -9999, top: -9999, width: 1, height: 1, overflow: "hidden" }} />
 
       {/* Top bar */}
-      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-background/90 backdrop-blur-xl border-b border-border/40">
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-background/95 border-b border-border/40 shadow-sm">
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center">
             <Lock className="w-4 h-4 text-primary" />
@@ -474,7 +497,7 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
 
       {/* ── Ad-blocker overlay ── */}
       {blocker === true && (
-        <div className="fixed inset-0 z-[2147483647] bg-background/95 backdrop-blur-xl flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-[2147483647] bg-background/95 flex items-start justify-center p-6 overflow-y-auto overscroll-y-contain touch-pan-y">
           <div className="max-w-sm w-full rounded-3xl border border-destructive/40 bg-card p-6 text-center space-y-4 shadow-2xl animate-scale-in">
             <div className="w-16 h-16 rounded-2xl bg-destructive/15 flex items-center justify-center mx-auto">
               <ShieldAlert className="w-8 h-8 text-destructive" />
@@ -497,8 +520,8 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
 
       {/* ── INTRO popup — banner + social combo, 5s mandatory wait ── */}
       {intro && blocker === false && (
-        <div className="fixed inset-0 z-[2147483646] bg-black/70 backdrop-blur-xl flex items-center justify-center p-4">
-          <div className="max-w-sm w-full rounded-3xl border border-primary/40 bg-card p-4 sm:p-5 space-y-4 shadow-2xl animate-scale-in">
+        <div className="fixed inset-0 z-[2147483646] bg-black/70 flex items-start justify-center p-4 overflow-y-auto overscroll-y-contain touch-pan-y">
+          <div className="max-w-sm w-full my-4 rounded-3xl border border-primary/40 bg-card p-4 sm:p-5 space-y-4 shadow-2xl animate-scale-in">
             <div className="flex items-center gap-2.5">
               <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
                 <Sparkles className="w-5 h-5 text-primary" />
@@ -506,7 +529,7 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
               <div className="min-w-0">
                 <h2 className="text-sm font-extrabold leading-tight">Sponsored — quick look</h2>
                 <p className="text-[10.5px] text-muted-foreground leading-tight">
-                  Tap the close button below after the {introWait > 0 ? `${introWait}s wait` : "wait"} to continue.
+                  Tap the close button below, view the sponsor page, then return to continue.
                 </p>
               </div>
             </div>
@@ -518,11 +541,11 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
 
             <button
               onClick={dismissIntro}
-              disabled={introWait > 0}
-              className="w-full h-12 rounded-2xl gradient-primary text-primary-foreground font-extrabold uppercase tracking-wider text-sm active:scale-95 transition-transform disabled:opacity-60 flex items-center justify-center gap-2"
+              disabled={introAwaiting}
+              className="w-full min-h-12 rounded-2xl gradient-primary text-primary-foreground font-extrabold uppercase text-sm active:scale-95 transition-transform disabled:opacity-70 flex items-center justify-center gap-2 px-3 py-2"
             >
               <X className="w-4 h-4" />
-              {introWait > 0 ? `Wait ${introWait}s to close…` : "Click here to close this ad"}
+              {introAwaiting ? "Waiting for sponsor return…" : "Click here to close this ad"}
             </button>
             <p className="text-[10px] text-center text-muted-foreground/80">
               Closing this ad fires the next sponsor link. {cfg.accessHours}h ad-free access waits after {cfg.clicksRequired} verified views.
@@ -544,17 +567,7 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
         {/* CIRCULAR timer + Access button (CENTER) */}
         <div className="relative flex items-center justify-center my-2" style={{ width: ringSize, height: ringSize }}>
           <div className="absolute inset-0 rounded-full bg-primary/10 blur-2xl animate-pulse" />
-          <svg width={ringSize} height={ringSize} className="absolute inset-0 -rotate-90">
-            <circle cx={ringSize/2} cy={ringSize/2} r={radius} stroke="hsl(var(--border))" strokeWidth={ringStroke} fill="none" opacity={0.5} />
-            <circle
-              cx={ringSize/2} cy={ringSize/2} r={radius}
-              stroke="hsl(var(--primary))" strokeWidth={ringStroke} fill="none"
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={dashOffset}
-              style={{ transition: "stroke-dashoffset 0.3s linear" }}
-            />
-          </svg>
+          <div className="absolute inset-0 rounded-full border-[10px] border-border/50" />
           <button
             onClick={handleAccessClick}
             disabled={awaitingReturn || blocker !== false}
@@ -564,8 +577,8 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
           >
             {awaitingReturn ? (
               <>
-                <span className="text-3xl font-extrabold leading-none tabular-nums">{countdown}</span>
-                <span className="text-[10px] font-bold uppercase tracking-wider opacity-90">stay on ad</span>
+                <span className="text-xs font-extrabold leading-tight uppercase text-center px-2">{buttonLabel}</span>
+                <span className="text-[10px] font-bold uppercase opacity-90 text-center px-2">{buttonHint}</span>
               </>
             ) : (
               <>
@@ -581,7 +594,7 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
         <div className={`text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full ${
           awaitingReturn ? "bg-primary/15 text-primary" : clickStep === "primary" ? "bg-secondary text-foreground/80" : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
         }`}>
-          {awaitingReturn ? "Verifying view…" : clickStep === "primary" ? "Step 1 of 2 — open ad" : "Step 2 of 2 — verify view"}
+          {awaitingReturn ? "Background verification running" : clickStep === "primary" ? "Step 1 of 2 — open ad" : "Step 2 of 2 — verify view"}
         </div>
 
         {/* Counted toast inline */}
@@ -606,7 +619,7 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
         {/* Hint */}
         <p className="text-[11px] text-center text-muted-foreground leading-relaxed px-2">
           {awaitingReturn
-            ? `Keep the ad open for ${cfg.dwellSeconds}s. Coming back early will not count this view.`
+            ? "Keep the sponsor page open, then return here. Closing early will not count this view."
             : clickStep === "primary"
               ? <>Tap <strong>ACCESS</strong> — the sponsor link opens. Return, then tap <strong>TAP AGAIN</strong> to fire the verified ad.</>
               : <>Tap <strong>TAP AGAIN</strong> — wait <strong>{cfg.dwellSeconds}s</strong> on the ad, then return to count this view.</>}
