@@ -3684,34 +3684,34 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               </div>
 
               {/* Bottom controls */}
-              <div className="px-2.5 pb-2.5">
+              <div className="px-3 pb-3">
                 {/* Progress bar - GPU accelerated with will-change */}
                 <div
                   ref={progressBarRef}
-                  className="w-full h-4 flex items-center cursor-pointer mb-1.5 relative touch-none"
+                  className="w-full h-5 flex items-center cursor-pointer mb-2 relative touch-none"
                   onClick={(e) => { e.stopPropagation(); handleProgressClick(e); }}
                   onTouchStart={handleProgressTouchStart}
                   onTouchMove={handleProgressTouchMove}
                   onTouchEnd={handleProgressTouchEnd}
                 >
-                  <div className="w-full h-1 bg-foreground/20 rounded-full relative">
+                  <div className="w-full h-1.5 bg-foreground/20 rounded-full relative">
                     <div
                       ref={progressRef}
                       className="h-full gradient-primary rounded-full relative"
                       style={{ width: `${progress}%` }}
                     >
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-primary shadow-[0_0_10px_hsla(355,85%,55%,0.6)]" />
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-primary shadow-[0_0_10px_hsla(355,85%,55%,0.6)]" />
                     </div>
                   </div>
                 </div>
                 <div className="flex justify-between items-center gap-3 flex-nowrap">
                   <div className="flex items-center gap-2 shrink-0 min-w-0">
-                    <span ref={timeDisplayRef} className="text-[10px] font-semibold whitespace-nowrap tabular-nums leading-none">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                    <span ref={timeDisplayRef} className="text-[12px] font-semibold whitespace-nowrap tabular-nums leading-none">{formatTime(currentTime)} / {formatTime(duration)}</span>
                     <button onClick={(e) => {
                       e.stopPropagation();
                       applyPlayerVolume(boostedVolume, !muted);
-                    }} className="w-6 h-6 flex items-center justify-center shrink-0">
-                      {muted || boostedVolume <= 0 ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                    }} className="w-8 h-8 flex items-center justify-center shrink-0">
+                      {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
                   </div>
                   <div className="flex items-center gap-1.5 justify-end flex-nowrap min-w-0 overflow-x-auto scrollbar-hide pb-0.5">
@@ -3723,22 +3723,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         const next = rates[(idx + 1) % rates.length] ?? 1;
                         setSpeed(next);
                       }}
-                      className={`text-[10px] px-2 py-1 rounded-md shrink-0 leading-none font-semibold transition-all ${playbackRate !== 1 ? "gradient-primary text-white" : "player-control-chip"}`}
+                      className={`text-[12px] px-2.5 py-1.5 rounded-md shrink-0 leading-none font-semibold transition-all ${playbackRate !== 1 ? "gradient-primary text-white" : "player-control-chip"}`}
                       aria-label="Playback speed"
                     >{playbackRate}x</button>
                     {availableQualities.length > 1 && (
                       <div className="relative shrink-0">
                           <button
                             onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
-                          className={`text-[10px] px-2 py-1 rounded-md font-semibold transition-all shrink-0 ${
+                          className={`text-[12px] px-2.5 py-1.5 rounded-md font-semibold transition-all shrink-0 ${
                             currentQuality !== "Auto" ? "gradient-primary text-white" : "player-control-chip"
                           }`}
                         >
                           {currentQuality}
                         </button>
                         {showQualityPanel && (
-                          <div data-player-panel="true" className={`absolute bottom-8 right-0 ${panelBaseClass} min-w-[120px] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
-                            <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Quality</p>
+                          <div data-player-panel="true" className={`absolute bottom-10 right-0 ${panelBaseClass} min-w-[130px] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
+                            <p className="text-[10px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Quality</p>
                             {availableQualities.map((opt) => {
                               const is4K = is4KLabel(opt.label);
                               const locked4K = is4K && !isPremium;
@@ -3766,17 +3766,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       <div className="relative shrink-0">
                           <button
                             onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
-                           className={`text-[10px] px-2 py-1 rounded-md font-semibold transition-all flex items-center gap-1 max-w-[86px] shrink-0 ${
+                           className={`text-[12px] px-2.5 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1 max-w-[96px] shrink-0 ${
                             currentAudioTrack !== "Default" ? "gradient-primary text-white" : "player-control-chip"
                           }`}
                         >
                           <span className="truncate">🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}</span>
                         </button>
                         {showAudioPanel && (
-                          <div data-player-panel="true" className={`absolute bottom-8 right-0 ${panelBaseClass} w-[180px] max-w-[78vw] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
-                            <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
+                          <div data-player-panel="true" className={`absolute bottom-10 right-0 ${panelBaseClass} w-[190px] max-w-[78vw] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
+                            <p className="text-[10px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
                             <button onClick={resetToDefaultAudio}
-                              className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between ${
+                              className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition-all flex items-center justify-between ${
                                 currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                               }`}>
                               <span>Default</span>
@@ -3784,7 +3784,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                             </button>
                             {audioTrackOptions.map((track, idx) => (
                               <button key={idx} onClick={() => switchAudioTrack(track)}
-                                className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${
+                                className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition-all flex items-center justify-between gap-1 ${
                                   currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
                                 }`}>
                                 <span className="truncate flex-1 min-w-0">{track.label}</span>
@@ -3796,15 +3796,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       </div>
                     )}
                     {onNextEpisode && (
-                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip text-[10px] px-2 py-1 rounded-md flex items-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 font-semibold">
-                        Next <ChevronRight className="w-3 h-3" />
+                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip text-[12px] px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 font-semibold">
+                        Next <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-7 h-7 rounded-lg flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
-                      <Settings className="w-3 h-3" />
+                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                      <Settings className="w-4 h-4" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-7 h-7 rounded-lg flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
-                      {isFullscreen ? <Minimize className="w-3 h-3" /> : <Maximize className="w-3 h-3" />}
+                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                      {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
