@@ -12,9 +12,8 @@
 // New strategy:
 //   • Parse the admin-saved <script> snippet, recreate real <script>
 //     elements, and append them to a normal <div> inside <body>.
-//   • Adsterra's social-bar / popunder scripts then load and self-mount
-//     their own fixed elements as designed — when they fail (no fill /
-//     blocked / network error) NOTHING is left over to block clicks.
+//   • Only two player ad types are allowed: Stream Link and Popunder.
+//     Old post-notification / social-bar snippets are intentionally ignored.
 //   • A MutationObserver tracks every node Adsterra adds to <body> while
 //     the player is open, so when the player closes we can rip every
 //     ad-injected node out (kills leftover social bars, popunder hooks).
@@ -39,9 +38,9 @@ declare global {
     __adsterraCloseButton?: HTMLButtonElement | null;
     __adsterraLastLoadAt?: number;
     __adsterraMountPromise?: Promise<void> | null;
-    __adsterraLastNotifAt?: number;
     __adsterraLastPopAt?: number;
     __adsterraOpenWrapped?: boolean;
+    __adsterraNextKind?: "streamLink" | "popunder";
 
   }
 }
@@ -49,21 +48,21 @@ declare global {
 export type AdsterraConfig = {
   enabled: boolean;
   popunder: string;
-  socialBar: string;
+  streamLink: string;
   refreshIntervalSec: number; // 0 = no refresh
 };
 
 const DEFAULT: AdsterraConfig = {
   enabled: true,
   popunder: "",
-  socialBar: "",
-  refreshIntervalSec: 600,
+  streamLink: "",
+  refreshIntervalSec: 50,
 };
 
 // Minimum gap (ms) between cross-origin window.open() popunder triggers.
 const POPUNDER_MIN_GAP_MS = 20_000;
-// Minimum gap (ms) between visible in-page push notifications.
-const NOTIF_MIN_GAP_MS = 5_500;
+const AD_MIN_DELAY_MS = 45_000;
+const AD_MAX_DELAY_MS = 60_000;
 
 let cached: AdsterraConfig | null = null;
 let cachedPromise: Promise<AdsterraConfig> | null = null;
@@ -73,8 +72,8 @@ function normalize(v: any): AdsterraConfig {
   return {
     enabled: v?.enabled !== false,
     popunder: typeof v?.popunder === "string" ? v.popunder : "",
-    socialBar: typeof v?.socialBar === "string" ? v.socialBar : "",
-    refreshIntervalSec: Number.isFinite(n) && n >= 0 ? Math.min(n, 3600) : 600,
+    streamLink: typeof v?.streamLink === "string" ? v.streamLink : "",
+    refreshIntervalSec: Number.isFinite(n) && n >= 0 ? Math.min(n, 3600) : 50,
   };
 }
 
@@ -107,7 +106,16 @@ export function setAdsterraPremium(p: boolean) {
 }
 
 function hasSnippets(cfg: AdsterraConfig) {
-  return !!(cfg.popunder.trim() || cfg.socialBar.trim());
+  return !!(cfg.popunder.trim() || cfg.streamLink.trim());
+}
+
+function nextDelayMs(cfg: AdsterraConfig) {
+  if (cfg.refreshIntervalSec > 0) {
+    const configured = Math.min(Math.max(cfg.refreshIntervalSec, 45), 60) * 1000;
+    const jitter = Math.round((Math.random() - 0.5) * 8_000);
+    return Math.min(AD_MAX_DELAY_MS, Math.max(AD_MIN_DELAY_MS, configured + jitter));
+  }
+  return AD_MIN_DELAY_MS + Math.round(Math.random() * (AD_MAX_DELAY_MS - AD_MIN_DELAY_MS));
 }
 
 function isOwnedNode(node: Node) {
@@ -141,7 +149,7 @@ function scheduleRefresh(cfg: AdsterraConfig, baseTs: number) {
   if (!window.__adsterraPlayerScopeActive || window.__adsterraPremium) return;
   if (!cfg.enabled || !hasSnippets(cfg) || cfg.refreshIntervalSec <= 0) return;
 
-  const dueTs = baseTs + cfg.refreshIntervalSec * 1000;
+  const dueTs = baseTs + nextDelayMs(cfg);
   const delay = Math.max(0, dueTs - Date.now());
   window.__adsterraRefreshTimer = window.setTimeout(() => {
     const nextCfg = window.__adsterraActiveConfig ?? cfg;
@@ -212,29 +220,20 @@ function ensureContainer(): HTMLDivElement {
   return div;
 }
 
-function throttleNotificationNode(node: HTMLElement | null) {
+function removeNotificationLikeNode(node: HTMLElement | null) {
   if (!node || !(node instanceof HTMLElement) || !node.isConnected) return;
   if (isOwnedNode(node)) return;
   let cs: CSSStyleDeclaration;
   try { cs = window.getComputedStyle(node); } catch { return; }
-  // Only throttle floating ad chrome (fixed position notifications / bars).
+  // Old post notification/social-bar ad chrome is not allowed in the player.
   if (cs.position !== "fixed") return;
-  if (cs.display === "none" || cs.visibility === "hidden") return;
-  // Skip our own close button.
   if (node === window.__adsterraCloseButton) return;
-  const now = Date.now();
-  const last = window.__adsterraLastNotifAt ?? 0;
-  if (now - last < NOTIF_MIN_GAP_MS) {
-    try {
-      node.style.setProperty("display", "none", "important");
-      node.style.setProperty("visibility", "hidden", "important");
-      node.style.setProperty("pointer-events", "none", "important");
-    } catch {}
-    // Drop it shortly so Adsterra doesn't accumulate hidden DOM.
-    window.setTimeout(() => { try { node.remove(); } catch {} }, 250);
-    return;
-  }
-  window.__adsterraLastNotifAt = now;
+  try {
+    node.style.setProperty("display", "none", "important");
+    node.style.setProperty("visibility", "hidden", "important");
+    node.style.setProperty("pointer-events", "none", "important");
+  } catch {}
+  window.setTimeout(() => { try { node.remove(); } catch {} }, 120);
 }
 
 function installPopunderThrottle() {
@@ -287,10 +286,7 @@ function startObserver() {
         const parent = (node as Node).parentNode;
         if (parent === document.body || parent === document.documentElement || parent === document.head) {
           tracked.add(node);
-          // Throttle in-page push notification toasts: if a fixed/visible
-          // ad node appears within NOTIF_MIN_GAP_MS of the last one, hide it.
-          // Runs after a tick so Adsterra's inline styles settle first.
-          window.setTimeout(() => throttleNotificationNode(node as HTMLElement), 80);
+          window.setTimeout(() => removeNotificationLikeNode(node as HTMLElement), 80);
         }
       });
     }
@@ -329,6 +325,19 @@ function clearRefreshTimer() {
 function injectSnippet(snippet: string, container: HTMLElement) {
   const trimmed = (snippet || "").trim();
   if (!trimmed) return [] as Promise<void>[];
+
+  if (/^https?:\/\//i.test(trimmed) && !trimmed.includes("<")) {
+    const a = document.createElement("a");
+    a.href = trimmed;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.dataset.adsterraOwned = "true";
+    a.style.cssText = "position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;top:-9999px";
+    container.appendChild(a);
+    try { a.click(); } catch {}
+    return [] as Promise<void>[];
+  }
+
   const tmp = document.createElement("div");
   tmp.innerHTML = trimmed;
 
@@ -379,6 +388,17 @@ function clearContainer() {
   }
 }
 
+function pickAdKind(cfg: AdsterraConfig): "streamLink" | "popunder" | null {
+  const hasStream = !!cfg.streamLink.trim();
+  const hasPop = !!cfg.popunder.trim();
+  if (!hasStream && !hasPop) return null;
+  if (hasStream && !hasPop) return "streamLink";
+  if (!hasStream && hasPop) return "popunder";
+  const next = window.__adsterraNextKind === "popunder" ? "popunder" : "streamLink";
+  window.__adsterraNextKind = next === "streamLink" ? "popunder" : "streamLink";
+  return next;
+}
+
 async function injectOnce(cfg: AdsterraConfig) {
   if (typeof window === "undefined") return;
   if (!window.__adsterraPlayerScopeActive) return;
@@ -395,9 +415,11 @@ async function injectOnce(cfg: AdsterraConfig) {
   const container = ensureContainer();
   startObserver();
 
+  const kind = pickAdKind(cfg);
+  if (!kind) return;
+
   const pending: Promise<void>[] = [];
-  if (cfg.socialBar?.trim()) pending.push(...injectSnippet(cfg.socialBar, container));
-  if (cfg.popunder?.trim()) pending.push(...injectSnippet(cfg.popunder, container));
+  pending.push(...injectSnippet(kind === "streamLink" ? cfg.streamLink : cfg.popunder, container));
   if (pending.length) {
     await Promise.allSettled(pending);
   }
@@ -457,6 +479,7 @@ export function exitAdsterraPlayerScope() {
   window.__adsterraLastLoadAt = undefined;
   window.__adsterraMountPromise = null;
   window.__adsterraLastConfigJson = undefined;
+  window.__adsterraNextKind = undefined;
 }
 
 export async function loadAdsterraSlots(): Promise<void> {

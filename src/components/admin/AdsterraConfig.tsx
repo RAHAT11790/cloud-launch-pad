@@ -7,8 +7,8 @@ interface Props { glassCard: string; inputClass: string; btnPrimary: string; }
 const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
   const [enabled, setEnabled] = useState(true);
   const [popunder, setPopunder] = useState("");
-  const [socialBar, setSocialBar] = useState("");
-  const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(600);
+  const [streamLink, setStreamLink] = useState("");
+  const [refreshIntervalSec, setRefreshIntervalSec] = useState<number>(50);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -16,9 +16,9 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       const v = snap.val() || {};
       setEnabled(v.enabled !== false);
       setPopunder(v.popunder || "");
-      setSocialBar(v.socialBar || "");
+      setStreamLink(v.streamLink || "");
       const n = Number(v.refreshIntervalSec);
-      setRefreshIntervalSec(Number.isFinite(n) && n >= 0 ? n : 600);
+      setRefreshIntervalSec(Number.isFinite(n) && n >= 0 ? Math.min(Math.max(n, 45), 60) : 50);
     });
     return () => u();
   }, []);
@@ -35,8 +35,9 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
       await set(ref(db, "settings/adsterra"), {
         enabled,
         popunder: popunder.trim(),
-        socialBar: socialBar.trim(),
-        refreshIntervalSec: Math.max(0, Math.min(3600, Number(refreshIntervalSec) || 0)),
+        streamLink: streamLink.trim(),
+        socialBar: null,
+        refreshIntervalSec: Math.max(45, Math.min(60, Number(refreshIntervalSec) || 50)),
       });
       toast.success("Adsterra config saved");
     } catch { toast.error("Save failed"); }
@@ -53,28 +54,28 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         </label>
       </div>
       <p className="text-[11px] text-white/60 leading-relaxed">
-        Paste the exact <code className="text-white/80">&lt;script&gt;</code> snippet from your Adsterra dashboard. Only your player-scoped direct link and push notification ads run here, and each successful ad interaction starts the refresh cooldown so users do not get spammed.
+        Paste the exact Adsterra snippets or direct URLs. The player now runs only two ads: Stream Link and One Click Popunder, alternating every 45–60 seconds.
       </p>
 
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-white/80 block">Direct Link Script</label>
+        <label className="text-xs font-semibold text-white/80 block">One Click Popunder</label>
         <textarea
           value={popunder}
           onChange={(e) => setPopunder(e.target.value)}
           rows={3}
           className={inputClass + " w-full font-mono text-[11px] break-all"}
-          placeholder='<script src="https://pl29545318.effectivecpmnetwork.com/.../invoke.js"></script>'
+          placeholder='<script src="https://.../popunder.js"></script>'
         />
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-white/80 block">Push Notification Script</label>
+        <label className="text-xs font-semibold text-white/80 block">Stream Link</label>
         <textarea
-          value={socialBar}
-          onChange={(e) => setSocialBar(e.target.value)}
+          value={streamLink}
+          onChange={(e) => setStreamLink(e.target.value)}
           rows={3}
           className={inputClass + " w-full font-mono text-[11px] break-all"}
-          placeholder='<script src="https://pl29545319.effectivecpmnetwork.com/.../invoke.js"></script>'
+          placeholder='https://... or <script src="https://.../invoke.js"></script>'
         />
       </div>
 
@@ -84,15 +85,15 @@ const AdsterraConfig = ({ glassCard, inputClass, btnPrimary }: Props) => {
         </label>
         <input
           type="number"
-          min={0}
-          max={3600}
+          min={45}
+          max={60}
           value={refreshIntervalSec}
           onChange={(e) => setRefreshIntervalSec(Number(e.target.value))}
           className={inputClass + " w-full"}
-          placeholder="60"
+          placeholder="50"
         />
         <p className="text-[10px] text-white/50 leading-relaxed">
-          Refresh starts counting after the current ad cycle finishes loading. Example: if an ad loads at 1:00 and this is <strong>120</strong>, the next cycle starts at about 3:00. Set <strong>0</strong> to disable auto refresh.
+          The runtime adds a small random jitter and keeps calls between <strong>45</strong> and <strong>60</strong> seconds.
         </p>
       </div>
 

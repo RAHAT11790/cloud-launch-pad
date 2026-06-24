@@ -15,7 +15,7 @@
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
-import { Layers, Volume2 } from "lucide-react";
+import { Layers, Pause, Play, RotateCcw, RotateCw, Volume2 } from "lucide-react";
 
 const SUPA = (import.meta.env.VITE_SUPABASE_URL as string) ||
   "https://kqxpzqegtvaiwgdusrin.supabase.co";
@@ -70,7 +70,15 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const [loading, setLoading] = useState(true);
   const [showQ, setShowQ]     = useState(false);
   const [showA, setShowA]     = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(true);
+  const [paused, setPaused] = useState(true);
+  const [current, setCurrent] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [skipHint, setSkipHint] = useState<{ side: "left" | "right"; total: number; nonce: number } | null>(null);
   const failedRef = useRef(false);
+  const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipTotalsRef = useRef({ left: 0, right: 0 });
+  const skipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Track whether we've already applied the initial resume — so quality
   // switching mid-playback keeps current position, not the original resume.
   const resumedRef = useRef(false);
@@ -234,6 +242,86 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     setShowQ(false);
   }, []);
 
+  const openControlsBriefly = useCallback(() => {
+    setControlsOpen(true);
+    if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+    controlsTimerRef.current = setTimeout(() => setControlsOpen(false), 2600);
+  }, []);
+
+  const seekBy = useCallback((delta: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    const max = Number.isFinite(video.duration) ? video.duration : Number.MAX_SAFE_INTEGER;
+    const next = Math.max(0, Math.min(max, video.currentTime + delta));
+    try {
+      if ("fastSeek" in video && typeof video.fastSeek === "function") video.fastSeek(next);
+      else video.currentTime = next;
+    } catch { video.currentTime = next; }
+    openControlsBriefly();
+  }, [openControlsBriefly]);
+
+  const doubleTapSkip = useCallback((side: "left" | "right") => {
+    seekBy(side === "right" ? 5 : -5);
+    skipTotalsRef.current[side] += 5;
+    setSkipHint({ side, total: skipTotalsRef.current[side], nonce: Date.now() });
+    if (skipTimerRef.current) clearTimeout(skipTimerRef.current);
+    skipTimerRef.current = setTimeout(() => {
+      skipTotalsRef.current = { left: 0, right: 0 };
+      setSkipHint(null);
+    }, 900);
+  }, [seekBy]);
+
+  const togglePlay = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) v.play().catch(() => {});
+    else v.pause();
+    openControlsBriefly();
+  }, [openControlsBriefly]);
+
+  const fmt = (n: number) => {
+    if (!Number.isFinite(n) || n < 0) return "0:00";
+    const h = Math.floor(n / 3600);
+    const m = Math.floor((n % 3600) / 60);
+    const s = Math.floor(n % 60).toString().padStart(2, "0");
+    return h ? `${h}:${m.toString().padStart(2, "0")}:${s}` : `${m}:${s}`;
+  };
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const update = () => {
+      setCurrent(v.currentTime || 0);
+      setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+      setPaused(v.paused);
+    };
+    const onWaiting = () => setLoading(true);
+    const onReadyData = () => setLoading(false);
+    v.addEventListener("timeupdate", update);
+    v.addEventListener("durationchange", update);
+    v.addEventListener("play", update);
+    v.addEventListener("pause", update);
+    v.addEventListener("waiting", onWaiting);
+    v.addEventListener("seeking", onWaiting);
+    v.addEventListener("seeked", onReadyData);
+    v.addEventListener("canplay", onReadyData);
+    return () => {
+      v.removeEventListener("timeupdate", update);
+      v.removeEventListener("durationchange", update);
+      v.removeEventListener("play", update);
+      v.removeEventListener("pause", update);
+      v.removeEventListener("waiting", onWaiting);
+      v.removeEventListener("seeking", onWaiting);
+      v.removeEventListener("seeked", onReadyData);
+      v.removeEventListener("canplay", onReadyData);
+    };
+  }, []);
+
+  useEffect(() => () => {
+    if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+    if (skipTimerRef.current) clearTimeout(skipTimerRef.current);
+  }, []);
+
   return (
     <>
       <video
@@ -241,24 +329,77 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         className={videoClassName}
         style={videoStyle}
         playsInline
-        controls
+        controls={false}
         autoPlay
+        preload="auto"
         crossOrigin="anonymous"
+        onClick={(e) => { e.stopPropagation(); openControlsBriefly(); }}
       />
+      <div className="absolute inset-0 z-30 grid grid-cols-2" onClick={(e) => e.stopPropagation()}>
+        <button aria-label="Back 5 seconds" className="h-full" onDoubleClick={() => doubleTapSkip("left")} onClick={openControlsBriefly} />
+        <button aria-label="Forward 5 seconds" className="h-full" onDoubleClick={() => doubleTapSkip("right")} onClick={openControlsBriefly} />
+      </div>
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center z-30 bg-black pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center z-40 bg-black/70 pointer-events-none">
           <div className="player-loader-shell" aria-hidden="true">
             {Array.from({ length: 12 }).map((_, i) => <span key={i} className="player-loader-petal" />)}
           </div>
         </div>
       )}
 
+      {skipHint && (
+        <div
+          key={skipHint.nonce}
+          className={`youtube-skip-burst absolute top-1/2 -translate-y-1/2 z-50 ${skipHint.side === "left" ? "left-[12%]" : "right-[12%]"}`}
+        >
+          <div className="youtube-skip-ring">
+            {skipHint.side === "left" ? <RotateCcw className="w-7 h-7" /> : <RotateCw className="w-7 h-7" />}
+            <span>{skipHint.total}s</span>
+          </div>
+        </div>
+      )}
+
+      <div
+        className={`absolute inset-x-0 bottom-0 z-50 player-custom-controls transition-transform duration-150 ${controlsOpen || paused ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0 pointer-events-none"}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-3 pb-3 pt-12 bg-gradient-to-t from-black/95 via-black/55 to-transparent">
+          <input
+            type="range"
+            min={0}
+            max={duration || 0}
+            step={0.1}
+            value={Math.min(current, duration || current)}
+            onChange={(e) => {
+              const v = videoRef.current;
+              const next = Number(e.target.value);
+              if (v) v.currentTime = next;
+              setCurrent(next);
+            }}
+            className="player-seek w-full"
+            aria-label="Seek video"
+          />
+          <div className="mt-2 flex items-center justify-between gap-3 text-white">
+            <div className="flex items-center gap-2">
+              <button onClick={() => seekBy(-10)} className="player-control-round" aria-label="Back 10 seconds"><RotateCcw className="w-5 h-5" /></button>
+              <button onClick={togglePlay} className="player-control-main" aria-label={paused ? "Play" : "Pause"}>
+                {paused ? <Play className="w-6 h-6 ml-0.5" fill="currentColor" /> : <Pause className="w-6 h-6" fill="currentColor" />}
+              </button>
+              <button onClick={() => seekBy(10)} className="player-control-round" aria-label="Forward 10 seconds"><RotateCw className="w-5 h-5" /></button>
+            </div>
+            <div className="text-[11px] font-semibold tabular-nums text-white/90 whitespace-nowrap">
+              {fmt(current)} / {fmt(duration)}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Quality + Audio HUD — anchored bottom-left, well above the native
           control bar so it never collides with play/seek/speed UI. Both pills
           share the exact same height/radius/border so the cluster looks
           aligned next to the top-bar buttons. */}
       {streams.length > 0 && (
-        <div className="absolute bottom-16 left-3 z-40 flex gap-2 pointer-events-auto">
+        <div className="absolute bottom-24 left-3 z-50 flex gap-2 pointer-events-auto">
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); setShowQ((v) => !v); setShowA(false); }}

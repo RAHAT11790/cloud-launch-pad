@@ -394,18 +394,68 @@ div[style*="z-index: 2147483647"],
     .hero-fade-in, .hero-progress-bar { animation: none !important; }
   }
 
-  .skip-indicator {
-    background: hsl(var(--card) / 0.78);
-    backdrop-filter: blur(10px);
-    border: 1px solid hsl(var(--border) / 0.45);
-    border-radius: 50%;
-    animation: skipPulse 0.5s ease-out;
+  .skip-indicator { display: none; }
+
+  .player-custom-controls {
+    contain: layout paint;
+    will-change: transform, opacity;
   }
 
-  @keyframes skipPulse {
-    0% { transform: scale(0.8); opacity: 0; }
-    50% { transform: scale(1.1); opacity: 1; }
-    100% { transform: scale(1); opacity: 0.9; }
+  .player-control-round,
+  .player-control-main {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: hsl(var(--foreground));
+    background: hsl(var(--background) / 0.72);
+    border: 1px solid hsl(var(--border) / 0.5);
+    box-shadow: 0 8px 24px hsl(0 0% 0% / 0.35);
+    touch-action: manipulation;
+    transition: transform 90ms ease, background 120ms ease;
+  }
+
+  .player-control-round { width: 42px; height: 42px; border-radius: 999px; }
+  .player-control-main { width: 56px; height: 56px; border-radius: 999px; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+
+  .player-control-round:active,
+  .player-control-main:active { transform: scale(0.94); }
+
+  .player-seek {
+    height: 18px;
+    accent-color: hsl(var(--primary));
+    touch-action: none;
+  }
+
+  .player-seek::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: hsl(var(--foreground) / 0.28); }
+  .player-seek::-webkit-slider-thumb { margin-top: -7px; width: 18px; height: 18px; border-radius: 999px; }
+
+  .youtube-skip-burst {
+    pointer-events: none;
+    color: hsl(var(--foreground));
+    animation: youtubeSkipPop 520ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+    will-change: transform, opacity;
+  }
+
+  .youtube-skip-ring {
+    width: 92px;
+    height: 92px;
+    border-radius: 999px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: hsl(var(--background) / 0.62);
+    border: 1px solid hsl(var(--border) / 0.45);
+    box-shadow: 0 14px 40px hsl(0 0% 0% / 0.35);
+  }
+
+  .youtube-skip-ring span { font-size: 13px; line-height: 1; font-weight: 800; }
+
+  @keyframes youtubeSkipPop {
+    0% { opacity: 0; transform: translateY(-50%) scale(0.76); }
+    18% { opacity: 1; transform: translateY(-50%) scale(1.04); }
+    100% { opacity: 0; transform: translateY(-50%) scale(1); }
   }
 
   @keyframes fadeInUp {
@@ -567,12 +617,12 @@ div[style*="z-index: 2147483647"],
 @media (max-width: 768px) {
   .player-glass,
   .player-touch-button { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-  .skip-indicator { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .youtube-skip-ring { background: hsl(var(--background) / 0.72); }
 }
 @media (prefers-reduced-transparency: reduce), (update: slow) {
   .player-glass,
   .player-touch-button,
-  .skip-indicator { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  .youtube-skip-ring { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 }
 
 /* Honor user reduced-motion */
