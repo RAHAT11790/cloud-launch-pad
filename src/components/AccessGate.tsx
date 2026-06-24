@@ -4,7 +4,7 @@
 // popunder interactions before the video player is allowed to mount.
 // ============================================
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, ExternalLink, Loader2, Lock, MousePointerClick, ShieldCheck, TimerReset, X } from "lucide-react";
+import { CheckCircle2, Loader2, Lock, MousePointerClick, ShieldCheck, TimerReset, X } from "lucide-react";
 import {
   AccessGateConfig,
   DEFAULT_GATE_CONFIG,
@@ -243,17 +243,6 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
       injectSnippet(cfg.socialBar, socialRef.current); socialRef.current.dataset.mounted = "1";
     }
   }, [shouldShow, cfg.nativeBanner, cfg.banner160x300, cfg.socialBar]);
-
-  // Load the one-click popunder only AFTER the Direct Link layer was opened.
-  // This keeps the first click dedicated to the stream/direct link, then the
-  // next Continue click is the one that the popunder SDK can capture.
-  useEffect(() => {
-    if (!shouldShow || !streamOpened || !cfg.popunder) return;
-    if (popunderRef.current && !popunderRef.current.dataset.mounted) {
-      injectSnippet(cfg.popunder, popunderRef.current);
-      popunderRef.current.dataset.mounted = "1";
-    }
-  }, [shouldShow, streamOpened, cfg.popunder]);
 
   // Notify when no gate is needed
   useEffect(() => {
