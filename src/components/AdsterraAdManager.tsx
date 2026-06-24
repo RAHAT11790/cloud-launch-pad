@@ -18,11 +18,12 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
   useEffect(() => {
     if (isPremium === null || isPremium === undefined) return;
     setAdsterraPremium(!!isPremium);
-    if (isPremium) { stopAdGuard(); return; }
-    const t = window.setTimeout(() => {
-      loadAdsterraSlots();
-      stopAdGuard();
-    }, 250);
+    stopAdGuard();
+    if (isPremium) return;
+    // First ad call is delayed 45s after the player opens — no ads at all
+    // during the first 45 seconds. After that adsterraAds.ts handles its
+    // own 45–60s cycle between Stream Link and Popunder.
+    const t = window.setTimeout(() => { loadAdsterraSlots(); }, 45_000);
     return () => window.clearTimeout(t);
   }, [isPremium, videoEl]);
 
