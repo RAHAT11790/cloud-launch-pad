@@ -3341,7 +3341,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               onDragStart={(e) => e.preventDefault()}
             />
           )}
-          <AccessGate isPremium={isPremium} onClose={onClose} />
+          
 
           {subtitleOverlayText && !isEmbedPlayback && (
             <div

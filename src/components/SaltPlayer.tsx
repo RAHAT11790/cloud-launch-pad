@@ -533,10 +533,6 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
             </div>
           )}
 
-
-          {/* Access Gate overlay — blocks playback until user clears the ad gate (or premium). */}
-          <AccessGate isPremium={isPremium} onClose={() => setSaltPlayerState(null)} />
-
         </div>
       </div>
 
