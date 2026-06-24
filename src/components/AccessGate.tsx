@@ -73,7 +73,9 @@ function shouldSkipFloatingNode(node: HTMLElement) {
     node.closest("[data-access-gate-root='true']");
 }
 
-function clampFloatingAdLayers(initial: Set<Element>, touched: Map<HTMLElement, { pe: string; z: string }>) {
+type TouchedLayerStyle = { pe: string; z: string; ta: string; os: string };
+
+function clampFloatingAdLayers(initial: Set<Element>, touched: Map<HTMLElement, TouchedLayerStyle>) {
   if (typeof document === "undefined") return;
   const floatingCandidates: HTMLElement[] = [];
   Array.from(document.body.children).forEach((node) => {
@@ -86,7 +88,7 @@ function clampFloatingAdLayers(initial: Set<Element>, touched: Map<HTMLElement, 
     const large = rect.width > window.innerWidth * 0.45 && rect.height > 80;
     if (floating || large || looksLikeGateAdNode(node)) {
       floatingCandidates.push(node);
-      if (!touched.has(node)) touched.set(node, { pe: node.style.pointerEvents, z: node.style.zIndex });
+      if (!touched.has(node)) touched.set(node, { pe: node.style.pointerEvents, z: node.style.zIndex, ta: node.style.touchAction, os: node.style.overscrollBehavior });
       node.dataset.accessGateRuntime = "1";
       node.style.pointerEvents = "none";
       node.style.zIndex = "2147482000";
@@ -100,7 +102,7 @@ function clampFloatingAdLayers(initial: Set<Element>, touched: Map<HTMLElement, 
   });
 }
 
-function cleanupGateRuntime(initial: Set<Element>, touched: Map<HTMLElement, { pe: string; z: string }>) {
+function cleanupGateRuntime(initial: Set<Element>, touched: Map<HTMLElement, TouchedLayerStyle>) {
   try {
     document.querySelectorAll('script[data-access-gate-script="1"], script[src*="highperformanceformat"], script[src*="profitabledisplaynetwork"], script[src*="profitableratecpm"], script[src*="cpmrevenuegate"], script[src*="adsterra"], script[src*="onclkds"], script[src*="onclick"]').forEach((n) => n.remove());
     Array.from(document.body.children).forEach((node) => {
@@ -109,7 +111,10 @@ function cleanupGateRuntime(initial: Set<Element>, touched: Map<HTMLElement, { p
     });
     touched.forEach((v, n) => {
       if (!n.isConnected) return;
-      n.style.pointerEvents = v.pe; n.style.zIndex = v.z;
+      n.style.pointerEvents = v.pe;
+      n.style.zIndex = v.z;
+      n.style.touchAction = v.ta;
+      n.style.overscrollBehavior = v.os;
       delete n.dataset.accessGateRuntime;
     });
     touched.clear();
@@ -164,7 +169,7 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
   const introBannerRef = useRef<HTMLDivElement>(null);
 
   const initialBodyChildrenRef = useRef<Set<Element>>(new Set());
-  const touchedBodyLayersRef = useRef<Map<HTMLElement, { pe: string; z: string }>>(new Map());
+  const touchedBodyLayersRef = useRef<Map<HTMLElement, TouchedLayerStyle>>(new Map());
 
   // dwell tracking
   const dwellEndRef = useRef<number>(0);
