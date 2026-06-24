@@ -5,15 +5,10 @@ import {
   loadAdsterraSlots,
   setAdsterraPremium,
 } from "@/lib/adsterraAds";
-import { stopAdGuard } from "@/lib/adGuard";
+import { startAdGuard, stopAdGuard } from "@/lib/adGuard";
 
 interface Props { isPremium?: boolean | null; videoEl?: HTMLVideoElement | null; }
 
-/**
- * Mount this only inside the video player.
- * Premium users → no ad scripts.
- * Non-premium → lightweight Stream Link / Popunder cycle only.
- */
 const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
   useEffect(() => {
     enterAdsterraPlayerScope();
@@ -26,8 +21,7 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     if (isPremium) { stopAdGuard(); return; }
     const t = window.setTimeout(() => {
       loadAdsterraSlots();
-      // Best-effort ads only: no blocking DNS/adblock guard popup in player.
-      stopAdGuard();
+      startAdGuard(videoEl ?? null);
     }, 250);
     return () => window.clearTimeout(t);
   }, [isPremium, videoEl]);
