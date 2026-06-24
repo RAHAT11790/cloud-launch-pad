@@ -309,10 +309,10 @@ div[style*="z-index: 2147483647"],
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 2.5px;
-    height: 10px;
-    margin: -18px 0 0 -1.25px;
-    transform-origin: 50% 18px;
+    width: 3px;
+    height: 14px;
+    margin: -24px 0 0 -1.5px;
+    transform-origin: 50% 24px;
     background: #ffffff;
     border-radius: 2px;
     opacity: 0.08;
