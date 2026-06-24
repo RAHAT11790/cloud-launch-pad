@@ -135,6 +135,9 @@ const AccessTimer = () => {
       if (data?.active && Number(data.expiresAt) > Date.now()) {
         setUserFreeExpiry(Number(data.expiresAt));
       } else {
+        if (data && Number(data.expiresAt || 0) <= Date.now()) {
+          remove(ref(db, `users/${uid}/freeAccess`)).catch(() => {});
+        }
         setUserFreeExpiry(0);
       }
     });
