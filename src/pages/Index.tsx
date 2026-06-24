@@ -2850,13 +2850,11 @@ const Index = () => {
 
   const handleNavigate = useCallback((page: string) => {
     if (page === "profile") {
-      if (!isLoggedIn) {
-        setShowProfile(false);
-        setShowLogin(true);
-      } else {
-        setShowLogin(false);
-        setShowProfile(true);
-      }
+      // Guests also have a real profile (device-scoped timers/history), so
+      // never redirect the Profile tab to login. Login remains an explicit
+      // button inside the profile page/header.
+      setShowLogin(false);
+      setShowProfile(true);
       return;
     }
     const nextPage = isMainPage(page) ? page : "home";
@@ -2896,7 +2894,7 @@ const Index = () => {
     } else {
       onDone();
     }
-  }, [activePage, showProfile, queueStripTransform, restorePageScroll, isLoggedIn, navigate]);
+  }, [activePage, showProfile, queueStripTransform, restorePageScroll, navigate]);
 
   // Browser back/forward + direct URL → sync activePage from pathname.
   // Skip while a routed overlay (anime details, watch, search, notifications) is open.
