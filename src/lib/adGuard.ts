@@ -153,6 +153,10 @@ async function runCheck(isRetry = false) {
 
 export function startAdGuard(videoEl: HTMLVideoElement | null) {
   if (typeof window === "undefined") return;
+  // Player ads are best-effort only. Do not block playback or show false
+  // DNS/adblock warnings to normal users; cleanup any stale overlay instead.
+  stopAdGuard();
+  return;
   if (guardActive) return;
   guardActive = true;
   pausedVideoEl = videoEl;
