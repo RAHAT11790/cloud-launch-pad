@@ -79,6 +79,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipTotalsRef = useRef({ left: 0, right: 0 });
   const skipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTapRef = useRef<{ side: "left" | "right"; at: number } | null>(null);
   // Track whether we've already applied the initial resume — so quality
   // switching mid-playback keeps current position, not the original resume.
   const resumedRef = useRef(false);
@@ -271,6 +272,18 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     }, 900);
   }, [seekBy]);
 
+  const handleTapZone = useCallback((side: "left" | "right") => {
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && last.side === side && now - last.at < 330) {
+      lastTapRef.current = null;
+      doubleTapSkip(side);
+      return;
+    }
+    lastTapRef.current = { side, at: now };
+    openControlsBriefly();
+  }, [doubleTapSkip, openControlsBriefly]);
+
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -336,8 +349,8 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         onClick={(e) => { e.stopPropagation(); openControlsBriefly(); }}
       />
       <div className="absolute inset-0 z-30 grid grid-cols-2" onClick={(e) => e.stopPropagation()}>
-        <button aria-label="Back 5 seconds" className="h-full" onDoubleClick={() => doubleTapSkip("left")} onClick={openControlsBriefly} />
-        <button aria-label="Forward 5 seconds" className="h-full" onDoubleClick={() => doubleTapSkip("right")} onClick={openControlsBriefly} />
+        <button aria-label="Back 5 seconds" className="h-full touch-manipulation" onPointerUp={() => handleTapZone("left")} />
+        <button aria-label="Forward 5 seconds" className="h-full touch-manipulation" onPointerUp={() => handleTapZone("right")} />
       </div>
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center z-40 bg-black/70 pointer-events-none">
