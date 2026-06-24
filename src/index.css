@@ -395,29 +395,39 @@ div[style*="z-index: 2147483647"],
     .hero-fade-in, .hero-progress-bar { animation: none !important; }
   }
 
+  /* YouTube-style skip burst — semi-transparent circle, no shadow,
+     centered on the tap zone. Used by both VideoPlayer and AN player. */
   .skip-pill {
     pointer-events: none;
-    z-index: 36;
+    z-index: 60;
     display: inline-flex;
+    flex-direction: column;
     align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    border-radius: 999px;
-    background: hsl(0 0% 0% / 0.7);
+    justify-content: center;
+    gap: 2px;
+    width: 96px;
+    height: 96px;
+    border-radius: 9999px;
+    background: hsl(0 0% 100% / 0.14);
     color: hsl(0 0% 100%);
-    border: 1px solid hsl(0 0% 100% / 0.14);
-    box-shadow: 0 10px 30px hsl(0 0% 0% / 0.5);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    animation: skipPillPop 380ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    animation: skipPillPop 460ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
   }
-  .skip-pill__num { font: 800 13px/1 system-ui, -apple-system, sans-serif; letter-spacing: 0.3px; }
-  .skip-pill--center { padding: 10px 16px; animation: none; }
+  .skip-pill__num { font: 700 12px/1 system-ui, -apple-system, sans-serif; letter-spacing: 0.2px; opacity: 0.95; }
+  .skip-pill--center { animation: skipPillCenterPop 420ms cubic-bezier(0.2, 0.9, 0.25, 1) both; }
 
   @keyframes skipPillPop {
-    0%   { opacity: 0; transform: translateY(-50%) scale(0.85); }
-    40%  { opacity: 1; transform: translateY(-50%) scale(1.06); }
-    100% { opacity: 1; transform: translateY(-50%) scale(1); }
+    0%   { opacity: 0; transform: translateY(-50%) scale(0.7); }
+    35%  { opacity: 1; transform: translateY(-50%) scale(1.04); }
+    100% { opacity: 0; transform: translateY(-50%) scale(1); }
+  }
+  @keyframes skipPillCenterPop {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+    35%  { opacity: 1; transform: translate(-50%, -50%) scale(1.04); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
   }
 
   .player-custom-controls {
