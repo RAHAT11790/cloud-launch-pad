@@ -3146,7 +3146,7 @@ const Index = () => {
     // Access Gate — completely separate page rendered BEFORE the video player
     // mounts. The player only initializes once the user has cleared the gate
     // (or has premium). No connection to VideoPlayer.
-    if (!saltIsPremium && !hasGateAccess()) {
+    if (gateConfig.enabled && !saltIsPremium && !hasGateAccess()) {
       return (
         <AccessGate
           isPremium={saltIsPremium}
