@@ -3293,7 +3293,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     e.stopPropagation();
   }, []);
 
-  const panelBaseClass = "player-glass rounded-xl p-2 z-30 overflow-y-auto overscroll-contain touch-pan-y shadow-lg [scrollbar-width:thin]";
+  const panelBaseClass = "player-glass rounded-xl p-2 z-[60] overflow-y-auto overscroll-contain touch-pan-y [scrollbar-width:thin]";
   const panelBaseStyle = { WebkitOverflowScrolling: "touch" as const, overscrollBehavior: "contain" as const, touchAction: "pan-y" as const };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
