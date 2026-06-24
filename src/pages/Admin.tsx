@@ -25,7 +25,7 @@ const WeeklyEpManager = () => null;
 
 import EgdManager from "@/components/admin/EgdManager";
 import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
-import AdsterraConfig from "@/components/admin/AdsterraConfig";
+import AdsterraConfig from "@/components/admin/AccessGateConfig";
 import BackdropAiReplacer from "@/components/admin/BackdropAiReplacer";
 import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseMultiManager from "@/components/admin/FirebaseMultiManager";

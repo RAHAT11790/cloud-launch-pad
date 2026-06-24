@@ -3341,7 +3341,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               onDragStart={(e) => e.preventDefault()}
             />
           )}
-          <AdsterraAdManager isPremium={isPremium} videoEl={videoRef.current} />
+          <AccessGate isPremium={isPremium} onClose={onClose} />
 
           {subtitleOverlayText && !isEmbedPlayback && (
             <div
