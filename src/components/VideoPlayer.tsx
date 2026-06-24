@@ -393,7 +393,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [locked, setLocked] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
-  const [skipIndicator, setSkipIndicator] = useState<{ side: "left" | "right" | "center"; text: string } | null>(null);
+  const [skipIndicator, setSkipIndicator] = useState<{ side: "left" | "right" | "center"; text: string; total?: number } | null>(null);
+  const skipAccumRef = useRef<{ side: "left" | "right" | null; total: number; timer: ReturnType<typeof setTimeout> | null }>({ side: null, total: 0, timer: null });
   const [brightness, setBrightness] = useState(1);
   const [swipeState, setSwipeState] = useState<{ startX: number; startY: number; type: string | null } | null>(null);
   const cropModes = ["contain", "cover", "fill"] as const;
@@ -3063,6 +3064,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return Math.min(Math.max(target, 0), v.duration);
   }, []);
 
+  const showSkipPill = useCallback((seconds: number) => {
+    const side: "left" | "right" = seconds > 0 ? "right" : "left";
+    const acc = skipAccumRef.current;
+    if (acc.side !== side) { acc.total = 0; }
+    acc.side = side;
+    acc.total += Math.abs(seconds);
+    if (acc.timer) clearTimeout(acc.timer);
+    setSkipIndicator({ side, text: `${acc.total}s`, total: acc.total });
+    acc.timer = setTimeout(() => {
+      skipAccumRef.current = { side: null, total: 0, timer: null };
+      setSkipIndicator(null);
+    }, 850);
+  }, []);
+
   const seek = useCallback((seconds: number) => {
     if (isEmbedPlayback) {
       const dur = embedTimeRef.current.duration || 0;
@@ -3070,8 +3085,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const next = Math.max(0, Math.min(dur || cur + seconds, cur + seconds));
       sendEmbedCmd("seek", { time: next });
       embedTimeRef.current.currentTime = next;
-      setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
-      setTimeout(() => setSkipIndicator(null), 600);
+      showSkipPill(seconds);
       resetHideTimer();
       return;
     }
@@ -3086,10 +3100,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       v.currentTime = nextTime;
     }
 
-    setSkipIndicator({ side: seconds > 0 ? "right" : "left", text: `${Math.abs(seconds)}s` });
-    setTimeout(() => setSkipIndicator(null), 600);
+    showSkipPill(seconds);
     resetHideTimer();
-  }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd]);
+  }, [getSafeSeekTime, isEmbedPlayback, resetHideTimer, sendEmbedCmd, showSkipPill]);
 
   const toggleFullscreen = useCallback(async () => {
     const el = videoContainerRef.current || containerRef.current || videoRef.current;
@@ -3415,15 +3428,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           )}
 
           {skipIndicator && (
-            <div className={`absolute top-1/2 -translate-y-1/2 skip-indicator w-16 h-16 flex items-center justify-center text-foreground text-xl font-bold ${
-              skipIndicator.side === "left" ? "left-[15%]" :
-              skipIndicator.side === "right" ? "right-[15%]" : "left-1/2 -translate-x-1/2"
-            }`}>
-              {skipIndicator.side === "left" ? <Rewind className="w-6 h-6" /> :
-               skipIndicator.side === "right" ? <FastForward className="w-6 h-6" /> :
-               <span className="text-2xl">{skipIndicator.text}</span>}
-              {skipIndicator.side !== "center" && <span className="text-xs mt-1 absolute -bottom-5">{skipIndicator.text}</span>}
-            </div>
+            skipIndicator.side === "center" ? (
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 skip-pill skip-pill--center" aria-hidden="true">
+                <span className="text-2xl leading-none">{skipIndicator.text}</span>
+              </div>
+            ) : (
+              <div
+                key={skipIndicator.side}
+                className={`absolute top-1/2 -translate-y-1/2 skip-pill ${skipIndicator.side === "left" ? "left-[12%] skip-pill--left" : "right-[12%] skip-pill--right"}`}
+                aria-hidden="true"
+              >
+                {skipIndicator.side === "left" ? <Rewind className="w-5 h-5" /> : <FastForward className="w-5 h-5" />}
+                <span className="skip-pill__num">{skipIndicator.text}</span>
+              </div>
+            )
           )}
 
           {/* Auto Next Episode Overlay */}
@@ -3653,15 +3671,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               </div>
 
               {/* Center play */}
-              <div className="flex items-center justify-center gap-5">
-                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
-                  <SkipBack className="w-4 h-4" />
+              <div className="flex items-center justify-center gap-7">
+                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-11 h-11 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                  <SkipBack className="w-5 h-5" />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary w-12 h-12 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
-                  {playing ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
+                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary w-14 h-14 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                  {playing ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-0.5" />}
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
-                  <SkipForward className="w-4 h-4" />
+                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-11 h-11 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                  <SkipForward className="w-5 h-5" />
                 </button>
               </div>
 
