@@ -55,12 +55,14 @@ const AccessGateConfigCard = ({ glassCard, inputClass, btnPrimary }: Props) => {
     </div>
   );
 
+  const taClass = inputClass + " w-full font-mono text-[10.5px] leading-snug whitespace-pre-wrap break-words resize-y";
+
   return (
-    <div className={glassCard + " space-y-4"}>
+    <div className={glassCard + " p-4 sm:p-5 space-y-4 overflow-hidden"}>
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
+        <div className="min-w-0 flex-1">
           <h3 className="text-base font-bold text-white">Access Gate (Master Trap)</h3>
-          <p className="text-[11px] text-white/60 mt-1 leading-relaxed">
+          <p className="text-[11px] text-white/60 mt-1 leading-relaxed break-words">
             Shows a single ad gate page before video playback. All 5 Adsterra ad slots load at once.
             Once the user completes N direct-link views, they get H hours of fully ad-free access.
           </p>
@@ -71,55 +73,55 @@ const AccessGateConfigCard = ({ glassCard, inputClass, btnPrimary }: Props) => {
         </label>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field label="Clicks Required" hint="How many ad views to unlock">
           <input type="number" min={1} max={50} value={v.clicksRequired}
             onChange={(e) => setV({ ...v, clicksRequired: Number(e.target.value) })}
-            className={inputClass + " w-full"} />
+            className={inputClass + " w-full min-w-0"} />
         </Field>
         <Field label="Dwell (seconds)" hint="Min seconds on ad tab per count">
           <input type="number" min={1} max={120} value={v.dwellSeconds}
             onChange={(e) => setV({ ...v, dwellSeconds: Number(e.target.value) })}
-            className={inputClass + " w-full"} />
+            className={inputClass + " w-full min-w-0"} />
         </Field>
         <Field label="Access Hours" hint="Hours of ad-free access">
           <input type="number" min={0.1} step={0.1} max={168} value={v.accessHours}
             onChange={(e) => setV({ ...v, accessHours: Number(e.target.value) })}
-            className={inputClass + " w-full"} />
+            className={inputClass + " w-full min-w-0"} />
         </Field>
       </div>
 
       <Field label="Direct Link (Smartlink URL)" hint="Adsterra Smartlink URL — opened in a new tab when user taps Continue">
         <input type="url" value={v.directLink}
           onChange={(e) => setV({ ...v, directLink: e.target.value })}
-          className={inputClass + " w-full font-mono text-[11px]"}
+          className={inputClass + " w-full min-w-0 font-mono text-[11px]"}
           placeholder="https://www.effectivecpmnetwork.com/zmcs077s5n?key=..." />
       </Field>
 
       <Field label="Native Banner Script" hint="Full <script>…</script> snippet from Adsterra Native Banner">
         <textarea value={v.nativeBanner} rows={3}
           onChange={(e) => setV({ ...v, nativeBanner: e.target.value })}
-          className={inputClass + " w-full font-mono text-[11px] break-all"}
-          placeholder='<script async data-cfasync="false" src="https://pl29872715.effectivecpmnetwork.com/.../invoke.js"></script><div id="container-..."></div>' />
+          className={taClass}
+          placeholder='<script async data-cfasync="false" src="..."></script><div id="container-..."></div>' />
       </Field>
 
       <Field label="Banner 160x300 Script" hint="Full atOptions + invoke.js snippet">
         <textarea value={v.banner160x300} rows={4}
           onChange={(e) => setV({ ...v, banner160x300: e.target.value })}
-          className={inputClass + " w-full font-mono text-[11px] break-all"}
+          className={taClass}
           placeholder='<script>atOptions={...}</script><script src="//www.highperformanceformat.com/.../invoke.js"></script>' />
       </Field>
 
       <Field label="Social Bar Script" hint="Adsterra Social Bar — sticks itself to the bottom">
         <textarea value={v.socialBar} rows={2}
           onChange={(e) => setV({ ...v, socialBar: e.target.value })}
-          className={inputClass + " w-full font-mono text-[11px] break-all"} />
+          className={taClass} />
       </Field>
 
       <Field label="Popunder Script" hint="Adsterra Popunder — fires on user click">
         <textarea value={v.popunder} rows={2}
           onChange={(e) => setV({ ...v, popunder: e.target.value })}
-          className={inputClass + " w-full font-mono text-[11px] break-all"} />
+          className={taClass} />
       </Field>
 
       <button onClick={save} disabled={loading} className={btnPrimary + " w-full"}>
