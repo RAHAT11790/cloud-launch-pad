@@ -299,8 +299,8 @@ div[style*="z-index: 2147483647"],
   /* AN-style 12-bar circular spinner (classic iOS/macOS loader) */
   .player-loader-shell {
     position: relative;
-    width: 40px;
-    height: 40px;
+    width: 56px;
+    height: 56px;
     display: inline-block;
     transform: translateZ(0);
     will-change: transform;
