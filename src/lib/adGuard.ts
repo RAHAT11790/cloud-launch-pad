@@ -157,13 +157,6 @@ export function startAdGuard(videoEl: HTMLVideoElement | null) {
   // DNS/adblock warnings to normal users; cleanup any stale overlay instead.
   stopAdGuard();
   return;
-  if (guardActive) return;
-  guardActive = true;
-  pausedVideoEl = videoEl;
-  ensureBait();
-  // Initial check, then poll every 8s.
-  runCheck();
-  pollTimer = window.setInterval(runCheck, 8000);
 }
 
 export function stopAdGuard() {
