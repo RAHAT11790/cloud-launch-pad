@@ -5,7 +5,7 @@ import {
   loadAdsterraSlots,
   setAdsterraPremium,
 } from "@/lib/adsterraAds";
-import { startAdGuard, stopAdGuard } from "@/lib/adGuard";
+import { stopAdGuard } from "@/lib/adGuard";
 
 interface Props { isPremium?: boolean | null; videoEl?: HTMLVideoElement | null; }
 

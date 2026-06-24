@@ -3768,14 +3768,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       </div>
                     )}
                     {onNextEpisode && (
-                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip text-[10px] px-2 py-0.5 rounded flex items-center gap-1 transition-transform duration-150 active:scale-95 shrink-0">
+                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip text-[11px] px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 font-semibold">
                         Next <ChevronRight className="w-3 h-3" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-9 h-9 rounded-xl flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       <Settings className="w-3 h-3" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-9 h-9 rounded-xl flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       {isFullscreen ? <Minimize className="w-3 h-3" /> : <Maximize className="w-3 h-3" />}
                     </button>
                   </div>
