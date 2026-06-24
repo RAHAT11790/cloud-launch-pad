@@ -439,11 +439,11 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
           />
           <div className="mt-2 flex items-center justify-between gap-3 text-white">
             <div className="flex items-center gap-2">
-              <button onClick={() => seekBy(-10)} className="player-control-round" aria-label="Back 10 seconds"><RotateCcw className="w-5 h-5" /></button>
+              <button onClick={() => seekBy(-10)} className="player-control-round" aria-label="Back 10 seconds"><RotateCcw className="w-4 h-4" /></button>
               <button onClick={togglePlay} className="player-control-main" aria-label={paused ? "Play" : "Pause"}>
-                {paused ? <Play className="w-6 h-6 ml-0.5" fill="currentColor" /> : <Pause className="w-6 h-6" fill="currentColor" />}
+                {paused ? <Play className="w-5 h-5 ml-0.5" fill="currentColor" /> : <Pause className="w-5 h-5" fill="currentColor" />}
               </button>
-              <button onClick={() => seekBy(10)} className="player-control-round" aria-label="Forward 10 seconds"><RotateCw className="w-5 h-5" /></button>
+              <button onClick={() => seekBy(10)} className="player-control-round" aria-label="Forward 10 seconds"><RotateCw className="w-4 h-4" /></button>
             </div>
             <div className="text-[11px] font-semibold tabular-nums text-white/90 whitespace-nowrap">
               {fmt(current)} / {fmt(duration)}
