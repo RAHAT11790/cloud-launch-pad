@@ -368,6 +368,7 @@ import HeroSlider from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
 import VideoPlayer, { normalizeLanguageName } from "@/components/VideoPlayer";
+import AccessGate from "@/components/AccessGate";
 import NotificationsPage from "@/pages/NotificationsPage";
 import ProfilePage from "@/components/ProfilePage";
 import SearchPage from "@/components/SearchPage";
@@ -3134,6 +3135,18 @@ const Index = () => {
   // "separate page" the user has been asking for — same React tree, but the
   // home UI no longer renders, eliminating leaks and CPU drain.
   if (playerState) {
+    // Access Gate — completely separate page rendered BEFORE the video player
+    // mounts. The player only initializes once the user has cleared the gate
+    // (or has premium). No connection to VideoPlayer.
+    if (!saltIsPremium && !hasGateAccess()) {
+      return (
+        <AccessGate
+          isPremium={saltIsPremium}
+          onUnlocked={() => { try { window.history.replaceState(null, "", "/"); } catch {} ; setPlayerState({ ...playerStateRef.current! }); }}
+          onClose={hardCloseToHome}
+        />
+      );
+    }
     return (
       <div className="fixed inset-0 z-[100] bg-black animate-in fade-in zoom-in-95 duration-300 ease-out">
         <VideoPlayer
