@@ -268,11 +268,11 @@ div[style*="z-index: 2147483647"],
   }
 
   .player-touch-button {
-    background: hsl(var(--card) / 0.84);
-    color: hsl(var(--card-foreground));
+    background: hsl(0 0% 5% / 0.72);
+    color: hsl(0 0% 100%);
     backdrop-filter: blur(18px);
-    border: 1px solid hsl(var(--border) / 0.5);
-    box-shadow: var(--neu-shadow-sm);
+    border: 1px solid hsl(0 0% 100% / 0.14);
+    box-shadow: 0 8px 24px hsl(0 0% 0% / 0.38);
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
   }
