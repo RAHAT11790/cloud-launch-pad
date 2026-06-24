@@ -268,15 +268,41 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const doubleTapSkip = useCallback((side: "left" | "right") => {
     seekBy(side === "right" ? 5 : -5);
     skipTotalsRef.current[side] += 5;
-    setSkipHint({ side, total: skipTotalsRef.current[side], nonce: Date.now() });
+    setSkipHint({ side, total: skipTotalsRef.current[side] });
     if (skipTimerRef.current) clearTimeout(skipTimerRef.current);
     skipTimerRef.current = setTimeout(() => {
       skipTotalsRef.current = { left: 0, right: 0 };
       setSkipHint(null);
-    }, 900);
+    }, 700);
   }, [seekBy]);
 
+  const startLongPress = useCallback(() => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressActiveRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      const v = videoRef.current;
+      if (!v || v.paused) return;
+      prevRateRef.current = v.playbackRate || 1;
+      try { v.playbackRate = 2; } catch {}
+      longPressActiveRef.current = true;
+      setSpeedBoost(true);
+    }, 380);
+  }, []);
+
+  const endLongPress = useCallback(() => {
+    if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+    if (longPressActiveRef.current) {
+      const v = videoRef.current;
+      if (v) { try { v.playbackRate = prevRateRef.current || 1; } catch {} }
+      longPressActiveRef.current = false;
+      setSpeedBoost(false);
+      return true;
+    }
+    return false;
+  }, []);
+
   const handleTapZone = useCallback((side: "left" | "right") => {
+    if (endLongPress()) return; // long-press release: skip tap logic
     const now = Date.now();
     const last = lastTapRef.current;
     if (last && last.side === side && now - last.at < 330) {
@@ -286,7 +312,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     }
     lastTapRef.current = { side, at: now };
     openControlsBriefly();
-  }, [doubleTapSkip, openControlsBriefly]);
+  }, [doubleTapSkip, openControlsBriefly, endLongPress]);
 
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
