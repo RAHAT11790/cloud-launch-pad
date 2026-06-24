@@ -1,4 +1,4 @@
-import { db, ref, set, get, runTransaction, update, onValue } from "@/lib/firebase";
+import { db, ref, set, get, runTransaction, onValue } from "@/lib/firebase";
 import { SITE_URL } from "@/lib/siteConfig";
 import { getUnlockBlockExpiry } from "@/lib/unlockBlock";
 import { getDeviceFingerprint, getDeviceId, getDeviceInfo } from "@/lib/premiumDevice";
