@@ -11,3 +11,4 @@ Rules:
 - Alternate calls one-by-one between Stream Link and Popunder when both are configured.
 - Schedule calls with jitter between 45 and 60 seconds to avoid player lag/ad spam.
 - Premium users still bypass player ads.
+- Do not show a blocking adblock/VPN/DNS guard overlay in the player; ad calls are best-effort and must not pause playback repeatedly.

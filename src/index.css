@@ -289,10 +289,11 @@ div[style*="z-index: 2147483647"],
   }
 
   .player-control-chip {
-    background: hsl(var(--card) / 0.78);
-    color: hsl(var(--card-foreground));
-    border: 1px solid hsl(var(--border) / 0.45);
-    box-shadow: var(--neu-shadow-sm);
+    background: hsl(0 0% 5% / 0.72);
+    color: hsl(0 0% 100%);
+    border: 1px solid hsl(0 0% 100% / 0.14);
+    box-shadow: 0 8px 24px hsl(0 0% 0% / 0.32);
+    touch-action: manipulation;
   }
 
   /* AN-style 12-bar circular spinner (classic iOS/macOS loader) */
@@ -394,7 +395,19 @@ div[style*="z-index: 2147483647"],
     .hero-fade-in, .hero-progress-bar { animation: none !important; }
   }
 
-  .skip-indicator { display: none; }
+  .skip-indicator {
+    display: flex;
+    pointer-events: none;
+    z-index: 35;
+    border-radius: 999px;
+    background: hsl(0 0% 0% / 0.62);
+    color: hsl(0 0% 100%);
+    border: 1px solid hsl(0 0% 100% / 0.16);
+    box-shadow: 0 14px 40px hsl(0 0% 0% / 0.45);
+    animation: youtubeSkipPop 520ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
 
   .player-custom-controls {
     contain: layout paint;
@@ -406,9 +419,9 @@ div[style*="z-index: 2147483647"],
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: hsl(var(--foreground));
-    background: hsl(var(--background) / 0.72);
-    border: 1px solid hsl(var(--border) / 0.5);
+    color: hsl(0 0% 100%);
+    background: hsl(0 0% 5% / 0.72);
+    border: 1px solid hsl(0 0% 100% / 0.14);
     box-shadow: 0 8px 24px hsl(0 0% 0% / 0.35);
     touch-action: manipulation;
     transition: transform 90ms ease, background 120ms ease;
