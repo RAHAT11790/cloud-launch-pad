@@ -4,7 +4,7 @@
 // popunder interactions before the video player is allowed to mount.
 // ============================================
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Loader2, Lock, MousePointerClick, ShieldCheck, TimerReset, X } from "lucide-react";
+import { CheckCircle2, Lock, MousePointerClick, ShieldCheck, TimerReset, X } from "lucide-react";
 import {
   AccessGateConfig,
   DEFAULT_GATE_CONFIG,
@@ -129,7 +129,7 @@ function cleanupGateRuntime(initialBodyChildren: Set<Element>, touched: Map<HTML
 
     Array.from(document.body.children).forEach((node) => {
       if (!(node instanceof HTMLElement) || node.id === "root") return;
-      if (node.dataset.accessGateRuntime === "1" || (!initialBodyChildren.has(node) && looksLikeGateAdNode(node))) node.remove();
+      if (node.dataset.accessGateRuntime === "1" || !initialBodyChildren.has(node) || looksLikeGateAdNode(node)) node.remove();
     });
 
     touched.forEach((value, node) => {
