@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import Hls from "hls.js";
 import { useBranding } from "@/hooks/useBranding";
 import { toast } from "sonner";
-
+import AdsterraAdManager from "@/components/AdsterraAdManager";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
@@ -1295,9 +1295,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (data?.active && Number(data.expiresAt) > Date.now()) {
         setUserFreeAccessExpiresAt(getCurrentDeviceFreeAccessExpiry(data));
       } else {
-        if (data && Number(data.expiresAt || 0) <= Date.now()) {
-          remove(ref(db, `users/${uid}/freeAccess`)).catch(() => {});
-        }
         setUserFreeAccessExpiresAt(0);
       }
       setFreeAccessLoaded(true);
@@ -3344,7 +3341,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               onDragStart={(e) => e.preventDefault()}
             />
           )}
-          
+          <AdsterraAdManager isPremium={isPremium} videoEl={videoRef.current} />
 
           {subtitleOverlayText && !isEmbedPlayback && (
             <div

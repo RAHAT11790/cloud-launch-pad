@@ -55,7 +55,6 @@ const App = () => (
           <Route path="/series" element={<Index />} />
           <Route path="/movies" element={<Index />} />
           <Route path="/live-tv" element={<Index />} />
-          <Route path="/access-gate" element={<Index />} />
           <Route path="*" element={<Index />} />
         </Routes>
       </BrowserRouter>

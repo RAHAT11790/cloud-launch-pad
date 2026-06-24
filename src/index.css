@@ -6,7 +6,7 @@
 
 /* Hide Lovable badge */
 a[href*="lovable.dev"][target="_blank"],
-div[style*="z-index: 2147483647"]:not(#root):not([data-access-gate-root="true"]),
+div[style*="z-index: 2147483647"],
 #lovable-badge,
 .lovable-badge {
   display: none !important;

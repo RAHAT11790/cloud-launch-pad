@@ -1,4 +1,4 @@
-import { db, ref, set, get, runTransaction, onValue } from "@/lib/firebase";
+import { db, ref, set, get, runTransaction, update, onValue } from "@/lib/firebase";
 import { SITE_URL } from "@/lib/siteConfig";
 import { getUnlockBlockExpiry } from "@/lib/unlockBlock";
 import { getDeviceFingerprint, getDeviceId, getDeviceInfo } from "@/lib/premiumDevice";
@@ -135,11 +135,6 @@ type FreeAccessRecord = {
 export const getCurrentDeviceFreeAccessExpiry = (snap: FreeAccessRecord | null | undefined): number => {
   const now = Date.now();
   if (!snap?.active) return 0;
-
-  // Authenticated free access is account-scoped. Device data is retained only
-  // as metadata, so multiple Firebase/Google IDs on the same phone never share
-  // access, while the same ID keeps its own Firebase-saved expiry.
-  if (Number(snap.expiresAt) > now) return Number(snap.expiresAt);
 
   const devices = snap.devices || {};
   const deviceId = getDeviceId();
@@ -410,9 +405,14 @@ export const consumeUnlockTokenForCurrentUser = async (
   const durationMs = grantMsOverride > 0 ? grantMsOverride : await getServiceDurationMs(serviceId);
   const expiresAt = now + durationMs;
 
+  const deviceId = getDeviceId();
+  const fingerprint = getDeviceFingerprint();
+  const deviceInfo = getDeviceInfo();
+
   const freeAccessRef = ref(db, `users/${userId}/freeAccess`);
   const existingSnap = await get(freeAccessRef);
   const existing = (existingSnap.val() || {}) as FreeAccessRecord;
+  const existingDevices = existing.devices || {};
 
   await set(freeAccessRef, {
     active: true,
@@ -420,7 +420,27 @@ export const consumeUnlockTokenForCurrentUser = async (
     expiresAt: Math.max(Number(existing.expiresAt || 0), expiresAt),
     viaToken: token,
     serviceId: serviceId || null,
+    devices: {
+      ...existingDevices,
+      [deviceId]: {
+        ...(existingDevices[deviceId] || {}),
+        name: deviceInfo.name,
+        type: deviceInfo.type,
+        fingerprint,
+        registeredAt: existingDevices[deviceId]?.registeredAt || now,
+        lastSeen: now,
+        grantedAt: now,
+        expiresAt,
+        viaToken: token,
+        serviceId: serviceId || null,
+      },
+    },
   });
+
+  const matchedLegacyDeviceId = Object.entries(existingDevices).find(([, device]) => device?.fingerprint && device.fingerprint === fingerprint)?.[0];
+  if (matchedLegacyDeviceId && matchedLegacyDeviceId !== deviceId) {
+    await update(ref(db, `users/${userId}/freeAccess/devices/${matchedLegacyDeviceId}`), { lastSeen: now, expiresAt });
+  }
 
   return { ok: true, reason: "claimed", serviceId, durationMs };
 };

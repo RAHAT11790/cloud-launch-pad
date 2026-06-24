@@ -15,7 +15,6 @@ import { Progress } from "@/components/ui/progress";
 import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
 import { buildEmailAliasKey, readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
-import { clearGateAccess, getGateAccessUntil } from "@/lib/accessGate";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -135,9 +134,6 @@ const AccessTimer = () => {
       if (data?.active && Number(data.expiresAt) > Date.now()) {
         setUserFreeExpiry(Number(data.expiresAt));
       } else {
-        if (data && Number(data.expiresAt || 0) <= Date.now()) {
-          remove(ref(db, `users/${uid}/freeAccess`)).catch(() => {});
-        }
         setUserFreeExpiry(0);
       }
     });
@@ -157,9 +153,7 @@ const AccessTimer = () => {
         return;
       }
       // Priority 2: UID-based free access from Firebase (cross-device, persistent)
-      let uid = "";
-      try { uid = JSON.parse(localStorage.getItem("rsanime_user") || "{}").id || ""; } catch {}
-      const localExpiry = uid ? 0 : Math.max(parseInt(localStorage.getItem("rsanime_ad_access") || "0"), getGateAccessUntil());
+      const localExpiry = parseInt(localStorage.getItem("rsanime_ad_access") || "0");
       const effectiveExpiry = Math.max(userFreeExpiry, localExpiry);
       if (effectiveExpiry <= Date.now()) {
         setHasAccess(false); setTimeLeft(null); return;
@@ -1142,15 +1136,9 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                   {isPremium ? "🚫 Disable Premium" : "⚡ Restore Premium"}
                 </button>
                 <button
-                  onClick={async () => {
+                  onClick={() => {
                     const expiry = Date.now() + 24 * 60 * 60 * 1000;
-                    let uid = "";
-                    try { uid = JSON.parse(localStorage.getItem("rsanime_user") || "{}").id || ""; } catch {}
-                    if (uid) {
-                      await set(ref(db, `users/${uid}/freeAccess`), { active: true, grantedAt: Date.now(), expiresAt: expiry, viaToken: "self-profile", serviceId: "self-profile" });
-                    } else {
-                      localStorage.setItem("rsanime_ad_access", expiry.toString());
-                    }
+                    localStorage.setItem("rsanime_ad_access", expiry.toString());
                     toast.success("🎁 Free Access activated (24h)");
                   }}
                   className="w-full py-2.5 rounded-lg text-sm font-bold bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 transition-all"
@@ -1158,14 +1146,7 @@ const ProfilePageInner = ({ onClose, allAnime = [], onCardClick, onContinueWatch
                   🎁 Grant Self Free Access (24h)
                 </button>
                 <button
-                  onClick={async () => {
-                    let uid = "";
-                    try { uid = JSON.parse(localStorage.getItem("rsanime_user") || "{}").id || ""; } catch {}
-                    if (uid) {
-                      await remove(ref(db, `users/${uid}/freeAccess`));
-                      await remove(ref(db, `freeAccessUsers/${uid}`)).catch(() => {});
-                    }
-                    clearGateAccess();
+                  onClick={() => {
                     localStorage.removeItem("rsanime_ad_access");
                     toast.success("Free access cleared");
                   }}

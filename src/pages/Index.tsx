@@ -368,8 +368,6 @@ import HeroSlider from "@/components/HeroSlider";
 import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
 import VideoPlayer, { normalizeLanguageName } from "@/components/VideoPlayer";
-import AccessGate from "@/components/AccessGate";
-import { hasGateAccess, subscribeGateConfig, DEFAULT_GATE_CONFIG, type AccessGateConfig } from "@/lib/accessGate";
 import NotificationsPage from "@/pages/NotificationsPage";
 import ProfilePage from "@/components/ProfilePage";
 import SearchPage from "@/components/SearchPage";
@@ -458,7 +456,7 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
   }
   throw lastErr || new Error("API failed");
 };
-import { db, ref, set, onValue, get, remove } from "@/lib/firebase";
+import { db, ref, set, onValue, get } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
 // FCM removed — push notifications no longer used
@@ -728,9 +726,6 @@ const Index = () => {
         setFreeAccessLoaded(true);
         setDeviceLimitWarning(null);
       } else {
-        if (data && Number(data.expiresAt || 0) <= Date.now()) {
-          remove(ref(db, `users/${uid}/freeAccess`)).catch(() => {});
-        }
         if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(0);
         setFreeAccessLoaded(true);
@@ -940,15 +935,6 @@ const Index = () => {
   // stale value — prevents handlePlay from firing twice and the RS player
   // from flashing Hindi ↔ English while playerState catches up.
   playerStateRef.current = playerState;
-
-  // Live Access-Gate config. We must read `enabled` here so the player path
-  // never returns an AccessGate that internally renders null (which would
-  // leave the screen black with no VideoPlayer mounted).
-  const [gateConfig, setGateConfig] = useState<AccessGateConfig>(DEFAULT_GATE_CONFIG);
-  useEffect(() => {
-    const unsub = subscribeGateConfig((c) => setGateConfig(c));
-    return () => { try { unsub(); } catch {} };
-  }, []);
 
   // AnimeSalt iframe player state
   const [saltPlayerState, setSaltPlayerState] = useState<{
@@ -2862,11 +2848,13 @@ const Index = () => {
 
   const handleNavigate = useCallback((page: string) => {
     if (page === "profile") {
-      // Guests also have a real profile (device-scoped timers/history), so
-      // never redirect the Profile tab to login. Login remains an explicit
-      // button inside the profile page/header.
-      setShowLogin(false);
-      setShowProfile(true);
+      if (!isLoggedIn) {
+        setShowProfile(false);
+        setShowLogin(true);
+      } else {
+        setShowLogin(false);
+        setShowProfile(true);
+      }
       return;
     }
     const nextPage = isMainPage(page) ? page : "home";
@@ -2906,7 +2894,7 @@ const Index = () => {
     } else {
       onDone();
     }
-  }, [activePage, showProfile, queueStripTransform, restorePageScroll, navigate]);
+  }, [activePage, showProfile, queueStripTransform, restorePageScroll, isLoggedIn, navigate]);
 
   // Browser back/forward + direct URL → sync activePage from pathname.
   // Skip while a routed overlay (anime details, watch, search, notifications) is open.
@@ -3146,18 +3134,6 @@ const Index = () => {
   // "separate page" the user has been asking for — same React tree, but the
   // home UI no longer renders, eliminating leaks and CPU drain.
   if (playerState) {
-    // Access Gate — completely separate page rendered BEFORE the video player
-    // mounts. The player only initializes once the user has cleared the gate
-    // (or has premium). No connection to VideoPlayer.
-    if (gateConfig.enabled && !saltIsPremium && !hasFreeAccess() && !hasGateAccess()) {
-      return (
-        <AccessGate
-          isPremium={saltIsPremium}
-          onUnlocked={() => { try { window.history.replaceState(null, "", "/"); } catch {} ; setPlayerState({ ...playerStateRef.current! }); }}
-          onClose={hardCloseToHome}
-        />
-      );
-    }
     return (
       <div className="fixed inset-0 z-[100] bg-black animate-in fade-in zoom-in-95 duration-300 ease-out">
         <VideoPlayer
@@ -3313,7 +3289,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background" style={customBgImage ? { backgroundImage: `url(${customBgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
-      <Header onSearchClick={() => navigate("/search")} onProfileClick={() => { if (isLoggedIn) handleNavigate("profile"); else setShowLogin(true); }} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
+      <Header onSearchClick={() => navigate("/search")} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
       <main
         className="relative overflow-hidden"
         style={{ height: "calc(100vh - 65px)", marginTop: 0, touchAction: "pan-y pinch-zoom" }}

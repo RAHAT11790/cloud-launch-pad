@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { X, Crop, Monitor, Search, Maximize, Minimize, ChevronDown, Play } from "lucide-react";
 import { toast } from "sonner";
 import type { AnimeItem } from "@/data/animeData";
-
+import AdsterraAdManager from "@/components/AdsterraAdManager";
 import AnNativeView from "@/components/AnNativeView";
 import { db, ref, onValue } from "@/lib/firebase";
 
@@ -533,6 +533,9 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
             </div>
           )}
 
+
+          {/* Adsterra ads — never mount for Live TV (SaltPlayer is only series/movies). */}
+          <AdsterraAdManager isPremium={isPremium} videoEl={null} />
         </div>
       </div>
 
