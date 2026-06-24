@@ -65,6 +65,18 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
     return () => { active = false; unsub(); };
   }, []);
 
+  // Push a dedicated URL while the gate is visible, restore on unmount.
+  useEffect(() => {
+    let pushed = false;
+    try {
+      if (window.location.pathname !== "/access-gate") {
+        window.history.pushState({ accessGate: true }, "", "/access-gate");
+        pushed = true;
+      }
+    } catch {}
+    return () => { try { if (pushed && window.location.pathname === "/access-gate") window.history.replaceState(null, "", "/"); } catch {} };
+  }, []);
+
   // Re-check access on focus
   useEffect(() => {
     const check = () => setUnlocked(hasGateAccess());
