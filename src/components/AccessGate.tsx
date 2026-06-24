@@ -4,7 +4,7 @@
 // popunder interactions before the video player is allowed to mount.
 // ============================================
 import { useEffect, useRef, useState } from "react";
-import { Lock, ExternalLink, Loader2, X, ShieldCheck } from "lucide-react";
+import { CheckCircle2, ExternalLink, Loader2, Lock, MousePointerClick, ShieldCheck, TimerReset, X } from "lucide-react";
 import {
   AccessGateConfig,
   DEFAULT_GATE_CONFIG,
@@ -44,6 +44,7 @@ function injectSnippet(snippet: string, host: HTMLElement) {
     Array.from(old.attributes).forEach((a) => s.setAttribute(a.name, a.value));
     if (old.textContent) s.textContent = old.textContent;
     if (s.src) s.async = true;
+    s.dataset.accessGateScript = "1";
     host.appendChild(s);
   });
 }
@@ -67,6 +68,80 @@ function openExternal(url: string) {
   }
 }
 
+const ADSTER_DOMAIN_HINTS = [
+  "adsterra",
+  "effectivecpmnetwork",
+  "highperformanceformat",
+  "profitabledisplaynetwork",
+  "profitableratecpm",
+  "cpmrevenuegate",
+  "onclkds",
+  "onclick",
+  "container-",
+];
+
+function looksLikeGateAdNode(el: Element) {
+  const meta = [
+    el.tagName,
+    el.id,
+    typeof el.className === "string" ? el.className : "",
+    el.getAttribute("src") || "",
+    el.getAttribute("data-zone") || "",
+    el.getAttribute("data-cfasync") || "",
+  ].join(" ").toLowerCase();
+  const html = (() => {
+    try { return el.outerHTML.slice(0, 2500).toLowerCase(); } catch { return ""; }
+  })();
+  return ADSTER_DOMAIN_HINTS.some((hint) => meta.includes(hint) || html.includes(hint));
+}
+
+function clampFloatingAdLayers(initialBodyChildren: Set<Element>, touched: Map<HTMLElement, { pointerEvents: string; zIndex: string }>) {
+  if (typeof document === "undefined") return;
+  const appRoot = document.getElementById("root");
+  if (appRoot) {
+    appRoot.style.position = "relative";
+    appRoot.style.zIndex = "2147483647";
+    appRoot.style.isolation = "isolate";
+  }
+
+  Array.from(document.body.children).forEach((node) => {
+    if (!(node instanceof HTMLElement) || node === appRoot) return;
+    if (!looksLikeGateAdNode(node) && initialBodyChildren.has(node)) return;
+
+    const style = window.getComputedStyle(node);
+    const rect = node.getBoundingClientRect();
+    const z = Number.parseInt(style.zIndex || "0", 10) || 0;
+    const floating = style.position === "fixed" || style.position === "sticky" || z > 1000 || node.tagName === "IFRAME";
+    const largeLayer = rect.width > window.innerWidth * 0.45 && rect.height > 80;
+
+    if (floating || largeLayer || looksLikeGateAdNode(node)) {
+      if (!touched.has(node)) touched.set(node, { pointerEvents: node.style.pointerEvents, zIndex: node.style.zIndex });
+      node.dataset.accessGateRuntime = "1";
+      node.style.pointerEvents = "none";
+      node.style.zIndex = "2147482000";
+    }
+  });
+}
+
+function cleanupGateRuntime(initialBodyChildren: Set<Element>, touched: Map<HTMLElement, { pointerEvents: string; zIndex: string }>) {
+  try {
+    document.querySelectorAll('script[data-access-gate-script="1"], script[src*="highperformanceformat"], script[src*="profitabledisplaynetwork"], script[src*="profitableratecpm"], script[src*="cpmrevenuegate"], script[src*="adsterra"], script[src*="onclkds"], script[src*="onclick"]').forEach((node) => node.remove());
+
+    Array.from(document.body.children).forEach((node) => {
+      if (!(node instanceof HTMLElement) || node.id === "root") return;
+      if (node.dataset.accessGateRuntime === "1" || (!initialBodyChildren.has(node) && looksLikeGateAdNode(node))) node.remove();
+    });
+
+    touched.forEach((value, node) => {
+      if (!node.isConnected) return;
+      node.style.pointerEvents = value.pointerEvents;
+      node.style.zIndex = value.zIndex;
+      delete node.dataset.accessGateRuntime;
+    });
+    touched.clear();
+  } catch {}
+}
+
 const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
   const [cfg, setCfg] = useState<AccessGateConfig>(DEFAULT_GATE_CONFIG);
   const [loaded, setLoaded] = useState(false);
@@ -76,13 +151,16 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
   const [awaitingReturn, setAwaitingReturn] = useState(false);
   const [streamOpened, setStreamOpened] = useState(false);
   const [popStarted, setPopStarted] = useState(false);
+  const [countedMessage, setCountedMessage] = useState<number | null>(null);
 
   const nativeRef = useRef<HTMLDivElement>(null);
   const bannerRef = useRef<HTMLDivElement>(null);
   const socialRef = useRef<HTMLDivElement>(null);
   const popunderRef = useRef<HTMLDivElement>(null);
-  const popClickRef = useRef<HTMLButtonElement>(null);
   const countedRef = useRef(false);
+  const initialBodyChildrenRef = useRef<Set<Element>>(new Set());
+  const touchedBodyLayersRef = useRef<Map<HTMLElement, { pointerEvents: string; zIndex: string }>>(new Map());
+  const appRootStyleRef = useRef<{ position: string; zIndex: string; isolation: string } | null>(null);
 
   // Load config once
   useEffect(() => {
@@ -114,6 +192,42 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
 
   // Inject ad snippets after gate is visible & needed
   const shouldShow = loaded && cfg.enabled && !unlocked && !isPremium;
+
+  // Keep all third-party ad layers contained to this route. Some SDKs append
+  // fixed iframes directly to <body>; they must never block the verify button
+  // or survive after leaving /access-gate.
+  useEffect(() => {
+    if (!shouldShow) return;
+    initialBodyChildrenRef.current = new Set(Array.from(document.body.children));
+    const appRoot = document.getElementById("root");
+    if (appRoot && !appRootStyleRef.current) {
+      appRootStyleRef.current = {
+        position: appRoot.style.position,
+        zIndex: appRoot.style.zIndex,
+        isolation: appRoot.style.isolation,
+      };
+    }
+    document.documentElement.dataset.accessGateActive = "1";
+    clampFloatingAdLayers(initialBodyChildrenRef.current, touchedBodyLayersRef.current);
+    const guard = window.setInterval(() => clampFloatingAdLayers(initialBodyChildrenRef.current, touchedBodyLayersRef.current), 450);
+    return () => {
+      window.clearInterval(guard);
+      delete document.documentElement.dataset.accessGateActive;
+      cleanupGateRuntime(initialBodyChildrenRef.current, touchedBodyLayersRef.current);
+      const root = document.getElementById("root");
+      if (root && appRootStyleRef.current) {
+        root.style.position = appRootStyleRef.current.position;
+        root.style.zIndex = appRootStyleRef.current.zIndex;
+        root.style.isolation = appRootStyleRef.current.isolation;
+      }
+      appRootStyleRef.current = null;
+      clearHost(nativeRef.current);
+      clearHost(bannerRef.current);
+      clearHost(socialRef.current);
+      clearHost(popunderRef.current);
+    };
+  }, [shouldShow]);
+
   useEffect(() => {
     if (!shouldShow) return;
     clearHost(nativeRef.current);
@@ -141,14 +255,6 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
     }
   }, [shouldShow, streamOpened, cfg.popunder]);
 
-  // Some one-click popunder SDKs only bind to real user clicks on the page.
-  // Keep an invisible, user-clickable layer mounted over the CTA area so the
-  // SDK receives a genuine click before our own 10s verification countdown.
-  useEffect(() => {
-    if (!shouldShow || !popStarted) return;
-    try { popClickRef.current?.click(); } catch {}
-  }, [shouldShow, popStarted]);
-
   // Notify when no gate is needed
   useEffect(() => {
     if (!loaded) return;
@@ -167,6 +273,8 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
       setProgress((current) => {
         const next = current + 1;
         setGateProgress(next);
+        setCountedMessage(next);
+        window.setTimeout(() => setCountedMessage(null), 2600);
         if (next >= cfg.clicksRequired) {
           grantGateAccess(cfg.accessHours);
           setUnlocked(true);
@@ -197,13 +305,23 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
   if (!shouldShow) return null;
 
   const handleStreamLayer = () => {
-    if (awaitingReturn || streamOpened || popStarted || !cfg.directLink) return;
-    const opened = openExternal(cfg.directLink);
-    if (opened) setStreamOpened(true);
+    if (awaitingReturn || streamOpened || popStarted) return;
+    setCountedMessage(null);
+    if (!cfg.directLink) {
+      setStreamOpened(true);
+      return;
+    }
+    openExternal(cfg.directLink);
+    setStreamOpened(true);
   };
 
   const handleContinue = () => {
     if (!streamOpened || awaitingReturn) return;
+    if (popunderRef.current && cfg.popunder && !popunderRef.current.dataset.mounted) {
+      injectSnippet(cfg.popunder, popunderRef.current);
+      popunderRef.current.dataset.mounted = "1";
+    }
+    clampFloatingAdLayers(initialBodyChildrenRef.current, touchedBodyLayersRef.current);
     setPopStarted(true);
     dwellEndRef.current = Date.now() + cfg.dwellSeconds * 1000;
     setAwaitingReturn(true);
@@ -211,9 +329,10 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
   };
 
   const pct = Math.min(100, Math.round((progress / cfg.clicksRequired) * 100));
+  const timerPct = awaitingReturn ? Math.min(100, Math.max(0, ((cfg.dwellSeconds - countdown) / Math.max(1, cfg.dwellSeconds)) * 100)) : 0;
 
   return (
-    <div className="fixed inset-0 z-[2147483600] bg-background flex flex-col overflow-y-auto">
+    <div data-access-gate-root="true" className="fixed inset-0 z-[2147483647] bg-background flex flex-col overflow-y-auto isolate">
       {/* One-click popunder host — loaded from admin SDK, triggered by CTA click */}
       <div ref={popunderRef} className="absolute" style={{ left: -9999, top: -9999, width: 1, height: 1, overflow: "hidden" }} />
 
@@ -268,48 +387,44 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
           </p>
         </div>
 
-        {/* Direct-link stream layer + one-click popunder button */}
-        <div className="relative rounded-2xl border border-primary/25 bg-primary/5 p-3 overflow-hidden">
-          {!streamOpened && cfg.directLink && (
-            <button
-              type="button"
-              aria-label="Open stream ad layer"
-              onClick={handleStreamLayer}
-              className="absolute inset-0 z-20 cursor-pointer bg-transparent text-transparent"
-            />
+        {/* Direct-link + one-click popunder button. No invisible overlay here, so the CTA always receives the tap. */}
+        <div className="sticky bottom-3 z-[2147483647] relative rounded-2xl border border-primary/25 bg-primary/10 p-3 overflow-hidden shadow-2xl backdrop-blur-xl">
+          <div className="pointer-events-none absolute inset-0 rounded-2xl border border-primary/40 animate-pulse" />
+          {countedMessage !== null && !awaitingReturn && (
+            <div className="mb-3 rounded-xl border border-primary/30 bg-primary/15 px-3 py-2 flex items-center justify-center gap-2 animate-scale-in">
+              <CheckCircle2 className="w-4 h-4 text-primary" />
+              <span className="text-sm font-bold">Counted {countedMessage}</span>
+            </div>
           )}
-
           <button
-            ref={popClickRef}
-            type="button"
-            aria-hidden="true"
-            tabIndex={-1}
-            className="absolute inset-x-3 top-3 h-16 opacity-0 z-0"
-          />
-
-          <button
-            onClick={handleContinue}
-            disabled={awaitingReturn || !streamOpened || !cfg.popunder}
-            className="relative z-10 w-full h-16 rounded-2xl gradient-primary text-primary-foreground font-bold text-base flex items-center justify-center gap-2 shadow-[0_8px_30px_hsla(170,75%,45%,0.35)] active:scale-[0.98] transition-transform disabled:opacity-60"
+            onClick={streamOpened ? handleContinue : handleStreamLayer}
+            disabled={awaitingReturn}
+            className="relative z-10 w-full h-16 rounded-2xl gradient-primary text-primary-foreground font-bold text-base flex items-center justify-center gap-2 shadow-lg active:scale-[0.96] transition-transform disabled:opacity-80 overflow-hidden"
           >
+            {awaitingReturn && (
+              <span
+                className="absolute inset-y-0 left-0 bg-primary-foreground/20 transition-all duration-300"
+                style={{ width: `${timerPct}%` }}
+              />
+            )}
             {awaitingReturn ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Waiting for return… {countdown}s
+                <TimerReset className="relative z-10 w-5 h-5 animate-spin" />
+                <span className="relative z-10">Timer Running · {countdown}s</span>
               </>
             ) : (
               <>
-                {streamOpened ? <ExternalLink className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
-                {streamOpened ? "Continue to Watching" : "Tap to Verify Stream"}
+                {streamOpened ? <MousePointerClick className="w-5 h-5 animate-pulse" /> : <ShieldCheck className="w-5 h-5" />}
+                {streamOpened ? "Start 10s Verification" : "Open Ad & Verify"}
               </>
             )}
           </button>
           <p className="text-[11px] text-center text-muted-foreground mt-2 leading-relaxed">
             {awaitingReturn
-              ? "Wait for the countdown, then this view will count automatically."
+              ? "Timer started. Return after it finishes and this view will count automatically."
               : streamOpened
-                ? "Now tap Continue to trigger the one-click popunder and start the timer."
-                : "This area opens the Direct Link layer first. Return here after it opens."}
+                ? "Tap the button once. The one-click popunder starts here, then wait for the timer."
+                : "Only this button opens the ad layer. Other page ads cannot block this tap."}
           </p>
         </div>
 
