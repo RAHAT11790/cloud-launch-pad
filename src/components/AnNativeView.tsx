@@ -379,8 +379,22 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         onClick={(e) => { e.stopPropagation(); openControlsBriefly(); }}
       />
       <div className="absolute inset-0 z-30 grid grid-cols-2" onClick={(e) => e.stopPropagation()}>
-        <button aria-label="Back 5 seconds" className="h-full touch-manipulation" onPointerUp={() => handleTapZone("left")} />
-        <button aria-label="Forward 5 seconds" className="h-full touch-manipulation" onPointerUp={() => handleTapZone("right")} />
+        <button
+          aria-label="Back 5 seconds"
+          className="h-full touch-manipulation"
+          onPointerDown={startLongPress}
+          onPointerUp={() => handleTapZone("left")}
+          onPointerLeave={endLongPress}
+          onPointerCancel={endLongPress}
+        />
+        <button
+          aria-label="Forward 5 seconds"
+          className="h-full touch-manipulation"
+          onPointerDown={startLongPress}
+          onPointerUp={() => handleTapZone("right")}
+          onPointerLeave={endLongPress}
+          onPointerCancel={endLongPress}
+        />
       </div>
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center z-40 bg-black/70 pointer-events-none">
@@ -390,13 +404,14 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         </div>
       )}
 
+      {speedBoost && <div className="player-speed-hud">2× SPEED ▶▶</div>}
+
       {skipHint && (
         <div
-          key={skipHint.nonce}
-          className={`youtube-skip-burst absolute top-1/2 -translate-y-1/2 z-50 ${skipHint.side === "left" ? "left-[12%]" : "right-[12%]"}`}
+          className={`youtube-skip-burst absolute top-1/2 -translate-y-1/2 z-50 ${skipHint.side === "left" ? "left-[18%]" : "right-[18%]"}`}
         >
           <div className="youtube-skip-ring">
-            {skipHint.side === "left" ? <RotateCcw className="w-7 h-7" /> : <RotateCw className="w-7 h-7" />}
+            {skipHint.side === "left" ? <RotateCcw className="w-5 h-5" /> : <RotateCw className="w-5 h-5" />}
             <span>{skipHint.total}s</span>
           </div>
         </div>
