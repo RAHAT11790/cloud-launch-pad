@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { X, Crop, Monitor, Search, Maximize, Minimize, ChevronDown, Play } from "lucide-react";
 import { toast } from "sonner";
 import type { AnimeItem } from "@/data/animeData";
-import AccessGate from "@/components/AccessGate";
+
 import AnNativeView from "@/components/AnNativeView";
 import { db, ref, onValue } from "@/lib/firebase";
 
