@@ -3544,28 +3544,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}
             >
               {/* Top controls */}
-              <div className="flex justify-between items-start gap-1.5 px-2.5 pt-2.5">
-                <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button h-8 w-8 rounded-lg flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
-                  <ArrowLeft className="w-4 h-4" />
+              <div className="flex justify-between items-start gap-1.5 px-3 pt-3">
+                <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button h-10 w-10 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
+                  <ArrowLeft className="w-5 h-5" />
                 </button>
-                <div className="flex max-w-[calc(100%-42px)] items-center justify-end gap-1 overflow-x-auto scrollbar-hide pb-1">
-                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-7 px-2 rounded-lg flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0">
-                  <Crop className="w-3 h-3" />
-                  <span className="text-[10px] font-semibold">{cropLabels[cropIndex]}</span>
+                <div className="flex max-w-[calc(100%-52px)] items-center justify-end gap-1.5 overflow-x-auto scrollbar-hide pb-1">
+                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-9 px-3 rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0">
+                  <Crop className="w-4 h-4" />
+                  <span className="text-[12px] font-semibold">{cropLabels[cropIndex]}</span>
                 </button>
                 {isHlsSrc ? (
-                  <button className="player-touch-button h-7 px-2 rounded-lg flex items-center justify-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <Server className="w-3 h-3" />
-                    <span className="text-[10px] font-semibold">HLS</span>
+                  <button className="player-touch-button h-9 px-3 rounded-full flex items-center justify-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <Server className="w-4 h-4" />
+                    <span className="text-[12px] font-semibold">HLS</span>
                   </button>
                 ) : effectiveVideoServers.length >= 1 && !noServerSwitch ? (
                   <div className="relative">
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowServerPanel((p) => !p); setShowQualityPanel(false); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); }}
-                      className={`player-touch-button h-7 px-2 rounded-lg flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${manualServerSelected ? 'ring-1 ring-primary bg-primary/25' : ''}`}
+                      className={`player-touch-button h-9 px-3 rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0 ${manualServerSelected ? 'ring-1 ring-primary bg-primary/25' : ''}`}
                     >
-                      <Server className="w-3 h-3" />
-                      <span className="text-[10px] font-semibold whitespace-nowrap max-w-[74px] truncate">{effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`}</span>
+                      <Server className="w-4 h-4" />
+                      <span className="text-[12px] font-semibold whitespace-nowrap max-w-[88px] truncate">{effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`}</span>
                     </button>
                     {showServerPanel && (
                       <div data-player-panel="true" className={`absolute top-9 right-0 ${panelBaseClass} min-w-[150px] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
