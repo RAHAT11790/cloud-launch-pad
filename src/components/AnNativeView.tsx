@@ -457,13 +457,13 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
           share the exact same height/radius/border so the cluster looks
           aligned next to the top-bar buttons. */}
       {streams.length > 0 && (
-        <div className="absolute bottom-24 left-3 z-50 flex gap-2 pointer-events-auto">
+        <div className="absolute bottom-20 left-2 z-50 flex gap-2 pointer-events-auto">
           <div className="relative">
             <button
               onClick={(e) => { e.stopPropagation(); setShowQ((v) => !v); setShowA(false); }}
-              className="h-8 inline-flex items-center gap-1.5 px-3 rounded-xl bg-black/75 backdrop-blur-md border border-white/15 text-white text-[12px] font-semibold hover:bg-black/90 active:scale-95 transition-all shadow-lg"
+              className="h-7 inline-flex items-center gap-1 px-2.5 rounded-lg bg-black/75 backdrop-blur-md border border-white/15 text-white text-[12px] font-semibold hover:bg-black/90 active:scale-95 transition-all shadow-lg"
             >
-              <Layers className="w-3.5 h-3.5" /> {streams[qIdx]?.label || "Auto"}
+              <Layers className="w-3 h-3" /> {streams[qIdx]?.label || "Auto"}
             </button>
             {showQ && (
               <div onClick={(e) => e.stopPropagation()} className="absolute bottom-full mb-1.5 left-0 bg-black/95 backdrop-blur-md rounded-xl border border-white/10 overflow-hidden min-w-[120px] shadow-2xl">
@@ -483,9 +483,9 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
             <div className="relative">
               <button
                 onClick={(e) => { e.stopPropagation(); setShowA((v) => !v); setShowQ(false); }}
-                className="h-8 inline-flex items-center gap-1.5 px-3 rounded-xl bg-black/75 backdrop-blur-md border border-white/15 text-white text-[12px] font-semibold hover:bg-black/90 active:scale-95 transition-all shadow-lg"
+                className="h-7 inline-flex items-center gap-1 px-2.5 rounded-lg bg-black/75 backdrop-blur-md border border-white/15 text-white text-[12px] font-semibold hover:bg-black/90 active:scale-95 transition-all shadow-lg"
               >
-                <Volume2 className="w-3.5 h-3.5" /> {audios[aIdx]?.name || "Audio"}
+                <Volume2 className="w-3 h-3" /> {audios[aIdx]?.name || "Audio"}
               </button>
               {showA && (
                 <div onClick={(e) => e.stopPropagation()} className="absolute bottom-full mb-1.5 left-0 bg-black/95 backdrop-blur-md rounded-xl border border-white/10 overflow-hidden min-w-[130px] shadow-2xl">
