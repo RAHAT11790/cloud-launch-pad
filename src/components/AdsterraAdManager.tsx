@@ -5,7 +5,7 @@ import {
   loadAdsterraSlots,
   setAdsterraPremium,
 } from "@/lib/adsterraAds";
-import { startAdGuard, stopAdGuard } from "@/lib/adGuard";
+import { stopAdGuard } from "@/lib/adGuard";
 
 interface Props { isPremium?: boolean | null; videoEl?: HTMLVideoElement | null; }
 
@@ -21,7 +21,7 @@ const AdsterraAdManager = ({ isPremium, videoEl }: Props) => {
     if (isPremium) { stopAdGuard(); return; }
     const t = window.setTimeout(() => {
       loadAdsterraSlots();
-      startAdGuard(videoEl ?? null);
+      stopAdGuard();
     }, 250);
     return () => window.clearTimeout(t);
   }, [isPremium, videoEl]);
