@@ -65,7 +65,6 @@ const Unlock = () => {
       }
 
       const expiry = Date.now() + durationMs;
-      localStorage.setItem("rsanime_ad_access", expiry.toString());
       setPrizeHours(hours);
       setPrizeMinutes(minutes);
       setStatus("success");
@@ -76,6 +75,13 @@ const Unlock = () => {
         if (userStr) {
           const user = JSON.parse(userStr);
           const id = user.id || user.uid || user.username || user.email?.replace(/[.@]/g, "_") || "user_" + Date.now();
+          await set(ref(db, `users/${id}/freeAccess`), {
+            active: true,
+            grantedAt: Date.now(),
+            expiresAt: expiry,
+            viaToken: token,
+            serviceId: consume.serviceId || (isPrize ? "prize" : null),
+          });
           await set(ref(db, `freeAccessUsers/${id}`), {
             userId: id,
             name: user.name || user.username || "Unknown",

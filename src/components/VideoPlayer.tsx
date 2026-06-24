@@ -1295,6 +1295,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (data?.active && Number(data.expiresAt) > Date.now()) {
         setUserFreeAccessExpiresAt(getCurrentDeviceFreeAccessExpiry(data));
       } else {
+        if (data && Number(data.expiresAt || 0) <= Date.now()) {
+          remove(ref(db, `users/${uid}/freeAccess`)).catch(() => {});
+        }
         setUserFreeAccessExpiresAt(0);
       }
       setFreeAccessLoaded(true);

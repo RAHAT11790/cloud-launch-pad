@@ -136,6 +136,11 @@ export const getCurrentDeviceFreeAccessExpiry = (snap: FreeAccessRecord | null |
   const now = Date.now();
   if (!snap?.active) return 0;
 
+  // Authenticated free access is account-scoped. Device data is retained only
+  // as metadata, so multiple Firebase/Google IDs on the same phone never share
+  // access, while the same ID keeps its own Firebase-saved expiry.
+  if (Number(snap.expiresAt) > now) return Number(snap.expiresAt);
+
   const devices = snap.devices || {};
   const deviceId = getDeviceId();
   const fingerprint = getDeviceFingerprint();

@@ -458,7 +458,7 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
   }
   throw lastErr || new Error("API failed");
 };
-import { db, ref, set, onValue, get } from "@/lib/firebase";
+import { db, ref, set, onValue, get, remove } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { toast } from "sonner";
 // FCM removed — push notifications no longer used
@@ -728,6 +728,9 @@ const Index = () => {
         setFreeAccessLoaded(true);
         setDeviceLimitWarning(null);
       } else {
+        if (data && Number(data.expiresAt || 0) <= Date.now()) {
+          remove(ref(db, `users/${uid}/freeAccess`)).catch(() => {});
+        }
         if (disposed || requestSeq !== accessRequestSeq) return;
         setUserFreeAccessExpiresAt(0);
         setFreeAccessLoaded(true);
@@ -3146,7 +3149,7 @@ const Index = () => {
     // Access Gate — completely separate page rendered BEFORE the video player
     // mounts. The player only initializes once the user has cleared the gate
     // (or has premium). No connection to VideoPlayer.
-    if (gateConfig.enabled && !saltIsPremium && !hasGateAccess()) {
+    if (gateConfig.enabled && !saltIsPremium && !hasFreeAccess() && !hasGateAccess()) {
       return (
         <AccessGate
           isPremium={saltIsPremium}

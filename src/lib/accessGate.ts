@@ -1,6 +1,6 @@
 // Access Gate — time-limited ad-free pass.
 // User clears the gate page once → granted N hours of player access.
-import { db, ref, onValue, get } from "@/lib/firebase";
+import { db, ref, onValue, get, set, remove } from "@/lib/firebase";
 import { getDeviceId } from "@/lib/premiumDevice";
 
 export type AccessGateConfig = {
@@ -30,8 +30,22 @@ export const DEFAULT_GATE_CONFIG: AccessGateConfig = {
 const STORAGE_KEY = "rsanime_gate_access_until";
 const PROGRESS_KEY = "rsanime_gate_progress";
 
+const getCurrentUserId = (): string | null => {
+  try {
+    const raw = localStorage.getItem("rsanime_user");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.id || parsed?.uid || null;
+  } catch { return null; }
+};
+
 const deviceScopedKey = (base: string) => {
   try { return `${base}_${getDeviceId()}`; } catch { return base; }
+};
+
+const identityScopedKey = (base: string) => {
+  const uid = getCurrentUserId();
+  return uid ? `${base}_user_${uid}` : deviceScopedKey(base);
 };
 
 function normalize(v: any): AccessGateConfig {
@@ -70,26 +84,49 @@ export function subscribeGateConfig(cb: (c: AccessGateConfig) => void) {
 
 export function hasGateAccess(): boolean {
   try {
-    const v = Math.max(
-      Number(localStorage.getItem(deviceScopedKey(STORAGE_KEY)) || "0"),
-      Number(localStorage.getItem(STORAGE_KEY) || "0"),
-    );
+    const uid = getCurrentUserId();
+    const v = uid
+      ? Number(localStorage.getItem(identityScopedKey(STORAGE_KEY)) || "0")
+      : Math.max(
+          Number(localStorage.getItem(deviceScopedKey(STORAGE_KEY)) || "0"),
+          Number(localStorage.getItem(STORAGE_KEY) || "0"),
+        );
     return v > Date.now();
   } catch { return false; }
 }
 
-export function grantGateAccess(hours: number) {
+export async function grantGateAccess(hours: number) {
   try {
+    const uid = getCurrentUserId();
     const until = Date.now() + Math.max(0.1, hours) * 3600 * 1000;
-    localStorage.setItem(deviceScopedKey(STORAGE_KEY), String(until));
-    localStorage.setItem(STORAGE_KEY, String(until));
-    localStorage.removeItem(PROGRESS_KEY);
-    localStorage.removeItem(deviceScopedKey(PROGRESS_KEY));
+    const now = Date.now();
+    if (uid) {
+      localStorage.setItem(identityScopedKey(STORAGE_KEY), String(until));
+      localStorage.removeItem(identityScopedKey(PROGRESS_KEY));
+      await set(ref(db, `users/${uid}/freeAccess`), {
+        active: true,
+        grantedAt: now,
+        expiresAt: until,
+        viaToken: "access-gate",
+        serviceId: "access-gate",
+      });
+    } else {
+      localStorage.setItem(deviceScopedKey(STORAGE_KEY), String(until));
+      localStorage.setItem(STORAGE_KEY, String(until));
+      localStorage.removeItem(PROGRESS_KEY);
+      localStorage.removeItem(deviceScopedKey(PROGRESS_KEY));
+    }
   } catch {}
 }
 
 export function clearGateAccess() {
   try {
+    const uid = getCurrentUserId();
+    if (uid) {
+      localStorage.removeItem(identityScopedKey(STORAGE_KEY));
+      localStorage.removeItem(identityScopedKey(PROGRESS_KEY));
+      remove(ref(db, `users/${uid}/freeAccess`)).catch(() => {});
+    }
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(deviceScopedKey(STORAGE_KEY));
     localStorage.removeItem(PROGRESS_KEY);
@@ -99,27 +136,28 @@ export function clearGateAccess() {
 
 export function getGateAccessUntil(): number {
   try {
-    return Math.max(
-      Number(localStorage.getItem(deviceScopedKey(STORAGE_KEY)) || "0"),
-      Number(localStorage.getItem(STORAGE_KEY) || "0"),
-    );
+    const uid = getCurrentUserId();
+    if (uid) return Number(localStorage.getItem(identityScopedKey(STORAGE_KEY)) || "0");
+    return Math.max(Number(localStorage.getItem(deviceScopedKey(STORAGE_KEY)) || "0"), Number(localStorage.getItem(STORAGE_KEY) || "0"));
   } catch { return 0; }
 }
 
 export function getGateProgress(): number {
   try {
-    return Math.max(
-      0,
-      Number(localStorage.getItem(deviceScopedKey(PROGRESS_KEY)) || "0"),
-      Number(localStorage.getItem(PROGRESS_KEY) || "0"),
-    );
+    const uid = getCurrentUserId();
+    if (uid) return Math.max(0, Number(localStorage.getItem(identityScopedKey(PROGRESS_KEY)) || "0"));
+    return Math.max(0, Number(localStorage.getItem(deviceScopedKey(PROGRESS_KEY)) || "0"), Number(localStorage.getItem(PROGRESS_KEY) || "0"));
   } catch { return 0; }
 }
 
 export function setGateProgress(n: number) {
   try {
+    const uid = getCurrentUserId();
     const next = String(Math.max(0, n));
-    localStorage.setItem(deviceScopedKey(PROGRESS_KEY), next);
-    localStorage.setItem(PROGRESS_KEY, next);
+    if (uid) localStorage.setItem(identityScopedKey(PROGRESS_KEY), next);
+    else {
+      localStorage.setItem(deviceScopedKey(PROGRESS_KEY), next);
+      localStorage.setItem(PROGRESS_KEY, next);
+    }
   } catch {}
 }

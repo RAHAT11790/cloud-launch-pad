@@ -265,7 +265,7 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
         setCountedMessage(next);
         window.setTimeout(() => setCountedMessage(null), 2600);
         if (next >= cfg.clicksRequired) {
-          grantGateAccess(cfg.accessHours);
+          void grantGateAccess(cfg.accessHours);
           setUnlocked(true);
           window.setTimeout(() => onUnlocked?.(), 50);
         }
