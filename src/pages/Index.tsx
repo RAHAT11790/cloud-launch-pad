@@ -938,6 +938,15 @@ const Index = () => {
   // from flashing Hindi ↔ English while playerState catches up.
   playerStateRef.current = playerState;
 
+  // Live Access-Gate config. We must read `enabled` here so the player path
+  // never returns an AccessGate that internally renders null (which would
+  // leave the screen black with no VideoPlayer mounted).
+  const [gateConfig, setGateConfig] = useState<AccessGateConfig>(DEFAULT_GATE_CONFIG);
+  useEffect(() => {
+    const unsub = subscribeGateConfig((c) => setGateConfig(c));
+    return () => { try { unsub(); } catch {} };
+  }, []);
+
   // AnimeSalt iframe player state
   const [saltPlayerState, setSaltPlayerState] = useState<{
     embedUrl: string;
