@@ -74,12 +74,16 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const [paused, setPaused] = useState(true);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [skipHint, setSkipHint] = useState<{ side: "left" | "right"; total: number; nonce: number } | null>(null);
+  const [skipHint, setSkipHint] = useState<{ side: "left" | "right"; total: number } | null>(null);
+  const [speedBoost, setSpeedBoost] = useState(false);
   const failedRef = useRef(false);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipTotalsRef = useRef({ left: 0, right: 0 });
   const skipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTapRef = useRef<{ side: "left" | "right"; at: number } | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressActiveRef = useRef(false);
+  const prevRateRef = useRef(1);
   // Track whether we've already applied the initial resume — so quality
   // switching mid-playback keeps current position, not the original resume.
   const resumedRef = useRef(false);
