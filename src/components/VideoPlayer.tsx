@@ -3429,16 +3429,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
           {skipIndicator && (
             skipIndicator.side === "center" ? (
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 skip-pill skip-pill--center" aria-hidden="true">
-                <span className="text-2xl leading-none">{skipIndicator.text}</span>
+              <div className="absolute top-1/2 left-1/2 skip-pill skip-pill--center" aria-hidden="true">
+                <span className="text-lg leading-none font-bold">{skipIndicator.text}</span>
               </div>
             ) : (
               <div
-                key={skipIndicator.side}
-                className={`absolute top-1/2 -translate-y-1/2 skip-pill ${skipIndicator.side === "left" ? "left-[12%] skip-pill--left" : "right-[12%] skip-pill--right"}`}
+                key={skipIndicator.side + skipIndicator.text}
+                className={`absolute top-1/2 -translate-y-1/2 skip-pill ${skipIndicator.side === "left" ? "left-[8%]" : "right-[8%]"}`}
                 aria-hidden="true"
               >
-                {skipIndicator.side === "left" ? <Rewind className="w-5 h-5" /> : <FastForward className="w-5 h-5" />}
+                {skipIndicator.side === "left" ? <Rewind className="w-6 h-6" /> : <FastForward className="w-6 h-6" />}
                 <span className="skip-pill__num">{skipIndicator.text}</span>
               </div>
             )
