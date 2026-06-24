@@ -153,9 +153,6 @@ async function runCheck(isRetry = false) {
 
 export function startAdGuard(videoEl: HTMLVideoElement | null) {
   if (typeof window === "undefined") return;
-  // Disabled: repeated false-positive DNS/adblock overlays were blocking playback.
-  stopAdGuard();
-  return;
   if (guardActive) return;
   guardActive = true;
   pausedVideoEl = videoEl;
