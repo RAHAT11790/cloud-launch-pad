@@ -3301,7 +3301,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background" style={customBgImage ? { backgroundImage: `url(${customBgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}>
-      <Header onSearchClick={() => navigate("/search")} onProfileClick={() => handleNavigate("profile")} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
+      <Header onSearchClick={() => navigate("/search")} onProfileClick={() => { if (isLoggedIn) handleNavigate("profile"); else setShowLogin(true); }} onOpenContent={(id) => { const a = allAnime.find(x => x.id === id); if (a) handleCardClick(a); }} animeTitles={allAnime.map(a => a.title)} onLogoClick={() => setChatOpen(prev => !prev)} chatOpen={chatOpen} />
       <main
         className="relative overflow-hidden"
         style={{ height: "calc(100vh - 65px)", marginTop: 0, touchAction: "pan-y pinch-zoom" }}

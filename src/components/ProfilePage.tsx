@@ -15,6 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { downloadManager, type DownloadQueueSnapshot } from "@/lib/downloadManager";
 import { buildEmailAliasKey, readDisplayName, readProfilePhoto, removeProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
+import { getGateAccessUntil } from "@/lib/accessGate";
 
 import VideoPlayer from "@/components/VideoPlayer";
 
@@ -153,7 +154,10 @@ const AccessTimer = () => {
         return;
       }
       // Priority 2: UID-based free access from Firebase (cross-device, persistent)
-      const localExpiry = parseInt(localStorage.getItem("rsanime_ad_access") || "0");
+      const localExpiry = Math.max(
+        parseInt(localStorage.getItem("rsanime_ad_access") || "0"),
+        getGateAccessUntil(),
+      );
       const effectiveExpiry = Math.max(userFreeExpiry, localExpiry);
       if (effectiveExpiry <= Date.now()) {
         setHasAccess(false); setTimeLeft(null); return;
