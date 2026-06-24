@@ -3715,7 +3715,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     </button>
                   </div>
                   <div className="flex items-center gap-1.5 justify-end flex-nowrap min-w-0 overflow-x-auto scrollbar-hide pb-0.5">
-                    <span className="player-control-chip text-[10px] px-2 py-1 rounded-md shrink-0 leading-none font-semibold">{playbackRate}x</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const rates = [1, 1.25, 1.5, 1.75, 2, 0.75];
+                        const idx = rates.indexOf(playbackRate);
+                        const next = rates[(idx + 1) % rates.length] ?? 1;
+                        setSpeed(next);
+                      }}
+                      className={`text-[10px] px-2 py-1 rounded-md shrink-0 leading-none font-semibold transition-all ${playbackRate !== 1 ? "gradient-primary text-white" : "player-control-chip"}`}
+                      aria-label="Playback speed"
+                    >{playbackRate}x</button>
                     {availableQualities.length > 1 && (
                       <div className="relative shrink-0">
                           <button
