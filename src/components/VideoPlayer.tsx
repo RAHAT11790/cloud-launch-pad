@@ -3598,10 +3598,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   <div className="relative">
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowCcPanel((p) => !p); setCcTab(currentHlsSubtitle >= 0 ? "subtitle" : "audio"); setShowAudioPanel(false); setShowQualityPanel(false); setShowSettings(false); }}
-                      className={`player-touch-button h-7 px-2 rounded-lg flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
+                      className={`player-touch-button h-9 px-3 rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
                     >
-                      <Subtitles className="w-3 h-3" />
-                      <span className="text-[10px] font-semibold">CC</span>
+                      <Subtitles className="w-4 h-4" />
+                      <span className="text-[12px] font-semibold">CC</span>
                     </button>
                     {showCcPanel && (
                       <div data-player-panel="true" className={`absolute top-9 right-0 ${panelBaseClass} w-[210px] max-w-[82vw] max-h-[min(75dvh,360px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
