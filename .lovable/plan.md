@@ -1,125 +1,111 @@
-# Ultra Security Hardening Plan
 
-চারটা layer-এ security add করব। প্রতিটা layer আলাদা ভাবে কাজ করে যাতে কেউ একটা break করলেও বাকিগুলা ধরে রাখে।
+# Adsterra Master-Trap Access Gate
 
----
+Replace today's in-player Adsterra ads with a single dedicated gate page (`/access-gate`) that the user passes through once to earn time-limited ad-free access. All other ad surfaces get removed permanently.
 
-## Layer 1 — Domain-Locked Video & API (সবচেয়ে important)
+## Flow
 
-**Goal:** আমার video URL/API অন্য কারো website বা app-এ play হবে না। শুধু `rsanime03.lovable.app` + lovable preview domain-এ চলবে।
-
-### Edge functions hardening (`video-proxy`, `video-download`, `an-api`, `rs-bot`, etc.)
-- Origin/Referer **allowlist**: `rsanime03.lovable.app`, `*.lovable.app` (preview), `localhost` (dev only)
-- Reject অন্য সব origin → `403 Forbidden` JSON: `{ error: "Access denied" }`
-- `OPTIONS` (CORS preflight) থেকেও non-allowed origin block — অন্য site থেকে browser fetch বন্ধ হবে
-- Bot/script direct hit (no Origin header) → require a rotating short-lived `x-rs-token` header (HMAC of timestamp with `RS_API_KEY`, ±90s window) → frontend automatically attaches it
-- Server-to-server scrapers fail কারণ token-এর secret browser-এ exposed না
-
-### Frontend helper
-- নতুন `src/lib/secureFetch.ts` — wrapping `fetch` to auto-add `x-rs-token` + correct origin
-- All edge-function calls এই helper দিয়ে যাবে
-
-**Result:** কেউ DevTools দিয়ে URL copy করে অন্য site-এ embed করলে 403, server-to-server scrape করলেও token mismatch → 403.
-
----
-
-## Layer 2 — Browser Anti-Theft UI
-
-**Goal:** কেউ image save / text copy / right-click / drag করতে পারবে না।
-
-Global CSS (`src/index.css`) এ add:
-```css
-html, body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-img, video { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
-input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
+```text
+User taps anime card
+        │
+        ▼
+   Has active access?  ── yes ──▶ open player directly (no ads)
+        │ no
+        ▼
+   /access-gate  ── show 5 ad slots + direct-link button
+        │
+        ▼
+   User clicks Direct Link N times (timer ≥ X sec each)
+        │
+        ▼
+   Unlock → grant access for H hours → open player
 ```
 
-Global JS guard (`src/lib/uiGuard.ts`, mounted in `App.tsx`):
-- `contextmenu` event → preventDefault (right-click + long-press image menu বন্ধ)
-- `dragstart` on images → preventDefault
-- `keydown`: F12, Ctrl+Shift+I/J/C, Ctrl+U, Ctrl+S → preventDefault
-- `copy` event on non-input → preventDefault
-- Mobile long-press on images → suppress save dialog via `touch-action` + callout disable
+## Admin Panel (new `AccessGateConfig` card under Adsterra)
 
-Card images-এ explicit `draggable={false}` + `onContextMenu={preventDefault}` wrapper.
+Single Firebase node `settings/accessGate`:
 
-**Note:** এগুলো friction add করে, determined attacker DevTools বন্ধ করতে পারবে না (browser-level limit) — কিন্তু সাধারণ user/casual scraper সম্পূর্ণ block।
+| Field | Type | Meaning |
+|---|---|---|
+| `enabled` | bool | Master on/off for the gate |
+| `directLink` | string | Adsterra Smartlink URL |
+| `nativeBanner` | string | Native Banner `<script>` snippet |
+| `banner160x300` | string | Banner 160×300 `<script>` snippet |
+| `popunder` | string | Existing popunder snippet (reused) |
+| `socialBar` | string | Existing social-bar snippet (reused) |
+| `clicksRequired` | number | How many qualifying direct-link views (e.g. 5) |
+| `dwellSeconds` | number | Seconds the user must stay on the direct-link tab before count increments (e.g. 10) |
+| `accessHours` | number | Hours of ad-free access granted after unlock (e.g. 6) |
 
----
+Old `settings/adsterra` keys (`popunder`, `socialBar`) are migrated into the new node on save; the gate is the only consumer.
 
-## Layer 3 — Admin Login History & Block System
+## Gate Page (`src/pages/AccessGate.tsx`, route `/access-gate`)
 
-**Goal:** Admin panel-এ কে কে ঢুকছে list দেখা + intruder permanently block + owner immune।
+Layout — built as a master-trap:
 
-### Owner protection (hard-coded)
-`src/lib/adminGuard.ts` এ:
+```text
+┌──────────────────────────────┐
+│  Social Bar  (Adsterra fixed)│
+├──────────────────────────────┤
+│  Native Banner               │
+│  Banner 160×300              │
+├──────────────────────────────┤
+│  Progress: 2 / 5 unlocked    │
+│  ⏱  10s timer                │
+│  ╔══════════════════════════╗│
+│  ║   ▶  Continue (Ad)       ║│  ← direct-link button
+│  ╚══════════════════════════╝│
+│  (popunder fires on click)   │
+└──────────────────────────────┘
+```
+
+Click behavior on the Continue button:
+1. Open `directLink` in a new tab (`window.open` — popunder script triggers concurrently).
+2. Start a `dwellSeconds` countdown in the foreground tab.
+3. When user returns (page `visibilitychange` → visible) AND countdown elapsed → increment counter in `localStorage` (`gateProgress`).
+4. After `clicksRequired` successful cycles → write `localStorage.gateAccessUntil = now + accessHours*3600*1000` and `navigate(returnTo)`.
+
+The button is positioned so social-bar / native-banner / 160×300 ad units sit around/above it — clicks tend to register on multiple ad surfaces (trap effect) without breaking Adsterra ToS-visible UI.
+
+## Access Check
+
+Helper `src/lib/accessGate.ts`:
+
 ```ts
-export const OWNER_EMAILS = ["rahatsarker224@gmail.com", "sarkeremon207@gmail.com"];
-```
-Block check skips these emails — কেউ owner-কে block করলে effect হবে না।
-
-### New Firebase nodes
-```
-adminAccess/
-  logs/{pushId}     → { email, uid, ip, userAgent, country, success, ts, reason }
-  blocked/{key}     → { email|uid|ip, blockedAt, blockedBy, reason }
-  sessions/{pushId} → { email, ip, startedAt, lastSeen, deviceFingerprint }
+export function hasGateAccess(): boolean
+export function clearGateAccess(): void
+export function consumeGateRedirect(returnTo: string): void  // navigate('/access-gate?to=...')
 ```
 
-### Login flow change
-- Admin PIN modal-এ entry-এর সময় → log every attempt (success/fail) to `adminAccess/logs`
-- IP/country fetch থেকে `ipapi.co/json` (free tier)
-- Device fingerprint = existing canvas hash
-- Check `adminAccess/blocked` before granting access — owner email skip block check
+Player open paths (`AnimeDetails` → Watch button, `SaltPlayer` mount) check `hasGateAccess()`. If false and `settings/accessGate.enabled`, redirect to `/access-gate?to=<encoded original path>`.
 
-### New Admin UI tab: "Security & Access"
-- **Login History** table: time, email, IP, country, device, status (✓/✗)
-- **Active Sessions**: real-time current admins
-- **Blocked List**: with unblock button
-- One-click "Block" beside each log entry (greyed out for owner emails)
-- Filter by date/email/IP
+## Removal of legacy ad surfaces
 
-**Result:** intruder login attempt → আপনি list-এ দেখবেন → এক click-এ block → তার IP/email/fingerprint পরের attempt-এ deny।
+- Delete `src/components/AdsterraAdManager.tsx` mounts inside `SaltPlayer`, `VideoPlayer`, `ProfilePage`.
+- Remove `enterAdsterraPlayerScope`/`loadAdsterraSlots`/`exitAdsterraPlayerScope` calls.
+- Keep `src/lib/adsterraAds.ts` only as a thin script-injection utility reused by the gate page (no MutationObserver popunder throttling on gate — we *want* the ads to fire).
 
----
+## Files
 
-## Layer 4 — Firebase Data Protection
+New:
+- `src/pages/AccessGate.tsx`
+- `src/lib/accessGate.ts`
+- `src/components/admin/AccessGateConfig.tsx`
 
-**Goal:** Database থেকে কেউ bulk read/dump করতে না পারে।
+Edited:
+- `src/App.tsx` — register `/access-gate` route
+- `src/pages/Admin.tsx` — swap `AdsterraConfig` card for `AccessGateConfig`
+- `src/components/SaltPlayer.tsx` — remove `AdsterraAdManager`, add gate check
+- `src/components/AnimeDetails.tsx` — gate the "Watch" button
+- `src/pages/Index.tsx` — gate the `setSaltPlayerState` call
+- `src/components/VideoPlayer.tsx`, `ProfilePage.tsx` — remove ad mounts
 
-- Existing Firebase rules check — sensitive nodes (`adminAccess/*`, `users/*/private/*`) read-only for matching uid বা owner
-- Bulk-read guard: client-side throttle in `useFirebaseData` — single `onValue` per node, no `get()` loop pattern
-- `siteConfig` public read OK; auth/admin nodes locked
-- Document which nodes are public vs locked in `mem://infrastructure/firebase-rules`
+Removed:
+- `src/components/AdsterraAdManager.tsx`
+- `src/components/admin/AdsterraConfig.tsx`
 
----
+## Notes / Out of scope
 
-## Technical Implementation Order
-
-1. **Edge function origin/token guard** (Layer 1) — most impactful, blocks API misuse instantly
-2. **Frontend `secureFetch` helper** + replace existing fetch calls in critical paths
-3. **CSS + `uiGuard.ts`** mounted in `App.tsx` (Layer 2)
-4. **Admin login logging + block table** Firebase nodes + UI tab (Layer 3)
-5. **Owner email immunity** hardcoded in `adminGuard.ts`
-6. **Firebase rules audit** documented in memory
-
----
-
-## What This Will NOT Do (honest limits)
-
-- Direct HTTPS video URLs (যেগুলা proxy bypass করে play হয়) — upstream server-এর control আমাদের নাই, ওগুলা সম্পূর্ণ lock করা impossible without re-proxying everything (latency cost বাড়বে)
-- DevTools open করে browsing — browser-level feature, কেউ চাইলে disable করতে পারবে না 100%
-- Screenshot/screen-record — OS-level, browser block করতে পারে না
-
-কিন্তু **API scraping, embed theft, casual copy/download — সব block হবে।**
-
----
-
-## Decisions Needed From You
-
-1. **Allowlist domains** — শুধু `rsanime03.lovable.app` + `*.lovable.app`? নাকি custom domain-ও যোগ হবে?
-2. **Direct HTTPS videos**ও কি proxy-র মধ্যে force করব (slower but fully locked) নাকি current speed-priority রাখব?
-3. **Owner emails** — উপরে যে দুইটা লিখেছি ঠিক আছে, নাকি আরও add করব?
-4. **Existing admin PIN (553300)** — keep as fallback বা remove করে শুধু email+password authentic admin auth use করব?
-
-Approve করলে এই sequence-এ build start করব।
+- Honest verification: the `visibilitychange + dwell` check is the strongest browser-side signal possible without a server callback. No Adsterra postback API exists for Smartlink, so this matches the original "Telegram-code" pattern's trust model.
+- Existing premium / device-bypass logic continues to short-circuit the gate.
+- Localised UI text stays English per project rule.
