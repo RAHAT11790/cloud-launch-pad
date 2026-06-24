@@ -369,6 +369,7 @@ import CategoryPills from "@/components/CategoryPills";
 import AnimeSection from "@/components/AnimeSection";
 import VideoPlayer, { normalizeLanguageName } from "@/components/VideoPlayer";
 import AccessGate from "@/components/AccessGate";
+import { hasGateAccess } from "@/lib/accessGate";
 import NotificationsPage from "@/pages/NotificationsPage";
 import ProfilePage from "@/components/ProfilePage";
 import SearchPage from "@/components/SearchPage";
