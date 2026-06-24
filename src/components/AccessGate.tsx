@@ -119,7 +119,6 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
     clearHost(nativeRef.current);
     clearHost(bannerRef.current);
     clearHost(socialRef.current);
-    clearHost(popunderRef.current);
     if (nativeRef.current && !nativeRef.current.dataset.mounted && cfg.nativeBanner) {
       injectSnippet(cfg.nativeBanner, nativeRef.current); nativeRef.current.dataset.mounted = "1";
     }
@@ -129,10 +128,18 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
     if (socialRef.current && !socialRef.current.dataset.mounted && cfg.socialBar) {
       injectSnippet(cfg.socialBar, socialRef.current); socialRef.current.dataset.mounted = "1";
     }
-    if (popunderRef.current && !popunderRef.current.dataset.mounted && cfg.popunder) {
-      injectSnippet(cfg.popunder, popunderRef.current); popunderRef.current.dataset.mounted = "1";
+  }, [shouldShow, cfg.nativeBanner, cfg.banner160x300, cfg.socialBar]);
+
+  // Load the one-click popunder only AFTER the Direct Link layer was opened.
+  // This keeps the first click dedicated to the stream/direct link, then the
+  // next Continue click is the one that the popunder SDK can capture.
+  useEffect(() => {
+    if (!shouldShow || !streamOpened || !cfg.popunder) return;
+    if (popunderRef.current && !popunderRef.current.dataset.mounted) {
+      injectSnippet(cfg.popunder, popunderRef.current);
+      popunderRef.current.dataset.mounted = "1";
     }
-  }, [shouldShow, cfg.nativeBanner, cfg.banner160x300, cfg.socialBar, cfg.popunder]);
+  }, [shouldShow, streamOpened, cfg.popunder]);
 
   // Some one-click popunder SDKs only bind to real user clicks on the page.
   // Keep an invisible, user-clickable layer mounted over the CTA area so the
