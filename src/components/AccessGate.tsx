@@ -82,6 +82,7 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
   const socialRef = useRef<HTMLDivElement>(null);
   const popunderRef = useRef<HTMLDivElement>(null);
   const popClickRef = useRef<HTMLButtonElement>(null);
+  const countedRef = useRef(false);
 
   // Load config once
   useEffect(() => {
@@ -151,32 +152,40 @@ const AccessGate = ({ isPremium, onUnlocked, onClose }: Props) => {
   const dwellEndRef = useRef<number>(0);
   useEffect(() => {
     if (!awaitingReturn) return;
+    countedRef.current = false;
     let raf = 0;
+    const completeView = () => {
+      if (countedRef.current || Date.now() < dwellEndRef.current) return;
+      countedRef.current = true;
+      setProgress((current) => {
+        const next = current + 1;
+        setGateProgress(next);
+        if (next >= cfg.clicksRequired) {
+          grantGateAccess(cfg.accessHours);
+          setUnlocked(true);
+          window.setTimeout(() => onUnlocked?.(), 50);
+        }
+        return next;
+      });
+      setAwaitingReturn(false);
+      setCountdown(0);
+      setStreamOpened(false);
+      setPopStarted(false);
+    };
     const tick = () => {
       const remaining = Math.max(0, Math.ceil((dwellEndRef.current - Date.now()) / 1000));
       setCountdown(remaining);
       if (remaining > 0) raf = window.setTimeout(tick, 250) as unknown as number;
+      else completeView();
     };
     tick();
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
-      // User came back. Did they meet the dwell?
-      if (Date.now() >= dwellEndRef.current) {
-        const next = progress + 1;
-        setGateProgress(next);
-        setProgress(next);
-        if (next >= cfg.clicksRequired) {
-          grantGateAccess(cfg.accessHours);
-          setUnlocked(true);
-          onUnlocked?.();
-        }
-      }
-      setAwaitingReturn(false);
-      setCountdown(0);
+      completeView();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => { document.removeEventListener("visibilitychange", onVisible); window.clearTimeout(raf); };
-  }, [awaitingReturn, progress, cfg.clicksRequired, cfg.accessHours, onUnlocked]);
+  }, [awaitingReturn, cfg.clicksRequired, cfg.accessHours, onUnlocked]);
 
   if (!shouldShow) return null;
 
