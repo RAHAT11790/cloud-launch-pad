@@ -3664,22 +3664,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     )}
                   </div>
                 )}
-                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-7 h-7 rounded-lg flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
-                  <Lock className="w-3 h-3" />
+                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                  <Lock className="w-4 h-4" />
                 </button>
                 </div>
               </div>
 
               {/* Center play */}
-              <div className="flex items-center justify-center gap-7">
-                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-11 h-11 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
-                  <SkipBack className="w-5 h-5" />
+              <div className="flex items-center justify-center gap-10">
+                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-14 h-14 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                  <SkipBack className="w-7 h-7" />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary w-14 h-14 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
-                  {playing ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-0.5" />}
+                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary w-18 h-18 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95" style={{ width: 72, height: 72 }}>
+                  {playing ? <Pause className="w-9 h-9" fill="currentColor" /> : <Play className="w-9 h-9 ml-0.5" fill="currentColor" />}
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-11 h-11 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
-                  <SkipForward className="w-5 h-5" />
+                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-14 h-14 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                  <SkipForward className="w-7 h-7" />
                 </button>
               </div>
 
