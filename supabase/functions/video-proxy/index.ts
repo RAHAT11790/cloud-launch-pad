@@ -102,11 +102,28 @@ const hostAllowed = (urlStr: string | null): boolean => {
     return false;
   }
 };
-const isAllowedRequest = (_req: Request): boolean => {
-  // Origin/referer allowlist disabled — browsers strip these headers on
-  // cross-origin media/Range fetches, blocking real users. Proxied URLs are
-  // already public; embed-theft protection is handled at the UI layer.
-  return true;
+const ALLOWED_HOST_RX = [
+  /\.lovable\.app$/i,
+  /\.lovableproject\.com$/i,
+  /^lovable\.app$/i,
+  /^lovableproject\.com$/i,
+  /^rsanime03\.lovable\.app$/i,
+  /^localhost(?::\d+)?$/i,
+  /^127\.0\.0\.1(?::\d+)?$/i,
+];
+const matchesAllowedHost = (urlStr: string | null): boolean => {
+  if (!urlStr) return false;
+  try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
+};
+const isAllowedRequest = (req: Request): boolean => {
+  // Strict allowlist: require Referer OR Origin to match an approved host.
+  // If BOTH headers are absent (some Android WebViews strip them on media
+  // Range fetches), we fall back to allow so legitimate playback isn't
+  // blocked. If either header is present and BOTH fail, we deny.
+  const origin = req.headers.get("origin");
+  const referer = req.headers.get("referer");
+  if (!origin && !referer) return true;
+  return matchesAllowedHost(origin) || matchesAllowedHost(referer);
 };
 
 Deno.serve(async (req) => {

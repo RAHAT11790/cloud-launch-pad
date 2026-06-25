@@ -22,8 +22,34 @@ const sanitizeName = (raw: string) => {
   return /\.apk$/i.test(trimmed) ? trimmed : `${trimmed.replace(/\.[^.]+$/, "")}.apk`;
 };
 
+const ALLOWED_HOST_RX = [
+  /\.lovable\.app$/i,
+  /\.lovableproject\.com$/i,
+  /^lovable\.app$/i,
+  /^lovableproject\.com$/i,
+  /^rsanime03\.lovable\.app$/i,
+  /^localhost(?::\d+)?$/i,
+  /^127\.0\.0\.1(?::\d+)?$/i,
+];
+const matchesAllowedHost = (urlStr: string | null): boolean => {
+  if (!urlStr) return false;
+  try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  // Referer/Origin allowlist — APK proxy is only for first-party download
+  // buttons, not a generic redistribution endpoint.
+  const origin = req.headers.get("origin");
+  const referer = req.headers.get("referer");
+  if (origin || referer) {
+    if (!matchesAllowedHost(origin) && !matchesAllowedHost(referer)) {
+      return new Response(JSON.stringify({ error: "forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
 
   const { searchParams } = new URL(req.url);
   const target = searchParams.get("url") || "";

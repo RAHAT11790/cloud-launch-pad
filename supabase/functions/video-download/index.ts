@@ -103,11 +103,24 @@ const hostAllowed = (s: string | null) => {
   if (!s) return false;
   try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(s).host)); } catch { return false; }
 };
-const isAllowedRequest = (_req: Request) => {
-  // Origin/referer allowlist disabled — too many legitimate browsers/CDN
-  // contexts strip these headers, blocking real users. Security is enforced
-  // at the UI/admin layer; proxied URLs are already public video links.
-  return true;
+const ALLOWED_HOST_RX = [
+  /\.lovable\.app$/i,
+  /\.lovableproject\.com$/i,
+  /^lovable\.app$/i,
+  /^lovableproject\.com$/i,
+  /^rsanime03\.lovable\.app$/i,
+  /^localhost(?::\d+)?$/i,
+  /^127\.0\.0\.1(?::\d+)?$/i,
+];
+const matchesAllowedHost = (urlStr: string | null): boolean => {
+  if (!urlStr) return false;
+  try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
+};
+const isAllowedRequest = (req: Request) => {
+  const origin = req.headers.get("origin");
+  const referer = req.headers.get("referer");
+  if (!origin && !referer) return true;
+  return matchesAllowedHost(origin) || matchesAllowedHost(referer);
 };
 
 Deno.serve(async (req) => {
