@@ -93,24 +93,6 @@ const ALLOWED_HOST_RX = [
   /^localhost(?::\d+)?$/i,
   /^127\.0\.0\.1(?::\d+)?$/i,
 ];
-const hostAllowed = (urlStr: string | null): boolean => {
-  if (!urlStr) return false;
-  try {
-    const h = new URL(urlStr).host;
-    return ALLOWED_HOST_RX.some((rx) => rx.test(h));
-  } catch {
-    return false;
-  }
-};
-const ALLOWED_HOST_RX = [
-  /\.lovable\.app$/i,
-  /\.lovableproject\.com$/i,
-  /^lovable\.app$/i,
-  /^lovableproject\.com$/i,
-  /^rsanime03\.lovable\.app$/i,
-  /^localhost(?::\d+)?$/i,
-  /^127\.0\.0\.1(?::\d+)?$/i,
-];
 const matchesAllowedHost = (urlStr: string | null): boolean => {
   if (!urlStr) return false;
   try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
