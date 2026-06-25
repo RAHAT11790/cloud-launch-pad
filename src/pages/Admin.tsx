@@ -4012,6 +4012,19 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  });
  }, []);
 
+ const updateSeriesEpisodeSubtitle = useCallback((sIdx: number, eIdx: number, value: string) => {
+ setSeasonsData((prev) => {
+ const copy = [...prev];
+ const season = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
+ const episode = { ...season.episodes[eIdx] } as any;
+ const url = value.trim();
+ episode.subtitleTracks = url ? [{ label: "Default", language: "", url }] : [];
+ season.episodes[eIdx] = episode;
+ copy[sIdx] = season;
+ return copy;
+ });
+ }, []);
+
  const ensureSeriesLanguageTab = useCallback((language: string) => {
  const normalized = normalizeLanguageValue(language);
  if (!normalized) return;
@@ -11778,6 +11791,11 @@ const AnimeSaltManagerSection = ({
  </div>
  );
  })}
+  <div>
+  <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Subtitle / CC (VTT or SRT)</span>
+  <textarea value={(ep as any).subtitleTracks?.[0]?.url || ""} onChange={e => updateSeriesEpisodeSubtitle(sIdx, eIdx, e.target.value)}
+  className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder="Subtitle URL (optional)" rows={2} />
+  </div>
  </div>
  </div>
  );
