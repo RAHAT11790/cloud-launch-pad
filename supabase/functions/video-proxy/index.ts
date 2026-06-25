@@ -56,7 +56,7 @@ const rewriteM3U8 = (text: string, baseUrl: string, proxyPrefix: string): string
 // ============================================================
 // Domain allowlist — block embed theft / API scraping
 // ============================================================
-const ALLOWED_HOST_RX = [
+const VIDEO_PROXY_ALLOWED_HOST_RX = [
   /\.lovable\.app$/i,
   /\.lovableproject\.com$/i,
   /^lovable\.app$/i,
@@ -67,7 +67,7 @@ const ALLOWED_HOST_RX = [
 ];
 const matchesAllowedHost = (urlStr: string | null): boolean => {
   if (!urlStr) return false;
-  try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
+  try { return VIDEO_PROXY_ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
 };
 const isAllowedRequest = (req: Request): boolean => {
   // Strict allowlist: require Referer OR Origin to match an approved host.

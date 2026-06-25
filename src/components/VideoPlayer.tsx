@@ -77,6 +77,26 @@ const isDataHlsUrl = (url: string): boolean => {
   return normalized.startsWith("data:application/vnd.apple.mpegurl");
 };
 
+const isHlsLikeUrl = (url: string): boolean => {
+  const value = String(url || "").trim();
+  if (!value) return false;
+  if (isDataHlsUrl(value)) return true;
+  if (/\.m3u8(?:[?#].*)?$/i.test(value) || /\.m3u8(?:%3f|%23|$)/i.test(value)) return true;
+
+  try {
+    const parsed = new URL(value);
+    const nested = parsed.searchParams.get("url");
+    if (nested && nested !== value) return isHlsLikeUrl(nested);
+  } catch {}
+
+  try {
+    const decoded = decodeURIComponent(value);
+    return decoded !== value && /\.m3u8(?:[?#].*)?$/i.test(decoded);
+  } catch {
+    return false;
+  }
+};
+
 const isInsecureHttpSource = (url: string): boolean => {
   return String(url || "").trim().toLowerCase().startsWith("http://");
 };
@@ -407,15 +427,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => unsub();
   }, []);
 
-  const isRawHlsSource = useMemo(() => /\.m3u8(\?|#|$)/i.test(String(src || "")) || isDataHlsUrl(src), [src]);
-
   const effectiveVideoServers = useMemo(() => {
-    if (noServerSwitch || isRawHlsSource) return [];
+    if (noServerSwitch) return [];
     // STRICT SERVER ISOLATION: only admin-configured servers are shown/used.
     // No built-in mirror generation, so one dead server cannot contaminate the
     // routing for the others.
     return videoServers;
-  }, [isRawHlsSource, noServerSwitch, videoServers]);
+  }, [noServerSwitch, videoServers]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
   // The branded `req.html` page on the embed server posts video events to us
@@ -434,7 +452,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // HLS / m3u8 detection — these MUST go through native <video>+hls.js, never iframe,
   // so the player controls (audio track / subtitle / quality / seek) keep working.
   const isHlsSrc = useMemo(
-    () => !!currentSrc && (/\.m3u8(\?|#|$)/i.test(currentSrc) || isDataHlsUrl(currentSrc)),
+    () => !!currentSrc && isHlsLikeUrl(currentSrc),
     [currentSrc],
   );
 
@@ -3723,12 +3741,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   <Crop className="w-3.5 h-3.5" />
                   <span className="text-[11px] font-semibold">{cropLabels[cropIndex]}</span>
                 </button>
-                {isHlsSrc ? (
-                    <button className="player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <Server className="w-3.5 h-3.5" />
-                    <span className="text-[11px] font-semibold">HLS</span>
-                  </button>
-                ) : effectiveVideoServers.length >= 1 && !noServerSwitch ? (
+                {effectiveVideoServers.length >= 1 && !noServerSwitch ? (
                   <div className="relative">
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowServerPanel((p) => !p); setShowQualityPanel(false); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); }}
@@ -3738,6 +3751,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       <span className="text-[11px] font-semibold whitespace-nowrap max-w-[78px] truncate">{effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`}</span>
                     </button>
                   </div>
+                ) : isHlsSrc ? (
+                    <button className="player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <Server className="w-3.5 h-3.5" />
+                    <span className="text-[11px] font-semibold">HLS</span>
+                  </button>
                 ) : null}
                 {isHlsSrc && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
                   <div className="relative">
@@ -3886,6 +3904,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         <span className="truncate">{currentQuality}</span>
                       </button>
                     )}
+                    {isHlsSrc && hlsSubtitleOptions.length > 0 && (
+                      <button
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); setShowCcPanel((p) => !p); setCcTab("subtitle"); setShowAudioPanel(false); setShowQualityPanel(false); setShowSettings(false); setShowServerPanel(false); }}
+                        className={`h-7 px-1.5 text-[10px] rounded-md font-semibold transition-all inline-flex items-center gap-0.5 shrink-0 ${
+                          currentHlsSubtitle >= 0 ? "gradient-primary text-white" : "player-control-chip"
+                        }`}
+                        aria-label="Subtitles"
+                      >
+                        <Subtitles className="w-3 h-3" /> CC
+                      </button>
+                    )}
                     {audioTrackOptions.length > 0 && (
                       <button
                         onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
@@ -3914,7 +3944,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
 
-          {!isEmbedPlayback && !isHlsSrc && showServerPanel && effectiveVideoServers.length >= 1 && !noServerSwitch && (
+          {!isEmbedPlayback && showServerPanel && effectiveVideoServers.length >= 1 && !noServerSwitch && (
             <div data-player-panel="true" className={`absolute top-14 right-3 ${panelBaseClass} min-w-[152px] max-w-[86vw] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
               <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
               {effectiveVideoServers.map((srv, idx) => {
