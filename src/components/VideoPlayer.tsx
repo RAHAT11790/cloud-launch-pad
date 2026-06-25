@@ -3669,8 +3669,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               >
               {/* Top controls */}
               <div className="flex justify-between items-start gap-1 px-2.5 pt-2.5">
-                <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button h-[33px] w-[33px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
-                  <ArrowLeft className="w-[18px] h-[18px]" />
+                <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button h-[40px] w-[40px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
+                  <ArrowLeft className="w-[22px] h-[22px]" />
                 </button>
                 <div className="flex max-w-[calc(100%-46px)] items-center justify-end gap-1 overflow-x-auto scrollbar-hide pb-1">
                 <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0">
