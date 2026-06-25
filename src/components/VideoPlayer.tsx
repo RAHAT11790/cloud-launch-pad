@@ -3405,10 +3405,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         {/* Video Container - will-change for GPU compositing */}
         <div
           ref={videoContainerRef}
+          key={isFullscreen ? "fs" : "win"}
           className={`relative bg-black overflow-hidden ${
             isFullscreen 
-              ? "w-screen h-screen rounded-none" 
-              : "w-full rounded-none aspect-video sticky top-0 z-40"
+              ? "w-screen h-screen rounded-none player-fs-enter" 
+              : "w-full rounded-none aspect-video sticky top-0 z-40 player-fs-exit"
           }`}
           style={{ filter: `brightness(${brightness})`, margin: isFullscreen ? 0 : undefined }}
           onContextMenu={(e) => e.preventDefault()}
