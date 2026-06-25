@@ -1680,6 +1680,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setIsBuffering(true);
     setVideoError(false);
 
+    if (manual) manualServerSelectedRef.current = true;
     setManualServerSelected((prev) => (manual ? true : prev));
     setActiveServerIndex(serverIndex);
     setCurrentQuality("Auto");
@@ -1710,10 +1711,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       } catch {}
     }
 
-    // Auto-failover only if server truly dead (5s, no data at all)
+    // Auto-failover only for automatic routes. If the user manually selected
+    // RSFR02 / HTTP proxy, never jump back to Server 1 just because buffering is slow.
     window.setTimeout(() => {
       const vv = videoRef.current;
       if (!vv || isEmbedPlayback) return;
+      if (manual || manualServerSelectedRef.current) return;
       if (vv.readyState < 1 && vv.networkState === 3) {
         const nextIdx = effectiveVideoServers.findIndex((s, i) => i !== serverIndex && (!s.locked || isPremium));
         if (nextIdx >= 0 && nextIdx !== serverIndex) {
