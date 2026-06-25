@@ -3805,11 +3805,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 </div>
                 <div className="flex justify-between items-center gap-3 flex-nowrap">
                   <div className="flex items-center gap-2 shrink-0 min-w-0">
-                    <span ref={timeDisplayRef} className="text-[11px] font-semibold whitespace-nowrap tabular-nums leading-none">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                    <span
+                      ref={timeDisplayRef}
+                      className="text-[12px] font-bold whitespace-nowrap tabular-nums leading-none text-white"
+                      style={{ textShadow: "0 1px 3px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.55)" }}
+                    >{formatTime(currentTime)} / {formatTime(duration)}</span>
                     <button onClick={(e) => {
                       e.stopPropagation();
                       applyPlayerVolume(boostedVolume, !muted);
-                    }} className="w-[26px] h-[26px] flex items-center justify-center shrink-0">
+                    }} className="w-7 h-7 flex items-center justify-center shrink-0 rounded-full ring-1 ring-white/25 bg-white/10 active:scale-90 transition-transform" aria-label="Toggle mute">
                       {muted || boostedVolume <= 0 ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                     </button>
                   </div>
@@ -3822,14 +3826,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         const next = rates[(idx + 1) % rates.length] ?? 1;
                         setSpeed(next);
                       }}
-                      className={`text-[11px] px-2 py-1 rounded-md shrink-0 leading-none font-semibold transition-all ${playbackRate !== 1 ? "gradient-primary text-white" : "player-control-chip"}`}
+                      className={`h-7 px-2.5 text-[11px] rounded-md shrink-0 leading-none font-semibold transition-all inline-flex items-center justify-center ${playbackRate !== 1 ? "gradient-primary text-white" : "player-control-chip"}`}
                       aria-label="Playback speed"
                     >{playbackRate}x</button>
                     {availableQualities.length > 1 && (
                       <div className="relative shrink-0">
                           <button
                             onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
-                          className={`text-[11px] px-2 py-1 rounded-md font-semibold transition-all shrink-0 ${
+                          className={`h-7 px-2.5 text-[11px] rounded-md font-semibold transition-all shrink-0 inline-flex items-center justify-center ${
                             currentQuality !== "Auto" ? "gradient-primary text-white" : "player-control-chip"
                           }`}
                         >
@@ -3842,7 +3846,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       <div className="relative shrink-0">
                           <button
                             onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
-                           className={`text-[11px] px-2 py-1 rounded-md font-semibold transition-all flex items-center gap-1 max-w-[86px] shrink-0 ${
+                           className={`h-7 px-2.5 text-[11px] rounded-md font-semibold transition-all flex items-center gap-1 max-w-[96px] shrink-0 ${
                             currentAudioTrack !== "Default" ? "gradient-primary text-white" : "player-control-chip"
                           }`}
                         >
@@ -3872,14 +3876,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       </div>
                     )}
                     {onNextEpisode && (
-                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip text-[11px] px-2 py-1 rounded-md flex items-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 font-semibold">
+                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip h-7 px-2.5 text-[11px] rounded-md inline-flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 font-semibold">
                         Next <ChevronRight className="w-3 h-3" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-[30px] h-[30px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       <Settings className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-[30px] h-[30px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
                     </button>
                   </div>
