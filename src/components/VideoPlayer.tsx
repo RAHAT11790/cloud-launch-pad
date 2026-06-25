@@ -3802,7 +3802,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               </div>
 
               {/* Bottom controls */}
-              <div className="px-2.5 pb-2.5">
+              <div className="px-2 pb-2.5">
                 {/* Progress bar - GPU accelerated with will-change */}
                 <div
                   ref={progressBarRef}
@@ -3822,21 +3822,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-2 min-w-0">
-                  <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center justify-between gap-1.5 min-w-0">
+                  <div className="flex items-center gap-1 shrink-0">
                     <span
                       ref={timeDisplayRef}
-                      className="text-[12px] font-bold whitespace-nowrap tabular-nums leading-none text-white"
+                      className="text-[11px] font-bold whitespace-nowrap tabular-nums leading-none text-white"
                       style={{ textShadow: "0 1px 3px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.55)" }}
                     >{formatTime(currentTime)} / {formatTime(duration)}</span>
                     <button onClick={(e) => {
                       e.stopPropagation();
                       applyPlayerVolume(boostedVolume, !muted);
-                    }} className="w-7 h-7 flex items-center justify-center shrink-0 rounded-full ring-1 ring-white/25 bg-white/10 active:scale-90 transition-transform" aria-label="Toggle mute">
+                    }} className="w-6 h-6 flex items-center justify-center shrink-0 rounded-full ring-1 ring-white/25 bg-white/10 active:scale-90 transition-transform" aria-label="Toggle mute">
                       {muted || boostedVolume <= 0 ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                     </button>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-nowrap min-w-0 overflow-x-auto scrollbar-hide pl-1">
+                  <div className="flex items-center justify-end gap-1 flex-nowrap min-w-0 flex-1 overflow-x-auto scrollbar-hide pl-0.5">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -3845,23 +3845,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         const next = rates[(idx + 1) % rates.length] ?? 1;
                         setSpeed(next);
                       }}
-                      className={`h-7 px-2.5 text-[11px] rounded-md shrink-0 leading-none font-semibold transition-all inline-flex items-center justify-center ${playbackRate !== 1 ? "gradient-primary text-white" : "player-control-chip"}`}
+                      className={`h-7 px-1.5 text-[10px] rounded-md shrink-0 leading-none font-semibold transition-all inline-flex items-center justify-center ${playbackRate !== 1 ? "gradient-primary text-white" : "player-control-chip"}`}
                       aria-label="Playback speed"
                     >{playbackRate}x</button>
                     {availableQualities.length > 1 && (
                       <button
                         onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
-                        className={`h-7 px-2.5 text-[11px] rounded-md font-semibold transition-all shrink-0 inline-flex items-center justify-center ${
+                        className={`h-7 px-2 text-[11px] rounded-md font-semibold transition-all shrink-0 inline-flex items-center justify-center max-w-[58px] ${
                           currentQuality !== "Auto" ? "gradient-primary text-white" : "player-control-chip"
                         }`}
                       >
-                        {currentQuality}
+                        <span className="truncate">{currentQuality}</span>
                       </button>
                     )}
                     {audioTrackOptions.length > 0 && (
                       <button
                         onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
-                        className={`h-7 px-2.5 text-[11px] rounded-md font-semibold transition-all inline-flex items-center gap-1 max-w-[110px] shrink-0 ${
+                        className={`h-7 px-2 text-[11px] rounded-md font-semibold transition-all inline-flex items-center gap-1 max-w-[82px] shrink-0 ${
                           currentAudioTrack !== "Default" ? "gradient-primary text-white" : "player-control-chip"
                         }`}
                         aria-label="Audio track"
@@ -3870,7 +3870,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       </button>
                     )}
                     {onNextEpisode && (
-                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip h-7 px-2.5 text-[11px] rounded-md inline-flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 font-semibold">
+                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip h-7 px-2 text-[11px] rounded-md inline-flex items-center justify-center gap-0.5 transition-transform duration-150 active:scale-95 shrink-0 font-semibold">
                         Next <ChevronRight className="w-3 h-3" />
                       </button>
                     )}
