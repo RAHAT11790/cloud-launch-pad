@@ -253,6 +253,18 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     setShowQ(false);
   }, []);
 
+  // Toggle native textTracks: -1 = off, else show selected
+  const changeSub = useCallback((i: number) => {
+    setSIdx(i);
+    setShowS(false);
+    const v = videoRef.current;
+    if (!v) return;
+    const tracks = v.textTracks;
+    for (let k = 0; k < tracks.length; k++) {
+      tracks[k].mode = k === i ? "showing" : "disabled";
+    }
+  }, []);
+
   const openControlsBriefly = useCallback(() => {
     setControlsOpen(true);
     if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
