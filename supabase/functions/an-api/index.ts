@@ -228,12 +228,49 @@ function collectSubtitleCandidates(value: unknown, baseUrl: string, out: any[], 
   }
 }
 
+function decodeJsStringLiteral(raw: string): string {
+  const value = raw.trim();
+  try {
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      return JSON.parse(value.startsWith("'")
+        ? `"${value.slice(1, -1).replace(/\\'/g, "'").replace(/"/g, '\\"')}"`
+        : value);
+    }
+  } catch {}
+  return value.replace(/^['"]|['"]$/g, "");
+}
+
+function collectPlayerJsSubtitles(html: string, baseUrl: string): any[] {
+  const out: any[] = [];
+  const varMatch = html.match(/var\s+playerjsSubtitle\s*=\s*(["'][\s\S]*?["'])\s*;/i);
+  if (!varMatch) return out;
+  const rawList = decodeJsStringLiteral(varMatch[1]);
+  const re = /\[([^\]]+)\]\s*([^,\s]+)/g;
+  let m: RegExpExecArray | null;
+  let n = 0;
+  while ((m = re.exec(rawList))) {
+    const name = decode(m[1] || `Subtitle ${++n}`) || `Subtitle ${++n}`;
+    const uri = (m[2] || "").trim();
+    if (!uri) continue;
+    out.push({
+      language: name.slice(0, 3).toLowerCase(),
+      name,
+      uri: resolveUrl(uri, baseUrl),
+    });
+  }
+  return uniqueByUri(out);
+}
+
 async function extractFromPlayer(embedUrl: string) {
   // embedUrl: https://as-cdnNN.top/video/{hash}
   const m = embedUrl.match(/^(https?:\/\/[^\/]+)\/video\/([a-f0-9]+)/i);
   if (!m) return { embed: embedUrl, error: "unrecognized embed format" };
   const origin = m[1];
   const hash = m[2];
+  let embedHtml = "";
+  try {
+    embedHtml = await fetchText(embedUrl, { headers: { Referer: AN_BASE + "/" } });
+  } catch {}
   const apiUrl = `${origin}/player/index.php?data=${hash}&do=getVideo`;
   const body = new URLSearchParams({ hash, r: AN_BASE + "/" }).toString();
   const res = await fetch(apiUrl, {
@@ -256,7 +293,18 @@ async function extractFromPlayer(embedUrl: string) {
   let parsed: any = { streams: [], audio: [], subtitles: [] };
   if (master) {
     try {
-      const mRes = await fetch(master, { headers: { "User-Agent": UA, Referer: origin + "/" } });
+      let mRes: Response | null = null;
+      const attempts = [
+        { "User-Agent": UA, Accept: "application/vnd.apple.mpegurl,*/*" },
+        { "User-Agent": UA, Accept: "application/vnd.apple.mpegurl,*/*", Referer: origin + "/", Origin: origin },
+        { "User-Agent": UA, Accept: "application/vnd.apple.mpegurl,*/*", Referer: embedUrl, Origin: origin },
+      ];
+      for (const headers of attempts) {
+        const res = await fetch(master, { headers });
+        if (res.ok) { mRes = res; break; }
+        try { await res.body?.cancel(); } catch {}
+      }
+      if (!mRes) throw new Error("master fetch failed");
       const mTxt = await mRes.text();
       parsed = parseMaster(master, mTxt);
     } catch (e) {
@@ -266,7 +314,8 @@ async function extractFromPlayer(embedUrl: string) {
   // Some AN player JSONs expose captions in top-level or nested player fields.
   const extraSubs: any[] = [];
   collectSubtitleCandidates(data, embedUrl, extraSubs);
-  const allSubs = uniqueByUri([...(parsed.subtitles || []), ...extraSubs]);
+  const embedSubs = collectPlayerJsSubtitles(embedHtml, embedUrl);
+  const allSubs = uniqueByUri([...(parsed.subtitles || []), ...extraSubs, ...embedSubs]);
   return {
     embed: embedUrl,
     hash,
