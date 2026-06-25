@@ -940,6 +940,7 @@ const Index = () => {
     epIdx?: number;
     qualityOptions?: { label: string; src: string }[];
     audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
+    subtitleTracks?: SubtitleTrack[];
     nextEpisodeSrc?: string;
     resumeTime?: number;
   } | null>(() => {
@@ -1983,6 +1984,7 @@ const Index = () => {
             epIdx: resolvedEpIdx,
             qualityOptions: directState?.qualityOptions || sourceOptions,
             audioTracks: directState?.audioTracks,
+            subtitleTracks: directState?.subtitleTracks,
             nextEpisodeSrc:
               anime.type === "webseries" && anime.seasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined
                 ? getEpisodeSrc(anime.seasons[resolvedSeasonIdx]?.episodes?.[resolvedEpIdx + 1] as Episode)
@@ -2020,6 +2022,7 @@ const Index = () => {
             anime,
             qualityOptions: directState?.qualityOptions || sourceOptions,
             audioTracks: directState?.audioTracks,
+            subtitleTracks: directState?.subtitleTracks,
           } as any);
           setSelectedAnime(null);
           inPlayerSwitchRef.current = false;
@@ -2053,6 +2056,7 @@ const Index = () => {
         // unless the episode actually defines them, otherwise the player's
         // language sheet hallucinates extra options and flips back and forth.
         audioTracks,
+        subtitleTracks: anime.type === "webseries" ? (resolvedSeasons?.[resolvedSeasonIdx ?? 0]?.episodes?.[resolvedEpIdx ?? 0] as any)?.subtitleTracks : (anime as any).subtitleTracks,
         nextEpisodeSrc:
           anime.type === "webseries" && resolvedSeasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined
             ? getEpisodeSrc(resolvedSeasons[resolvedSeasonIdx]?.episodes?.[resolvedEpIdx + 1] as Episode)
@@ -2374,6 +2378,7 @@ const Index = () => {
                   epIdx: eIdx,
                   qualityOptions: directState.qualityOptions,
                   audioTracks: directState.audioTracks,
+                  subtitleTracks: directState.subtitleTracks,
                   resumeTime: item.currentTime || 0,
                   nextEpisodeSrc: getEpisodeSrc(fullAnime.seasons?.[sIdx]?.episodes?.[eIdx + 1] as Episode),
                 };
@@ -2480,6 +2485,7 @@ const Index = () => {
                   epIdx: eIdx,
                   qualityOptions: directState.qualityOptions,
                   audioTracks: directState.audioTracks,
+                  subtitleTracks: directState.subtitleTracks,
                   resumeTime: item.currentTime || 0,
                   nextEpisodeSrc: getEpisodeSrc(fullAnime.seasons?.[sIdx]?.episodes?.[eIdx + 1] as Episode),
                 };
@@ -2541,6 +2547,7 @@ const Index = () => {
           seasonIdx: sIdx,
           epIdx: eIdx,
           audioTracks: episode?.audioTracks,
+          subtitleTracks: (episode as any)?.subtitleTracks,
           resumeTime: item.currentTime || 0,
           qualityOptions: qualityOptions.length > 0 ? qualityOptions : undefined,
           nextEpisodeSrc: getEpisodeSrc(resolvedSeasons?.[sIdx]?.episodes?.[eIdx + 1] as Episode),
@@ -2564,6 +2571,7 @@ const Index = () => {
           subtitle: "Movie",
           anime,
           audioTracks: anime.audioTracks,
+          subtitleTracks: (anime as any).subtitleTracks,
           qualityOptions: getMovieQualityOptions(anime),
           resumeTime: item.currentTime || 0,
         };
@@ -2703,6 +2711,7 @@ const Index = () => {
       let nextSrc = getEpisodeSrc(clickedEp);
       let qOpts = getEpisodeQualityOptions(clickedEp);
       let nextAudioTracks = clickedEp.audioTracks;
+      let nextSubtitleTracks = (clickedEp as any).subtitleTracks;
         if (playerState?.anime.source === "animesalt" && String(clickedEp.link || "").startsWith("animesalt://")) {
         const epSlug = String(clickedEp.link).replace("animesalt://", "");
         try {
@@ -2712,6 +2721,7 @@ const Index = () => {
             nextSrc = directState.src;
             qOpts = directState.qualityOptions || [];
             nextAudioTracks = directState.audioTracks;
+            nextSubtitleTracks = directState.subtitleTracks;
           } else {
             const resolved = resolveSaltEmbed(epResult);
             const embedServers = resolved.allEmbeds.filter(Boolean);
@@ -2730,6 +2740,7 @@ const Index = () => {
         epIdx: i,
         resumeTime: 0,
         audioTracks: nextAudioTracks,
+        subtitleTracks: nextSubtitleTracks,
         qualityOptions: qOpts.length > 0 ? qOpts : undefined,
         nextEpisodeSrc: undefined,
       };
@@ -2749,6 +2760,7 @@ const Index = () => {
     let nextSrc = getEpisodeSrc(ep);
     let qOpts: { label: string; src: string }[] = getEpisodeQualityOptions(ep);
     let nextAudioTracks = ep.audioTracks;
+    let nextSubtitleTracks = (ep as any).subtitleTracks;
     if (playerState.anime.source === "animesalt" && String(ep.link || "").startsWith("animesalt://")) {
       const epSlug = String(ep.link).replace("animesalt://", "");
       try {
@@ -2758,6 +2770,7 @@ const Index = () => {
           nextSrc = directState.src;
           qOpts = directState.qualityOptions || [];
           nextAudioTracks = directState.audioTracks;
+          nextSubtitleTracks = directState.subtitleTracks;
         } else {
           const resolved = resolveSaltEmbed(epResult);
           const embedServers = resolved.allEmbeds.filter(Boolean);
@@ -2777,6 +2790,7 @@ const Index = () => {
       epIdx: 0,
       resumeTime: 0,
       audioTracks: nextAudioTracks,
+      subtitleTracks: nextSubtitleTracks,
       qualityOptions: qOpts.length > 0 ? qOpts : undefined,
       nextEpisodeSrc: undefined,
     };
@@ -3168,6 +3182,7 @@ const Index = () => {
           onClose={hardCloseToHome}
           qualityOptions={playerState.qualityOptions}
           audioTracks={playerState.audioTracks}
+          subtitleTracks={playerState.subtitleTracks}
           animeId={playerState.anime.id}
           initialSeekTime={typeof playerState.resumeTime === "number" ? playerState.resumeTime : undefined}
           currentEpisodeIdx={playerState.epIdx}

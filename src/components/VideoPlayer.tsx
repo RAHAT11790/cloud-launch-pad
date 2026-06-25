@@ -2192,19 +2192,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const switchHlsSubtitle = useCallback((idx: number) => {
     const hls = hlsRef.current;
+    const meta = hlsSubtitleMetaRef.current.find((track) => track.id === idx);
     subtitleSwitchingUntilRef.current = Date.now() + 1600;
     setSubtitleOverlayText("");
     setSubtitleStatusTone(idx >= 0 ? "neutral" : "success");
     setSubtitleStatusMessage(idx >= 0 ? "Loading subtitles..." : "Subtitles turned off.");
     if (hls) {
-      hls.subtitleDisplay = idx >= 0;
-      hls.subtitleTrack = idx;
-    } else if (hls && idx >= 0) {
-      try { hls.subtitleDisplay = false; hls.subtitleTrack = -1; } catch {}
-    }
-    const meta = hlsSubtitleMetaRef.current.find((track) => track.id === idx);
-    if (hls && meta?.external) {
-      try { hls.subtitleDisplay = false; hls.subtitleTrack = -1; } catch {}
+      if (idx >= 0 && !meta?.external) {
+        hls.subtitleDisplay = true;
+        hls.subtitleTrack = idx;
+      } else {
+        try { hls.subtitleDisplay = false; hls.subtitleTrack = -1; } catch {}
+      }
     }
     setCurrentHlsSubtitle(idx);
     setIsBuffering(false);
