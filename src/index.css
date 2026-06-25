@@ -328,7 +328,7 @@ div[style*="z-index: 2147483647"],
     background: #ffffff;
     border-radius: 2px;
     opacity: 1;
-    filter: drop-shadow(0 0 3px hsl(0 0% 0% / 0.75));
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.85));
     animation: anSpinnerFade 1s linear infinite;
   }
   .player-loader-petal:nth-child(1)  { transform: rotate(0deg);   animation-delay: -1.000s; }
