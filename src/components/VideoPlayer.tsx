@@ -88,35 +88,11 @@ const isBypassSource = (url: string): boolean => {
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
 };
 
-const isManagedServerSource = (url: string): boolean => {
-  try {
-    const host = new URL(url).hostname.toLowerCase();
-    return host.includes("onrender.com") || host.includes("hf.space") || host.includes("bot-hosting.net");
-  } catch {
-    return false;
-  }
-};
-
 const VIDEO_MIRROR_ORIGINS = [
   "https://rahat1102-video-hosting-bot.hf.space",
   "http://fi3.bot-hosting.net:22854",
   "https://rs-stream-bot-1.onrender.com",
 ];
-
-const buildManagedMirrorSources = (rawUrl: string): string[] => {
-  try {
-    const parsed = new URL(rawUrl);
-    const host = parsed.host.toLowerCase();
-    if (!isManagedServerSource(rawUrl)) return [];
-    return VIDEO_MIRROR_ORIGINS
-      .filter((origin) => {
-        try { return new URL(origin).host.toLowerCase() !== host; } catch { return false; }
-      })
-      .map((origin) => `${origin}${parsed.pathname}${parsed.search}${parsed.hash}`);
-  } catch {
-    return [];
-  }
-};
 
 const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
   try {
@@ -184,11 +160,10 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     // If no proxy is configured, we have to fallback to the original URL but it will likely fail.
     if (candidates.length === 0) addCandidate(url);
   } else {
-    // HTTPS source — direct first for speed, then proxy fallback for hosts that
-    // block browser playback/CORS/hotlinking (Render, Hugging Face, etc.).
+    // HTTPS source — strict direct playback only. Never route one HTTPS video
+    // server through another proxy/server; if Render is down, HuggingFace/other
+    // HTTPS servers must still play independently in the video tag.
     addCandidate(url);
-    if (customProxyCandidate) addCandidate(customProxyCandidate);
-    if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
   }
 
   return candidates;
@@ -463,7 +438,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => unsub();
   }, []);
 
-  const isRawHlsSource = useMemo(() => /\.m3u8(\?|#|$)/i.test(String(src || "")), [src]);
+  const isRawHlsSource = useMemo(() => /\.m3u8(\?|#|$)/i.test(String(src || "")) || isDataHlsUrl(src), [src]);
 
   const effectiveVideoServers = useMemo(() => {
     if (noServerSwitch || isRawHlsSource) return [];
@@ -623,29 +598,39 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       maybeReady();
     });
 
-    // Live TV uses a dedicated proxy (settings/liveTvProxy). Fall back to the
-    // normal proxy (settings/proxyServer) when no Live TV proxy is configured.
-    const proxyPath = preferProxy ? "settings/liveTvProxy" : "settings/proxyServer";
-    const unsub2 = onValue(ref(db, proxyPath), (snap) => {
-      const val = snap.val();
+    // HTTP video playback uses settings/videoProxy/url first. HTTPS servers do
+    // not use this proxy; they play direct in the video tag.
+    const proxyPath = preferProxy ? "settings/liveTvProxy" : "settings/videoProxy";
+    const applyProxyConfig = (val: any) => {
+      if (typeof val === "string" && val.trim()) {
+        setProxyUrl(val.trim());
+        setProxyApiKey('');
+        return true;
+      }
       if (val && val.url) {
         setProxyUrl(String(val.url));
         setProxyApiKey(String(val.apiKey || ''));
-      } else if (preferProxy) {
-        // No Live TV proxy set — fall back to the regular proxy so playback still works.
-        get(ref(db, "settings/proxyServer")).then((s) => {
-          const v = s.val();
-          if (v && v.url) {
-            setProxyUrl(String(v.url));
-            setProxyApiKey(String(v.apiKey || ''));
-          } else {
-            setProxyUrl('');
-            setProxyApiKey('');
-          }
-        }).catch(() => { setProxyUrl(''); setProxyApiKey(''); });
+        return true;
+      }
+      return false;
+    };
+    const loadProxyFallback = async () => {
+      const paths = preferProxy ? ["settings/videoProxy", "settings/proxyServer"] : ["settings/proxyServer"];
+      for (const path of paths) {
+        try {
+          const snap = await get(ref(db, path));
+          if (applyProxyConfig(snap.val())) return;
+        } catch {}
+      }
+      setProxyUrl('');
+      setProxyApiKey('');
+    };
+    const unsub2 = onValue(ref(db, proxyPath), (snap) => {
+      const val = snap.val();
+      if (applyProxyConfig(val)) {
+        // ready
       } else {
-        setProxyUrl('');
-        setProxyApiKey('');
+        loadProxyFallback();
       }
       gotProxy = true;
       maybeReady();
@@ -1644,10 +1629,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const resolvePlaybackSrc = useCallback((rawUrl: string) => {
     const trimmed = String(rawUrl || "").trim();
     if (!trimmed) return "";
-    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy || isManagedServerSource(trimmed));
+    return getPrimaryPlaybackSrc(trimmed, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy);
   }, [cdnEnabled, proxyUrl, proxyApiKey, preferProxy]);
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
+    if (isBypassSource(rawUrl)) return rawUrl;
     const server = effectiveVideoServers[serverIndex];
     if (!server?.domain) return rawUrl;
     const domainTrim = server.domain.trim().replace(/\/$/, "");
@@ -2224,8 +2210,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (hls && idx >= 0) {
       try { hls.audioTrack = idx; } catch {}
     }
+    const track = hlsAudioOptions[idx];
+    if (track) {
+      const label = track.label || track.language || `Audio ${idx + 1}`;
+      setCurrentAudioTrack(label);
+      setSelectedLanguageLabel(getPrimaryLanguageToken(label) || label);
+    }
     setCurrentHlsAudio(idx);
-  }, []);
+    setShowCcPanel(false);
+  }, [hlsAudioOptions]);
 
 
   // Build audio track options from props + detect native audio tracks on video load
@@ -2274,6 +2267,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const savedTime = v.currentTime;
     const wasPlaying = !v.paused;
 
+    // AN/HLS streams expose audio renditions inside the same HLS master. For
+    // those, switch the hls.js audioTrack directly instead of rebuilding the
+    // media URL; this makes the control-panel Audio button respond instantly.
+    if (hlsRef.current && hlsAudioOptions.length > 0) {
+      const normalize = (value?: string) => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
+      const wanted = normalize(track.label || track.language);
+      const wantedToken = normalize(getPrimaryLanguageToken(track.label || track.language || ""));
+      const matchedIdx = hlsAudioOptions.findIndex((opt) => {
+        const optFull = normalize(opt.label || opt.language);
+        const optToken = normalize(getPrimaryLanguageToken(opt.label || opt.language || ""));
+        return !!wanted && (optFull === wanted || optToken === wanted || (!!wantedToken && optToken === wantedToken));
+      });
+      if (matchedIdx >= 0) {
+        try { hlsRef.current.audioTrack = matchedIdx; } catch {}
+        setCurrentHlsAudio(matchedIdx);
+        setCurrentAudioTrack(track.label);
+        setSelectedLanguageLabel(track.label || track.language || "");
+        setShowAudioPanel(false);
+        return;
+      }
+    }
+
     if (track.hlsAudioIndex !== undefined && hlsRef.current) {
       // Switch HLS.js audio rendition (preserves time + playing state automatically)
       hlsRef.current.audioTrack = track.hlsAudioIndex;
@@ -2302,6 +2317,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const finalAudioUrl = getServerScopedSource(audioUrl);
       const proxiedSrc = resolvePlaybackSrc(finalAudioUrl);
       activeSourceBaseRef.current = finalAudioUrl;
+      pendingSeek.current = savedTime;
       setCurrentSrc(proxiedSrc);
       setCurrentAudioTrack(track.label);
       setSelectedLanguageLabel(track.label || track.language || "");
@@ -2316,7 +2332,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       v.addEventListener("loadedmetadata", restoreTime);
     }
     setShowAudioPanel(false);
-  }, [currentQuality, resolvePlaybackSrc, getServerScopedSource]);
+  }, [currentQuality, hlsAudioOptions, resolvePlaybackSrc, getServerScopedSource]);
 
   const resetToDefaultAudio = useCallback(() => {
     const v = videoRef.current;
@@ -2329,6 +2345,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (audioTracks?.length) {
       for (let i = 0; i < audioTracks.length; i++) {
         audioTracks[i].enabled = i === 0;
+      }
+    }
+    if (hlsRef.current) {
+      const nativeDefaultIdx = (hlsRef.current.audioTracks || []).findIndex((track: any) => track?.default);
+      const defaultIdx = nativeDefaultIdx >= 0 ? nativeDefaultIdx : 0;
+      if ((hlsRef.current.audioTracks || []).length > 0) {
+        try { hlsRef.current.audioTrack = defaultIdx; } catch {}
+        setCurrentHlsAudio(defaultIdx);
       }
     }
 
@@ -2353,6 +2377,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
       v.addEventListener("loadedmetadata", restoreTime);
       activeSourceBaseRef.current = finalDefaultSrc;
+      pendingSeek.current = savedTime;
       setCurrentSrc(finalResolvedSrc);
     }
 
@@ -2800,7 +2825,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           cdnEnabled,
           proxyUrl || undefined,
           proxyApiKey || undefined,
-          preferProxy || isManagedServerSource(activeSourceBaseRef.current)
+          preferProxy
         ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
 
         if (sameQualityRouteFallback) {
@@ -2811,14 +2836,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
         const nextOption = availableQualities.find((q) => {
           const candidateRaw = getServerScopedSource(q.src);
-          const candidateSrc = getPrimaryPlaybackSrc(candidateRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy || isManagedServerSource(candidateRaw));
+          const candidateSrc = getPrimaryPlaybackSrc(candidateRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy);
           return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
         });
 
         if (nextOption) {
           pendingSeek.current = lastKnownTime || v?.currentTime || 0;
           const nextRaw = getServerScopedSource(nextOption.src);
-          const newFallbackSrc = getPrimaryPlaybackSrc(nextRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy || isManagedServerSource(nextRaw));
+          const newFallbackSrc = getPrimaryPlaybackSrc(nextRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy);
           activeSourceBaseRef.current = nextRaw;
           if (newFallbackSrc === currentSrc) {
             v.currentTime = pendingSeek.current;
@@ -3803,8 +3828,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     </div>
                   </div>
                 </div>
-                <div className="flex justify-between items-center gap-3 flex-nowrap">
-                  <div className="flex items-center gap-2 shrink-0 min-w-0">
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
                     <span
                       ref={timeDisplayRef}
                       className="text-[12px] font-bold whitespace-nowrap tabular-nums leading-none text-white"
@@ -3816,8 +3842,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     }} className="w-7 h-7 flex items-center justify-center shrink-0 rounded-full ring-1 ring-white/25 bg-white/10 active:scale-90 transition-transform" aria-label="Toggle mute">
                       {muted || boostedVolume <= 0 ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                     </button>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                        <Settings className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                        {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 justify-end flex-nowrap min-w-0 overflow-x-auto scrollbar-hide pb-0.5">
+                  <div className="flex w-full items-center gap-1.5 flex-nowrap min-w-0 overflow-x-auto scrollbar-hide pb-0.5 pr-1">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -3880,12 +3915,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         Next <ChevronRight className="w-3 h-3" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
-                      <Settings className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
-                      {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
-                    </button>
                   </div>
                 </div>
               </div>
