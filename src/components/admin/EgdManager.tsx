@@ -204,7 +204,8 @@ export default function EgdManager({
   useEffect(() => {
     let cancelled = false;
     setLovableKeyLoading(true);
-    supabase.functions.invoke("get-lovable-key").then(({ data, error }) => {
+    const adminPin = (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("rs_admin_pin") : "") || "";
+    supabase.functions.invoke("get-lovable-key", { headers: adminPin ? { "x-admin-pin": adminPin } : {} }).then(({ data, error }) => {
       if (cancelled) return;
       if (!error) {
         const k = (data as any)?.key as string | undefined;

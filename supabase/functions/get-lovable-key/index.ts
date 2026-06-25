@@ -1,26 +1,25 @@
 // Returns the project's LOVABLE_API_KEY for admin tooling that needs to embed
-// it in deployed EGD functions. Requires a Supabase service-role JWT in the
-// Authorization header so only privileged callers (admin panel using service
-// role) can retrieve the value.
+// it in deployed EGD functions. Gated by the ADMIN_PIN secret — callers must
+// pass `x-admin-pin: <pin>` after authenticating against verify-admin-pin.
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
-function requireServiceRole(req: Request): { ok: boolean; reason?: string } {
-  const auth = req.headers.get("authorization") || "";
-  const token = auth.replace(/^Bearer\s+/i, "").trim();
-  if (!token) return { ok: false, reason: "missing-bearer" };
-  const expected = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "").trim();
-  if (!expected) return { ok: false, reason: "service-role-not-configured" };
-  if (token.length !== expected.length) return { ok: false, reason: "invalid" };
+const ADMIN_HEADERS = "authorization, x-client-info, apikey, content-type, x-admin-pin";
+
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
   let diff = 0;
-  for (let i = 0; i < token.length; i++) diff |= token.charCodeAt(i) ^ expected.charCodeAt(i);
-  return diff === 0 ? { ok: true } : { ok: false, reason: "invalid" };
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 Deno.serve((req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  const gate = requireServiceRole(req);
-  if (!gate.ok) {
-    return new Response(JSON.stringify({ ok: false, error: "unauthorized", reason: gate.reason }), {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: { ...corsHeaders, "Access-Control-Allow-Headers": ADMIN_HEADERS } });
+  }
+  const supplied = (req.headers.get("x-admin-pin") || "").trim();
+  const expected = (Deno.env.get("ADMIN_PIN") || "").trim();
+  if (!expected || !supplied || !timingSafeEqual(supplied, expected)) {
+    return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
