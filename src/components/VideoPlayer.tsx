@@ -2909,89 +2909,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const next = prev + 1;
       retryAttemptsRef.current.set(errSrc, next);
       if (next > MAX_RETRIES) {
-        console.log('Video failed after retries. URL:', currentSrc);
-        failedSrcsRef.current.add(currentSrc);
-        const sameQualityRouteFallback = buildPlaybackCandidates(
-          activeSourceBaseRef.current,
-          cdnEnabled,
-          proxyUrl || undefined,
-          proxyApiKey || undefined,
-          preferProxy
-        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
-
-        if (sameQualityRouteFallback) {
-          pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          setCurrentSrc(sameQualityRouteFallback);
-          return;
-        }
-
-        // Try EVERY configured quality on the CURRENT admin server first.
-        // Previously we could mark a server/link expired after only one quality
-        // failed, even when 480p/720p/1080p alternatives were still valid.
-        const nextQualityRoute = availableQualities
-          .map((q) => {
-            const candidateRaw = getServerScopedSource(q.src);
-            const route = buildPlaybackCandidates(
-              candidateRaw,
-              cdnEnabled,
-              proxyUrl || undefined,
-              proxyApiKey || undefined,
-              preferProxy
-            ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
-            return route ? { option: q, raw: candidateRaw, src: route } : null;
-          })
-          .find(Boolean) as { option: QualityOption; raw: string; src: string } | null;
-
-        if (nextQualityRoute) {
-          pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          sourceBaseRef.current = nextQualityRoute.option.src;
-          activeSourceBaseRef.current = nextQualityRoute.raw;
-          setCurrentSrc(nextQualityRoute.src);
-          // Keep an explicit user quality sticky; when on Auto, show the quality
-          // label we actually fell back to so the UI matches the loaded source.
-          if (currentQuality === "Auto") setCurrentQuality(nextQualityRoute.option.label);
-          return;
-        }
-
-        const nextOption = availableQualities.find((q) => {
-          const candidateRaw = getServerScopedSource(q.src);
-          const candidateSrc = getPrimaryPlaybackSrc(candidateRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy);
-          return !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc;
-        });
-
-        if (nextOption) {
-          pendingSeek.current = lastKnownTime || v?.currentTime || 0;
-          const nextRaw = getServerScopedSource(nextOption.src);
-          const newFallbackSrc = getPrimaryPlaybackSrc(nextRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy);
-          activeSourceBaseRef.current = nextRaw;
-          if (newFallbackSrc === currentSrc) {
-            v.currentTime = pendingSeek.current;
-            pendingSeek.current = null;
-            v.load();
-          } else {
-            setCurrentSrc(newFallbackSrc);
-          }
-          // Keep the user-chosen quality label sticky on fallback. Only update
-          // label if the user was on "Auto" (i.e. no explicit selection).
-          if (currentQuality === "Auto") setCurrentQuality(nextOption.label);
-        } else {
-          // ===== AUTO SERVER FAILOVER =====
-          // All quality/route fallbacks exhausted — try another *admin-defined*
-          // server. Mark the failed server, then skip locked/already-failed ones.
-          if (effectiveVideoServers.length > 1) {
-            failedSrcsRef.current.add(`__server_failover_${activeServerIndex}`);
-            const nextServerIdx = Array.from({ length: effectiveVideoServers.length - 1 }, (_, offset) => (activeServerIndex + offset + 1) % effectiveVideoServers.length)
-              .find((idx) => {
-                const srv = effectiveVideoServers[idx];
-                return !!srv && (!srv.locked || isPremium) && !failedSrcsRef.current.has(`__server_failover_${idx}`);
-              });
-            if (typeof nextServerIdx === "number") {
-              switchServer(nextServerIdx, false);
-              return;
-            }
-          }
-          setVideoError(true);
-        }
+        tryNextPlaybackRoute(lastKnownTime || v?.currentTime || 0);
         return;
       }
       console.log(`Video error, retry ${next}/${MAX_RETRIES}...`);
@@ -3053,12 +2971,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setIsBuffering(false);
     };
     let stalledTimer: ReturnType<typeof setTimeout> | null = null;
+    let hardStallTimer: ReturnType<typeof setTimeout> | null = null;
     const onStalled = () => {
       if (subtitleSwitchingUntilRef.current > Date.now()) return;
       if (stalledTimer) clearTimeout(stalledTimer);
       stalledTimer = setTimeout(() => {
         if (v.readyState < 3) setIsBuffering(true);
       }, 1500);
+      if (hardStallTimer) clearTimeout(hardStallTimer);
+      hardStallTimer = setTimeout(() => {
+        if (v.readyState < 2 && !v.paused) {
+          tryNextPlaybackRoute(lastKnownTime || v.currentTime || 0);
+        }
+      }, 7500);
     };
     const onTimeUpdate = () => {
       const ct = v.currentTime;
@@ -3103,6 +3028,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => {
       cancelAnimationFrame(rafId.current);
       if (stalledTimer) clearTimeout(stalledTimer);
+      if (hardStallTimer) clearTimeout(hardStallTimer);
       v.removeEventListener("loadedmetadata", onLoaded);
       v.removeEventListener("timeupdate", onTimeUpdate);
       v.removeEventListener("durationchange", onDurationChange);
@@ -3121,7 +3047,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [applyPendingSeek, currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex, getServerScopedSource, proxyApiKey, preferProxy, isPremium]);
+  }, [applyPendingSeek, currentSrc, adGateActive, playbackRouteReady, tryNextPlaybackRoute]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
