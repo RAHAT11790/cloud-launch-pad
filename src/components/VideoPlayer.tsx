@@ -3772,65 +3772,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       <Subtitles className="w-3.5 h-3.5" />
                       <span className="text-[11px] font-semibold">CC</span>
                     </button>
-                    {showCcPanel && (
-                      <div data-player-panel="true" className={`absolute top-9 right-0 ${panelBaseClass} w-[210px] max-w-[82vw] max-h-[min(75dvh,360px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
-                        <div className="flex gap-1 mb-2">
-                          <button onClick={() => setCcTab("audio")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Languages className="w-3 h-3" /> Audio</button>
-                          <button onClick={() => setCcTab("subtitle")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "subtitle" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Subtitles className="w-3 h-3" /> Subtitle</button>
-                        </div>
-                        {ccTab === "audio" ? (
-                          <div className="space-y-0.5">
-                            {hlsAudioOptions.length === 0 ? <p className="text-[10px] text-muted-foreground text-center py-3">No audio tracks in stream</p> : hlsAudioOptions.map((track, i) => (
-                              <button key={i} onClick={() => switchHlsAudio(i)} className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${currentHlsAudio === i ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}><span className="truncate flex-1 min-w-0">{track.label || track.language || `Audio ${i + 1}`}</span>{currentHlsAudio === i && <Check className="w-3 h-3 shrink-0" />}</button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            <button onClick={() => switchHlsSubtitle(-1)} className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between ${currentHlsSubtitle < 0 ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}><span>Off</span>{currentHlsSubtitle < 0 && <Check className="w-3 h-3" />}</button>
-                            {hlsSubtitleOptions.length === 0 ? <p className="text-[10px] text-muted-foreground text-center py-2">No subtitles in stream</p> : hlsSubtitleOptions.map((st) => (
-                              <button key={st.id} onClick={() => switchHlsSubtitle(st.id)} className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${currentHlsSubtitle === st.id ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}><span className="truncate flex-1 min-w-0">{st.label || st.language || `Subtitle ${st.id + 1}`}</span>{currentHlsSubtitle === st.id && <Check className="w-3 h-3 shrink-0" />}</button>
-                            ))}
-                            <div className="mt-2 space-y-2 rounded-lg bg-foreground/10 px-2 py-2">
-                              <div>
-                                <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
-                                  <span>Caption size</span>
-                                  <span>{captionFontScale.toFixed(1)}x</span>
-                                </div>
-                                <input
-                                  type="range"
-                                  min={0.8}
-                                  max={1.8}
-                                  step={0.1}
-                                  value={captionFontScale}
-                                  onChange={(e) => setCaptionFontScale(Number(e.target.value))}
-                                  className="w-full accent-primary"
-                                />
-                              </div>
-                              <div>
-                                <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
-                                  <span>Caption position</span>
-                                  <span>{captionVerticalOffset}%</span>
-                                </div>
-                                <input
-                                  type="range"
-                                  min={4}
-                                  max={28}
-                                  step={1}
-                                  value={captionVerticalOffset}
-                                  onChange={(e) => setCaptionVerticalOffset(Number(e.target.value))}
-                                  className="w-full accent-primary"
-                                />
-                              </div>
-                            </div>
-                            {!!subtitleStatusMessage && (
-                              <div className={`mt-1 rounded-lg px-2 py-1.5 text-[10px] leading-relaxed ${subtitleStatusTone === "warning" ? "bg-destructive/15 text-destructive" : subtitleStatusTone === "success" ? "bg-primary/15 text-primary" : "bg-foreground/10 text-muted-foreground"}`}>
-                                {subtitleStatusMessage}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )}
                 <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-[30px] h-[30px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
@@ -3972,6 +3913,54 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   </button>
                 );
               })}
+            </div>
+          )}
+
+          {!isEmbedPlayback && showCcPanel && isHlsSrc && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
+            <div
+              data-player-panel="true"
+              className={`absolute bottom-16 right-3 ${panelBaseClass} w-[230px] max-w-[88vw] max-h-[min(72dvh,360px)] z-[95]`}
+              style={panelBaseStyle}
+              onClick={stopPanelPointerPropagation}
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+              onTouchStart={keepPanelScrollActive}
+              onTouchMove={keepPanelScrollActive}
+              onTouchEnd={stopPanelPointerPropagation}
+              onScroll={keepPanelScrollActive}
+              onWheel={stopPanelWheelPropagation}
+            >
+              <div className="flex gap-1 mb-2">
+                <button onClick={() => setCcTab("audio")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "audio" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Languages className="w-3 h-3" /> Audio</button>
+                <button onClick={() => setCcTab("subtitle")} className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg font-semibold flex items-center justify-center gap-1 ${ccTab === "subtitle" ? "gradient-primary text-white" : "bg-foreground/10"}`}><Subtitles className="w-3 h-3" /> Subtitle</button>
+              </div>
+              {ccTab === "audio" ? (
+                <div className="space-y-0.5">
+                  {hlsAudioOptions.length === 0 ? <p className="text-[10px] text-muted-foreground text-center py-3">No audio tracks in stream</p> : hlsAudioOptions.map((track, i) => (
+                    <button key={i} onClick={() => switchHlsAudio(i)} className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${currentHlsAudio === i ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}><span className="truncate flex-1 min-w-0">{track.label || track.language || `Audio ${i + 1}`}</span>{currentHlsAudio === i && <Check className="w-3 h-3 shrink-0" />}</button>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <button onClick={() => switchHlsSubtitle(-1)} className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between ${currentHlsSubtitle < 0 ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}><span>Off</span>{currentHlsSubtitle < 0 && <Check className="w-3 h-3" />}</button>
+                  {hlsSubtitleOptions.length === 0 ? <p className="text-[10px] text-muted-foreground text-center py-2">No subtitles in stream</p> : hlsSubtitleOptions.map((st) => (
+                    <button key={st.id} onClick={() => switchHlsSubtitle(st.id)} className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] transition-all flex items-center justify-between gap-1 ${currentHlsSubtitle === st.id ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"}`}><span className="truncate flex-1 min-w-0">{st.label || st.language || `Subtitle ${st.id + 1}`}</span>{currentHlsSubtitle === st.id && <Check className="w-3 h-3 shrink-0" />}</button>
+                  ))}
+                  <div className="mt-2 space-y-2 rounded-lg bg-foreground/10 px-2 py-2">
+                    <div>
+                      <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground"><span>Caption size</span><span>{captionFontScale.toFixed(1)}x</span></div>
+                      <input type="range" min={0.8} max={1.8} step={0.1} value={captionFontScale} onChange={(e) => setCaptionFontScale(Number(e.target.value))} className="w-full accent-primary" />
+                    </div>
+                    <div>
+                      <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground"><span>Caption position</span><span>{captionVerticalOffset}%</span></div>
+                      <input type="range" min={4} max={28} step={1} value={captionVerticalOffset} onChange={(e) => setCaptionVerticalOffset(Number(e.target.value))} className="w-full accent-primary" />
+                    </div>
+                  </div>
+                  {!!subtitleStatusMessage && (
+                    <div className={`mt-1 rounded-lg px-2 py-1.5 text-[10px] leading-relaxed ${subtitleStatusTone === "warning" ? "bg-destructive/15 text-destructive" : subtitleStatusTone === "success" ? "bg-primary/15 text-primary" : "bg-foreground/10 text-muted-foreground"}`}>{subtitleStatusMessage}</div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
