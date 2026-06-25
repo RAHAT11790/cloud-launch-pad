@@ -3240,6 +3240,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
     if (locked) return;
 
+    if (showServerPanel || showQualityPanel || showAudioPanel || showCcPanel || showSettings) {
+      setShowServerPanel(false);
+      setShowQualityPanel(false);
+      setShowAudioPanel(false);
+      setShowCcPanel(false);
+      setShowSettings(false);
+      return;
+    }
+
     const now = Date.now();
     const clientX = "touches" in e ? e.changedTouches[0].clientX : e.clientX;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -3267,7 +3276,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         singleTapTimerRef.current = null;
       }, 210);
     }
-  }, [locked, seek, togglePlay, playing, toggleControls]);
+  }, [locked, seek, showAudioPanel, showCcPanel, showQualityPanel, showServerPanel, showSettings, togglePlay, playing, toggleControls]);
 
   const clearSpeedHoldTimer = useCallback(() => {
     if (speedHoldTimerRef.current) {
