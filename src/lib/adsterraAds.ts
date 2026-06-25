@@ -41,6 +41,8 @@ declare global {
     __adsterraLastPopAt?: number;
     __adsterraOpenWrapped?: boolean;
     __adsterraNextKind?: "streamLink" | "popunder";
+    __adsterraOpenOriginal?: typeof window.open;
+    __adsterraPendingPopunderUrl?: string;
 
   }
 }
@@ -242,6 +244,7 @@ function installPopunderThrottle() {
   window.__adsterraOpenWrapped = true;
   const origOpen = window.open?.bind(window);
   if (!origOpen) return;
+  window.__adsterraOpenOriginal = origOpen as typeof window.open;
   window.open = function (url?: string | URL, target?: string, features?: string): Window | null {
     try {
       const urlStr = String(url ?? "");
@@ -265,6 +268,20 @@ function installPopunderThrottle() {
     } catch {}
     return origOpen(url as any, target as any, features as any);
   } as typeof window.open;
+}
+
+function triggerPopunderUrl(url: string) {
+  if (typeof window === "undefined") return;
+  const clean = String(url || "").trim();
+  if (!clean) return;
+  try {
+    const now = Date.now();
+    const last = window.__adsterraLastPopAt ?? 0;
+    if (now - last < POPUNDER_MIN_GAP_MS) return;
+    window.__adsterraLastPopAt = now;
+    const opener = window.__adsterraOpenOriginal || window.open;
+    opener?.(clean, "_blank", "noopener,noreferrer");
+  } catch {}
 }
 
 function startObserver() {
@@ -327,14 +344,7 @@ function injectSnippet(snippet: string, container: HTMLElement) {
   if (!trimmed) return [] as Promise<void>[];
 
   if (/^https?:\/\//i.test(trimmed) && !trimmed.includes("<")) {
-    const a = document.createElement("a");
-    a.href = trimmed;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    a.dataset.adsterraOwned = "true";
-    a.style.cssText = "position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;top:-9999px";
-    container.appendChild(a);
-    try { a.click(); } catch {}
+    triggerPopunderUrl(trimmed);
     return [] as Promise<void>[];
   }
 
@@ -399,6 +409,32 @@ function pickAdKind(cfg: AdsterraConfig): "streamLink" | "popunder" | null {
   return next;
 }
 
+function extractDirectUrl(snippet: string) {
+  const trimmed = String(snippet || "").trim();
+  if (/^https?:\/\//i.test(trimmed) && !trimmed.includes("<")) return trimmed;
+  const match = trimmed.match(/https?:\/\/[^'"\s<>]+/i);
+  return match?.[0] || "";
+}
+
+function prewarmPopunderForNextGesture(cfg: AdsterraConfig) {
+  if (typeof window === "undefined") return;
+  if (!cfg.popunder.trim()) return;
+  window.__adsterraPendingPopunderUrl = extractDirectUrl(cfg.popunder);
+}
+
+function installPopunderGestureBridge() {
+  if (typeof window === "undefined") return;
+  const handler = () => {
+    const url = window.__adsterraPendingPopunderUrl;
+    if (!url) return;
+    window.__adsterraPendingPopunderUrl = undefined;
+    triggerPopunderUrl(url);
+  };
+  window.addEventListener("pointerup", handler, { capture: true, passive: true });
+  window.addEventListener("touchend", handler, { capture: true, passive: true });
+  window.addEventListener("click", handler, { capture: true, passive: true });
+}
+
 async function injectOnce(cfg: AdsterraConfig) {
   if (typeof window === "undefined") return;
   if (!window.__adsterraPlayerScopeActive) return;
@@ -417,6 +453,8 @@ async function injectOnce(cfg: AdsterraConfig) {
 
   const kind = pickAdKind(cfg);
   if (!kind) return;
+
+  if (kind === "popunder") prewarmPopunderForNextGesture(cfg);
 
   const pending: Promise<void>[] = [];
   pending.push(...injectSnippet(kind === "streamLink" ? cfg.streamLink : cfg.popunder, container));
@@ -459,6 +497,7 @@ export function enterAdsterraPlayerScope() {
   if (typeof window === "undefined") return;
   window.__adsterraPlayerScopeActive = true;
   installPopunderThrottle();
+  installPopunderGestureBridge();
 
 }
 
@@ -480,6 +519,7 @@ export function exitAdsterraPlayerScope() {
   window.__adsterraMountPromise = null;
   window.__adsterraLastConfigJson = undefined;
   window.__adsterraNextKind = undefined;
+  window.__adsterraPendingPopunderUrl = undefined;
 }
 
 export async function loadAdsterraSlots(): Promise<void> {
