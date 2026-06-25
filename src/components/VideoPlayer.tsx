@@ -3887,27 +3887,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         >
                           <span className="truncate">🎧 {currentAudioTrack === "Default" ? "Audio" : currentAudioTrack}</span>
                         </button>
-                        {showAudioPanel && (
-                          <div data-player-panel="true" className={`absolute bottom-10 right-0 ${panelBaseClass} w-[190px] max-w-[78vw] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
-                            <p className="text-[10px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
-                            <button onClick={resetToDefaultAudio}
-                              className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition-all flex items-center justify-between ${
-                                currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                              }`}>
-                              <span>Default</span>
-                              {currentAudioTrack === "Default" && <Check className="w-3 h-3" />}
-                            </button>
-                            {audioTrackOptions.map((track, idx) => (
-                              <button key={idx} onClick={() => switchAudioTrack(track)}
-                                className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition-all flex items-center justify-between gap-1 ${
-                                  currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                                }`}>
-                                <span className="truncate flex-1 min-w-0">{track.label}</span>
-                                {currentAudioTrack === track.label && <Check className="w-3 h-3 shrink-0" />}
-                              </button>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     )}
                     {onNextEpisode && (
@@ -3968,6 +3947,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   </button>
                 );
               })}
+            </div>
+          )}
+
+          {!isEmbedPlayback && showAudioPanel && audioTrackOptions.length > 0 && (
+            <div data-player-panel="true" className={`absolute bottom-16 right-3 ${panelBaseClass} w-[190px] max-w-[82vw] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
+              <p className="text-[10px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Audio Track</p>
+              <button onClick={resetToDefaultAudio}
+                className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition-all flex items-center justify-between ${
+                  currentAudioTrack === "Default" ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                }`}>
+                <span>Default</span>
+                {currentAudioTrack === "Default" && <Check className="w-3 h-3" />}
+              </button>
+              {audioTrackOptions.map((track, idx) => (
+                <button key={idx} onClick={() => switchAudioTrack(track)}
+                  className={`w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition-all flex items-center justify-between gap-1 ${
+                    currentAudioTrack === track.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                  }`}>
+                  <span className="truncate flex-1 min-w-0">{track.label}</span>
+                  {currentAudioTrack === track.label && <Check className="w-3 h-3 shrink-0" />}
+                </button>
+              ))}
             </div>
           )}
 
