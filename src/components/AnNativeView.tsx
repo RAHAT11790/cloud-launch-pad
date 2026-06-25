@@ -530,6 +530,36 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
                 </div>
               )}
             </div>
+            </div>
+          )}
+          {subs.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowS((v) => !v); setShowQ(false); setShowA(false); }}
+                className="h-7 inline-flex items-center gap-1 px-2.5 rounded-lg bg-black/75 backdrop-blur-md border border-white/15 text-white text-[12px] font-semibold hover:bg-black/90 active:scale-95 transition-all shadow-lg"
+              >
+                <Captions className="w-3 h-3" /> {sIdx >= 0 ? (subs[sIdx]?.name || "CC") : "CC"}
+              </button>
+              {showS && (
+                <div onClick={(e) => e.stopPropagation()} className="absolute bottom-full mb-1.5 left-0 bg-black/95 backdrop-blur-md rounded-xl border border-white/10 overflow-hidden min-w-[140px] shadow-2xl max-h-[40vh] overflow-y-auto">
+                  <button
+                    onClick={() => changeSub(-1)}
+                    className={`block w-full text-left px-3 py-2 text-[12px] hover:bg-white/10 ${sIdx === -1 ? "text-primary font-semibold" : "text-white"}`}
+                  >
+                    Off
+                  </button>
+                  {subs.map((s, i) => (
+                    <button
+                      key={i}
+                      onClick={() => changeSub(i)}
+                      className={`block w-full text-left px-3 py-2 text-[12px] hover:bg-white/10 ${i === sIdx ? "text-primary font-semibold" : "text-white"}`}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
