@@ -451,7 +451,8 @@ async function verifyKeyboard(user_id: number, returnPayload = "") {
 
   let finalUrl = callbackUrl;
   try {
-    const vplinkKey = Deno.env.get("VPLINK_API_KEY") || "ab26a97a3a3540c5be2ce837bd97526f8e76043d";
+    const vplinkKey = Deno.env.get("VPLINK_API_KEY") || "";
+    if (!vplinkKey) { console.warn("[vplink] VPLINK_API_KEY not configured; skipping shortening"); return { inline_keyboard: [[{ text: `🎁 ᴠᴇʀɪғʏ ᴀᴄᴄᴇꜱꜱ (${hours}ʜ)`, url: callbackUrl }]] }; }
     const apiUrl = `https://vplink.in/api?api=${encodeURIComponent(vplinkKey)}&url=${encodeURIComponent(callbackUrl)}`;
     const r = await fetch(apiUrl);
     const j = await r.json().catch(() => ({}));
