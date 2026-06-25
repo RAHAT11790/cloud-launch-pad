@@ -481,6 +481,31 @@ async function hlsProxy(req: Request, target: string, proxyPrefix: string): Prom
   return new Response(upstream.body, { status: upstream.status, headers: baseHeaders });
 }
 
+// ---------- SUBTITLE PROXY (SRT→VTT conversion, always WebVTT out) ----------
+function srtToVtt(srt: string): string {
+  // Convert "00:00:01,000" → "00:00:01.000" and prepend WEBVTT header.
+  const body = srt
+    .replace(/\r+/g, "")
+    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
+  return "WEBVTT\n\n" + body.trim() + "\n";
+}
+
+async function subsProxy(target: string): Promise<Response> {
+  const upstream = await fetch(target, { headers: { "User-Agent": UA } });
+  if (!upstream.ok) {
+    return new Response(`upstream ${upstream.status}`, { status: upstream.status, headers: cors });
+  }
+  let text = await upstream.text();
+  const lower = target.toLowerCase();
+  const looksSrt = lower.endsWith(".srt") || /-->/.test(text) && !/^WEBVTT/i.test(text.trim());
+  if (looksSrt) text = srtToVtt(text);
+  else if (!/^WEBVTT/i.test(text.trim())) text = "WEBVTT\n\n" + text.trim() + "\n";
+  return new Response(text, {
+    status: 200,
+    headers: { ...cors, "Content-Type": "text/vtt; charset=utf-8", "Cache-Control": "public, max-age=3600" },
+  });
+}
+
 // ---------- ROUTER ----------
 // Domain allowlist — block third-party scrapers/embeds.
 const _ALLOWED_HOST_RX = [
