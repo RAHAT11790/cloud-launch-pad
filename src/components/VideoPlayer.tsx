@@ -2865,7 +2865,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         // server before trying random qualities on the same dead domain. The
         // URL path/query/hash stay identical; only the selected server domain
         // changes inside switchServer().
-        if (effectiveVideoServers.length > 1) {
+        if (!manualServerSelectedRef.current && effectiveVideoServers.length > 1) {
           failedSrcsRef.current.add(`__server_failover_${activeServerIndex}`);
           const nextServerIdx = Array.from({ length: effectiveVideoServers.length - 1 }, (_, offset) => (activeServerIndex + offset + 1) % effectiveVideoServers.length)
             .find((idx) => {
@@ -2903,7 +2903,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           // ===== AUTO SERVER FAILOVER =====
           // All quality/route fallbacks exhausted — try another *admin-defined*
           // server. Mark the failed server, then skip locked/already-failed ones.
-          if (effectiveVideoServers.length > 1) {
+          if (!manualServerSelectedRef.current && effectiveVideoServers.length > 1) {
             failedSrcsRef.current.add(`__server_failover_${activeServerIndex}`);
             const nextServerIdx = Array.from({ length: effectiveVideoServers.length - 1 }, (_, offset) => (activeServerIndex + offset + 1) % effectiveVideoServers.length)
               .find((idx) => {
