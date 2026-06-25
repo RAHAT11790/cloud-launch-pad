@@ -11793,7 +11793,7 @@ const AnimeSaltManagerSection = ({
  })}
   <div>
   <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Subtitle / CC (VTT or SRT)</span>
-  <textarea value={(ep as any).subtitleTracks?.[0]?.url || ""} onChange={e => updateSeriesEpisodeSubtitle(sIdx, eIdx, e.target.value)}
+  <textarea value={(ep as any).subtitleTracks?.[0]?.url || ""} onChange={e => epUpdateEpisodeField(sIdx, eIdx, 'subtitleTracks', e.target.value.trim() ? [{ label: 'Default', language: '', url: e.target.value.trim() }] : [])}
   className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder="Subtitle URL (optional)" rows={2} />
   </div>
  </div>
