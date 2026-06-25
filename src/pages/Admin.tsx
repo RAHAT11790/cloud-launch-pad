@@ -2636,22 +2636,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  return () => unsub();
  }, []);
 
- // Load PIN from Firebase
+ // PIN is verified server-side via the verify-admin-pin edge function
+ // (PIN is stored only as the ADMIN_PIN Lovable Cloud secret, never in
+ // Firebase RTDB which is world-readable to authenticated users).
  useEffect(() => {
- const unsub = onValue(ref(db, "admin/pin"), (snap) => {
- const data = snap.val();
- if (data && data.enabled && data.code) {
  setPinExists(true);
- setCurrentPin(data.code);
- } else {
- setPinExists(false);
  setCurrentPin("");
- }
- });
- return () => unsub();
  }, []);
 
- // Auto-verify stored admin session against current PIN or Google
+ // Auto-verify stored admin session timestamp (PIN re-verification happens
+ // on each login submit — the session cookie just tracks expiry).
  useEffect(() => {
  if (isAuthenticated) {
  try {
@@ -2662,12 +2656,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  setIsAuthenticated(false);
  localStorage.removeItem("rs_admin_session");
  localStorage.removeItem("rs_admin_google");
+ sessionStorage.removeItem("rs_admin_pin");
  return;
- }
- // If PIN session, verify PIN still matches
- if (parsed.pin && currentPin && parsed.pin !== currentPin) {
- setIsAuthenticated(false);
- localStorage.removeItem("rs_admin_session");
  }
  }
  } catch {
@@ -2675,7 +2665,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  localStorage.removeItem("rs_admin_session");
  }
  }
- }, [currentPin]);
+ }, [isAuthenticated]);
 
  // Load saved Telegram channel
  useEffect(() => {
@@ -4315,53 +4305,49 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  };
 
  // ==================== AUTH HANDLERS ====================
-  const handlePinLogin = async () => {
-  if (!loginPinInput) { toast.error("Enter PIN"); return; }
-  // Block check (device/IP) — owner-emails not relevant for PIN flow.
-  const blk = await isBlocked(null);
-  if (blk.blocked) {
-    await logAdminAccess({ method: "pin", success: false, reason: "blocked: " + (blk.reason || "") });
-    toast.error("Access denied: " + (blk.reason || "blocked"));
-    setLoginPinInput("");
-    return;
-  }
-  if (loginPinInput === currentPin) {
-  setIsAuthenticated(true);
-  try {
-  localStorage.setItem("rs_admin_session", JSON.stringify({ pin: currentPin, ts: Date.now() }));
-  } catch {}
-  logAdminAccess({ method: "pin", success: true });
-  toast.success("Login successful!");
-  setLoginPinInput("");
-  } else {
-  logAdminAccess({ method: "pin", success: false, reason: "wrong-pin" });
-  toast.error("Wrong PIN");
-  setLoginPinInput("");
-  }
-  };
+   const handlePinLogin = async () => {
+   if (!loginPinInput) { toast.error("Enter PIN"); return; }
+   const blk = await isBlocked(null);
+   if (blk.blocked) {
+     await logAdminAccess({ method: "pin", success: false, reason: "blocked: " + (blk.reason || "") });
+     toast.error("Access denied: " + (blk.reason || "blocked"));
+     setLoginPinInput("");
+     return;
+   }
+   try {
+     const { data, error } = await supabase.functions.invoke("verify-admin-pin", { body: { pin: loginPinInput } });
+     if (error || !(data as any)?.ok) {
+       logAdminAccess({ method: "pin", success: false, reason: "wrong-pin" });
+       toast.error("Wrong PIN");
+       setLoginPinInput("");
+       return;
+     }
+     setIsAuthenticated(true);
+     try {
+       sessionStorage.setItem("rs_admin_pin", loginPinInput);
+       localStorage.setItem("rs_admin_session", JSON.stringify({ method: "pin", ts: Date.now() }));
+     } catch {}
+     logAdminAccess({ method: "pin", success: true });
+     toast.success("Login successful!");
+     setLoginPinInput("");
+   } catch (e: any) {
+     logAdminAccess({ method: "pin", success: false, reason: "verify-error" });
+     toast.error("PIN verification failed");
+     setLoginPinInput("");
+   }
+   };
 
  const handleCreatePin = () => {
- if (createPinInput.length < 4) { toast.error("PIN must be at least 4 digits"); return; }
- if (createPinInput !== createPinConfirm) { toast.error("PINs don't match"); return; }
- set(ref(db, "admin/pin"), { enabled: true, code: createPinInput })
- .then(() => { 
- toast.success("PIN created! Please login now."); 
- setCreatePinInput(""); 
- setCreatePinConfirm(""); 
- });
+ toast.info("PIN is now managed via the ADMIN_PIN Lovable Cloud secret. Update it in project settings.");
  };
 
  const handleSetPin = () => {
- if (newPinInput.length < 4) { toast.error("PIN must be at least 4 digits"); return; }
- set(ref(db, "admin/pin"), { enabled: true, code: newPinInput })
- .then(() => { toast.success("PIN set!"); setNewPinInput(""); setShowPinSetup(false); });
+ toast.info("PIN is now managed via the ADMIN_PIN Lovable Cloud secret. Update it in project settings.");
+ setShowPinSetup(false);
  };
 
  const handleDisablePin = () => {
- if (confirm("Disable PIN security?")) {
- set(ref(db, "admin/pin"), { enabled: false, code: "" })
- .then(() => { toast.success("PIN disabled"); });
- }
+ toast.info("PIN is enforced via the ADMIN_PIN secret and cannot be disabled from the UI.");
  };
 
  const handleLogout = () => {
