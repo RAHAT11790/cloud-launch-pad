@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.an-api]
 verify_jwt = false
+
+[functions.verify-admin-pin]
+verify_jwt = false
