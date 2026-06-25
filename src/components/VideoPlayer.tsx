@@ -2811,6 +2811,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           return;
         }
 
+        // If this admin-defined server is dead, move to another configured
+        // server before trying random qualities on the same dead domain. The
+        // URL path/query/hash stay identical; only the selected server domain
+        // changes inside switchServer().
+        if (effectiveVideoServers.length > 1) {
+          failedSrcsRef.current.add(`__server_failover_${activeServerIndex}`);
+          const nextServerIdx = Array.from({ length: effectiveVideoServers.length - 1 }, (_, offset) => (activeServerIndex + offset + 1) % effectiveVideoServers.length)
+            .find((idx) => {
+              const srv = effectiveVideoServers[idx];
+              return !!srv && (!srv.locked || isPremium) && !failedSrcsRef.current.has(`__server_failover_${idx}`);
+            });
+          if (typeof nextServerIdx === "number") {
+            switchServer(nextServerIdx, false);
+            return;
+          }
+        }
+
         const nextOption = availableQualities.find((q) => {
           const candidateRaw = getServerScopedSource(q.src);
           const candidateSrc = getPrimaryPlaybackSrc(candidateRaw, cdnEnabled, proxyUrl || undefined, proxyApiKey || undefined, preferProxy);
