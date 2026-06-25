@@ -533,16 +533,86 @@ function srtToVtt(srt: string): string {
   return "WEBVTT\n\n" + body.trim() + "\n";
 }
 
-async function subsProxy(target: string): Promise<Response> {
+function isVttLike(text: string) {
+  return /^WEBVTT\b/i.test(text.trim()) || /\d{2}:\d{2}:\d{2}[,.]\d{3}\s+-->\s+\d{2}:\d{2}:\d{2}[,.]\d{3}/.test(text);
+}
+
+function timestampToSeconds(raw: string): number {
+  const parts = raw.trim().replace(",", ".").split(":").map(Number);
+  if (parts.some((part) => Number.isNaN(part))) return Number.NaN;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return Number.NaN;
+}
+
+function secondsToTimestamp(seconds: number): string {
+  const safe = Math.max(0, seconds || 0);
+  const hh = Math.floor(safe / 3600).toString().padStart(2, "0");
+  const mm = Math.floor((safe % 3600) / 60).toString().padStart(2, "0");
+  const ss = Math.floor(safe % 60).toString().padStart(2, "0");
+  const ms = Math.round((safe - Math.floor(safe)) * 1000).toString().padStart(3, "0");
+  return `${hh}:${mm}:${ss}.${ms}`;
+}
+
+function stripVttHeader(text: string) {
+  return text
+    .replace(/\r+/g, "")
+    .replace(/^WEBVTT[^\n]*(?:\n+NOTE[^\n]*(?:\n(?!\d{2}:)[^\n]*)*)?/i, "")
+    .trim();
+}
+
+function offsetVttCues(text: string, offset: number): string {
+  const body = stripVttHeader(text);
+  if (!offset) return body;
+  return body.replace(
+    /(\d{2}:\d{2}:\d{2}[,.]\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}[,.]\d{3})([^\n]*)/g,
+    (_m, start, end, rest) => {
+      const s = timestampToSeconds(start);
+      const e = timestampToSeconds(end);
+      if (!Number.isFinite(s) || !Number.isFinite(e)) return _m;
+      return `${secondsToTimestamp(s + offset)} --> ${secondsToTimestamp(e + offset)}${rest || ""}`;
+    },
+  );
+}
+
+async function subtitleToVtt(target: string, depth = 0): Promise<string> {
+  if (depth > 4) throw new Error("subtitle nesting too deep");
   const upstream = await fetch(target, { headers: { "User-Agent": UA } });
-  if (!upstream.ok) {
-    return new Response(`upstream ${upstream.status}`, { status: upstream.status, headers: cors });
+  if (!upstream.ok) throw new Error(`upstream ${upstream.status}`);
+  const text = await upstream.text();
+  const trimmed = text.replace(/\r/g, "").trim();
+
+  if (/^#EXTM3U\b/i.test(trimmed)) {
+    const lines = trimmed.split("\n").map((line) => line.trim()).filter(Boolean);
+    let nextDuration = 0;
+    let offset = 0;
+    const parts: string[] = [];
+    for (const line of lines) {
+      if (line.startsWith("#EXTINF:")) {
+        nextDuration = Number.parseFloat(line.slice(8).split(",")[0] || "0") || 0;
+        continue;
+      }
+      if (line.startsWith("#")) continue;
+      const segmentUrl = resolveUrl(line, target);
+      const segmentVtt = await subtitleToVtt(segmentUrl, depth + 1);
+      parts.push(offsetVttCues(segmentVtt, offset));
+      offset += nextDuration;
+      nextDuration = 0;
+    }
+    return "WEBVTT\n\n" + parts.filter(Boolean).join("\n\n").trim() + "\n";
   }
-  let text = await upstream.text();
-  const lower = target.toLowerCase();
-  const looksSrt = lower.endsWith(".srt") || /-->/.test(text) && !/^WEBVTT/i.test(text.trim());
-  if (looksSrt) text = srtToVtt(text);
-  else if (!/^WEBVTT/i.test(text.trim())) text = "WEBVTT\n\n" + text.trim() + "\n";
+
+  if (isVttLike(trimmed)) return /^WEBVTT\b/i.test(trimmed) ? trimmed + "\n" : srtToVtt(trimmed);
+  return "WEBVTT\n\n" + trimmed + "\n";
+}
+
+async function subsProxy(target: string): Promise<Response> {
+  let text: string;
+  try {
+    text = await subtitleToVtt(target);
+  } catch (e) {
+    return new Response((e as Error).message || "subtitle upstream failed", { status: 502, headers: cors });
+  }
   return new Response(text, {
     status: 200,
     headers: { ...cors, "Content-Type": "text/vtt; charset=utf-8", "Cache-Control": "public, max-age=3600" },
