@@ -543,15 +543,29 @@ function rewriteM3U8(text: string, baseUrl: string, proxyPrefix: string): string
 
 async function hlsProxy(req: Request, target: string, proxyPrefix: string): Promise<Response> {
   const range = req.headers.get("range") || undefined;
-  // NOTE: AN's CDN returns 500 if Referer/Origin are set on segment requests.
-  // The CDN serves all variant playlists + segments fine without any
-  // identifying headers, so we send a minimal request.
-  const upstream = await fetch(target, {
-    headers: {
+  const commonHeaders: Record<string, string> = {
       "User-Agent": UA,
+      Accept: "application/vnd.apple.mpegurl,video/*,*/*",
+      "Accept-Language": "en-US,en;q=0.9",
       ...(range ? { Range: range } : {}),
-    },
-  });
+  };
+  const targetUrl = new URL(target);
+  const origin = `${targetUrl.protocol}//${targetUrl.host}`;
+  const attempts: Record<string, string>[] = [
+    commonHeaders,
+    { ...commonHeaders, Referer: origin + "/", Origin: origin },
+  ];
+
+  let upstream: Response | null = null;
+  for (const headers of attempts) {
+    const res = await fetch(target, { headers });
+    if (res.ok || res.status === 206 || res.status === 304) { upstream = res; break; }
+    try { await res.body?.cancel(); } catch {}
+  }
+
+  if (!upstream) {
+    return new Response("AN upstream fetch failed", { status: 502, headers: cors });
+  }
 
   const ct = (upstream.headers.get("content-type") || "").toLowerCase();
   const looksM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(\?|$)/i.test(target);
