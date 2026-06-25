@@ -3629,16 +3629,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               >
               {/* Top controls */}
               <div className="flex justify-between items-start gap-1.5 px-3 pt-3">
-                <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button h-[39px] w-[39px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
+                <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button h-[37px] w-[37px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
                   <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div className="flex max-w-[calc(100%-52px)] items-center justify-end gap-1.5 overflow-x-auto scrollbar-hide pb-1">
-                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-[35px] px-[11px] rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0">
+                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-[33px] px-[10px] rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0">
                   <Crop className="w-4 h-4" />
                   <span className="text-[12px] font-semibold">{cropLabels[cropIndex]}</span>
                 </button>
                 {isHlsSrc ? (
-                    <button className="player-touch-button h-[35px] px-[11px] rounded-full flex items-center justify-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button className="player-touch-button h-[33px] px-[10px] rounded-full flex items-center justify-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <Server className="w-4 h-4" />
                     <span className="text-[12px] font-semibold">HLS</span>
                   </button>
@@ -3646,7 +3646,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   <div className="relative">
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowServerPanel((p) => !p); setShowQualityPanel(false); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); }}
-                      className={`player-touch-button h-[35px] px-[11px] rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0 ${manualServerSelected ? 'ring-1 ring-primary bg-primary/25' : ''}`}
+                      className={`player-touch-button h-[33px] px-[10px] rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0 ${manualServerSelected ? 'ring-1 ring-primary bg-primary/25' : ''}`}
                     >
                       <Server className="w-4 h-4" />
                       <span className="text-[12px] font-semibold whitespace-nowrap max-w-[88px] truncate">{effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`}</span>
@@ -3657,7 +3657,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   <div className="relative">
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowCcPanel((p) => !p); setCcTab(currentHlsSubtitle >= 0 ? "subtitle" : "audio"); setShowAudioPanel(false); setShowQualityPanel(false); setShowSettings(false); }}
-                      className={`player-touch-button h-[35px] px-[11px] rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
+                      className={`player-touch-button h-[33px] px-[10px] rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
                     >
                       <Subtitles className="w-4 h-4" />
                       <span className="text-[12px] font-semibold">CC</span>
@@ -3723,7 +3723,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     )}
                   </div>
                 )}
-                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-[35px] h-[35px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-[33px] h-[33px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                   <Lock className="w-4 h-4" />
                 </button>
                 </div>
@@ -3731,13 +3731,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
               {/* Center play */}
               <div className="flex items-center justify-center gap-10">
-                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-[53px] h-[53px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-[51px] h-[51px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <SkipBack className="w-7 h-7" />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95" style={{ width: 68, height: 68 }}>
+                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95" style={{ width: 66, height: 66 }}>
                   {playing ? <Pause className="w-9 h-9" fill="currentColor" /> : <Play className="w-9 h-9 ml-0.5" fill="currentColor" />}
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-[53px] h-[53px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-[51px] h-[51px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <SkipForward className="w-7 h-7" />
                 </button>
               </div>
@@ -3769,7 +3769,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     <button onClick={(e) => {
                       e.stopPropagation();
                       applyPlayerVolume(boostedVolume, !muted);
-                    }} className="w-[31px] h-[31px] flex items-center justify-center shrink-0">
+                    }} className="w-[29px] h-[29px] flex items-center justify-center shrink-0">
                       {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
                   </div>
@@ -3836,10 +3836,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         Next <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-[35px] h-[35px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-[33px] h-[33px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       <Settings className="w-4 h-4" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-[35px] h-[35px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-[33px] h-[33px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
                     </button>
                   </div>
