@@ -493,16 +493,16 @@ div[style*="z-index: 2147483647"],
   }
 
   @keyframes skipYoutubePopLeft {
-    0%   { opacity: 0; }
-    20%  { opacity: 1; }
-    70%  { opacity: 1; }
-    100% { opacity: 0; }
+    0%   { opacity: 0; transform: translateX(-6px) scale(0.96); }
+    25%  { opacity: 1; transform: translateX(0) scale(1); }
+    75%  { opacity: 1; transform: translateX(0) scale(1); }
+    100% { opacity: 0; transform: translateX(-4px) scale(0.98); }
   }
   @keyframes skipYoutubePopRight {
-    0%   { opacity: 0; }
-    20%  { opacity: 1; }
-    70%  { opacity: 1; }
-    100% { opacity: 0; }
+    0%   { opacity: 0; transform: translateX(6px) scale(0.96); }
+    25%  { opacity: 1; transform: translateX(0) scale(1); }
+    75%  { opacity: 1; transform: translateX(0) scale(1); }
+    100% { opacity: 0; transform: translateX(4px) scale(0.98); }
   }
 
   /* Swipe-up fullscreen — compact YouTube-like push/lift response */
