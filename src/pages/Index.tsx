@@ -3403,7 +3403,34 @@ const Index = () => {
         )}
       </AnimatePresence>
 
-      {/* Big fullscreen loader removed — small top notification loader handles AN card transitions. */}
+      <AnimatePresence>
+        {detailsLoadingAnime && !playerState && !saltPlayerState && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          >
+            {detailsLoadingAnime.poster && (
+              <img
+                src={optimizedImageUrl(detailsLoadingAnime.poster, "poster")}
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 w-full h-full object-cover opacity-20 blur-xl scale-110"
+              />
+            )}
+            <div className="relative flex flex-col items-center gap-3 px-6 text-center">
+              <div className="player-loader-shell" aria-hidden="true">
+                {Array.from({ length: 12 }).map((_, i) => <span key={i} className="player-loader-petal" />)}
+              </div>
+              <p className="text-sm font-semibold text-white/90 line-clamp-2 max-w-[260px]">
+                Loading <span className="text-primary">{detailsLoadingAnime.title}</span>…
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* On-demand login overlay (no more login wall on first visit) */}
       {showLogin && (
