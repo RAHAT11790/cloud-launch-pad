@@ -849,6 +849,7 @@ const Index = () => {
   const [activeCategory, setActiveCategory] = useState("All");
   const [dubFilter, setDubFilter] = useState<"all" | "official" | "fandub">("all");
   const [selectedAnime, setSelectedAnime] = useState<AnimeItem | null>(null);
+  const [detailsLoadingAnime, setDetailsLoadingAnime] = useState<AnimeItem | null>(null);
   const [customPostDetail, setCustomPostDetail] = useState<{ title: string; backdrop: string; description: string } | null>(null);
   const [pendingAnimeId, setPendingAnimeId] = useState<string | null>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1107,6 +1108,7 @@ const Index = () => {
 
   useEffect(() => {
     if (playerState || saltPlayerState) {
+      setDetailsLoadingAnime(null);
       dismissDetailsLoadingToast();
     }
   }, [playerState, saltPlayerState, dismissDetailsLoadingToast]);
@@ -1650,9 +1652,14 @@ const Index = () => {
 
     // AnimeSalt source
     if (anime.source === "animesalt" && anime.slug) {
+      if (!switchingInPlayer) setDetailsLoadingAnime(anime);
       const cachedDetails = detailsCacheRef.current.get(anime.id);
       if (cachedDetails) {
-        await openPlayerFromAnime(cachedDetails, { seasonIdx: sIdx, epIdx: eIdx });
+        try {
+          await openPlayerFromAnime(cachedDetails, { seasonIdx: sIdx, epIdx: eIdx });
+        } finally {
+          if (!switchingInPlayer) setDetailsLoadingAnime(null);
+        }
         return;
       }
 
@@ -1889,6 +1896,7 @@ const Index = () => {
         }
       } finally {
         if (!switchingInPlayer && detailsLoadingToastRef.current === toastId) dismissDetailsLoadingToast();
+        if (!switchingInPlayer && requestId === detailsRequestRef.current) setDetailsLoadingAnime(null);
       }
       return;
     }
