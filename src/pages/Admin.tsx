@@ -5003,8 +5003,12 @@ ${tgBulkFooter}
   </div>
     );
   })()}
+  </div>
+  </div>
+  );
+  }
 
- return (
+  return (
  <div className="min-h-screen bg-[#0D0D1A] text-white font-['Poppins',sans-serif]">
  {/* Fetching Overlay */}
  {fetchingOverlay && (
