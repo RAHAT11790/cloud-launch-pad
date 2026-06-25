@@ -346,7 +346,7 @@ div[style*="z-index: 2147483647"],
 
   @keyframes anSpinnerFade {
     0%   { opacity: 1; }
-    100% { opacity: 0.30; }
+    100% { opacity: 0.35; }
   }
 
   /* Keep petalSpin keyframe for any other consumer */
