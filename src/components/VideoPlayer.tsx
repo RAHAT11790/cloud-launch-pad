@@ -392,6 +392,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [locked, setLocked] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [speedHoldActive, setSpeedHoldActive] = useState(false);
+  const speedHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speedHoldPointerRef = useRef<number | null>(null);
+  const speedHoldActiveRef = useRef(false);
+  const previousSpeedRef = useRef(1);
+  const suppressNextClickRef = useRef(false);
   const [showSettings, setShowSettings] = useState(false);
   const [skipIndicator, setSkipIndicator] = useState<{ side: "left" | "right" | "center"; text: string; total?: number } | null>(null);
   const skipAccumRef = useRef<{ side: "left" | "right" | null; total: number; timer: ReturnType<typeof setTimeout> | null }>({ side: null, total: 0, timer: null });
@@ -1987,6 +1993,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return target instanceof HTMLElement && !!target.closest("[data-player-panel='true']");
   }, []);
 
+  const isPlayerInteractiveTarget = useCallback((target: EventTarget | null) => {
+    return target instanceof HTMLElement && !!target.closest("[data-player-panel='true'],button,a,input,select,textarea,[role='button']");
+  }, []);
+
   useEffect(() => {
     if (!isHlsSrc || currentHlsSubtitle < 0) {
       clearSubtitlePolling();
@@ -3119,16 +3129,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     } catch (e) { console.log('Fullscreen not supported'); }
   }, []);
 
-  const setSpeed = useCallback((rate: number) => {
+  const applyPlaybackRateNow = useCallback((rate: number) => {
     if (isEmbedPlayback) {
       sendEmbedCmd("rate", { rate });
     } else if (videoRef.current) {
       videoRef.current.playbackRate = rate;
     }
     setPlaybackRate(rate);
+  }, [isEmbedPlayback, resetHideTimer, sendEmbedCmd]);
+
+  const setSpeed = useCallback((rate: number) => {
+    applyPlaybackRateNow(rate);
     setShowSettings(false);
     resetHideTimer();
-  }, [isEmbedPlayback, resetHideTimer, sendEmbedCmd]);
+  }, [applyPlaybackRateNow, resetHideTimer]);
 
 
   const switchQuality = useCallback((option: QualityOption) => {
@@ -3218,6 +3232,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, []);
 
   const handleVideoClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (suppressNextClickRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      suppressNextClickRef.current = false;
+      return;
+    }
     if (locked) return;
 
     const now = Date.now();
@@ -3249,15 +3269,58 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
   }, [locked, seek, togglePlay, playing, toggleControls]);
 
+  const clearSpeedHoldTimer = useCallback(() => {
+    if (speedHoldTimerRef.current) {
+      clearTimeout(speedHoldTimerRef.current);
+      speedHoldTimerRef.current = null;
+    }
+  }, []);
+
+  const startSpeedHold = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (locked || isPlayerInteractiveTarget(e.target)) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const relX = (e.clientX - rect.left) / rect.width;
+    const relY = (e.clientY - rect.top) / rect.height;
+    if (relX < 0.28 || relX > 0.72 || relY > 0.82) return;
+    speedHoldPointerRef.current = e.pointerId;
+    clearSpeedHoldTimer();
+    speedHoldTimerRef.current = setTimeout(() => {
+      previousSpeedRef.current = playbackRate || 1;
+      speedHoldActiveRef.current = true;
+      setSpeedHoldActive(true);
+      applyPlaybackRateNow(2);
+      setShowControls(false);
+    }, 320);
+  }, [applyPlaybackRateNow, clearSpeedHoldTimer, isPlayerInteractiveTarget, locked, playbackRate]);
+
+  const endSpeedHold = useCallback((e?: React.PointerEvent<HTMLDivElement>) => {
+    if (e && speedHoldPointerRef.current !== null && e.pointerId !== speedHoldPointerRef.current) return;
+    speedHoldPointerRef.current = null;
+    clearSpeedHoldTimer();
+    if (!speedHoldActiveRef.current) return;
+    speedHoldActiveRef.current = false;
+    setSpeedHoldActive(false);
+    applyPlaybackRateNow(previousSpeedRef.current || 1);
+    suppressNextClickRef.current = true;
+    window.setTimeout(() => { suppressNextClickRef.current = false; }, 260);
+    resetHideTimer();
+  }, [applyPlaybackRateNow, clearSpeedHoldTimer, resetHideTimer]);
+
+  useEffect(() => () => {
+    clearSpeedHoldTimer();
+    if (speedHoldActiveRef.current) applyPlaybackRateNow(previousSpeedRef.current || 1);
+  }, [applyPlaybackRateNow, clearSpeedHoldTimer]);
+
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (isPlayerPanelTarget(e.target)) return;
+    if (isPlayerInteractiveTarget(e.target)) return;
     const t = e.touches[0];
     setSwipeState({ startX: t.clientX, startY: t.clientY, type: null });
-  }, [isPlayerPanelTarget]);
+  }, [isPlayerInteractiveTarget]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (isPlayerPanelTarget(e.target)) return;
+    if (isPlayerInteractiveTarget(e.target)) return;
     if (!swipeState || locked) return;
     const t = e.touches[0];
     const dy = t.clientY - swipeState.startY;
@@ -3275,12 +3338,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setBrightness(newBr);
       setSwipeState({ ...swipeState, startY: t.clientY });
     }
-  }, [swipeState, locked, brightness, boostedVolume, muted, applyPlayerVolume, isPlayerPanelTarget]);
+  }, [swipeState, locked, brightness, boostedVolume, muted, applyPlayerVolume, isPlayerInteractiveTarget]);
 
   const handleTouchEnd = useCallback((e?: React.TouchEvent) => {
-    if (e && isPlayerPanelTarget(e.target)) return;
+    if (e && isPlayerInteractiveTarget(e.target)) return;
     setSwipeState(null);
-  }, [isPlayerPanelTarget]);
+  }, [isPlayerInteractiveTarget]);
   const stopPanelPointerPropagation = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.stopPropagation();
   }, []);
@@ -3293,7 +3356,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     e.stopPropagation();
   }, []);
 
-  const panelBaseClass = "player-glass rounded-xl p-2 z-[60] overflow-y-auto overscroll-contain touch-pan-y [scrollbar-width:thin]";
+  const panelBaseClass = "player-menu-panel rounded-xl p-2 z-[80] overflow-y-auto overscroll-contain touch-pan-y [scrollbar-width:thin]";
   const panelBaseStyle = { WebkitOverflowScrolling: "touch" as const, overscrollBehavior: "contain" as const, touchAction: "pan-y" as const };
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -3323,6 +3386,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           style={{ filter: `brightness(${brightness})`, margin: isFullscreen ? 0 : undefined }}
           onContextMenu={(e) => e.preventDefault()}
           onClick={handleVideoClick}
+          onPointerDown={startSpeedHold}
+          onPointerUp={endSpeedHold}
+          onPointerCancel={endSpeedHold}
+          onPointerLeave={endSpeedHold}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -3435,13 +3502,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             ) : (
               <div
                 key={skipIndicator.side + skipIndicator.text}
-                className={`absolute top-1/2 -translate-y-1/2 skip-pill ${skipIndicator.side === "left" ? "left-[8%]" : "right-[8%]"}`}
+                className={`absolute top-1/2 -translate-y-1/2 skip-youtube ${skipIndicator.side === "left" ? "left-[11%] skip-youtube--left" : "right-[11%] skip-youtube--right"}`}
                 aria-hidden="true"
               >
-                {skipIndicator.side === "left" ? <Rewind className="w-6 h-6" /> : <FastForward className="w-6 h-6" />}
-                <span className="skip-pill__num">{skipIndicator.text}</span>
+                <div className="skip-youtube__arrows">{skipIndicator.side === "left" ? "‹‹" : "››"}</div>
+                <div className="skip-youtube__time">{skipIndicator.text}</div>
               </div>
             )
+          )}
+
+          {speedHoldActive && (
+            <div className="player-speed-hold-hud" aria-hidden="true">
+              <FastForward className="w-4 h-4" />
+              <span>2x</span>
+            </div>
           )}
 
           {/* Auto Next Episode Overlay */}
@@ -3539,22 +3613,21 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
           {/* Controls Overlay - smooth fade in/out (RS direct video only) */}
           {!locked && !isEmbedPlayback && (
-            <div
-              className={`absolute inset-0 flex flex-col justify-between text-white transition-opacity duration-300 ease-out ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-              style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.7) 70%)" }}
-            >
+              <div
+                className={`absolute inset-0 flex flex-col justify-between text-white transition-opacity duration-300 ease-out ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+              >
               {/* Top controls */}
               <div className="flex justify-between items-start gap-1.5 px-3 pt-3">
-                <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button h-10 w-10 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
+                <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button h-[39px] w-[39px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
                   <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div className="flex max-w-[calc(100%-52px)] items-center justify-end gap-1.5 overflow-x-auto scrollbar-hide pb-1">
-                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-9 px-3 rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0">
+                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-[35px] px-[11px] rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0">
                   <Crop className="w-4 h-4" />
                   <span className="text-[12px] font-semibold">{cropLabels[cropIndex]}</span>
                 </button>
                 {isHlsSrc ? (
-                  <button className="player-touch-button h-9 px-3 rounded-full flex items-center justify-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button className="player-touch-button h-[35px] px-[11px] rounded-full flex items-center justify-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <Server className="w-4 h-4" />
                     <span className="text-[12px] font-semibold">HLS</span>
                   </button>
@@ -3562,43 +3635,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   <div className="relative">
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowServerPanel((p) => !p); setShowQualityPanel(false); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); }}
-                      className={`player-touch-button h-9 px-3 rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0 ${manualServerSelected ? 'ring-1 ring-primary bg-primary/25' : ''}`}
+                      className={`player-touch-button h-[35px] px-[11px] rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0 ${manualServerSelected ? 'ring-1 ring-primary bg-primary/25' : ''}`}
                     >
                       <Server className="w-4 h-4" />
                       <span className="text-[12px] font-semibold whitespace-nowrap max-w-[88px] truncate">{effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`}</span>
                     </button>
-                    {showServerPanel && (
-                      <div data-player-panel="true" className={`absolute top-9 right-0 ${panelBaseClass} min-w-[150px] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
-                        <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
-                        {effectiveVideoServers.map((srv, idx) => {
-                          const isLocked = srv.locked && !isPremium;
-                          const isActive = activeServerIndex === idx;
-                          return (
-                            <button
-                              key={`${srv.name || "server"}-${idx}`}
-                              onClick={() => { if (!isLocked) { switchServer(idx); } }}
-                              disabled={isLocked}
-                              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-1 ${
-                                isActive ? "gradient-primary font-bold text-white" : isLocked ? "opacity-45 cursor-not-allowed" : "hover:bg-foreground/10"
-                              }`}
-                            >
-                              <span className="flex items-center gap-1.5">
-                                {srv.locked && <Lock className="w-3 h-3 text-accent" />}
-                                {srv.name || `Server ${idx + 1}`}
-                              </span>
-                              {!isLocked && isActive && <Check className="w-3 h-3" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
                 ) : null}
                 {isHlsSrc && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
                   <div className="relative">
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowCcPanel((p) => !p); setCcTab(currentHlsSubtitle >= 0 ? "subtitle" : "audio"); setShowAudioPanel(false); setShowQualityPanel(false); setShowSettings(false); }}
-                      className={`player-touch-button h-9 px-3 rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
+                      className={`player-touch-button h-[35px] px-[11px] rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
                     >
                       <Subtitles className="w-4 h-4" />
                       <span className="text-[12px] font-semibold">CC</span>
@@ -3664,7 +3712,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     )}
                   </div>
                 )}
-                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-[35px] h-[35px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                   <Lock className="w-4 h-4" />
                 </button>
                 </div>
@@ -3672,13 +3720,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
               {/* Center play */}
               <div className="flex items-center justify-center gap-10">
-                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-14 h-14 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-[55px] h-[55px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <SkipBack className="w-7 h-7" />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary w-18 h-18 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95" style={{ width: 72, height: 72 }}>
+                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95" style={{ width: 70, height: 70 }}>
                   {playing ? <Pause className="w-9 h-9" fill="currentColor" /> : <Play className="w-9 h-9 ml-0.5" fill="currentColor" />}
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-14 h-14 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-[55px] h-[55px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <SkipForward className="w-7 h-7" />
                 </button>
               </div>
@@ -3710,7 +3758,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     <button onClick={(e) => {
                       e.stopPropagation();
                       applyPlayerVolume(boostedVolume, !muted);
-                    }} className="w-8 h-8 flex items-center justify-center shrink-0">
+                    }} className="w-[31px] h-[31px] flex items-center justify-center shrink-0">
                       {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
                   </div>
@@ -3723,7 +3771,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         const next = rates[(idx + 1) % rates.length] ?? 1;
                         setSpeed(next);
                       }}
-                      className={`text-[12px] px-2.5 py-1.5 rounded-md shrink-0 leading-none font-semibold transition-all ${playbackRate !== 1 ? "gradient-primary text-white" : "player-control-chip"}`}
+                      className={`text-[12px] px-[9px] py-1.5 rounded-md shrink-0 leading-none font-semibold transition-all ${playbackRate !== 1 ? "gradient-primary text-white" : "player-control-chip"}`}
                       aria-label="Playback speed"
                     >{playbackRate}x</button>
                     {availableQualities.length > 1 && (
@@ -3737,27 +3785,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                           {currentQuality}
                         </button>
                         {showQualityPanel && (
-                          <div data-player-panel="true" className={`absolute bottom-10 right-0 ${panelBaseClass} min-w-[130px] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
-                            <p className="text-[10px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Quality</p>
-                            {availableQualities.map((opt) => {
-                              const is4K = is4KLabel(opt.label);
-                              const locked4K = is4K && !isPremium;
-                              return (
-                                <button key={opt.label} onClick={() => { if (!locked4K) { switchQuality(opt); setShowQualityPanel(false); } }}
-                                  className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
-                                    locked4K ? "opacity-50 cursor-not-allowed" :
-                                    currentQuality === opt.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
-                                  }`}>
-                                  <span className="flex items-center gap-1.5">
-                                    {opt.label}
-                                    {locked4K && <Lock className="w-3 h-3 text-accent" />}
-                                  </span>
-                                  {locked4K && <span className="text-[8px] text-accent font-medium">Premium</span>}
-                                  {!locked4K && currentQuality === opt.label && <Check className="w-3 h-3" />}
-                                </button>
-                              );
-                            })}
-                          </div>
                         )}
                       </div>
                     )}
@@ -3800,15 +3827,65 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         Next <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-[35px] h-[35px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       <Settings className="w-4 h-4" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-[35px] h-[35px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {!isEmbedPlayback && !isHlsSrc && showServerPanel && effectiveVideoServers.length >= 1 && !noServerSwitch && (
+            <div data-player-panel="true" className={`absolute top-14 right-3 ${panelBaseClass} min-w-[152px] max-w-[86vw] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
+              <p className="text-[9px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Server</p>
+              {effectiveVideoServers.map((srv, idx) => {
+                const isLocked = srv.locked && !isPremium;
+                const isActive = activeServerIndex === idx;
+                return (
+                  <button
+                    key={`${srv.name || "server"}-${idx}`}
+                    onClick={() => { if (!isLocked) switchServer(idx); }}
+                    disabled={isLocked}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between gap-1 ${
+                      isActive ? "gradient-primary font-bold text-white" : isLocked ? "opacity-45 cursor-not-allowed" : "hover:bg-foreground/10"
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {srv.locked && <Lock className="w-3 h-3 text-accent" />}
+                      {srv.name || `Server ${idx + 1}`}
+                    </span>
+                    {!isLocked && isActive && <Check className="w-3 h-3" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {!isEmbedPlayback && showQualityPanel && availableQualities.length > 1 && (
+            <div data-player-panel="true" className={`absolute bottom-16 right-12 ${panelBaseClass} min-w-[132px] max-w-[82vw] max-h-[min(70dvh,320px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
+              <p className="text-[10px] text-muted-foreground mb-1.5 px-2 uppercase tracking-wider font-medium">Quality</p>
+              {availableQualities.map((opt) => {
+                const is4K = is4KLabel(opt.label);
+                const locked4K = is4K && !isPremium;
+                return (
+                  <button key={opt.label} onClick={() => { if (!locked4K) { switchQuality(opt); setShowQualityPanel(false); } }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all flex items-center justify-between ${
+                      locked4K ? "opacity-50 cursor-not-allowed" :
+                      currentQuality === opt.label ? "gradient-primary font-bold text-white" : "hover:bg-foreground/10"
+                    }`}>
+                    <span className="flex items-center gap-1.5">
+                      {opt.label}
+                      {locked4K && <Lock className="w-3 h-3 text-accent" />}
+                    </span>
+                    {locked4K && <span className="text-[8px] text-accent font-medium">Premium</span>}
+                    {!locked4K && currentQuality === opt.label && <Check className="w-3 h-3" />}
+                  </button>
+                );
+              })}
             </div>
           )}
 
