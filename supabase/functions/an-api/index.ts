@@ -36,6 +36,31 @@ const decode = (s: string) =>
     .replace(/<[^>]+>/g, "")
     .trim();
 
+const parseHlsAttrs = (line: string): Record<string, string> => {
+  const attrs: Record<string, string> = {};
+  const body = line.includes(":") ? line.slice(line.indexOf(":") + 1) : line;
+  const re = /([A-Z0-9-]+)=("[^"]*"|[^,]*)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body))) {
+    attrs[m[1].toUpperCase()] = String(m[2] || "").replace(/^"|"$/g, "");
+  }
+  return attrs;
+};
+
+const resolveUrl = (value: string, baseUrl: string) => {
+  try { return new URL(value, baseUrl).toString(); } catch { return value; }
+};
+
+const uniqueByUri = <T extends { uri?: string; url?: string }>(items: T[]) => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = String(item.uri || item.url || "").trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 async function fetchText(url: string, init?: RequestInit): Promise<string> {
   const res = await fetch(url, {
     ...init,
@@ -147,21 +172,24 @@ function parseMaster(masterUrl: string, body: string) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line.startsWith("#EXT-X-MEDIA") && /TYPE=AUDIO/i.test(line)) {
-      const lang = (line.match(/LANGUAGE="([^"]+)"/i) || [])[1] || "";
-      const name = (line.match(/NAME="([^"]+)"/i) || [])[1] || lang;
-      const uri = (line.match(/URI="([^"]+)"/i) || [])[1] || "";
+      const attrs = parseHlsAttrs(line);
+      const lang = attrs.LANGUAGE || "";
+      const name = attrs.NAME || lang;
+      const uri = attrs.URI || "";
       if (uri) audio.push({ language: lang, name, uri: resolve(uri) });
-    } else if (line.startsWith("#EXT-X-MEDIA") && /TYPE=SUBTITLES/i.test(line)) {
-      const lang = (line.match(/LANGUAGE="([^"]+)"/i) || [])[1] || "";
-      const name = (line.match(/NAME="([^"]+)"/i) || [])[1] || lang || "Subtitle";
-      const uri = (line.match(/URI="([^"]+)"/i) || [])[1] || "";
+    } else if (line.startsWith("#EXT-X-MEDIA") && /TYPE=(SUBTITLES|CLOSED-CAPTIONS)/i.test(line)) {
+      const attrs = parseHlsAttrs(line);
+      const lang = attrs.LANGUAGE || "";
+      const name = attrs.NAME || lang || attrs["GROUP-ID"] || "Subtitle";
+      const uri = attrs.URI || "";
       if (uri) subtitles.push({ language: lang, name, uri: resolve(uri) });
     } else if (line.startsWith("#EXT-X-STREAM-INF")) {
       const next = (lines[i + 1] || "").trim();
       if (!next || next.startsWith("#")) continue;
-      const res = (line.match(/RESOLUTION=(\d+x\d+)/i) || [])[1] || "";
-      const name = (line.match(/NAME="([^"]+)"/i) || [])[1] || "";
-      const bw = Number((line.match(/BANDWIDTH=(\d+)/i) || [])[1] || 0);
+      const attrs = parseHlsAttrs(line);
+      const res = attrs.RESOLUTION || "";
+      const name = attrs.NAME || "";
+      const bw = Number(attrs.BANDWIDTH || 0);
       const height = res ? Number(res.split("x")[1]) : 0;
       const url = resolve(next);
       const label = name || (height ? `${height}p` : "auto");
@@ -170,7 +198,34 @@ function parseMaster(masterUrl: string, body: string) {
     }
   }
   streams.sort((a, b) => b.height - a.height);
-  return { streams, audio, subtitles };
+  return { streams, audio: uniqueByUri(audio), subtitles: uniqueByUri(subtitles) };
+}
+
+function collectSubtitleCandidates(value: unknown, baseUrl: string, out: any[], depth = 0) {
+  if (!value || depth > 5) return;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectSubtitleCandidates(item, baseUrl, out, depth + 1));
+    return;
+  }
+  if (typeof value !== "object") return;
+
+  const obj = value as Record<string, any>;
+  const kind = String(obj.kind || obj.type || obj.trackType || obj.fileType || "").toLowerCase();
+  const label = String(obj.label || obj.name || obj.title || obj.language || obj.lang || obj.srclang || "Subtitle");
+  const raw = obj.file || obj.url || obj.src || obj.uri || obj.link || obj.href;
+  const rawString = typeof raw === "string" ? raw.trim() : "";
+  const looksLikeSubtitle = /sub|caption|text|vtt|srt|webvtt|ttml|dfxp/i.test(kind) || /\.(vtt|srt|webvtt|ttml|dfxp)(\?|#|$)/i.test(rawString);
+  if (rawString && looksLikeSubtitle) {
+    out.push({
+      language: obj.language || obj.srclang || obj.lang || "",
+      name: label || obj.language || obj.lang || "Subtitle",
+      uri: resolveUrl(rawString, baseUrl),
+    });
+  }
+
+  for (const key of ["captions", "caption", "subtitles", "subtitle", "tracks", "textTracks", "subs", "files", "sources"]) {
+    if (obj[key]) collectSubtitleCandidates(obj[key], baseUrl, out, depth + 1);
+  }
 }
 
 async function extractFromPlayer(embedUrl: string) {
@@ -208,22 +263,10 @@ async function extractFromPlayer(embedUrl: string) {
       parsed.error = `master fetch failed: ${(e as Error).message}`;
     }
   }
-  // Some AN player JSONs also expose top-level captions/subtitles arrays.
+  // Some AN player JSONs expose captions in top-level or nested player fields.
   const extraSubs: any[] = [];
-  const subArrays = [data.captions, data.subtitles, data.tracks, data.subs];
-  for (const arr of subArrays) {
-    if (!Array.isArray(arr)) continue;
-    for (const s of arr) {
-      const uri = s?.file || s?.url || s?.src || s?.uri;
-      if (!uri) continue;
-      extraSubs.push({
-        language: s?.language || s?.srclang || s?.lang || "",
-        name: s?.label || s?.name || s?.language || "Subtitle",
-        uri: /^https?:\/\//i.test(uri) ? uri : new URL(uri, origin).toString(),
-      });
-    }
-  }
-  const allSubs = [...(parsed.subtitles || []), ...extraSubs];
+  collectSubtitleCandidates(data, embedUrl, extraSubs);
+  const allSubs = uniqueByUri([...(parsed.subtitles || []), ...extraSubs]);
   return {
     embed: embedUrl,
     hash,

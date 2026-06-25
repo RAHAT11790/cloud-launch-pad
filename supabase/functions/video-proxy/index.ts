@@ -5,7 +5,7 @@
 //   https://<project>.supabase.co/functions/v1/video-proxy?url=<ENCODED_VIDEO_URL>
 //
 // Features:
-//  - No allowlist (universal — proxies ANY http/https video URL)
+//  - Per-request proxy only: never swaps/mirrors across admin video servers
 //  - Native Range request forwarding → instant seeking / skipping
 //  - Zero-copy streaming (passes upstream body straight to client)
 //  - Fast HEAD/GET; preserves 200/206/302 semantics
@@ -38,34 +38,6 @@ const PASSTHROUGH_RESP = [
   "cache-control",
 ];
 
-const VIDEO_MIRROR_ORIGINS = [
-  "https://rahat1102-video-hosting-bot.hf.space",
-  "http://fi3.bot-hosting.net:22854",
-  "https://rs-stream-bot-1.onrender.com",
-];
-
-const isKnownMirrorHost = (target: URL) => {
-  const host = target.host.toLowerCase();
-  return host === "rs-stream-bot-1.onrender.com" ||
-    host === "rahat1102-video-hosting-bot.hf.space" ||
-    host === "fi3.bot-hosting.net:22854";
-};
-
-const isVideoFileRequest = (target: URL): boolean => /\.(mp4|mkv|webm|mov)(\?|#|$)/i.test(target.toString());
-
-const buildUpstreamCandidates = (target: URL): URL[] => {
-  const out: URL[] = [target];
-  if (!isKnownMirrorHost(target) || !isVideoFileRequest(target)) return out;
-
-  for (const origin of VIDEO_MIRROR_ORIGINS) {
-    try {
-      const candidate = new URL(`${origin}${target.pathname}${target.search}${target.hash}`);
-      if (!out.some((u) => u.toString() === candidate.toString())) out.push(candidate);
-    } catch { /* skip bad mirror */ }
-  }
-  return out;
-};
-
 const looksLikeHlsRequest = (target: URL): boolean => /\.(m3u8|ts|m4s|mp4|aac|vtt|key)(\?|#|$)/i.test(target.toString());
 
 const rewriteM3U8 = (text: string, baseUrl: string, proxyPrefix: string): string => {
@@ -84,24 +56,6 @@ const rewriteM3U8 = (text: string, baseUrl: string, proxyPrefix: string): string
 // ============================================================
 // Domain allowlist — block embed theft / API scraping
 // ============================================================
-const ALLOWED_HOST_RX = [
-  /\.lovable\.app$/i,
-  /\.lovableproject\.com$/i,
-  /^lovable\.app$/i,
-  /^lovableproject\.com$/i,
-  /^rsanime03\.lovable\.app$/i,
-  /^localhost(?::\d+)?$/i,
-  /^127\.0\.0\.1(?::\d+)?$/i,
-];
-const hostAllowed = (urlStr: string | null): boolean => {
-  if (!urlStr) return false;
-  try {
-    const h = new URL(urlStr).host;
-    return ALLOWED_HOST_RX.some((rx) => rx.test(h));
-  } catch {
-    return false;
-  }
-};
 const ALLOWED_HOST_RX = [
   /\.lovable\.app$/i,
   /\.lovableproject\.com$/i,
@@ -206,36 +160,26 @@ Deno.serve(async (req) => {
   let upstream: Response | null = null;
   let effectiveTargetUrl = targetUrl;
   try {
-    let lastError: unknown = null;
-    for (const candidate of buildUpstreamCandidates(targetUrl)) {
-      const candidateHeaders = { ...fwd };
-      if (!looksLikeHlsRequest(candidate)) {
-        candidateHeaders.Referer = `${candidate.protocol}//${candidate.hostname}/`;
-        candidateHeaders.Origin = `${candidate.protocol}//${candidate.hostname}`;
-      } else {
-        delete candidateHeaders.Referer;
-        delete candidateHeaders.Origin;
-      }
-      try {
-        const res = await fetch(candidate.toString(), {
-          method: req.method,
-          headers: candidateHeaders,
-          redirect: "follow",
-          signal: ac.signal,
-        });
-        if (res.ok || res.status === 206 || res.status === 304) {
-          upstream = res;
-          effectiveTargetUrl = candidate;
-          lastError = null;
-          break;
-        }
-        lastError = new Error(`Upstream ${res.status}`);
-        try { await res.body?.cancel(); } catch {}
-      } catch (e) {
-        lastError = e;
-      }
+    const candidateHeaders = { ...fwd };
+    if (!looksLikeHlsRequest(targetUrl)) {
+      candidateHeaders.Referer = `${targetUrl.protocol}//${targetUrl.hostname}/`;
+      candidateHeaders.Origin = `${targetUrl.protocol}//${targetUrl.hostname}`;
+    } else {
+      delete candidateHeaders.Referer;
+      delete candidateHeaders.Origin;
     }
-    if (!upstream) throw lastError || new Error("All upstream mirrors failed");
+    const res = await fetch(targetUrl.toString(), {
+      method: req.method,
+      headers: candidateHeaders,
+      redirect: "follow",
+      signal: ac.signal,
+    });
+    if (!(res.ok || res.status === 206 || res.status === 304)) {
+      try { await res.body?.cancel(); } catch {}
+      throw new Error(`Upstream ${res.status}`);
+    }
+    upstream = res;
+    effectiveTargetUrl = targetUrl;
   } catch (e) {
     return new Response(
       `Upstream fetch failed: ${(e as Error).message}`,

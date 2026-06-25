@@ -24,6 +24,7 @@ const HLS_PROXY = `${AN_API}/hls`;
 const SUBS_PROXY = `${AN_API}/subs`;
 
 type Sub = { language: string; name: string; uri: string };
+type Cue = { start: number; end: number; text: string };
 
 type Stream = { url: string; label: string; height: number; resolution: string; bandwidth: number };
 type Audio  = { language: string; name: string; uri: string };
@@ -45,7 +46,7 @@ interface Props {
 
 const proxied = (u: string) => `${HLS_PROXY}?url=${encodeURIComponent(u)}`;
 
-function buildMaster(stream: Stream, audios: Audio[], defaultAudioIdx: number): string {
+function buildMaster(stream: Stream, audios: Audio[], defaultAudioIdx: number, subs: Sub[] = []): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audios.forEach((a, i) => {
     const isDefault = i === defaultAudioIdx;
@@ -55,8 +56,15 @@ function buildMaster(stream: Stream, audios: Audio[], defaultAudioIdx: number): 
       `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${proxied(a.uri)}"`
     );
   });
+  subs.forEach((s, i) => {
+    lines.push(
+      `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="${(s.name || `Subtitle ${i + 1}`).replace(/"/g, "")}",` +
+      `LANGUAGE="${s.language || `sub${i + 1}`}",DEFAULT=NO,AUTOSELECT=YES,FORCED=NO,URI="${SUBS_PROXY}?url=${encodeURIComponent(s.uri)}"`
+    );
+  });
   const audioRef = audios.length > 0 ? ',AUDIO="aud"' : "";
-  lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || stream.height * 5000},RESOLUTION=${stream.resolution || `${stream.height}p`}${audioRef}`);
+  const subRef = subs.length > 0 ? ',SUBTITLES="subs"' : "";
+  lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || stream.height * 5000},RESOLUTION=${stream.resolution || `${stream.height}p`}${audioRef}${subRef}`);
   lines.push(proxied(stream.url));
   const text = lines.join("\n");
   // data URL avoids needing yet another endpoint; hls.js handles it natively
@@ -90,6 +98,11 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressActiveRef = useRef(false);
   const prevRateRef = useRef(1);
+  const subtitleCuesRef = useRef<Cue[]>([]);
+  const subtitlePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const subtitleSeqRef = useRef(0);
+  const [subtitleText, setSubtitleText] = useState("");
+  const [subtitleStatus, setSubtitleStatus] = useState("");
   // Track whether we've already applied the initial resume — so quality
   // switching mid-playback keeps current position, not the original resume.
   const resumedRef = useRef(false);
@@ -133,7 +146,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     if (!video || streams.length === 0) return;
     const stream = streams[qIdx];
     if (!stream) return;
-    const master = buildMaster(stream, audios, aIdx);
+    const master = buildMaster(stream, audios, aIdx, subs);
     // First mount → use the resumeTime prop (continue-watching). After that,
     // preserve the live currentTime across quality swaps.
     const initialStart = !resumedRef.current
@@ -219,7 +232,49 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     // resumeTime intentionally NOT in deps — re-running on resume change
     // would tear down hls mid-playback. Only embed/quality/audio rebuilds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streams, qIdx, audios, aIdx, onFail]);
+  }, [streams, qIdx, audios, aIdx, subs, onFail]);
+
+  const parseVttCues = useCallback((text: string): Cue[] => {
+    const toSeconds = (raw: string) => {
+      const clean = raw.trim().replace(",", ".");
+      const parts = clean.split(":").map(Number);
+      if (parts.some(Number.isNaN)) return NaN;
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      if (parts.length === 2) return parts[0] * 60 + parts[1];
+      return NaN;
+    };
+    return text.replace(/\r/g, "").split(/\n\n+/).flatMap((block) => {
+      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
+      const timingIndex = lines.findIndex((line) => line.includes("-->"));
+      if (timingIndex < 0) return [];
+      const [startRaw, endRaw] = lines[timingIndex].split("-->").map((part) => part.trim().split(/\s+/)[0]);
+      const start = toSeconds(startRaw || "");
+      const end = toSeconds(endRaw || "");
+      const cueText = lines.slice(timingIndex + 1).join("\n")
+        .replace(/<\d{2}:\d{2}:\d{2}\.\d{3}>/g, "")
+        .replace(/<[^>]+>/g, "")
+        .trim();
+      return cueText && Number.isFinite(start) && Number.isFinite(end) ? [{ start, end, text: cueText }] : [];
+    });
+  }, []);
+
+  const syncSubtitleText = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || sIdx < 0) { setSubtitleText(""); return; }
+    const active = subtitleCuesRef.current
+      .filter((cue) => video.currentTime >= cue.start && video.currentTime <= cue.end)
+      .map((cue) => cue.text)
+      .join("\n")
+      .trim();
+    setSubtitleText(active);
+  }, [sIdx]);
+
+  const stopSubtitlePolling = useCallback(() => {
+    if (subtitlePollRef.current) {
+      clearInterval(subtitlePollRef.current);
+      subtitlePollRef.current = null;
+    }
+  }, []);
 
   // Bubble timeupdate to parent for progress persistence (continue-watching).
   useEffect(() => {
@@ -254,16 +309,47 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   }, []);
 
   // Toggle native textTracks: -1 = off, else show selected
-  const changeSub = useCallback((i: number) => {
+  const changeSub = useCallback(async (i: number) => {
+    const seq = ++subtitleSeqRef.current;
     setSIdx(i);
     setShowS(false);
+    setSubtitleText("");
+    stopSubtitlePolling();
     const v = videoRef.current;
-    if (!v) return;
-    const tracks = v.textTracks;
-    for (let k = 0; k < tracks.length; k++) {
-      tracks[k].mode = k === i ? "showing" : "disabled";
+    const hls = hlsRef.current;
+    if (hls) {
+      try { hls.subtitleDisplay = i >= 0; hls.subtitleTrack = i; } catch {}
     }
-  }, []);
+    if (v?.textTracks) {
+      const tracks = v.textTracks;
+      for (let k = 0; k < tracks.length; k++) tracks[k].mode = k === i ? "showing" : "disabled";
+    }
+    if (i < 0) {
+      subtitleCuesRef.current = [];
+      setSubtitleStatus("Subtitles off");
+      return;
+    }
+    const selected = subs[i];
+    if (!selected?.uri) {
+      setSubtitleStatus("Subtitle URL missing");
+      return;
+    }
+    try {
+      setSubtitleStatus("Loading subtitles...");
+      const res = await fetch(`${SUBS_PROXY}?url=${encodeURIComponent(selected.uri)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const cues = parseVttCues(await res.text());
+      if (seq !== subtitleSeqRef.current) return;
+      subtitleCuesRef.current = cues;
+      setSubtitleStatus(cues.length ? "Subtitles ready" : "No subtitle cues found");
+      syncSubtitleText();
+      subtitlePollRef.current = setInterval(syncSubtitleText, 250);
+    } catch {
+      if (seq !== subtitleSeqRef.current) return;
+      subtitleCuesRef.current = [];
+      setSubtitleStatus("Subtitle load failed");
+    }
+  }, [parseVttCues, stopSubtitlePolling, subs, syncSubtitleText]);
 
   const openControlsBriefly = useCallback(() => {
     setControlsOpen(true);
@@ -381,6 +467,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   useEffect(() => () => {
     if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
     if (skipTimerRef.current) clearTimeout(skipTimerRef.current);
+    if (subtitlePollRef.current) clearInterval(subtitlePollRef.current);
   }, []);
 
   return (
@@ -435,6 +522,14 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
 
       {speedBoost && <div className="player-speed-hud">2× SPEED ▶▶</div>}
 
+      {subtitleText && (
+        <div className="absolute inset-x-4 bottom-28 z-[65] pointer-events-none flex justify-center">
+          <div className="max-w-[92%] rounded-lg bg-black/70 px-3 py-1.5 text-center text-white text-[15px] font-semibold leading-snug shadow-xl whitespace-pre-line">
+            {subtitleText}
+          </div>
+        </div>
+      )}
+
       {skipHint && (
         <div
           className={`youtube-skip-burst absolute top-1/2 -translate-y-1/2 z-50 ${skipHint.side === "left" ? "left-[18%]" : "right-[18%]"}`}
@@ -486,10 +581,11 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
           share the exact same height/radius/border so the cluster looks
           aligned next to the top-bar buttons. */}
       {streams.length > 0 && (
-        <div className="absolute bottom-20 left-2 z-50 flex gap-2 pointer-events-auto">
+        <div className="absolute bottom-20 left-2 z-[70] flex gap-2 pointer-events-auto" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
           <div className="relative">
             <button
-              onClick={(e) => { e.stopPropagation(); setShowQ((v) => !v); setShowA(false); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setShowQ((v) => !v); setShowA(false); setShowS(false); }}
               className="h-7 inline-flex items-center gap-1 px-2.5 rounded-lg bg-black/75 backdrop-blur-md border border-white/15 text-white text-[12px] font-semibold hover:bg-black/90 active:scale-95 transition-all shadow-lg"
             >
               <Layers className="w-3 h-3" /> {streams[qIdx]?.label || "Auto"}
@@ -511,7 +607,8 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
           {audios.length > 0 && (
             <div className="relative">
               <button
-                onClick={(e) => { e.stopPropagation(); setShowA((v) => !v); setShowQ(false); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setShowA((v) => !v); setShowQ(false); setShowS(false); }}
                 className="h-7 inline-flex items-center gap-1 px-2.5 rounded-lg bg-black/75 backdrop-blur-md border border-white/15 text-white text-[12px] font-semibold hover:bg-black/90 active:scale-95 transition-all shadow-lg"
               >
                 <Volume2 className="w-3 h-3" /> {audios[aIdx]?.name || "Audio"}
@@ -534,6 +631,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
           {subs.length > 0 && (
             <div className="relative">
               <button
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => { e.stopPropagation(); setShowS((v) => !v); setShowQ(false); setShowA(false); }}
                 className="h-7 inline-flex items-center gap-1 px-2.5 rounded-lg bg-black/75 backdrop-blur-md border border-white/15 text-white text-[12px] font-semibold hover:bg-black/90 active:scale-95 transition-all shadow-lg"
               >
@@ -542,7 +640,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
               {showS && (
                 <div onClick={(e) => e.stopPropagation()} className="absolute bottom-full mb-1.5 left-0 bg-black/95 backdrop-blur-md rounded-xl border border-white/10 overflow-hidden min-w-[140px] shadow-2xl max-h-[40vh] overflow-y-auto">
                   <button
-                    onClick={() => changeSub(-1)}
+                    onClick={() => void changeSub(-1)}
                     className={`block w-full text-left px-3 py-2 text-[12px] hover:bg-white/10 ${sIdx === -1 ? "text-primary font-semibold" : "text-white"}`}
                   >
                     Off
@@ -550,12 +648,15 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
                   {subs.map((s, i) => (
                     <button
                       key={i}
-                      onClick={() => changeSub(i)}
+                      onClick={() => void changeSub(i)}
                       className={`block w-full text-left px-3 py-2 text-[12px] hover:bg-white/10 ${i === sIdx ? "text-primary font-semibold" : "text-white"}`}
                     >
                       {s.name}
                     </button>
                   ))}
+                  {!!subtitleStatus && (
+                    <div className="px-3 py-1.5 text-[10px] text-white/60 border-t border-white/10">{subtitleStatus}</div>
+                  )}
                 </div>
               )}
             </div>
