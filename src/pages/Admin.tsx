@@ -11245,7 +11245,7 @@ const AnimeSaltManagerSection = ({
  });
  };
 
- const epUpdateEpisodeField = (sIdx: number, eIdx: number, field: string, value: string) => {
+ const epUpdateEpisodeField = (sIdx: number, eIdx: number, field: string, value: any) => {
  setEpEditorSeasons(prev => {
  const copy = [...prev];
  const s = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
