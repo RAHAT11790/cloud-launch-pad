@@ -260,14 +260,14 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
 
   const syncSubtitleText = useCallback(() => {
     const video = videoRef.current;
-    if (!video || sIdx < 0) { setSubtitleText(""); return; }
+    if (!video || subtitleCuesRef.current.length === 0) { setSubtitleText(""); return; }
     const active = subtitleCuesRef.current
       .filter((cue) => video.currentTime >= cue.start && video.currentTime <= cue.end)
       .map((cue) => cue.text)
       .join("\n")
       .trim();
     setSubtitleText(active);
-  }, [sIdx]);
+  }, []);
 
   const stopSubtitlePolling = useCallback(() => {
     if (subtitlePollRef.current) {
@@ -581,7 +581,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
           share the exact same height/radius/border so the cluster looks
           aligned next to the top-bar buttons. */}
       {streams.length > 0 && (
-        <div className="absolute bottom-20 left-2 z-[70] flex gap-2 pointer-events-auto" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+        <div className="absolute bottom-20 left-2 z-[90] flex gap-2 pointer-events-auto" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
           <div className="relative">
             <button
                 onPointerDown={(e) => e.stopPropagation()}
