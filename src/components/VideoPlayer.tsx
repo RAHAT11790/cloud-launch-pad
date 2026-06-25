@@ -409,10 +409,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const effectiveVideoServers = useMemo(() => {
     if (noServerSwitch || isRawHlsSource) return [];
-    const list = videoServers.length > 0 ? videoServers : buildFallbackServers(src);
-    // Show ALL configured servers so the user can switch between them.
-    return list;
-  }, [isRawHlsSource, noServerSwitch, src, videoServers]);
+    // STRICT SERVER ISOLATION: only admin-configured servers are shown/used.
+    // No built-in mirror generation, so one dead server cannot contaminate the
+    // routing for the others.
+    return videoServers;
+  }, [isRawHlsSource, noServerSwitch, videoServers]);
 
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
   // The branded `req.html` page on the embed server posts video events to us
