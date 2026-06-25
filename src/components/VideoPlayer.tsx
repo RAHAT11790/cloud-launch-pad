@@ -3333,6 +3333,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!swipeState || locked) return;
     const t = e.touches[0];
     const dy = t.clientY - swipeState.startY;
+    const dx = t.clientX - swipeState.startX;
+    // Detect vertical swipe at the visual center: swipe-up → enter fullscreen,
+    // swipe-down → exit fullscreen (YouTube-style gesture).
+    if (!swipeState.type && Math.abs(dx) < 30 && Math.abs(dy) > 55) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const relX = (swipeState.startX - rect.left) / rect.width;
+      // Middle 50% triggers fullscreen swap; outer zones still control vol/brightness.
+      if (relX > 0.25 && relX < 0.75) {
+        setSwipeState({ ...swipeState, type: "fullscreen" });
+        if (dy < 0 && !isFullscreen) {
+          toggleFullscreen();
+        } else if (dy > 0 && isFullscreen) {
+          toggleFullscreen();
+        }
+        return;
+      }
+    }
     if (!swipeState.type && Math.abs(dy) > 20) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const relX = (swipeState.startX - rect.left) / rect.width;
@@ -3347,7 +3364,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setBrightness(newBr);
       setSwipeState({ ...swipeState, startY: t.clientY });
     }
-  }, [swipeState, locked, brightness, boostedVolume, muted, applyPlayerVolume, isPlayerInteractiveTarget]);
+  }, [swipeState, locked, brightness, boostedVolume, muted, applyPlayerVolume, isPlayerInteractiveTarget, isFullscreen, toggleFullscreen]);
+
 
   const handleTouchEnd = useCallback((e?: React.TouchEvent) => {
     if (e && isPlayerInteractiveTarget(e.target)) return;
