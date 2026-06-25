@@ -436,6 +436,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return videoServers;
   }, [noServerSwitch, videoServers]);
 
+  const videoServerFingerprint = useMemo(
+    () => effectiveVideoServers.map((s) => `${s.domain || ""}:${s.locked ? "1" : "0"}`).join("|"),
+    [effectiveVideoServers],
+  );
+
   // ===== EMBED IFRAME BRIDGE (Server 2 / hf.space) =====
   // The branded `req.html` page on the embed server posts video events to us
   // and accepts commands (play/pause/seek/etc). We mirror those events into
@@ -1771,8 +1776,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
 
     // Try EVERY configured quality on the current admin server before declaring
-    // the server/link expired.
-    const nextQualityRoute = availableQualities
+    // the server/link expired. Current quality is checked first, then the rest;
+    // only after every quality + proxy route is exhausted do we move servers.
+    const orderedQualities = [
+      ...availableQualities.filter((q) => q.label === currentQuality),
+      ...availableQualities.filter((q) => q.label !== currentQuality),
+    ].filter((q) => !is4KLabel(q.label) || isPremium);
+
+    const nextQualityRoute = orderedQualities
       .map((q) => {
         const candidateRaw = getServerScopedSource(q.src);
         const route = buildPlaybackCandidates(
@@ -1804,6 +1815,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           return !!srv && (!srv.locked || isPremium) && !failedSrcsRef.current.has(`__server_failover_${idx}`);
         });
       if (typeof nextServerIdx === "number") {
+        // Start the next server from Auto/default source, then that server will
+        // run the same all-quality scan if its default link is also bad.
+        sourceBaseRef.current = src;
         switchServer(nextServerIdx, false);
         return true;
       }
@@ -1811,7 +1825,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     setVideoError(true);
     return false;
-  }, [activeServerIndex, availableQualities, cdnEnabled, currentSrc, effectiveVideoServers, getServerScopedSource, isPremium, preferProxy, proxyApiKey, proxyUrl, switchServer]);
+  }, [activeServerIndex, availableQualities, cdnEnabled, currentQuality, currentSrc, effectiveVideoServers, getServerScopedSource, isPremium, preferProxy, proxyApiKey, proxyUrl, src, switchServer]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
   const [hlsAudioOptions, setHlsAudioOptions] = useState<AudioTrackOption[]>([]);
