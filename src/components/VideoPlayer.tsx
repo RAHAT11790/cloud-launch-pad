@@ -1791,7 +1791,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       sourceBaseRef.current = nextQualityRoute.option.src;
       activeSourceBaseRef.current = nextQualityRoute.raw;
       setCurrentSrc(nextQualityRoute.src);
-      if (currentQuality === "Auto") setCurrentQuality(nextQualityRoute.option.label);
+      setCurrentQuality(nextQualityRoute.option.label);
       return true;
     }
 
