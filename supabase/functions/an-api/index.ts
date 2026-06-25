@@ -589,7 +589,7 @@ Deno.serve(async (req) => {
 
   try {
     if (path === "/" || path === "") {
-      return new Response(HTML_UI, { headers: { ...cors, "Content-Type": "text/html; charset=utf-8" } });
+      return json(API_ENDPOINTS);
     }
     if (path === "/search") {
       const q = url.searchParams.get("q") || "";
