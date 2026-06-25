@@ -3731,13 +3731,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
               {/* Center play */}
               <div className="flex items-center justify-center gap-10">
-                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-[55px] h-[55px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-[53px] h-[53px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <SkipBack className="w-7 h-7" />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95" style={{ width: 70, height: 70 }}>
+                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95" style={{ width: 68, height: 68 }}>
                   {playing ? <Pause className="w-9 h-9" fill="currentColor" /> : <Play className="w-9 h-9 ml-0.5" fill="currentColor" />}
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-[55px] h-[55px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-[53px] h-[53px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
                   <SkipForward className="w-7 h-7" />
                 </button>
               </div>
