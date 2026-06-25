@@ -47,6 +47,7 @@ export const fetchGeo = async (): Promise<Geo> => {
 
 export type AdminAccessLog = {
   email?: string;
+  name?: string;
   method: "pin" | "google" | "session";
   success: boolean;
   reason?: string;
@@ -58,13 +59,44 @@ export type AdminAccessLog = {
   ts: number;
 };
 
-export const logAdminAccess = async (entry: Omit<AdminAccessLog, "ts" | "fingerprint" | "ua" | "ip" | "country" | "city">) => {
+/**
+ * Record a known display name for the current device fingerprint so the
+ * Security Center can render a human-readable identity next to the raw
+ * fingerprint. Called once after a successful Google login.
+ */
+export const rememberDeviceName = async (name?: string | null, email?: string | null) => {
+  try {
+    const fp = getDeviceFingerprint();
+    if (!fp) return;
+    await set(ref(db, `adminAccess/devices/${fp}`), {
+      name: name || null,
+      email: email?.trim().toLowerCase() || null,
+      ua: typeof navigator !== "undefined" ? navigator.userAgent : "",
+      lastSeen: Date.now(),
+    });
+  } catch (e) {
+    console.warn("[securityGuard] rememberDeviceName failed", e);
+  }
+};
+
+const getDeviceName = async (fp: string): Promise<string | undefined> => {
+  try {
+    const snap = await get(ref(db, `adminAccess/devices/${fp}`));
+    return snap.val()?.name || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+export const logAdminAccess = async (entry: Omit<AdminAccessLog, "ts" | "fingerprint" | "ua" | "ip" | "country" | "city" | "name"> & { name?: string }) => {
   try {
     const geo = await fetchGeo();
     const fp = getDeviceFingerprint();
+    const name = entry.name || (fp ? await getDeviceName(fp) : undefined);
     const payload: AdminAccessLog = {
       ...entry,
       email: entry.email?.trim().toLowerCase(),
+      name,
       ts: Date.now(),
       fingerprint: fp,
       ua: typeof navigator !== "undefined" ? navigator.userAgent : "",
