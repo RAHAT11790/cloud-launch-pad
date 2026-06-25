@@ -4606,10 +4606,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               ordered.push(clean);
             };
             if (effectiveVideoServers.length > 0) {
+              // Download must follow the currently selected server only. Do
+              // not silently mix in every other admin server; if the user chose
+              // HTTP, that HTTP domain is used, and HTTPS choices stay direct.
               push(applyServerDomain(rawUrl, activeServerIndex));
-              effectiveVideoServers.forEach((_, index) => push(applyServerDomain(rawUrl, index)));
+            } else {
+              push(rawUrl);
             }
-            push(rawUrl);
             return ordered;
           };
           const buildDownloadFileName = (label: string, quality?: string) => {
