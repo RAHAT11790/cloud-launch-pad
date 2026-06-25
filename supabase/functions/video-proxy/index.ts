@@ -38,7 +38,7 @@ const PASSTHROUGH_RESP = [
   "cache-control",
 ];
 
-const looksLikeHlsRequest = (target: URL): boolean => /\.(m3u8|ts|m4s|mp4|aac|vtt|key)(\?|#|$)/i.test(target.toString());
+const looksLikeHlsRequest = (target: URL): boolean => /\.(m3u8|ts|m4s|aac|vtt|key)(\?|#|$)/i.test(target.toString());
 
 const rewriteM3U8 = (text: string, baseUrl: string, proxyPrefix: string): string => {
   const base = new URL(baseUrl);
@@ -170,9 +170,9 @@ Deno.serve(async (req) => {
     if (!looksLikeHlsRequest(targetUrl)) {
       withContext.Referer = `${targetUrl.protocol}//${targetUrl.host}/`;
       withContext.Origin = `${targetUrl.protocol}//${targetUrl.host}`;
-      headerAttempts.push(withContext, minimal);
+      headerAttempts.push(minimal, withContext);
     } else {
-      headerAttempts.push(minimal);
+      headerAttempts.push(minimal, withContext);
     }
 
     for (const candidateHeaders of headerAttempts) {
