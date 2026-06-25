@@ -2,7 +2,7 @@
 // an-api — Standalone AnimeSalt (AN) Search + Stream Extractor API
 // ============================================================
 // Endpoints (all GET, JSON unless noted):
-//   GET /                       → Beautiful HTML UI (browser)
+//   GET /                       → JSON endpoint list (API only)
 //   GET /search?q=naruto        → [{slug,title,poster,year,type}]
 //   GET /anime?slug=&type=series→ {title,poster,storyline,seasons:[{name,episodes:[{number,title,slug}]}]}
 //   GET /episode?slug=naruto-1x1→ {slug,title,sources:[{embed,master,streams:[{url,filename,resolution,height,bandwidth}],audio:[{language,name,uri}]}]}
@@ -201,8 +201,36 @@ function parseMaster(masterUrl: string, body: string) {
   return { streams, audio: uniqueByUri(audio), subtitles: uniqueByUri(subtitles) };
 }
 
+function collectSubtitleString(value: string, baseUrl: string, out: any[]) {
+  const raw = decodeSubtitleEntities(value || "").trim();
+  if (!raw) return;
+
+  // PlayerJS commonly stores subtitles as:
+  //   [English]https://...vtt,[Arabic]https://...srt
+  // Some mirrors use escaped JSON containing file/url/src keys. Support both.
+  try {
+    const parsed = JSON.parse(raw);
+    collectSubtitleCandidates(parsed, baseUrl, out);
+  } catch {}
+
+  const bracketRe = /\[([^\]]+)\]\s*(https?:\/\/[^,\s\]"']+|\/[^,\s\]"']+|[^,\s\]"']+\.(?:vtt|srt|webvtt|ttml|dfxp)(?:\?[^,\s\]"']*)?)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = bracketRe.exec(raw))) {
+    out.push({ language: (m[1] || "").slice(0, 3).toLowerCase(), name: decode(m[1] || "Subtitle"), uri: resolveUrl(m[2], baseUrl) });
+  }
+
+  const objectUrlRe = /(?:file|url|src|uri|href)\s*[:=]\s*["']([^"']+\.(?:vtt|srt|webvtt|ttml|dfxp)(?:\?[^"']*)?)["']/gi;
+  while ((m = objectUrlRe.exec(raw))) {
+    out.push({ language: "und", name: `Subtitle ${out.length + 1}`, uri: resolveUrl(m[1], baseUrl) });
+  }
+}
+
 function collectSubtitleCandidates(value: unknown, baseUrl: string, out: any[], depth = 0) {
   if (!value || depth > 5) return;
+  if (typeof value === "string") {
+    collectSubtitleString(value, baseUrl, out);
+    return;
+  }
   if (Array.isArray(value)) {
     value.forEach((item) => collectSubtitleCandidates(item, baseUrl, out, depth + 1));
     return;
@@ -223,7 +251,7 @@ function collectSubtitleCandidates(value: unknown, baseUrl: string, out: any[], 
     });
   }
 
-  for (const key of ["captions", "caption", "subtitles", "subtitle", "tracks", "textTracks", "subs", "files", "sources"]) {
+  for (const key of ["captions", "caption", "subtitles", "subtitle", "tracks", "textTracks", "subs", "files", "sources", "playerjsSubtitle"]) {
     if (obj[key]) collectSubtitleCandidates(obj[key], baseUrl, out, depth + 1);
   }
 }
@@ -242,21 +270,11 @@ function decodeJsStringLiteral(raw: string): string {
 
 function collectPlayerJsSubtitles(html: string, baseUrl: string): any[] {
   const out: any[] = [];
-  const varMatch = html.match(/var\s+playerjsSubtitle\s*=\s*(["'][\s\S]*?["'])\s*;/i);
-  if (!varMatch) return out;
-  const rawList = decodeJsStringLiteral(varMatch[1]);
-  const re = /\[([^\]]+)\]\s*([^,\s]+)/g;
-  let m: RegExpExecArray | null;
-  let n = 0;
-  while ((m = re.exec(rawList))) {
-    const name = decode(m[1] || `Subtitle ${++n}`) || `Subtitle ${++n}`;
-    const uri = (m[2] || "").trim();
-    if (!uri) continue;
-    out.push({
-      language: name.slice(0, 3).toLowerCase(),
-      name,
-      uri: resolveUrl(uri, baseUrl),
-    });
+  const assignments = /(?:var\s+)?(?:playerjsSubtitle|subtitle|subtitles|tracks|textTracks)\s*=\s*(["'][\s\S]*?["']|\[[\s\S]*?\]|\{[\s\S]*?\})\s*;/gi;
+  let a: RegExpExecArray | null;
+  while ((a = assignments.exec(html))) {
+    const rawList = decodeJsStringLiteral(a[1]);
+    collectSubtitleString(rawList, baseUrl, out);
   }
   return uniqueByUri(out);
 }
