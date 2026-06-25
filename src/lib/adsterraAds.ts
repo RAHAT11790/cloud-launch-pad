@@ -43,6 +43,7 @@ declare global {
     __adsterraNextKind?: "streamLink" | "popunder";
     __adsterraOpenOriginal?: Window["open"];
     __adsterraPendingPopunderUrl?: string;
+    __adsterraPendingPopunderSnippet?: string;
     __adsterraGestureBridgeInstalled?: boolean;
 
   }
@@ -421,6 +422,7 @@ function prewarmPopunderForNextGesture(cfg: AdsterraConfig) {
   if (typeof window === "undefined") return;
   if (!cfg.popunder.trim()) return;
   window.__adsterraPendingPopunderUrl = extractDirectUrl(cfg.popunder);
+  window.__adsterraPendingPopunderSnippet = cfg.popunder;
 }
 
 function installPopunderGestureBridge() {
@@ -429,9 +431,15 @@ function installPopunderGestureBridge() {
   window.__adsterraGestureBridgeInstalled = true;
   const handler = () => {
     const url = window.__adsterraPendingPopunderUrl;
-    if (!url) return;
+    const snippet = window.__adsterraPendingPopunderSnippet;
+    if (!url && !snippet) return;
     window.__adsterraPendingPopunderUrl = undefined;
-    triggerPopunderUrl(url);
+    window.__adsterraPendingPopunderSnippet = undefined;
+    if (snippet && !/^https?:\/\//i.test(snippet.trim())) {
+      try { injectSnippet(snippet, ensureContainer()); } catch {}
+      return;
+    }
+    if (url) triggerPopunderUrl(url);
   };
   window.addEventListener("pointerup", handler, { capture: true, passive: true });
   window.addEventListener("touchend", handler, { capture: true, passive: true });
@@ -523,6 +531,7 @@ export function exitAdsterraPlayerScope() {
   window.__adsterraLastConfigJson = undefined;
   window.__adsterraNextKind = undefined;
   window.__adsterraPendingPopunderUrl = undefined;
+  window.__adsterraPendingPopunderSnippet = undefined;
 }
 
 export async function loadAdsterraSlots(): Promise<void> {
