@@ -198,7 +198,7 @@ async function extractFromPlayer(embedUrl: string) {
     return { embed: embedUrl, error: "player did not return JSON", raw: txt.slice(0, 200) };
   }
   const master = data.videoSource || data.securedLink || "";
-  let parsed: any = { streams: [], audio: [] };
+  let parsed: any = { streams: [], audio: [], subtitles: [] };
   if (master) {
     try {
       const mRes = await fetch(master, { headers: { "User-Agent": UA, Referer: origin + "/" } });
@@ -208,6 +208,22 @@ async function extractFromPlayer(embedUrl: string) {
       parsed.error = `master fetch failed: ${(e as Error).message}`;
     }
   }
+  // Some AN player JSONs also expose top-level captions/subtitles arrays.
+  const extraSubs: any[] = [];
+  const subArrays = [data.captions, data.subtitles, data.tracks, data.subs];
+  for (const arr of subArrays) {
+    if (!Array.isArray(arr)) continue;
+    for (const s of arr) {
+      const uri = s?.file || s?.url || s?.src || s?.uri;
+      if (!uri) continue;
+      extraSubs.push({
+        language: s?.language || s?.srclang || s?.lang || "",
+        name: s?.label || s?.name || s?.language || "Subtitle",
+        uri: /^https?:\/\//i.test(uri) ? uri : new URL(uri, origin).toString(),
+      });
+    }
+  }
+  const allSubs = [...(parsed.subtitles || []), ...extraSubs];
   return {
     embed: embedUrl,
     hash,
@@ -215,6 +231,7 @@ async function extractFromPlayer(embedUrl: string) {
     master,
     streams: parsed.streams,
     audio: parsed.audio,
+    subtitles: allSubs,
   };
 }
 
