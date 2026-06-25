@@ -166,6 +166,7 @@ interface HlsSubtitleOption {
   label: string;
   language: string;
   url?: string;
+  external?: boolean;
 }
 
 interface VideoPlayerProps {
@@ -181,6 +182,7 @@ interface VideoPlayerProps {
   episodeList?: { number: number; title?: string; active: boolean; onClick: () => void }[];
   qualityOptions?: QualityOption[];
   audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
+  subtitleTracks?: { language?: string; label: string; url: string }[];
   animeId?: string;
   onSaveProgress?: (currentTime: number, duration: number) => void;
   hideDownload?: boolean;
@@ -306,7 +308,7 @@ const formatTime = (t: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = false }: VideoPlayerProps) => {
+const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, onClose, onLanguageChange, onNextEpisode, episodeList, qualityOptions, audioTracks: propAudioTracks, subtitleTracks: propSubtitleTracks, animeId, onSaveProgress, hideDownload, noProxy, noServerSwitch, seasons, currentSeasonIdx, currentEpisodeIdx, onSeasonChange, suggestedAnime, onSuggestedClick, nextEpisodeSrc, forceEmbedMode, initialSeekTime, shareLink, buildShareLinkForEpisode, onInfoClick, onLibraryClick, preferProxy = false }: VideoPlayerProps) => {
   const branding = useBranding();
   const playerLoaderLogo = branding.playerLogoUrl || branding.logoUrl;
   // Removed preload anime character image - no longer needed
@@ -1701,7 +1703,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           switchServer(nextIdx, false);
         }
       }
-    }, 2500);
+    }, 5000);
 
     window.setTimeout(() => {
       serverSwitchingRef.current = false;
@@ -1744,6 +1746,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const subtitleCueListRef = useRef<Array<{ start: number; end: number; text: string }>>([]);
   const subtitlePollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const subtitleSwitchingUntilRef = useRef(0);
+
+  const externalSubtitleOptions = useMemo<HlsSubtitleOption[]>(() => {
+    return (propSubtitleTracks || [])
+      .map((track, index) => ({
+        id: 10000 + index,
+        label: String(track?.label || track?.language || `Subtitle ${index + 1}`).trim(),
+        language: String(track?.language || "und").trim() || "und",
+        url: String(track?.url || "").trim(),
+        external: true,
+      }))
+      .filter((track) => !!track.url);
+  }, [propSubtitleTracks]);
 
   const decodeSubtitleEntities = useCallback((value: string) => {
     return value
@@ -1823,7 +1837,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [currentHlsSubtitle]);
 
   const fetchSubtitleText = useCallback(async (targetUrl: string) => {
-    const response = await fetch(targetUrl, { mode: "cors" });
+    const fetchUrl = /^https?:\/\//i.test(targetUrl) && BUILTIN_STREAM_PROXY && !targetUrl.includes("/functions/v1/")
+      ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, targetUrl)
+      : targetUrl;
+    const response = await fetch(fetchUrl, { mode: "cors" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.text();
   }, []);
@@ -2073,15 +2090,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     const refreshHlsSubs = () => {
       const sTracks = hls.subtitleTracks || [];
-      const nextSubtitleOptions = sTracks.map((t, i) => ({
+      const manifestSubtitleOptions = sTracks.map((t, i) => ({
         id: i,
         label: t.name || t.lang || `Subtitle ${i + 1}`,
         language: t.lang || "und",
         url: t.url,
       }));
+      const seenSubtitleUrls = new Set(manifestSubtitleOptions.map((track) => String(track.url || "").trim()).filter(Boolean));
+      const nextSubtitleOptions = [
+        ...manifestSubtitleOptions,
+        ...externalSubtitleOptions.filter((track) => !seenSubtitleUrls.has(String(track.url || "").trim())),
+      ];
       hlsSubtitleMetaRef.current = nextSubtitleOptions;
       setHlsSubtitleOptions(nextSubtitleOptions);
-      if (sTracks.length === 0) {
+      if (nextSubtitleOptions.length === 0) {
         setCurrentHlsSubtitle(-1);
         return;
       }
@@ -2177,6 +2199,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (hls) {
       hls.subtitleDisplay = idx >= 0;
       hls.subtitleTrack = idx;
+    } else if (hls && idx >= 0) {
+      try { hls.subtitleDisplay = false; hls.subtitleTrack = -1; } catch {}
+    }
+    const meta = hlsSubtitleMetaRef.current.find((track) => track.id === idx);
+    if (hls && meta?.external) {
+      try { hls.subtitleDisplay = false; hls.subtitleTrack = -1; } catch {}
     }
     setCurrentHlsSubtitle(idx);
     setIsBuffering(false);
@@ -3715,7 +3743,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 {isHlsSrc && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
                   <div className="relative">
                     <button
-                      onClick={(e) => { e.stopPropagation(); setShowCcPanel((p) => !p); setCcTab(currentHlsSubtitle >= 0 ? "subtitle" : "audio"); setShowAudioPanel(false); setShowQualityPanel(false); setShowSettings(false); }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); setShowCcPanel((p) => !p); setCcTab(currentHlsSubtitle >= 0 || hlsAudioOptions.length === 0 ? "subtitle" : "audio"); setShowAudioPanel(false); setShowQualityPanel(false); setShowSettings(false); }}
                       className={`player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
                     >
                       <Subtitles className="w-3.5 h-3.5" />

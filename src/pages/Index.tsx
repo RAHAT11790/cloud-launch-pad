@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
-import type { Episode, Season } from "@/data/animeData";
+import type { Episode, Season, SubtitleTrack } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
@@ -126,6 +126,7 @@ const buildAnSyntheticMaster = (
   stream: { url: string; bandwidth?: number; resolution?: string; height?: number },
   audio: Array<{ language?: string; name?: string; uri?: string }>,
   defaultAudioIdx?: number,
+  subtitles: Array<{ language?: string; name?: string; label?: string; uri?: string; url?: string }> = [],
 ) => {
   const resolvedDefault = typeof defaultAudioIdx === "number" ? defaultAudioIdx : pickAnDefaultAudioIdx(audio);
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
@@ -138,9 +139,20 @@ const buildAnSyntheticMaster = (
       `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${rawName}",LANGUAGE="${rawLanguage || `aud${index + 1}`}",DEFAULT=${index === resolvedDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${buildAnProxyUrl(uri)}"`,
     );
   });
+  subtitles.forEach((track, index) => {
+    const rawName = String(track?.name || track?.label || track?.language || `Subtitle ${index + 1}`).replace(/"/g, "").trim();
+    const rawLanguage = String(track?.language || rawName || `sub${index + 1}`).trim().toLowerCase();
+    const uri = String(track?.uri || track?.url || "").trim();
+    if (!uri) return;
+    const subUrl = AN_API_BASE ? `${AN_API_BASE}/subs?url=${encodeURIComponent(uri)}` : uri;
+    lines.push(
+      `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="${rawName}",LANGUAGE="${rawLanguage || `sub${index + 1}`}",DEFAULT=NO,AUTOSELECT=YES,FORCED=NO,URI="${subUrl}"`,
+    );
+  });
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
+  const subRef = subtitles.some((track) => String(track?.uri || track?.url || "").trim()) ? ',SUBTITLES="subs"' : "";
   lines.push(
-    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${stream.height || 720}x${Math.round(((stream.height || 720) * 16) / 9)}`}${audioRef}`,
+    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${stream.height || 720}x${Math.round(((stream.height || 720) * 16) / 9)}`}${audioRef}${subRef}`,
   );
   lines.push(buildAnProxyUrl(stream.url));
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(lines.join("\n"))))}`;
@@ -149,6 +161,7 @@ const buildAnSyntheticMaster = (
 const normalizeAnAudioTracks = (
   audio: Array<{ language?: string; name?: string; uri?: string }> | undefined,
   streams: Array<{ label?: string; url?: string; height?: number }> | undefined,
+  subtitles: Array<{ language?: string; name?: string; label?: string; uri?: string; url?: string }> | undefined = [],
 ) => {
   if (!Array.isArray(audio) || audio.length === 0) return undefined;
 
@@ -169,7 +182,7 @@ const normalizeAnAudioTracks = (
         return buildAnSyntheticMaster({
           url: direct,
           height: Number(qualityLabel.replace(/\D/g, "")) || undefined,
-        }, audio, trackIndex);
+        }, audio, trackIndex, subtitles || []);
       };
       const rawLabel = String(track?.name || track?.language || "Audio").trim();
       const rawLang = String(track?.language || rawLabel).trim();
@@ -183,7 +196,7 @@ const normalizeAnAudioTracks = (
       return {
         language: normalized,
         label: normalized,
-        link: buildAnSyntheticMaster({ url: defaultStreamUrl }, audio, trackIndex),
+        link: buildAnSyntheticMaster({ url: defaultStreamUrl }, audio, trackIndex, subtitles || []),
         link480: pickStreamUrl("480p"),
         link720: pickStreamUrl("720p"),
         link1080: pickStreamUrl("1080p"),
@@ -198,6 +211,7 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   const primarySource = sourceList.find((entry: any) => Array.isArray(entry?.streams) && entry.streams.length > 0) || sourceList[0];
   const streams = Array.isArray(primarySource?.streams) ? primarySource.streams.filter((entry: any) => String(entry?.url || "").trim()) : [];
   const audio = Array.isArray(primarySource?.audio) ? primarySource.audio.filter((entry: any) => String(entry?.uri || "").trim()) : [];
+  const subtitles = Array.isArray(primarySource?.subtitles) ? primarySource.subtitles.filter((entry: any) => String(entry?.uri || entry?.url || "").trim()) : [];
 
   if (streams.length === 0) return null;
 
@@ -205,12 +219,12 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   const defaultAudioIdx = pickAnDefaultAudioIdx(audio);
   const qualityOptions = streams.map((stream: any) => ({
     label: String(stream?.label || (stream?.height ? `${stream.height}p` : "Auto")).trim() || "Auto",
-    src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx),
+    src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx, subtitles),
   }));
 
   // Reorder audioTracks so Hindi (when present) is first → VideoPlayer picks
   // it as the default language pill and matching HLS audio track.
-  const normalized = normalizeAnAudioTracks(audio, streams);
+  const normalized = normalizeAnAudioTracks(audio, streams, subtitles);
   let audioTracks = normalized;
   if (normalized && normalized.length > 1) {
     const hindiIdx = normalized.findIndex((t) =>
@@ -221,10 +235,19 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
     }
   }
 
+  const subtitleTracks: SubtitleTrack[] | undefined = subtitles.length
+    ? subtitles.map((track: any, index: number) => ({
+        language: String(track?.language || "").trim() || undefined,
+        label: String(track?.name || track?.label || track?.language || `Subtitle ${index + 1}`).trim(),
+        url: String(track?.uri || track?.url || "").trim(),
+      }))
+    : undefined;
+
   return {
     src: qualityOptions[0]?.src || buildAnProxyUrl(primaryStream.url),
     qualityOptions: qualityOptions.length > 1 ? qualityOptions : undefined,
     audioTracks,
+    subtitleTracks,
   };
 };
 

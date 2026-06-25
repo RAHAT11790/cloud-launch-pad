@@ -18,6 +18,12 @@ export interface AudioTrack {
   link4k?: string;
 }
 
+export interface SubtitleTrack {
+  language?: string;
+  label: string;
+  url: string;
+}
+
 export interface Episode {
   episodeNumber: number;
   title: string;
@@ -27,6 +33,7 @@ export interface Episode {
   link1080?: string;
   link4k?: string;
   audioTracks?: AudioTrack[];
+  subtitleTracks?: SubtitleTrack[];
 }
 
 export interface Season {
