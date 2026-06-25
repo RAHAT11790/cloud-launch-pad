@@ -449,26 +449,26 @@ div[style*="z-index: 2147483647"],
     pointer-events: none;
     z-index: 65;
     position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 56%;
+    top: 6%;
+    bottom: 6%;
+    width: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: hsl(0 0% 100% / 0.92);
-    background: hsl(0 0% 100% / 0.12);
+    color: hsl(0 0% 100% / 0.95);
+    background: hsl(0 0% 100% / 0.16);
     overflow: hidden;
   }
   .skip-youtube--left {
-    left: 0;
-    border-top-right-radius: 50% 60%;
-    border-bottom-right-radius: 50% 60%;
+    left: -8%;
+    border-top-right-radius: 60% 80%;
+    border-bottom-right-radius: 60% 80%;
     animation: skipYoutubePopLeft 560ms cubic-bezier(0.22, 0.9, 0.25, 1) both;
   }
   .skip-youtube--right {
-    right: 0;
-    border-top-left-radius: 50% 60%;
-    border-bottom-left-radius: 50% 60%;
+    right: -8%;
+    border-top-left-radius: 60% 80%;
+    border-bottom-left-radius: 60% 80%;
     animation: skipYoutubePopRight 560ms cubic-bezier(0.22, 0.9, 0.25, 1) both;
   }
   .skip-youtube__inner {
@@ -477,12 +477,10 @@ div[style*="z-index: 2147483647"],
     align-items: center;
     justify-content: center;
     gap: 4px;
-    /* Pull content toward the curved (outer) edge so it sits at the
-       visual center of the visible half-disc, not the bounding box. */
     transform: translateX(0);
   }
-  .skip-youtube--left  .skip-youtube__inner { transform: translateX(-12%); }
-  .skip-youtube--right .skip-youtube__inner { transform: translateX(12%); }
+  .skip-youtube--left  .skip-youtube__inner { transform: translateX(18%); }
+  .skip-youtube--right .skip-youtube__inner { transform: translateX(-18%); }
   .skip-youtube__arrows {
     font: 900 26px/1 system-ui, -apple-system, sans-serif;
     letter-spacing: -2px;
@@ -490,7 +488,7 @@ div[style*="z-index: 2147483647"],
   .skip-youtube__time {
     font: 700 12px/1 system-ui, -apple-system, sans-serif;
     letter-spacing: 0.2px;
-    opacity: 0.92;
+    opacity: 0.95;
   }
 
   @keyframes skipYoutubePopLeft {
@@ -504,6 +502,18 @@ div[style*="z-index: 2147483647"],
     20%  { opacity: 1; }
     70%  { opacity: 1; }
     100% { opacity: 0; }
+  }
+
+  /* Swipe-up to fullscreen — gentle lift + scale animation */
+  .player-fs-enter { animation: playerFsEnter 280ms cubic-bezier(0.22, 0.9, 0.25, 1) both; }
+  .player-fs-exit  { animation: playerFsExit  240ms cubic-bezier(0.22, 0.9, 0.25, 1) both; }
+  @keyframes playerFsEnter {
+    0%   { transform: translateY(8px) scale(0.985); opacity: 0.85; }
+    100% { transform: translateY(0)    scale(1);     opacity: 1; }
+  }
+  @keyframes playerFsExit {
+    0%   { transform: translateY(-6px) scale(1.01); opacity: 0.9; }
+    100% { transform: translateY(0)    scale(1);    opacity: 1; }
   }
 
   .player-custom-controls {
