@@ -2996,7 +2996,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [applyPendingSeek, currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex, getServerScopedSource, proxyApiKey, preferProxy]);
+  }, [applyPendingSeek, currentSrc, adGateActive, availableQualities, currentQuality, cdnEnabled, proxyUrl, playbackRouteReady, switchServer, effectiveVideoServers, activeServerIndex, getServerScopedSource, proxyApiKey, preferProxy, isPremium]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
