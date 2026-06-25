@@ -311,8 +311,8 @@ div[style*="z-index: 2147483647"],
   /* AN-style 12-bar circular spinner (classic iOS/macOS loader) */
   .player-loader-shell {
     position: relative;
-    width: 56px;
-    height: 56px;
+    width: 44px;
+    height: 44px;
     display: inline-block;
     transform: translateZ(0);
     will-change: transform;
@@ -321,10 +321,10 @@ div[style*="z-index: 2147483647"],
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 3px;
-    height: 14px;
-    margin: -24px 0 0 -1.5px;
-    transform-origin: 50% 24px;
+    width: 2.5px;
+    height: 11px;
+    margin: -19px 0 0 -1.25px;
+    transform-origin: 50% 19px;
     background: #ffffff;
     border-radius: 2px;
     opacity: 0.08;
