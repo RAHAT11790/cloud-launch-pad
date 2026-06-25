@@ -3417,7 +3417,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               ref={videoRef}
               src={adGateActive || (isHlsSrc && Hls.isSupported()) ? undefined : currentSrc}
               crossOrigin={isHlsSrc ? "anonymous" : undefined}
-              className="w-full h-full bg-black"
+                className="w-full h-full bg-black pointer-events-none"
               style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
               playsInline
               preload={adGateActive ? "none" : "auto"}
@@ -3614,7 +3614,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           {/* Controls Overlay - smooth fade in/out (RS direct video only) */}
           {!locked && !isEmbedPlayback && (
               <div
-                className={`absolute inset-0 flex flex-col justify-between text-white transition-opacity duration-300 ease-out ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+                className={`absolute inset-0 z-[70] flex flex-col justify-between text-white transition-opacity duration-300 ease-out ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
               >
               {/* Top controls */}
               <div className="flex justify-between items-start gap-1.5 px-3 pt-3">
