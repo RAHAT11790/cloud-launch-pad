@@ -554,6 +554,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // and we don't trigger a wasted reload after Firebase resolves.
     let gotCdn = false;
     let gotProxy = false;
+    let proxyLoadSeq = 0;
+    let cancelled = false;
     const maybeReady = () => { if (gotCdn && gotProxy) setPlaybackRouteReady(true); };
 
     // Safety: never block playback longer than 1.2s waiting on Firebase.
@@ -582,29 +584,32 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
       return false;
     };
-    const loadProxyFallback = async () => {
+    const loadProxyFallback = async (seq: number) => {
       const paths = preferProxy ? ["settings/videoProxy", "settings/proxyServer"] : ["settings/proxyServer"];
       for (const path of paths) {
         try {
           const snap = await get(ref(db, path));
+          if (cancelled || seq !== proxyLoadSeq) return;
           if (applyProxyConfig(snap.val())) return;
         } catch {}
       }
+      if (cancelled || seq !== proxyLoadSeq) return;
       setProxyUrl('');
       setProxyApiKey('');
     };
-    const unsub2 = onValue(ref(db, proxyPath), (snap) => {
+    const unsub2 = onValue(ref(db, proxyPath), async (snap) => {
+      const seq = ++proxyLoadSeq;
       const val = snap.val();
-      if (applyProxyConfig(val)) {
-        // ready
-      } else {
-        loadProxyFallback();
+      if (!applyProxyConfig(val)) {
+        await loadProxyFallback(seq);
       }
+      if (cancelled || seq !== proxyLoadSeq) return;
       gotProxy = true;
       maybeReady();
     });
 
     return () => {
+      cancelled = true;
       window.clearTimeout(safety);
       unsub1();
       unsub2();
