@@ -137,8 +137,8 @@ Deno.serve(async (req) => {
   // Use minimal headers for HLS manifests/segments; keep referer/origin only
   // for normal file servers that require basic hotlink context.
   if (!looksLikeHlsRequest(targetUrl)) {
-    fwd.Referer = `${targetUrl.protocol}//${targetUrl.hostname}/`;
-    fwd.Origin = `${targetUrl.protocol}//${targetUrl.hostname}`;
+    fwd.Referer = `${targetUrl.protocol}//${targetUrl.host}/`;
+    fwd.Origin = `${targetUrl.protocol}//${targetUrl.host}`;
   }
 
   const range = req.headers.get("range");
@@ -160,26 +160,42 @@ Deno.serve(async (req) => {
   let upstream: Response | null = null;
   let effectiveTargetUrl = targetUrl;
   try {
-    const candidateHeaders = { ...fwd };
+    let lastError: unknown = null;
+    const headerAttempts: Record<string, string>[] = [];
+    const withContext = { ...fwd };
+    const minimal = { ...fwd };
+    delete minimal.Referer;
+    delete minimal.Origin;
+
     if (!looksLikeHlsRequest(targetUrl)) {
-      candidateHeaders.Referer = `${targetUrl.protocol}//${targetUrl.hostname}/`;
-      candidateHeaders.Origin = `${targetUrl.protocol}//${targetUrl.hostname}`;
+      withContext.Referer = `${targetUrl.protocol}//${targetUrl.host}/`;
+      withContext.Origin = `${targetUrl.protocol}//${targetUrl.host}`;
+      headerAttempts.push(withContext, minimal);
     } else {
-      delete candidateHeaders.Referer;
-      delete candidateHeaders.Origin;
+      headerAttempts.push(minimal);
     }
-    const res = await fetch(targetUrl.toString(), {
-      method: req.method,
-      headers: candidateHeaders,
-      redirect: "follow",
-      signal: ac.signal,
-    });
-    if (!(res.ok || res.status === 206 || res.status === 304)) {
-      try { await res.body?.cancel(); } catch {}
-      throw new Error(`Upstream ${res.status}`);
+
+    for (const candidateHeaders of headerAttempts) {
+      try {
+        const res = await fetch(targetUrl.toString(), {
+          method: req.method,
+          headers: candidateHeaders,
+          redirect: "follow",
+          signal: ac.signal,
+        });
+        if (res.ok || res.status === 206 || res.status === 304) {
+          upstream = res;
+          effectiveTargetUrl = targetUrl;
+          lastError = null;
+          break;
+        }
+        lastError = new Error(`Upstream ${res.status}`);
+        try { await res.body?.cancel(); } catch {}
+      } catch (e) {
+        lastError = e;
+      }
     }
-    upstream = res;
-    effectiveTargetUrl = targetUrl;
+    if (!upstream) throw lastError || new Error("Upstream failed");
   } catch (e) {
     return new Response(
       `Upstream fetch failed: ${(e as Error).message}`,
