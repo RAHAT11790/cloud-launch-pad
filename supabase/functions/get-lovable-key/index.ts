@@ -1,7 +1,11 @@
 // Returns the project's LOVABLE_API_KEY for admin tooling that needs to embed
 // it in deployed EGD functions. Gated by the ADMIN_PIN secret — callers must
 // pass `x-admin-pin: <pin>` after authenticating against verify-admin-pin.
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-admin-pin",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+};
 
 const ADMIN_HEADERS = "authorization, x-client-info, apikey, content-type, x-admin-pin";
 
