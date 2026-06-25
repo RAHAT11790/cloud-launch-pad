@@ -442,36 +442,68 @@ div[style*="z-index: 2147483647"],
     100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
   }
 
+  /* YouTube-style D-shaped skip overlay — a half-disc that covers one
+     side of the player. Vertically centered. Chevrons + "10 seconds"
+     text sit at the geometric center of the visible half. */
   .skip-youtube {
     pointer-events: none;
     z-index: 65;
-    display: inline-flex;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 56%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: hsl(0 0% 100% / 0.92);
+    background: hsl(0 0% 100% / 0.12);
+    overflow: hidden;
+  }
+  .skip-youtube--left {
+    left: 0;
+    border-top-right-radius: 50% 60%;
+    border-bottom-right-radius: 50% 60%;
+    animation: skipYoutubePopLeft 560ms cubic-bezier(0.22, 0.9, 0.25, 1) both;
+  }
+  .skip-youtube--right {
+    right: 0;
+    border-top-left-radius: 50% 60%;
+    border-bottom-left-radius: 50% 60%;
+    animation: skipYoutubePopRight 560ms cubic-bezier(0.22, 0.9, 0.25, 1) both;
+  }
+  .skip-youtube__inner {
+    display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: 68px;
-    min-height: 52px;
-    color: hsl(0 0% 100%);
-    text-shadow: 0 1px 3px hsl(0 0% 0% / 0.7);
-    animation: skipYoutubePop 620ms ease-out both;
+    gap: 4px;
+    /* Pull content toward the curved (outer) edge so it sits at the
+       visual center of the visible half-disc, not the bounding box. */
+    transform: translateX(0);
   }
+  .skip-youtube--left  .skip-youtube__inner { transform: translateX(-12%); }
+  .skip-youtube--right .skip-youtube__inner { transform: translateX(12%); }
   .skip-youtube__arrows {
-    font: 900 30px/0.8 system-ui, -apple-system, sans-serif;
-    letter-spacing: 0;
+    font: 900 26px/1 system-ui, -apple-system, sans-serif;
+    letter-spacing: -2px;
   }
   .skip-youtube__time {
-    margin-top: 2px;
-    font: 800 12px/1 system-ui, -apple-system, sans-serif;
-    letter-spacing: 0;
+    font: 700 12px/1 system-ui, -apple-system, sans-serif;
+    letter-spacing: 0.2px;
+    opacity: 0.92;
   }
-  .skip-youtube--left { transform-origin: center center; }
-  .skip-youtube--right { transform-origin: center center; }
 
-  @keyframes skipYoutubePop {
-    0% { opacity: 0; transform: translateY(-50%) scale(0.82); }
-    18% { opacity: 1; transform: translateY(-50%) scale(1); }
-    58% { opacity: 1; transform: translateY(-50%) scale(1); }
-    100% { opacity: 0; transform: translateY(-50%) scale(1.02); }
+  @keyframes skipYoutubePopLeft {
+    0%   { opacity: 0; }
+    20%  { opacity: 1; }
+    70%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  @keyframes skipYoutubePopRight {
+    0%   { opacity: 0; }
+    20%  { opacity: 1; }
+    70%  { opacity: 1; }
+    100% { opacity: 0; }
   }
 
   .player-custom-controls {
