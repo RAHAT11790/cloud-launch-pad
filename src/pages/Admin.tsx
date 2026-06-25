@@ -4307,6 +4307,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // ==================== AUTH HANDLERS ====================
    const handlePinLogin = async () => {
    if (!loginPinInput) { toast.error("Enter PIN"); return; }
+   // SECURITY: PIN-only login is allowed ONLY after this device has completed
+   // a Google login at least once. First-ever login on any device must use
+   // Google (so we capture identity + device fingerprint before issuing a PIN).
+   const googleVerified = (() => { try { return !!localStorage.getItem("rs_admin_google"); } catch { return false; } })();
+   if (!googleVerified) {
+     await logAdminAccess({ method: "pin", success: false, reason: "google-not-verified-on-device" });
+     toast.error("First login on this device must use Google. PIN login unlocks after that.");
+     setLoginPinInput("");
+     return;
+   }
    const blk = await isBlocked(null);
    if (blk.blocked) {
      await logAdminAccess({ method: "pin", success: false, reason: "blocked: " + (blk.reason || "") });
