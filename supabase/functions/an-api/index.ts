@@ -393,156 +393,19 @@ async function episode(slug: string, type?: string) {
   };
 }
 
-// ---------- HTML UI ----------
-const HTML_UI = `<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>AN Stream API — Explorer</title>
-<style>
-:root{--bg:#0a0b10;--panel:#13151d;--line:#262936;--text:#e7e9ee;--mute:#8b90a0;--acc:#ff4d6d;--acc2:#7c4dff;--ok:#3fd97f}
-*{box-sizing:border-box}
-body{margin:0;font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;background:radial-gradient(1200px 600px at 10% -10%,#1a1330 0%,transparent 60%),radial-gradient(900px 600px at 110% 10%,#301525 0%,transparent 60%),var(--bg);color:var(--text);min-height:100vh}
-.wrap{max-width:1100px;margin:0 auto;padding:28px 18px 80px}
-header{display:flex;align-items:center;gap:14px;margin-bottom:22px}
-.logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;font-weight:800;color:#fff;box-shadow:0 8px 28px rgba(124,77,255,.35)}
-h1{font-size:20px;margin:0;letter-spacing:.3px}
-.sub{color:var(--mute);font-size:13px;margin-top:2px}
-.search{display:flex;gap:10px;background:var(--panel);border:1px solid var(--line);padding:10px;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
-.search input{flex:1;background:transparent;border:0;outline:0;color:var(--text);padding:12px 8px;font-size:16px}
-.search button{background:linear-gradient(135deg,var(--acc),var(--acc2));border:0;color:#fff;padding:0 20px;border-radius:10px;font-weight:600;cursor:pointer;font-size:14px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;margin-top:22px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s}
-.card:hover{transform:translateY(-3px);border-color:#3a3f55}
-.card .pwrap{aspect-ratio:2/3;background:#1a1c25;background-size:cover;background-position:center}
-.card .meta{padding:10px 12px}
-.card .t{font-size:13px;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.card .s{font-size:11px;color:var(--mute);margin-top:4px;display:flex;justify-content:space-between}
-.badge{background:rgba(124,77,255,.18);color:#cdbbff;padding:1px 7px;border-radius:6px;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:22px}
-.epheader{display:flex;gap:16px;align-items:flex-start}
-.epheader img{width:120px;border-radius:10px}
-.epheader h2{margin:0 0 6px;font-size:18px}
-.epheader p{color:var(--mute);font-size:13px;line-height:1.5;margin:0}
-.season{margin-top:14px}
-.season h3{margin:0 0 8px;font-size:13px;color:var(--mute);text-transform:uppercase;letter-spacing:.6px}
-.eps{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px}
-.ep{padding:8px;text-align:center;background:#1a1d28;border:1px solid var(--line);border-radius:8px;cursor:pointer;font-size:12px;transition:border-color .15s,background .15s}
-.ep:hover{border-color:var(--acc);background:#222533}
-.streams{margin-top:10px}
-.src{background:#1a1d28;border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:10px}
-.src .hd{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--mute);margin-bottom:8px}
-.qrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px;background:#0f1119;border:1px solid var(--line);border-radius:8px;margin-top:6px;flex-wrap:wrap}
-.qrow .l{font-weight:600;font-size:13px}
-.qrow .u{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#a4b1d0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:200px}
-.copy{background:var(--ok);border:0;color:#04230f;padding:5px 10px;border-radius:6px;font-weight:600;font-size:11px;cursor:pointer}
-.copy.open{background:var(--acc)}
-.loading{text-align:center;color:var(--mute);padding:30px;font-size:14px}
-.err{background:rgba(255,77,109,.12);color:#ff97a8;padding:12px;border-radius:10px;border:1px solid rgba(255,77,109,.3);font-size:13px;margin-top:10px}
-.tabs{display:flex;gap:6px;margin-top:14px;border-bottom:1px solid var(--line)}
-.tab{padding:8px 14px;cursor:pointer;font-size:13px;color:var(--mute);border-bottom:2px solid transparent}
-.tab.on{color:var(--text);border-color:var(--acc)}
-.api-hint{background:#0f1119;border:1px solid var(--line);padding:10px 14px;border-radius:10px;margin-top:18px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#a4b1d0;overflow:auto}
-.api-hint b{color:var(--acc)}
-.back{background:transparent;border:1px solid var(--line);color:var(--text);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;margin-bottom:14px}
-</style>
-</head><body>
-<div class="wrap">
-  <header>
-    <div class="logo">AN</div>
-    <div>
-      <h1>AnimeSalt Stream API</h1>
-      <div class="sub">Search any anime → fetch every episode → extract all quality streams</div>
-    </div>
-  </header>
-
-  <form class="search" onsubmit="event.preventDefault();doSearch()">
-    <input id="q" placeholder="Search anime… (e.g. Naruto)" autocomplete="off"/>
-    <button>Search</button>
-  </form>
-
-  <div id="out"></div>
-
-  <div class="api-hint">
-    <b>API Endpoints:</b><br/>
-    GET <span id="origin"></span>/search?q=naruto<br/>
-    GET <span id="origin2"></span>/anime?slug=naruto&type=series<br/>
-    GET <span id="origin3"></span>/episode?slug=naruto-1x1
-  </div>
-</div>
-
-<script>
-const $=s=>document.querySelector(s);
-const out=$('#out');
-const O=location.origin+location.pathname.replace(/\\/$/,'');
-['origin','origin2','origin3'].forEach(id=>$('#'+id).textContent=O);
-
-async function doSearch(){
-  const q=$('#q').value.trim();
-  if(!q) return;
-  out.innerHTML='<div class="loading">Searching…</div>';
-  try{
-    const r=await fetch(O+'/search?q='+encodeURIComponent(q));
-    const d=await r.json();
-    if(!Array.isArray(d)||d.length===0){out.innerHTML='<div class="err">No results found.</div>';return;}
-    out.innerHTML='<div class="grid">'+d.map(it=>\`
-      <div class="card" onclick='openAnime(\${JSON.stringify(it).replace(/'/g,"&#39;")})'>
-        <div class="pwrap" style="background-image:url('\${it.poster||""}')"></div>
-        <div class="meta">
-          <div class="t">\${it.title}</div>
-          <div class="s"><span class="badge">\${it.type}</span><span>\${it.year||""}</span></div>
-        </div>
-      </div>\`).join('')+'</div>';
-  }catch(e){out.innerHTML='<div class="err">'+e.message+'</div>';}
-}
-
-async function openAnime(it){
-  out.innerHTML='<button class="back" onclick="doSearch()">← Back to results</button><div class="loading">Loading episodes…</div>';
-  try{
-    const r=await fetch(O+'/anime?slug='+encodeURIComponent(it.slug)+'&type='+it.type);
-    const d=await r.json();
-    let h='<button class="back" onclick="doSearch()">← Back to results</button><div class="panel">';
-    h+=\`<div class="epheader"><img src="\${d.poster||it.poster||''}"/><div><h2>\${d.title}</h2><p>\${d.storyline||''}</p><div class="s" style="margin-top:8px"><span class="badge">\${d.episodeCount} episodes</span></div></div></div>\`;
-    if(d.seasons.length===0 && it.type==='movies'){
-      h+=\`<div class="season"><div class="eps"><div class="ep" onclick='openEpisode("\${it.slug}")'>Play Movie</div></div></div>\`;
-    } else {
-      d.seasons.forEach(s=>{
-        h+=\`<div class="season"><h3>\${s.name}</h3><div class="eps">\${s.episodes.map(e=>\`<div class="ep" onclick='openEpisode("\${e.slug}")'>EP \${e.number}</div>\`).join('')}</div></div>\`;
-      });
-    }
-    h+='</div>';
-    out.innerHTML=h;
-  }catch(e){out.innerHTML+='<div class="err">'+e.message+'</div>';}
-}
-
-async function openEpisode(slug){
-  const sec=document.createElement('div');
-  sec.className='panel';
-  sec.innerHTML='<div class="loading">Extracting stream URLs…</div>';
-  out.appendChild(sec);
-  sec.scrollIntoView({behavior:'smooth',block:'start'});
-  try{
-    const r=await fetch(O+'/episode?slug='+encodeURIComponent(slug));
-    const d=await r.json();
-    let h=\`<h2 style="margin:0 0 4px">\${d.title}</h2><div class="sub">\${slug}</div>\`;
-    if(!d.sources||d.sources.length===0){h+='<div class="err">No streams found.</div>'}
-    d.sources.forEach((s,i)=>{
-      h+=\`<div class="src"><div class="hd"><span>Server \${i+1} · \${new URL(s.embed).host}</span><span>\${s.streams?.length||0} qualities</span></div>\`;
-      if(s.error){h+=\`<div class="err">\${s.error}</div>\`}
-      if(s.master){h+=\`<div class="qrow"><span class="l">Master HLS</span><span class="u">\${s.master}</span><button class="copy open" onclick="window.open('\${s.master}')">Open</button><button class="copy" onclick="navigator.clipboard.writeText('\${s.master}')">Copy</button></div>\`}
-      (s.streams||[]).forEach(q=>{
-        h+=\`<div class="qrow"><span class="l">\${q.label} <span style="color:var(--mute);font-weight:400">· \${q.resolution}</span></span><span class="u">\${q.url}</span><button class="copy" onclick="navigator.clipboard.writeText('\${q.url}')">Copy</button></div>\`;
-      });
-      (s.audio||[]).forEach(a=>{
-        h+=\`<div class="qrow"><span class="l">🔊 \${a.name}</span><span class="u">\${a.uri}</span><button class="copy" onclick="navigator.clipboard.writeText('\${a.uri}')">Copy</button></div>\`;
-      });
-      h+='</div>';
-    });
-    sec.innerHTML=h;
-  }catch(e){sec.innerHTML='<div class="err">'+e.message+'</div>';}
-}
-</script>
-</body></html>`;
+// ---------- API ROOT ----------
+const API_ENDPOINTS = {
+  ok: true,
+  name: "AnimeSalt Stream API",
+  endpoints: {
+    search: "/search?q=naruto",
+    anime: "/anime?slug=naruto&type=series",
+    episode: "/episode?slug=naruto-1x1",
+    embed: "/embed?url=https%3A%2F%2Fexample.com%2Fembed",
+    hls: "/hls?url=https%3A%2F%2Fexample.com%2Fmaster.m3u8",
+    subs: "/subs?url=https%3A%2F%2Fexample.com%2Fsubtitle.srt"
+  }
+};
 
 // ---------- HLS PROXY (CORS-safe pass-through + m3u8 URL rewriting) ----------
 // Used by the native player so hls.js can fetch playlists and segments from a
