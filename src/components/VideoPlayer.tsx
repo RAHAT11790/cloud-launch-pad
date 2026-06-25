@@ -2834,17 +2834,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           if (currentQuality === "Auto") setCurrentQuality(nextOption.label);
         } else {
           // ===== AUTO SERVER FAILOVER =====
-          // All quality/route fallbacks exhausted — try next server automatically
+          // All quality/route fallbacks exhausted — try another *admin-defined*
+          // server. Mark the failed server, then skip locked/already-failed ones.
           if (effectiveVideoServers.length > 1) {
-            const nextServerIdx = (activeServerIndex + 1) % effectiveVideoServers.length;
-            // Only auto-failover if we haven't cycled through all servers
-            const failoverKey = `__server_failover_${nextServerIdx}`;
-            if (!failedSrcsRef.current.has(failoverKey)) {
-              failedSrcsRef.current.add(failoverKey);
-              // Reset failed srcs for the new server (keep failover keys)
-              const failoverKeys = new Set([...failedSrcsRef.current].filter(k => k.startsWith("__server_failover_")));
-              failedSrcsRef.current = failoverKeys;
-              switchServer(nextServerIdx);
+            failedSrcsRef.current.add(`__server_failover_${activeServerIndex}`);
+            const nextServerIdx = Array.from({ length: effectiveVideoServers.length - 1 }, (_, offset) => (activeServerIndex + offset + 1) % effectiveVideoServers.length)
+              .find((idx) => {
+                const srv = effectiveVideoServers[idx];
+                return !!srv && (!srv.locked || isPremium) && !failedSrcsRef.current.has(`__server_failover_${idx}`);
+              });
+            if (typeof nextServerIdx === "number") {
+              switchServer(nextServerIdx, false);
               return;
             }
           }
