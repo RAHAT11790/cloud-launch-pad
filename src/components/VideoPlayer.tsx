@@ -1749,6 +1749,70 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => window.clearTimeout(t);
   }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer, manualServerSelected]);
 
+  const tryNextPlaybackRoute = useCallback((lastKnownTime = 0) => {
+    if (!currentSrc) return false;
+
+    console.log('Video failed after retries. URL:', currentSrc);
+    failedSrcsRef.current.add(currentSrc);
+
+    // Same quality, alternate route first (admin proxy → built-in proxy, etc.)
+    const sameQualityRouteFallback = buildPlaybackCandidates(
+      activeSourceBaseRef.current,
+      cdnEnabled,
+      proxyUrl || undefined,
+      proxyApiKey || undefined,
+      preferProxy
+    ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
+
+    if (sameQualityRouteFallback) {
+      pendingSeek.current = lastKnownTime || videoRef.current?.currentTime || 0;
+      setCurrentSrc(sameQualityRouteFallback);
+      return true;
+    }
+
+    // Try EVERY configured quality on the current admin server before declaring
+    // the server/link expired.
+    const nextQualityRoute = availableQualities
+      .map((q) => {
+        const candidateRaw = getServerScopedSource(q.src);
+        const route = buildPlaybackCandidates(
+          candidateRaw,
+          cdnEnabled,
+          proxyUrl || undefined,
+          proxyApiKey || undefined,
+          preferProxy
+        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
+        return route ? { option: q, raw: candidateRaw, src: route } : null;
+      })
+      .find(Boolean) as { option: QualityOption; raw: string; src: string } | null;
+
+    if (nextQualityRoute) {
+      pendingSeek.current = lastKnownTime || videoRef.current?.currentTime || 0;
+      sourceBaseRef.current = nextQualityRoute.option.src;
+      activeSourceBaseRef.current = nextQualityRoute.raw;
+      setCurrentSrc(nextQualityRoute.src);
+      if (currentQuality === "Auto") setCurrentQuality(nextQualityRoute.option.label);
+      return true;
+    }
+
+    // All qualities on this server failed — move to the next configured server.
+    if (effectiveVideoServers.length > 1) {
+      failedSrcsRef.current.add(`__server_failover_${activeServerIndex}`);
+      const nextServerIdx = Array.from({ length: effectiveVideoServers.length - 1 }, (_, offset) => (activeServerIndex + offset + 1) % effectiveVideoServers.length)
+        .find((idx) => {
+          const srv = effectiveVideoServers[idx];
+          return !!srv && (!srv.locked || isPremium) && !failedSrcsRef.current.has(`__server_failover_${idx}`);
+        });
+      if (typeof nextServerIdx === "number") {
+        switchServer(nextServerIdx, false);
+        return true;
+      }
+    }
+
+    setVideoError(true);
+    return false;
+  }, [activeServerIndex, availableQualities, cdnEnabled, currentQuality, currentSrc, effectiveVideoServers, getServerScopedSource, isPremium, preferProxy, proxyApiKey, proxyUrl, switchServer]);
+
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
   const [hlsAudioOptions, setHlsAudioOptions] = useState<AudioTrackOption[]>([]);
   const [currentHlsAudio, setCurrentHlsAudio] = useState<number>(-1);
