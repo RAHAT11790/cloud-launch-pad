@@ -21,6 +21,9 @@ const SUPA = (import.meta.env.VITE_SUPABASE_URL as string) ||
   "https://kqxpzqegtvaiwgdusrin.supabase.co";
 const AN_API = `${SUPA}/functions/v1/an-api`;
 const HLS_PROXY = `${AN_API}/hls`;
+const SUBS_PROXY = `${AN_API}/subs`;
+
+type Sub = { language: string; name: string; uri: string };
 
 type Stream = { url: string; label: string; height: number; resolution: string; bandwidth: number };
 type Audio  = { language: string; name: string; uri: string };
