@@ -2543,6 +2543,35 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setCurrentSrc((prev) => (prev === nextResolved ? prev : nextResolved));
   }, [playbackRouteReady, proxyUrl, proxyApiKey, cdnEnabled, resolvePlaybackSrc]);
 
+  // If Firebase videoServers arrive after the player has already mounted, rebuild
+  // the active URL with that admin server domain. This is critical for HTTP
+  // RSFR/bot-hosting servers because the proxy can only be applied after the
+  // domain swap has produced the final http:// URL.
+  useEffect(() => {
+    if (!playbackRouteReady || !effectiveVideoServers.length) return;
+    const safeServerIndex = Math.min(activeServerIndex, effectiveVideoServers.length - 1);
+    if (safeServerIndex !== activeServerIndex) setActiveServerIndex(safeServerIndex);
+
+    const scopedRaw = getServerScopedSource(sourceBaseRef.current || src, safeServerIndex);
+    activeSourceBaseRef.current = scopedRaw;
+    const resolved = resolvePlaybackSrc(scopedRaw);
+    setCurrentSrc((prev) => (prev === resolved ? prev : resolved));
+    retryAttemptsRef.current.clear();
+    setVideoError(false);
+  }, [activeServerIndex, effectiveVideoServers.length, getServerScopedSource, playbackRouteReady, resolvePlaybackSrc, src, videoServerFingerprint]);
+
+  useEffect(() => {
+    if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
+    const timer = window.setTimeout(() => {
+      const v = videoRef.current;
+      if (!v || currentSrc !== v.currentSrc && currentSrc !== v.src) return;
+      if (v.readyState < 2) {
+        tryNextPlaybackRoute(v.currentTime || 0);
+      }
+    }, 8500);
+    return () => window.clearTimeout(timer);
+  }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, tryNextPlaybackRoute]);
+
   const applyPendingSeek = useCallback((targetVideo?: HTMLVideoElement | null) => {
     const v = targetVideo || videoRef.current;
     const target = pendingSeek.current;
