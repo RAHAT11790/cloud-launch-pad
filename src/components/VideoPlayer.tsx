@@ -3511,11 +3511,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             ) : (
               <div
                 key={skipIndicator.side + skipIndicator.text}
-                className={`absolute top-1/2 -translate-y-1/2 skip-youtube ${skipIndicator.side === "left" ? "left-[11%] skip-youtube--left" : "right-[11%] skip-youtube--right"}`}
+                className={`skip-youtube ${skipIndicator.side === "left" ? "skip-youtube--left" : "skip-youtube--right"}`}
                 aria-hidden="true"
               >
-                <div className="skip-youtube__arrows">{skipIndicator.side === "left" ? "‹‹" : "››"}</div>
-                <div className="skip-youtube__time">{skipIndicator.text}</div>
+                <div className="skip-youtube__inner">
+                  <div className="skip-youtube__arrows">{skipIndicator.side === "left" ? "‹‹" : "››"}</div>
+                  <div className="skip-youtube__time">{skipIndicator.text}</div>
+                </div>
               </div>
             )
           )}
