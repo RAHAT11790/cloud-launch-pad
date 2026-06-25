@@ -68,11 +68,14 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const hlsRef = useRef<Hls | null>(null);
   const [streams, setStreams] = useState<Stream[]>([]);
   const [audios, setAudios]   = useState<Audio[]>([]);
+  const [subs, setSubs]       = useState<Sub[]>([]);
   const [qIdx, setQIdx]       = useState(0);
   const [aIdx, setAIdx]       = useState(0);
+  const [sIdx, setSIdx]       = useState(-1); // -1 = off
   const [loading, setLoading] = useState(true);
   const [showQ, setShowQ]     = useState(false);
   const [showA, setShowA]     = useState(false);
+  const [showS, setShowS]     = useState(false);
   const [controlsOpen, setControlsOpen] = useState(true);
   const [paused, setPaused] = useState(true);
   const [current, setCurrent] = useState(0);
