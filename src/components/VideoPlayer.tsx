@@ -403,6 +403,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const skipAccumRef = useRef<{ side: "left" | "right" | null; total: number; timer: ReturnType<typeof setTimeout> | null }>({ side: null, total: 0, timer: null });
   const [brightness, setBrightness] = useState(1);
   const [swipeState, setSwipeState] = useState<{ startX: number; startY: number; type: string | null } | null>(null);
+  const [fullscreenSwipeY, setFullscreenSwipeY] = useState(0);
+  const fullscreenGestureFiredRef = useRef(false);
   const cropModes = ["contain", "cover", "fill"] as const;
   const cropLabels = ["Fit", "Crop", "Stretch"];
   const [cropIndex, setCropIndex] = useState(0);
@@ -3325,6 +3327,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (isPlayerInteractiveTarget(e.target)) return;
     const t = e.touches[0];
+    fullscreenGestureFiredRef.current = false;
+    setFullscreenSwipeY(0);
     setSwipeState({ startX: t.clientX, startY: t.clientY, type: null });
   }, [isPlayerInteractiveTarget]);
 
@@ -3334,17 +3338,26 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const t = e.touches[0];
     const dy = t.clientY - swipeState.startY;
     const dx = t.clientX - swipeState.startX;
-    // Detect vertical swipe at the visual center: swipe-up → enter fullscreen,
-    // swipe-down → exit fullscreen (YouTube-style gesture).
-    if (!swipeState.type && Math.abs(dx) < 30 && Math.abs(dy) > 55) {
+    // YouTube-style center swipe: stop page scrolling immediately, let the
+    // player follow the finger a little, then enter/exit fullscreen at threshold.
+    if ((!swipeState.type || swipeState.type === "fullscreen") && Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx) * 1.2) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const relX = (swipeState.startX - rect.left) / rect.width;
-      // Middle 50% triggers fullscreen swap; outer zones still control vol/brightness.
       if (relX > 0.25 && relX < 0.75) {
-        setSwipeState({ ...swipeState, type: "fullscreen" });
-        if (dy < 0 && !isFullscreen) {
+        e.preventDefault();
+        e.stopPropagation();
+        const previewY = dy < 0
+          ? Math.max(-26, dy * 0.24)
+          : Math.min(18, dy * 0.18);
+        setFullscreenSwipeY(previewY);
+        if (swipeState.type !== "fullscreen") setSwipeState({ ...swipeState, type: "fullscreen" });
+        if (Math.abs(dy) > 54 && !fullscreenGestureFiredRef.current && dy < 0 && !isFullscreen) {
+          fullscreenGestureFiredRef.current = true;
+          setFullscreenSwipeY(-30);
           toggleFullscreen();
-        } else if (dy > 0 && isFullscreen) {
+        } else if (Math.abs(dy) > 54 && !fullscreenGestureFiredRef.current && dy > 0 && isFullscreen) {
+          fullscreenGestureFiredRef.current = true;
+          setFullscreenSwipeY(18);
           toggleFullscreen();
         }
         return;
@@ -3369,6 +3382,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const handleTouchEnd = useCallback((e?: React.TouchEvent) => {
     if (e && isPlayerInteractiveTarget(e.target)) return;
+    setFullscreenSwipeY(0);
+    window.setTimeout(() => { fullscreenGestureFiredRef.current = false; }, 220);
     setSwipeState(null);
   }, [isPlayerInteractiveTarget]);
   const stopPanelPointerPropagation = useCallback((e: React.MouseEvent | React.TouchEvent) => {
@@ -3410,7 +3425,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               ? "w-screen h-screen rounded-none player-fs-enter" 
               : "w-full rounded-none aspect-video sticky top-0 z-40"
           }`}
-          style={{ filter: `brightness(${brightness})`, margin: isFullscreen ? 0 : undefined }}
+          style={{
+            filter: `brightness(${brightness})`,
+            margin: isFullscreen ? 0 : undefined,
+            transform: fullscreenSwipeY ? `translate3d(0, ${fullscreenSwipeY}px, 0) scale(${fullscreenSwipeY < 0 ? 1.012 : 0.992})` : undefined,
+            transition: fullscreenSwipeY ? "none" : "transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+            touchAction: "none",
+            overscrollBehavior: "contain",
+          }}
           onContextMenu={(e) => e.preventDefault()}
           onClick={handleVideoClick}
           onPointerDown={startSpeedHold}
@@ -3646,28 +3668,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 className={`absolute inset-0 z-[70] flex flex-col justify-between text-white transition-opacity duration-300 ease-out ${showControls ? "opacity-100" : "opacity-0 pointer-events-none"}`}
               >
               {/* Top controls */}
-              <div className="flex justify-between items-start gap-1.5 px-3 pt-3">
-                <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button h-[37px] w-[37px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
-                  <ArrowLeft className="w-5 h-5" />
+              <div className="flex justify-between items-start gap-1 px-2.5 pt-2.5">
+                <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button h-[33px] w-[33px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
+                  <ArrowLeft className="w-[18px] h-[18px]" />
                 </button>
-                <div className="flex max-w-[calc(100%-52px)] items-center justify-end gap-1.5 overflow-x-auto scrollbar-hide pb-1">
-                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-[33px] px-[10px] rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0">
-                  <Crop className="w-4 h-4" />
-                  <span className="text-[12px] font-semibold">{cropLabels[cropIndex]}</span>
+                <div className="flex max-w-[calc(100%-46px)] items-center justify-end gap-1 overflow-x-auto scrollbar-hide pb-1">
+                <button onClick={(e) => { e.stopPropagation(); setCropIndex((cropIndex + 1) % 3); }} className="player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0">
+                  <Crop className="w-3.5 h-3.5" />
+                  <span className="text-[11px] font-semibold">{cropLabels[cropIndex]}</span>
                 </button>
                 {isHlsSrc ? (
-                    <button className="player-touch-button h-[33px] px-[10px] rounded-full flex items-center justify-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <Server className="w-4 h-4" />
-                    <span className="text-[12px] font-semibold">HLS</span>
+                    <button className="player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <Server className="w-3.5 h-3.5" />
+                    <span className="text-[11px] font-semibold">HLS</span>
                   </button>
                 ) : effectiveVideoServers.length >= 1 && !noServerSwitch ? (
                   <div className="relative">
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowServerPanel((p) => !p); setShowQualityPanel(false); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); }}
-                      className={`player-touch-button h-[33px] px-[10px] rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0 ${manualServerSelected ? 'ring-1 ring-primary bg-primary/25' : ''}`}
+                      className={`player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${manualServerSelected ? 'ring-1 ring-primary bg-primary/25' : ''}`}
                     >
-                      <Server className="w-4 h-4" />
-                      <span className="text-[12px] font-semibold whitespace-nowrap max-w-[88px] truncate">{effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`}</span>
+                      <Server className="w-3.5 h-3.5" />
+                      <span className="text-[11px] font-semibold whitespace-nowrap max-w-[78px] truncate">{effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`}</span>
                     </button>
                   </div>
                 ) : null}
@@ -3675,10 +3697,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   <div className="relative">
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowCcPanel((p) => !p); setCcTab(currentHlsSubtitle >= 0 ? "subtitle" : "audio"); setShowAudioPanel(false); setShowQualityPanel(false); setShowSettings(false); }}
-                      className={`player-touch-button h-[33px] px-[10px] rounded-full flex items-center justify-center gap-1.5 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
+                      className={`player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${currentHlsSubtitle >= 0 ? "ring-1 ring-primary" : ""}`}
                     >
-                      <Subtitles className="w-4 h-4" />
-                      <span className="text-[12px] font-semibold">CC</span>
+                      <Subtitles className="w-3.5 h-3.5" />
+                      <span className="text-[11px] font-semibold">CC</span>
                     </button>
                     {showCcPanel && (
                       <div data-player-panel="true" className={`absolute top-9 right-0 ${panelBaseClass} w-[210px] max-w-[82vw] max-h-[min(75dvh,360px)]`} style={panelBaseStyle} onClick={stopPanelPointerPropagation} onTouchStart={keepPanelScrollActive} onTouchMove={keepPanelScrollActive} onTouchEnd={stopPanelPointerPropagation} onScroll={keepPanelScrollActive} onWheel={stopPanelWheelPropagation}>
@@ -3741,54 +3763,54 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     )}
                   </div>
                 )}
-                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-[33px] h-[33px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
-                  <Lock className="w-4 h-4" />
+                <button onClick={(e) => { e.stopPropagation(); setLocked(true); resetHideTimer(); }} className="player-touch-button w-[30px] h-[30px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                  <Lock className="w-3.5 h-3.5" />
                 </button>
                 </div>
               </div>
 
               {/* Center play */}
-              <div className="flex items-center justify-center gap-10">
-                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-[51px] h-[51px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
-                  <SkipBack className="w-7 h-7" />
+              <div className="flex items-center justify-center gap-8">
+                <button onClick={(e) => { e.stopPropagation(); seek(-10); }} className="player-touch-button w-[46px] h-[46px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                  <SkipBack className="w-6 h-6" />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95" style={{ width: 66, height: 66 }}>
-                  {playing ? <Pause className="w-9 h-9" fill="currentColor" /> : <Play className="w-9 h-9 ml-0.5" fill="currentColor" />}
+                <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="player-touch-button player-touch-button--primary rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95" style={{ width: 58, height: 58 }}>
+                  {playing ? <Pause className="w-8 h-8" fill="currentColor" /> : <Play className="w-8 h-8 ml-0.5" fill="currentColor" />}
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-[51px] h-[51px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
-                  <SkipForward className="w-7 h-7" />
+                <button onClick={(e) => { e.stopPropagation(); seek(10); }} className="player-touch-button w-[46px] h-[46px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95">
+                  <SkipForward className="w-6 h-6" />
                 </button>
               </div>
 
               {/* Bottom controls */}
-              <div className="px-3 pb-3">
+              <div className="px-2.5 pb-2.5">
                 {/* Progress bar - GPU accelerated with will-change */}
                 <div
                   ref={progressBarRef}
-                  className="w-full h-5 flex items-center cursor-pointer mb-2 relative touch-none"
+                  className="w-full h-4 flex items-center cursor-pointer mb-1.5 relative touch-none"
                   onClick={(e) => { e.stopPropagation(); handleProgressClick(e); }}
                   onTouchStart={handleProgressTouchStart}
                   onTouchMove={handleProgressTouchMove}
                   onTouchEnd={handleProgressTouchEnd}
                 >
-                  <div className="w-full h-1.5 bg-foreground/20 rounded-full relative">
+                  <div className="w-full h-1 bg-foreground/20 rounded-full relative">
                     <div
                       ref={progressRef}
                       className="h-full gradient-primary rounded-full relative"
                       style={{ width: `${progress}%` }}
                     >
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-primary shadow-[0_0_10px_hsla(355,85%,55%,0.6)]" />
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-primary shadow-[0_0_10px_hsla(355,85%,55%,0.6)]" />
                     </div>
                   </div>
                 </div>
                 <div className="flex justify-between items-center gap-3 flex-nowrap">
                   <div className="flex items-center gap-2 shrink-0 min-w-0">
-                    <span ref={timeDisplayRef} className="text-[12px] font-semibold whitespace-nowrap tabular-nums leading-none">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                    <span ref={timeDisplayRef} className="text-[11px] font-semibold whitespace-nowrap tabular-nums leading-none">{formatTime(currentTime)} / {formatTime(duration)}</span>
                     <button onClick={(e) => {
                       e.stopPropagation();
                       applyPlayerVolume(boostedVolume, !muted);
-                    }} className="w-[29px] h-[29px] flex items-center justify-center shrink-0">
-                      {muted || boostedVolume <= 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                    }} className="w-[26px] h-[26px] flex items-center justify-center shrink-0">
+                      {muted || boostedVolume <= 0 ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                   <div className="flex items-center gap-1.5 justify-end flex-nowrap min-w-0 overflow-x-auto scrollbar-hide pb-0.5">
@@ -3800,14 +3822,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         const next = rates[(idx + 1) % rates.length] ?? 1;
                         setSpeed(next);
                       }}
-                      className={`text-[12px] px-[9px] py-1.5 rounded-md shrink-0 leading-none font-semibold transition-all ${playbackRate !== 1 ? "gradient-primary text-white" : "player-control-chip"}`}
+                      className={`text-[11px] px-2 py-1 rounded-md shrink-0 leading-none font-semibold transition-all ${playbackRate !== 1 ? "gradient-primary text-white" : "player-control-chip"}`}
                       aria-label="Playback speed"
                     >{playbackRate}x</button>
                     {availableQualities.length > 1 && (
                       <div className="relative shrink-0">
                           <button
                             onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
-                          className={`text-[12px] px-2.5 py-1.5 rounded-md font-semibold transition-all shrink-0 ${
+                          className={`text-[11px] px-2 py-1 rounded-md font-semibold transition-all shrink-0 ${
                             currentQuality !== "Auto" ? "gradient-primary text-white" : "player-control-chip"
                           }`}
                         >
@@ -3820,7 +3842,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       <div className="relative shrink-0">
                           <button
                             onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
-                           className={`text-[12px] px-2.5 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1 max-w-[96px] shrink-0 ${
+                           className={`text-[11px] px-2 py-1 rounded-md font-semibold transition-all flex items-center gap-1 max-w-[86px] shrink-0 ${
                             currentAudioTrack !== "Default" ? "gradient-primary text-white" : "player-control-chip"
                           }`}
                         >
@@ -3850,15 +3872,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       </div>
                     )}
                     {onNextEpisode && (
-                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip text-[12px] px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 font-semibold">
-                        Next <ChevronRight className="w-3.5 h-3.5" />
+                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip text-[11px] px-2 py-1 rounded-md flex items-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 font-semibold">
+                        Next <ChevronRight className="w-3 h-3" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-[33px] h-[33px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
-                      <Settings className="w-4 h-4" />
+                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-[30px] h-[30px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                      <Settings className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-[33px] h-[33px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
-                      {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-[30px] h-[30px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                      {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
