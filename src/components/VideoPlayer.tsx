@@ -40,8 +40,6 @@ interface VideoServerOption {
   locked?: boolean;
 }
 
-const PROXY_SERVER_LIMIT = 3;
-
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
@@ -86,37 +84,6 @@ const isInsecureHttpSource = (url: string): boolean => {
 const isBypassSource = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
   return normalized.startsWith("blob:") || normalized.startsWith("data:") || normalized.startsWith("mediasource:");
-};
-
-const VIDEO_MIRROR_ORIGINS = [
-  "https://rahat1102-video-hosting-bot.hf.space",
-  "http://fi3.bot-hosting.net:22854",
-  "https://rs-stream-bot-1.onrender.com",
-];
-
-const buildFallbackServers = (rawUrl: string): VideoServerOption[] => {
-  try {
-    const parsed = new URL(rawUrl);
-    const hostname = parsed.hostname.toLowerCase();
-    const canMirror = hostname.includes("bot-hosting.net") || /sttv|sttvs/.test(hostname);
-    if (!canMirror) return [];
-
-    const port = parsed.port ? `:${parsed.port}` : "";
-    const protocol = parsed.protocol || "http:";
-    const builtInMirrors = VIDEO_MIRROR_ORIGINS.map((domain, index) => ({
-      name: index === 0 ? "RS FR 01" : index === 1 ? "RS FR 02" : "RS Backup",
-      domain,
-    }));
-    const legacyMirrors = Array.from({ length: PROXY_SERVER_LIMIT }, (_, index) => ({
-      name: `Server ${index + 1}`,
-      domain: `${protocol}//fi${index + 1}.bot-hosting.net${port}`,
-    }));
-    return [...builtInMirrors, ...legacyMirrors].filter((server, index, all) =>
-      all.findIndex((item) => item.domain === server.domain) === index,
-    );
-  } catch {
-    return [];
-  }
 };
 
 const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string[] => {
