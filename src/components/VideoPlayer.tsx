@@ -1811,7 +1811,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     setVideoError(true);
     return false;
-  }, [activeServerIndex, availableQualities, cdnEnabled, currentQuality, currentSrc, effectiveVideoServers, getServerScopedSource, isPremium, preferProxy, proxyApiKey, proxyUrl, switchServer]);
+  }, [activeServerIndex, availableQualities, cdnEnabled, currentSrc, effectiveVideoServers, getServerScopedSource, isPremium, preferProxy, proxyApiKey, proxyUrl, switchServer]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
   const [hlsAudioOptions, setHlsAudioOptions] = useState<AudioTrackOption[]>([]);
