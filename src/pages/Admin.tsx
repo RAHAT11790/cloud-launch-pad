@@ -4354,6 +4354,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  setIsAuthenticated(false);
  localStorage.removeItem("rs_admin_session");
  localStorage.removeItem("rs_admin_google");
+ try { sessionStorage.removeItem("rs_admin_pin"); } catch {}
  toast.success("Logged out");
  };
 
