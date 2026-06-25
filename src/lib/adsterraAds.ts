@@ -41,8 +41,9 @@ declare global {
     __adsterraLastPopAt?: number;
     __adsterraOpenWrapped?: boolean;
     __adsterraNextKind?: "streamLink" | "popunder";
-    __adsterraOpenOriginal?: typeof window.open;
+    __adsterraOpenOriginal?: Window["open"];
     __adsterraPendingPopunderUrl?: string;
+    __adsterraGestureBridgeInstalled?: boolean;
 
   }
 }
@@ -424,6 +425,8 @@ function prewarmPopunderForNextGesture(cfg: AdsterraConfig) {
 
 function installPopunderGestureBridge() {
   if (typeof window === "undefined") return;
+  if (window.__adsterraGestureBridgeInstalled) return;
+  window.__adsterraGestureBridgeInstalled = true;
   const handler = () => {
     const url = window.__adsterraPendingPopunderUrl;
     if (!url) return;
