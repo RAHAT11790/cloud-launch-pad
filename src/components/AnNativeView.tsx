@@ -395,7 +395,18 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         preload="auto"
         crossOrigin="anonymous"
         onClick={(e) => { e.stopPropagation(); openControlsBriefly(); }}
-      />
+      >
+        {subs.map((s, i) => (
+          <track
+            key={`${embedUrl}-${i}-${s.uri}`}
+            kind="subtitles"
+            src={`${SUBS_PROXY}?url=${encodeURIComponent(s.uri)}`}
+            srcLang={s.language || "en"}
+            label={s.name}
+            default={i === sIdx}
+          />
+        ))}
+      </video>
       <div className="absolute inset-0 z-30 grid grid-cols-2" onClick={(e) => e.stopPropagation()}>
         <button
           aria-label="Back 5 seconds"
