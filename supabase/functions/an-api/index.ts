@@ -561,6 +561,11 @@ Deno.serve(async (req) => {
       if (!target) return new Response("missing ?url=", { status: 400, headers: cors });
       return await hlsProxy(req, target, proxyPrefix);
     }
+    if (path === "/subs") {
+      const target = url.searchParams.get("url") || "";
+      if (!target) return new Response("missing ?url=", { status: 400, headers: cors });
+      return await subsProxy(target);
+    }
     return json({ error: "not found", path }, 404);
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
