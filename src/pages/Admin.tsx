@@ -4391,14 +4391,19 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   toast.error("❌ This Google account is not authorized as admin");
   return;
   }
-  setIsAuthenticated(true);
-  setAdminGoogleEmail(email);
-  try {
-  localStorage.setItem("rs_admin_session", JSON.stringify({ google: email, ts: Date.now() }));
-  localStorage.setItem("rs_admin_google", email);
-  } catch {}
-  logAdminAccess({ email, method: "google", success: true });
-  toast.success(`✅ Google Login successful! (${email})`);
+   setIsAuthenticated(true);
+   setAdminGoogleEmail(email);
+   const displayName = result.user.displayName || email.split("@")[0];
+   try {
+   localStorage.setItem("rs_admin_session", JSON.stringify({ google: email, ts: Date.now() }));
+   localStorage.setItem("rs_admin_google", email);
+   localStorage.setItem("rs_admin_google_name", displayName);
+   } catch {}
+   // Persist device → name mapping so SecurityCenter can show a human name
+   // alongside the device fingerprint in subsequent PIN logins.
+   rememberDeviceName(displayName, email);
+   logAdminAccess({ email, name: displayName, method: "google", success: true });
+   toast.success(`✅ Google Login successful! (${email})`);
   } catch (err: any) {
   logAdminAccess({ method: "google", success: false, reason: err?.message || "google-error" });
   toast.error(err.message || "Google Login failed");
