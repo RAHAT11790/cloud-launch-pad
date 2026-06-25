@@ -172,7 +172,42 @@ ${userContext ? `USER CONTEXT:\n${userContext}\n` : ""}
 Stay on topic — anime, the site, accounts, premium. Decline politely for unrelated requests.`;
 }
 
-// ---------- Handler ----------
+// ---------- Auth + abuse gate ----------
+const ALLOWED_HOST_RX = [
+  /\.lovable\.app$/i,
+  /\.lovableproject\.com$/i,
+  /^lovable\.app$/i,
+  /^lovableproject\.com$/i,
+  /^rsanime03\.lovable\.app$/i,
+  /^localhost(?::\d+)?$/i,
+  /^127\.0\.0\.1(?::\d+)?$/i,
+];
+function hostAllowed(urlStr: string | null): boolean {
+  if (!urlStr) return false;
+  try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
+}
+async function requireAuthedUser(req: Request): Promise<{ ok: boolean; status?: number; error?: string }> {
+  const origin = req.headers.get("origin");
+  const referer = req.headers.get("referer");
+  if (!hostAllowed(origin) && !hostAllowed(referer)) {
+    return { ok: false, status: 403, error: "origin not allowed" };
+  }
+  const auth = req.headers.get("authorization") || "";
+  const token = auth.replace(/^Bearer\s+/i, "").trim();
+  const anon = (Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "").trim();
+  if (!token || token === anon) {
+    return { ok: false, status: 401, error: "user JWT required" };
+  }
+  try {
+    const url = `${Deno.env.get("SUPABASE_URL")}/auth/v1/user`;
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, apikey: anon } });
+    if (!r.ok) return { ok: false, status: 401, error: "invalid token" };
+    return { ok: true };
+  } catch {
+    return { ok: false, status: 401, error: "auth check failed" };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -183,6 +218,13 @@ Deno.serve(async (req) => {
     if (body?.test === true) {
       return new Response(JSON.stringify({ ok: true, ping: "rs-bot" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const gate = await requireAuthedUser(req);
+    if (!gate.ok) {
+      return new Response(JSON.stringify({ error: gate.error || "unauthorized" }), {
+        status: gate.status || 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
