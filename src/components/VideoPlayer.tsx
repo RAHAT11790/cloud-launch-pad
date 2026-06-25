@@ -3784,8 +3784,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         >
                           {currentQuality}
                         </button>
-                        {showQualityPanel && (
-                        )}
                       </div>
                     )}
                     {/* Audio track button */}
