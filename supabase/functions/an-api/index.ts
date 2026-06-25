@@ -143,6 +143,7 @@ function parseMaster(masterUrl: string, body: string) {
   const lines = body.split(/\r?\n/);
   const streams: any[] = [];
   const audio: any[] = [];
+  const subtitles: any[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line.startsWith("#EXT-X-MEDIA") && /TYPE=AUDIO/i.test(line)) {
@@ -150,6 +151,11 @@ function parseMaster(masterUrl: string, body: string) {
       const name = (line.match(/NAME="([^"]+)"/i) || [])[1] || lang;
       const uri = (line.match(/URI="([^"]+)"/i) || [])[1] || "";
       if (uri) audio.push({ language: lang, name, uri: resolve(uri) });
+    } else if (line.startsWith("#EXT-X-MEDIA") && /TYPE=SUBTITLES/i.test(line)) {
+      const lang = (line.match(/LANGUAGE="([^"]+)"/i) || [])[1] || "";
+      const name = (line.match(/NAME="([^"]+)"/i) || [])[1] || lang || "Subtitle";
+      const uri = (line.match(/URI="([^"]+)"/i) || [])[1] || "";
+      if (uri) subtitles.push({ language: lang, name, uri: resolve(uri) });
     } else if (line.startsWith("#EXT-X-STREAM-INF")) {
       const next = (lines[i + 1] || "").trim();
       if (!next || next.startsWith("#")) continue;
@@ -164,7 +170,7 @@ function parseMaster(masterUrl: string, body: string) {
     }
   }
   streams.sort((a, b) => b.height - a.height);
-  return { streams, audio };
+  return { streams, audio, subtitles };
 }
 
 async function extractFromPlayer(embedUrl: string) {
