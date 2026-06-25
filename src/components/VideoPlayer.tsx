@@ -584,8 +584,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     let cancelled = false;
     const maybeReady = () => { if (gotCdn && gotProxy) setPlaybackRouteReady(true); };
 
-    // Safety: never block playback longer than 1.2s waiting on Firebase.
-    const safety = window.setTimeout(() => setPlaybackRouteReady(true), 1200);
+    // Safety: never block playback longer than 4s waiting on Firebase.
+    // For HTTP sources we MUST have the admin proxy resolved before
+    // marking the route ready, otherwise the <video> will load the
+    // bare HTTP URL once and fail with mixed-content before the proxy
+    // arrives. So for HTTP sources we extend the safety to 6s and only
+    // mark ready when a proxy is actually present.
+    const httpSrc = isInsecureHttpSource(src || "");
+    const safetyMs = httpSrc ? 6000 : 1200;
+    const safety = window.setTimeout(() => setPlaybackRouteReady(true), safetyMs);
 
     const unsub1 = onValue(ref(db, "settings/cdnEnabled"), (snap) => {
       const val = snap.val();
