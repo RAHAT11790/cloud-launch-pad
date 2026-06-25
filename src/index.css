@@ -323,13 +323,14 @@ div[style*="z-index: 2147483647"],
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 2.5px;
-    height: 11px;
-    margin: -19px 0 0 -1.25px;
-    transform-origin: 50% 19px;
+    width: 3px;
+    height: 12px;
+    margin: -20px 0 0 -1.5px;
+    transform-origin: 50% 20px;
     background: #ffffff;
     border-radius: 2px;
-    opacity: 0.22;
+    opacity: 0.85;
+    filter: drop-shadow(0 0 2px hsl(0 0% 0% / 0.55));
     animation: anSpinnerFade 1s linear infinite;
   }
   .player-loader-petal:nth-child(1)  { transform: rotate(0deg);   animation-delay: -1.000s; }
@@ -347,7 +348,7 @@ div[style*="z-index: 2147483647"],
 
   @keyframes anSpinnerFade {
     0%   { opacity: 1; }
-    100% { opacity: 0.22; }
+    100% { opacity: 0.30; }
   }
 
   /* Keep petalSpin keyframe for any other consumer */
