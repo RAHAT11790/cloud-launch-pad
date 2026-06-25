@@ -530,7 +530,6 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
                 </div>
               )}
             </div>
-            </div>
           )}
           {subs.length > 0 && (
             <div className="relative">
