@@ -2431,6 +2431,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     activeSourceBaseRef.current = initialRawSrc;
     setCurrentSrc(resolvedSrc);
     setCurrentQuality("Auto");
+    manualServerSelectedRef.current = false;
     setManualServerSelected(false);
     setActiveServerIndex(0);
     retryAttemptsRef.current.clear();
