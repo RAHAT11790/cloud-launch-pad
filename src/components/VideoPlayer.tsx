@@ -3845,13 +3845,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         const next = rates[(idx + 1) % rates.length] ?? 1;
                         setSpeed(next);
                       }}
-                      className={`h-7 px-1.5 text-[10px] rounded-md shrink-0 leading-none font-semibold transition-all inline-flex items-center justify-center ${playbackRate !== 1 ? "gradient-primary text-white" : "player-control-chip"}`}
+                      className={`h-7 px-1.5 text-[10px] rounded-md shrink-0 leading-none font-semibold transition-all inline-flex items-center justify-center min-w-[28px] ${playbackRate !== 1 ? "gradient-primary text-white" : "player-control-chip"}`}
                       aria-label="Playback speed"
                     >{playbackRate}x</button>
                     {availableQualities.length > 1 && (
                       <button
                         onClick={(e) => { e.stopPropagation(); setShowQualityPanel(!showQualityPanel); setShowAudioPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
-                        className={`h-7 px-2 text-[11px] rounded-md font-semibold transition-all shrink-0 inline-flex items-center justify-center max-w-[58px] ${
+                        className={`h-7 px-2 text-[11px] rounded-md font-semibold transition-all shrink-0 inline-flex items-center justify-center max-w-[54px] ${
                           currentQuality !== "Auto" ? "gradient-primary text-white" : "player-control-chip"
                         }`}
                       >
@@ -3861,7 +3861,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     {audioTrackOptions.length > 0 && (
                       <button
                         onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
-                        className={`h-7 px-2 text-[11px] rounded-md font-semibold transition-all inline-flex items-center gap-1 max-w-[82px] shrink-0 ${
+                        className={`h-7 px-1.5 text-[10px] rounded-md font-semibold transition-all inline-flex items-center gap-0.5 max-w-[62px] shrink-0 ${
                           currentAudioTrack !== "Default" ? "gradient-primary text-white" : "player-control-chip"
                         }`}
                         aria-label="Audio track"
@@ -3870,14 +3870,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       </button>
                     )}
                     {onNextEpisode && (
-                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip h-7 px-2 text-[11px] rounded-md inline-flex items-center justify-center gap-0.5 transition-transform duration-150 active:scale-95 shrink-0 font-semibold">
+                      <button onClick={(e) => { e.stopPropagation(); onNextEpisode(); }} className="player-control-chip h-7 px-1.5 text-[10px] rounded-md inline-flex items-center justify-center gap-0.5 transition-transform duration-150 active:scale-95 shrink-0 font-semibold">
                         Next <ChevronRight className="w-3 h-3" />
                       </button>
                     )}
-                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setSettingsTab("speed"); setShowAudioPanel(false); setShowQualityPanel(false); setShowCcPanel(false); setShowServerPanel(false); }} className="player-touch-button w-6 h-6 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       <Settings className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-7 h-7 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }} className="player-touch-button w-6 h-6 rounded-full flex items-center justify-center transition-transform duration-150 active:scale-95 shrink-0">
                       {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
                     </button>
                   </div>
