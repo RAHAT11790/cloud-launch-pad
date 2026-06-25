@@ -1637,8 +1637,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // and wasted bandwidth that slowed the *current* video load. Browser will
   // naturally prefetch via the video element when user switches.
 
-  const switchServer = useCallback((serverIndex: number) => {
-    if ((serverIndex === activeServerIndex && manualServerSelected) || !effectiveVideoServers[serverIndex]) return;
+  const switchServer = useCallback((serverIndex: number, manual = true) => {
+    if (serverIndex === activeServerIndex || !effectiveVideoServers[serverIndex]) return;
     if (effectiveVideoServers[serverIndex].locked && !isPremium) return;
     if (serverSwitchingRef.current) return;
     const v = videoRef.current;
@@ -1659,13 +1659,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setIsBuffering(true);
     setVideoError(false);
 
-    setManualServerSelected(true);
+    setManualServerSelected((prev) => (manual ? true : prev));
     setActiveServerIndex(serverIndex);
     setCurrentQuality("Auto");
     activeSourceBaseRef.current = newRawSrc;
     pendingSeek.current = savedTime;
 
-    failedSrcsRef.current.clear();
+    if (manual) {
+      failedSrcsRef.current.clear();
+    } else {
+      failedSrcsRef.current = new Set([...failedSrcsRef.current].filter((key) => key.startsWith("__server_failover_")));
+    }
     retryAttemptsRef.current.clear();
 
     // Server swap must force a fresh media pipeline. Some hosts keep the old
@@ -1694,7 +1698,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (nextIdx >= 0 && nextIdx !== serverIndex) {
           serverSwitchingRef.current = false;
           setServerSwitching(false);
-          switchServer(nextIdx);
+          switchServer(nextIdx, false);
         }
       }
     }, 2500);
@@ -1703,7 +1707,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       serverSwitchingRef.current = false;
       setServerSwitching(false);
     }, 180);
-  }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, getServerScopedSource, isEmbedPlayback, isPremium, playing, manualServerSelected]);
+  }, [activeServerIndex, effectiveVideoServers, resolvePlaybackSrc, getServerScopedSource, isEmbedPlayback, isPremium, playing]);
 
   // Auto-switch to premium server for premium users (only if user hasn't picked one)
   useEffect(() => {
@@ -1716,7 +1720,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     premiumServerApplied.current = true;
     const t = window.setTimeout(() => {
       if (manualServerSelected) return;
-      switchServer(premIdx);
+      switchServer(premIdx, false);
     }, 250);
     return () => window.clearTimeout(t);
   }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer, manualServerSelected]);
