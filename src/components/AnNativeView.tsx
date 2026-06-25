@@ -100,7 +100,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     failedRef.current = false;
     resumedRef.current = false;
     setLoading(true);
-    setStreams([]); setAudios([]);
+    setStreams([]); setAudios([]); setSubs([]);
     (async () => {
       try {
         const r = await fetch(`${AN_API}/embed?url=${encodeURIComponent(embedUrl)}`);
@@ -108,16 +108,16 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         if (cancelled) return;
         const s: Stream[] = Array.isArray(d?.streams) ? d.streams : [];
         const a: Audio[]  = Array.isArray(d?.audio)   ? d.audio   : [];
+        const sb: Sub[]   = Array.isArray(d?.subtitles) ? d.subtitles : [];
         if (s.length === 0) { onFail?.("no-streams"); return; }
         setStreams(s);
         setAudios(a);
-        // Pick a sensible default quality: prefer 720p if available,
-        // otherwise the highest available. This avoids starting at 1080p
-        // on weak networks (the user explicitly mentioned 5-6 MB pulls).
+        setSubs(sb);
         const preferred = s.findIndex((x) => x.height === 720);
         const fallback  = s.findIndex((x) => x.height <= 720);
         setQIdx(preferred >= 0 ? preferred : (fallback >= 0 ? fallback : 0));
         setAIdx(0);
+        setSIdx(-1);
         onReady?.();
       } catch (e) {
         if (cancelled) return;
