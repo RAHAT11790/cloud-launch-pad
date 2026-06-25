@@ -2861,21 +2861,32 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           return;
         }
 
-        // If this admin-defined server is dead, move to another configured
-        // server before trying random qualities on the same dead domain. The
-        // URL path/query/hash stay identical; only the selected server domain
-        // changes inside switchServer().
-        if (!manualServerSelectedRef.current && effectiveVideoServers.length > 1) {
-          failedSrcsRef.current.add(`__server_failover_${activeServerIndex}`);
-          const nextServerIdx = Array.from({ length: effectiveVideoServers.length - 1 }, (_, offset) => (activeServerIndex + offset + 1) % effectiveVideoServers.length)
-            .find((idx) => {
-              const srv = effectiveVideoServers[idx];
-              return !!srv && (!srv.locked || isPremium) && !failedSrcsRef.current.has(`__server_failover_${idx}`);
-            });
-          if (typeof nextServerIdx === "number") {
-            switchServer(nextServerIdx, false);
-            return;
-          }
+        // Try EVERY configured quality on the CURRENT admin server first.
+        // Previously we could mark a server/link expired after only one quality
+        // failed, even when 480p/720p/1080p alternatives were still valid.
+        const nextQualityRoute = availableQualities
+          .map((q) => {
+            const candidateRaw = getServerScopedSource(q.src);
+            const route = buildPlaybackCandidates(
+              candidateRaw,
+              cdnEnabled,
+              proxyUrl || undefined,
+              proxyApiKey || undefined,
+              preferProxy
+            ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
+            return route ? { option: q, raw: candidateRaw, src: route } : null;
+          })
+          .find(Boolean) as { option: QualityOption; raw: string; src: string } | null;
+
+        if (nextQualityRoute) {
+          pendingSeek.current = lastKnownTime || v?.currentTime || 0;
+          sourceBaseRef.current = nextQualityRoute.option.src;
+          activeSourceBaseRef.current = nextQualityRoute.raw;
+          setCurrentSrc(nextQualityRoute.src);
+          // Keep an explicit user quality sticky; when on Auto, show the quality
+          // label we actually fell back to so the UI matches the loaded source.
+          if (currentQuality === "Auto") setCurrentQuality(nextQualityRoute.option.label);
+          return;
         }
 
         const nextOption = availableQualities.find((q) => {
@@ -2903,7 +2914,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           // ===== AUTO SERVER FAILOVER =====
           // All quality/route fallbacks exhausted — try another *admin-defined*
           // server. Mark the failed server, then skip locked/already-failed ones.
-          if (!manualServerSelectedRef.current && effectiveVideoServers.length > 1) {
+          if (effectiveVideoServers.length > 1) {
             failedSrcsRef.current.add(`__server_failover_${activeServerIndex}`);
             const nextServerIdx = Array.from({ length: effectiveVideoServers.length - 1 }, (_, offset) => (activeServerIndex + offset + 1) % effectiveVideoServers.length)
               .find((idx) => {
