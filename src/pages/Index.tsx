@@ -1174,9 +1174,22 @@ const Index = () => {
           return i.currentTime && i.duration && (i.currentTime / i.duration) < 0.95;
         });
         withProgress.sort((a: any, b: any) => (b.watchedAt || 0) - (a.watchedAt || 0));
-        setContinueWatching(withProgress);
+        // Secondary dedup: collapse any duplicates that share the same
+        // normalized title (handles legacy entries whose id was per-episode
+        // or differed between AN/RS sources). Keep the most recently
+        // watched one — its episodeInfo is the user's last watched episode.
+        const byTitle = new Map<string, any>();
+        const final: any[] = [];
+        for (const item of withProgress) {
+          const tkey = String(item.title || "").trim().toLowerCase();
+          if (!tkey) { final.push(item); continue; }
+          if (byTitle.has(tkey)) continue;
+          byTitle.set(tkey, item);
+          final.push(item);
+        }
+        setContinueWatching(final);
         // Mirror to localStorage so guests/offline still see the list
-        try { localStorage.setItem("rs_continueCache", JSON.stringify(withProgress.slice(0, 50))); } catch {}
+        try { localStorage.setItem("rs_continueCache", JSON.stringify(final.slice(0, 50))); } catch {}
       });
       return () => unsub();
     } catch {}
