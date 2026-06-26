@@ -60,13 +60,25 @@ const rewriteM3U8 = (text: string, baseUrl: string, proxyPrefix: string): string
 // Each entry can be a plain host ("rsanime03.lovable.app") or a wildcard
 // ("*.lovable.app"). If the secret is empty, every origin is allowed (open mode).
 const ALLOWED_HOSTS_RAW = Deno.env.get("ALLOWED_HOSTS") || "";
+const escapeRegex = (value: string) => value.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+const normalizeAllowedHost = (value: string) => {
+  const raw = value.trim().toLowerCase();
+  if (!raw) return "";
+  try {
+    if (/^https?:\/\//i.test(raw)) return new URL(raw).host.toLowerCase();
+  } catch {}
+  return raw.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+};
 const ALLOWED_HOST_RX: RegExp[] = ALLOWED_HOSTS_RAW
   .split(/[\s,]+/)
-  .map((s) => s.trim().toLowerCase())
+  .map(normalizeAllowedHost)
   .filter(Boolean)
   .map((host) => {
-    const escaped = host.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\\\*/g, "[^.]+");
-    return new RegExp("^" + escaped + "(?::\\d+)?$", "i");
+    // Correct wildcard support: "*.lovable.app" must compile and match
+    // preview--rsanime03.lovable.app. The previous replace expected an
+    // already-escaped "\\*", leaving a raw "*" and crashing the function.
+    const wildcarded = host.split("*").map(escapeRegex).join("[^.]+")
+    return new RegExp("^" + wildcarded + "(?::\\d+)?$", "i");
   });
 
 const matchesAllowedHost = (urlStr: string | null): boolean => {
