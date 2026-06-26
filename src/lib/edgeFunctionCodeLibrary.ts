@@ -80,7 +80,7 @@ const entry = (
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
   entry("video-proxy",    "Video Proxy",    "Ultra-minimal HTTP-only passthrough. No scripts, no protection — single job: stream http:// videos fast. HTTPS plays directly without the proxy.", videoProxySource, [], { isNew: true }),
-  entry("an-api",         "AN API (AnimeSalt)", "Standalone AnimeSalt scraper — search, anime, episode endpoints. Multi-CDN + subtitle extraction.", anApiSource, [], { isNew: true }),
+  entry("an-api",         "AN API (AnimeSalt)", "OLD/STABLE AnimeSalt scraper — search, anime, episode, embed and HLS proxy. Subtitle extraction removed for fast reliable playback.", anApiSource, [], { isNew: true }),
   entry("video-download", "Video Download", "Dedicated, retry-hardened download proxy (recommended for downloads).", videoDownloadSource),
   entry("live-tv-proxy",  "Live TV Proxy",  "Dedicated HLS proxy for Live TV channels.", liveTvProxySource),
   entry("telegram-post",  "Telegram Post",  "Posts new episodes to your Telegram channel.", telegramPostSource),

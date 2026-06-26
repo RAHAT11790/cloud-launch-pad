@@ -50,9 +50,9 @@ interface Props {
 }
 
 const proxied = (apiBase: string, u: string) => `${apiBase}/hls?url=${encodeURIComponent(u)}`;
-const subsProxy = (apiBase: string, u: string) => `${apiBase}/subs?url=${encodeURIComponent(u)}`;
+// AN subtitle extraction/proxy was removed from the API for stability.
 
-function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAudioIdx: number, subs: Sub[] = []): string {
+function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAudioIdx: number): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audios.forEach((a, i) => {
     const isDefault = i === defaultAudioIdx;
@@ -62,15 +62,8 @@ function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAu
       `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${proxied(apiBase, a.uri)}"`
     );
   });
-  subs.forEach((s, i) => {
-    lines.push(
-      `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="${(s.name || `Subtitle ${i + 1}`).replace(/"/g, "")}",` +
-      `LANGUAGE="${s.language || `sub${i + 1}`}",DEFAULT=NO,AUTOSELECT=YES,FORCED=NO,URI="${subsProxy(apiBase, s.uri)}"`
-    );
-  });
   const audioRef = audios.length > 0 ? ',AUDIO="aud"' : "";
-  const subRef = subs.length > 0 ? ',SUBTITLES="subs"' : "";
-  lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || stream.height * 5000},RESOLUTION=${stream.resolution || `${stream.height}p`}${audioRef}${subRef}`);
+  lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || stream.height * 5000},RESOLUTION=${stream.resolution || `${stream.height}p`}${audioRef}`);
   lines.push(proxied(apiBase, stream.url));
   const text = lines.join("\n");
   // data URL avoids needing yet another endpoint; hls.js handles it natively
@@ -98,7 +91,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const hlsRef = useRef<Hls | null>(null);
   const [streams, setStreams] = useState<Stream[]>(() => initialData?.streams || []);
   const [audios, setAudios]   = useState<Audio[]>(() => initialData?.audio || []);
-  const [subs, setSubs]       = useState<Sub[]>(() => initialData?.subtitles || []);
+  const [subs, setSubs]       = useState<Sub[]>([]);
   const [qIdx, setQIdx]       = useState(() => initialData?.preferredQualityIdx ?? pickQualityIdx(initialData?.streams || []));
   const [aIdx, setAIdx]       = useState(() => initialData?.defaultAudioIdx ?? pickHindiAudioIdx(initialData?.audio || []));
   const [sIdx, setSIdx]       = useState(-1); // -1 = off
@@ -146,7 +139,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         if (initialData?.streams?.length) {
           setStreams(initialData.streams);
           setAudios(initialData.audio || []);
-          setSubs(initialData.subtitles || []);
+          setSubs([]);
           setQIdx(initialData.preferredQualityIdx ?? pickQualityIdx(initialData.streams));
           setAIdx(initialData.defaultAudioIdx ?? pickHindiAudioIdx(initialData.audio || []));
           setSIdx(-1);
@@ -158,11 +151,10 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         if (cancelled) return;
         const s: Stream[] = Array.isArray(d?.streams) ? d.streams : [];
         const a: Audio[]  = Array.isArray(d?.audio)   ? d.audio   : [];
-        const sb: Sub[]   = Array.isArray(d?.subtitles) ? d.subtitles : [];
         if (s.length === 0) { onFail?.("no-streams"); return; }
         setStreams(s);
         setAudios(a);
-        setSubs(sb);
+        setSubs([]);
         setQIdx(pickQualityIdx(s));
         // Default audio = Hindi when available (matches site-wide preference).
         // Picked BEFORE the manifest builds so the first HLS playlist already
@@ -184,7 +176,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     if (!video || streams.length === 0 || !apiBase) return;
     const stream = streams[qIdx];
     if (!stream) return;
-    const master = buildMaster(apiBase, stream, audios, aIdx, subs);
+    const master = buildMaster(apiBase, stream, audios, aIdx);
     // First mount → use the resumeTime prop (continue-watching). After that,
     // preserve the live currentTime across quality swaps.
     const initialStart = !resumedRef.current
@@ -382,27 +374,8 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       setSubtitleStatus("Subtitles off");
       return;
     }
-    const selected = subs[i];
-    if (!selected?.uri) {
-      setSubtitleStatus("Subtitle URL missing");
-      return;
-    }
-    try {
-      setSubtitleStatus("Loading subtitles...");
-      if (!apiBase) throw new Error("AN API URL is not saved in EGD Router");
-      const res = await fetch(subsProxy(apiBase, selected.uri));
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const cues = parseVttCues(await res.text());
-      if (seq !== subtitleSeqRef.current) return;
-      subtitleCuesRef.current = cues;
-      setSubtitleStatus(cues.length ? "Subtitles ready" : "No subtitle cues found");
-      syncSubtitleText();
-      subtitlePollRef.current = setInterval(syncSubtitleText, 250);
-    } catch {
-      if (seq !== subtitleSeqRef.current) return;
-      subtitleCuesRef.current = [];
-      setSubtitleStatus("Subtitle load failed");
-    }
+    subtitleCuesRef.current = [];
+    setSubtitleStatus("Subtitles are not available for AN playback");
   }, [parseVttCues, stopSubtitlePolling, subs, syncSubtitleText]);
 
   const openControlsBriefly = useCallback(() => {
@@ -536,18 +509,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         preload="auto"
         crossOrigin="anonymous"
         onClick={(e) => { e.stopPropagation(); openControlsBriefly(); }}
-      >
-        {subs.map((s, i) => (
-          <track
-            key={`${embedUrl}-${i}-${s.uri}`}
-            kind="subtitles"
-            src={apiBase ? subsProxy(apiBase, s.uri) : ""}
-            srcLang={s.language || "en"}
-            label={s.name}
-            default={i === sIdx}
-          />
-        ))}
-      </video>
+      />
       <div className="absolute inset-0 z-30 grid grid-cols-2" onClick={(e) => e.stopPropagation()}>
         <button
           aria-label="Back 5 seconds"
