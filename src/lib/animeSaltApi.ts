@@ -9,7 +9,7 @@ const FETCH_TIMEOUT_MS = 12_000;
 // Firebase-backed cache for AnimeSalt API responses.
 // Series structure rarely changes -> long TTL. Playback URLs may be signed -> shorter TTL.
 const CACHE_TTL_SERIES_MS = 7 * 24 * 60 * 60 * 1000;   // 7 days
-const CACHE_TTL_PLAYBACK_MS = 6 * 60 * 60 * 1000;      // 6 hours
+const CACHE_TTL_PLAYBACK_MS = 10 * 60 * 1000;          // playback links expire; keep fresh
 const memCache = new Map<string, { ts: number; data: any }>();
 
 const sanitizeKey = (s: string) => String(s || '').replace(/[.#$/\[\]]/g, '_').slice(0, 200);
@@ -522,7 +522,12 @@ export const animeSaltApi = {
 
   async getMovie(slug: string) {
     const cached = await readAsCache('movie', slug, CACHE_TTL_PLAYBACK_MS);
-    if (cached) return { success: true, data: cached, cached: true };
+    if (cached) {
+      const normalizedCached = normalizePlaybackPayload(cached);
+      if (normalizedCached.embedUrl || normalizedCached.links?.length || normalizedCached.allEmbeds?.length) {
+        return { success: true, data: normalizedCached, cached: true };
+      }
+    }
 
     const proxyUrl = await getAnimeSaltProxyUrl();
     const directResult = await tryDirectApi(proxyUrl, { action: 'movie', slug });
@@ -542,7 +547,12 @@ export const animeSaltApi = {
 
   async getEpisode(slug: string) {
     const cached = await readAsCache('episode', slug, CACHE_TTL_PLAYBACK_MS);
-    if (cached) return { success: true, ...cached, cached: true };
+    if (cached) {
+      const normalizedCached = normalizePlaybackPayload(cached);
+      if (normalizedCached.embedUrl || normalizedCached.links?.length || normalizedCached.allEmbeds?.length) {
+        return { success: true, ...normalizedCached, cached: true };
+      }
+    }
 
     const proxyUrl = await getAnimeSaltProxyUrl();
     const directResult = await tryDirectApi(proxyUrl, { action: 'episode', slug });

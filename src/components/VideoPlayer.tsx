@@ -2627,7 +2627,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     try { nested = new URL(currentSrc).searchParams.get("url") || ""; } catch {}
     if (!/^http:\/\//i.test(nested)) return;
     const ac = new AbortController();
-    const t = window.setTimeout(() => ac.abort(), 3500);
+    const t = window.setTimeout(() => ac.abort(), 6500);
     fetch(currentSrc, { headers: { Range: "bytes=0-0" }, signal: ac.signal })
       .then((res) => {
         if (res.status >= 500 || res.status === 403 || res.status === 404) {
@@ -2635,7 +2635,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         }
         try { res.body?.cancel(); } catch {}
       })
-      .catch(() => {
+      .catch((err) => {
+        // Timeout is not proof that the server is blocked; let the real video
+        // element/watchdog decide. Only immediate network/proxy failures should
+        // trigger the route scanner.
+        if ((err as any)?.name === "AbortError") return;
         tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
       })
       .finally(() => window.clearTimeout(t));

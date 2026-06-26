@@ -202,12 +202,23 @@ Deno.serve(async (req) => {
     delete minimal.Referer;
     delete minimal.Origin;
 
+    // Some RSFR/bot-hosting style HTTP servers close cloud requests when a
+    // Range header is present, even though the same file can stream as a plain
+    // 200 response. Keep Range first for normal seeking, then retry without it
+    // before declaring the server blocked.
     if (!looksLikeHlsRequest(targetUrl)) {
       withContext.Referer = `${targetUrl.protocol}//${targetUrl.host}/`;
       withContext.Origin = `${targetUrl.protocol}//${targetUrl.host}`;
       headerAttempts.push(minimal, withContext);
     } else {
       headerAttempts.push(minimal, withContext);
+    }
+    if (range && req.method === "GET") {
+      const minimalNoRange = { ...minimal };
+      const withContextNoRange = { ...withContext };
+      delete minimalNoRange.Range;
+      delete withContextNoRange.Range;
+      headerAttempts.push(minimalNoRange, withContextNoRange);
     }
 
     for (const candidateHeaders of headerAttempts) {

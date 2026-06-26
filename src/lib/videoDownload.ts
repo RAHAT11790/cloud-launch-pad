@@ -73,6 +73,9 @@ function openDownloadLink(finalUrl: string, fileName: string) {
   const link = document.createElement("a");
   link.href = finalUrl;
   link.rel = "noopener noreferrer";
+  // HTTP file hosts are often blocked as hidden mixed-content downloads. A new
+  // tab keeps it as a user navigation/download, which browsers allow more often.
+  if (/^http:\/\//i.test(finalUrl)) link.target = "_blank";
   link.download = fileName;
   document.body.appendChild(link);
   link.click();
@@ -118,6 +121,13 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
     return false;
   }
   openDownloadLink(finalUrl, fileName);
+  if (preferDirect && proxiedUrl && directUrl && proxiedUrl !== directUrl) {
+    // Keep the proxy as an explicit backup link without blocking the direct
+    // download path that works for cloud-blocked RSFR hosts.
+    setTimeout(() => {
+      try { console.info("[Download] Proxy backup available:", proxiedUrl); } catch {}
+    }, 0);
+  }
   return true;
 }
 
