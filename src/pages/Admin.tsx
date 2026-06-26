@@ -426,9 +426,13 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 };
 
 // ==================== CLOUDFLARE WORKER ROUTER SECTION ====================
-// ==================== FUNCTION URL OVERRIDES — only admin self-deployed URLs ====================
-const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean }> = EDGE_FUNCTION_LIBRARY.map(
- (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew })
+// ==================== FUNCTION URL OVERRIDES — admin paste OR Lovable-deployed default ====================
+// Every library function is ALSO deployed on Lovable Cloud (this project). The
+// "Default" button pastes the Lovable-hosted URL so admin can fall back when
+// self-hosted credits run out, and switch back to their own URL anytime.
+const LOVABLE_DEFAULT_BASE = "https://kqxpzqegtvaiwgdusrin.supabase.co/functions/v1";
+const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean; defaultUrl: string }> = EDGE_FUNCTION_LIBRARY.map(
+ (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew, defaultUrl: `${LOVABLE_DEFAULT_BASE}/${e.slug}` })
 );
 
 
