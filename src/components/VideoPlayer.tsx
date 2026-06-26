@@ -562,16 +562,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
   
-  // Single source of truth for the playback proxy: the URL the admin saves
-  // inside EGD Manager after deploying their own `video-proxy` edge function.
-  // No hard-coded proxy in code, no per-server proxy, no admin-panel duplicates.
-  // The proxy itself decides what to do with each upstream URL:
-  //   • http://  → proxy fetches the upstream and streams it to the browser
-  //                (browsers can't play mixed-content http inside an https page)
-  //                AND enforces the domain allow-list.
-  //   • https:// → proxy passes the bytes through ONLY to enforce the domain
-  //                allow-list (anti-hotlink protection). If no proxy URL is set
-  //                we play https sources directly from the <video> tag.
+  // Load CDN + proxy settings from Firebase. noProxy keeps normal RS playback
+  // direct, but Live TV can still pass preferProxy to use admin proxy first.
   useEffect(() => {
     const httpSrc = isInsecureHttpSource(src || "");
     if (noProxy && !preferProxy && !httpSrc) {
@@ -582,15 +574,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return;
     }
 
+    // Wait for BOTH cdn + proxy snapshots before marking route ready,
+    // so the first <video> src already uses the admin-configured proxy
+    // and we don't trigger a wasted reload after Firebase resolves.
     let gotCdn = false;
     let gotProxy = false;
     let proxyLoadSeq = 0;
     let cancelled = false;
     const maybeReady = () => { if (gotCdn && gotProxy) setPlaybackRouteReady(true); };
 
-    // Safety: for HTTP sources we wait for the admin proxy setting so we
-    // never inject a raw http:// URL into <video>. For https we can play
-    // direct very quickly even if Firebase is slow.
+    // Safety: for HTTP sources we wait for the Admin Panel proxy setting.
+    // Never inject a direct http:// URL into <video>, and never invent a
+    // proxy unless the admin setting explicitly points to one / supabase.
     const safetyMs = httpSrc ? 6000 : 1200;
     const safety = window.setTimeout(() => {
       if (httpSrc) {
@@ -607,15 +602,48 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       maybeReady();
     });
 
-    // SINGLE PROXY SOURCE — the URL admin saves in EGD Manager after deploy.
-    // Stored as a plain string at `egdManager/config/playerProxyUrl`.
-    const unsub2 = onValue(ref(db, "egdManager/config/playerProxyUrl"), (snap) => {
-      const seq = ++proxyLoadSeq;
-      const raw = snap.val();
-      const url = typeof raw === "string" ? raw.trim() : (raw?.url ? String(raw.url).trim() : "");
+    // HTTP video playback uses the proxy selected in Admin Panel
+    // (settings/proxyServer). HTTPS servers stay direct in the video tag.
+    const proxyPath = preferProxy ? "settings/liveTvProxy" : "settings/proxyServer";
+    const applyProxyConfig = (val: any) => {
+      if (typeof val === "string" && val.trim()) {
+        setProxyUrl(val.trim());
+        setProxyApiKey('');
+        return true;
+      }
+      // Admin panel built-in proxy stores { id: 'supabase', url: null }.
+      if (val?.id === "supabase") {
+        setProxyUrl(getBuiltInProxyConfig());
+        setProxyApiKey('');
+        return true;
+      }
+      if (val && val.url) {
+        setProxyUrl(String(val.url));
+        setProxyApiKey(String(val.apiKey || ''));
+        return true;
+      }
+      return false;
+    };
+    const loadProxyFallback = async (seq: number) => {
+      const paths = preferProxy ? ["settings/videoProxy", "settings/proxyServer"] : ["settings/videoProxy"];
+      for (const path of paths) {
+        try {
+          const snap = await get(ref(db, path));
+          if (cancelled || seq !== proxyLoadSeq) return;
+          if (applyProxyConfig(snap.val())) return;
+        } catch {}
+      }
       if (cancelled || seq !== proxyLoadSeq) return;
-      setProxyUrl(url);
+      setProxyUrl('');
       setProxyApiKey('');
+    };
+    const unsub2 = onValue(ref(db, proxyPath), async (snap) => {
+      const seq = ++proxyLoadSeq;
+      const val = snap.val();
+      if (!applyProxyConfig(val)) {
+        await loadProxyFallback(seq);
+      }
+      if (cancelled || seq !== proxyLoadSeq) return;
       gotProxy = true;
       maybeReady();
     });

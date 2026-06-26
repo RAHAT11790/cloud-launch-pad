@@ -8450,8 +8450,16 @@ ${footerLinksHtml}
  {/* Force notification re-prompt removed — FCM disabled site-wide */}
 
 
- {/* Proxy Server Selector — REMOVED. Player proxy now comes only from
-     EGD Manager → Player Proxy URL (egdManager/config/playerProxyUrl). */}
+ {/* Proxy Server Selector */}
+ <div className={`${glassCard} p-4 mb-4`}>
+ <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
+ <Activity size={14} className="text-cyan-400" /> video প্রক্সি server
+ </h3>
+ <p className="text-[11px] text-zinc-400 mb-4">
+ CDN When off, choose which proxy server streams the video। বিdifferent server test করে খো anyতে goodো স্পিড পা and।
+ </p>
+ <ProxyServerSelector glassCard={glassCard} />
+ </div>
 
  {/* Image Refresh from TMDB */}
  <ImageRefreshSection
@@ -8668,7 +8676,7 @@ ${footerLinksHtml}
 
   return (
   <div>
-  {/* LiveTvProxyConfig removed — single proxy now configured via EGD Manager. */}
+  <LiveTvProxyConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
   <div className={`${glassCard} p-4 mb-4`}>
   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
   📺 {editId ? "Edit Channel" : "Add New Channel"}

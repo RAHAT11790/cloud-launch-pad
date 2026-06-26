@@ -172,11 +172,6 @@ export default function EgdManager({
   const [savedDeployerUrl, setSavedDeployerUrl] = useState("");
   const [savingUrl, setSavingUrl] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
-  // Player proxy URL — pasted by admin after deploying video-proxy here.
-  // Single source of truth used by VideoPlayer. Stored at
-  // egdManager/config/playerProxyUrl.
-  const [playerProxyUrl, setPlayerProxyUrl] = useState("");
-  const [savingPlayerProxy, setSavingPlayerProxy] = useState(false);
 
   // --- Function editor state ---
   const [list, setList] = useState<FnRow[]>([]);
@@ -242,28 +237,6 @@ export default function EgdManager({
       setShowSetup(!v);
     });
   }, []);
-
-  // ---------- Load player proxy URL ----------
-  useEffect(() => {
-    const r = ref(db, "egdManager/config/playerProxyUrl");
-    return onValue(r, (snap) => {
-      const raw = snap.val();
-      const v = typeof raw === "string" ? raw : (raw?.url ? String(raw.url) : "");
-      setPlayerProxyUrl(v);
-    });
-  }, []);
-
-  const savePlayerProxyUrl = async () => {
-    const u = playerProxyUrl.trim();
-    if (u && !/^https?:\/\//.test(u)) { toast.error("Must start with http(s)://"); return; }
-    setSavingPlayerProxy(true);
-    try {
-      await set(ref(db, "egdManager/config/playerProxyUrl"), u);
-      toast.success(u ? "Player Proxy URL saved ✔" : "Player Proxy URL cleared");
-    } catch (e: any) {
-      toast.error("Save failed: " + (e?.message || String(e)));
-    } finally { setSavingPlayerProxy(false); }
-  };
 
 
 
@@ -682,35 +655,6 @@ export default function EgdManager({
           </div>
         </div>
       )}
-
-      {/* ===== Player Proxy URL — single source of truth for VideoPlayer ===== */}
-      <div className={glassCard + " p-4 sm:p-5"}>
-        <h3 className="font-bold flex items-center gap-2 text-sm sm:text-base mb-2">
-          <LinkIcon size={16} className="text-cyan-400" /> Player Proxy URL
-        </h3>
-        <p className="text-[11px] text-zinc-400 mb-3 leading-relaxed">
-          Deploy <code className="bg-zinc-800 px-1 rounded">video-proxy</code> via the Code Library below, then paste its function URL here.
-          The video player uses this single URL for every server — HTTP servers get streamed through the proxy, HTTPS servers get domain-lock protection only.
-          Leave empty to play HTTPS servers directly with no protection.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            className={inputClass + " flex-1 min-w-0"}
-            placeholder="https://xxxx.supabase.co/functions/v1/video-proxy"
-            value={playerProxyUrl}
-            onChange={(e) => setPlayerProxyUrl(e.target.value)}
-          />
-          <button
-            onClick={savePlayerProxyUrl}
-            disabled={savingPlayerProxy}
-            className={btnPrimary + " inline-flex items-center justify-center gap-2 shrink-0"}
-          >
-            {savingPlayerProxy ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
-            Save
-          </button>
-        </div>
-      </div>
-
 
       {/* ===== Code Library — one click loads source + secret slots ===== */}
 
