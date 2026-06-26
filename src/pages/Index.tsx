@@ -2436,6 +2436,7 @@ const Index = () => {
                   title: anime.title,
                   subtitle: `${cSeason.name} - Episode ${cEp.episodeNumber || cEp.number || eIdx + 1}`,
                   anime: fullAnime,
+                  selectedLanguage: directState.preferredLanguage || "Hindi",
                   seasonIdx: sIdx,
                   epIdx: eIdx,
                   qualityOptions: directState.qualityOptions,
@@ -2544,6 +2545,7 @@ const Index = () => {
                   title: anime.title,
                   subtitle: `${season.name} - Episode ${ep.number}`,
                   anime: fullAnime,
+                  selectedLanguage: directState.preferredLanguage || "Hindi",
                   seasonIdx: sIdx,
                   epIdx: eIdx,
                   qualityOptions: directState.qualityOptions,
@@ -2776,6 +2778,7 @@ const Index = () => {
       let qOpts = getEpisodeQualityOptions(clickedEp);
       let nextAudioTracks = clickedEp.audioTracks;
       let nextSubtitleTracks = (clickedEp as any).subtitleTracks;
+      let preferredLanguage = (playerState as any)?.selectedLanguage;
         if (playerState?.anime.source === "animesalt" && String(clickedEp.link || "").startsWith("animesalt://")) {
         const epSlug = String(clickedEp.link).replace("animesalt://", "");
         try {
@@ -2786,6 +2789,7 @@ const Index = () => {
             qOpts = directState.qualityOptions || [];
             nextAudioTracks = directState.audioTracks;
             nextSubtitleTracks = directState.subtitleTracks;
+            preferredLanguage = directState.preferredLanguage || (nextAudioTracks?.find((t: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`))?.label) || preferredLanguage;
           } else {
             const resolved = resolveSaltEmbed(epResult);
             const embedServers = resolved.allEmbeds.filter(Boolean);
@@ -2803,6 +2807,7 @@ const Index = () => {
         subtitle: `${season.name} - Episode ${clickedEp.episodeNumber}`,
         epIdx: i,
         resumeTime: 0,
+        selectedLanguage: preferredLanguage,
         audioTracks: nextAudioTracks,
         subtitleTracks: nextSubtitleTracks,
         qualityOptions: qOpts.length > 0 ? qOpts : undefined,
