@@ -41,19 +41,10 @@ interface VideoServerOption {
 }
 
 // Cloudflare CDN proxy for fast video streaming
-import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
+import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { buildVideoDownloadUrl, triggerBulkBackgroundDownloads } from "@/lib/videoDownload";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
-
-// Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
-// Auto-applied to plain http:// sources (e.g. Server 1 bot-hosting.net) to bypass
-// browser mixed-content blocks. HTTPS sources stay direct (zero overhead).
-const BUILTIN_STREAM_PROXY = SUPABASE_URL
-  ? `${SUPABASE_URL}/functions/v1/video-proxy?url={url}`
-  : "";
-
-const getBuiltInProxyConfig = (): string => BUILTIN_STREAM_PROXY;
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -562,8 +553,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
   
-  // Load CDN + proxy settings from Firebase. noProxy keeps normal RS playback
-  // direct, but Live TV can still pass preferProxy to use admin proxy first.
+  // Single source of truth for the playback proxy: settings/functionOverrides/video-proxy,
+  // saved from EGD Router after the admin deploys their own `video-proxy`.
+  // No hard-coded proxy in code, no EGD Manager duplicate URL field.
+  // The proxy itself decides what to do with each upstream URL:
+  //   • http://  → proxy fetches the upstream and streams it to the browser
+  //                (browsers can't play mixed-content http inside an https page)
+  //                AND enforces the domain allow-list.
+  //   • https:// → proxy passes the bytes through ONLY to enforce the domain
+  //                allow-list (anti-hotlink protection). If no proxy URL is set
+  //                we play https sources directly from the <video> tag.
   useEffect(() => {
     const httpSrc = isInsecureHttpSource(src || "");
     if (noProxy && !preferProxy && !httpSrc) {
@@ -574,18 +573,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return;
     }
 
-    // Wait for BOTH cdn + proxy snapshots before marking route ready,
-    // so the first <video> src already uses the admin-configured proxy
-    // and we don't trigger a wasted reload after Firebase resolves.
     let gotCdn = false;
     let gotProxy = false;
     let proxyLoadSeq = 0;
     let cancelled = false;
     const maybeReady = () => { if (gotCdn && gotProxy) setPlaybackRouteReady(true); };
 
-    // Safety: for HTTP sources we wait for the Admin Panel proxy setting.
-    // Never inject a direct http:// URL into <video>, and never invent a
-    // proxy unless the admin setting explicitly points to one / supabase.
+    // Safety: for HTTP sources we wait for the admin proxy setting so we
+    // never inject a raw http:// URL into <video>. For https we can play
+    // direct very quickly even if Firebase is slow.
     const safetyMs = httpSrc ? 6000 : 1200;
     const safety = window.setTimeout(() => {
       if (httpSrc) {
@@ -602,48 +598,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       maybeReady();
     });
 
-    // HTTP video playback uses the proxy selected in Admin Panel
-    // (settings/proxyServer). HTTPS servers stay direct in the video tag.
-    const proxyPath = preferProxy ? "settings/liveTvProxy" : "settings/proxyServer";
-    const applyProxyConfig = (val: any) => {
-      if (typeof val === "string" && val.trim()) {
-        setProxyUrl(val.trim());
-        setProxyApiKey('');
-        return true;
-      }
-      // Admin panel built-in proxy stores { id: 'supabase', url: null }.
-      if (val?.id === "supabase") {
-        setProxyUrl(getBuiltInProxyConfig());
-        setProxyApiKey('');
-        return true;
-      }
-      if (val && val.url) {
-        setProxyUrl(String(val.url));
-        setProxyApiKey(String(val.apiKey || ''));
-        return true;
-      }
-      return false;
-    };
-    const loadProxyFallback = async (seq: number) => {
-      const paths = preferProxy ? ["settings/videoProxy", "settings/proxyServer"] : ["settings/videoProxy"];
-      for (const path of paths) {
-        try {
-          const snap = await get(ref(db, path));
-          if (cancelled || seq !== proxyLoadSeq) return;
-          if (applyProxyConfig(snap.val())) return;
-        } catch {}
-      }
-      if (cancelled || seq !== proxyLoadSeq) return;
-      setProxyUrl('');
-      setProxyApiKey('');
-    };
-    const unsub2 = onValue(ref(db, proxyPath), async (snap) => {
+    // SINGLE PROXY SOURCE — EGD Router row: video-proxy.
+    const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       const seq = ++proxyLoadSeq;
-      const val = snap.val();
-      if (!applyProxyConfig(val)) {
-        await loadProxyFallback(seq);
-      }
+      const raw = snap.val();
+      const enabled = raw?.enabled === true;
+      const url = enabled ? String(raw?.customUrl || raw?.url || "").trim() : "";
       if (cancelled || seq !== proxyLoadSeq) return;
+      setProxyUrl(url);
+      setProxyApiKey('');
       gotProxy = true;
       maybeReady();
     });
@@ -1951,10 +1914,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [currentHlsSubtitle]);
 
   const fetchSubtitleText = useCallback(async (targetUrl: string) => {
-    const fetchUrl = /^https?:\/\//i.test(targetUrl) && BUILTIN_STREAM_PROXY && !targetUrl.includes("/functions/v1/")
-      ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, targetUrl)
-      : targetUrl;
-    const response = await fetch(fetchUrl, { mode: "cors" });
+    const response = await fetch(targetUrl, { mode: "cors" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.text();
   }, []);
@@ -2194,6 +2154,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     hls.loadSource(currentSrc);
     hls.attachMedia(v);
 
+    const applyPreferredHlsAudio = () => {
+      const tracks = hls.audioTracks || [];
+      if (tracks.length === 0) return;
+      const preferredToken = String(getPrimaryLanguageToken(selectedLanguage) || selectedLanguage || "").toLowerCase();
+      const preferredIdx = preferredToken
+        ? tracks.findIndex((track: any) => {
+            const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
+            return blob.includes(preferredToken);
+          })
+        : -1;
+      const hindiIdx = tracks.findIndex((track: any) => {
+        const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
+        return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
+      });
+      const defaultIdx = tracks.findIndex((track: any) => track?.default);
+      const wanted = preferredIdx >= 0 ? preferredIdx : (hindiIdx >= 0 ? hindiIdx : (defaultIdx >= 0 ? defaultIdx : 0));
+      try { hls.audioTrack = wanted; } catch {}
+    };
+
     const refreshHlsAudio = () => {
       const aTracks = hls.audioTracks || [];
       const opts: AudioTrackOption[] = aTracks.map((t, i) => ({
@@ -2241,11 +2220,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
       hlsFatalRetriesRef.current = 0;
+      // Select Hindi/preferred audio before first play so AN opens already in
+      // the correct language instead of visibly switching 4-5 seconds later.
+      applyPreferredHlsAudio();
       refreshHlsAudio();
       refreshHlsSubs();
       v.play().catch(() => {});
     });
-    hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, refreshHlsAudio);
+    hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
+      applyPreferredHlsAudio();
+      refreshHlsAudio();
+    });
     hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, refreshHlsAudio);
     hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, refreshHlsSubs);
     hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_e, d: any) => {
@@ -2294,7 +2279,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       try { hls.destroy(); } catch {}
       if (hlsRef.current === hls) hlsRef.current = null;
     };
-  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive, tryNextPlaybackRoute, externalSubtitleOptions]);
+  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive, tryNextPlaybackRoute, externalSubtitleOptions, selectedLanguage]);
 
   // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
   // users reported when returning to home. Detaches HLS, clears <video>, kills timers.

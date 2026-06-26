@@ -14,9 +14,6 @@ import videoProxySource from "../../supabase/functions/video-proxy/index.ts?raw"
 import liveTvProxySource from "../../supabase/functions/live-tv-proxy/index.ts?raw";
 import videoDownloadSource from "../../supabase/functions/video-download/index.ts?raw";
 import telegramPostSource from "../../supabase/functions/telegram-post/index.ts?raw";
-import rsBotSource from "../../supabase/functions/rs-bot/index.ts?raw";
-import sendOtpEmailSource from "../../supabase/functions/send-otp-email/index.ts?raw";
-import processEmailQueueSource from "../../supabase/functions/process-email-queue/index.ts?raw";
 import apkDownloadSource from "../../supabase/functions/apk-download/index.ts?raw";
 import linkShareBotSource from "../../supabase/functions/link-share-bot/index.ts?raw";
 import shortenArolinksSource from "../../supabase/functions/shorten-arolinks/index.ts?raw";
@@ -32,6 +29,7 @@ export type EdgeFnLibraryEntry = {
   description: string;   // Short Bengali description
   source: string;        // index.ts content
   secrets: string[];     // Required secret names (user must fill before deploy)
+  isNew?: boolean;       // Only current update gets a NEW badge
 };
 
 // Regex auto-detects Deno.env.get("XXX") references and offers them as
@@ -66,28 +64,29 @@ const entry = (
   description: string,
   source: string,
   extraSecrets: string[] = [],
+  options: { isNew?: boolean } = {},
 ): EdgeFnLibraryEntry => ({
   slug,
   label,
   description,
   source,
   secrets: autoDetectSecrets(source, extraSecrets),
+  isNew: options.isNew,
 });
 
+// Only functions the admin self-deploys via EGD Manager are listed here.
+// Lovable-managed functions (rs-bot, send-otp-email, process-email-queue)
+// are permanently hidden from this deployable library.
+
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
+  entry("video-proxy",    "Video Proxy",    "Universal streaming proxy. Set ALLOWED_HOSTS to your app/preview domain. HTTP servers get playback help + protection; HTTPS can be protected through the proxy.", videoProxySource, ["ALLOWED_HOSTS"], { isNew: true }),
   entry("video-download", "Video Download", "Dedicated, retry-hardened download proxy (recommended for downloads).", videoDownloadSource),
-  entry("video-proxy",    "Video Proxy",    "Universal streaming proxy used by the video player.", videoProxySource),
   entry("live-tv-proxy",  "Live TV Proxy",  "Dedicated HLS proxy for Live TV channels.", liveTvProxySource),
   entry("telegram-post",  "Telegram Post",  "Posts new episodes to your Telegram channel.", telegramPostSource),
-  entry("rs-bot",         "RS Bot (AI)",    "In-app AI chat powered by your GEMINI_API_KEY.", rsBotSource),
-  entry("send-otp-email", "Send OTP Email", "Sends 6-digit OTP via Resend.", sendOtpEmailSource),
-  entry("process-email-queue", "Process Email Queue", "Background queue worker that flushes pending OTP emails.", processEmailQueueSource),
   entry("apk-download",   "APK Download",   "Serves the user-facing APK with proper headers.", apkDownloadSource),
   entry("link-share-bot", "Link Share Bot", "Telegram bot for shareable unlock / access links.", linkShareBotSource),
   entry("shorten-arolinks", "Shorten Arolinks", "Generic shortener proxy used by ad services.", shortenArolinksSource),
-  
-  entry("an-api", "AN API (AnimeSalt)", "Standalone AnimeSalt scraper — search, anime, episode endpoints. No secrets required.", anApiSource),
-
+  entry("an-api",         "AN API (AnimeSalt)", "Standalone AnimeSalt scraper — search, anime, episode endpoints.", anApiSource),
 ];
 
 export const getLibraryEntry = (slug: string) =>

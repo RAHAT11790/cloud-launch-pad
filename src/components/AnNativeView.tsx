@@ -16,18 +16,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Captions, Layers, Pause, Play, RotateCcw, RotateCw, Volume2 } from "lucide-react";
-
-const SUPA = (import.meta.env.VITE_SUPABASE_URL as string) ||
-  "https://kqxpzqegtvaiwgdusrin.supabase.co";
-const AN_API = `${SUPA}/functions/v1/an-api`;
-const HLS_PROXY = `${AN_API}/hls`;
-const SUBS_PROXY = `${AN_API}/subs`;
+import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
 type Sub = { language: string; name: string; uri: string };
 type Cue = { start: number; end: number; text: string };
 
 type Stream = { url: string; label: string; height: number; resolution: string; bandwidth: number };
 type Audio  = { language: string; name: string; uri: string };
+
+export type AnNativeResolvedData = {
+  streams: Stream[];
+  audio: Audio[];
+  subtitles?: Sub[];
+  preferredQualityIdx?: number;
+  defaultAudioIdx?: number;
+};
 
 interface Props {
   embedUrl: string;
@@ -42,43 +45,62 @@ interface Props {
   onReady?: () => void;
   /** Bubble currentTime/duration up so parent can persist progress. */
   onTimeUpdate?: (currentTime: number, duration: number) => void;
+  /** Already-extracted HLS data from the card-click/loading-details phase. */
+  initialData?: AnNativeResolvedData | null;
 }
 
-const proxied = (u: string) => `${HLS_PROXY}?url=${encodeURIComponent(u)}`;
+const proxied = (apiBase: string, u: string) => `${apiBase}/hls?url=${encodeURIComponent(u)}`;
+const subsProxy = (apiBase: string, u: string) => `${apiBase}/subs?url=${encodeURIComponent(u)}`;
 
-function buildMaster(stream: Stream, audios: Audio[], defaultAudioIdx: number, subs: Sub[] = []): string {
+function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAudioIdx: number, subs: Sub[] = []): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audios.forEach((a, i) => {
     const isDefault = i === defaultAudioIdx;
     lines.push(
       `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${a.name.replace(/"/g, "")}",` +
       `LANGUAGE="${a.language || a.name.slice(0, 2).toLowerCase()}",` +
-      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${proxied(a.uri)}"`
+      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${proxied(apiBase, a.uri)}"`
     );
   });
   subs.forEach((s, i) => {
     lines.push(
       `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="${(s.name || `Subtitle ${i + 1}`).replace(/"/g, "")}",` +
-      `LANGUAGE="${s.language || `sub${i + 1}`}",DEFAULT=NO,AUTOSELECT=YES,FORCED=NO,URI="${SUBS_PROXY}?url=${encodeURIComponent(s.uri)}"`
+      `LANGUAGE="${s.language || `sub${i + 1}`}",DEFAULT=NO,AUTOSELECT=YES,FORCED=NO,URI="${subsProxy(apiBase, s.uri)}"`
     );
   });
   const audioRef = audios.length > 0 ? ',AUDIO="aud"' : "";
   const subRef = subs.length > 0 ? ',SUBTITLES="subs"' : "";
   lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || stream.height * 5000},RESOLUTION=${stream.resolution || `${stream.height}p`}${audioRef}${subRef}`);
-  lines.push(proxied(stream.url));
+  lines.push(proxied(apiBase, stream.url));
   const text = lines.join("\n");
   // data URL avoids needing yet another endpoint; hls.js handles it natively
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(text)))}`;
 }
 
-export default function AnNativeView({ embedUrl, videoStyle, videoClassName, resumeTime, onFail, onReady, onTimeUpdate }: Props) {
+const isHindiAudio = (track?: Pick<Audio, "language" | "name"> | null) => {
+  const blob = `${track?.language || ""} ${track?.name || ""}`.toLowerCase();
+  return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
+};
+
+const pickHindiAudioIdx = (audio: Audio[]) => {
+  const hindiIdx = audio.findIndex(isHindiAudio);
+  return hindiIdx >= 0 ? hindiIdx : 0;
+};
+
+const pickQualityIdx = (streams: Stream[]) => {
+  const preferred = streams.findIndex((x) => x.height === 720);
+  const fallback = streams.findIndex((x) => x.height <= 720);
+  return preferred >= 0 ? preferred : (fallback >= 0 ? fallback : 0);
+};
+
+export default function AnNativeView({ embedUrl, videoStyle, videoClassName, resumeTime, onFail, onReady, onTimeUpdate, initialData }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
-  const [streams, setStreams] = useState<Stream[]>([]);
-  const [audios, setAudios]   = useState<Audio[]>([]);
-  const [subs, setSubs]       = useState<Sub[]>([]);
-  const [qIdx, setQIdx]       = useState(0);
-  const [aIdx, setAIdx]       = useState(0);
+  const [streams, setStreams] = useState<Stream[]>(() => initialData?.streams || []);
+  const [audios, setAudios]   = useState<Audio[]>(() => initialData?.audio || []);
+  const [subs, setSubs]       = useState<Sub[]>(() => initialData?.subtitles || []);
+  const [qIdx, setQIdx]       = useState(() => initialData?.preferredQualityIdx ?? pickQualityIdx(initialData?.streams || []));
+  const [aIdx, setAIdx]       = useState(() => initialData?.defaultAudioIdx ?? pickHindiAudioIdx(initialData?.audio || []));
   const [sIdx, setSIdx]       = useState(-1); // -1 = off
   const [loading, setLoading] = useState(true);
   const [showQ, setShowQ]     = useState(false);
@@ -90,6 +112,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const [duration, setDuration] = useState(0);
   const [skipHint, setSkipHint] = useState<{ side: "left" | "right"; total: number } | null>(null);
   const [speedBoost, setSpeedBoost] = useState(false);
+  const [apiBase, setApiBase] = useState("");
   const failedRef = useRef(false);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipTotalsRef = useRef({ left: 0, right: 0 });
@@ -116,7 +139,21 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     setStreams([]); setAudios([]); setSubs([]);
     (async () => {
       try {
-        const r = await fetch(`${AN_API}/embed?url=${encodeURIComponent(embedUrl)}`);
+        const base = await getEdgeFunctionUrl("an-api");
+        if (!base) throw new Error("AN API URL is not saved in EGD Router");
+        if (cancelled) return;
+        setApiBase(base);
+        if (initialData?.streams?.length) {
+          setStreams(initialData.streams);
+          setAudios(initialData.audio || []);
+          setSubs(initialData.subtitles || []);
+          setQIdx(initialData.preferredQualityIdx ?? pickQualityIdx(initialData.streams));
+          setAIdx(initialData.defaultAudioIdx ?? pickHindiAudioIdx(initialData.audio || []));
+          setSIdx(-1);
+          onReady?.();
+          return;
+        }
+        const r = await fetch(`${base}/embed?url=${encodeURIComponent(embedUrl)}`);
         const d = await r.json();
         if (cancelled) return;
         const s: Stream[] = Array.isArray(d?.streams) ? d.streams : [];
@@ -126,10 +163,11 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         setStreams(s);
         setAudios(a);
         setSubs(sb);
-        const preferred = s.findIndex((x) => x.height === 720);
-        const fallback  = s.findIndex((x) => x.height <= 720);
-        setQIdx(preferred >= 0 ? preferred : (fallback >= 0 ? fallback : 0));
-        setAIdx(0);
+        setQIdx(pickQualityIdx(s));
+        // Default audio = Hindi when available (matches site-wide preference).
+        // Picked BEFORE the manifest builds so the first HLS playlist already
+        // marks Hindi as DEFAULT=YES — no visible track switch on play.
+        setAIdx(pickHindiAudioIdx(a));
         setSIdx(-1);
         onReady?.();
       } catch (e) {
@@ -138,15 +176,15 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       }
     })();
     return () => { cancelled = true; };
-  }, [embedUrl, onFail, onReady]);
+  }, [embedUrl, initialData, onFail, onReady]);
 
   // 2. Build + attach hls whenever quality changes
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || streams.length === 0) return;
+    if (!video || streams.length === 0 || !apiBase) return;
     const stream = streams[qIdx];
     if (!stream) return;
-    const master = buildMaster(stream, audios, aIdx, subs);
+    const master = buildMaster(apiBase, stream, audios, aIdx, subs);
     // First mount → use the resumeTime prop (continue-watching). After that,
     // preserve the live currentTime across quality swaps.
     const initialStart = !resumedRef.current
@@ -200,8 +238,23 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     });
     hlsRef.current = hls;
     hls.attachMedia(video);
+    const applyPreferredAudio = () => {
+      const tracks = hls.audioTracks || [];
+      if (tracks.length === 0) return;
+      const manifestDefault = tracks.findIndex((track: any) => track?.default);
+      const hindiTrack = tracks.findIndex((track: any) => {
+        const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
+        return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
+      });
+      const wanted = hindiTrack >= 0 ? hindiTrack : (manifestDefault >= 0 ? manifestDefault : Math.min(aIdx, tracks.length - 1));
+      try { hls.audioTrack = wanted; } catch {}
+    };
+
     hls.on(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(master));
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      // Force Hindi before the first play() call. This prevents the visible
+      // 4-5s post-open language switch the user reported.
+      applyPreferredAudio();
       // startPosition handles the seek for hls.js automatically; only
       // touch currentTime as a safety net if it didn't land near target.
       if (initialStart > 0 && Math.abs(video.currentTime - initialStart) > 2) {
@@ -212,7 +265,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       setLoading(false);
     });
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
-      // Default audio is already set inside the master via DEFAULT=YES.
+      applyPreferredAudio();
     });
     hls.on(Hls.Events.ERROR, (_, data) => {
       if (!data.fatal) return;
@@ -232,7 +285,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     // resumeTime intentionally NOT in deps — re-running on resume change
     // would tear down hls mid-playback. Only embed/quality/audio rebuilds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streams, qIdx, audios, aIdx, subs, onFail]);
+  }, [streams, qIdx, audios, aIdx, subs, onFail, apiBase]);
 
   const parseVttCues = useCallback((text: string): Cue[] => {
     const toSeconds = (raw: string) => {
@@ -336,7 +389,8 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     }
     try {
       setSubtitleStatus("Loading subtitles...");
-      const res = await fetch(`${SUBS_PROXY}?url=${encodeURIComponent(selected.uri)}`);
+      if (!apiBase) throw new Error("AN API URL is not saved in EGD Router");
+      const res = await fetch(subsProxy(apiBase, selected.uri));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const cues = parseVttCues(await res.text());
       if (seq !== subtitleSeqRef.current) return;
@@ -487,7 +541,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
           <track
             key={`${embedUrl}-${i}-${s.uri}`}
             kind="subtitles"
-            src={`${SUBS_PROXY}?url=${encodeURIComponent(s.uri)}`}
+            src={apiBase ? subsProxy(apiBase, s.uri) : ""}
             srcLang={s.language || "en"}
             label={s.name}
             default={i === sIdx}

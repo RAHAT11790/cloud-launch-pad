@@ -286,198 +286,7 @@ const FcmProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }:
 
 
 
-// ==================== TELEGRAM PROVIDER SECTION ====================
-const TelegramProviderSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
- const [tgUrl, setTgUrl] = useState("");
- const [tgUrlInput, setTgUrlInput] = useState("");
- const [testing, setTesting] = useState(false);
- const [testResult, setTestResult] = useState<{ alive: boolean; latency: number } | null>(null);
-
- useEffect(() => {
- const unsub = onValue(ref(db, "settings/telegramProvider"), (snap) => {
- const val = snap.val();
- setTgUrl(val?.url || "");
- setTgUrlInput(val?.url || "");
- });
- return () => unsub();
- }, []);
-
- const saveTgUrl = async () => {
- const url = tgUrlInput.trim();
- await set(ref(db, "settings/telegramProvider"), { url });
- setTgUrl(url);
- toast.success("✅ Telegram Supabase URL saved.");
- if (url) testTg(url);
- };
-
- const testTg = async (urlOverride?: string) => {
- const url = urlOverride || tgUrl;
- if (!url) { toast.error("Enter a URL first."); return; }
- setTesting(true);
- setTestResult(null);
- const start = Date.now();
- try {
- const controller = new AbortController();
- const t = setTimeout(() => controller.abort(), 8000);
- const res = await fetch(url, { method: "GET", signal: controller.signal });
- clearTimeout(t);
- setTestResult({ alive: res.status < 500, latency: Date.now() - start });
- } catch {
- setTestResult({ alive: false, latency: Date.now() - start });
- }
- setTesting(false);
- };
-
- return (
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
- <Send size={14} className="text-blue-400" /> 📨 Telegram Supabase URL
- </h3>
- <p className="text-[10px] text-zinc-400 mb-3">
- Deploy the telegram-post function and paste its URL here. Telegram post publishing and button edits will use this URL.
- </p>
- <div className="flex gap-2">
- <input value={tgUrlInput} onChange={(e) => setTgUrlInput(e.target.value)}
- placeholder="https://xxx.supabase.co/functions/v1/telegram-post"
- className={`${inputClass} flex-1`} />
- <button onClick={saveTgUrl} className={`${btnPrimary} !px-3`}>
- <Save size={12} /> Save
- </button>
- </div>
- {tgUrl && <p className="mt-1.5 text-[10px] text-green-400">✓ {tgUrl}</p>}
- {testResult && (
- <p className={`mt-1 text-[10px] ${testResult.alive ? "text-green-400" : "text-red-400"}`}>
- {testResult.alive ? `✅ Live — ${testResult.latency}ms` : "❌ Down"}
- </p>
- )}
- {testing && <p className="mt-1 text-[10px] text-yellow-400 animate-pulse">🔄 Testing...</p>}
- </div>
- );
-};
-
-// ==================== TELEGRAM BOT WEBHOOK SECTION ====================
-const TelegramWebhookSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
- const [tgUrl, setTgUrl] = useState("");
- const [webhookStatus, setWebhookStatus] = useState<any>(null);
- const [loading, setLoading] = useState(false);
-
- useEffect(() => {
- const unsub = onValue(ref(db, "settings/telegramProvider"), (snap) => {
- const val = snap.val();
- setTgUrl(val?.url || "");
- });
- return () => unsub();
- }, []);
-
- const callTgAction = async (action: string, extra: Record<string, unknown> = {}) => {
- if (!tgUrl) { toast.error("Set the Telegram Supabase URL first."); return null; }
- setLoading(true);
- try {
- const res = await fetch(tgUrl, {
- method: "POST",
- headers: {
- "Content-Type": "application/json",
- ...(SUPABASE_ANON_KEY ? { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } : {}),
- },
- body: JSON.stringify({ action, ...extra }),
- });
- const data = await res.json();
- setLoading(false);
- return data;
- } catch (e: any) {
- setLoading(false);
- toast.error(e?.message || "Error");
- return null;
- }
- };
-
- const setWebhook = async () => {
- if (!tgUrl) { toast.error("Set the Telegram Supabase URL first."); return; }
- // Webhook URL = same supabase function URL but with webhook action
- // We need to set webhook to a URL that posts back to our function with action=webhook
- const webhookUrl = tgUrl;
- const data = await callTgAction("set-webhook", { webhookUrl });
- if (data?.ok) {
- toast.success("✅ Webhook set successfully.");
- checkWebhook();
- } else {
- toast.error(`❌ ${data?.description || data?.error || "Failed"}`);
- }
- };
-
- const deleteWebhook = async () => {
- const data = await callTgAction("delete-webhook");
- if (data?.ok) {
- toast.success("✅ Webhook deleted.");
- setWebhookStatus(null);
- } else {
- toast.error(`❌ ${data?.description || data?.error || "Failed"}`);
- }
- };
-
- const checkWebhook = async () => {
- const data = await callTgAction("webhook-info");
- if (data?.ok !== undefined) {
- setWebhookStatus(data?.result || data);
- }
- };
-
- useEffect(() => {
- if (tgUrl) checkWebhook();
- }, [tgUrl]);
-
- return (
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
- <MessageCircle size={14} className="text-purple-400" /> 🤖 Telegram Bot /start Webhook
- </h3>
- <p className="text-[10px] text-zinc-400 mb-3">
- Set the webhook so /start sends a polished welcome message with website details and channel links.
- </p>
-
- {/* Webhook Status */}
- {webhookStatus && (
- <div className="bg-zinc-900/50 rounded-lg p-3 mb-3 text-[10px] space-y-1">
- <p className="text-zinc-300">
- <span className="text-zinc-500">URL:</span>{" "}
- <span className={webhookStatus.url ? "text-green-400" : "text-red-400"}>
- {webhookStatus.url || "Not Set"}
- </span>
- </p>
- {webhookStatus.last_error_date && (
- <p className="text-red-400">
- ⚠️ Last Error: {webhookStatus.last_error_message}
- </p>
- )}
- {webhookStatus.pending_update_count !== undefined && (
- <p className="text-zinc-400">
- Pending Updates: {webhookStatus.pending_update_count}
- </p>
- )}
- </div>
- )}
-
- <div className="flex gap-2 flex-wrap">
- <button onClick={setWebhook} disabled={loading || !tgUrl} className={`${btnPrimary} !px-3 text-xs`}>
- {loading ? "⏳" : "🔗"} Set Webhook
- </button>
- <button onClick={checkWebhook} disabled={loading || !tgUrl} className={`${btnSecondary} !px-3 text-xs`}>
- 🔍 Check Status
- </button>
- <button onClick={deleteWebhook} disabled={loading || !tgUrl}
- className="px-3 py-1.5 rounded-lg text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all">
- 🗑️ Remove Webhook
- </button>
- </div>
-
- {!tgUrl && (
- <p className="mt-2 text-[10px] text-yellow-400">
- ⚠️ Set the "Telegram Supabase URL" above first.
- </p>
- )}
- </div>
- );
-};
+// Legacy Telegram URL/webhook panels removed: EGD Router → telegram-post is the single URL source.
 
 // ==================== EMAIL SERVICE SECTION ====================
 const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
@@ -617,19 +426,15 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 };
 
 // ==================== CLOUDFLARE WORKER ROUTER SECTION ====================
-// ==================== FUNCTION URL OVERRIDES — every edge function gets a router URL field ====================
-const ROUTER_FUNCTIONS: Array<{ slug: string; label: string }> = EDGE_FUNCTION_LIBRARY.map(
- (e) => ({ slug: e.slug, label: e.label })
+// ==================== FUNCTION URL OVERRIDES — only admin self-deployed URLs ====================
+const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean }> = EDGE_FUNCTION_LIBRARY.map(
+ (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew })
 );
 
-// Functions whose source was just updated — user must paste the freshly-deployed
-// URL from EGD Manager into these fields. A green "NEW" badge highlights them.
-const NEW_ROUTER_PASTE = new Set<string>(["video-proxy", "live-tv-proxy", "video-download", "an-api", "apk-download", "telegram-post"]);
 
 const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
- const defaultBase = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1";
  const [urls, setUrls] = useState<Record<string, string>>({});
- const [enabled, setEnabled] = useState<Record<string, boolean>>({});
+  const [enabled, setEnabled] = useState<Record<string, boolean>>({});
  const [saving, setSaving] = useState<string | null>(null);
  const [testing, setTesting] = useState<string | null>(null);
  const [testResult, setTestResult] = useState<Record<string, { ok: boolean; ms: number }>>({});
@@ -641,7 +446,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  const e: Record<string, boolean> = {};
  ROUTER_FUNCTIONS.forEach(({ slug }) => {
  u[slug] = String(v?.[slug]?.customUrl || "");
- e[slug] = v?.[slug]?.enabled !== false;
+ e[slug] = v?.[slug]?.enabled === true;
  });
  setUrls(u);
  setEnabled(e);
@@ -649,38 +454,34 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  return () => unsub();
  }, []);
 
- const save = async (slug: string) => {
- setSaving(slug);
- try {
- await set(ref(db, `settings/functionOverrides/${slug}`), {
- enabled: enabled[slug] !== false,
- customUrl: (urls[slug] || "").trim(),
- });
- toast.success(`Saved · ${slug}`);
- } catch (e: any) { toast.error(e?.message || "Save failed"); }
- finally { setSaving(null); }
- };
+  const save = async (slug: string) => {
+   setSaving(slug);
+   try {
+   const url = (urls[slug] || "").trim();
+    if (url && !/^https?:\/\//i.test(url)) { toast.error("Paste a valid http/https function URL"); return; }
+     const active = Boolean(url) && enabled[slug] === true;
+   await set(ref(db, `settings/functionOverrides/${slug}`), {
+    enabled: active,
+   customUrl: url,
+    updatedAt: Date.now(),
+    source: "egd-router",
+   });
+   if (slug === "video-proxy") {
+    await remove(ref(db, "egdManager/config/playerProxyUrl"));
+   }
+    toast.success(active ? `Activated · ${slug}` : `Disabled · ${slug}`);
+   } catch (e: any) { toast.error(e?.message || "Save failed"); }
+   finally { setSaving(null); }
+  };
 
- const fillRecommended = (slug: string) =>
- setUrls((p) => ({ ...p, [slug]: `${defaultBase}/${slug}` }));
-
- const fillAllDefaults = async () => {
- setSaving("__all__");
- try {
- const next: Record<string, string> = {};
- for (const { slug } of ROUTER_FUNCTIONS) {
- const u = `${defaultBase}/${slug}`;
- next[slug] = u;
- await set(ref(db, `settings/functionOverrides/${slug}`), { enabled: true, customUrl: u });
- }
- setUrls(next);
- toast.success("All URLs reset to defaults");
- } catch (e: any) { toast.error(e?.message || "Save failed"); }
- finally { setSaving(null); }
+ const clearLocal = (slug: string) => {
+ setUrls((p) => ({ ...p, [slug]: "" }));
+ setEnabled((p) => ({ ...p, [slug]: false }));
  };
 
  const ping = async (slug: string) => {
- const u = (urls[slug] || `${defaultBase}/${slug}`).trim();
+ const u = (urls[slug] || "").trim();
+ if (!u) { toast.error("Paste and save a deployed URL first"); return; }
  setTesting(slug);
  const start = Date.now();
  try {
@@ -699,33 +500,33 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
  <div className="min-w-0">
  <h3 className="text-sm font-semibold flex items-center gap-2">
- <Link size={14} className="text-emerald-400" /> Edge Function URL Router
+  <Link size={14} className="text-emerald-400" /> EGD Router — Deployed URLs
  </h3>
  <p className="text-[10px] text-zinc-400 mt-1 break-words">
- Each Edge Function can be redirected to your own deployed URL. Leave empty to fall back to defaults.
+  Paste only the URLs you deployed yourself. Empty or disabled rows are not used by the app.
  </p>
  </div>
- <button onClick={fillAllDefaults} disabled={saving === "__all__"} className={`${btnSecondary} !px-3 !py-1.5 !text-[11px] inline-flex items-center gap-1.5 shrink-0`}>
- {saving === "__all__" ? <Loader2 className="animate-spin" size={12} /> : <RefreshCw size={12} />}
- Reset all to defaults
- </button>
  </div>
 
  <div className="space-y-2">
- {ROUTER_FUNCTIONS.map(({ slug, label }) => {
- const recommended = `${defaultBase}/${slug}`;
+  {ROUTER_FUNCTIONS.map(({ slug, label, isNew }) => {
  const res = testResult[slug];
- const isNew = NEW_ROUTER_PASTE.has(slug);
+ const isVideoProxy = slug === "video-proxy";
  return (
- <div key={slug} className={`rounded-xl border bg-zinc-900/40 p-3 min-w-0 ${isNew ? "border-emerald-400/70 ring-1 ring-emerald-400/40" : "border-zinc-700/50"}`}>
+ <div key={slug} className="rounded-xl border bg-zinc-900/40 p-3 min-w-0 border-zinc-700/50">
  <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
  <div className="min-w-0 flex items-center gap-2">
  <div className="min-w-0">
  <div className="text-xs font-semibold text-white truncate flex items-center gap-1.5">
  {label}
- {isNew && (
- <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500 text-black tracking-wider animate-pulse">
- NEW · paste URL
+  {isNew && (
+  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 tracking-wider">
+  NEW
+  </span>
+  )}
+ {isVideoProxy && (
+ <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 tracking-wider">
+ PLAYER PROXY
  </span>
  )}
  </div>
@@ -733,22 +534,26 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  </div>
  </div>
  <button
- onClick={() => setEnabled((p) => ({ ...p, [slug]: !(p[slug] !== false) }))}
- className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${enabled[slug] !== false ? 'bg-emerald-600' : 'bg-zinc-600'}`}
- title={enabled[slug] !== false ? "Enabled" : "Disabled"}
+  onClick={() => setEnabled((p) => ({ ...p, [slug]: !(p[slug] === true) }))}
+  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${enabled[slug] === true ? 'bg-emerald-600' : 'bg-zinc-600'}`}
+  title={enabled[slug] === true ? "Enabled" : "Disabled"}
  >
- <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${enabled[slug] !== false ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${enabled[slug] === true ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
  </button>
  </div>
  <input
  value={urls[slug] || ""}
- onChange={(e) => setUrls((p) => ({ ...p, [slug]: e.target.value }))}
- placeholder={recommended}
+  onChange={(e) => {
+  const value = e.target.value;
+  setUrls((p) => ({ ...p, [slug]: value }));
+  setEnabled((p) => ({ ...p, [slug]: Boolean(value.trim()) }));
+  }}
+  placeholder={`Paste deployed ${slug} URL here`}
  className={inputClass + " w-full text-[11px]"}
  />
  <div className="flex flex-wrap gap-1.5 mt-2">
- <button onClick={() => fillRecommended(slug)} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
- Use Default
+  <button onClick={() => clearLocal(slug)} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
+  Clear
  </button>
  <button onClick={() => save(slug)} disabled={saving === slug} className={`${btnPrimary} !px-2 !py-1 !text-[10px] inline-flex items-center gap-1`}>
  {saving === slug ? <Loader2 className="animate-spin" size={10} /> : <Save size={10} />} Save
@@ -770,110 +575,9 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  );
 };
 
-const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
- const [telegramPostUrl, setTelegramPostUrl] = useState("");
- const [telegramPostUrlInput, setTelegramPostUrlInput] = useState("");
-
- const recommendedShortenerUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/shorten-arolinks`;
- const recommendedTelegramAccessUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/link-share-bot`;
- const recommendedTelegramPostUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/telegram-post`;
-
- useEffect(() => {
- const unsub = onValue(ref(db, "settings/telegramProvider"), (snap) => {
- const value = String(snap.val()?.url || "");
- setTelegramPostUrl(value);
- setTelegramPostUrlInput(value);
- });
- return () => {
- unsub();
- };
- }, []);
-
- const copyText = async (value: string, label: string) => {
- try {
- await navigator.clipboard.writeText(value);
- toast.success(label);
- } catch {
- toast.error("Copy failed");
- }
- };
-
- const saveTelegramPostUrl = async () => {
- const url = telegramPostUrlInput.trim();
- await set(ref(db, "settings/telegramProvider"), { url });
- await set(ref(db, "settings/functionOverrides/telegram-post"), { enabled: true, customUrl: url || recommendedTelegramPostUrl });
- setTelegramPostUrl(url);
- toast.success("✅ Telegram Post URL saved");
- };
-
- return (
- <div>
+const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => (
  <FunctionUrlOverrides glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
-
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
- <Send size={14} className="text-blue-400" /> Telegram Post URL
- </h3>
- <p className="text-[10px] text-zinc-400 mb-3">
- খানে only Telegram Post function URL থাকবে। remaining কা andয়া all router block removed andয়া হয়েছে।
- </p>
- <div className="space-y-2">
- <input
- value={telegramPostUrlInput}
- onChange={(e) => setTelegramPostUrlInput(e.target.value)}
- placeholder={recommendedTelegramPostUrl}
- className={inputClass}
- />
- <div className="flex gap-2">
- <button onClick={() => setTelegramPostUrlInput(recommendedTelegramPostUrl)} className={`${btnSecondary} flex-1`}>
- Use Recommended
- </button>
- <button onClick={saveTelegramPostUrl} className={`${btnPrimary} flex-1`}>
- <Save size={12} /> Save
- </button>
- </div>
- {telegramPostUrl && <p className="text-[10px] text-green-400 break-all">✓ {telegramPostUrl}</p>}
- </div>
- </div>
-
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
- <Link size={14} className="text-amber-400" /> Recommended 2 Links
- </h3>
- <div className="space-y-3">
- <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/30 p-3">
- <div className="flex items-center justify-between gap-2 mb-1.5">
- <div className="min-w-0">
- <p className="text-[11px] font-semibold text-white">🔗 Shortener URL</p>
- <p className="text-[9px] text-zinc-400">Use this as the Ad service shortener function</p>
- </div>
- <button onClick={() => copyText(recommendedShortenerUrl, "Shortener URL copied")} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
- Copy
- </button>
- </div>
- <code className="text-[10px] text-cyan-300 break-all block">{recommendedShortenerUrl}</code>
- </div>
-
- <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/30 p-3">
- <div className="flex items-center justify-between gap-2 mb-1.5">
- <div className="min-w-0">
- <p className="text-[11px] font-semibold text-white">🤖 Telegram Access URL</p>
- <p className="text-[9px] text-zinc-400">Use this as the Telegram verify / unlock bot function</p>
- </div>
- <button onClick={() => copyText(recommendedTelegramAccessUrl, "Telegram Access URL copied")} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
- Copy
- </button>
- </div>
- <code className="text-[10px] text-cyan-300 break-all block">{recommendedTelegramAccessUrl}</code>
- </div>
- </div>
- </div>
-
- <AdServicesSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
- <AdGateCooldownConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
- </div>
- );
-};
+);
 
 // ==================== AD GATE COOLDOWN CONFIG ====================
 const AdGateCooldownConfig = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
@@ -8450,16 +8154,8 @@ ${footerLinksHtml}
  {/* Force notification re-prompt removed — FCM disabled site-wide */}
 
 
- {/* Proxy Server Selector */}
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-3.5 flex items-center gap-2">
- <Activity size={14} className="text-cyan-400" /> video প্রক্সি server
- </h3>
- <p className="text-[11px] text-zinc-400 mb-4">
- CDN When off, choose which proxy server streams the video। বিdifferent server test করে খো anyতে goodো স্পিড পা and।
- </p>
- <ProxyServerSelector glassCard={glassCard} />
- </div>
+  {/* Proxy Server Selector — REMOVED. Player proxy now comes only from
+     EGD Router → video-proxy URL (settings/functionOverrides/video-proxy). */}
 
  {/* Image Refresh from TMDB */}
  <ImageRefreshSection
@@ -8676,7 +8372,7 @@ ${footerLinksHtml}
 
   return (
   <div>
-  <LiveTvProxyConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+  {/* LiveTvProxyConfig removed — single proxy now configured via EGD Manager. */}
   <div className={`${glassCard} p-4 mb-4`}>
   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
   📺 {editId ? "Edit Channel" : "Add New Channel"}
@@ -10686,34 +10382,6 @@ const AnimeSaltManagerSection = ({
  const epSeasonJsonFileRef = useRef<HTMLInputElement>(null);
  const [epSeasonJsonTarget, setEpSeasonJsonTarget] = useState<number>(-1);
 
- // AnimeSalt custom URL config
- const [asEnabled, setAsEnabled] = useState(true);
- const [asCustomUrl, setAsCustomUrl] = useState("");
- const [asCustomUrlInput, setAsCustomUrlInput] = useState("");
-
- useEffect(() => {
- const unsub = onValue(ref(db, "settings/animesaltConfig"), (snap) => {
- const val = snap.val();
- setAsEnabled(val?.enabled !== false);
- setAsCustomUrl(val?.customUrl || "");
- setAsCustomUrlInput(val?.customUrl || "");
- });
- return () => unsub();
- }, []);
-
- const saveAsConfig = async () => {
- await set(ref(db, "settings/animesaltConfig"), { enabled: asEnabled, customUrl: asCustomUrlInput.trim() });
- setAsCustomUrl(asCustomUrlInput.trim());
- toast.success("✅ AnimeSalt config save done!");
- };
-
- const toggleAs = async () => {
- const next = !asEnabled;
- setAsEnabled(next);
- await set(ref(db, "settings/animesaltConfig/enabled"), next);
- toast.success(next ? "AnimeSalt on" : "AnimeSalt off");
- };
-
  const loadItems = async () => {
  setLoading(true);
  try {
@@ -11905,34 +11573,7 @@ const AnimeSaltManagerSection = ({
  )}
  </div>
 
- {/* AnimeSalt Custom URL Config */}
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
- ⚙️ AnimeSalt Source Config
- </h3>
- <p className="text-[10px] text-zinc-400 mb-3">
- custom URL দিলে সে from AnimeSalt data আallে। Cloudflare, Supabase, or any site URL day।
- </p>
- <div className="flex items-center justify-between mb-3 bg-zinc-800/40 rounded-xl p-3 border border-zinc-700/40">
- <div className="flex items-center gap-3">
- <div className={`w-3 h-3 rounded-full ${asEnabled ? 'bg-green-500' : 'bg-red-500'}`} />
- <span className="text-xs font-medium">{asEnabled ? 'on' : 'off'}</span>
- </div>
- <button onClick={toggleAs}
- className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors ${asEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}>
- <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${asEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
- </button>
- </div>
- <div className="flex gap-2 mb-2">
- <input value={asCustomUrlInput} onChange={e => setAsCustomUrlInput(e.target.value)}
- placeholder="https://your-worker.dev/animesalt" className={`${inputClass} flex-1`} />
- <button onClick={saveAsConfig} className={`${btnPrimary} !px-3`}>
- <Save size={12} /> save
- </button>
- </div>
- {asCustomUrl && <p className="text-[9px] text-cyan-400">⚡ custom URL: {asCustomUrl}</p>}
- </div>
-
+ {/* AN API URL is now configured only in EGD Router → AN API row. */}
  {/* Global AnimeSalt ON/OFF Toggle */}
  <div className={`${glassCard} p-4 mb-4`}>
  <div className="flex items-center justify-between">

@@ -702,6 +702,114 @@ div[style*="z-index: 2147483647"],
     100% { background-position: 300% 50%; }
   }
 
+  /* Single anime sakura splash loader — transform/opacity only for smooth mobile performance. */
+  @keyframes sakuraPetalFall {
+    0% { transform: translate3d(0, -12vh, 0) rotate(0deg) scale(0.72); opacity: 0; }
+    8% { opacity: var(--petal-opacity, 0.75); }
+    50% { transform: translate3d(calc(var(--drift, 40px) * 0.46), 50vh, 0) rotate(240deg) scale(1); }
+    92% { opacity: var(--petal-opacity, 0.75); }
+    100% { transform: translate3d(var(--drift, 40px), 112vh, 0) rotate(520deg) scale(0.86); opacity: 0; }
+  }
+
+  @keyframes sakuraSparkRain {
+    0% { transform: translate3d(0, -10vh, 0) scale(0.35); opacity: 0; }
+    18% { opacity: 1; }
+    72% { opacity: 0.9; }
+    100% { transform: translate3d(var(--drift, 24px), 108vh, 0) scale(1.08); opacity: 0; }
+  }
+
+  @keyframes sakuraAuraSpin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes sakuraSoftPulse {
+    0%, 100% { transform: scale(0.985); opacity: 0.72; }
+    50% { transform: scale(1.035); opacity: 1; }
+  }
+
+  @keyframes sakuraTitleGlow {
+    0%, 100% { background-position: 0% 50%; filter: drop-shadow(0 0 10px rgba(255, 170, 215, 0.28)); }
+    50% { background-position: 100% 50%; filter: drop-shadow(0 0 18px rgba(179, 235, 255, 0.42)); }
+  }
+
+  @keyframes sakuraSheen {
+    0%, 100% { transform: translate3d(-18%, 0, 0); opacity: 0.22; }
+    50% { transform: translate3d(18%, 0, 0); opacity: 0.62; }
+  }
+
+  @keyframes splFadeIn {
+    from { opacity: 0; transform: scale(0.94); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes confettiBurst {
+    0% { transform: translate3d(0,0,0) rotate(0deg) scale(0.3); opacity: 0; }
+    8% { opacity: 1; }
+    100% { transform: translate3d(var(--cx, 0px), var(--cy, -80px), 0) rotate(var(--cr, 540deg)) scale(1); opacity: 0; }
+  }
+
+  @keyframes rgbConicSpin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Petal/spark ejects radially from the spinner center outward */
+  @keyframes petalEject {
+    0%   { transform: translate3d(0,0,0) rotate(0deg) scale(0.2); opacity: 0; }
+    12%  { opacity: 1; }
+    100% { transform: translate3d(var(--ex, 200px), var(--ey, 0px), 0) rotate(var(--er, 720deg)) scale(1); opacity: 0; }
+  }
+
+  /* Expanding aura rings emitted from spinner */
+  @keyframes auraRing {
+    0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0.85; }
+    80%  { opacity: 0.18; }
+    100% { transform: translate(-50%, -50%) scale(5); opacity: 0; }
+  }
+
+  /* Light beams rotating out of the spinner */
+  @keyframes beamSpin {
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+
+  @keyframes sparkFlicker {
+    0%, 100% { filter: drop-shadow(0 0 6px currentColor) drop-shadow(0 0 12px currentColor); }
+    50%      { filter: drop-shadow(0 0 12px currentColor) drop-shadow(0 0 22px currentColor); }
+  }
+
+  /* Streak lines shooting outward from the spinner */
+  @keyframes streakOut {
+    0%   { transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) translateX(60px) scaleX(0.2); opacity: 0; }
+    20%  { opacity: 1; }
+    100% { transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) translateX(320px) scaleX(1); opacity: 0; }
+  }
+
+  /* Dots radiating outward (dust/particles) */
+  @keyframes dotOut {
+    0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
+    15%  { opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(1); opacity: 0; }
+  }
+
+  /* RGB rainbow text glow cycle */
+  @keyframes rgbTextGlow {
+    0%   { text-shadow: 0 0 8px #ff0055, 0 0 18px #ff0055, 0 0 32px #ff0055; }
+    25%  { text-shadow: 0 0 8px #ffd23b, 0 0 18px #ffae00, 0 0 32px #ff5a00; }
+    50%  { text-shadow: 0 0 8px #00ff85, 0 0 18px #00d4ff, 0 0 32px #00d4ff; }
+    75%  { text-shadow: 0 0 8px #6a5cff, 0 0 18px #a855f7, 0 0 32px #ff00c8; }
+    100% { text-shadow: 0 0 8px #ff0055, 0 0 18px #ff0055, 0 0 32px #ff0055; }
+  }
+
+  /* Slow drifting anime grid + scanlines bg */
+  @keyframes bgGridDrift {
+    0%   { background-position: 0 0, 0 0; }
+    100% { background-position: 80px 80px, 0 4px; }
+  }
+
+  @keyframes auraBreath {
+    0%, 100% { transform: translate(-50%,-50%) scale(0.95); opacity: 0.55; }
+    50%      { transform: translate(-50%,-50%) scale(1.1);  opacity: 0.9; }
+  }
+
   @keyframes runAcross {
     0% { transform: translateX(-24px); }
     100% { transform: translateX(96px); }
