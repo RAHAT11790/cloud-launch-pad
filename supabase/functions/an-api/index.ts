@@ -15,7 +15,7 @@ const UA =
 
 const cors: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "*",
 };
 
@@ -35,6 +35,21 @@ const decode = (s: string) =>
     .replace(/&nbsp;/g, " ")
     .replace(/<[^>]+>/g, "")
     .trim();
+
+const decodeSubtitleEntities = (value: string) =>
+  decode(value)
+    .replace(/\\\//g, "/")
+    .replace(/\\u0026/g, "&")
+    .replace(/\\u003d/g, "=")
+    .replace(/\\u003f/g, "?")
+    .replace(/\\u002f/gi, "/")
+    .replace(/\\x([0-9a-f]{2})/gi, (_m, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+
+function safeAtob(value: string): string {
+  try { return atob(value); } catch {}
+  try { return atob(value.replace(/-/g, "+").replace(/_/g, "/")); } catch {}
+  return "";
+}
 
 const parseHlsAttrs = (line: string): Record<string, string> => {
   const attrs: Record<string, string> = {};
@@ -197,6 +212,11 @@ function parseMaster(masterUrl: string, body: string) {
       streams.push({ url, filename, resolution: res, height, bandwidth: bw, label });
     }
   }
+  // Some AnimeSalt CDN responses are a media playlist, not a variant master.
+  // In that case the playable URL is the master/media URL itself.
+  if (streams.length === 0 && /^#EXTM3U/i.test(body) && /#EXTINF:/i.test(body)) {
+    streams.push({ url: masterUrl, filename: "auto.m3u8", resolution: "", height: 0, bandwidth: 0, label: "Auto" });
+  }
   streams.sort((a, b) => b.height - a.height);
   return { streams, audio: uniqueByUri(audio), subtitles: uniqueByUri(subtitles) };
 }
@@ -279,6 +299,38 @@ function collectPlayerJsSubtitles(html: string, baseUrl: string): any[] {
   return uniqueByUri(out);
 }
 
+
+function collectEmbedsFromHtml(html: string): string[] {
+  const out = new Set<string>();
+  const push = (value: string) => {
+    const raw = decodeSubtitleEntities(String(value || "").trim());
+    if (!raw) return;
+    const abs = raw.startsWith("//") ? `https:${raw}` : raw;
+    if (/^https?:\/\/[^\s"'<>]+\/video\/[a-f0-9]{16,}/i.test(abs)) out.add(abs);
+  };
+
+  const attrRe = /(?:src|data-src|data-embed|data-player|data-video)=["']([^"']+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = attrRe.exec(html))) push(m[1]);
+
+  const anyRe = /https?:\/\/[a-z0-9.-]+\/video\/[a-f0-9]{16,}/gi;
+  while ((m = anyRe.exec(html))) push(m[0]);
+
+  // AnimeSalt multi-language iframe stores short links in a base64 JSON `data=`
+  // payload. Keep these as fallback embed servers instead of discarding them.
+  const multiRe = /multi-lang-plyr\/player\.php\?data=([A-Za-z0-9_\-=+/]+)/gi;
+  while ((m = multiRe.exec(html))) {
+    const decoded = safeAtob(m[1]);
+    if (!decoded) continue;
+    try {
+      const arr = JSON.parse(decoded);
+      if (Array.isArray(arr)) arr.forEach((item) => push(String(item?.link || "")));
+    } catch {}
+  }
+
+  return Array.from(out);
+}
+
 async function extractFromPlayer(embedUrl: string) {
   // embedUrl: https://as-cdnNN.top/video/{hash}
   const m = embedUrl.match(/^(https?:\/\/[^\/]+)\/video\/([a-f0-9]+)/i);
@@ -303,11 +355,12 @@ async function extractFromPlayer(embedUrl: string) {
     body,
   });
   const txt = await res.text();
+  if (!res.ok) return { embed: embedUrl, error: `player upstream ${res.status}`, raw: txt.slice(0, 200) };
   let data: any;
   try { data = JSON.parse(txt); } catch {
     return { embed: embedUrl, error: "player did not return JSON", raw: txt.slice(0, 200) };
   }
-  const master = data.videoSource || data.securedLink || "";
+  const master = decodeSubtitleEntities(String(data.videoSource || data.securedLink || data.file || data.source || "")).trim();
   let parsed: any = { streams: [], audio: [], subtitles: [] };
   if (master) {
     try {
@@ -339,6 +392,8 @@ async function extractFromPlayer(embedUrl: string) {
     hash,
     poster: data.videoImage || "",
     master,
+    videoSource: master,
+    securedLink: master,
     streams: parsed.streams,
     audio: parsed.audio,
     subtitles: allSubs,
@@ -357,17 +412,7 @@ async function episode(slug: string, type?: string) {
   for (const url of candidates) {
     try {
       const h = await fetchText(url);
-      const found = new Set<string>();
-      const reIframe = /<iframe[^>]+(?:src|data-src)="([^"]+)"/gi;
-      let m: RegExpExecArray | null;
-      while ((m = reIframe.exec(h))) {
-        if (/\/video\/[a-f0-9]+/i.test(m[1])) found.add(m[1]);
-      }
-      const reData = /data-(?:src|embed|player|video)="([^"]+\/video\/[a-f0-9]+[^"]*)"/gi;
-      while ((m = reData.exec(h))) found.add(m[1]);
-      // any URL in HTML
-      const reAny = /https?:\/\/[a-z0-9.-]+\/video\/[a-f0-9]+/gi;
-      while ((m = reAny.exec(h))) found.add(m[0]);
+      const found = new Set<string>(collectEmbedsFromHtml(h));
       if (found.size > 0) { html = h; pageUrl = url; embeds = found; break; }
       if (!html) { html = h; pageUrl = url; }
     } catch {}
@@ -385,11 +430,21 @@ async function episode(slug: string, type?: string) {
       sources.push({ embed, error: (e as Error).message });
     }
   }
+  const playableSources = sources.filter((source) => source?.master || (Array.isArray(source?.streams) && source.streams.length > 0));
+  const links = playableSources
+    .flatMap((source) => Array.isArray(source?.streams) && source.streams.length > 0
+      ? source.streams.map((stream: any) => ({ quality: stream.label || (stream.height ? `${stream.height}p` : "Auto"), url: stream.url }))
+      : [{ quality: "Auto", url: source.master }])
+    .filter((entry) => entry.url);
   return {
     slug,
     title: titleM ? decode(titleM[1]) : slug,
     pageUrl,
     sources,
+    links,
+    embedUrl: sources[0]?.embed || "",
+    allEmbeds: sources.map((source) => source?.embed).filter(Boolean),
+    directUrl: playableSources[0]?.master || links[0]?.url || "",
   };
 }
 
@@ -588,8 +643,38 @@ Deno.serve(async (req) => {
   // Embed-theft protection is enforced at the UI layer instead.
 
   try {
+    // Backward-compatible JSON mode for the app/client library.
+    // Supported body shapes:
+    //   { url }                         -> raw HTML fetch
+    //   { action:"series", slug }       -> detail
+    //   { action:"movie"|"episode", slug } -> stream extraction
+    //   { action:"browse", type, page } -> raw list HTML
+    if (req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      const targetUrl = String(body?.url || "").trim();
+      if (targetUrl) return json({ success: true, html: await fetchText(targetUrl) });
+
+      const action = String(body?.action || "").trim().toLowerCase();
+      const slug = String(body?.slug || "").trim();
+      const type = String(body?.type || "series").trim();
+      if (action === "series" && slug) return json({ success: true, data: await detail(slug, "series") });
+      if ((action === "movie" || action === "episode") && slug) return json({ success: true, data: await episode(slug, action === "movie" ? "movies" : type) });
+      if (action === "browse") {
+        const safeType = type === "movies" ? "movies" : "series";
+        const page = Math.max(1, Number(body?.page || 1));
+        const listUrl = page > 1 ? `${AN_BASE}/${safeType}/page/${page}/` : `${AN_BASE}/${safeType}/`;
+        return json({ success: true, html: await fetchText(listUrl) });
+      }
+      return json({ success: false, error: "unsupported POST body" }, 400);
+    }
+
     if (path === "/" || path === "") {
       return json(API_ENDPOINTS);
+    }
+    if (path === "/raw") {
+      const target = url.searchParams.get("url") || "";
+      if (!target) return json({ error: "missing ?url=" }, 400);
+      return json({ success: true, html: await fetchText(target) });
     }
     if (path === "/search") {
       const q = url.searchParams.get("q") || "";

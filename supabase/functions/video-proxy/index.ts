@@ -58,24 +58,45 @@ const rewriteM3U8 = (text: string, baseUrl: string, proxyPrefix: string): string
 // ============================================================
 // Hosts come from the ALLOWED_HOSTS secret (comma/space/newline-separated).
 // Each entry can be a plain host ("rsanime03.lovable.app") or a wildcard
-// ("*.lovable.app"). If the secret is empty, every origin is allowed (open mode).
+// ("*.lovable.app"). Lovable preview hosts are always allowed for peer-review
+// testing; production domains should still be added to ALLOWED_HOSTS.
 const ALLOWED_HOSTS_RAW = Deno.env.get("ALLOWED_HOSTS") || "";
-const ALLOWED_HOST_RX: RegExp[] = ALLOWED_HOSTS_RAW
-  .split(/[\s,]+/)
-  .map((s) => s.trim().toLowerCase())
+const escapeRegex = (value: string) => value.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+const normalizeAllowedHost = (value: string) => {
+  const raw = value.trim().toLowerCase();
+  if (!raw) return "";
+  try {
+    if (/^https?:\/\//i.test(raw)) return new URL(raw).host.toLowerCase();
+  } catch {}
+  return raw.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+};
+const DEFAULT_ALLOWED_HOSTS = [
+  "localhost",
+  "127.0.0.1",
+  "*.lovable.app",
+  "lovable.app",
+  "*.lovableproject.com",
+  "lovableproject.com",
+];
+const ALLOWED_HOST_RX: RegExp[] = Array.from(new Set([
+  ...DEFAULT_ALLOWED_HOSTS,
+  ...ALLOWED_HOSTS_RAW.split(/[\s,]+/),
+]))
+  .map(normalizeAllowedHost)
   .filter(Boolean)
   .map((host) => {
-    const escaped = host.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\\\*/g, "[^.]+");
-    return new RegExp("^" + escaped + "(?::\\d+)?$", "i");
+    // Correct wildcard support: "*.lovable.app" must compile and match
+    // preview--rsanime03.lovable.app. The previous replace expected an
+    // already-escaped "\\*", leaving a raw "*" and crashing the function.
+    const wildcarded = host.split("*").map(escapeRegex).join("[^.]+")
+    return new RegExp("^" + wildcarded + "(?::\\d+)?$", "i");
   });
 
 const matchesAllowedHost = (urlStr: string | null): boolean => {
   if (!urlStr) return false;
-  if (ALLOWED_HOST_RX.length === 0) return true; // open mode
   try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
 };
 const isAllowedRequest = (req: Request): boolean => {
-  if (ALLOWED_HOST_RX.length === 0) return true;
   const origin = req.headers.get("origin");
   const referer = req.headers.get("referer");
   if (!origin && !referer) return true; // some WebViews strip both on Range
@@ -181,12 +202,23 @@ Deno.serve(async (req) => {
     delete minimal.Referer;
     delete minimal.Origin;
 
+    // Some RSFR/bot-hosting style HTTP servers close cloud requests when a
+    // Range header is present, even though the same file can stream as a plain
+    // 200 response. Keep Range first for normal seeking, then retry without it
+    // before declaring the server blocked.
     if (!looksLikeHlsRequest(targetUrl)) {
       withContext.Referer = `${targetUrl.protocol}//${targetUrl.host}/`;
       withContext.Origin = `${targetUrl.protocol}//${targetUrl.host}`;
       headerAttempts.push(minimal, withContext);
     } else {
       headerAttempts.push(minimal, withContext);
+    }
+    if (range && req.method === "GET") {
+      const minimalNoRange = { ...minimal };
+      const withContextNoRange = { ...withContext };
+      delete minimalNoRange.Range;
+      delete withContextNoRange.Range;
+      headerAttempts.push(minimalNoRange, withContextNoRange);
     }
 
     for (const candidateHeaders of headerAttempts) {
@@ -231,7 +263,12 @@ Deno.serve(async (req) => {
   const isM3u8 = /mpegurl|m3u8/.test(upstreamType) || /\.m3u8(\?|#|$)/i.test(effectiveTargetUrl.toString());
   if (isM3u8 && req.method !== "HEAD") {
     const text = await upstream.text();
-    const proxyPrefix = `https://${url.host}/functions/v1/video-proxy?url=`;
+    const proxySelf = new URL(req.url);
+    proxySelf.searchParams.delete("url");
+    proxySelf.searchParams.delete("download");
+    proxySelf.searchParams.delete("filename");
+    const existingParams = proxySelf.searchParams.toString();
+    const proxyPrefix = `${proxySelf.origin}${proxySelf.pathname}?${existingParams ? `${existingParams}&` : ""}url=`;
     respHeaders.delete("content-length");
     respHeaders.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
     respHeaders.set("cache-control", "no-store");

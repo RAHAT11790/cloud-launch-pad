@@ -6,7 +6,7 @@ import AdsterraAdManager from "@/components/AdsterraAdManager";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
-  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages, Info, Star, Tv, Share2, Bookmark, FolderDown
+  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages, Info, Star, Tv, Share2, Bookmark, FolderDown, RefreshCw
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
@@ -43,7 +43,7 @@ interface VideoServerOption {
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
-import { buildVideoDownloadUrl, triggerBulkBackgroundDownloads } from "@/lib/videoDownload";
+import { buildDirectDownloadUrl, buildVideoDownloadUrl, triggerBulkBackgroundDownloads } from "@/lib/videoDownload";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
@@ -133,7 +133,8 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   if (isHttp) {
     // HTTP source — ADMIN PROXY ONLY. If admin selected built-in Supabase,
     // applyProxyConfig() puts that proxy URL into proxyUrl first.
-    // Never add the raw http:// URL to <video>; HTTPS pages will block it.
+    // Never inject the raw http:// URL into an https page: browsers block it as
+    // mixed content and the player appears broken before failover can help.
     addCandidate(customProxyCandidate);
   } else {
     // HTTPS source — strict direct playback only. Never route one HTTPS video
@@ -622,6 +623,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [adGateActive, setAdGateActive] = useState(false);
   const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
   const [shortenLoading, setShortenLoading] = useState(false);
+  const [adGateError, setAdGateError] = useState("");
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
   const [showInfoSheet, setShowInfoSheet] = useState(false);
@@ -1370,6 +1372,32 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     localStorage.setItem("rsanime_ad_access", expiry.toString());
   }, []);
 
+  const loadAdGateLinks = useCallback(async (isCancelled: () => boolean = () => false) => {
+    setShortenLoading(true);
+    setAdGateError("");
+    try {
+      const result = await createUnlockLinksForAllServices();
+      if (isCancelled()) return;
+      setShortenLoading(false);
+      if (result.ok && result.links.length > 0) {
+        setAdLinks(result.links);
+        setAdGateError("");
+      } else {
+        setAdLinks([]);
+        setAdGateError(
+          result.error === "no_services"
+            ? "No ad/unlock service is enabled in Admin."
+            : "Ad link network is blocked right now. Please retry.",
+        );
+      }
+    } catch {
+      if (isCancelled()) return;
+      setShortenLoading(false);
+      setAdLinks([]);
+      setAdGateError("Ad link network is blocked right now. Please retry.");
+    }
+  }, []);
+
   // Premium check (device limit is now enforced at login time)
   useEffect(() => {
     const getUserId = (): string | null => {
@@ -1402,6 +1430,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     if (unlockBlocked) {
       setAdGateActive(false);
+      setAdGateError("");
       if (videoRef.current) {
         videoRef.current.pause();
         videoRef.current.src = "";
@@ -1411,10 +1440,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     if (isPremium || has24hAccess()) {
       setAdGateActive(false);
+      setAdGateError("");
       return;
     }
     if (isAdGateCooldownActive()) {
       setAdGateActive(false);
+      setAdGateError("");
       return;
     }
     // Shortener master toggle: if admin disabled it, give free users instant access
@@ -1423,23 +1454,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // No access - block video and show ad gate
       markAdGateShownNow();
       setAdGateActive(true);
-      setShortenLoading(true);
+      setAdLinks([]);
+      setAdGateError("");
       timeoutId = setTimeout(() => {
         if (cancelled) return;
         setShortenLoading(false);
-        setAdGateActive(false);
-      }, 2000);
-      createUnlockLinksForAllServices().then((result) => {
-        if (cancelled) return;
+        setAdGateError("Ad link network is taking too long. Please retry.");
+      }, 15000);
+      loadAdGateLinks(() => cancelled).finally(() => {
         if (timeoutId) clearTimeout(timeoutId);
-        setShortenLoading(false);
-        if (result.ok && result.links.length > 0) setAdLinks(result.links);
-        else setAdGateActive(false);
-      }).catch(() => {
-        if (cancelled) return;
-        if (timeoutId) clearTimeout(timeoutId);
-        setShortenLoading(false);
-        setAdGateActive(false);
       });
     });
 
@@ -1447,7 +1470,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
+  }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded, loadAdGateLinks]);
 
   const handleToggleWatchlist = useCallback(() => {
     if (!animeId) {
@@ -1510,8 +1533,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setShareFallback({ url, title: shareTitle });
   }, [buildShareLinkForEpisode, shareLink, title]);
 
-  const handleOpenAdLink = useCallback(async (url: string, _service?: AdService) => {
+  const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
     const { openExternalBrowser, openTelegramDeepLink } = await import("@/lib/openExternal");
+    const isTelegramUnlock = service?.mode === "miniapp" || url.startsWith("miniapp://") || url.startsWith("telegram://");
+    if (!isTelegramUnlock && url) {
+      openExternalBrowser(url);
+      return;
+    }
     try {
       const fb = await import("@/lib/firebase");
       const { createTelegramBotUnlockLink } = await import("@/lib/unlockAccess");
@@ -1523,8 +1551,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
       const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramVerifyBotUsername"));
       const botUsername = String(botSnap.val() || "").replace(/^@/, "").trim();
-      window.location.href = `https://t.me/${botUsername}`;
-      return;
+      if (botUsername) {
+        window.location.href = `https://t.me/${botUsername}`;
+        return;
+      }
     } catch {}
     if (url) {
       openExternalBrowser(url);
@@ -1732,10 +1762,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer, manualServerSelected]);
 
   const tryNextPlaybackRoute = useCallback((lastKnownTime = 0) => {
-    if (!currentSrc) return false;
+    const failedKey = currentSrc || activeSourceBaseRef.current || sourceBaseRef.current;
+    if (!failedKey) return false;
 
-    console.log('Video failed after retries. URL:', currentSrc);
-    failedSrcsRef.current.add(currentSrc);
+    console.log('Video failed after retries. URL:', failedKey);
+    failedSrcsRef.current.add(failedKey);
 
     // Same quality, alternate route first (admin proxy → built-in proxy, etc.)
     const sameQualityRouteFallback = buildPlaybackCandidates(
@@ -1744,7 +1775,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       proxyUrl || undefined,
       proxyApiKey || undefined,
       preferProxy
-    ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
+    ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && candidateSrc !== failedKey);
 
     if (sameQualityRouteFallback) {
       pendingSeek.current = lastKnownTime || videoRef.current?.currentTime || 0;
@@ -1769,7 +1800,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           proxyUrl || undefined,
           proxyApiKey || undefined,
           preferProxy
-        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
+        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && candidateSrc !== failedKey);
         return route ? { option: q, raw: candidateRaw, src: route } : null;
       })
       .find(Boolean) as { option: QualityOption; raw: string; src: string } | null;
@@ -2581,6 +2612,53 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => window.clearTimeout(timer);
   }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, tryNextPlaybackRoute]);
 
+  // Fast-detect cloud-blocked HTTP proxies (RSFR/bot-hosting style). The proxy
+  // can fail with a quick 502 while the video element waits much longer before
+  // firing a media error. Probe one byte and move to the direct/failover route
+  // immediately when the proxy endpoint itself reports failure.
+  useEffect(() => {
+    if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
+    if (!/\/functions\/v1\/video-proxy\?/i.test(currentSrc)) return;
+    let nested = "";
+    try { nested = new URL(currentSrc).searchParams.get("url") || ""; } catch {}
+    if (!/^http:\/\//i.test(nested)) return;
+    const ac = new AbortController();
+    const t = window.setTimeout(() => ac.abort(), 6500);
+    fetch(currentSrc, { headers: { Range: "bytes=0-0" }, signal: ac.signal })
+      .then((res) => {
+        if (res.status >= 500 || res.status === 403 || res.status === 404) {
+          tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
+        }
+        try { res.body?.cancel(); } catch {}
+      })
+      .catch((err) => {
+        // Timeout is not proof that the server is blocked; let the real video
+        // element/watchdog decide. Only immediate network/proxy failures should
+        // trigger the route scanner.
+        if ((err as any)?.name === "AbortError") return;
+        tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
+      })
+      .finally(() => window.clearTimeout(t));
+    return () => {
+      window.clearTimeout(t);
+      ac.abort();
+    };
+  }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, tryNextPlaybackRoute]);
+
+  // If the active admin server resolves to http:// but no EGD Router video-proxy
+  // URL is saved, there is no legal browser route (HTTPS pages block raw HTTP).
+  // Do not leave the player on a blank src forever — immediately continue the
+  // same quality scan/server failover chain.
+  useEffect(() => {
+    if (!playbackRouteReady || adGateActive || isEmbedPlayback) return;
+    const raw = activeSourceBaseRef.current || getServerScopedSource(sourceBaseRef.current || src, activeServerIndex);
+    if (!raw || !isInsecureHttpSource(raw) || proxyUrl) return;
+    const t = window.setTimeout(() => {
+      tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [activeServerIndex, adGateActive, getServerScopedSource, isEmbedPlayback, playbackRouteReady, proxyUrl, src, tryNextPlaybackRoute, videoServerFingerprint]);
+
   const applyPendingSeek = useCallback((targetVideo?: HTMLVideoElement | null) => {
     const v = targetVideo || videoRef.current;
     const target = pendingSeek.current;
@@ -3384,8 +3462,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         clearTimeout(singleTapTimerRef.current);
         singleTapTimerRef.current = null;
       }
-      if (relX < 0.33) seek(-10);
-      else if (relX > 0.66) seek(10);
+      if (relX < 0.3) seek(-10);
+      else if (relX > 0.7) seek(10);
       else {
         togglePlay();
         setSkipIndicator({ side: "center", text: playing ? "⏸" : "▶" });
@@ -3466,7 +3544,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if ((!swipeState.type || swipeState.type === "fullscreen") && Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx) * 1.2) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const relX = (swipeState.startX - rect.left) / rect.width;
-      if (relX > 0.25 && relX < 0.75) {
+      if (relX >= 0.3 && relX <= 0.7) {
         e.preventDefault();
         e.stopPropagation();
         const previewY = dy < 0
@@ -3489,7 +3567,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!swipeState.type && Math.abs(dy) > 20) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const relX = (swipeState.startX - rect.left) / rect.width;
-      setSwipeState({ ...swipeState, type: relX > 0.5 ? "volume" : "brightness" });
+      if (relX < 0.3) {
+        setSwipeState({ ...swipeState, type: "brightness" });
+      } else if (relX > 0.7) {
+        setSwipeState({ ...swipeState, type: "volume" });
+      } else {
+        return;
+      }
     }
     if (swipeState.type === "volume") {
       const newBoosted = Math.min(MAX_VOL, Math.max(0, boostedVolume - dy * 0.8));
@@ -3534,7 +3618,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       : "scale(1)";
 
   return (
-    <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
+    <div className={`rs-video-player-root fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
       {/* Back arrow lives inside the controls overlay below, so it hides/shows with controls */}
 
 
@@ -3543,7 +3627,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         {/* Video Container - will-change for GPU compositing */}
         <div
           ref={videoContainerRef}
-          className={`relative bg-black overflow-hidden ${
+          className={`rs-video-player-shell relative bg-black overflow-hidden ${
             isFullscreen 
               ? "w-screen h-screen rounded-none player-fs-enter" 
               : "w-full rounded-none aspect-video sticky top-0 z-40"
@@ -4311,6 +4395,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   <Loader2 className="w-5 h-5 animate-spin text-primary" />
                   <span className="text-sm text-muted-foreground">Preparing links...</span>
                 </div>
+              ) : adGateError ? (
+                <div className="space-y-3 rounded-xl border border-red-500/25 bg-red-500/10 p-3">
+                  <p className="text-sm text-red-200">{adGateError}</p>
+                  <button
+                    onClick={() => loadAdGateLinks()}
+                    className="w-full py-2.5 rounded-xl bg-red-500 text-white font-semibold flex items-center justify-center gap-2 transition-all hover:scale-105 text-sm"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Retry ad link
+                  </button>
+                </div>
               ) : (
                 <div className="space-y-2">
                   {adLinks.map((link, i) => (
@@ -4710,7 +4805,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             const directCandidate = [u, ...candidates].find((candidate) => isDirectDownloadCandidate(candidate));
             if (!directCandidate) return "";
 
-            return buildVideoDownloadUrl(directCandidate, buildDownloadFileName(String(sub || title), quality)) || "";
+            return buildVideoDownloadUrl(directCandidate, buildDownloadFileName(String(sub || title), quality)) || buildDirectDownloadUrl(directCandidate) || "";
           };
 
           const buildDlId = (q: string, sub: string) =>

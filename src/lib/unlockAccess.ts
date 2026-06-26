@@ -6,6 +6,7 @@ import { getDeviceFingerprint, getDeviceId, getDeviceInfo } from "@/lib/premiumD
 const UNLOCK_TOKEN_TTL_MS = 15 * 60 * 1000;
 const DEFAULT_FREE_ACCESS_DURATION_MS = 24 * 60 * 60 * 1000;
 const AD_GATE_LAST_SHOWN_KEY = "rs_ad_gate_last_shown_at";
+const AD_LINK_FETCH_TIMEOUT_MS = 12_000;
 
 // Admin-configurable cooldown (minutes). 0 = no cooldown (every play shows ad gate).
 let _adGateCooldownMs = 0;
@@ -173,15 +174,25 @@ export const isAdGateCooldownActive = (): boolean => getRemainingAdGateCooldownM
 
 /** Shorten via dedicated shortener URL, legacy functionUrl, or generic site+apiKey */
 async function shortenWithService(svc: AdService, callbackUrl: string): Promise<string | null> {
+  const fetchJsonWithTimeout = async (input: RequestInfo | URL, init?: RequestInit): Promise<any> => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), AD_LINK_FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(input, { ...init, signal: controller.signal });
+      return await res.json().catch(() => ({}));
+    } finally {
+      window.clearTimeout(timer);
+    }
+  };
+
   const shortenerUrl = svc.shortenerFunctionUrl || (svc.functionUrl && !svc.functionUrl.startsWith("telegram://") && !svc.functionUrl.startsWith("generic://") ? svc.functionUrl : "");
   if (shortenerUrl) {
     try {
-      const res = await fetch(shortenerUrl, {
+      const data = await fetchJsonWithTimeout(shortenerUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: callbackUrl }),
       });
-      const data = await res.json();
       const out = data?.shortenedUrl || data?.short || data?.url || null;
       if (out) return out;
     } catch {}
@@ -190,8 +201,7 @@ async function shortenWithService(svc: AdService, callbackUrl: string): Promise<
     try {
       const base = svc.siteBase.replace(/\/+$/, "");
       const apiUrl = `${base}/api?api=${encodeURIComponent(svc.apiKey)}&url=${encodeURIComponent(callbackUrl)}`;
-      const r = await fetch(apiUrl);
-      const d = await r.json().catch(() => ({}));
+      const d = await fetchJsonWithTimeout(apiUrl);
       const out = d?.shortenedUrl || d?.short || (typeof d?.url === "string" ? d.url : null);
       if (out) return out;
     } catch {}
@@ -226,7 +236,7 @@ export const createUnlockLinksForAllServices = async (): Promise<{ ok: boolean; 
   const expiresAt = now + UNLOCK_TOKEN_TTL_MS;
 
   const results: { service: AdService; shortUrl: string }[] = [];
-  await Promise.all(services.map(async (svc) => {
+  await Promise.allSettled(services.map(async (svc) => {
     // Mini App mode: no shortener — VideoPlayer will redirect to Telegram instead
     if (svc.mode === "miniapp") {
       results.push({ service: svc, shortUrl: "miniapp://telegram" });
