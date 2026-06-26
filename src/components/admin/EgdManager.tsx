@@ -683,6 +683,35 @@ export default function EgdManager({
         </div>
       )}
 
+      {/* ===== Player Proxy URL — single source of truth for VideoPlayer ===== */}
+      <div className={glassCard + " p-4 sm:p-5"}>
+        <h3 className="font-bold flex items-center gap-2 text-sm sm:text-base mb-2">
+          <LinkIcon size={16} className="text-cyan-400" /> Player Proxy URL
+        </h3>
+        <p className="text-[11px] text-zinc-400 mb-3 leading-relaxed">
+          Deploy <code className="bg-zinc-800 px-1 rounded">video-proxy</code> via the Code Library below, then paste its function URL here.
+          The video player uses this single URL for every server — HTTP servers get streamed through the proxy, HTTPS servers get domain-lock protection only.
+          Leave empty to play HTTPS servers directly with no protection.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            className={inputClass + " flex-1 min-w-0"}
+            placeholder="https://xxxx.supabase.co/functions/v1/video-proxy"
+            value={playerProxyUrl}
+            onChange={(e) => setPlayerProxyUrl(e.target.value)}
+          />
+          <button
+            onClick={savePlayerProxyUrl}
+            disabled={savingPlayerProxy}
+            className={btnPrimary + " inline-flex items-center justify-center gap-2 shrink-0"}
+          >
+            {savingPlayerProxy ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
+            Save
+          </button>
+        </div>
+      </div>
+
+
       {/* ===== Code Library — one click loads source + secret slots ===== */}
 
       <div className={glassCard + " p-4 sm:p-5"}>
