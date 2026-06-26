@@ -3,50 +3,51 @@ import { useBranding } from "@/hooks/useBranding";
 /**
  * Ultra-optimized splash loader.
  * - Compact RGB conic spinner sized just slightly larger than the logo image.
- * - Sakura petal fall + party-spray confetti burst behind the logo.
- * - Transform/opacity-only animations for smooth playback.
+ * - Everything radiates OUTWARD from the spinner: flower petals, sparks,
+ *   rotating light beams, expanding aura rings, confetti burst.
+ * - Transform/opacity only, GPU friendly.
  */
 
 const LOGO_SIZE = 96;
-const RING_SIZE = 128; // a touch bigger than the logo
+const RING_SIZE = 128;
 
-// Fire embers falling from top like flower petals
-const embers = Array.from({ length: 22 }, (_, i) => ({
-  left: `${(i * 11 + (i % 4) * 5) % 100}%`,
-  delay: `${(i * 0.37) % 6}s`,
-  dur: `${5.5 + (i % 5) * 0.8}s`,
-  drift: `${(i % 2 ? 1 : -1) * (28 + (i % 6) * 16)}px`,
-  size: 8 + (i % 4) * 4,
-  hue: i % 3, // 0=red, 1=orange, 2=yellow
-}));
+const palette = ["#ff3b6b", "#ffd23b", "#3bd1ff", "#7cff8a", "#c47bff", "#ffa14a", "#ff6ad5"];
 
-// Party-spray confetti burst (from center) — fires repeatedly
-const confettiColors = ["#ff3b6b", "#ffd23b", "#3bd1ff", "#7cff8a", "#c47bff", "#ffa14a"];
-const burst = Array.from({ length: 26 }, (_, i) => {
-  const angle = (i / 26) * Math.PI * 2;
-  const radius = 160 + (i % 5) * 30;
+// Radial petals/sparks ejected from the spinner center
+const PETAL_COUNT = 36;
+const petals = Array.from({ length: PETAL_COUNT }, (_, i) => {
+  const angle = (i / PETAL_COUNT) * Math.PI * 2 + (i % 3) * 0.18;
+  const distance = 240 + (i % 6) * 40; // outward distance in px
   return {
-    cx: `${Math.cos(angle) * radius}px`,
-    cy: `${Math.sin(angle) * radius - 40}px`,
-    cr: `${(i % 2 ? 1 : -1) * (360 + (i % 4) * 180)}deg`,
-    delay: `${(i * 0.07) % 2.6}s`,
-    dur: `${2.4 + (i % 5) * 0.3}s`,
-    color: confettiColors[i % confettiColors.length],
-    w: 5 + (i % 3) * 2,
-    h: 9 + (i % 4) * 3,
+    ex: `${Math.cos(angle) * distance}px`,
+    ey: `${Math.sin(angle) * distance}px`,
+    er: `${(i % 2 ? 1 : -1) * (360 + (i % 5) * 180)}deg`,
+    delay: `${(i * 0.13) % 3.2}s`,
+    dur: `${2.8 + (i % 5) * 0.35}s`,
+    color: palette[i % palette.length],
+    size: 10 + (i % 4) * 4,
+    isPetal: i % 2 === 0,
   };
 });
 
-// Drifting ribbons from top (party streamers)
-const ribbons = Array.from({ length: 14 }, (_, i) => ({
-  left: `${(i * 19 + 4) % 100}%`,
-  delay: `${(i * 0.33) % 5}s`,
-  dur: `${5.5 + (i % 5) * 0.6}s`,
-  drift: `${(i % 2 ? 1 : -1) * (24 + (i % 5) * 12)}px`,
-  color: confettiColors[i % confettiColors.length],
-  w: 4,
-  h: 14 + (i % 3) * 4,
-}));
+// Confetti burst (smaller, ribbon-like) also from center
+const burst = Array.from({ length: 22 }, (_, i) => {
+  const angle = (i / 22) * Math.PI * 2 + 0.4;
+  const radius = 150 + (i % 5) * 28;
+  return {
+    cx: `${Math.cos(angle) * radius}px`,
+    cy: `${Math.sin(angle) * radius}px`,
+    cr: `${(i % 2 ? 1 : -1) * (360 + (i % 4) * 180)}deg`,
+    delay: `${(i * 0.09) % 2.2}s`,
+    dur: `${2.0 + (i % 5) * 0.28}s`,
+    color: palette[i % palette.length],
+    w: 5 + (i % 3) * 2,
+    h: 10 + (i % 4) * 3,
+  };
+});
+
+// Expanding aura rings
+const auras = [0, 0.7, 1.4, 2.1];
 
 const SplashLoader = () => {
   const branding = useBranding();
@@ -59,65 +60,103 @@ const SplashLoader = () => {
       className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden"
       style={{
         background:
-          "radial-gradient(ellipse at 50% 22%, rgba(180,120,255,0.18), transparent 42%), radial-gradient(ellipse at 18% 82%, rgba(255,170,90,0.12), transparent 44%), radial-gradient(ellipse at 82% 78%, rgba(90,200,255,0.14), transparent 44%), linear-gradient(180deg, #07060d 0%, #100818 55%, #050409 100%)",
+          "radial-gradient(ellipse at 50% 50%, rgba(180,120,255,0.18), transparent 45%), radial-gradient(ellipse at 18% 82%, rgba(255,170,90,0.10), transparent 44%), radial-gradient(ellipse at 82% 78%, rgba(90,200,255,0.12), transparent 44%), linear-gradient(180deg, #07060d 0%, #100818 55%, #050409 100%)",
         animation: "splFadeIn 0.35s ease-out",
       }}
     >
-      {/* Fire embers falling from top */}
-      {embers.map((e, i) => {
-        const grad =
-          e.hue === 0
-            ? "radial-gradient(circle at 35% 30%, #fff3a8 0%, #ffd24a 25%, #ff7a1a 55%, #ff2d00 80%, rgba(120,0,0,0) 100%)"
-            : e.hue === 1
-            ? "radial-gradient(circle at 35% 30%, #fff1cc 0%, #ffae3a 30%, #ff5a00 65%, rgba(120,20,0,0) 100%)"
-            : "radial-gradient(circle at 35% 30%, #ffffff 0%, #ffe27a 30%, #ffb02a 60%, rgba(180,60,0,0) 100%)";
-        return (
+      {/* Emission stage — everything anchored to viewport center */}
+      <div className="absolute left-1/2 top-1/2 pointer-events-none" style={{ width: 0, height: 0 }}>
+        {/* Expanding aura rings emitted from spinner */}
+        {auras.map((delay, i) => (
           <span
-            key={`ember-${i}`}
-            className="absolute top-0 pointer-events-none"
+            key={`aura-${i}`}
+            className="absolute"
             style={{
-              left: e.left,
-              width: e.size,
-              height: e.size * 1.5,
-              borderRadius: "100% 0 100% 18%",
-              background: grad,
-              // @ts-ignore
-              "--drift": e.drift,
-              animation: `fireEmberFall ${e.dur} linear ${e.delay} infinite, emberFlicker 1.2s ease-in-out ${e.delay} infinite`,
+              left: 0,
+              top: 0,
+              width: RING_SIZE,
+              height: RING_SIZE,
+              borderRadius: "9999px",
+              border: "2px solid rgba(255,255,255,0.55)",
+              boxShadow:
+                "0 0 24px rgba(255,90,180,0.35), inset 0 0 18px rgba(120,200,255,0.25)",
+              transform: "translate(-50%,-50%) scale(0.2)",
+              animation: `auraRing 2.8s ease-out ${delay}s infinite`,
+              willChange: "transform, opacity",
+            }}
+          />
+        ))}
+
+        {/* Rotating light beams (conic) */}
+        <div
+          className="absolute"
+          style={{
+            left: 0,
+            top: 0,
+            width: 560,
+            height: 560,
+            borderRadius: "9999px",
+            background:
+              "conic-gradient(from 0deg, transparent 0deg, rgba(255,90,180,0.18) 14deg, transparent 30deg, transparent 90deg, rgba(120,200,255,0.16) 104deg, transparent 120deg, transparent 180deg, rgba(255,210,90,0.16) 194deg, transparent 210deg, transparent 270deg, rgba(140,255,160,0.14) 284deg, transparent 300deg)",
+            transform: "translate(-50%,-50%) rotate(0deg)",
+            animation: "beamSpin 9s linear infinite",
+            filter: "blur(2px)",
+            willChange: "transform",
+          }}
+        />
+        <div
+          className="absolute"
+          style={{
+            left: 0,
+            top: 0,
+            width: 460,
+            height: 460,
+            borderRadius: "9999px",
+            background:
+              "conic-gradient(from 180deg, transparent 0deg, rgba(196,123,255,0.18) 20deg, transparent 40deg, transparent 120deg, rgba(255,160,90,0.18) 140deg, transparent 160deg, transparent 240deg, rgba(90,255,200,0.16) 260deg, transparent 280deg)",
+            transform: "translate(-50%,-50%) rotate(0deg)",
+            animation: "beamSpin 7s linear infinite reverse",
+            filter: "blur(2px)",
+            willChange: "transform",
+          }}
+        />
+
+        {/* Radiating petals + sparks */}
+        {petals.map((p, i) => (
+          <span
+            key={`petal-${i}`}
+            className="absolute"
+            style={{
+              left: 0,
+              top: 0,
+              width: p.size,
+              height: p.isPetal ? p.size * 1.5 : p.size,
+              marginLeft: -p.size / 2,
+              marginTop: -p.size / 2,
+              borderRadius: p.isPetal ? "100% 0 100% 0" : "9999px",
+              background: p.isPetal
+                ? `radial-gradient(circle at 30% 30%, #fff, ${p.color} 55%, transparent 100%)`
+                : `radial-gradient(circle, #fff 0%, ${p.color} 50%, transparent 80%)`,
+              color: p.color,
+              boxShadow: `0 0 10px ${p.color}cc, 0 0 22px ${p.color}66`,
+              // @ts-ignore CSS vars
+              "--ex": p.ex,
+              "--ey": p.ey,
+              "--er": p.er,
+              animation: `petalEject ${p.dur} ease-out ${p.delay} infinite, sparkFlicker 1.4s ease-in-out ${p.delay} infinite`,
               willChange: "transform, opacity, filter",
             }}
           />
-        );
-      })}
+        ))}
 
-      {/* Party streamers falling */}
-      {ribbons.map((r, i) => (
-        <span
-          key={`rib-${i}`}
-          className="absolute top-0 pointer-events-none"
-          style={{
-            left: r.left,
-            width: r.w,
-            height: r.h,
-            background: r.color,
-            borderRadius: 2,
-            boxShadow: `0 0 10px ${r.color}aa`,
-            // @ts-ignore
-            "--drift": r.drift,
-            animation: `confettiRibbon ${r.dur} linear ${r.delay} infinite`,
-            willChange: "transform, opacity",
-          }}
-        />
-      ))}
-
-      {/* Center stage: confetti burst + RGB spinner + logo */}
-      <div className="relative flex items-center justify-center" style={{ width: RING_SIZE, height: RING_SIZE }}>
-        {/* Confetti party-spray bursting from center, behind spinner */}
+        {/* Confetti burst */}
         {burst.map((b, i) => (
           <span
             key={`burst-${i}`}
-            className="absolute top-1/2 left-1/2 pointer-events-none"
+            className="absolute"
             style={{
+              left: 0,
+              top: 0,
               width: b.w,
               height: b.h,
               marginLeft: -b.w / 2,
@@ -134,8 +173,10 @@ const SplashLoader = () => {
             }}
           />
         ))}
+      </div>
 
-        {/* RGB conic spinner ring */}
+      {/* Spinner + logo (above emissions) */}
+      <div className="relative flex items-center justify-center" style={{ width: RING_SIZE, height: RING_SIZE }}>
         <div
           className="absolute rounded-full"
           style={{
@@ -147,7 +188,6 @@ const SplashLoader = () => {
             willChange: "transform",
           }}
         />
-        {/* Inner mask to make it a ring */}
         <div
           className="absolute rounded-full"
           style={{
@@ -157,7 +197,6 @@ const SplashLoader = () => {
           }}
         />
 
-        {/* Logo */}
         {logo ? (
           <img
             src={logo}
@@ -183,10 +222,9 @@ const SplashLoader = () => {
         )}
       </div>
 
-      {/* Title — solid readable with subtle RGB sweep */}
       {title && (
         <h1
-          className="mt-8 px-5 text-center font-black leading-tight"
+          className="relative mt-8 px-5 text-center font-black leading-tight"
           style={{
             fontSize: "clamp(22px,5.8vw,34px)",
             letterSpacing: "0.16em",
@@ -202,7 +240,7 @@ const SplashLoader = () => {
 
       {tagline && (
         <div
-          className="mt-2 px-4 text-center"
+          className="relative mt-2 px-4 text-center"
           style={{
             color: "#f3f0ff",
             fontSize: "clamp(11px,2.6vw,13px)",
@@ -216,8 +254,7 @@ const SplashLoader = () => {
         </div>
       )}
 
-      {/* Progress bar */}
-      <div className="mt-7 w-[260px] max-w-[70vw] h-[3px] bg-white/10 overflow-hidden relative rounded-full">
+      <div className="relative mt-7 w-[260px] max-w-[70vw] h-[3px] bg-white/10 overflow-hidden rounded-full">
         <div
           className="absolute inset-y-0 w-2/3"
           style={{
@@ -228,7 +265,7 @@ const SplashLoader = () => {
           }}
         />
       </div>
-      <div className="mt-3 text-[10px] tracking-[0.45em] text-white/70" style={{ fontFamily: "ui-monospace,monospace" }}>
+      <div className="relative mt-3 text-[10px] tracking-[0.45em] text-white/70" style={{ fontFamily: "ui-monospace,monospace" }}>
         SYS · LOADING
       </div>
     </div>
