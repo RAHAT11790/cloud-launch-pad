@@ -128,9 +128,25 @@ const isPlaybackCandidate = (value: string) => {
 const pickPlaybackFields = (payload: any) => {
   const rawLinks = Array.isArray(payload?.links) ? payload.links : [];
   const rawEmbedUrls = Array.isArray(payload?.embedUrls) ? payload.embedUrls : [];
+  const sourceLinks = Array.isArray(payload?.sources)
+    ? payload.sources.flatMap((source: any) => {
+        const streams = Array.isArray(source?.streams) ? source.streams : [];
+        return [
+          source?.master,
+          source?.videoSource,
+          source?.securedLink,
+          source?.embed,
+          ...streams.map((stream: any) => ({
+            quality: stream?.label || stream?.quality || (stream?.height ? `${stream.height}p` : undefined),
+            url: stream?.url,
+          })),
+        ];
+      })
+    : [];
   const collected = normalizeLinkList([
     ...rawLinks,
     ...rawEmbedUrls,
+    ...sourceLinks,
     payload?.embedUrl,
     payload?.movieEmbedUrl,
     payload?.directUrl,
@@ -199,22 +215,22 @@ const getAnimeSaltProxyUrl = async (): Promise<string> => {
 
 const fetchPage = async (url: string): Promise<string> => {
   const proxyUrl = await getAnimeSaltProxyUrl();
-  let res = await fetchWithTimeout(`${proxyUrl.replace(/\/+$/, '')}/raw?url=${encodeURIComponent(url)}`);
 
-  let data: any;
-  if (res.ok) {
-    data = await res.json();
-    if (data.success && data.html) return data.html;
-  }
-
-  res = await fetchWithTimeout(proxyUrl, {
+  // Important: do NOT call `/raw?url=...` from the app. The AN API contract
+  // exposed in EGD Manager is structured (`/search`, `/anime`, `/episode`,
+  // `/embed`, `/hls`, `/subs`). Older builds used `/raw?url=` as a fallback,
+  // which produced the reported invalid runtime path:
+  //   supabase/functions/raw?url=https://animesalt.ac/episode/.../index.ts
+  // Keep the raw HTML fallback only through the backwards-compatible POST
+  // shape supported by our deployable `an-api` source, never as a GET path.
+  const res = await fetchWithTimeout(proxyUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),
   });
 
   if (!res.ok) throw new Error(`AnimeSalt proxy error: ${res.status}`);
-  data = await res.json();
+  const data = await res.json();
   if (data.success && data.html) return data.html;
   throw new Error('No HTML returned from AnimeSalt proxy');
 };
