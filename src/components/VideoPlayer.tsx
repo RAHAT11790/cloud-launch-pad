@@ -2633,6 +2633,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         if (res.status >= 500 || res.status === 403 || res.status === 404) {
           tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
         }
+        try { res.body?.cancel(); } catch {}
       })
       .catch(() => {
         tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
