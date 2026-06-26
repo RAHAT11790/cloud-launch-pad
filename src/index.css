@@ -776,6 +776,35 @@ div[style*="z-index: 2147483647"],
     50%      { filter: drop-shadow(0 0 12px currentColor) drop-shadow(0 0 22px currentColor); }
   }
 
+  /* Streak lines shooting outward from the spinner */
+  @keyframes streakOut {
+    0%   { transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) translateX(60px) scaleX(0.2); opacity: 0; }
+    20%  { opacity: 1; }
+    100% { transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) translateX(320px) scaleX(1); opacity: 0; }
+  }
+
+  /* Dots radiating outward (dust/particles) */
+  @keyframes dotOut {
+    0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
+    15%  { opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, 0px))) scale(1); opacity: 0; }
+  }
+
+  /* RGB rainbow text glow cycle */
+  @keyframes rgbTextGlow {
+    0%   { text-shadow: 0 0 8px #ff0055, 0 0 18px #ff0055, 0 0 32px #ff0055; }
+    25%  { text-shadow: 0 0 8px #ffd23b, 0 0 18px #ffae00, 0 0 32px #ff5a00; }
+    50%  { text-shadow: 0 0 8px #00ff85, 0 0 18px #00d4ff, 0 0 32px #00d4ff; }
+    75%  { text-shadow: 0 0 8px #6a5cff, 0 0 18px #a855f7, 0 0 32px #ff00c8; }
+    100% { text-shadow: 0 0 8px #ff0055, 0 0 18px #ff0055, 0 0 32px #ff0055; }
+  }
+
+  /* Slow drifting anime grid + scanlines bg */
+  @keyframes bgGridDrift {
+    0%   { background-position: 0 0, 0 0; }
+    100% { background-position: 80px 80px, 0 4px; }
+  }
+
   @keyframes runAcross {
     0% { transform: translateX(-24px); }
     100% { transform: translateX(96px); }
