@@ -430,11 +430,21 @@ async function episode(slug: string, type?: string) {
       sources.push({ embed, error: (e as Error).message });
     }
   }
+  const playableSources = sources.filter((source) => source?.master || (Array.isArray(source?.streams) && source.streams.length > 0));
+  const links = playableSources
+    .flatMap((source) => Array.isArray(source?.streams) && source.streams.length > 0
+      ? source.streams.map((stream: any) => ({ quality: stream.label || (stream.height ? `${stream.height}p` : "Auto"), url: stream.url }))
+      : [{ quality: "Auto", url: source.master }])
+    .filter((entry) => entry.url);
   return {
     slug,
     title: titleM ? decode(titleM[1]) : slug,
     pageUrl,
     sources,
+    links,
+    embedUrl: sources[0]?.embed || "",
+    allEmbeds: sources.map((source) => source?.embed).filter(Boolean),
+    directUrl: playableSources[0]?.master || links[0]?.url || "",
   };
 }
 
