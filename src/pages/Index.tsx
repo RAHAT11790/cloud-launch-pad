@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
-import type { Episode, Season } from "@/data/animeData";
+import type { Episode, Season, SubtitleTrack } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
