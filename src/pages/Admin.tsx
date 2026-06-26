@@ -560,6 +560,17 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
   <button onClick={() => clearLocal(slug)} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
   Clear
  </button>
+ <button
+   onClick={() => {
+     setUrls((p) => ({ ...p, [slug]: defaultUrl }));
+     setEnabled((p) => ({ ...p, [slug]: true }));
+     toast.success("Default URL pasted — hit Save to activate");
+   }}
+   className={`${btnSecondary} !px-2 !py-1 !text-[10px] inline-flex items-center gap-1 ${isDefault ? '!border-cyan-500/50 !text-cyan-300' : ''}`}
+   title="Use the Lovable-deployed copy of this function"
+ >
+   ⭐ Default{isDefault ? " ✓" : ""}
+ </button>
  <button onClick={() => save(slug)} disabled={saving === slug} className={`${btnPrimary} !px-2 !py-1 !text-[10px] inline-flex items-center gap-1`}>
  {saving === slug ? <Loader2 className="animate-spin" size={10} /> : <Save size={10} />} Save
  </button>
