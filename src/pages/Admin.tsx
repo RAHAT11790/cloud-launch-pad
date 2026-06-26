@@ -631,15 +631,13 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  const [testResult, setTestResult] = useState<Record<string, { ok: boolean; ms: number }>>({});
 
  useEffect(() => {
- const unsub = onValue(ref(db, "settings"), (snap) => {
- const settings = snap.val() || {};
- const v = settings.functionOverrides || {};
+ const unsub = onValue(ref(db, "settings/functionOverrides"), (snap) => {
+ const v = snap.val() || {};
  const u: Record<string, string> = {};
  const e: Record<string, boolean> = {};
  ROUTER_FUNCTIONS.forEach(({ slug }) => {
- const legacyTelegramUrl = slug === "telegram-post" ? String(settings?.telegramProvider?.url || "") : "";
- u[slug] = String(v?.[slug]?.customUrl || legacyTelegramUrl || "");
- e[slug] = v?.[slug]?.enabled === true || Boolean(legacyTelegramUrl);
+ u[slug] = String(v?.[slug]?.customUrl || "");
+ e[slug] = v?.[slug]?.enabled === true;
  });
  setUrls(u);
  setEnabled(e);
@@ -660,7 +658,7 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
     source: "egd-router",
    });
     if (slug === "telegram-post") {
-    await set(ref(db, "settings/telegramProvider"), { url });
+    await set(ref(db, "settings/telegramProvider"), { url: active ? url : "" });
     }
    if (slug === "video-proxy") {
     await remove(ref(db, "egdManager/config/playerProxyUrl"));
