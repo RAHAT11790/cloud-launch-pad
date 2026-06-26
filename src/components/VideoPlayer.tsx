@@ -6,7 +6,7 @@ import AdsterraAdManager from "@/components/AdsterraAdManager";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   SkipForward, SkipBack, Settings, X, Lock, Unlock, ArrowLeft,
-  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages, Info, Star, Tv, Share2, Bookmark, FolderDown
+  ChevronRight, ChevronDown, FastForward, Rewind, Crop, Check, ExternalLink, Loader2, Download, PauseCircle, PlayCircle, Search, Server, Subtitles, Languages, Info, Star, Tv, Share2, Bookmark, FolderDown, RefreshCw
 } from "lucide-react";
 import type { AnimeItem, Season } from "@/data/animeData";
 import { db, ref, onValue, set, remove, update, get } from "@/lib/firebase";
