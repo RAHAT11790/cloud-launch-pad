@@ -294,6 +294,38 @@ function collectPlayerJsSubtitles(html: string, baseUrl: string): any[] {
   return uniqueByUri(out);
 }
 
+
+function collectEmbedsFromHtml(html: string): string[] {
+  const out = new Set<string>();
+  const push = (value: string) => {
+    const raw = decodeSubtitleEntities(String(value || "").trim());
+    if (!raw) return;
+    const abs = raw.startsWith("//") ? `https:${raw}` : raw;
+    if (/^https?:\/\/[^\s"'<>]+\/video\/[a-f0-9]{16,}/i.test(abs)) out.add(abs);
+  };
+
+  const attrRe = /(?:src|data-src|data-embed|data-player|data-video)=["']([^"']+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = attrRe.exec(html))) push(m[1]);
+
+  const anyRe = /https?:\/\/[a-z0-9.-]+\/video\/[a-f0-9]{16,}/gi;
+  while ((m = anyRe.exec(html))) push(m[0]);
+
+  // AnimeSalt multi-language iframe stores short links in a base64 JSON `data=`
+  // payload. Keep these as fallback embed servers instead of discarding them.
+  const multiRe = /multi-lang-plyr\/player\.php\?data=([A-Za-z0-9_\-=+/]+)/gi;
+  while ((m = multiRe.exec(html))) {
+    const decoded = safeAtob(m[1]);
+    if (!decoded) continue;
+    try {
+      const arr = JSON.parse(decoded);
+      if (Array.isArray(arr)) arr.forEach((item) => push(String(item?.link || "")));
+    } catch {}
+  }
+
+  return Array.from(out);
+}
+
 async function extractFromPlayer(embedUrl: string) {
   // embedUrl: https://as-cdnNN.top/video/{hash}
   const m = embedUrl.match(/^(https?:\/\/[^\/]+)\/video\/([a-f0-9]+)/i);
