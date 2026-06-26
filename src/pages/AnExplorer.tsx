@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+
+const API_BASE = `https://kqxpzqegtvaiwgdusrin.supabase.co/functions/v1/an-api`;
 
 type SearchItem = { slug: string; type: string; title: string; poster: string; year: string };
 type Episode = { number: number; title: string; slug: string };
@@ -11,7 +12,6 @@ type Source = { embed: string; hash?: string; poster?: string; master?: string; 
 type EpisodeData = { slug: string; title: string; pageUrl: string; sources: Source[] };
 
 export default function AnExplorer() {
-  const [apiBase, setApiBase] = useState("");
   const [q, setQ] = useState("");
   const [view, setView] = useState<"search" | "anime">("search");
   const [loading, setLoading] = useState(false);
@@ -22,18 +22,14 @@ export default function AnExplorer() {
   const [episodes, setEpisodes] = useState<Record<string, EpisodeData | { loading: true } | { error: string }>>({});
   const [copied, setCopied] = useState("");
 
-  useEffect(() => {
-    document.title = "AN Stream API — Explorer";
-    getEdgeFunctionUrl("an-api").then((url) => setApiBase(url || ""));
-  }, []);
+  useEffect(() => { document.title = "AN Stream API — Explorer"; }, []);
 
   async function doSearch(e?: React.FormEvent) {
     e?.preventDefault();
     if (!q.trim()) return;
-    if (!apiBase) { setErr("AN API URL is not saved/enabled in EGD Router."); return; }
     setLoading(true); setErr(""); setView("search"); setDetail(null); setCurrent(null);
     try {
-      const r = await fetch(`${apiBase}/search?q=${encodeURIComponent(q.trim())}`);
+      const r = await fetch(`${API_BASE}/search?q=${encodeURIComponent(q.trim())}`);
       const d = await r.json();
       if (!Array.isArray(d) || d.length === 0) { setErr("No results found."); setResults([]); }
       else setResults(d);
@@ -44,8 +40,7 @@ export default function AnExplorer() {
   async function openAnime(it: SearchItem) {
     setCurrent(it); setView("anime"); setLoading(true); setErr(""); setDetail(null); setEpisodes({});
     try {
-      if (!apiBase) throw new Error("AN API URL is not saved/enabled in EGD Router.");
-      const r = await fetch(`${apiBase}/anime?slug=${encodeURIComponent(it.slug)}&type=${it.type}`);
+      const r = await fetch(`${API_BASE}/anime?slug=${encodeURIComponent(it.slug)}&type=${it.type}`);
       const d = await r.json();
       setDetail(d);
     } catch (e: any) { setErr(e.message); }
@@ -56,9 +51,8 @@ export default function AnExplorer() {
     if (episodes[slug] && !("error" in episodes[slug])) return;
     setEpisodes((p) => ({ ...p, [slug]: { loading: true } as any }));
     try {
-      if (!apiBase) throw new Error("AN API URL is not saved/enabled in EGD Router.");
       const t = type || current?.type || "";
-      const r = await fetch(`${apiBase}/episode?slug=${encodeURIComponent(slug)}${t ? `&type=${t}` : ""}`);
+      const r = await fetch(`${API_BASE}/episode?slug=${encodeURIComponent(slug)}${t ? `&type=${t}` : ""}`);
       const d = await r.json();
       setEpisodes((p) => ({ ...p, [slug]: d }));
     } catch (e: any) {
@@ -156,7 +150,7 @@ export default function AnExplorer() {
         )}
 
         <div className="bg-[#0f1119] border border-[#262936] px-3 py-2.5 rounded-xl mt-5 font-mono text-[10px] sm:text-[11px] text-[#a4b1d0] overflow-auto break-all">
-          <b className="text-[#ff4d6d]">API:</b> {apiBase ? `GET ${apiBase}/search?q=… · /anime?slug=…&type=… · /episode?slug=…&type=…` : "Save and enable AN API URL in EGD Router first."}
+          <b className="text-[#ff4d6d]">API:</b> GET {API_BASE}/search?q=… · /anime?slug=…&type=… · /episode?slug=…&type=…
         </div>
       </div>
     </div>

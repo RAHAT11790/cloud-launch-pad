@@ -16,7 +16,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Captions, Layers, Pause, Play, RotateCcw, RotateCw, Volume2 } from "lucide-react";
-import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+
+const SUPA = (import.meta.env.VITE_SUPABASE_URL as string) ||
+  "https://kqxpzqegtvaiwgdusrin.supabase.co";
+const AN_API = `${SUPA}/functions/v1/an-api`;
+const HLS_PROXY = `${AN_API}/hls`;
+const SUBS_PROXY = `${AN_API}/subs`;
 
 type Sub = { language: string; name: string; uri: string };
 type Cue = { start: number; end: number; text: string };
@@ -49,29 +54,28 @@ interface Props {
   initialData?: AnNativeResolvedData | null;
 }
 
-const proxied = (apiBase: string, u: string) => `${apiBase}/hls?url=${encodeURIComponent(u)}`;
-const subsProxy = (apiBase: string, u: string) => `${apiBase}/subs?url=${encodeURIComponent(u)}`;
+const proxied = (u: string) => `${HLS_PROXY}?url=${encodeURIComponent(u)}`;
 
-function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAudioIdx: number, subs: Sub[] = []): string {
+function buildMaster(stream: Stream, audios: Audio[], defaultAudioIdx: number, subs: Sub[] = []): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audios.forEach((a, i) => {
     const isDefault = i === defaultAudioIdx;
     lines.push(
       `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${a.name.replace(/"/g, "")}",` +
       `LANGUAGE="${a.language || a.name.slice(0, 2).toLowerCase()}",` +
-      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${proxied(apiBase, a.uri)}"`
+      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${proxied(a.uri)}"`
     );
   });
   subs.forEach((s, i) => {
     lines.push(
       `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="${(s.name || `Subtitle ${i + 1}`).replace(/"/g, "")}",` +
-      `LANGUAGE="${s.language || `sub${i + 1}`}",DEFAULT=NO,AUTOSELECT=YES,FORCED=NO,URI="${subsProxy(apiBase, s.uri)}"`
+      `LANGUAGE="${s.language || `sub${i + 1}`}",DEFAULT=NO,AUTOSELECT=YES,FORCED=NO,URI="${SUBS_PROXY}?url=${encodeURIComponent(s.uri)}"`
     );
   });
   const audioRef = audios.length > 0 ? ',AUDIO="aud"' : "";
   const subRef = subs.length > 0 ? ',SUBTITLES="subs"' : "";
   lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || stream.height * 5000},RESOLUTION=${stream.resolution || `${stream.height}p`}${audioRef}${subRef}`);
-  lines.push(proxied(apiBase, stream.url));
+  lines.push(proxied(stream.url));
   const text = lines.join("\n");
   // data URL avoids needing yet another endpoint; hls.js handles it natively
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(text)))}`;
@@ -112,7 +116,6 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const [duration, setDuration] = useState(0);
   const [skipHint, setSkipHint] = useState<{ side: "left" | "right"; total: number } | null>(null);
   const [speedBoost, setSpeedBoost] = useState(false);
-  const [apiBase, setApiBase] = useState("");
   const failedRef = useRef(false);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipTotalsRef = useRef({ left: 0, right: 0 });
@@ -136,24 +139,20 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     failedRef.current = false;
     resumedRef.current = false;
     setLoading(true);
+    if (initialData?.streams?.length) {
+      setStreams(initialData.streams);
+      setAudios(initialData.audio || []);
+      setSubs(initialData.subtitles || []);
+      setQIdx(initialData.preferredQualityIdx ?? pickQualityIdx(initialData.streams));
+      setAIdx(initialData.defaultAudioIdx ?? pickHindiAudioIdx(initialData.audio || []));
+      setSIdx(-1);
+      onReady?.();
+      return () => { cancelled = true; };
+    }
     setStreams([]); setAudios([]); setSubs([]);
     (async () => {
       try {
-        const base = await getEdgeFunctionUrl("an-api");
-        if (!base) throw new Error("AN API URL is not saved in EGD Router");
-        if (cancelled) return;
-        setApiBase(base);
-        if (initialData?.streams?.length) {
-          setStreams(initialData.streams);
-          setAudios(initialData.audio || []);
-          setSubs(initialData.subtitles || []);
-          setQIdx(initialData.preferredQualityIdx ?? pickQualityIdx(initialData.streams));
-          setAIdx(initialData.defaultAudioIdx ?? pickHindiAudioIdx(initialData.audio || []));
-          setSIdx(-1);
-          onReady?.();
-          return;
-        }
-        const r = await fetch(`${base}/embed?url=${encodeURIComponent(embedUrl)}`);
+        const r = await fetch(`${AN_API}/embed?url=${encodeURIComponent(embedUrl)}`);
         const d = await r.json();
         if (cancelled) return;
         const s: Stream[] = Array.isArray(d?.streams) ? d.streams : [];
@@ -181,10 +180,10 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   // 2. Build + attach hls whenever quality changes
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || streams.length === 0 || !apiBase) return;
+    if (!video || streams.length === 0) return;
     const stream = streams[qIdx];
     if (!stream) return;
-    const master = buildMaster(apiBase, stream, audios, aIdx, subs);
+    const master = buildMaster(stream, audios, aIdx, subs);
     // First mount → use the resumeTime prop (continue-watching). After that,
     // preserve the live currentTime across quality swaps.
     const initialStart = !resumedRef.current
@@ -285,7 +284,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     // resumeTime intentionally NOT in deps — re-running on resume change
     // would tear down hls mid-playback. Only embed/quality/audio rebuilds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streams, qIdx, audios, aIdx, subs, onFail, apiBase]);
+  }, [streams, qIdx, audios, aIdx, subs, onFail]);
 
   const parseVttCues = useCallback((text: string): Cue[] => {
     const toSeconds = (raw: string) => {
@@ -389,8 +388,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     }
     try {
       setSubtitleStatus("Loading subtitles...");
-      if (!apiBase) throw new Error("AN API URL is not saved in EGD Router");
-      const res = await fetch(subsProxy(apiBase, selected.uri));
+      const res = await fetch(`${SUBS_PROXY}?url=${encodeURIComponent(selected.uri)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const cues = parseVttCues(await res.text());
       if (seq !== subtitleSeqRef.current) return;
@@ -541,7 +539,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
           <track
             key={`${embedUrl}-${i}-${s.uri}`}
             kind="subtitles"
-            src={apiBase ? subsProxy(apiBase, s.uri) : ""}
+            src={`${SUBS_PROXY}?url=${encodeURIComponent(s.uri)}`}
             srcLang={s.language || "en"}
             label={s.name}
             default={i === sIdx}

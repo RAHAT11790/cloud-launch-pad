@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { isInTelegramWebView, openExternalBrowser } from "@/lib/openExternal";
+import { SUPABASE_URL } from "@/lib/siteConfig";
 import { db, ref, onValue } from "@/lib/firebase";
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
@@ -17,20 +18,25 @@ const buildSafeFileName = (rawName: string) => {
 };
 
 let overrideBaseUrl = "";
-let overrideEnabled = false;
+let overrideEnabled = true;
 try {
   if (typeof window !== "undefined") {
     onValue(ref(db, "settings/functionOverrides/video-download"), (snap) => {
       const v = snap.val() || {};
       overrideBaseUrl = String(v.customUrl || "").trim();
-      overrideEnabled = v.enabled === true;
+      overrideEnabled = v.enabled !== false;
     });
   }
 } catch {}
 
+const defaultBase = (): string => {
+  if (!SUPABASE_URL) return "";
+  return `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/video-download`;
+};
+
 const resolveBaseSync = (): string => {
   if (overrideEnabled && overrideBaseUrl) return overrideBaseUrl.replace(/\/+$/, "");
-  return "";
+  return defaultBase();
 };
 
 export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): string | null {

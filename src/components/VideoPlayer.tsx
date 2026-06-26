@@ -41,10 +41,19 @@ interface VideoServerOption {
 }
 
 // Cloudflare CDN proxy for fast video streaming
-import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
+import { CLOUDFLARE_CDN_URL, SUPABASE_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { buildVideoDownloadUrl, triggerBulkBackgroundDownloads } from "@/lib/videoDownload";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
+
+// Built-in ultra-fast HTTPS streaming proxy (Supabase edge function).
+// Auto-applied to plain http:// sources (e.g. Server 1 bot-hosting.net) to bypass
+// browser mixed-content blocks. HTTPS sources stay direct (zero overhead).
+const BUILTIN_STREAM_PROXY = SUPABASE_URL
+  ? `${SUPABASE_URL}/functions/v1/video-proxy?url={url}`
+  : "";
+
+const getBuiltInProxyConfig = (): string => BUILTIN_STREAM_PROXY;
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
@@ -553,9 +562,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
 
   
-  // Single source of truth for the playback proxy: settings/functionOverrides/video-proxy,
-  // saved from EGD Router after the admin deploys their own `video-proxy`.
-  // No hard-coded proxy in code, no EGD Manager duplicate URL field.
+  // Single source of truth for the playback proxy: the URL the admin saves
+  // inside EGD Manager after deploying their own `video-proxy` edge function.
+  // No hard-coded proxy in code, no per-server proxy, no admin-panel duplicates.
   // The proxy itself decides what to do with each upstream URL:
   //   • http://  → proxy fetches the upstream and streams it to the browser
   //                (browsers can't play mixed-content http inside an https page)
@@ -598,12 +607,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       maybeReady();
     });
 
-    // SINGLE PROXY SOURCE — EGD Router row: video-proxy.
-    const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
+    // SINGLE PROXY SOURCE — the URL admin saves in EGD Manager after deploy.
+    // Stored as a plain string at `egdManager/config/playerProxyUrl`.
+    const unsub2 = onValue(ref(db, "egdManager/config/playerProxyUrl"), (snap) => {
       const seq = ++proxyLoadSeq;
       const raw = snap.val();
-      const enabled = raw?.enabled === true;
-      const url = enabled ? String(raw?.customUrl || raw?.url || "").trim() : "";
+      const url = typeof raw === "string" ? raw.trim() : (raw?.url ? String(raw.url).trim() : "");
       if (cancelled || seq !== proxyLoadSeq) return;
       setProxyUrl(url);
       setProxyApiKey('');
@@ -1914,7 +1923,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [currentHlsSubtitle]);
 
   const fetchSubtitleText = useCallback(async (targetUrl: string) => {
-    const response = await fetch(targetUrl, { mode: "cors" });
+    const fetchUrl = /^https?:\/\//i.test(targetUrl) && BUILTIN_STREAM_PROXY && !targetUrl.includes("/functions/v1/")
+      ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, targetUrl)
+      : targetUrl;
+    const response = await fetch(fetchUrl, { mode: "cors" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.text();
   }, []);
