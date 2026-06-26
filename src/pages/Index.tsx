@@ -2405,6 +2405,9 @@ const Index = () => {
 
     // AnimeSalt source: directly play the last watched episode
     if (anime.source === "animesalt") {
+      // Immediate feedback — same "Loading details..." toast as fresh card clicks.
+      // Auto-dismissed by the saltPlayerState/playerState effect when playback resolves.
+      showDetailsLoadingToast();
       // If we have episode info, try to play that episode directly
       if (item.episodeInfo) {
         const hasAccess = await checkAndShowAdGate(anime, item.episodeInfo?.seasonIdx, item.episodeInfo?.epIdx);
