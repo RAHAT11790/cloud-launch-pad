@@ -1,43 +1,73 @@
-import logoImg from "@/assets/logo.png";
-import { SITE_NAME } from "@/lib/siteConfig";
+import { useBranding } from "@/hooks/useBranding";
 
 const SplashLoader = () => {
-  const displayName = SITE_NAME || "RS ANIME";
+  const branding = useBranding();
+  const title = branding.siteName || "";
+  const tagline = branding.siteTagline || branding.splashText || "";
+  const logo = branding.logoUrl || "";
 
   return (
-    <div className="fixed inset-0 bg-background flex flex-col items-center justify-center z-[9999]">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    <div
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(ellipse at 20% 10%, #1a1230 0%, transparent 55%), radial-gradient(ellipse at 85% 90%, #2a0a14 0%, transparent 55%), #050507",
+      }}
+    >
+      {/* Logo + rotating ring */}
+      <div className="relative w-[160px] h-[160px] flex items-center justify-center">
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full opacity-15"
+          className="absolute inset-0 rounded-full"
           style={{
-            background: "radial-gradient(circle, hsl(var(--primary)) 0%, transparent 70%)",
-            animation: "logoPulse 3s ease-in-out infinite",
+            border: "2px solid transparent",
+            borderTopColor: "rgba(255,255,255,0.85)",
+            borderLeftColor: "rgba(255,255,255,0.25)",
+            animation: "spin 2.4s linear infinite",
           }}
         />
+        {logo && (
+          <img
+            src={logo}
+            alt={title}
+            className="w-[130px] h-[130px] rounded-full object-cover"
+            style={{ filter: "drop-shadow(0 0 30px rgba(220,30,40,0.45))" }}
+          />
+        )}
       </div>
-      <img
-        src={logoImg}
-        alt={displayName}
-        className="w-28 h-28 object-contain mb-5 relative z-10"
-        style={{
-          filter: "drop-shadow(0 0 30px hsla(42,80%,50%,0.4))",
-          animation: "logoPulse 2s ease-in-out infinite",
-        }}
-      />
-      <div
-        className="text-2xl font-black tracking-[6px] uppercase relative z-10 gradient-text"
-        style={{
-          fontFamily: "'Russo One', sans-serif",
-          filter: "drop-shadow(0 0 15px hsla(42,80%,50%,0.3))",
-        }}
-      >
-        {displayName}
-      </div>
-      <p className="mt-3 text-[10px] text-muted-foreground uppercase tracking-[5px] relative z-10">
-        Loading...
-      </p>
-      <div className="mt-5 w-[160px] h-[3px] rounded-full overflow-hidden relative z-10" style={{ boxShadow: "var(--neu-shadow-inset)" }}>
-        <div className="absolute h-full w-[40%] bg-gradient-to-r from-transparent via-primary to-transparent animate-[loadingMove_1s_ease-in-out_infinite]" />
+
+      {/* Title (from admin) */}
+      {title && (
+        <div
+          className="mt-10 text-white text-[26px] font-semibold"
+          style={{
+            fontFamily: "'Cormorant Garamond', 'Playfair Display', Georgia, serif",
+            letterSpacing: "0.35em",
+          }}
+        >
+          {title}
+        </div>
+      )}
+
+      {/* Tagline (from admin) */}
+      {tagline && (
+        <div
+          className="mt-3 text-white/85 text-[12px]"
+          style={{ letterSpacing: "0.35em", fontFamily: "Georgia, serif" }}
+        >
+          {tagline}
+        </div>
+      )}
+
+      {/* Thin progress line */}
+      <div className="mt-8 w-[260px] h-[1px] bg-white/10 overflow-hidden relative">
+        <div
+          className="absolute top-0 left-0 h-full w-[35%]"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent, rgba(255,255,255,0.85), transparent)",
+            animation: "loadingMove 1.6s ease-in-out infinite",
+          }}
+        />
       </div>
     </div>
   );
