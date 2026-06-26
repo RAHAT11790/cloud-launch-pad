@@ -5,6 +5,7 @@ import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { SUPABASE_URL, TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
+import type { AnNativeResolvedData } from "@/components/AnNativeView";
 
 const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: number) => {
   const params = new URLSearchParams();
@@ -122,6 +123,12 @@ const pickAnDefaultAudioIdx = (audio: Array<{ language?: string; name?: string; 
   return idx >= 0 ? idx : 0;
 };
 
+const pickAnPreferredQualityIdx = (streams: Array<{ height?: number }>) => {
+  const preferred = streams.findIndex((x) => Number(x?.height) === 720);
+  const fallback = streams.findIndex((x) => Number(x?.height) <= 720);
+  return preferred >= 0 ? preferred : (fallback >= 0 ? fallback : 0);
+};
+
 const buildAnSyntheticMaster = (
   stream: { url: string; bandwidth?: number; resolution?: string; height?: number },
   audio: Array<{ language?: string; name?: string; uri?: string }>,
@@ -217,6 +224,7 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
 
   const primaryStream = streams[0];
   const defaultAudioIdx = pickAnDefaultAudioIdx(audio);
+  const preferredQualityIdx = pickAnPreferredQualityIdx(streams);
   const qualityOptions = streams.map((stream: any) => ({
     label: String(stream?.label || (stream?.height ? `${stream.height}p` : "Auto")).trim() || "Auto",
     src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx, subtitles),
@@ -244,11 +252,43 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
     : undefined;
 
   return {
-    src: qualityOptions[0]?.src || buildAnProxyUrl(primaryStream.url),
+    src: qualityOptions[preferredQualityIdx]?.src || qualityOptions[0]?.src || buildAnProxyUrl(primaryStream.url),
     qualityOptions: qualityOptions.length > 1 ? qualityOptions : undefined,
     audioTracks,
     subtitleTracks,
+    preferredLanguage: audio[defaultAudioIdx]
+      ? (String(audio[defaultAudioIdx]?.name || audio[defaultAudioIdx]?.language || "Hindi").trim() || "Hindi")
+      : undefined,
+    anNativeData: {
+      streams,
+      audio,
+      subtitles,
+      preferredQualityIdx,
+      defaultAudioIdx,
+    } as AnNativeResolvedData,
   };
+};
+
+const getAnNativeDataFromEmbed = async (embedUrl: string): Promise<AnNativeResolvedData | null> => {
+  if (!AN_API_BASE || !embedUrl) return null;
+  try {
+    const response = await fetch(`${AN_API_BASE}/embed?url=${encodeURIComponent(embedUrl)}`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    const streams = Array.isArray(data?.streams) ? data.streams.filter((entry: any) => String(entry?.url || "").trim()) : [];
+    const audio = Array.isArray(data?.audio) ? data.audio.filter((entry: any) => String(entry?.uri || "").trim()) : [];
+    const subtitles = Array.isArray(data?.subtitles) ? data.subtitles.filter((entry: any) => String(entry?.uri || "").trim()) : [];
+    if (streams.length === 0) return null;
+    return {
+      streams,
+      audio,
+      subtitles,
+      preferredQualityIdx: pickAnPreferredQualityIdx(streams),
+      defaultAudioIdx: pickAnDefaultAudioIdx(audio),
+    };
+  } catch {
+    return null;
+  }
 };
 
 // Derive a playable embed URL from any AnimeSalt episode payload shape.
