@@ -5,7 +5,6 @@ import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { SUPABASE_URL, TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
-import type { AnNativeResolvedData } from "@/components/AnNativeView";
 
 const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: number) => {
   const params = new URLSearchParams();
@@ -123,12 +122,6 @@ const pickAnDefaultAudioIdx = (audio: Array<{ language?: string; name?: string; 
   return idx >= 0 ? idx : 0;
 };
 
-const pickAnPreferredQualityIdx = (streams: Array<{ height?: number }>) => {
-  const preferred = streams.findIndex((x) => Number(x?.height) === 720);
-  const fallback = streams.findIndex((x) => Number(x?.height) <= 720);
-  return preferred >= 0 ? preferred : (fallback >= 0 ? fallback : 0);
-};
-
 const buildAnSyntheticMaster = (
   stream: { url: string; bandwidth?: number; resolution?: string; height?: number },
   audio: Array<{ language?: string; name?: string; uri?: string }>,
@@ -224,7 +217,6 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
 
   const primaryStream = streams[0];
   const defaultAudioIdx = pickAnDefaultAudioIdx(audio);
-  const preferredQualityIdx = pickAnPreferredQualityIdx(streams);
   const qualityOptions = streams.map((stream: any) => ({
     label: String(stream?.label || (stream?.height ? `${stream.height}p` : "Auto")).trim() || "Auto",
     src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx, subtitles),
@@ -252,43 +244,11 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
     : undefined;
 
   return {
-    src: qualityOptions[preferredQualityIdx]?.src || qualityOptions[0]?.src || buildAnProxyUrl(primaryStream.url),
+    src: qualityOptions[0]?.src || buildAnProxyUrl(primaryStream.url),
     qualityOptions: qualityOptions.length > 1 ? qualityOptions : undefined,
     audioTracks,
     subtitleTracks,
-    preferredLanguage: audio[defaultAudioIdx]
-      ? (String(audio[defaultAudioIdx]?.name || audio[defaultAudioIdx]?.language || "Hindi").trim() || "Hindi")
-      : undefined,
-    anNativeData: {
-      streams,
-      audio,
-      subtitles,
-      preferredQualityIdx,
-      defaultAudioIdx,
-    } as AnNativeResolvedData,
   };
-};
-
-const getAnNativeDataFromEmbed = async (embedUrl: string): Promise<AnNativeResolvedData | null> => {
-  if (!AN_API_BASE || !embedUrl) return null;
-  try {
-    const response = await fetch(`${AN_API_BASE}/embed?url=${encodeURIComponent(embedUrl)}`);
-    if (!response.ok) return null;
-    const data = await response.json();
-    const streams = Array.isArray(data?.streams) ? data.streams.filter((entry: any) => String(entry?.url || "").trim()) : [];
-    const audio = Array.isArray(data?.audio) ? data.audio.filter((entry: any) => String(entry?.uri || "").trim()) : [];
-    const subtitles = Array.isArray(data?.subtitles) ? data.subtitles.filter((entry: any) => String(entry?.uri || "").trim()) : [];
-    if (streams.length === 0) return null;
-    return {
-      streams,
-      audio,
-      subtitles,
-      preferredQualityIdx: pickAnPreferredQualityIdx(streams),
-      defaultAudioIdx: pickAnDefaultAudioIdx(audio),
-    };
-  } catch {
-    return null;
-  }
 };
 
 // Derive a playable embed URL from any AnimeSalt episode payload shape.
@@ -312,26 +272,16 @@ const resolveSaltEmbed = (payload: any): { embedUrl: string; allEmbeds: string[]
   return { embedUrl: collected[0] || "", allEmbeds: collected };
 };
 
-const animeSaltDirectStateCache = new Map<string, Promise<Awaited<ReturnType<typeof buildAnimeSaltDirectPlaybackState>> | null>>();
-
 const getAnimeSaltDirectState = async (episodeSlug: string) => {
   if (!AN_API_BASE) return null;
-  const key = String(episodeSlug || "").trim();
-  if (!key) return null;
-  const existing = animeSaltDirectStateCache.get(key);
-  if (existing) return existing;
-  const request = (async () => {
-    try {
-      const response = await fetch(`${AN_API_BASE}/episode?slug=${encodeURIComponent(key)}`);
-      if (!response.ok) return null;
-      const payload = await response.json();
-      return await buildAnimeSaltDirectPlaybackState(payload);
-    } catch {
-      return null;
-    }
-  })();
-  animeSaltDirectStateCache.set(key, request);
-  return request;
+  try {
+    const response = await fetch(`${AN_API_BASE}/episode?slug=${encodeURIComponent(episodeSlug)}`);
+    if (!response.ok) return null;
+    const payload = await response.json();
+    return await buildAnimeSaltDirectPlaybackState(payload);
+  } catch {
+    return null;
+  }
 };
 
 // Helper: get best available src from episode (fallback if default link is empty)
@@ -989,7 +939,6 @@ const Index = () => {
     subtitleTracks?: SubtitleTrack[];
     nextEpisodeSrc?: string;
     resumeTime?: number;
-    anNativeData?: AnNativeResolvedData | null;
   } | null>(() => {
     try {
       const saved = sessionStorage.getItem("rs_playerState");
@@ -1023,7 +972,6 @@ const Index = () => {
     cropH?: number;
     loading?: boolean;
     resumeTime?: number;
-    anNativeData?: AnNativeResolvedData | null;
   } | null>(() => {
     try {
       const saved = sessionStorage.getItem("rs_saltPlayerState");
@@ -1154,13 +1102,7 @@ const Index = () => {
   }, [dismissDetailsLoadingToast]);
 
   useEffect(() => {
-    // Keep the "Loading details..." toast visible while the salt player is
-    // still resolving the embed URL — only dismiss once playback is actually
-    // ready, so users see continuous feedback (no premature silent gap, and
-    // by the time the player paints the default Hindi audio is already
-    // selected — no visible language switch).
-    const saltReady = saltPlayerState && saltPlayerState.loading === false;
-    if (playerState || saltReady) {
+    if (playerState || saltPlayerState) {
       dismissDetailsLoadingToast();
     }
   }, [playerState, saltPlayerState, dismissDetailsLoadingToast]);
@@ -2050,7 +1992,6 @@ const Index = () => {
             title: anime.title,
             subtitle: subtitle || `Episode`,
             anime,
-            selectedLanguage: directState?.preferredLanguage || "Hindi",
             seasonIdx: resolvedSeasonIdx,
             epIdx: resolvedEpIdx,
             qualityOptions: directState?.qualityOptions || sourceOptions,
@@ -2091,7 +2032,6 @@ const Index = () => {
             title: anime.title,
             subtitle: "Movie",
             anime,
-            selectedLanguage: directState?.preferredLanguage || "Hindi",
             qualityOptions: directState?.qualityOptions || sourceOptions,
             audioTracks: directState?.audioTracks,
             subtitleTracks: directState?.subtitleTracks,
@@ -2446,7 +2386,6 @@ const Index = () => {
                   title: anime.title,
                   subtitle: `${cSeason.name} - Episode ${cEp.episodeNumber || cEp.number || eIdx + 1}`,
                   anime: fullAnime,
-                  selectedLanguage: directState.preferredLanguage || "Hindi",
                   seasonIdx: sIdx,
                   epIdx: eIdx,
                   qualityOptions: directState.qualityOptions,
@@ -2469,7 +2408,6 @@ const Index = () => {
                   subtitle: `${cSeason.name} - Episode ${cEp.episodeNumber || cEp.number || eIdx + 1}`,
                   anime: fullAnime, seasonIdx: sIdx, epIdx: eIdx,
                   allEmbeds: resolved.allEmbeds,
-                  anNativeData: directState?.anNativeData || await getAnNativeDataFromEmbed(resolved.embedUrl),
                   currentEmbedIdx: 0, cropMode: 'contain', cropW: 0, cropH: 0, loading: false,
                   resumeTime: item.currentTime || 0,
                 });
@@ -2555,7 +2493,6 @@ const Index = () => {
                   title: anime.title,
                   subtitle: `${season.name} - Episode ${ep.number}`,
                   anime: fullAnime,
-                  selectedLanguage: directState.preferredLanguage || "Hindi",
                   seasonIdx: sIdx,
                   epIdx: eIdx,
                   qualityOptions: directState.qualityOptions,
@@ -2577,7 +2514,6 @@ const Index = () => {
                   title: anime.title, subtitle: `${season.name} - Episode ${ep.number}`,
                   anime: fullAnime, seasonIdx: sIdx, epIdx: eIdx,
                   allEmbeds: resolved.allEmbeds,
-                  anNativeData: directState?.anNativeData || await getAnNativeDataFromEmbed(resolved.embedUrl),
                   currentEmbedIdx: 0, cropMode: 'contain', cropW: 0, cropH: 0, loading: false,
                 });
                 return;
@@ -2788,7 +2724,6 @@ const Index = () => {
       let qOpts = getEpisodeQualityOptions(clickedEp);
       let nextAudioTracks = clickedEp.audioTracks;
       let nextSubtitleTracks = (clickedEp as any).subtitleTracks;
-      let preferredLanguage = (playerState as any)?.selectedLanguage;
         if (playerState?.anime.source === "animesalt" && String(clickedEp.link || "").startsWith("animesalt://")) {
         const epSlug = String(clickedEp.link).replace("animesalt://", "");
         try {
@@ -2799,7 +2734,6 @@ const Index = () => {
             qOpts = directState.qualityOptions || [];
             nextAudioTracks = directState.audioTracks;
             nextSubtitleTracks = directState.subtitleTracks;
-            preferredLanguage = directState.preferredLanguage || (nextAudioTracks?.find((t: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`))?.label) || preferredLanguage;
           } else {
             const resolved = resolveSaltEmbed(epResult);
             const embedServers = resolved.allEmbeds.filter(Boolean);
@@ -2817,7 +2751,6 @@ const Index = () => {
         subtitle: `${season.name} - Episode ${clickedEp.episodeNumber}`,
         epIdx: i,
         resumeTime: 0,
-        selectedLanguage: preferredLanguage,
         audioTracks: nextAudioTracks,
         subtitleTracks: nextSubtitleTracks,
         qualityOptions: qOpts.length > 0 ? qOpts : undefined,
@@ -2840,7 +2773,6 @@ const Index = () => {
     let qOpts: { label: string; src: string }[] = getEpisodeQualityOptions(ep);
     let nextAudioTracks = ep.audioTracks;
     let nextSubtitleTracks = (ep as any).subtitleTracks;
-    let preferredLanguage = (playerState as any)?.selectedLanguage;
     if (playerState.anime.source === "animesalt" && String(ep.link || "").startsWith("animesalt://")) {
       const epSlug = String(ep.link).replace("animesalt://", "");
       try {
@@ -2851,7 +2783,6 @@ const Index = () => {
           qOpts = directState.qualityOptions || [];
           nextAudioTracks = directState.audioTracks;
           nextSubtitleTracks = directState.subtitleTracks;
-          preferredLanguage = directState.preferredLanguage || (nextAudioTracks?.find((t: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`))?.label) || preferredLanguage;
         } else {
           const resolved = resolveSaltEmbed(epResult);
           const embedServers = resolved.allEmbeds.filter(Boolean);
@@ -2873,7 +2804,6 @@ const Index = () => {
       audioTracks: nextAudioTracks,
       subtitleTracks: nextSubtitleTracks,
       qualityOptions: qOpts.length > 0 ? qOpts : undefined,
-      selectedLanguage: preferredLanguage,
       nextEpisodeSrc: undefined,
     };
     playerStateRef.current = nextState;
@@ -3280,7 +3210,6 @@ const Index = () => {
                   let nextSrc = getEpisodeSrc(nextEp);
                   let qOpts = getEpisodeQualityOptions(nextEp);
                   let nextAudioTracks = nextEp.audioTracks;
-                  let preferredLanguage = (playerState as any)?.selectedLanguage;
                   if (playerState.anime.source === "animesalt" && String(nextEp.link || "").startsWith("animesalt://")) {
                     const epSlug = String(nextEp.link).replace("animesalt://", "");
                     try {
@@ -3290,7 +3219,6 @@ const Index = () => {
                         nextSrc = directState.src;
                         qOpts = directState.qualityOptions || [];
                         nextAudioTracks = directState.audioTracks;
-                        preferredLanguage = directState.preferredLanguage || (nextAudioTracks?.find((t: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`))?.label) || preferredLanguage;
                       } else {
                         const resolved = resolveSaltEmbed(epResult);
                         const embedServers = resolved.allEmbeds.filter(Boolean);
@@ -3309,7 +3237,6 @@ const Index = () => {
                     epIdx: nextIdx,
                      resumeTime: 0,
                      audioTracks: nextAudioTracks,
-                       selectedLanguage: preferredLanguage,
                     qualityOptions: qOpts.length > 0 ? qOpts : undefined,
                     nextEpisodeSrc: undefined,
                   };

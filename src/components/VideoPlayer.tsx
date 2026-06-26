@@ -2194,25 +2194,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     hls.loadSource(currentSrc);
     hls.attachMedia(v);
 
-    const applyPreferredHlsAudio = () => {
-      const tracks = hls.audioTracks || [];
-      if (tracks.length === 0) return;
-      const preferredToken = String(getPrimaryLanguageToken(selectedLanguage) || selectedLanguage || "").toLowerCase();
-      const preferredIdx = preferredToken
-        ? tracks.findIndex((track: any) => {
-            const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
-            return blob.includes(preferredToken);
-          })
-        : -1;
-      const hindiIdx = tracks.findIndex((track: any) => {
-        const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
-        return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
-      });
-      const defaultIdx = tracks.findIndex((track: any) => track?.default);
-      const wanted = preferredIdx >= 0 ? preferredIdx : (hindiIdx >= 0 ? hindiIdx : (defaultIdx >= 0 ? defaultIdx : 0));
-      try { hls.audioTrack = wanted; } catch {}
-    };
-
     const refreshHlsAudio = () => {
       const aTracks = hls.audioTracks || [];
       const opts: AudioTrackOption[] = aTracks.map((t, i) => ({
@@ -2260,17 +2241,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
       hlsFatalRetriesRef.current = 0;
-      // Select Hindi/preferred audio before first play so AN opens already in
-      // the correct language instead of visibly switching 4-5 seconds later.
-      applyPreferredHlsAudio();
       refreshHlsAudio();
       refreshHlsSubs();
       v.play().catch(() => {});
     });
-    hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
-      applyPreferredHlsAudio();
-      refreshHlsAudio();
-    });
+    hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, refreshHlsAudio);
     hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, refreshHlsAudio);
     hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, refreshHlsSubs);
     hls.on(Hls.Events.SUBTITLE_TRACK_SWITCH, (_e, d: any) => {
@@ -2319,7 +2294,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       try { hls.destroy(); } catch {}
       if (hlsRef.current === hls) hlsRef.current = null;
     };
-  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive, tryNextPlaybackRoute, externalSubtitleOptions, selectedLanguage]);
+  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive, tryNextPlaybackRoute, externalSubtitleOptions]);
 
   // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
   // users reported when returning to home. Detaches HLS, clears <video>, kills timers.

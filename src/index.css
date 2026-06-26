@@ -702,46 +702,6 @@ div[style*="z-index: 2147483647"],
     100% { background-position: 300% 50%; }
   }
 
-  /* Single anime sakura splash loader — transform/opacity only for smooth mobile performance. */
-  @keyframes sakuraPetalFall {
-    0% { transform: translate3d(0, -12vh, 0) rotate(0deg) scale(0.72); opacity: 0; }
-    8% { opacity: var(--petal-opacity, 0.75); }
-    50% { transform: translate3d(calc(var(--drift, 40px) * 0.46), 50vh, 0) rotate(240deg) scale(1); }
-    92% { opacity: var(--petal-opacity, 0.75); }
-    100% { transform: translate3d(var(--drift, 40px), 112vh, 0) rotate(520deg) scale(0.86); opacity: 0; }
-  }
-
-  @keyframes sakuraSparkRain {
-    0% { transform: translate3d(0, -10vh, 0) scale(0.35); opacity: 0; }
-    18% { opacity: 1; }
-    72% { opacity: 0.9; }
-    100% { transform: translate3d(var(--drift, 24px), 108vh, 0) scale(1.08); opacity: 0; }
-  }
-
-  @keyframes sakuraAuraSpin {
-    to { transform: rotate(360deg); }
-  }
-
-  @keyframes sakuraSoftPulse {
-    0%, 100% { transform: scale(0.985); opacity: 0.72; }
-    50% { transform: scale(1.035); opacity: 1; }
-  }
-
-  @keyframes sakuraTitleGlow {
-    0%, 100% { background-position: 0% 50%; filter: drop-shadow(0 0 10px rgba(255, 170, 215, 0.28)); }
-    50% { background-position: 100% 50%; filter: drop-shadow(0 0 18px rgba(179, 235, 255, 0.42)); }
-  }
-
-  @keyframes sakuraSheen {
-    0%, 100% { transform: translate3d(-18%, 0, 0); opacity: 0.22; }
-    50% { transform: translate3d(18%, 0, 0); opacity: 0.62; }
-  }
-
-  @keyframes splFadeIn {
-    from { opacity: 0; transform: scale(0.94); }
-    to { opacity: 1; transform: scale(1); }
-  }
-
   @keyframes runAcross {
     0% { transform: translateX(-24px); }
     100% { transform: translateX(96px); }

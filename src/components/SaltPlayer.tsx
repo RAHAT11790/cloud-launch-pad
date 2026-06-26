@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import type { AnimeItem } from "@/data/animeData";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
 import AnNativeView from "@/components/AnNativeView";
-import type { AnNativeResolvedData } from "@/components/AnNativeView";
 import { db, ref, onValue } from "@/lib/firebase";
 
 
@@ -25,8 +24,6 @@ interface SaltPlayerState {
   loading?: boolean;
   /** Seconds to resume playback from (continue-watching). */
   resumeTime?: number;
-  /** Pre-extracted AN HLS data so player opens with Hindi already selected. */
-  anNativeData?: AnNativeResolvedData | null;
 }
 
 interface SaltPlayerProps {
@@ -484,7 +481,6 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
           {saltPlayerState.embedUrl && !nativeFailed && (
             <AnNativeView
               embedUrl={saltPlayerState.embedUrl}
-              initialData={saltPlayerState.anNativeData}
               resumeTime={saltPlayerState.resumeTime}
               videoClassName={`${isFullscreen ? 'w-full h-full' : 'absolute inset-0 w-full h-full'} bg-black`}
               videoStyle={getIframeStyle()}
