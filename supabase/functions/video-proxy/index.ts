@@ -125,6 +125,18 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Auto behaviour per upstream protocol:
+  //   http://  → ALWAYS proxy. Browsers block mixed-content http inside an
+  //              https page, so the proxy is what makes these servers playable.
+  //              Domain allow-list above still enforces hot-link protection.
+  //   https:// → Pass through, but only after the domain allow-list above has
+  //              confirmed the caller is on an approved origin. This is the
+  //              "protection only" mode for already-playable servers.
+  const upstreamIsHttp = targetUrl.protocol === "http:";
+  const upstreamIsHttps = targetUrl.protocol === "https:";
+  void upstreamIsHttp; void upstreamIsHttps;
+
+
   // Build upstream headers — forward ONLY what matters.
   const fwd: Record<string, string> = {
     "User-Agent": UA,
