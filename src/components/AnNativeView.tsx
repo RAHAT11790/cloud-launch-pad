@@ -16,12 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Captions, Layers, Pause, Play, RotateCcw, RotateCw, Volume2 } from "lucide-react";
-
-const SUPA = (import.meta.env.VITE_SUPABASE_URL as string) ||
-  "https://kqxpzqegtvaiwgdusrin.supabase.co";
-const AN_API = `${SUPA}/functions/v1/an-api`;
-const HLS_PROXY = `${AN_API}/hls`;
-const SUBS_PROXY = `${AN_API}/subs`;
+import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
 type Sub = { language: string; name: string; uri: string };
 type Cue = { start: number; end: number; text: string };
@@ -54,28 +49,29 @@ interface Props {
   initialData?: AnNativeResolvedData | null;
 }
 
-const proxied = (u: string) => `${HLS_PROXY}?url=${encodeURIComponent(u)}`;
+const proxied = (apiBase: string, u: string) => `${apiBase}/hls?url=${encodeURIComponent(u)}`;
+const subsProxy = (apiBase: string, u: string) => `${apiBase}/subs?url=${encodeURIComponent(u)}`;
 
-function buildMaster(stream: Stream, audios: Audio[], defaultAudioIdx: number, subs: Sub[] = []): string {
+function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAudioIdx: number, subs: Sub[] = []): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audios.forEach((a, i) => {
     const isDefault = i === defaultAudioIdx;
     lines.push(
       `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${a.name.replace(/"/g, "")}",` +
       `LANGUAGE="${a.language || a.name.slice(0, 2).toLowerCase()}",` +
-      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${proxied(a.uri)}"`
+      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${proxied(apiBase, a.uri)}"`
     );
   });
   subs.forEach((s, i) => {
     lines.push(
       `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="${(s.name || `Subtitle ${i + 1}`).replace(/"/g, "")}",` +
-      `LANGUAGE="${s.language || `sub${i + 1}`}",DEFAULT=NO,AUTOSELECT=YES,FORCED=NO,URI="${SUBS_PROXY}?url=${encodeURIComponent(s.uri)}"`
+      `LANGUAGE="${s.language || `sub${i + 1}`}",DEFAULT=NO,AUTOSELECT=YES,FORCED=NO,URI="${subsProxy(apiBase, s.uri)}"`
     );
   });
   const audioRef = audios.length > 0 ? ',AUDIO="aud"' : "";
   const subRef = subs.length > 0 ? ',SUBTITLES="subs"' : "";
   lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || stream.height * 5000},RESOLUTION=${stream.resolution || `${stream.height}p`}${audioRef}${subRef}`);
-  lines.push(proxied(stream.url));
+  lines.push(proxied(apiBase, stream.url));
   const text = lines.join("\n");
   // data URL avoids needing yet another endpoint; hls.js handles it natively
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(text)))}`;
