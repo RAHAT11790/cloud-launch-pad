@@ -209,8 +209,26 @@ const parseMeta = (html: string) => {
 /** Get AnimeSalt proxy URL from the EGD Router only. */
 const getAnimeSaltProxyUrl = async (): Promise<string> => {
   const proxyUrl = await getEdgeFunctionUrl('an-api');
-  if (!proxyUrl) throw new Error('AN API URL is not saved/enabled in EGD Router.');
-  return proxyUrl;
+  const normalized = normalizeAnApiBaseUrl(proxyUrl);
+  if (!normalized) throw new Error('AN API URL is not saved/enabled in EGD Router.');
+  return normalized;
+};
+
+const normalizeAnApiBaseUrl = (value: string): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    url.search = '';
+    url.hash = '';
+    const endpointNames = new Set(['raw', 'search', 'anime', 'episode', 'embed', 'hls', 'subs']);
+    const parts = url.pathname.split('/').filter(Boolean);
+    while (parts.length && endpointNames.has(parts[parts.length - 1].toLowerCase())) parts.pop();
+    url.pathname = `/${parts.join('/')}`.replace(/\/+$/, '');
+    return url.toString().replace(/\/+$/, '');
+  } catch {
+    return raw.replace(/\/(?:raw|search|anime|episode|embed|hls|subs)(?:\?.*)?$/i, '').replace(/\/+$/, '');
+  }
 };
 
 const fetchPage = async (url: string): Promise<string> => {
@@ -387,7 +405,7 @@ const parsePlaybackPage = (html: string) => {
 /** Try direct API call first, supporting both nested and top-level response formats */
 const tryDirectApi = async (proxyUrl: string, body: any): Promise<any | null> => {
   try {
-    const base = proxyUrl.replace(/\/+$/, '');
+    const base = normalizeAnApiBaseUrl(proxyUrl);
     let endpoint = '';
     if (body.action === 'search') endpoint = `${base}/search?q=${encodeURIComponent(body.q || body.query || '')}`;
     else if (body.action === 'series') endpoint = `${base}/anime?slug=${encodeURIComponent(body.slug || '')}&type=series`;

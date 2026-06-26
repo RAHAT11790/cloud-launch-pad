@@ -110,12 +110,29 @@ const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualit
 let anApiBaseUrl = "";
 let anApiBasePromise: Promise<string> | null = null;
 
+const normalizeAnApiBaseUrl = (value: string): string => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    url.search = "";
+    url.hash = "";
+    const endpointNames = new Set(["raw", "search", "anime", "episode", "embed", "hls", "subs"]);
+    const parts = url.pathname.split("/").filter(Boolean);
+    while (parts.length && endpointNames.has(parts[parts.length - 1].toLowerCase())) parts.pop();
+    url.pathname = `/${parts.join("/")}`.replace(/\/+$/, "");
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return raw.replace(/\/(?:raw|search|anime|episode|embed|hls|subs)(?:\?.*)?$/i, "").replace(/\/+$/, "");
+  }
+};
+
 const ensureAnApiBaseUrl = async (): Promise<string> => {
   if (anApiBaseUrl) return anApiBaseUrl;
   if (!anApiBasePromise) {
     anApiBasePromise = getEdgeFunctionUrl("an-api")
       .then((url) => {
-        anApiBaseUrl = String(url || "").trim().replace(/\/+$/, "");
+        anApiBaseUrl = normalizeAnApiBaseUrl(url || "");
         return anApiBaseUrl;
       })
       .catch(() => "");

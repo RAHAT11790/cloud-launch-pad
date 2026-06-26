@@ -163,6 +163,23 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     const msg = (e as Error)?.message || "Upstream unreachable";
+    // Some HTTP file hosts (notably bot-hosting/RSFR style servers) accept
+    // HEAD/probe requests but close cloud/Supabase GET streams before sending
+    // bytes. In that case the only working route is the user's own browser/IP.
+    // For real download clicks, redirect to the original URL instead of ending
+    // on a dead JSON error page. Client code also prefers direct HTTP first.
+    if (req.method === "GET") {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          ...corsHeaders,
+          Location: targetUrl.toString(),
+          "Cache-Control": "no-store",
+          "X-RS-Fallback": "direct-browser",
+          "X-RS-Upstream-Error": msg.slice(0, 180),
+        },
+      });
+    }
     return new Response(
       JSON.stringify({ error: "Download source not responding", detail: msg }),
       { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
