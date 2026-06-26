@@ -63,29 +63,32 @@ const SplashLoader = () => {
         animation: "splFadeIn 0.35s ease-out",
       }}
     >
-      {/* Sakura petals (background) */}
-      {petals.map((p, i) => (
-        <span
-          key={`petal-${i}`}
-          className="absolute top-0 pointer-events-none"
-          style={{
-            left: p.left,
-            width: p.size,
-            height: p.size * 1.45,
-            opacity: p.opacity,
-            borderRadius: "100% 0 100% 18%",
-            background: i % 3 === 0
-              ? "linear-gradient(135deg, rgba(255,240,246,0.98), rgba(255,124,185,0.88))"
-              : "linear-gradient(135deg, rgba(255,220,236,0.95), rgba(255,174,116,0.78))",
-            boxShadow: "0 0 10px rgba(255, 154, 206, 0.42)",
-            transformOrigin: "50% 10%",
-            // @ts-ignore
-            "--drift": p.drift,
-            animation: `sakuraPetalFall ${p.dur} linear ${p.delay} infinite`,
-            willChange: "transform, opacity",
-          }}
-        />
-      ))}
+      {/* Fire embers falling from top */}
+      {embers.map((e, i) => {
+        const grad =
+          e.hue === 0
+            ? "radial-gradient(circle at 35% 30%, #fff3a8 0%, #ffd24a 25%, #ff7a1a 55%, #ff2d00 80%, rgba(120,0,0,0) 100%)"
+            : e.hue === 1
+            ? "radial-gradient(circle at 35% 30%, #fff1cc 0%, #ffae3a 30%, #ff5a00 65%, rgba(120,20,0,0) 100%)"
+            : "radial-gradient(circle at 35% 30%, #ffffff 0%, #ffe27a 30%, #ffb02a 60%, rgba(180,60,0,0) 100%)";
+        return (
+          <span
+            key={`ember-${i}`}
+            className="absolute top-0 pointer-events-none"
+            style={{
+              left: e.left,
+              width: e.size,
+              height: e.size * 1.5,
+              borderRadius: "100% 0 100% 18%",
+              background: grad,
+              // @ts-ignore
+              "--drift": e.drift,
+              animation: `fireEmberFall ${e.dur} linear ${e.delay} infinite, emberFlicker 1.2s ease-in-out ${e.delay} infinite`,
+              willChange: "transform, opacity, filter",
+            }}
+          />
+        );
+      })}
 
       {/* Party streamers falling */}
       {ribbons.map((r, i) => (
