@@ -9,11 +9,7 @@ import { db, ref, onValue, set } from "@/lib/firebase";
 import { EGD_DEPLOYER_CODE } from "@/lib/egdDeployerCode";
 import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
 
-// (No "NEW" badges; library is curated to deployable functions only.)
-import { supabase } from "@/integrations/supabase/client";
-
-// Secrets that Lovable auto-provisions; the admin never needs to paste a value.
-const AUTO_MANAGED_SECRETS = new Set<string>(["LOVABLE_API_KEY"]);
+// Library is curated to admin self-deployable functions only.
 
 /**
  * EGD MANAGER
@@ -193,35 +189,6 @@ export default function EgdManager({
   const [showProjectSecretValues, setShowProjectSecretValues] = useState(false);
   const [savingProjectSecret, setSavingProjectSecret] = useState<string | null>(null);
   const [deletingProjectSecret, setDeletingProjectSecret] = useState<string | null>(null);
-
-  // --- Auto-managed Lovable key (auto-injected into deploy form when needed) ---
-  const [lovableKey, setLovableKey] = useState<string>("");
-  const [lovableKeyLoading, setLovableKeyLoading] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    setLovableKeyLoading(true);
-    const adminPin = (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("rs_admin_pin") : "") || "";
-    supabase.functions.invoke("get-lovable-key", { headers: adminPin ? { "x-admin-pin": adminPin } : {} }).then(({ data, error }) => {
-      if (cancelled) return;
-      if (!error) {
-        const k = (data as any)?.key as string | undefined;
-        if (k) setLovableKey(k);
-      }
-      setLovableKeyLoading(false);
-    }).catch(() => { if (!cancelled) setLovableKeyLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
-
-  // Backfill auto-managed rows once the key resolves
-  useEffect(() => {
-    if (!lovableKey) return;
-    setSecrets((prev) => prev.map((r) => (AUTO_MANAGED_SECRETS.has(r.name) && !r.value ? { ...r, value: lovableKey } : r)));
-  }, [lovableKey]);
-
-
-
-
-
 
   // ---------- Load deployer URL ----------
   useEffect(() => {
