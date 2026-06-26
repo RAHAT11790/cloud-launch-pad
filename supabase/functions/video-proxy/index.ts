@@ -58,7 +58,8 @@ const rewriteM3U8 = (text: string, baseUrl: string, proxyPrefix: string): string
 // ============================================================
 // Hosts come from the ALLOWED_HOSTS secret (comma/space/newline-separated).
 // Each entry can be a plain host ("rsanime03.lovable.app") or a wildcard
-// ("*.lovable.app"). If the secret is empty, every origin is allowed (open mode).
+// ("*.lovable.app"). Lovable preview hosts are always allowed for peer-review
+// testing; production domains should still be added to ALLOWED_HOSTS.
 const ALLOWED_HOSTS_RAW = Deno.env.get("ALLOWED_HOSTS") || "";
 const escapeRegex = (value: string) => value.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
 const normalizeAllowedHost = (value: string) => {
