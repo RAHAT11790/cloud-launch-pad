@@ -53,6 +53,8 @@ const BUILTIN_STREAM_PROXY = SUPABASE_URL
   ? `${SUPABASE_URL}/functions/v1/video-proxy?url={url}`
   : "";
 
+const getBuiltInProxyConfig = (): string => BUILTIN_STREAM_PROXY;
+
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
   const base = proxyBase.trim();
   const encoded = encodeURIComponent(targetUrl);
@@ -122,7 +124,7 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
 
   const isHttp = isInsecureHttpSource(url);
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  const builtinProxyCandidate = BUILTIN_STREAM_PROXY ? buildProxyPlaybackUrl(BUILTIN_STREAM_PROXY, url) : null;
+  const builtinProxyCandidate = getBuiltInProxyConfig() ? buildProxyPlaybackUrl(getBuiltInProxyConfig(), url) : null;
 
   // STRICT SERVER ISOLATION: each server in the admin panel uses ONLY its own
   // configured URL. We never silently mirror across servers — that previously
@@ -135,17 +137,15 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     // then fall back to direct only if proxy is unavailable.
     if (customProxyCandidate) addCandidate(customProxyCandidate);
     if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
-    addCandidate(url);
+    if (!isHttp) addCandidate(url);
     return candidates;
   }
 
   if (isHttp) {
-    // HTTP source — MUST use admin proxy only. No direct playback (mixed-content block).
-    if (customProxyCandidate) addCandidate(customProxyCandidate);
-    if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
-
-    // If no proxy is configured, we have to fallback to the original URL but it will likely fail.
-    if (candidates.length === 0) addCandidate(url);
+    // HTTP source — proxy-only. If admin selected the built-in proxy, Firebase
+    // stores a blank URL, so we resolve that to our built-in proxy config here.
+    // Never add the raw http:// URL to <video>; HTTPS pages will block it.
+    addCandidate(customProxyCandidate || builtinProxyCandidate);
   } else {
     // HTTPS source — strict direct playback only. Never route one HTTPS video
     // server through another proxy/server; if Render is down, HuggingFace/other
@@ -157,7 +157,7 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
 };
 
 const getPrimaryPlaybackSrc = (url: string, cdnEnabled: boolean, proxyUrl?: string, proxyApiKey?: string, preferProxy = false): string => {
-  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey, preferProxy)[0] || url;
+  return buildPlaybackCandidates(url, cdnEnabled, proxyUrl, proxyApiKey, preferProxy)[0] || (isInsecureHttpSource(url) ? "" : url);
 };
 
 const isDirectDownloadCandidate = (url: string): boolean => {
@@ -567,7 +567,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // Load CDN + proxy settings from Firebase. noProxy keeps normal RS playback
   // direct, but Live TV can still pass preferProxy to use admin proxy first.
   useEffect(() => {
-    if (noProxy && !preferProxy) {
+    const httpSrc = isInsecureHttpSource(src || "");
+    if (noProxy && !preferProxy && !httpSrc) {
       setCdnEnabled(false);
       setProxyUrl('');
       setProxyApiKey('');
@@ -590,9 +591,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // bare HTTP URL once and fail with mixed-content before the proxy
     // arrives. So for HTTP sources we extend the safety to 6s and only
     // mark ready when a proxy is actually present.
-    const httpSrc = isInsecureHttpSource(src || "");
     const safetyMs = httpSrc ? 6000 : 1200;
-    const safety = window.setTimeout(() => setPlaybackRouteReady(true), safetyMs);
+    const safety = window.setTimeout(() => {
+      if (httpSrc) {
+        setProxyUrl((prev) => prev || getBuiltInProxyConfig());
+        gotProxy = true;
+        gotCdn = true;
+      }
+      setPlaybackRouteReady(true);
+    }, safetyMs);
 
     const unsub1 = onValue(ref(db, "settings/cdnEnabled"), (snap) => {
       const val = snap.val();
@@ -601,12 +608,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       maybeReady();
     });
 
-    // HTTP video playback uses settings/videoProxy/url first. HTTPS servers do
-    // not use this proxy; they play direct in the video tag.
-    const proxyPath = preferProxy ? "settings/liveTvProxy" : "settings/videoProxy";
+    // HTTP video playback uses the proxy selected in Admin Panel
+    // (settings/proxyServer). HTTPS servers stay direct in the video tag.
+    const proxyPath = preferProxy ? "settings/liveTvProxy" : "settings/proxyServer";
     const applyProxyConfig = (val: any) => {
       if (typeof val === "string" && val.trim()) {
         setProxyUrl(val.trim());
+        setProxyApiKey('');
+        return true;
+      }
+      // Admin panel built-in proxy stores { id: 'supabase', url: null }.
+      if (val?.id === "supabase") {
+        setProxyUrl(getBuiltInProxyConfig());
         setProxyApiKey('');
         return true;
       }
@@ -618,7 +631,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return false;
     };
     const loadProxyFallback = async (seq: number) => {
-      const paths = preferProxy ? ["settings/videoProxy", "settings/proxyServer"] : ["settings/proxyServer"];
+      const paths = preferProxy ? ["settings/videoProxy", "settings/proxyServer"] : ["settings/videoProxy"];
       for (const path of paths) {
         try {
           const snap = await get(ref(db, path));
@@ -627,7 +640,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         } catch {}
       }
       if (cancelled || seq !== proxyLoadSeq) return;
-      setProxyUrl('');
+      setProxyUrl(httpSrc ? getBuiltInProxyConfig() : '');
       setProxyApiKey('');
     };
     const unsub2 = onValue(ref(db, proxyPath), async (snap) => {
@@ -2259,7 +2272,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (hlsFatalRetriesRef.current > 2) {
         try { hls.destroy(); } catch {}
         hlsRef.current = null;
-        setVideoError(true);
+        tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
         return;
       }
 
@@ -2277,7 +2290,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       try { hls.destroy(); } catch {}
       if (hlsRef.current === hls) hlsRef.current = null;
     };
-  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive]);
+  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive, tryNextPlaybackRoute]);
 
   // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
   // users reported when returning to home. Detaches HLS, clears <video>, kills timers.

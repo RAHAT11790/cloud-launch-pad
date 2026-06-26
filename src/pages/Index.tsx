@@ -539,13 +539,10 @@ const Index = () => {
   const displaySiteName = brandingConfig.siteName || "RS ANIME";
 
   // --- Splash hold ---
-  // Hold the splash until hero + first batch of poster images have actually
-  // preloaded (bytes in cache). Min 900ms (brand visibility), hard cap 4s so
-  // a slow/blocked image never traps the user. After release, sessionStorage
-  // prevents the splash from showing again in this tab.
-  const [splashHold, setSplashHold] = useState<boolean>(() => {
-    try { return !sessionStorage.getItem("rs_splash_shown_v1"); } catch { return true; }
-  });
+  // Always show the original splash on a fresh website entry/reload, then
+  // release after the first visible assets are warm. Route/page navigation does
+  // not remount this component, so the splash still won't interrupt browsing.
+  const [splashHold, setSplashHold] = useState<boolean>(true);
   const splashAssetTargetsRef = useRef<string[]>([]);
   useEffect(() => {
     if (!splashHold) return;
@@ -554,7 +551,6 @@ const Index = () => {
       if (cancelled) return;
       cancelled = true;
       setSplashHold(false);
-      try { sessionStorage.setItem("rs_splash_shown_v1", "1"); } catch {}
     };
     const cap = window.setTimeout(release, 4000);
     const min = new Promise<void>((r) => window.setTimeout(r, 900));
@@ -849,7 +845,6 @@ const Index = () => {
   const [activeCategory, setActiveCategory] = useState("All");
   const [dubFilter, setDubFilter] = useState<"all" | "official" | "fandub">("all");
   const [selectedAnime, setSelectedAnime] = useState<AnimeItem | null>(null);
-  const [detailsLoadingAnime, setDetailsLoadingAnime] = useState<AnimeItem | null>(null);
   const [customPostDetail, setCustomPostDetail] = useState<{ title: string; backdrop: string; description: string } | null>(null);
   const [pendingAnimeId, setPendingAnimeId] = useState<string | null>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1108,7 +1103,6 @@ const Index = () => {
 
   useEffect(() => {
     if (playerState || saltPlayerState) {
-      setDetailsLoadingAnime(null);
       dismissDetailsLoadingToast();
     }
   }, [playerState, saltPlayerState, dismissDetailsLoadingToast]);
@@ -1665,19 +1659,17 @@ const Index = () => {
 
     // AnimeSalt source
     if (anime.source === "animesalt" && anime.slug) {
-      if (!switchingInPlayer) setDetailsLoadingAnime(anime);
+      const requestId = detailsRequestRef.current;
+      const toastId = switchingInPlayer ? null : showDetailsLoadingToast();
       const cachedDetails = detailsCacheRef.current.get(anime.id);
       if (cachedDetails) {
         try {
           await openPlayerFromAnime(cachedDetails, { seasonIdx: sIdx, epIdx: eIdx });
         } finally {
-          if (!switchingInPlayer) setDetailsLoadingAnime(null);
+          if (!switchingInPlayer && detailsLoadingToastRef.current === toastId) dismissDetailsLoadingToast();
         }
         return;
       }
-
-      const requestId = detailsRequestRef.current;
-      const toastId = switchingInPlayer ? null : showDetailsLoadingToast();
 
       try {
         // Step 1: Try Firebase customSeasons first (no API needed)
@@ -1909,7 +1901,6 @@ const Index = () => {
         }
       } finally {
         if (!switchingInPlayer && detailsLoadingToastRef.current === toastId) dismissDetailsLoadingToast();
-        if (!switchingInPlayer && requestId === detailsRequestRef.current) setDetailsLoadingAnime(null);
       }
       return;
     }
@@ -3413,35 +3404,6 @@ const Index = () => {
       <AnimatePresence>
         {showProfile && (
           <ProfilePage onClose={() => setShowProfile(false)} allAnime={allAnime} onCardClick={handleCardClick} onContinueWatching={handleContinueWatching} onLogout={handleLogout} onLoginClick={() => setShowLogin(true)} />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {detailsLoadingAnime && !playerState && !saltPlayerState && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.16 }}
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 backdrop-blur-sm"
-          >
-            {detailsLoadingAnime.poster && (
-              <img
-                src={optimizedImageUrl(detailsLoadingAnime.poster, "poster")}
-                alt=""
-                aria-hidden="true"
-                className="absolute inset-0 w-full h-full object-cover opacity-20 blur-xl scale-110"
-              />
-            )}
-            <div className="relative flex flex-col items-center gap-3 px-6 text-center">
-              <div className="player-loader-shell" aria-hidden="true">
-                {Array.from({ length: 12 }).map((_, i) => <span key={i} className="player-loader-petal" />)}
-              </div>
-              <p className="text-sm font-semibold text-white/90 line-clamp-2 max-w-[260px]">
-                Loading <span className="text-primary">{detailsLoadingAnime.title}</span>…
-              </p>
-            </div>
-          </motion.div>
         )}
       </AnimatePresence>
 
