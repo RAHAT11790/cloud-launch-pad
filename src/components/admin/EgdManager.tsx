@@ -243,6 +243,28 @@ export default function EgdManager({
     });
   }, []);
 
+  // ---------- Load player proxy URL ----------
+  useEffect(() => {
+    const r = ref(db, "egdManager/config/playerProxyUrl");
+    return onValue(r, (snap) => {
+      const raw = snap.val();
+      const v = typeof raw === "string" ? raw : (raw?.url ? String(raw.url) : "");
+      setPlayerProxyUrl(v);
+    });
+  }, []);
+
+  const savePlayerProxyUrl = async () => {
+    const u = playerProxyUrl.trim();
+    if (u && !/^https?:\/\//.test(u)) { toast.error("Must start with http(s)://"); return; }
+    setSavingPlayerProxy(true);
+    try {
+      await set(ref(db, "egdManager/config/playerProxyUrl"), u);
+      toast.success(u ? "Player Proxy URL saved ✔" : "Player Proxy URL cleared");
+    } catch (e: any) {
+      toast.error("Save failed: " + (e?.message || String(e)));
+    } finally { setSavingPlayerProxy(false); }
+  };
+
 
 
 
