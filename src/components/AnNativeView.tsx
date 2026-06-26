@@ -29,6 +29,14 @@ type Cue = { start: number; end: number; text: string };
 type Stream = { url: string; label: string; height: number; resolution: string; bandwidth: number };
 type Audio  = { language: string; name: string; uri: string };
 
+export type AnNativeResolvedData = {
+  streams: Stream[];
+  audio: Audio[];
+  subtitles?: Sub[];
+  preferredQualityIdx?: number;
+  defaultAudioIdx?: number;
+};
+
 interface Props {
   embedUrl: string;
   videoStyle?: React.CSSProperties;
@@ -42,6 +50,8 @@ interface Props {
   onReady?: () => void;
   /** Bubble currentTime/duration up so parent can persist progress. */
   onTimeUpdate?: (currentTime: number, duration: number) => void;
+  /** Already-extracted HLS data from the card-click/loading-details phase. */
+  initialData?: AnNativeResolvedData | null;
 }
 
 const proxied = (u: string) => `${HLS_PROXY}?url=${encodeURIComponent(u)}`;
@@ -71,14 +81,30 @@ function buildMaster(stream: Stream, audios: Audio[], defaultAudioIdx: number, s
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(text)))}`;
 }
 
-export default function AnNativeView({ embedUrl, videoStyle, videoClassName, resumeTime, onFail, onReady, onTimeUpdate }: Props) {
+const isHindiAudio = (track?: Pick<Audio, "language" | "name"> | null) => {
+  const blob = `${track?.language || ""} ${track?.name || ""}`.toLowerCase();
+  return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
+};
+
+const pickHindiAudioIdx = (audio: Audio[]) => {
+  const hindiIdx = audio.findIndex(isHindiAudio);
+  return hindiIdx >= 0 ? hindiIdx : 0;
+};
+
+const pickQualityIdx = (streams: Stream[]) => {
+  const preferred = streams.findIndex((x) => x.height === 720);
+  const fallback = streams.findIndex((x) => x.height <= 720);
+  return preferred >= 0 ? preferred : (fallback >= 0 ? fallback : 0);
+};
+
+export default function AnNativeView({ embedUrl, videoStyle, videoClassName, resumeTime, onFail, onReady, onTimeUpdate, initialData }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
-  const [streams, setStreams] = useState<Stream[]>([]);
-  const [audios, setAudios]   = useState<Audio[]>([]);
-  const [subs, setSubs]       = useState<Sub[]>([]);
-  const [qIdx, setQIdx]       = useState(0);
-  const [aIdx, setAIdx]       = useState(0);
+  const [streams, setStreams] = useState<Stream[]>(() => initialData?.streams || []);
+  const [audios, setAudios]   = useState<Audio[]>(() => initialData?.audio || []);
+  const [subs, setSubs]       = useState<Sub[]>(() => initialData?.subtitles || []);
+  const [qIdx, setQIdx]       = useState(() => initialData?.preferredQualityIdx ?? pickQualityIdx(initialData?.streams || []));
+  const [aIdx, setAIdx]       = useState(() => initialData?.defaultAudioIdx ?? pickHindiAudioIdx(initialData?.audio || []));
   const [sIdx, setSIdx]       = useState(-1); // -1 = off
   const [loading, setLoading] = useState(true);
   const [showQ, setShowQ]     = useState(false);
@@ -113,6 +139,16 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     failedRef.current = false;
     resumedRef.current = false;
     setLoading(true);
+    if (initialData?.streams?.length) {
+      setStreams(initialData.streams);
+      setAudios(initialData.audio || []);
+      setSubs(initialData.subtitles || []);
+      setQIdx(initialData.preferredQualityIdx ?? pickQualityIdx(initialData.streams));
+      setAIdx(initialData.defaultAudioIdx ?? pickHindiAudioIdx(initialData.audio || []));
+      setSIdx(-1);
+      onReady?.();
+      return () => { cancelled = true; };
+    }
     setStreams([]); setAudios([]); setSubs([]);
     (async () => {
       try {
@@ -126,17 +162,11 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         setStreams(s);
         setAudios(a);
         setSubs(sb);
-        const preferred = s.findIndex((x) => x.height === 720);
-        const fallback  = s.findIndex((x) => x.height <= 720);
-        setQIdx(preferred >= 0 ? preferred : (fallback >= 0 ? fallback : 0));
+        setQIdx(pickQualityIdx(s));
         // Default audio = Hindi when available (matches site-wide preference).
         // Picked BEFORE the manifest builds so the first HLS playlist already
         // marks Hindi as DEFAULT=YES — no visible track switch on play.
-        const hindiIdx = a.findIndex((t) => {
-          const blob = `${t?.language || ""} ${t?.name || ""}`.toLowerCase();
-          return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
-        });
-        setAIdx(hindiIdx >= 0 ? hindiIdx : 0);
+        setAIdx(pickHindiAudioIdx(a));
         setSIdx(-1);
         onReady?.();
       } catch (e) {
@@ -145,7 +175,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       }
     })();
     return () => { cancelled = true; };
-  }, [embedUrl, onFail, onReady]);
+  }, [embedUrl, initialData, onFail, onReady]);
 
   // 2. Build + attach hls whenever quality changes
   useEffect(() => {
@@ -207,8 +237,23 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     });
     hlsRef.current = hls;
     hls.attachMedia(video);
+    const applyPreferredAudio = () => {
+      const tracks = hls.audioTracks || [];
+      if (tracks.length === 0) return;
+      const manifestDefault = tracks.findIndex((track: any) => track?.default);
+      const hindiTrack = tracks.findIndex((track: any) => {
+        const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
+        return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
+      });
+      const wanted = hindiTrack >= 0 ? hindiTrack : (manifestDefault >= 0 ? manifestDefault : Math.min(aIdx, tracks.length - 1));
+      try { hls.audioTrack = wanted; } catch {}
+    };
+
     hls.on(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(master));
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      // Force Hindi before the first play() call. This prevents the visible
+      // 4-5s post-open language switch the user reported.
+      applyPreferredAudio();
       // startPosition handles the seek for hls.js automatically; only
       // touch currentTime as a safety net if it didn't land near target.
       if (initialStart > 0 && Math.abs(video.currentTime - initialStart) > 2) {
@@ -219,7 +264,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       setLoading(false);
     });
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
-      // Default audio is already set inside the master via DEFAULT=YES.
+      applyPreferredAudio();
     });
     hls.on(Hls.Events.ERROR, (_, data) => {
       if (!data.fatal) return;
