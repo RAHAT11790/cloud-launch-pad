@@ -1823,6 +1823,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       sourceBaseRef.current = nextQualityRoute.option.src;
       activeSourceBaseRef.current = nextQualityRoute.raw;
       setCurrentSrc(nextQualityRoute.src);
+      currentQualityRef.current = nextQualityRoute.option.label;
       setCurrentQuality(nextQualityRoute.option.label);
       return true;
     }
@@ -3073,7 +3074,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         onNextEpisode();
       }
     };
-    const MAX_RETRIES = 1;
+    const MAX_RETRIES = manualQualitySelectedRef.current ? 4 : 1;
     const onError = () => {
       const errSrc = currentSrc;
       const prev = retryAttemptsRef.current.get(errSrc) || 0;
