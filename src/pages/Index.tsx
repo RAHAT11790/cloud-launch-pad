@@ -1013,6 +1013,7 @@ const Index = () => {
     cropH?: number;
     loading?: boolean;
     resumeTime?: number;
+    anNativeData?: AnNativeResolvedData | null;
   } | null>(() => {
     try {
       const saved = sessionStorage.getItem("rs_saltPlayerState");
