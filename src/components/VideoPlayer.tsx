@@ -2094,10 +2094,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, []);
 
   useEffect(() => {
-    if (!isHlsSrc || currentHlsSubtitle < 0) {
+    const hasActiveSubtitleMeta = hlsSubtitleMetaRef.current.some((track) => track.id === currentHlsSubtitle);
+    if (currentHlsSubtitle < 0 || (!isHlsSrc && !hasActiveSubtitleMeta)) {
       clearSubtitlePolling();
       setSubtitleOverlayText("");
-      if (!isHlsSrc) {
+      if (!isHlsSrc && !hasActiveSubtitleMeta) {
         setSubtitleStatusMessage("");
         setSubtitleStatusTone("neutral");
       }
