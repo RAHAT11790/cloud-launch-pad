@@ -172,6 +172,11 @@ export default function EgdManager({
   const [savedDeployerUrl, setSavedDeployerUrl] = useState("");
   const [savingUrl, setSavingUrl] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
+  // Player proxy URL — pasted by admin after deploying video-proxy here.
+  // Single source of truth used by VideoPlayer. Stored at
+  // egdManager/config/playerProxyUrl.
+  const [playerProxyUrl, setPlayerProxyUrl] = useState("");
+  const [savingPlayerProxy, setSavingPlayerProxy] = useState(false);
 
   // --- Function editor state ---
   const [list, setList] = useState<FnRow[]>([]);
