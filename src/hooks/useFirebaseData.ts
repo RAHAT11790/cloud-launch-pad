@@ -80,6 +80,11 @@ export function useFirebaseData() {
                               link720: ep.link720 || undefined,
                               link1080: ep.link1080 || undefined,
                               link4k: ep.link4k || undefined,
+                              subtitleTracks: ep.subtitleTracks ? Object.values(ep.subtitleTracks).map((st: any) => ({
+                                language: st.language || undefined,
+                                label: st.label || st.language || "Subtitle",
+                                url: st.url || st.link || "",
+                              })).filter((st: any) => st.url) : undefined,
                               audioTracks: ep.audioTracks ? Object.values(ep.audioTracks).map((at: any) => ({
                                 language: at.language || "",
                                 label: at.label || "",
@@ -122,6 +127,11 @@ export function useFirebaseData() {
                       link720: ep.link720 || undefined,
                       link1080: ep.link1080 || undefined,
                       link4k: ep.link4k || undefined,
+                      subtitleTracks: ep.subtitleTracks ? Object.values(ep.subtitleTracks).map((st: any) => ({
+                        language: st.language || undefined,
+                        label: st.label || st.language || "Subtitle",
+                        url: st.url || st.link || "",
+                      })).filter((st: any) => st.url) : undefined,
                       audioTracks: ep.audioTracks ? Object.values(ep.audioTracks).map((at: any) => ({
                         language: at.language || "",
                         label: at.label || "",
