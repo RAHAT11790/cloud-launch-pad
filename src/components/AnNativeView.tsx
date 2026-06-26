@@ -261,49 +261,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     // resumeTime intentionally NOT in deps — re-running on resume change
     // would tear down hls mid-playback. Only embed/quality/audio rebuilds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streams, qIdx, audios, aIdx, subs, onFail, apiBase]);
-
-  const parseVttCues = useCallback((text: string): Cue[] => {
-    const toSeconds = (raw: string) => {
-      const clean = raw.trim().replace(",", ".");
-      const parts = clean.split(":").map(Number);
-      if (parts.some(Number.isNaN)) return NaN;
-      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-      if (parts.length === 2) return parts[0] * 60 + parts[1];
-      return NaN;
-    };
-    return text.replace(/\r/g, "").split(/\n\n+/).flatMap((block) => {
-      const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-      const timingIndex = lines.findIndex((line) => line.includes("-->"));
-      if (timingIndex < 0) return [];
-      const [startRaw, endRaw] = lines[timingIndex].split("-->").map((part) => part.trim().split(/\s+/)[0]);
-      const start = toSeconds(startRaw || "");
-      const end = toSeconds(endRaw || "");
-      const cueText = lines.slice(timingIndex + 1).join("\n")
-        .replace(/<\d{2}:\d{2}:\d{2}\.\d{3}>/g, "")
-        .replace(/<[^>]+>/g, "")
-        .trim();
-      return cueText && Number.isFinite(start) && Number.isFinite(end) ? [{ start, end, text: cueText }] : [];
-    });
-  }, []);
-
-  const syncSubtitleText = useCallback(() => {
-    const video = videoRef.current;
-    if (!video || subtitleCuesRef.current.length === 0) { setSubtitleText(""); return; }
-    const active = subtitleCuesRef.current
-      .filter((cue) => video.currentTime >= cue.start && video.currentTime <= cue.end)
-      .map((cue) => cue.text)
-      .join("\n")
-      .trim();
-    setSubtitleText(active);
-  }, []);
-
-  const stopSubtitlePolling = useCallback(() => {
-    if (subtitlePollRef.current) {
-      clearInterval(subtitlePollRef.current);
-      subtitlePollRef.current = null;
-    }
-  }, []);
+  }, [streams, qIdx, audios, aIdx, onFail, apiBase]);
 
   // Bubble timeupdate to parent for progress persistence (continue-watching).
   useEffect(() => {
@@ -336,31 +294,6 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     setQIdx(i);
     setShowQ(false);
   }, []);
-
-  // Toggle native textTracks: -1 = off, else show selected
-  const changeSub = useCallback(async (i: number) => {
-    const seq = ++subtitleSeqRef.current;
-    setSIdx(i);
-    setShowS(false);
-    setSubtitleText("");
-    stopSubtitlePolling();
-    const v = videoRef.current;
-    const hls = hlsRef.current;
-    if (hls) {
-      try { hls.subtitleDisplay = i >= 0; hls.subtitleTrack = i; } catch {}
-    }
-    if (v?.textTracks) {
-      const tracks = v.textTracks;
-      for (let k = 0; k < tracks.length; k++) tracks[k].mode = k === i ? "showing" : "disabled";
-    }
-    if (i < 0) {
-      subtitleCuesRef.current = [];
-      setSubtitleStatus("Subtitles off");
-      return;
-    }
-    subtitleCuesRef.current = [];
-    setSubtitleStatus("Subtitles are not available for AN playback");
-  }, [parseVttCues, stopSubtitlePolling, subs, syncSubtitleText]);
 
   const openControlsBriefly = useCallback(() => {
     setControlsOpen(true);
@@ -478,7 +411,6 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   useEffect(() => () => {
     if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
     if (skipTimerRef.current) clearTimeout(skipTimerRef.current);
-    if (subtitlePollRef.current) clearInterval(subtitlePollRef.current);
   }, []);
 
   return (
@@ -521,14 +453,6 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       )}
 
       {speedBoost && <div className="player-speed-hud">2× SPEED ▶▶</div>}
-
-      {subtitleText && (
-        <div className="absolute inset-x-4 bottom-28 z-[65] pointer-events-none flex justify-center">
-          <div className="max-w-[92%] rounded-lg bg-black/70 px-3 py-1.5 text-center text-white text-[15px] font-semibold leading-snug shadow-xl whitespace-pre-line">
-            {subtitleText}
-          </div>
-        </div>
-      )}
 
       {skipHint && (
         <div
@@ -585,7 +509,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
           <div className="relative">
             <button
                 onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); setShowQ((v) => !v); setShowA(false); setShowS(false); }}
+                onClick={(e) => { e.stopPropagation(); setShowQ((v) => !v); setShowA(false); }}
               className="h-7 inline-flex items-center gap-1 px-2.5 rounded-lg bg-black/75 backdrop-blur-md border border-white/15 text-white text-[12px] font-semibold hover:bg-black/90 active:scale-95 transition-all shadow-lg"
             >
               <Layers className="w-3 h-3" /> {streams[qIdx]?.label || "Auto"}
@@ -608,7 +532,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
             <div className="relative">
               <button
                 onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); setShowA((v) => !v); setShowQ(false); setShowS(false); }}
+                onClick={(e) => { e.stopPropagation(); setShowA((v) => !v); setShowQ(false); }}
                 className="h-7 inline-flex items-center gap-1 px-2.5 rounded-lg bg-black/75 backdrop-blur-md border border-white/15 text-white text-[12px] font-semibold hover:bg-black/90 active:scale-95 transition-all shadow-lg"
               >
                 <Volume2 className="w-3 h-3" /> {audios[aIdx]?.name || "Audio"}
@@ -624,39 +548,6 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
                       {a.name}
                     </button>
                   ))}
-                </div>
-              )}
-            </div>
-          )}
-          {subs.length > 0 && (
-            <div className="relative">
-              <button
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); setShowS((v) => !v); setShowQ(false); setShowA(false); }}
-                className="h-7 inline-flex items-center gap-1 px-2.5 rounded-lg bg-black/75 backdrop-blur-md border border-white/15 text-white text-[12px] font-semibold hover:bg-black/90 active:scale-95 transition-all shadow-lg"
-              >
-                <Captions className="w-3 h-3" /> {sIdx >= 0 ? (subs[sIdx]?.name || "CC") : "CC"}
-              </button>
-              {showS && (
-                <div onClick={(e) => e.stopPropagation()} className="absolute bottom-full mb-1.5 left-0 bg-black/95 backdrop-blur-md rounded-xl border border-white/10 overflow-hidden min-w-[140px] shadow-2xl max-h-[40vh] overflow-y-auto">
-                  <button
-                    onClick={() => void changeSub(-1)}
-                    className={`block w-full text-left px-3 py-2 text-[12px] hover:bg-white/10 ${sIdx === -1 ? "text-primary font-semibold" : "text-white"}`}
-                  >
-                    Off
-                  </button>
-                  {subs.map((s, i) => (
-                    <button
-                      key={i}
-                      onClick={() => void changeSub(i)}
-                      className={`block w-full text-left px-3 py-2 text-[12px] hover:bg-white/10 ${i === sIdx ? "text-primary font-semibold" : "text-white"}`}
-                    >
-                      {s.name}
-                    </button>
-                  ))}
-                  {!!subtitleStatus && (
-                    <div className="px-3 py-1.5 text-[10px] text-white/60 border-t border-white/10">{subtitleStatus}</div>
-                  )}
                 </div>
               )}
             </div>
