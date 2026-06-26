@@ -69,8 +69,18 @@ const normalizeAllowedHost = (value: string) => {
   } catch {}
   return raw.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
 };
-const ALLOWED_HOST_RX: RegExp[] = ALLOWED_HOSTS_RAW
-  .split(/[\s,]+/)
+const DEFAULT_ALLOWED_HOSTS = [
+  "localhost",
+  "127.0.0.1",
+  "*.lovable.app",
+  "lovable.app",
+  "*.lovableproject.com",
+  "lovableproject.com",
+];
+const ALLOWED_HOST_RX: RegExp[] = Array.from(new Set([
+  ...DEFAULT_ALLOWED_HOSTS,
+  ...ALLOWED_HOSTS_RAW.split(/[\s,]+/),
+]))
   .map(normalizeAllowedHost)
   .filter(Boolean)
   .map((host) => {
@@ -83,11 +93,9 @@ const ALLOWED_HOST_RX: RegExp[] = ALLOWED_HOSTS_RAW
 
 const matchesAllowedHost = (urlStr: string | null): boolean => {
   if (!urlStr) return false;
-  if (ALLOWED_HOST_RX.length === 0) return true; // open mode
   try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
 };
 const isAllowedRequest = (req: Request): boolean => {
-  if (ALLOWED_HOST_RX.length === 0) return true;
   const origin = req.headers.get("origin");
   const referer = req.headers.get("referer");
   if (!origin && !referer) return true; // some WebViews strip both on Range
