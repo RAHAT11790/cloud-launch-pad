@@ -4,7 +4,8 @@ import type { Episode, Season, SubtitleTrack } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
-import { SUPABASE_URL, TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
+import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
+import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import type { AnNativeResolvedData } from "@/components/AnNativeView";
 
 const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: number) => {
@@ -106,11 +107,25 @@ const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualit
   };
 };
 
-const AN_API_BASE = SUPABASE_URL ? `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/an-api` : "";
+let anApiBaseUrl = "";
+let anApiBasePromise: Promise<string> | null = null;
+
+const ensureAnApiBaseUrl = async (): Promise<string> => {
+  if (anApiBaseUrl) return anApiBaseUrl;
+  if (!anApiBasePromise) {
+    anApiBasePromise = getEdgeFunctionUrl("an-api")
+      .then((url) => {
+        anApiBaseUrl = String(url || "").trim().replace(/\/+$/, "");
+        return anApiBaseUrl;
+      })
+      .catch(() => "");
+  }
+  return anApiBasePromise;
+};
 
 const buildAnProxyUrl = (url: string) => {
-  if (!AN_API_BASE || !url) return url;
-  return `${AN_API_BASE}/hls?url=${encodeURIComponent(url)}`;
+  if (!anApiBaseUrl || !url) return url;
+  return `${anApiBaseUrl}/hls?url=${encodeURIComponent(url)}`;
 };
 
 // Prefer Hindi as the default audio track for AnimeSalt content.
@@ -151,7 +166,7 @@ const buildAnSyntheticMaster = (
     const rawLanguage = String(track?.language || rawName || `sub${index + 1}`).trim().toLowerCase();
     const uri = String(track?.uri || track?.url || "").trim();
     if (!uri) return;
-    const subUrl = AN_API_BASE ? `${AN_API_BASE}/subs?url=${encodeURIComponent(uri)}` : uri;
+    const subUrl = anApiBaseUrl ? `${anApiBaseUrl}/subs?url=${encodeURIComponent(uri)}` : uri;
     lines.push(
       `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="${rawName}",LANGUAGE="${rawLanguage || `sub${index + 1}`}",DEFAULT=NO,AUTOSELECT=YES,FORCED=NO,URI="${subUrl}"`,
     );
@@ -214,6 +229,7 @@ const normalizeAnAudioTracks = (
 };
 
 const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
+  await ensureAnApiBaseUrl();
   const sourceList = Array.isArray(payload?.sources) ? payload.sources : [];
   const primarySource = sourceList.find((entry: any) => Array.isArray(entry?.streams) && entry.streams.length > 0) || sourceList[0];
   const streams = Array.isArray(primarySource?.streams) ? primarySource.streams.filter((entry: any) => String(entry?.url || "").trim()) : [];
@@ -270,9 +286,10 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
 };
 
 const getAnNativeDataFromEmbed = async (embedUrl: string): Promise<AnNativeResolvedData | null> => {
-  if (!AN_API_BASE || !embedUrl) return null;
+  const base = await ensureAnApiBaseUrl();
+  if (!base || !embedUrl) return null;
   try {
-    const response = await fetch(`${AN_API_BASE}/embed?url=${encodeURIComponent(embedUrl)}`);
+    const response = await fetch(`${base}/embed?url=${encodeURIComponent(embedUrl)}`);
     if (!response.ok) return null;
     const data = await response.json();
     const streams = Array.isArray(data?.streams) ? data.streams.filter((entry: any) => String(entry?.url || "").trim()) : [];
@@ -315,14 +332,15 @@ const resolveSaltEmbed = (payload: any): { embedUrl: string; allEmbeds: string[]
 const animeSaltDirectStateCache = new Map<string, Promise<Awaited<ReturnType<typeof buildAnimeSaltDirectPlaybackState>> | null>>();
 
 const getAnimeSaltDirectState = async (episodeSlug: string) => {
-  if (!AN_API_BASE) return null;
+  const base = await ensureAnApiBaseUrl();
+  if (!base) return null;
   const key = String(episodeSlug || "").trim();
   if (!key) return null;
   const existing = animeSaltDirectStateCache.get(key);
   if (existing) return existing;
   const request = (async () => {
     try {
-      const response = await fetch(`${AN_API_BASE}/episode?slug=${encodeURIComponent(key)}`);
+      const response = await fetch(`${base}/episode?slug=${encodeURIComponent(key)}`);
       if (!response.ok) return null;
       const payload = await response.json();
       return await buildAnimeSaltDirectPlaybackState(payload);
