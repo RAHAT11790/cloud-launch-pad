@@ -109,10 +109,9 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
   }
   const fileName = buildSafeFileName(rawFileName);
   const unwrapped = unwrapManagedVideoUrl(trimmedUrl);
-  // HTTP file hosts like bot-hosting often block cloud/Supabase GET requests
-  // while still allowing the real user's browser to download directly. Keep
-  // the old HTTP-download behaviour: direct first, proxy only as backup.
-  const preferDirect = /^http:\/\//i.test(unwrapped);
+  // On an HTTPS app, raw http:// downloads are mixed-content and get blocked.
+  // Use the admin video-download function first; direct is only a last fallback.
+  const preferDirect = false;
   const directUrl = buildDirectDownloadUrl(trimmedUrl);
   const proxiedUrl = buildVideoDownloadUrl(trimmedUrl, fileName);
   const finalUrl = preferDirect ? (directUrl || proxiedUrl) : (proxiedUrl || directUrl);
@@ -121,13 +120,6 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
     return false;
   }
   openDownloadLink(finalUrl, fileName);
-  if (preferDirect && proxiedUrl && directUrl && proxiedUrl !== directUrl) {
-    // Keep the proxy as an explicit backup link without blocking the direct
-    // download path that works for cloud-blocked RSFR hosts.
-    setTimeout(() => {
-      try { console.info("[Download] Proxy backup available:", proxiedUrl); } catch {}
-    }, 0);
-  }
   return true;
 }
 
@@ -142,7 +134,7 @@ export function triggerBulkBackgroundDownloads(
       if (!u || !isHttpUrl(u)) return null;
       const fn = buildSafeFileName(it?.fileName || "video");
       const unwrapped = unwrapManagedVideoUrl(u);
-      const preferDirect = /^http:\/\//i.test(unwrapped);
+      const preferDirect = false;
       const direct = buildDirectDownloadUrl(u);
       const proxied = buildVideoDownloadUrl(u, fn);
       const final = preferDirect ? (direct || proxied) : (proxied || direct);
