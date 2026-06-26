@@ -364,7 +364,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [cropIndex, setCropIndex] = useState(0);
   const [settingsTab, setSettingsTab] = useState<"speed" | "quality" | "audio">("speed");
   const [currentQuality, setCurrentQuality] = useState<string>("Auto");
+  const currentQualityRef = useRef("Auto");
   const manualQualitySelectedRef = useRef(false);
+  useEffect(() => { currentQualityRef.current = currentQuality; }, [currentQuality]);
   const [cdnEnabled, setCdnEnabled] = useState(true);
   const [proxyUrl, setProxyUrl] = useState<string>('');
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
@@ -1771,6 +1773,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const failedKey = currentSrc || activeSourceBaseRef.current || sourceBaseRef.current;
     if (!failedKey) return false;
 
+    const selectedQuality = currentQualityRef.current || currentQuality || "Auto";
+
     console.log('Video failed after retries. URL:', failedKey);
     failedSrcsRef.current.add(failedKey);
 
@@ -1792,11 +1796,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // Try EVERY configured quality on the current admin server before declaring
     // the server/link expired. Current quality is checked first, then the rest;
     // only after every quality + proxy route is exhausted do we move servers.
-    const orderedQualities = (manualQualitySelectedRef.current && currentQuality !== "Auto"
-      ? availableQualities.filter((q) => q.label === currentQuality)
+    const orderedQualities = (manualQualitySelectedRef.current && selectedQuality !== "Auto"
+      ? availableQualities.filter((q) => q.label === selectedQuality)
       : [
-          ...availableQualities.filter((q) => q.label === currentQuality),
-          ...availableQualities.filter((q) => q.label !== currentQuality),
+          ...availableQualities.filter((q) => q.label === selectedQuality),
+          ...availableQualities.filter((q) => q.label !== selectedQuality),
         ]
     ).filter((q) => !is4KLabel(q.label) || isPremium);
 
@@ -1835,8 +1839,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         // Preserve a user-selected fixed quality during server failover. The old
         // logic reset to `src` (usually 480p), which made HTTP quality switching
         // look broken even when every quality URL was valid.
-        sourceBaseRef.current = (manualQualitySelectedRef.current && currentQuality !== "Auto"
-          ? availableQualities.find((q) => q.label === currentQuality)?.src
+        sourceBaseRef.current = (manualQualitySelectedRef.current && selectedQuality !== "Auto"
+          ? availableQualities.find((q) => q.label === selectedQuality)?.src
           : src) || src;
         switchServer(nextServerIdx, false);
         return true;
@@ -2566,8 +2570,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       : null;
     const baseRawSrc = preservedQuality?.src || src;
     const hadManualServer = manualServerSelectedRef.current;
+    const rememberedServerIndex = typeof preferredServerIndexRef.current === "number" ? preferredServerIndexRef.current : activeServerIndex;
     const targetServerIndex = hadManualServer && effectiveVideoServers.length
-      ? Math.min(activeServerIndex, effectiveVideoServers.length - 1)
+      ? Math.min(Math.max(rememberedServerIndex, 0), effectiveVideoServers.length - 1)
       : 0;
 
     sourceBaseRef.current = baseRawSrc;
@@ -2577,9 +2582,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const resolvedSrc = resolvePlaybackSrc(initialRawSrc);
     activeSourceBaseRef.current = initialRawSrc;
     setCurrentSrc(resolvedSrc);
+    currentQualityRef.current = preservedQuality?.label || "Auto";
     setCurrentQuality(preservedQuality?.label || "Auto");
     if (!hadManualServer) {
       manualServerSelectedRef.current = false;
+      preferredServerIndexRef.current = null;
       setManualServerSelected(false);
     }
     setActiveServerIndex(targetServerIndex);
@@ -3389,6 +3396,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (option.label === currentQuality) { setShowSettings(false); return; }
 
     sourceBaseRef.current = option.src;
+    currentQualityRef.current = option.label;
     manualQualitySelectedRef.current = option.label !== "Auto";
     failedSrcsRef.current.clear();
     retryAttemptsRef.current.clear();
@@ -3397,6 +3405,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const newSrc = resolvePlaybackSrc(finalOptionSrc);
 
     if (newSrc === currentSrc) {
+      currentQualityRef.current = option.label;
       setCurrentQuality(option.label);
       setShowSettings(false);
       return;
@@ -3407,6 +3416,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     pendingSeek.current = Math.max(liveTime, pendingResume);
     setIsBuffering(true);
     setCurrentSrc(newSrc);
+    currentQualityRef.current = option.label;
     setCurrentQuality(option.label);
     setShowSettings(false);
 
