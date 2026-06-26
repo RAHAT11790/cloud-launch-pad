@@ -622,6 +622,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [adGateActive, setAdGateActive] = useState(false);
   const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
   const [shortenLoading, setShortenLoading] = useState(false);
+  const [adGateError, setAdGateError] = useState("");
   const [showQualityPanel, setShowQualityPanel] = useState(false);
   const [showDownloadQualityPicker, setShowDownloadQualityPicker] = useState(false);
   const [showInfoSheet, setShowInfoSheet] = useState(false);
@@ -1370,6 +1371,32 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     localStorage.setItem("rsanime_ad_access", expiry.toString());
   }, []);
 
+  const loadAdGateLinks = useCallback(async (isCancelled: () => boolean = () => false) => {
+    setShortenLoading(true);
+    setAdGateError("");
+    try {
+      const result = await createUnlockLinksForAllServices();
+      if (isCancelled()) return;
+      setShortenLoading(false);
+      if (result.ok && result.links.length > 0) {
+        setAdLinks(result.links);
+        setAdGateError("");
+      } else {
+        setAdLinks([]);
+        setAdGateError(
+          result.error === "no_services"
+            ? "No ad/unlock service is enabled in Admin."
+            : "Ad link network is blocked right now. Please retry.",
+        );
+      }
+    } catch {
+      if (isCancelled()) return;
+      setShortenLoading(false);
+      setAdLinks([]);
+      setAdGateError("Ad link network is blocked right now. Please retry.");
+    }
+  }, []);
+
   // Premium check (device limit is now enforced at login time)
   useEffect(() => {
     const getUserId = (): string | null => {
@@ -1402,6 +1429,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     if (unlockBlocked) {
       setAdGateActive(false);
+      setAdGateError("");
       if (videoRef.current) {
         videoRef.current.pause();
         videoRef.current.src = "";
@@ -1411,10 +1439,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     if (isPremium || has24hAccess()) {
       setAdGateActive(false);
+      setAdGateError("");
       return;
     }
     if (isAdGateCooldownActive()) {
       setAdGateActive(false);
+      setAdGateError("");
       return;
     }
     // Shortener master toggle: if admin disabled it, give free users instant access
@@ -1423,23 +1453,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // No access - block video and show ad gate
       markAdGateShownNow();
       setAdGateActive(true);
-      setShortenLoading(true);
+      setAdLinks([]);
+      setAdGateError("");
       timeoutId = setTimeout(() => {
         if (cancelled) return;
         setShortenLoading(false);
-        setAdGateActive(false);
-      }, 2000);
-      createUnlockLinksForAllServices().then((result) => {
-        if (cancelled) return;
+        setAdGateError("Ad link network is taking too long. Please retry.");
+      }, 15000);
+      loadAdGateLinks(() => cancelled).finally(() => {
         if (timeoutId) clearTimeout(timeoutId);
-        setShortenLoading(false);
-        if (result.ok && result.links.length > 0) setAdLinks(result.links);
-        else setAdGateActive(false);
-      }).catch(() => {
-        if (cancelled) return;
-        if (timeoutId) clearTimeout(timeoutId);
-        setShortenLoading(false);
-        setAdGateActive(false);
       });
     });
 
@@ -1447,7 +1469,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded]);
+  }, [isPremium, has24hAccess, unlockBlocked, freeAccessLoaded, loadAdGateLinks]);
 
   const handleToggleWatchlist = useCallback(() => {
     if (!animeId) {
@@ -1510,8 +1532,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setShareFallback({ url, title: shareTitle });
   }, [buildShareLinkForEpisode, shareLink, title]);
 
-  const handleOpenAdLink = useCallback(async (url: string, _service?: AdService) => {
+  const handleOpenAdLink = useCallback(async (url: string, service?: AdService) => {
     const { openExternalBrowser, openTelegramDeepLink } = await import("@/lib/openExternal");
+    const isTelegramUnlock = service?.mode === "miniapp" || url.startsWith("miniapp://") || url.startsWith("telegram://");
+    if (!isTelegramUnlock && url) {
+      openExternalBrowser(url);
+      return;
+    }
     try {
       const fb = await import("@/lib/firebase");
       const { createTelegramBotUnlockLink } = await import("@/lib/unlockAccess");
@@ -1523,8 +1550,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
       const botSnap = await fb.get(fb.ref(fb.db, "settings/telegramVerifyBotUsername"));
       const botUsername = String(botSnap.val() || "").replace(/^@/, "").trim();
-      window.location.href = `https://t.me/${botUsername}`;
-      return;
+      if (botUsername) {
+        window.location.href = `https://t.me/${botUsername}`;
+        return;
+      }
     } catch {}
     if (url) {
       openExternalBrowser(url);
@@ -2581,6 +2610,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }, 8500);
     return () => window.clearTimeout(timer);
   }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, tryNextPlaybackRoute]);
+
+  // If the active admin server resolves to http:// but no EGD Router video-proxy
+  // URL is saved, there is no legal browser route (HTTPS pages block raw HTTP).
+  // Do not leave the player on a blank src forever — immediately continue the
+  // same quality scan/server failover chain.
+  useEffect(() => {
+    if (!playbackRouteReady || adGateActive || isEmbedPlayback) return;
+    const raw = activeSourceBaseRef.current || getServerScopedSource(sourceBaseRef.current || src, activeServerIndex);
+    if (!raw || !isInsecureHttpSource(raw) || proxyUrl) return;
+    const t = window.setTimeout(() => {
+      tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [activeServerIndex, adGateActive, getServerScopedSource, isEmbedPlayback, playbackRouteReady, proxyUrl, src, tryNextPlaybackRoute, videoServerFingerprint]);
 
   const applyPendingSeek = useCallback((targetVideo?: HTMLVideoElement | null) => {
     const v = targetVideo || videoRef.current;
