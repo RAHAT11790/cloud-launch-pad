@@ -3985,18 +3985,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         <span className="truncate">{currentQuality}</span>
                       </button>
                     )}
-                    {(isHlsSrc || hlsSubtitleOptions.length > 0) && hlsSubtitleOptions.length > 0 && (
-                      <button
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => { e.stopPropagation(); setShowCcPanel((p) => !p); setCcTab("subtitle"); setShowAudioPanel(false); setShowQualityPanel(false); setShowSettings(false); setShowServerPanel(false); }}
-                        className={`h-7 px-1.5 text-[10px] rounded-md font-semibold transition-all inline-flex items-center gap-0.5 shrink-0 ${
-                          currentHlsSubtitle >= 0 ? "gradient-primary text-white" : "player-control-chip"
-                        }`}
-                        aria-label="Subtitles"
-                      >
-                        <Subtitles className="w-3 h-3" /> CC
-                      </button>
-                    )}
+                    {/* Bottom CC button removed — single CC lives in the top server row */}
                     {audioTrackOptions.length > 0 && (
                       <button
                         onClick={(e) => { e.stopPropagation(); setShowAudioPanel(!showAudioPanel); setShowQualityPanel(false); setShowCcPanel(false); setShowSettings(false); setShowServerPanel(false); }}
