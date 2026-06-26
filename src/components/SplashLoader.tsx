@@ -89,49 +89,39 @@ const SplashLoader = () => {
       ))}
 
       {/* Central hex emblem */}
-      <div className="relative w-[230px] h-[230px] flex items-center justify-center">
-        {/* Outer hex (slow spin) */}
+      <div className="relative w-[240px] h-[240px] flex items-center justify-center">
+        {/* RGB rainbow conic ring (main spinner) */}
         <div
-          className="absolute inset-0"
+          className="absolute inset-0 rounded-full"
           style={{
-            clipPath: HEX_CLIP,
             background:
-              "conic-gradient(from 0deg,#ff3866,#ff8a5b,#ffd166,#5ad7ff,#a06bff,#ff3866)",
-            animation: "splashHexSpin 8s linear infinite",
-            filter: "drop-shadow(0 0 25px rgba(255,60,100,0.5))",
+              "conic-gradient(from 0deg,#ff0040,#ff7a00,#ffd400,#28ff7a,#00d4ff,#5a6bff,#c84bff,#ff0040)",
+            animation: "splashHexSpin 3.2s linear infinite",
+            filter: "drop-shadow(0 0 22px rgba(255,80,160,0.55)) drop-shadow(0 0 30px rgba(90,215,255,0.35))",
           }}
         />
-        {/* Inner cutout */}
+        {/* Inner mask */}
+        <div className="absolute inset-[5px] rounded-full" style={{ background: "#06060c" }} />
+        {/* Counter-rotating accent ring */}
         <div
-          className="absolute inset-[6px]"
+          className="absolute inset-[12px] rounded-full"
           style={{
-            clipPath: HEX_CLIP,
-            background: "#06060c",
-          }}
-        />
-        {/* Middle hex (reverse spin, thinner) */}
-        <div
-          className="absolute inset-[14px]"
-          style={{
-            clipPath: HEX_CLIP,
             background:
-              "conic-gradient(from 180deg,transparent 0deg,rgba(90,215,255,0.9) 40deg,transparent 90deg,transparent 180deg,rgba(255,80,140,0.9) 220deg,transparent 270deg)",
-            animation: "splashHexSpinRev 4s linear infinite",
+              "conic-gradient(from 180deg,transparent 0deg,#00ffd5 60deg,transparent 120deg,transparent 240deg,#ff3df5 300deg,transparent 360deg)",
+            animation: "splashHexSpinRev 5s linear infinite",
+            opacity: 0.9,
           }}
         />
-        <div
-          className="absolute inset-[18px]"
-          style={{ clipPath: HEX_CLIP, background: "#0a0612" }}
-        />
+        <div className="absolute inset-[17px] rounded-full" style={{ background: "#0a0612" }} />
 
         {/* Glow behind logo */}
         <div
-          className="absolute inset-[28px] rounded-full pointer-events-none"
+          className="absolute inset-[26px] rounded-full pointer-events-none"
           style={{
             background:
-              "radial-gradient(circle,rgba(255,60,100,0.65) 0%,rgba(120,30,80,0.25) 50%,transparent 75%)",
+              "radial-gradient(circle,rgba(255,80,180,0.55) 0%,rgba(90,80,200,0.25) 50%,transparent 75%)",
             animation: "splashGlow 2s ease-in-out infinite",
-            filter: "blur(8px)",
+            filter: "blur(10px)",
           }}
         />
 
@@ -140,109 +130,100 @@ const SplashLoader = () => {
           <img
             src={logo}
             alt={title}
-            className="relative z-10 w-[140px] h-[140px] rounded-full object-cover"
+            className="relative z-10 w-[150px] h-[150px] rounded-full object-cover"
             style={{
               boxShadow:
-                "0 0 30px rgba(255,60,100,0.6),0 0 60px rgba(90,215,255,0.25)",
+                "0 0 26px rgba(255,80,160,0.55),0 0 60px rgba(90,215,255,0.35)",
             }}
           />
         ) : (
           <div
-            className="relative z-10 w-[140px] h-[140px] rounded-full"
+            className="relative z-10 w-[150px] h-[150px] rounded-full"
             style={{ background: "#1a0a18" }}
           />
         )}
 
-        {/* Corner brackets */}
+        {/* Corner brackets — rainbow tinted */}
         {[
-          { top: -6, left: -6, rot: 0 },
-          { top: -6, right: -6, rot: 90 },
-          { bottom: -6, right: -6, rot: 180 },
-          { bottom: -6, left: -6, rot: 270 },
+          { top: -8, left: -8, rot: 0, c: "#ff3df5" },
+          { top: -8, right: -8, rot: 90, c: "#ffd400" },
+          { bottom: -8, right: -8, rot: 180, c: "#28ff7a" },
+          { bottom: -8, left: -8, rot: 270, c: "#00d4ff" },
         ].map((c, i) => (
           <span
             key={i}
-            className="absolute w-5 h-5 pointer-events-none"
+            className="absolute w-6 h-6 pointer-events-none"
             style={{
-              ...c,
+              top: c.top as number | undefined,
+              left: c.left as number | undefined,
+              right: c.right as number | undefined,
+              bottom: c.bottom as number | undefined,
               transform: `rotate(${c.rot}deg)`,
-              borderTop: "2px solid #5ad7ff",
-              borderLeft: "2px solid #5ad7ff",
+              borderTop: `2px solid ${c.c}`,
+              borderLeft: `2px solid ${c.c}`,
               animation: `splashCorner 1.6s ease-in-out ${i * 0.15}s infinite`,
-              filter: "drop-shadow(0 0 6px #5ad7ff)",
+              filter: `drop-shadow(0 0 6px ${c.c})`,
             }}
           />
         ))}
       </div>
 
-      {/* Title — RGB glitch effect */}
+      {/* Title — crisp readable, rainbow gradient text */}
       {title && (
-        <div
-          className="relative mt-12"
-          style={{ animation: "splashGlitch 3s steps(1) infinite" }}
-        >
-          <div
-            className="text-[26px] font-black tracking-[0.45em] text-white relative"
+        <div className="relative mt-10 px-6 text-center">
+          <h1
+            className="font-black tracking-[0.32em] leading-none"
             style={{
-              fontFamily:
-                "'Bebas Neue','Russo One','Oswald',system-ui,sans-serif",
-              textShadow:
-                "0 0 18px rgba(255,60,100,0.55),0 0 38px rgba(255,60,100,0.25)",
+              fontSize: "clamp(22px,6vw,34px)",
+              fontFamily: "'Bebas Neue','Russo One','Oswald',system-ui,sans-serif",
+              backgroundImage:
+                "linear-gradient(90deg,#ff3df5,#ff7a00,#ffd400,#28ff7a,#00d4ff,#5a6bff,#ff3df5)",
+              backgroundSize: "300% 100%",
+              WebkitBackgroundClip: "text",
+              backgroundClip: "text",
+              color: "transparent",
+              WebkitTextFillColor: "transparent",
+              animation: "splashTitleShift 6s linear infinite",
+              filter:
+                "drop-shadow(0 0 10px rgba(255,80,200,0.55)) drop-shadow(0 0 22px rgba(0,200,255,0.35))",
             }}
           >
-            <span
-              aria-hidden
-              className="absolute inset-0"
-              style={{
-                color: "#ff2d6a",
-                transform: "translate(-1.5px,0)",
-                mixBlendMode: "screen",
-                opacity: 0.75,
-              }}
-            >
-              {title}
-            </span>
-            <span
-              aria-hidden
-              className="absolute inset-0"
-              style={{
-                color: "#5ad7ff",
-                transform: "translate(1.5px,0)",
-                mixBlendMode: "screen",
-                opacity: 0.75,
-              }}
-            >
-              {title}
-            </span>
-            <span className="relative">{title}</span>
-          </div>
+            {title}
+          </h1>
         </div>
       )}
 
-      {/* Tagline */}
+      {/* Tagline — bright, readable */}
       {tagline && (
         <div
-          className="mt-3 text-[10px] uppercase text-white/65"
-          style={{ letterSpacing: "0.5em", fontFamily: "system-ui,sans-serif" }}
+          className="mt-4 px-4 text-center text-white/90"
+          style={{
+            fontSize: "clamp(11px,2.6vw,13px)",
+            letterSpacing: "0.32em",
+            textTransform: "uppercase",
+            fontFamily: "system-ui,sans-serif",
+            fontWeight: 600,
+            textShadow: "0 0 10px rgba(255,80,180,0.45),0 0 18px rgba(0,200,255,0.3)",
+          }}
         >
           {tagline}
         </div>
       )}
 
-      {/* HUD scan bar */}
-      <div className="mt-8 w-[260px] h-[2px] bg-white/10 overflow-hidden relative rounded-full">
+      {/* HUD scan bar — full RGB */}
+      <div className="mt-8 w-[280px] h-[3px] bg-white/10 overflow-hidden relative rounded-full">
         <div
-          className="absolute inset-y-0 w-1/2"
+          className="absolute inset-y-0 w-2/3"
           style={{
             background:
-              "linear-gradient(90deg,transparent,#ff2d6a,#5ad7ff,transparent)",
+              "linear-gradient(90deg,transparent,#ff3df5,#ffd400,#28ff7a,#00d4ff,transparent)",
             animation: "splashBarFill 1.8s ease-in-out infinite",
-            filter: "drop-shadow(0 0 6px rgba(255,80,120,0.7))",
+            filter: "drop-shadow(0 0 8px rgba(255,120,200,0.7))",
           }}
         />
       </div>
       <div
-        className="mt-2 text-[9px] tracking-[0.5em] text-white/45"
+        className="mt-3 text-[10px] tracking-[0.5em] text-white/70"
         style={{ fontFamily: "ui-monospace,monospace" }}
       >
         SYS · LOADING
@@ -252,3 +233,4 @@ const SplashLoader = () => {
 };
 
 export default SplashLoader;
+
