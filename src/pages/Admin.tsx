@@ -8668,7 +8668,7 @@ ${footerLinksHtml}
 
   return (
   <div>
-  <LiveTvProxyConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
+  {/* LiveTvProxyConfig removed — single proxy now configured via EGD Manager. */}
   <div className={`${glassCard} p-4 mb-4`}>
   <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
   📺 {editId ? "Edit Channel" : "Add New Channel"}
