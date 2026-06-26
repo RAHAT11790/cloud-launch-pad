@@ -600,11 +600,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     });
 
     // SINGLE PROXY SOURCE — EGD Router row: video-proxy.
-    const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
+    // If the admin override returns 403 (Access denied) for this origin we
+    // auto-fall back to Lovable Cloud's own video-proxy so playback isn't
+    // permanently broken when ALLOWED_HOSTS on the external project is stale.
+    const NATIVE_PROXY = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy`;
+    const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), async (snap) => {
       const seq = ++proxyLoadSeq;
       const raw = snap.val();
       const enabled = raw?.enabled === true;
-      const url = enabled ? String(raw?.customUrl || raw?.url || "").trim() : "";
+      let url = enabled ? String(raw?.customUrl || raw?.url || "").trim() : "";
+      if (url) {
+        try {
+          const probeUrl = `${url}${url.includes("?") ? "&" : "?"}url=${encodeURIComponent("https://example.com/")}`;
+          const probe = await fetch(probeUrl, { method: "GET", headers: { Range: "bytes=0-0" } });
+          if (probe.status === 403) {
+            console.warn("[video-proxy] override returned 403 for this origin, falling back to native proxy");
+            url = NATIVE_PROXY;
+          }
+          try { await probe.body?.cancel(); } catch {}
+        } catch {}
+      } else {
+        url = NATIVE_PROXY;
+      }
       if (cancelled || seq !== proxyLoadSeq) return;
       setProxyUrl(url);
       setProxyApiKey('');
