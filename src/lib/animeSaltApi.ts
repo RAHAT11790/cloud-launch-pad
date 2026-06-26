@@ -199,11 +199,7 @@ const getAnimeSaltProxyUrl = async (): Promise<string> => {
 
 const fetchPage = async (url: string): Promise<string> => {
   const proxyUrl = await getAnimeSaltProxyUrl();
-  let res = await fetchWithTimeout(proxyUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
-  });
+  let res = await fetchWithTimeout(`${proxyUrl.replace(/\/+$/, '')}/raw?url=${encodeURIComponent(url)}`);
 
   let data: any;
   if (res.ok) {
@@ -211,20 +207,10 @@ const fetchPage = async (url: string): Promise<string> => {
     if (data.success && data.html) return data.html;
   }
 
-  const isMoviesPage = url.includes('/movies');
-  const isEpisodePage = url.includes('/episode/');
-  const pageMatch = url.match(/\/page\/(\d+)/);
-  const slugMatch = url.match(/\/(series|movies|episode)\/([^/?#]+)/);
-
-  let fallbackBody: any;
-  if (isEpisodePage && slugMatch) fallbackBody = { action: 'episode', slug: slugMatch[2] };
-  else if (slugMatch && !pageMatch) fallbackBody = { action: slugMatch[1] === 'series' ? 'series' : 'movie', slug: slugMatch[2] };
-  else fallbackBody = { action: 'browse', type: isMoviesPage ? 'movies' : 'series', page: pageMatch ? parseInt(pageMatch[1], 10) : 1 };
-
   res = await fetchWithTimeout(proxyUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(fallbackBody),
+    body: JSON.stringify({ url }),
   });
 
   if (!res.ok) throw new Error(`AnimeSalt proxy error: ${res.status}`);
@@ -385,14 +371,18 @@ const parsePlaybackPage = (html: string) => {
 /** Try direct API call first, supporting both nested and top-level response formats */
 const tryDirectApi = async (proxyUrl: string, body: any): Promise<any | null> => {
   try {
-    const res = await fetchWithTimeout(proxyUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const base = proxyUrl.replace(/\/+$/, '');
+    let endpoint = '';
+    if (body.action === 'search') endpoint = `${base}/search?q=${encodeURIComponent(body.q || body.query || '')}`;
+    else if (body.action === 'series') endpoint = `${base}/anime?slug=${encodeURIComponent(body.slug || '')}&type=series`;
+    else if (body.action === 'movie') endpoint = `${base}/episode?slug=${encodeURIComponent(body.slug || '')}&type=movies`;
+    else if (body.action === 'episode') endpoint = `${base}/episode?slug=${encodeURIComponent(body.slug || '')}`;
+    else return null;
+    const res = await fetchWithTimeout(endpoint);
     if (!res.ok) return null;
     const data = await res.json();
-    if (!data?.success) return null;
+    if (Array.isArray(data)) return { items: data };
+    if (data?.error) return null;
     if (data.data) return data.data;
     if (data.items) return { items: data.items, maxPage: data.maxPage, currentPage: data.currentPage, totalCount: data.totalCount };
     return data;
