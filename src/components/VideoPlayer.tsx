@@ -2616,6 +2616,34 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => window.clearTimeout(timer);
   }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, tryNextPlaybackRoute]);
 
+  // Fast-detect cloud-blocked HTTP proxies (RSFR/bot-hosting style). The proxy
+  // can fail with a quick 502 while the video element waits much longer before
+  // firing a media error. Probe one byte and move to the direct/failover route
+  // immediately when the proxy endpoint itself reports failure.
+  useEffect(() => {
+    if (!playbackRouteReady || !currentSrc || isEmbedPlayback || adGateActive) return;
+    if (!/\/functions\/v1\/video-proxy\?/i.test(currentSrc)) return;
+    let nested = "";
+    try { nested = new URL(currentSrc).searchParams.get("url") || ""; } catch {}
+    if (!/^http:\/\//i.test(nested)) return;
+    const ac = new AbortController();
+    const t = window.setTimeout(() => ac.abort(), 3500);
+    fetch(currentSrc, { headers: { Range: "bytes=0-0" }, signal: ac.signal })
+      .then((res) => {
+        if (res.status >= 500 || res.status === 403 || res.status === 404) {
+          tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
+        }
+      })
+      .catch(() => {
+        tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
+      })
+      .finally(() => window.clearTimeout(t));
+    return () => {
+      window.clearTimeout(t);
+      ac.abort();
+    };
+  }, [adGateActive, currentSrc, isEmbedPlayback, playbackRouteReady, tryNextPlaybackRoute]);
+
   // If the active admin server resolves to http:// but no EGD Router video-proxy
   // URL is saved, there is no legal browser route (HTTPS pages block raw HTTP).
   // Do not leave the player on a blank src forever — immediately continue the
