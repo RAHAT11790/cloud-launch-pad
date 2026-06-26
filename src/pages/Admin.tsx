@@ -622,9 +622,8 @@ const ROUTER_FUNCTIONS: Array<{ slug: string; label: string }> = EDGE_FUNCTION_L
  (e) => ({ slug: e.slug, label: e.label })
 );
 
-// Functions whose source was just updated — user must paste the freshly-deployed
-// URL from EGD Manager into these fields. A green "NEW" badge highlights them.
-const NEW_ROUTER_PASTE = new Set<string>(["video-proxy", "live-tv-proxy", "video-download", "an-api", "apk-download", "telegram-post"]);
+// (No "NEW" badges — router list matches whatever the admin deploys via EGD Manager.)
+
 
 const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
  const defaultBase = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1";
@@ -649,17 +648,22 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  return () => unsub();
  }, []);
 
- const save = async (slug: string) => {
- setSaving(slug);
- try {
- await set(ref(db, `settings/functionOverrides/${slug}`), {
- enabled: enabled[slug] !== false,
- customUrl: (urls[slug] || "").trim(),
- });
- toast.success(`Saved · ${slug}`);
- } catch (e: any) { toast.error(e?.message || "Save failed"); }
- finally { setSaving(null); }
- };
+  const save = async (slug: string) => {
+   setSaving(slug);
+   try {
+   const url = (urls[slug] || "").trim();
+   await set(ref(db, `settings/functionOverrides/${slug}`), {
+   enabled: enabled[slug] !== false,
+   customUrl: url,
+   });
+   // video-proxy URL is also the Player Proxy URL used by VideoPlayer.
+   if (slug === "video-proxy") {
+   await set(ref(db, "egdManager/config/playerProxyUrl"), url);
+   }
+   toast.success(`Saved · ${slug}`);
+   } catch (e: any) { toast.error(e?.message || "Save failed"); }
+   finally { setSaving(null); }
+  };
 
  const fillRecommended = (slug: string) =>
  setUrls((p) => ({ ...p, [slug]: `${defaultBase}/${slug}` }));
