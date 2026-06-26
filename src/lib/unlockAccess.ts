@@ -458,7 +458,8 @@ async function getAccessBotEndpoint(): Promise<string> {
   if (!endpoint) {
     try {
       const overrideSnap = await get(ref(db, "settings/functionOverrides/link-share-bot"));
-      const overrideUrl = String(overrideSnap.val()?.customUrl || "").trim();
+      const override = overrideSnap.val() || {};
+      const overrideUrl = override.enabled === true ? String(override.customUrl || "").trim() : "";
       if (overrideUrl && /link-share-bot/i.test(overrideUrl)) {
         endpoint = overrideUrl;
       }
