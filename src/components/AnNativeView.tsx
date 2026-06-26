@@ -112,6 +112,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const [duration, setDuration] = useState(0);
   const [skipHint, setSkipHint] = useState<{ side: "left" | "right"; total: number } | null>(null);
   const [speedBoost, setSpeedBoost] = useState(false);
+  const [apiBase, setApiBase] = useState("");
   const failedRef = useRef(false);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipTotalsRef = useRef({ left: 0, right: 0 });
@@ -135,20 +136,24 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     failedRef.current = false;
     resumedRef.current = false;
     setLoading(true);
-    if (initialData?.streams?.length) {
-      setStreams(initialData.streams);
-      setAudios(initialData.audio || []);
-      setSubs(initialData.subtitles || []);
-      setQIdx(initialData.preferredQualityIdx ?? pickQualityIdx(initialData.streams));
-      setAIdx(initialData.defaultAudioIdx ?? pickHindiAudioIdx(initialData.audio || []));
-      setSIdx(-1);
-      onReady?.();
-      return () => { cancelled = true; };
-    }
     setStreams([]); setAudios([]); setSubs([]);
     (async () => {
       try {
-        const r = await fetch(`${AN_API}/embed?url=${encodeURIComponent(embedUrl)}`);
+        const base = await getEdgeFunctionUrl("an-api");
+        if (!base) throw new Error("AN API URL is not saved in EGD Router");
+        if (cancelled) return;
+        setApiBase(base);
+        if (initialData?.streams?.length) {
+          setStreams(initialData.streams);
+          setAudios(initialData.audio || []);
+          setSubs(initialData.subtitles || []);
+          setQIdx(initialData.preferredQualityIdx ?? pickQualityIdx(initialData.streams));
+          setAIdx(initialData.defaultAudioIdx ?? pickHindiAudioIdx(initialData.audio || []));
+          setSIdx(-1);
+          onReady?.();
+          return;
+        }
+        const r = await fetch(`${base}/embed?url=${encodeURIComponent(embedUrl)}`);
         const d = await r.json();
         if (cancelled) return;
         const s: Stream[] = Array.isArray(d?.streams) ? d.streams : [];
@@ -176,10 +181,10 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   // 2. Build + attach hls whenever quality changes
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || streams.length === 0) return;
+    if (!video || streams.length === 0 || !apiBase) return;
     const stream = streams[qIdx];
     if (!stream) return;
-    const master = buildMaster(stream, audios, aIdx, subs);
+    const master = buildMaster(apiBase, stream, audios, aIdx, subs);
     // First mount → use the resumeTime prop (continue-watching). After that,
     // preserve the live currentTime across quality swaps.
     const initialStart = !resumedRef.current
@@ -280,7 +285,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     // resumeTime intentionally NOT in deps — re-running on resume change
     // would tear down hls mid-playback. Only embed/quality/audio rebuilds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streams, qIdx, audios, aIdx, subs, onFail]);
+  }, [streams, qIdx, audios, aIdx, subs, onFail, apiBase]);
 
   const parseVttCues = useCallback((text: string): Cue[] => {
     const toSeconds = (raw: string) => {
@@ -384,7 +389,8 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     }
     try {
       setSubtitleStatus("Loading subtitles...");
-      const res = await fetch(`${SUBS_PROXY}?url=${encodeURIComponent(selected.uri)}`);
+      if (!apiBase) throw new Error("AN API URL is not saved in EGD Router");
+      const res = await fetch(subsProxy(apiBase, selected.uri));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const cues = parseVttCues(await res.text());
       if (seq !== subtitleSeqRef.current) return;
@@ -535,7 +541,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
           <track
             key={`${embedUrl}-${i}-${s.uri}`}
             kind="subtitles"
-            src={`${SUBS_PROXY}?url=${encodeURIComponent(s.uri)}`}
+            src={apiBase ? subsProxy(apiBase, s.uri) : ""}
             srcLang={s.language || "en"}
             label={s.name}
             default={i === sIdx}
