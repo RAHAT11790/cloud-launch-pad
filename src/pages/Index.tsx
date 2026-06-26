@@ -240,7 +240,6 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   const primarySource = sourceList.find((entry: any) => Array.isArray(entry?.streams) && entry.streams.length > 0) || sourceList[0];
   const streams = Array.isArray(primarySource?.streams) ? primarySource.streams.filter((entry: any) => String(entry?.url || "").trim()) : [];
   const audio = Array.isArray(primarySource?.audio) ? primarySource.audio.filter((entry: any) => String(entry?.uri || "").trim()) : [];
-  const subtitles = Array.isArray(primarySource?.subtitles) ? primarySource.subtitles.filter((entry: any) => String(entry?.uri || entry?.url || "").trim()) : [];
 
   if (streams.length === 0) return null;
 
@@ -249,12 +248,12 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   const preferredQualityIdx = pickAnPreferredQualityIdx(streams);
   const qualityOptions = streams.map((stream: any) => ({
     label: String(stream?.label || (stream?.height ? `${stream.height}p` : "Auto")).trim() || "Auto",
-    src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx, subtitles),
+    src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx),
   }));
 
   // Reorder audioTracks so Hindi (when present) is first → VideoPlayer picks
   // it as the default language pill and matching HLS audio track.
-  const normalized = normalizeAnAudioTracks(audio, streams, subtitles);
+  const normalized = normalizeAnAudioTracks(audio, streams);
   let audioTracks = normalized;
   if (normalized && normalized.length > 1) {
     const hindiIdx = normalized.findIndex((t) =>
@@ -265,26 +264,16 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
     }
   }
 
-  const subtitleTracks: SubtitleTrack[] | undefined = subtitles.length
-    ? subtitles.map((track: any, index: number) => ({
-        language: String(track?.language || "").trim() || undefined,
-        label: String(track?.name || track?.label || track?.language || `Subtitle ${index + 1}`).trim(),
-        url: String(track?.uri || track?.url || "").trim(),
-      }))
-    : undefined;
-
   return {
     src: qualityOptions[preferredQualityIdx]?.src || qualityOptions[0]?.src || buildAnProxyUrl(primaryStream.url),
     qualityOptions: qualityOptions.length > 1 ? qualityOptions : undefined,
     audioTracks,
-    subtitleTracks,
     preferredLanguage: audio[defaultAudioIdx]
       ? (String(audio[defaultAudioIdx]?.name || audio[defaultAudioIdx]?.language || "Hindi").trim() || "Hindi")
       : undefined,
     anNativeData: {
       streams,
       audio,
-      subtitles,
       preferredQualityIdx,
       defaultAudioIdx,
     } as AnNativeResolvedData,
