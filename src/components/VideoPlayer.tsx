@@ -2166,35 +2166,35 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      // Ultra-fast start: skip Hls.js's initial bandwidth probe and assume a
-      // healthy bitrate so playback begins on the first fragment instead of
-      // waiting ~3-5s for the bandwidth test to finish.
+      // Ultra-fast start: skip bandwidth probe, assume strong link.
       testBandwidth: false,
-      abrEwmaDefaultEstimate: 5_000_000,
-      // Smaller buffers → faster first frame & faster seek response. The big
-      // 180s buffer here was forcing the player to fetch ~3 minutes of video
-      // before signalling canplay on slow connections.
-      backBufferLength: 30,
-      maxBufferLength: 20,
-      maxMaxBufferLength: 60,
-      maxBufferSize: 60 * 1000 * 1000,
-      // Start at the lowest quality so the very first fragment lands in <1s,
-      // then ABR climbs to the best level the user's bandwidth supports.
-      startLevel: 0,
+      abrEwmaDefaultEstimate: 8_000_000,
+      abrBandWidthFactor: 0.95,
+      abrBandWidthUpFactor: 0.8,
+      // Bigger forward buffer → seeking/skipping lands inside already-loaded
+      // chunks ~95% of the time. Back buffer kept tight to free memory.
+      backBufferLength: 20,
+      maxBufferLength: 60,
+      maxMaxBufferLength: 180,
+      maxBufferSize: 150 * 1000 * 1000,
+      maxBufferHole: 0.3,
+      highBufferWatchdogPeriod: 1,
+      nudgeMaxRetry: 8,
+      // Start mid-tier (auto picks higher if bw allows) — avoids 480p lock-in.
+      startLevel: -1,
       startFragPrefetch: true,
+      progressive: true,
       // Aggressive but bounded retries so a single dead fragment never stalls
       // playback for tens of seconds.
-      manifestLoadingTimeOut: 8000,
-      manifestLoadingMaxRetry: 2,
-      manifestLoadingRetryDelay: 500,
-      levelLoadingTimeOut: 8000,
-      levelLoadingMaxRetry: 3,
-      fragLoadingTimeOut: 15000,
-      fragLoadingMaxRetry: 4,
-      fragLoadingRetryDelay: 500,
+      manifestLoadingTimeOut: 6000,
+      manifestLoadingMaxRetry: 3,
+      manifestLoadingRetryDelay: 300,
+      levelLoadingTimeOut: 6000,
+      levelLoadingMaxRetry: 4,
+      fragLoadingTimeOut: 12000,
+      fragLoadingMaxRetry: 6,
+      fragLoadingRetryDelay: 300,
       capLevelToPlayerSize: false,
-      // Keep subtitle handling inside our custom overlay so the native track UI
-      // does not silently hide cues on Android Chrome.
       renderTextTracksNatively: false,
     });
     hlsRef.current = hls;
