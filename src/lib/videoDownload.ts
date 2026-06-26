@@ -105,7 +105,14 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
     return false;
   }
   const fileName = buildSafeFileName(rawFileName);
-  const finalUrl = buildVideoDownloadUrl(trimmedUrl, fileName) || buildDirectDownloadUrl(trimmedUrl);
+  const unwrapped = unwrapManagedVideoUrl(trimmedUrl);
+  // HTTP file hosts like bot-hosting often block cloud/Supabase GET requests
+  // while still allowing the real user's browser to download directly. Keep
+  // the old HTTP-download behaviour: direct first, proxy only as backup.
+  const preferDirect = /^http:\/\//i.test(unwrapped);
+  const directUrl = buildDirectDownloadUrl(trimmedUrl);
+  const proxiedUrl = buildVideoDownloadUrl(trimmedUrl, fileName);
+  const finalUrl = preferDirect ? (directUrl || proxiedUrl) : (proxiedUrl || directUrl);
   if (!finalUrl) {
     toast.error("Download service is unavailable");
     return false;
@@ -124,7 +131,11 @@ export function triggerBulkBackgroundDownloads(
       const u = String(it?.url || "").trim();
       if (!u || !isHttpUrl(u)) return null;
       const fn = buildSafeFileName(it?.fileName || "video");
-      const final = buildVideoDownloadUrl(u, fn) || buildDirectDownloadUrl(u);
+      const unwrapped = unwrapManagedVideoUrl(u);
+      const preferDirect = /^http:\/\//i.test(unwrapped);
+      const direct = buildDirectDownloadUrl(u);
+      const proxied = buildVideoDownloadUrl(u, fn);
+      const final = preferDirect ? (direct || proxied) : (proxied || direct);
       return final ? { final, fn } : null;
     })
     .filter((x): x is { final: string; fn: string } => !!x);
