@@ -805,6 +805,11 @@ div[style*="z-index: 2147483647"],
     100% { background-position: 80px 80px, 0 4px; }
   }
 
+  @keyframes auraBreath {
+    0%, 100% { transform: translate(-50%,-50%) scale(0.95); opacity: 0.55; }
+    50%      { transform: translate(-50%,-50%) scale(1.1);  opacity: 0.9; }
+  }
+
   @keyframes runAcross {
     0% { transform: translateX(-24px); }
     100% { transform: translateX(96px); }
