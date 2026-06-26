@@ -133,13 +133,9 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   if (isHttp) {
     // HTTP source — ADMIN PROXY ONLY. If admin selected built-in Supabase,
     // applyProxyConfig() puts that proxy URL into proxyUrl first.
-    // Proxy is first because HTTPS pages usually need it for mixed-content
-    // protection. Keep the raw HTTP URL as the final fallback because some
-    // file hosts (RSFR/bot-hosting) block cloud proxy IPs but allow the user's
-    // own browser. If the browser blocks it, the normal error handler will move
-    // to the next quality/server immediately.
+    // Never inject the raw http:// URL into an https page: browsers block it as
+    // mixed content and the player appears broken before failover can help.
     addCandidate(customProxyCandidate);
-    addCandidate(url);
   } else {
     // HTTPS source — strict direct playback only. Never route one HTTPS video
     // server through another proxy/server; if Render is down, HuggingFace/other
