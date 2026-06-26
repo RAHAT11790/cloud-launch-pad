@@ -1,26 +1,50 @@
 import { useBranding } from "@/hooks/useBranding";
 
 /**
- * Ultra optimized anime splash loader.
- * Single consistent design: admin branding + sakura/petal fall + magic sparkle rain.
- * Animations are transform/opacity-only for smooth, low-lag playback.
+ * Ultra-optimized splash loader.
+ * - Compact RGB conic spinner sized just slightly larger than the logo image.
+ * - Sakura petal fall + party-spray confetti burst behind the logo.
+ * - Transform/opacity-only animations for smooth playback.
  */
 
-const petals = Array.from({ length: 22 }, (_, i) => ({
-  left: `${(i * 11 + (i % 4) * 9) % 100}%`,
-  delay: `${(i * 0.37) % 7}s`,
-  dur: `${7.5 + (i % 6) * 0.65}s`,
-  drift: `${(i % 2 ? 1 : -1) * (38 + (i % 7) * 13)}px`,
-  size: 13 + (i % 5) * 3,
-  opacity: 0.5 + (i % 4) * 0.12,
+const LOGO_SIZE = 96;
+const RING_SIZE = 128; // a touch bigger than the logo
+
+const petals = Array.from({ length: 18 }, (_, i) => ({
+  left: `${(i * 13 + (i % 3) * 7) % 100}%`,
+  delay: `${(i * 0.41) % 6}s`,
+  dur: `${7 + (i % 5) * 0.7}s`,
+  drift: `${(i % 2 ? 1 : -1) * (32 + (i % 6) * 14)}px`,
+  size: 12 + (i % 4) * 3,
+  opacity: 0.55 + (i % 4) * 0.1,
 }));
 
-const sparkles = Array.from({ length: 28 }, (_, i) => ({
-  left: `${(i * 17 + 5) % 100}%`,
-  delay: `${(i * 0.21) % 4}s`,
-  dur: `${3 + (i % 5) * 0.55}s`,
-  drift: `${(i % 2 ? 1 : -1) * (20 + (i % 6) * 9)}px`,
-  size: 2 + (i % 3),
+// Party-spray confetti burst (from center) — fires repeatedly
+const confettiColors = ["#ff3b6b", "#ffd23b", "#3bd1ff", "#7cff8a", "#c47bff", "#ffa14a"];
+const burst = Array.from({ length: 26 }, (_, i) => {
+  const angle = (i / 26) * Math.PI * 2;
+  const radius = 160 + (i % 5) * 30;
+  return {
+    cx: `${Math.cos(angle) * radius}px`,
+    cy: `${Math.sin(angle) * radius - 40}px`,
+    cr: `${(i % 2 ? 1 : -1) * (360 + (i % 4) * 180)}deg`,
+    delay: `${(i * 0.07) % 2.6}s`,
+    dur: `${2.4 + (i % 5) * 0.3}s`,
+    color: confettiColors[i % confettiColors.length],
+    w: 5 + (i % 3) * 2,
+    h: 9 + (i % 4) * 3,
+  };
+});
+
+// Drifting ribbons from top (party streamers)
+const ribbons = Array.from({ length: 14 }, (_, i) => ({
+  left: `${(i * 19 + 4) % 100}%`,
+  delay: `${(i * 0.33) % 5}s`,
+  dur: `${5.5 + (i % 5) * 0.6}s`,
+  drift: `${(i % 2 ? 1 : -1) * (24 + (i % 5) * 12)}px`,
+  color: confettiColors[i % confettiColors.length],
+  w: 4,
+  h: 14 + (i % 3) * 4,
 }));
 
 const SplashLoader = () => {
@@ -34,13 +58,11 @@ const SplashLoader = () => {
       className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden"
       style={{
         background:
-          "radial-gradient(ellipse at 50% 18%, rgba(255, 168, 210, 0.18), transparent 38%), radial-gradient(ellipse at 16% 85%, rgba(255, 202, 122, 0.12), transparent 42%), radial-gradient(ellipse at 84% 78%, rgba(132, 215, 255, 0.14), transparent 44%), linear-gradient(180deg, #08070f 0%, #110817 54%, #06050a 100%)",
+          "radial-gradient(ellipse at 50% 22%, rgba(180,120,255,0.18), transparent 42%), radial-gradient(ellipse at 18% 82%, rgba(255,170,90,0.12), transparent 44%), radial-gradient(ellipse at 82% 78%, rgba(90,200,255,0.14), transparent 44%), linear-gradient(180deg, #07060d 0%, #100818 55%, #050409 100%)",
         animation: "splFadeIn 0.35s ease-out",
       }}
     >
-      <div className="absolute inset-0 pointer-events-none opacity-70" style={{ background: "linear-gradient(115deg, transparent 0 42%, rgba(255,255,255,0.08) 50%, transparent 58% 100%)", animation: "sakuraSheen 5.8s ease-in-out infinite" }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.12) 1px, transparent 1.6px)", backgroundSize: "34px 34px", maskImage: "radial-gradient(circle at center, #000 18%, transparent 76%)", WebkitMaskImage: "radial-gradient(circle at center, #000 18%, transparent 76%)", opacity: 0.18 }} />
-
+      {/* Sakura petals (background) */}
       {petals.map((p, i) => (
         <span
           key={`petal-${i}`}
@@ -56,93 +78,153 @@ const SplashLoader = () => {
               : "linear-gradient(135deg, rgba(255,220,236,0.95), rgba(255,174,116,0.78))",
             boxShadow: "0 0 10px rgba(255, 154, 206, 0.42)",
             transformOrigin: "50% 10%",
-            // @ts-ignore CSS custom props
+            // @ts-ignore
             "--drift": p.drift,
             animation: `sakuraPetalFall ${p.dur} linear ${p.delay} infinite`,
+            willChange: "transform, opacity",
           }}
         />
       ))}
 
-      {sparkles.map((s, i) => (
+      {/* Party streamers falling */}
+      {ribbons.map((r, i) => (
         <span
-          key={`spark-${i}`}
-          className="absolute top-0 pointer-events-none rounded-full"
+          key={`rib-${i}`}
+          className="absolute top-0 pointer-events-none"
           style={{
-            left: s.left,
-            width: s.size,
-            height: s.size,
-            background: i % 2 ? "#fff6c7" : "#ffd8f0",
-            boxShadow: "0 0 10px currentColor, 0 0 18px rgba(255,255,255,0.7)",
-            color: i % 2 ? "#fff6c7" : "#ffd8f0",
-            // @ts-ignore CSS custom props
-            "--drift": s.drift,
-            animation: `sakuraSparkRain ${s.dur} ease-in ${s.delay} infinite`,
+            left: r.left,
+            width: r.w,
+            height: r.h,
+            background: r.color,
+            borderRadius: 2,
+            boxShadow: `0 0 10px ${r.color}aa`,
+            // @ts-ignore
+            "--drift": r.drift,
+            animation: `confettiRibbon ${r.dur} linear ${r.delay} infinite`,
+            willChange: "transform, opacity",
           }}
         />
       ))}
 
-      <div className="relative flex items-center justify-center w-[196px] h-[196px]">
-        <div className="absolute inset-0 rounded-full" style={{ background: "conic-gradient(from 0deg, rgba(255,120,196,0), rgba(255,120,196,0.95), rgba(255,223,130,0.95), rgba(126,219,255,0.95), rgba(255,120,196,0))", animation: "sakuraAuraSpin 6s linear infinite", filter: "blur(0.2px) drop-shadow(0 0 18px rgba(255,152,205,0.42))" }} />
-        <div className="absolute inset-[4px] rounded-full" style={{ background: "#090711" }} />
-        <div className="absolute inset-[16px] rounded-full" style={{ border: "1px solid rgba(255,255,255,0.22)", boxShadow: "inset 0 0 34px rgba(255,160,210,0.2), 0 0 42px rgba(126,219,255,0.18)", animation: "sakuraSoftPulse 2.6s ease-in-out infinite" }} />
-        <div className="absolute inset-[32px] rounded-full" style={{ background: "radial-gradient(circle, rgba(255,255,255,0.16), rgba(255,142,199,0.10) 45%, transparent 70%)" }} />
+      {/* Center stage: confetti burst + RGB spinner + logo */}
+      <div className="relative flex items-center justify-center" style={{ width: RING_SIZE, height: RING_SIZE }}>
+        {/* Confetti party-spray bursting from center, behind spinner */}
+        {burst.map((b, i) => (
+          <span
+            key={`burst-${i}`}
+            className="absolute top-1/2 left-1/2 pointer-events-none"
+            style={{
+              width: b.w,
+              height: b.h,
+              marginLeft: -b.w / 2,
+              marginTop: -b.h / 2,
+              background: b.color,
+              borderRadius: 1.5,
+              boxShadow: `0 0 8px ${b.color}cc`,
+              // @ts-ignore
+              "--cx": b.cx,
+              "--cy": b.cy,
+              "--cr": b.cr,
+              animation: `confettiBurst ${b.dur} ease-out ${b.delay} infinite`,
+              willChange: "transform, opacity",
+            }}
+          />
+        ))}
+
+        {/* RGB conic spinner ring */}
+        <div
+          className="absolute rounded-full"
+          style={{
+            inset: 0,
+            background:
+              "conic-gradient(from 0deg, #ff0055, #ff8a00, #ffe600, #00ff85, #00d4ff, #6a5cff, #ff00c8, #ff0055)",
+            animation: "rgbConicSpin 2.4s linear infinite",
+            filter: "drop-shadow(0 0 14px rgba(255,90,180,0.55)) drop-shadow(0 0 22px rgba(90,200,255,0.35))",
+            willChange: "transform",
+          }}
+        />
+        {/* Inner mask to make it a ring */}
+        <div
+          className="absolute rounded-full"
+          style={{
+            inset: 6,
+            background: "#08060f",
+            boxShadow: "inset 0 0 18px rgba(255,255,255,0.06)",
+          }}
+        />
+
+        {/* Logo */}
         {logo ? (
           <img
             src={logo}
             alt={title || "Site logo"}
-            className="relative z-10 w-[104px] h-[104px] rounded-full object-cover"
-            style={{ border: "2px solid rgba(255,255,255,0.28)", boxShadow: "0 12px 38px rgba(0,0,0,0.55), 0 0 28px rgba(255,151,207,0.42)" }}
+            className="relative z-10 rounded-full object-cover"
+            style={{
+              width: LOGO_SIZE,
+              height: LOGO_SIZE,
+              border: "2px solid rgba(255,255,255,0.32)",
+              boxShadow: "0 10px 32px rgba(0,0,0,0.6), 0 0 22px rgba(255,120,200,0.42)",
+            }}
           />
         ) : (
-          <div className="relative z-10 w-[104px] h-[104px] rounded-full" style={{ background: "radial-gradient(circle, rgba(255,255,255,0.88), rgba(255,150,205,0.55), rgba(126,219,255,0.22))", boxShadow: "0 0 34px rgba(255,151,207,0.48)" }} />
+          <div
+            className="relative z-10 rounded-full"
+            style={{
+              width: LOGO_SIZE,
+              height: LOGO_SIZE,
+              background: "radial-gradient(circle, #fff, #ff9ad5 55%, #6a5cff)",
+              boxShadow: "0 0 28px rgba(255,120,200,0.55)",
+            }}
+          />
         )}
       </div>
 
+      {/* Title — solid readable with subtle RGB sweep */}
       {title && (
         <h1
-          className="mt-9 px-6 text-center font-black leading-tight"
+          className="mt-8 px-5 text-center font-black leading-tight"
           style={{
-            fontSize: "clamp(24px,6.2vw,38px)",
-            letterSpacing: "0.18em",
+            fontSize: "clamp(22px,5.8vw,34px)",
+            letterSpacing: "0.16em",
             fontFamily: "'Russo One','Bebas Neue','Poppins',system-ui,sans-serif",
-            backgroundImage: "linear-gradient(90deg,#fff7fb,#ffc1df,#fff2a8,#b9efff,#fff7fb)",
-            backgroundSize: "240% 100%",
-            WebkitBackgroundClip: "text",
-            backgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            color: "transparent",
-            animation: "sakuraTitleGlow 4.8s ease-in-out infinite",
-            textShadow: "0 0 20px rgba(255,183,218,0.28)",
+            color: "#ffffff",
+            textShadow:
+              "0 0 10px rgba(255,80,170,0.55), 0 0 22px rgba(80,180,255,0.45), 0 2px 14px rgba(0,0,0,0.6)",
           }}
         >
           {title}
         </h1>
       )}
 
-      {/* Tagline */}
       {tagline && (
         <div
-          className="mt-3 px-5 text-center text-white/86"
+          className="mt-2 px-4 text-center"
           style={{
+            color: "#f3f0ff",
             fontSize: "clamp(11px,2.6vw,13px)",
-            letterSpacing: "0.24em",
+            letterSpacing: "0.26em",
             textTransform: "uppercase",
             fontWeight: 700,
-            textShadow: "0 0 12px rgba(255,178,215,0.34),0 0 22px rgba(126,219,255,0.22)",
+            textShadow: "0 0 10px rgba(255,255,255,0.25), 0 2px 8px rgba(0,0,0,0.6)",
           }}
         >
           {tagline}
         </div>
       )}
 
-      <div className="mt-8 w-[268px] max-w-[72vw] h-[3px] bg-white/10 overflow-hidden relative rounded-full">
-        <div className="absolute inset-y-0 w-2/3" style={{
-          background: "linear-gradient(90deg,transparent,#ff9ecd,#fff2a8,#b9efff,transparent)",
-          animation: "splashBarFill 1.65s ease-in-out infinite",
-          filter: "drop-shadow(0 0 8px rgba(255,178,215,0.68))",
-        }} />
+      {/* Progress bar */}
+      <div className="mt-7 w-[260px] max-w-[70vw] h-[3px] bg-white/10 overflow-hidden relative rounded-full">
+        <div
+          className="absolute inset-y-0 w-2/3"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent, #ff3b6b, #ffd23b, #3bd1ff, #c47bff, transparent)",
+            animation: "splashBarFill 1.6s ease-in-out infinite",
+            filter: "drop-shadow(0 0 8px rgba(255,120,200,0.7))",
+          }}
+        />
       </div>
-      <div className="mt-3 text-[10px] tracking-[0.45em] text-white/62" style={{ fontFamily: "ui-monospace,monospace" }}>
+      <div className="mt-3 text-[10px] tracking-[0.45em] text-white/70" style={{ fontFamily: "ui-monospace,monospace" }}>
         SYS · LOADING
       </div>
     </div>
