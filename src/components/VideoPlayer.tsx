@@ -3535,7 +3535,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       : "scale(1)";
 
   return (
-    <div className={`fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
+    <div className={`rs-video-player-root fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
       {/* Back arrow lives inside the controls overlay below, so it hides/shows with controls */}
 
 
@@ -3544,7 +3544,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         {/* Video Container - will-change for GPU compositing */}
         <div
           ref={videoContainerRef}
-          className={`relative bg-black overflow-hidden ${
+          className={`rs-video-player-shell relative bg-black overflow-hidden ${
             isFullscreen 
               ? "w-screen h-screen rounded-none player-fs-enter" 
               : "w-full rounded-none aspect-video sticky top-0 z-40"
