@@ -212,6 +212,11 @@ function parseMaster(masterUrl: string, body: string) {
       streams.push({ url, filename, resolution: res, height, bandwidth: bw, label });
     }
   }
+  // Some AnimeSalt CDN responses are a media playlist, not a variant master.
+  // In that case the playable URL is the master/media URL itself.
+  if (streams.length === 0 && /^#EXTM3U/i.test(body) && /#EXTINF:/i.test(body)) {
+    streams.push({ url: masterUrl, filename: "auto.m3u8", resolution: "", height: 0, bandwidth: 0, label: "Auto" });
+  }
   streams.sort((a, b) => b.height - a.height);
   return { streams, audio: uniqueByUri(audio), subtitles: uniqueByUri(subtitles) };
 }
@@ -350,11 +355,12 @@ async function extractFromPlayer(embedUrl: string) {
     body,
   });
   const txt = await res.text();
+  if (!res.ok) return { embed: embedUrl, error: `player upstream ${res.status}`, raw: txt.slice(0, 200) };
   let data: any;
   try { data = JSON.parse(txt); } catch {
     return { embed: embedUrl, error: "player did not return JSON", raw: txt.slice(0, 200) };
   }
-  const master = data.videoSource || data.securedLink || "";
+  const master = decodeSubtitleEntities(String(data.videoSource || data.securedLink || data.file || data.source || "")).trim();
   let parsed: any = { streams: [], audio: [], subtitles: [] };
   if (master) {
     try {
@@ -386,6 +392,8 @@ async function extractFromPlayer(embedUrl: string) {
     hash,
     poster: data.videoImage || "",
     master,
+    videoSource: master,
+    securedLink: master,
     streams: parsed.streams,
     audio: parsed.audio,
     subtitles: allSubs,
@@ -404,17 +412,7 @@ async function episode(slug: string, type?: string) {
   for (const url of candidates) {
     try {
       const h = await fetchText(url);
-      const found = new Set<string>();
-      const reIframe = /<iframe[^>]+(?:src|data-src)="([^"]+)"/gi;
-      let m: RegExpExecArray | null;
-      while ((m = reIframe.exec(h))) {
-        if (/\/video\/[a-f0-9]+/i.test(m[1])) found.add(m[1]);
-      }
-      const reData = /data-(?:src|embed|player|video)="([^"]+\/video\/[a-f0-9]+[^"]*)"/gi;
-      while ((m = reData.exec(h))) found.add(m[1]);
-      // any URL in HTML
-      const reAny = /https?:\/\/[a-z0-9.-]+\/video\/[a-f0-9]+/gi;
-      while ((m = reAny.exec(h))) found.add(m[0]);
+      const found = new Set<string>(collectEmbedsFromHtml(h));
       if (found.size > 0) { html = h; pageUrl = url; embeds = found; break; }
       if (!html) { html = h; pageUrl = url; }
     } catch {}
