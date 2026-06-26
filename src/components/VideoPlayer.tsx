@@ -124,7 +124,6 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
 
   const isHttp = isInsecureHttpSource(url);
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  const builtinProxyCandidate = getBuiltInProxyConfig() ? buildProxyPlaybackUrl(getBuiltInProxyConfig(), url) : null;
 
   // STRICT SERVER ISOLATION: each server in the admin panel uses ONLY its own
   // configured URL. We never silently mirror across servers — that previously
@@ -136,16 +135,15 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     // Live TV / fragile HLS streams should use the admin-selected proxy first,
     // then fall back to direct only if proxy is unavailable.
     if (customProxyCandidate) addCandidate(customProxyCandidate);
-    if (builtinProxyCandidate) addCandidate(builtinProxyCandidate);
     if (!isHttp) addCandidate(url);
     return candidates;
   }
 
   if (isHttp) {
-    // HTTP source — proxy-only. If admin selected the built-in proxy, Firebase
-    // stores a blank URL, so we resolve that to our built-in proxy config here.
+    // HTTP source — ADMIN PROXY ONLY. If admin selected built-in Supabase,
+    // applyProxyConfig() puts that proxy URL into proxyUrl first.
     // Never add the raw http:// URL to <video>; HTTPS pages will block it.
-    addCandidate(customProxyCandidate || builtinProxyCandidate);
+    addCandidate(customProxyCandidate);
   } else {
     // HTTPS source — strict direct playback only. Never route one HTTPS video
     // server through another proxy/server; if Render is down, HuggingFace/other
