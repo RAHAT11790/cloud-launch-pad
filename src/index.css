@@ -702,89 +702,41 @@ div[style*="z-index: 2147483647"],
     100% { background-position: 300% 50%; }
   }
 
-  /* === Splash variant keyframes (lag-free GPU transforms) === */
-  @keyframes splBloom {
-    0%, 100% { transform: rotate(var(--rot,0deg)) translateY(0) scale(0.6); opacity: 0.5; }
-    50% { transform: rotate(var(--rot,0deg)) translateY(-44px) scale(1); opacity: 1; }
+  /* Single anime sakura splash loader — transform/opacity only for smooth mobile performance. */
+  @keyframes sakuraPetalFall {
+    0% { transform: translate3d(0, -12vh, 0) rotate(0deg) scale(0.72); opacity: 0; }
+    8% { opacity: var(--petal-opacity, 0.75); }
+    50% { transform: translate3d(calc(var(--drift, 40px) * 0.46), 50vh, 0) rotate(240deg) scale(1); }
+    92% { opacity: var(--petal-opacity, 0.75); }
+    100% { transform: translate3d(var(--drift, 40px), 112vh, 0) rotate(520deg) scale(0.86); opacity: 0; }
   }
-  @keyframes splOrbit {
+
+  @keyframes sakuraSparkRain {
+    0% { transform: translate3d(0, -10vh, 0) scale(0.35); opacity: 0; }
+    18% { opacity: 1; }
+    72% { opacity: 0.9; }
+    100% { transform: translate3d(var(--drift, 24px), 108vh, 0) scale(1.08); opacity: 0; }
+  }
+
+  @keyframes sakuraAuraSpin {
     to { transform: rotate(360deg); }
   }
-  @keyframes splOrbitRev { to { transform: rotate(-360deg); } }
-  @keyframes splBars {
-    0%, 100% { transform: scaleY(0.25); }
-    50% { transform: scaleY(1); }
+
+  @keyframes sakuraSoftPulse {
+    0%, 100% { transform: scale(0.985); opacity: 0.72; }
+    50% { transform: scale(1.035); opacity: 1; }
   }
-  @keyframes splDotWave {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
-    30% { transform: translateY(-18px); opacity: 1; }
+
+  @keyframes sakuraTitleGlow {
+    0%, 100% { background-position: 0% 50%; filter: drop-shadow(0 0 10px rgba(255, 170, 215, 0.28)); }
+    50% { background-position: 100% 50%; filter: drop-shadow(0 0 18px rgba(179, 235, 255, 0.42)); }
   }
-  @keyframes splSparkleDrop {
-    0% { transform: translate3d(0,-110%,0) scale(0.4) rotate(0deg); opacity: 0; }
-    20% { opacity: 1; }
-    100% { transform: translate3d(var(--dx,0),110vh,0) scale(1) rotate(720deg); opacity: 0; }
+
+  @keyframes sakuraSheen {
+    0%, 100% { transform: translate3d(-18%, 0, 0); opacity: 0.22; }
+    50% { transform: translate3d(18%, 0, 0); opacity: 0.62; }
   }
-  @keyframes splConfetti {
-    0% { transform: translate3d(0,0,0) rotate(0deg); opacity: 1; }
-    100% { transform: translate3d(var(--dx,0),var(--dy,-80vh),0) rotate(720deg); opacity: 0; }
-  }
-  @keyframes splRipple {
-    0% { transform: scale(0.2); opacity: 1; }
-    100% { transform: scale(2.2); opacity: 0; }
-  }
-  @keyframes splFlame {
-    0%, 100% { transform: translateY(0) scaleY(1) scaleX(1); }
-    50% { transform: translateY(-6px) scaleY(1.25) scaleX(0.85); }
-  }
-  @keyframes splHeart {
-    0%, 100% { transform: scale(1); }
-    25% { transform: scale(1.18); }
-    50% { transform: scale(0.95); }
-    75% { transform: scale(1.12); }
-  }
-  @keyframes splStarBurst {
-    0% { transform: rotate(var(--rot,0deg)) translateX(0) scale(0.4); opacity: 0; }
-    50% { opacity: 1; }
-    100% { transform: rotate(var(--rot,0deg)) translateX(70px) scale(1); opacity: 0; }
-  }
-  @keyframes splCubeRot {
-    0% { transform: rotateX(0) rotateY(0); }
-    100% { transform: rotateX(360deg) rotateY(360deg); }
-  }
-  @keyframes splGridPulse {
-    0%, 100% { transform: scale(0.6); opacity: 0.35; }
-    50% { transform: scale(1); opacity: 1; }
-  }
-  @keyframes splScanRing {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-  @keyframes splNeonPulse {
-    0%, 100% { box-shadow: 0 0 8px currentColor, 0 0 22px currentColor; transform: scale(1); }
-    50% { box-shadow: 0 0 22px currentColor, 0 0 50px currentColor; transform: scale(1.08); }
-  }
-  @keyframes splTriMorph {
-    0%, 100% { border-radius: 0%; transform: rotate(0deg); }
-    33% { border-radius: 50%; transform: rotate(120deg); }
-    66% { border-radius: 25%; transform: rotate(240deg); }
-  }
-  @keyframes splLiquid {
-    0%, 100% { border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%; transform: rotate(0deg); }
-    50% { border-radius: 70% 30% 45% 55% / 30% 60% 40% 70%; transform: rotate(180deg); }
-  }
-  @keyframes splGalaxy {
-    0% { transform: rotate(0deg) scale(0.6); opacity: 0; }
-    50% { opacity: 1; }
-    100% { transform: rotate(720deg) scale(1.3); opacity: 0; }
-  }
-  @keyframes splBoltFlash {
-    0%, 50%, 100% { opacity: 0.25; filter: drop-shadow(0 0 4px #fff); }
-    25%, 75% { opacity: 1; filter: drop-shadow(0 0 18px #fff) drop-shadow(0 0 30px #ffd400); }
-  }
-  @keyframes splSwingPetal {
-    0%, 100% { transform: rotate(var(--rot,0deg)) translateY(-46px) scale(0.95); }
-    50% { transform: rotate(calc(var(--rot,0deg) + 18deg)) translateY(-52px) scale(1.05); }
-  }
+
   @keyframes splFadeIn {
     from { opacity: 0; transform: scale(0.94); }
     to { opacity: 1; transform: scale(1); }
