@@ -3,10 +3,10 @@ import logoImg from "@/assets/logo.png";
 import { useBranding, getBrandingSync } from "@/hooks/useBranding";
 
 /**
- * Splash loader — clean, premium, zero-lag.
- * - Pure dark backdrop (no admin-uploaded background image — controlled here).
- * - Single GPU transform ring + soft halo. No conic, no SVG noise.
- * - Logo is warmed via CacheStorage for instant repaint.
+ * Main website splash loader.
+ * Restored to the original login-intro style: dark login background, glowing
+ * logo, big branded title, and welcome text. This is only for first website
+ * entry/reload — AN card clicks use only the top "Loading details..." toast.
  */
 
 const BG_CACHE = "rs-branding-assets-v1";
@@ -36,8 +36,8 @@ const SplashLoader = () => {
   const logoSrc = useMemo(() => branding.logoUrl || initial.logoUrl || logoImg, [branding.logoUrl, initial.logoUrl]);
   const [resolvedLogo, setResolvedLogo] = useState(logoSrc);
 
-  const displayName = (branding.splashText || initial.splashText || branding.siteName || initial.siteName || "").trim();
-  const tagline = (branding.siteTagline || initial.siteTagline || "").trim();
+  const displayName = (branding.loginTitle || branding.splashText || initial.splashText || branding.siteName || initial.siteName || "RS ANIME").trim();
+  const siteName = (branding.siteName || initial.siteName || displayName || "RS ANIME").trim();
 
   useEffect(() => {
     let cancelled = false;
@@ -52,114 +52,52 @@ const SplashLoader = () => {
   }, [logoSrc]);
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden">
-      {/* Pure dark backdrop with subtle radial wash */}
+    <div className="fixed inset-0 z-[9999] bg-background flex flex-col items-center justify-center overflow-hidden">
+      {/* Original login-style animated background */}
       <div
         aria-hidden
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(60% 50% at 50% 40%, #1a1a22 0%, #0b0b10 55%, #050507 100%)",
-        }}
-      />
-      {/* Soft ambient blobs for depth (transform-only, GPU friendly) */}
-      <div
-        aria-hidden
-        className="absolute -top-20 -left-20 w-[300px] h-[300px] rounded-full splash-blob-a"
-        style={{ background: "radial-gradient(circle, rgba(120,90,255,0.18), transparent 70%)", filter: "blur(40px)" }}
-      />
-      <div
-        aria-hidden
-        className="absolute -bottom-24 -right-16 w-[320px] h-[320px] rounded-full splash-blob-b"
-        style={{ background: "radial-gradient(circle, rgba(255,90,160,0.16), transparent 70%)", filter: "blur(46px)" }}
-      />
+        className="absolute inset-0 pointer-events-none"
+      >
+        <div
+          className="absolute top-[-30%] left-[-20%] w-[80%] h-[80%] rounded-full splash-login-blob-a"
+          style={{ background: "radial-gradient(circle, hsla(176,65%,48%,0.08) 0%, transparent 70%)" }}
+        />
+        <div
+          className="absolute bottom-[-30%] right-[-20%] w-[80%] h-[80%] rounded-full splash-login-blob-b"
+          style={{ background: "radial-gradient(circle, hsla(38,90%,55%,0.06) 0%, transparent 70%)" }}
+        />
+      </div>
 
-      <div className="relative z-10 flex flex-col items-center px-6">
-        {/* Logo with single smooth ring */}
-        <div className="relative w-[150px] h-[150px] flex items-center justify-center">
-          {/* Soft halo */}
-          <div
-            aria-hidden
-            className="absolute inset-[-18px] rounded-full splash-halo"
-            style={{
-              background: "radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 65%)",
-              filter: "blur(12px)",
-            }}
-          />
-          {/* Rotating SVG ring */}
-          <svg
-            className="absolute inset-0 splash-spin"
-            viewBox="0 0 100 100"
-            style={{ willChange: "transform", transform: "translateZ(0)" }}
-          >
-            <defs>
-              <linearGradient id="splashRing" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="rgba(255,255,255,0)" />
-                <stop offset="55%" stopColor="rgba(255,255,255,0.55)" />
-                <stop offset="100%" stopColor="#ffffff" />
-              </linearGradient>
-            </defs>
-            <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2" />
-            <circle cx="50" cy="50" r="46" fill="none" stroke="url(#splashRing)" strokeWidth="2.4" strokeLinecap="round" strokeDasharray="120 220" />
-          </svg>
-          {/* Logo */}
+      <div className="relative z-10 flex flex-col items-center gap-4 px-6 splash-login-intro">
+        <div className="relative splash-login-logo-wrap">
           <img
             src={resolvedLogo}
-            alt={displayName || "Logo"}
-            className="relative w-[112px] h-[112px] rounded-full object-cover"
+            alt={displayName}
+            className="w-24 h-24 rounded-3xl object-cover"
             loading="eager"
             decoding="async"
-            style={{
-              boxShadow:
-                "0 0 0 2px rgba(0,0,0,0.85), 0 0 0 3px rgba(255,255,255,0.18), 0 0 28px rgba(255,255,255,0.18), inset 0 0 18px rgba(0,0,0,0.55)",
-            }}
+            style={{ boxShadow: "0 0 60px hsla(176,65%,48%,0.35), 0 12px 35px rgba(0,0,0,0.45)" }}
           />
         </div>
 
-        {displayName ? (
-          <div
-            className="mt-9 text-[22px] font-bold tracking-[6px] uppercase text-center text-white"
-            style={{
-              fontFamily: "'Russo One', 'Inter', sans-serif",
-              textShadow: "0 2px 18px rgba(0,0,0,0.85), 0 0 22px rgba(255,255,255,0.16)",
-            }}
-          >
-            {displayName}
-          </div>
-        ) : null}
-
-        {tagline ? (
-          <p
-            className="mt-2.5 text-[11px] uppercase tracking-[5px] font-semibold text-center"
-            style={{ color: "rgba(255,255,255,0.85)", textShadow: "0 1px 8px rgba(0,0,0,0.85)" }}
-          >
-            {tagline}
-          </p>
-        ) : null}
-
-        {/* Progress rail */}
-        <div className="mt-8 w-[220px] h-[2.5px] rounded-full overflow-hidden bg-white/[0.08]">
-          <div
-            className="h-full w-[40%] rounded-full splash-sweep"
-            style={{
-              background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.95), transparent)",
-              willChange: "transform",
-            }}
-          />
-        </div>
+        <h1
+          className="text-4xl font-black gradient-text text-center"
+          style={{ fontFamily: "'Russo One', sans-serif" }}
+        >
+          {displayName}
+        </h1>
+        <p className="text-sm text-muted-foreground text-center">Welcome to {siteName}</p>
       </div>
 
       <style>{`
-        @keyframes splashSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        @keyframes splashHalo { 0%,100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
-        @keyframes splashSweep { 0% { transform: translateX(-110%); } 100% { transform: translateX(360%); } }
-        @keyframes blobA { 0%,100% { transform: translate(0,0); } 50% { transform: translate(30px,20px); } }
-        @keyframes blobB { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-25px,-18px); } }
-        .splash-spin { animation: splashSpin 2.6s linear infinite; }
-        .splash-halo { animation: splashHalo 2.6s ease-in-out infinite; }
-        .splash-sweep { animation: splashSweep 1.6s cubic-bezier(.45,.05,.25,1) infinite; }
-        .splash-blob-a { animation: blobA 8s ease-in-out infinite; }
-        .splash-blob-b { animation: blobB 9s ease-in-out infinite; }
+        @keyframes splashIntroIn { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes splashLogoGlow { 0%,100% { filter: drop-shadow(0 0 0 hsla(176,65%,48%,0)); } 50% { filter: drop-shadow(0 0 38px hsla(176,65%,48%,0.55)); } }
+        @keyframes splashLoginBlobA { 0%,100% { transform: scale(1); } 50% { transform: scale(1.16) translate(18px, 10px); } }
+        @keyframes splashLoginBlobB { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12) translate(-16px, -10px); } }
+        .splash-login-intro { animation: splashIntroIn .6s cubic-bezier(.16,1,.3,1) both; }
+        .splash-login-logo-wrap { animation: splashLogoGlow 2s ease-in-out infinite; }
+        .splash-login-blob-a { animation: splashLoginBlobA 8s ease-in-out infinite; }
+        .splash-login-blob-b { animation: splashLoginBlobB 9s ease-in-out infinite; }
       `}</style>
     </div>
   );
