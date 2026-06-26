@@ -719,17 +719,17 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  {ROUTER_FUNCTIONS.map(({ slug, label }) => {
  const recommended = `${defaultBase}/${slug}`;
  const res = testResult[slug];
- const isNew = NEW_ROUTER_PASTE.has(slug);
+ const isVideoProxy = slug === "video-proxy";
  return (
- <div key={slug} className={`rounded-xl border bg-zinc-900/40 p-3 min-w-0 ${isNew ? "border-emerald-400/70 ring-1 ring-emerald-400/40" : "border-zinc-700/50"}`}>
+ <div key={slug} className="rounded-xl border bg-zinc-900/40 p-3 min-w-0 border-zinc-700/50">
  <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
  <div className="min-w-0 flex items-center gap-2">
  <div className="min-w-0">
  <div className="text-xs font-semibold text-white truncate flex items-center gap-1.5">
  {label}
- {isNew && (
- <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500 text-black tracking-wider animate-pulse">
- NEW · paste URL
+ {isVideoProxy && (
+ <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 tracking-wider">
+ PLAYER PROXY
  </span>
  )}
  </div>
