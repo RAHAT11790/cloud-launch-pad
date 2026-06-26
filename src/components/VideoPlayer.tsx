@@ -2124,11 +2124,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         try { hlsRef.current.destroy(); } catch {}
         hlsRef.current = null;
       }
-      // Clear HLS-only track UI so CC button hides for non-HLS sources
+      // Non-HLS MP4/direct sources can still have admin-provided external
+      // subtitle tracks. Keep those tracks available for the CC panel instead
+      // of hiding the button completely.
       setHlsAudioOptions([]);
-      setHlsSubtitleOptions([]);
       setCurrentHlsAudio(-1);
-      setCurrentHlsSubtitle(-1);
+      if (externalSubtitleOptions.length > 0 && currentSrc && !isEmbedPlayback && !adGateActive) {
+        hlsSubtitleMetaRef.current = externalSubtitleOptions;
+        setHlsSubtitleOptions(externalSubtitleOptions);
+        setCurrentHlsSubtitle((prev) => externalSubtitleOptions.some((track) => track.id === prev) ? prev : -1);
+      } else {
+        hlsSubtitleMetaRef.current = [];
+        setHlsSubtitleOptions([]);
+        setCurrentHlsSubtitle(-1);
+      }
       return;
     }
 
