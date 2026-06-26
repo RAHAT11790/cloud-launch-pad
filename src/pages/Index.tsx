@@ -166,7 +166,6 @@ const buildAnSyntheticMaster = (
   stream: { url: string; bandwidth?: number; resolution?: string; height?: number },
   audio: Array<{ language?: string; name?: string; uri?: string }>,
   defaultAudioIdx?: number,
-  subtitles: Array<{ language?: string; name?: string; label?: string; uri?: string; url?: string }> = [],
 ) => {
   const resolvedDefault = typeof defaultAudioIdx === "number" ? defaultAudioIdx : pickAnDefaultAudioIdx(audio);
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
@@ -179,20 +178,9 @@ const buildAnSyntheticMaster = (
       `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${rawName}",LANGUAGE="${rawLanguage || `aud${index + 1}`}",DEFAULT=${index === resolvedDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${buildAnProxyUrl(uri)}"`,
     );
   });
-  subtitles.forEach((track, index) => {
-    const rawName = String(track?.name || track?.label || track?.language || `Subtitle ${index + 1}`).replace(/"/g, "").trim();
-    const rawLanguage = String(track?.language || rawName || `sub${index + 1}`).trim().toLowerCase();
-    const uri = String(track?.uri || track?.url || "").trim();
-    if (!uri) return;
-    const subUrl = anApiBaseUrl ? `${anApiBaseUrl}/subs?url=${encodeURIComponent(uri)}` : uri;
-    lines.push(
-      `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="${rawName}",LANGUAGE="${rawLanguage || `sub${index + 1}`}",DEFAULT=NO,AUTOSELECT=YES,FORCED=NO,URI="${subUrl}"`,
-    );
-  });
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
-  const subRef = subtitles.some((track) => String(track?.uri || track?.url || "").trim()) ? ',SUBTITLES="subs"' : "";
   lines.push(
-    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${stream.height || 720}x${Math.round(((stream.height || 720) * 16) / 9)}`}${audioRef}${subRef}`,
+    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${stream.height || 720}x${Math.round(((stream.height || 720) * 16) / 9)}`}${audioRef}`,
   );
   lines.push(buildAnProxyUrl(stream.url));
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(lines.join("\n"))))}`;
@@ -201,7 +189,6 @@ const buildAnSyntheticMaster = (
 const normalizeAnAudioTracks = (
   audio: Array<{ language?: string; name?: string; uri?: string }> | undefined,
   streams: Array<{ label?: string; url?: string; height?: number }> | undefined,
-  subtitles: Array<{ language?: string; name?: string; label?: string; uri?: string; url?: string }> | undefined = [],
 ) => {
   if (!Array.isArray(audio) || audio.length === 0) return undefined;
 
@@ -222,7 +209,7 @@ const normalizeAnAudioTracks = (
         return buildAnSyntheticMaster({
           url: direct,
           height: Number(qualityLabel.replace(/\D/g, "")) || undefined,
-        }, audio, trackIndex, subtitles || []);
+        }, audio, trackIndex);
       };
       const rawLabel = String(track?.name || track?.language || "Audio").trim();
       const rawLang = String(track?.language || rawLabel).trim();
@@ -236,7 +223,7 @@ const normalizeAnAudioTracks = (
       return {
         language: normalized,
         label: normalized,
-        link: buildAnSyntheticMaster({ url: defaultStreamUrl }, audio, trackIndex, subtitles || []),
+        link: buildAnSyntheticMaster({ url: defaultStreamUrl }, audio, trackIndex),
         link480: pickStreamUrl("480p"),
         link720: pickStreamUrl("720p"),
         link1080: pickStreamUrl("1080p"),
