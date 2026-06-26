@@ -1102,7 +1102,13 @@ const Index = () => {
   }, [dismissDetailsLoadingToast]);
 
   useEffect(() => {
-    if (playerState || saltPlayerState) {
+    // Keep the "Loading details..." toast visible while the salt player is
+    // still resolving the embed URL — only dismiss once playback is actually
+    // ready, so users see continuous feedback (no premature silent gap, and
+    // by the time the player paints the default Hindi audio is already
+    // selected — no visible language switch).
+    const saltReady = saltPlayerState && saltPlayerState.loading === false;
+    if (playerState || saltReady) {
       dismissDetailsLoadingToast();
     }
   }, [playerState, saltPlayerState, dismissDetailsLoadingToast]);
