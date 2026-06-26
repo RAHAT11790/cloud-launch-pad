@@ -190,28 +190,10 @@ const parseMeta = (html: string) => {
   };
 };
 
-/** Get AnimeSalt proxy URL - checks custom URL first, then edge router */
+/** Get AnimeSalt proxy URL from the EGD Router only. */
 const getAnimeSaltProxyUrl = async (): Promise<string> => {
-  try {
-    const snap = await get(ref(db, 'settings/animesaltConfig'));
-    const val = snap.val();
-    if (val?.enabled !== false && val?.customUrl) return val.customUrl;
-    if (val?.enabled === false) throw new Error('AnimeSalt বন্ধ আছে। Admin Panel থেকে চালু করুন।');
-  } catch (e: any) {
-    if (e.message?.includes('বন্ধ')) throw e;
-  }
-
-  try {
-    const overrideSnap = await get(ref(db, 'settings/functionOverrides/animesalt'));
-    const override = overrideSnap.val();
-    if (override?.customUrl) return override.customUrl;
-    if (override?.enabled === false) throw new Error('AnimeSalt ফাংশন বন্ধ আছে।');
-  } catch (e: any) {
-    if (e.message?.includes('বন্ধ')) throw e;
-  }
-
-  const proxyUrl = await getEdgeFunctionUrl('animesalt');
-  if (!proxyUrl) throw new Error('AnimeSalt endpoint not configured. Set Base URL or Custom URL in Admin Panel.');
+  const proxyUrl = await getEdgeFunctionUrl('an-api');
+  if (!proxyUrl) throw new Error('AN API URL is not saved/enabled in EGD Router.');
   return proxyUrl;
 };
 
