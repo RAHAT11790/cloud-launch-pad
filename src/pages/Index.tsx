@@ -1014,7 +1014,7 @@ const Index = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         const isAnimeSalt = parsed?.anime?.source === "animesalt" || String(parsed?.anime?.id || "").startsWith("as_");
-        if (!isAnimeSalt) return parsed;
+        if (isAnimeSalt) return parsed;
       }
     } catch {}
     return null;
@@ -1070,38 +1070,13 @@ const Index = () => {
   useEffect(() => {
     try {
       const isAnimeSalt = saltPlayerState?.anime?.source === "animesalt" || String(saltPlayerState?.anime?.id || "").startsWith("as_");
-      if (saltPlayerState && !isAnimeSalt) {
+      if (saltPlayerState && isAnimeSalt) {
         const { loading, ...rest } = saltPlayerState;
         sessionStorage.setItem("rs_saltPlayerState", JSON.stringify(rest));
       } else {
         sessionStorage.removeItem("rs_saltPlayerState");
       }
     } catch {}
-  }, [saltPlayerState]);
-
-  useEffect(() => {
-    if (!saltPlayerState?.embedUrl || !saltPlayerState.anime) return;
-
-    const embedServers = (saltPlayerState.allEmbeds || [saltPlayerState.embedUrl]).filter(Boolean);
-    setPlayerState({
-      src: saltPlayerState.embedUrl,
-      title: saltPlayerState.title,
-      subtitle: saltPlayerState.subtitle,
-      anime: saltPlayerState.anime,
-      seasonIdx: saltPlayerState.seasonIdx,
-      epIdx: saltPlayerState.epIdx,
-      qualityOptions: embedServers.length > 1
-        ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
-        : undefined,
-      nextEpisodeSrc:
-        saltPlayerState.anime.type === "webseries" &&
-        saltPlayerState.anime.seasons &&
-        saltPlayerState.seasonIdx !== undefined &&
-        saltPlayerState.epIdx !== undefined
-          ? getEpisodeSrc(saltPlayerState.anime.seasons[saltPlayerState.seasonIdx]?.episodes?.[saltPlayerState.epIdx + 1] as Episode)
-          : undefined,
-    });
-    setSaltPlayerState(null);
   }, [saltPlayerState]);
 
   // Persist exact current UI layer so refresh returns to the same screen
