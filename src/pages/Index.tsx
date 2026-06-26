@@ -2267,7 +2267,7 @@ const Index = () => {
         const nextCache = [
           nextItem,
           ...(Array.isArray(cached)
-            ? cached.filter((item: any) => !(item?.id === playerState.anime.id && ((item?.episodeInfo?.seasonIdx ?? item?.episodeInfo?.season) === (updates?.episodeInfo?.seasonIdx ?? updates?.episodeInfo?.season)) && ((item?.episodeInfo?.epIdx ?? item?.episodeInfo?.episode) === (updates?.episodeInfo?.epIdx ?? updates?.episodeInfo?.episode))))
+            ? cached.filter((item: any) => item?.id !== playerState.anime.id)
             : []),
         ].slice(0, 50);
         localStorage.setItem("rs_continueCache", JSON.stringify(nextCache));
