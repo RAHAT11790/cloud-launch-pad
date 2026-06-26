@@ -44,17 +44,15 @@ const sanitizeFilename = (raw: string) => {
   return /\.[a-z0-9]{2,5}$/i.test(cleaned) ? cleaned : `${cleaned}.mp4`;
 };
 
-const buildUpstreamHeaders = (target: URL, range: string | null, withContext = true): Record<string, string> => {
+const buildUpstreamHeaders = (target: URL, range: string | null): Record<string, string> => {
   const h: Record<string, string> = {
     "User-Agent": UA,
     Accept: "*/*",
     "Accept-Encoding": "identity",
     Connection: "keep-alive",
+    Referer: `${target.protocol}//${target.hostname}/`,
+    Origin: `${target.protocol}//${target.hostname}`,
   };
-  if (withContext) {
-    h.Referer = `${target.protocol}//${target.hostname}/`;
-    h.Origin = `${target.protocol}//${target.hostname}`;
-  }
   if (range) h["Range"] = range;
   return h;
 };
@@ -69,33 +67,27 @@ const fetchWithRetry = async (
 ): Promise<Response> => {
   let lastErr: unknown = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const headerPlans: Array<{ range: string | null; withContext: boolean }> = [
-      { range, withContext: false },
-      { range, withContext: true },
-    ];
-    if (range && method === "GET") {
-      headerPlans.push({ range: null, withContext: false }, { range: null, withContext: true });
-    }
-    for (const plan of headerPlans) {
-      try {
-        const res = await fetch(target.toString(), {
-          method,
-          headers: buildUpstreamHeaders(target, plan.range, plan.withContext),
-          redirect: "follow",
-          signal,
-        });
-        // 5xx → try next header shape / retry. 4xx → return immediately.
-        if (res.status >= 500 && res.status < 600) {
-          lastErr = new Error(`Upstream ${res.status}`);
-          try { await res.body?.cancel(); } catch {}
-          continue;
-        }
-        return res;
-      } catch (e) {
-        lastErr = e;
+    try {
+      const res = await fetch(target.toString(), {
+        method,
+        headers: buildUpstreamHeaders(target, range),
+        redirect: "follow",
+        signal,
+      });
+      // 5xx → retry. 4xx → return immediately (client error).
+      if (res.status >= 500 && res.status < 600 && attempt < MAX_RETRIES) {
+        try { await res.body?.cancel(); } catch {}
+        await sleep(RETRY_DELAY_MS * (attempt + 1));
+        continue;
+      }
+      return res;
+    } catch (e) {
+      lastErr = e;
+      if (attempt < MAX_RETRIES) {
+        await sleep(RETRY_DELAY_MS * (attempt + 1));
+        continue;
       }
     }
-    if (attempt < MAX_RETRIES) await sleep(RETRY_DELAY_MS * (attempt + 1));
   }
   throw lastErr ?? new Error("Upstream fetch failed");
 };
@@ -171,23 +163,6 @@ Deno.serve(async (req) => {
     }
   } catch (e) {
     const msg = (e as Error)?.message || "Upstream unreachable";
-    // Some HTTP file hosts (notably bot-hosting/RSFR style servers) accept
-    // HEAD/probe requests but close cloud/Supabase GET streams before sending
-    // bytes. In that case the only working route is the user's own browser/IP.
-    // For real download clicks, redirect to the original URL instead of ending
-    // on a dead JSON error page. Client code also prefers direct HTTP first.
-    if (req.method === "GET") {
-      return new Response(null, {
-        status: 302,
-        headers: {
-          ...corsHeaders,
-          Location: targetUrl.toString(),
-          "Cache-Control": "no-store",
-          "X-RS-Fallback": "direct-browser",
-          "X-RS-Upstream-Error": msg.slice(0, 180),
-        },
-      });
-    }
     return new Response(
       JSON.stringify({ error: "Download source not responding", detail: msg }),
       { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -197,18 +172,6 @@ Deno.serve(async (req) => {
   // Any non-OK final upstream → return JSON, never broken bytes.
   if (!upstream.ok && upstream.status !== 206) {
     try { await upstream.body?.cancel(); } catch {}
-    if (req.method === "GET") {
-      return new Response(null, {
-        status: 302,
-        headers: {
-          ...corsHeaders,
-          Location: targetUrl.toString(),
-          "Cache-Control": "no-store",
-          "X-RS-Fallback": "direct-browser-status",
-          "X-RS-Upstream-Status": String(upstream.status),
-        },
-      });
-    }
     return new Response(
       JSON.stringify({
         error: "Download source error",

@@ -51,7 +51,6 @@ const getAnimeSaltSourcePriority = (url?: string | null) => {
 };
 
 const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualityOptions?: { label: string; src: string }[] } => {
-  payload = payload?.data && !payload?.links && !payload?.sources ? payload.data : payload;
   const seen = new Set<string>();
   const normalize = (value?: string | null) => normalizeAnimeSaltPlaybackUrl(value);
   const pushUnique = (list: { label: string; src: string }[], label: string, src?: string | null) => {
@@ -111,29 +110,12 @@ const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualit
 let anApiBaseUrl = "";
 let anApiBasePromise: Promise<string> | null = null;
 
-const normalizeAnApiBaseUrl = (value: string): string => {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  try {
-    const url = new URL(raw);
-    url.search = "";
-    url.hash = "";
-    const endpointNames = new Set(["raw", "search", "anime", "episode", "embed", "hls", "subs"]);
-    const parts = url.pathname.split("/").filter(Boolean);
-    while (parts.length && endpointNames.has(parts[parts.length - 1].toLowerCase())) parts.pop();
-    url.pathname = `/${parts.join("/")}`.replace(/\/+$/, "");
-    return url.toString().replace(/\/+$/, "");
-  } catch {
-    return raw.replace(/\/(?:raw|search|anime|episode|embed|hls|subs)(?:\?.*)?$/i, "").replace(/\/+$/, "");
-  }
-};
-
 const ensureAnApiBaseUrl = async (): Promise<string> => {
   if (anApiBaseUrl) return anApiBaseUrl;
   if (!anApiBasePromise) {
     anApiBasePromise = getEdgeFunctionUrl("an-api")
       .then((url) => {
-        anApiBaseUrl = normalizeAnApiBaseUrl(url || "");
+        anApiBaseUrl = String(url || "").trim().replace(/\/+$/, "");
         return anApiBaseUrl;
       })
       .catch(() => "");
@@ -248,8 +230,7 @@ const normalizeAnAudioTracks = (
 
 const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   await ensureAnApiBaseUrl();
-  const resolvedPayload = payload?.data && !Array.isArray(payload?.sources) ? payload.data : payload;
-  const sourceList = Array.isArray(resolvedPayload?.sources) ? resolvedPayload.sources : [];
+  const sourceList = Array.isArray(payload?.sources) ? payload.sources : [];
   const primarySource = sourceList.find((entry: any) => Array.isArray(entry?.streams) && entry.streams.length > 0) || sourceList[0];
   const streams = Array.isArray(primarySource?.streams) ? primarySource.streams.filter((entry: any) => String(entry?.url || "").trim()) : [];
   const audio = Array.isArray(primarySource?.audio) ? primarySource.audio.filter((entry: any) => String(entry?.uri || "").trim()) : [];
@@ -368,11 +349,6 @@ const getAnimeSaltDirectState = async (episodeSlug: string) => {
     }
   })();
   animeSaltDirectStateCache.set(key, request);
-  request.then((value) => {
-    // Do not cache a failed/empty extraction forever. AN sources are scraped and
-    // can fail transiently; the next click should retry the fixed API endpoint.
-    if (!value?.src) animeSaltDirectStateCache.delete(key);
-  }).catch(() => animeSaltDirectStateCache.delete(key));
   return request;
 };
 
@@ -502,7 +478,7 @@ import { optimizedImageUrl } from "@/lib/imageCache";
 // Session cache for API responses to speed up continue watching
 const apiCache = new Map<string, { data: any; ts: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 min
-const API_TIMEOUT_MS = 15_000;
+const API_TIMEOUT_MS = 6_000;
 const warmedImageUrls = new Set<string>();
 
 const preloadImage = (src?: string | null) => {
@@ -547,39 +523,20 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promis
   });
 };
 
-const hasPlayableAnimeSaltPayload = (data: any) => {
-  const payload = data?.data || data;
-  if (!payload) return false;
-  if (payload.embedUrl || payload.directUrl || payload.streamUrl || payload.videoUrl || payload.file) return true;
-  if (Array.isArray(payload.links) && payload.links.some((x: any) => String(x?.url || x?.src || x || "").trim())) return true;
-  if (Array.isArray(payload.allEmbeds) && payload.allEmbeds.some((x: any) => String(x || "").trim())) return true;
-  if (Array.isArray(payload.sources) && payload.sources.some((source: any) =>
-    source?.master || source?.videoSource || source?.securedLink || source?.embed ||
-    (Array.isArray(source?.streams) && source.streams.some((stream: any) => String(stream?.url || "").trim()))
-  )) return true;
-  return false;
-};
-
-const isCacheableApiResponse = (key: string, data: any) => {
-  if (!data) return false;
-  // Episode/movie playback calls must contain an actual playable URL. A plain
-  // `{ success: true }` from a scraper miss must not poison cache and break AN.
-  if (/^(ep|movie)_/i.test(key)) return hasPlayableAnimeSaltPayload(data);
-  return data.success === true || data.embedUrl || data.allEmbeds?.length || data.links?.length || data.data;
-};
-
 const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
   const cached = apiCache.get(key);
   if (cached && Date.now() - cached.ts < CACHE_TTL) {
     // Skip cache if previous response was a failure — allow retry
-    if (isCacheableApiResponse(key, cached.data)) return cached.data;
+    const c: any = cached.data;
+    const ok = c && (c.success === true || c.embedUrl || c.allEmbeds?.length || c.links?.length || c.data);
+    if (ok) return cached.data;
   }
   // Try up to 2 times on failure (cloudflare worker / animesalt site flake)
   let lastErr: any = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const data = await withTimeout(fn(), API_TIMEOUT_MS, key);
-      const ok = isCacheableApiResponse(key, data);
+      const ok = data && (data.success === true || data.embedUrl || data.allEmbeds?.length || data.links?.length || data.data);
       if (ok) {
         apiCache.set(key, { data, ts: Date.now() });
         return data;
@@ -1057,7 +1014,7 @@ const Index = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         const isAnimeSalt = parsed?.anime?.source === "animesalt" || String(parsed?.anime?.id || "").startsWith("as_");
-        if (isAnimeSalt) return parsed;
+        if (!isAnimeSalt) return parsed;
       }
     } catch {}
     return null;
@@ -1113,13 +1070,38 @@ const Index = () => {
   useEffect(() => {
     try {
       const isAnimeSalt = saltPlayerState?.anime?.source === "animesalt" || String(saltPlayerState?.anime?.id || "").startsWith("as_");
-      if (saltPlayerState && isAnimeSalt) {
+      if (saltPlayerState && !isAnimeSalt) {
         const { loading, ...rest } = saltPlayerState;
         sessionStorage.setItem("rs_saltPlayerState", JSON.stringify(rest));
       } else {
         sessionStorage.removeItem("rs_saltPlayerState");
       }
     } catch {}
+  }, [saltPlayerState]);
+
+  useEffect(() => {
+    if (!saltPlayerState?.embedUrl || !saltPlayerState.anime) return;
+
+    const embedServers = (saltPlayerState.allEmbeds || [saltPlayerState.embedUrl]).filter(Boolean);
+    setPlayerState({
+      src: saltPlayerState.embedUrl,
+      title: saltPlayerState.title,
+      subtitle: saltPlayerState.subtitle,
+      anime: saltPlayerState.anime,
+      seasonIdx: saltPlayerState.seasonIdx,
+      epIdx: saltPlayerState.epIdx,
+      qualityOptions: embedServers.length > 1
+        ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
+        : undefined,
+      nextEpisodeSrc:
+        saltPlayerState.anime.type === "webseries" &&
+        saltPlayerState.anime.seasons &&
+        saltPlayerState.seasonIdx !== undefined &&
+        saltPlayerState.epIdx !== undefined
+          ? getEpisodeSrc(saltPlayerState.anime.seasons[saltPlayerState.seasonIdx]?.episodes?.[saltPlayerState.epIdx + 1] as Episode)
+          : undefined,
+    });
+    setSaltPlayerState(null);
   }, [saltPlayerState]);
 
   // Persist exact current UI layer so refresh returns to the same screen
@@ -2073,14 +2055,11 @@ const Index = () => {
       if (!hasAccess) return;
       const epSlug = src.replace("animesalt://", "");
       try {
-        // Parallel, but isolated: if the metadata wrapper fails, do not kill the
-        // direct stream extraction path that actually makes AN playback work.
-        const [resultSettled, directSettled] = await Promise.allSettled([
+        // Parallel — these used to be sequential, adding ~1-2s of dead time.
+        const [result, directState] = await Promise.all([
           cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug)),
           getAnimeSaltDirectState(epSlug),
         ]);
-        const result = resultSettled.status === "fulfilled" ? resultSettled.value : null;
-        const directState = directSettled.status === "fulfilled" ? directSettled.value : null;
         const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result || {});
         if (directState?.src || primarySrc) {
           addToWatchHistory(anime, resolvedSeasonIdx, resolvedEpIdx, true);
@@ -2104,7 +2083,6 @@ const Index = () => {
           inPlayerSwitchRef.current = false;
         } else {
           console.warn("[AN] no source for episode", epSlug, result);
-          inPlayerSwitchRef.current = false;
           toast.error("Episode source not available. Try another server or episode.");
         }
       } catch (e) {
@@ -2121,13 +2099,9 @@ const Index = () => {
       if (!hasAccess) return;
       const movieSlug = src.replace("animesalt_movie://", "");
       try {
-        const [resultSettled, directSettled] = await Promise.allSettled([
-          cachedApiCall(`movie_${movieSlug}`, () => animeSaltApi.getMovie(movieSlug)),
-          getAnimeSaltDirectState(movieSlug),
-        ]);
-        const result = resultSettled.status === "fulfilled" ? resultSettled.value : null;
-        const directState = directSettled.status === "fulfilled" ? directSettled.value : null;
-        const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result?.success ? result.data : result);
+        const result = await cachedApiCall(`movie_${movieSlug}`, () => animeSaltApi.getMovie(movieSlug));
+        const directState = await getAnimeSaltDirectState(movieSlug);
+        const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result.success ? result.data : result);
         if (directState?.src || primarySrc) {
           addToWatchHistory(anime, undefined, undefined, true);
           setPlayerState({
@@ -2143,7 +2117,6 @@ const Index = () => {
           setSelectedAnime(null);
           inPlayerSwitchRef.current = false;
         } else {
-          inPlayerSwitchRef.current = false;
           toast.error("Movie source not found");
         }
       } catch {

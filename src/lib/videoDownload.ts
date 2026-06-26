@@ -49,33 +49,11 @@ export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): stri
   return `${base}?filename=${encodeURIComponent(fileName)}&url=${encodeURIComponent(trimmedUrl)}`;
 }
 
-export function unwrapManagedVideoUrl(value: string): string {
-  const trimmed = String(value || "").trim();
-  if (!trimmed) return "";
-  if (isManagedVideoDownloadUrl(trimmed) || isManagedVideoProxyUrl(trimmed)) {
-    try {
-      return new URL(trimmed).searchParams.get("url") || trimmed;
-    } catch {
-      return trimmed;
-    }
-  }
-  return trimmed;
-}
-
-export function buildDirectDownloadUrl(rawUrl: string): string | null {
-  const trimmedUrl = unwrapManagedVideoUrl(rawUrl);
-  if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return null;
-  return trimmedUrl;
-}
-
 function openDownloadLink(finalUrl: string, fileName: string) {
   if (isInTelegramWebView()) { openExternalBrowser(finalUrl); return; }
   const link = document.createElement("a");
   link.href = finalUrl;
   link.rel = "noopener noreferrer";
-  // HTTP file hosts are often blocked as hidden mixed-content downloads. A new
-  // tab keeps it as a user navigation/download, which browsers allow more often.
-  if (/^http:\/\//i.test(finalUrl)) link.target = "_blank";
   link.download = fileName;
   document.body.appendChild(link);
   link.click();
@@ -108,13 +86,7 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
     return false;
   }
   const fileName = buildSafeFileName(rawFileName);
-  const unwrapped = unwrapManagedVideoUrl(trimmedUrl);
-  // On an HTTPS app, raw http:// downloads are mixed-content and get blocked.
-  // Use the admin video-download function first; direct is only a last fallback.
-  const preferDirect = false;
-  const directUrl = buildDirectDownloadUrl(trimmedUrl);
-  const proxiedUrl = buildVideoDownloadUrl(trimmedUrl, fileName);
-  const finalUrl = preferDirect ? (directUrl || proxiedUrl) : (proxiedUrl || directUrl);
+  const finalUrl = buildVideoDownloadUrl(trimmedUrl, fileName);
   if (!finalUrl) {
     toast.error("Download service is unavailable");
     return false;
@@ -133,11 +105,7 @@ export function triggerBulkBackgroundDownloads(
       const u = String(it?.url || "").trim();
       if (!u || !isHttpUrl(u)) return null;
       const fn = buildSafeFileName(it?.fileName || "video");
-      const unwrapped = unwrapManagedVideoUrl(u);
-      const preferDirect = false;
-      const direct = buildDirectDownloadUrl(u);
-      const proxied = buildVideoDownloadUrl(u, fn);
-      const final = preferDirect ? (direct || proxied) : (proxied || direct);
+      const final = buildVideoDownloadUrl(u, fn);
       return final ? { final, fn } : null;
     })
     .filter((x): x is { final: string; fn: string } => !!x);

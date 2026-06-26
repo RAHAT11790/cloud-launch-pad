@@ -9,7 +9,7 @@ const FETCH_TIMEOUT_MS = 12_000;
 // Firebase-backed cache for AnimeSalt API responses.
 // Series structure rarely changes -> long TTL. Playback URLs may be signed -> shorter TTL.
 const CACHE_TTL_SERIES_MS = 7 * 24 * 60 * 60 * 1000;   // 7 days
-const CACHE_TTL_PLAYBACK_MS = 10 * 60 * 1000;          // playback links expire; keep fresh
+const CACHE_TTL_PLAYBACK_MS = 6 * 60 * 60 * 1000;      // 6 hours
 const memCache = new Map<string, { ts: number; data: any }>();
 
 const sanitizeKey = (s: string) => String(s || '').replace(/[.#$/\[\]]/g, '_').slice(0, 200);
@@ -128,25 +128,9 @@ const isPlaybackCandidate = (value: string) => {
 const pickPlaybackFields = (payload: any) => {
   const rawLinks = Array.isArray(payload?.links) ? payload.links : [];
   const rawEmbedUrls = Array.isArray(payload?.embedUrls) ? payload.embedUrls : [];
-  const sourceLinks = Array.isArray(payload?.sources)
-    ? payload.sources.flatMap((source: any) => {
-        const streams = Array.isArray(source?.streams) ? source.streams : [];
-        return [
-          source?.master,
-          source?.videoSource,
-          source?.securedLink,
-          source?.embed,
-          ...streams.map((stream: any) => ({
-            quality: stream?.label || stream?.quality || (stream?.height ? `${stream.height}p` : undefined),
-            url: stream?.url,
-          })),
-        ];
-      })
-    : [];
   const collected = normalizeLinkList([
     ...rawLinks,
     ...rawEmbedUrls,
-    ...sourceLinks,
     payload?.embedUrl,
     payload?.movieEmbedUrl,
     payload?.directUrl,
@@ -209,46 +193,42 @@ const parseMeta = (html: string) => {
 /** Get AnimeSalt proxy URL from the EGD Router only. */
 const getAnimeSaltProxyUrl = async (): Promise<string> => {
   const proxyUrl = await getEdgeFunctionUrl('an-api');
-  const normalized = normalizeAnApiBaseUrl(proxyUrl);
-  if (!normalized) throw new Error('AN API URL is not saved/enabled in EGD Router.');
-  return normalized;
-};
-
-const normalizeAnApiBaseUrl = (value: string): string => {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  try {
-    const url = new URL(raw);
-    url.search = '';
-    url.hash = '';
-    const endpointNames = new Set(['raw', 'search', 'anime', 'episode', 'embed', 'hls', 'subs']);
-    const parts = url.pathname.split('/').filter(Boolean);
-    while (parts.length && endpointNames.has(parts[parts.length - 1].toLowerCase())) parts.pop();
-    url.pathname = `/${parts.join('/')}`.replace(/\/+$/, '');
-    return url.toString().replace(/\/+$/, '');
-  } catch {
-    return raw.replace(/\/(?:raw|search|anime|episode|embed|hls|subs)(?:\?.*)?$/i, '').replace(/\/+$/, '');
-  }
+  if (!proxyUrl) throw new Error('AN API URL is not saved/enabled in EGD Router.');
+  return proxyUrl;
 };
 
 const fetchPage = async (url: string): Promise<string> => {
   const proxyUrl = await getAnimeSaltProxyUrl();
-
-  // Important: do NOT call `/raw?url=...` from the app. The AN API contract
-  // exposed in EGD Manager is structured (`/search`, `/anime`, `/episode`,
-  // `/embed`, `/hls`, `/subs`). Older builds used `/raw?url=` as a fallback,
-  // which produced the reported invalid runtime path:
-  //   supabase/functions/raw?url=https://animesalt.ac/episode/.../index.ts
-  // Keep the raw HTML fallback only through the backwards-compatible POST
-  // shape supported by our deployable `an-api` source, never as a GET path.
-  const res = await fetchWithTimeout(proxyUrl, {
+  let res = await fetchWithTimeout(proxyUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),
   });
 
+  let data: any;
+  if (res.ok) {
+    data = await res.json();
+    if (data.success && data.html) return data.html;
+  }
+
+  const isMoviesPage = url.includes('/movies');
+  const isEpisodePage = url.includes('/episode/');
+  const pageMatch = url.match(/\/page\/(\d+)/);
+  const slugMatch = url.match(/\/(series|movies|episode)\/([^/?#]+)/);
+
+  let fallbackBody: any;
+  if (isEpisodePage && slugMatch) fallbackBody = { action: 'episode', slug: slugMatch[2] };
+  else if (slugMatch && !pageMatch) fallbackBody = { action: slugMatch[1] === 'series' ? 'series' : 'movie', slug: slugMatch[2] };
+  else fallbackBody = { action: 'browse', type: isMoviesPage ? 'movies' : 'series', page: pageMatch ? parseInt(pageMatch[1], 10) : 1 };
+
+  res = await fetchWithTimeout(proxyUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fallbackBody),
+  });
+
   if (!res.ok) throw new Error(`AnimeSalt proxy error: ${res.status}`);
-  const data = await res.json();
+  data = await res.json();
   if (data.success && data.html) return data.html;
   throw new Error('No HTML returned from AnimeSalt proxy');
 };
@@ -405,18 +385,14 @@ const parsePlaybackPage = (html: string) => {
 /** Try direct API call first, supporting both nested and top-level response formats */
 const tryDirectApi = async (proxyUrl: string, body: any): Promise<any | null> => {
   try {
-    const base = normalizeAnApiBaseUrl(proxyUrl);
-    let endpoint = '';
-    if (body.action === 'search') endpoint = `${base}/search?q=${encodeURIComponent(body.q || body.query || '')}`;
-    else if (body.action === 'series') endpoint = `${base}/anime?slug=${encodeURIComponent(body.slug || '')}&type=series`;
-    else if (body.action === 'movie') endpoint = `${base}/episode?slug=${encodeURIComponent(body.slug || '')}&type=movies`;
-    else if (body.action === 'episode') endpoint = `${base}/episode?slug=${encodeURIComponent(body.slug || '')}`;
-    else return null;
-    const res = await fetchWithTimeout(endpoint);
+    const res = await fetchWithTimeout(proxyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
     if (!res.ok) return null;
     const data = await res.json();
-    if (Array.isArray(data)) return { items: data };
-    if (data?.error) return null;
+    if (!data?.success) return null;
     if (data.data) return data.data;
     if (data.items) return { items: data.items, maxPage: data.maxPage, currentPage: data.currentPage, totalCount: data.totalCount };
     return data;
@@ -522,12 +498,7 @@ export const animeSaltApi = {
 
   async getMovie(slug: string) {
     const cached = await readAsCache('movie', slug, CACHE_TTL_PLAYBACK_MS);
-    if (cached) {
-      const normalizedCached = normalizePlaybackPayload(cached);
-      if (normalizedCached.embedUrl || normalizedCached.links?.length || normalizedCached.allEmbeds?.length) {
-        return { success: true, data: normalizedCached, cached: true };
-      }
-    }
+    if (cached) return { success: true, data: cached, cached: true };
 
     const proxyUrl = await getAnimeSaltProxyUrl();
     const directResult = await tryDirectApi(proxyUrl, { action: 'movie', slug });
@@ -547,12 +518,7 @@ export const animeSaltApi = {
 
   async getEpisode(slug: string) {
     const cached = await readAsCache('episode', slug, CACHE_TTL_PLAYBACK_MS);
-    if (cached) {
-      const normalizedCached = normalizePlaybackPayload(cached);
-      if (normalizedCached.embedUrl || normalizedCached.links?.length || normalizedCached.allEmbeds?.length) {
-        return { success: true, ...normalizedCached, cached: true };
-      }
-    }
+    if (cached) return { success: true, ...cached, cached: true };
 
     const proxyUrl = await getAnimeSaltProxyUrl();
     const directResult = await tryDirectApi(proxyUrl, { action: 'episode', slug });

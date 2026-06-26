@@ -1042,54 +1042,6 @@ html.tv-mode [data-anime-card] {
   transform: none !important;
 }
 
-/* Android TV video player layout — larger controls, stable bottom bar, no tiny chips */
-html.tv-mode .rs-video-player-root {
-  background: #000 !important;
-  overflow: hidden !important;
-}
-
-html.tv-mode .rs-video-player-shell {
-  width: 100vw !important;
-  height: 100vh !important;
-  max-height: 100vh !important;
-  border-radius: 0 !important;
-  position: relative !important;
-  top: auto !important;
-}
-
-html.tv-mode .rs-video-player-shell video,
-html.tv-mode .rs-video-player-shell iframe {
-  object-fit: contain !important;
-}
-
-html.tv-mode .rs-video-player-shell button,
-html.tv-mode .rs-video-player-shell [role="button"] {
-  min-width: 48px !important;
-  min-height: 48px !important;
-  font-size: 13px !important;
-}
-
-html.tv-mode .rs-video-player-shell .player-touch-button,
-html.tv-mode .rs-video-player-shell .player-control-chip {
-  min-width: 48px !important;
-  min-height: 48px !important;
-  padding-left: 14px !important;
-  padding-right: 14px !important;
-  border-radius: 999px !important;
-}
-
-html.tv-mode .rs-video-player-shell [data-player-panel="true"] {
-  min-width: 260px !important;
-  max-height: 62vh !important;
-  font-size: 15px !important;
-  background: rgba(0, 0, 0, 0.92) !important;
-}
-
-html.tv-mode .rs-video-player-shell [data-player-panel="true"] button {
-  min-height: 48px !important;
-  font-size: 14px !important;
-}
-
 /* ============================================================
    Security hardening — anti-copy / anti-drag / anti-save UX
    ============================================================
