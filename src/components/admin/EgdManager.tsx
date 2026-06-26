@@ -167,11 +167,7 @@ export default function EgdManager({
   const [savedDeployerUrl, setSavedDeployerUrl] = useState("");
   const [savingUrl, setSavingUrl] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
-  // Player proxy URL — pasted by admin after deploying video-proxy here.
-  // Single source of truth used by VideoPlayer. Stored at
-  // egdManager/config/playerProxyUrl.
-  const [playerProxyUrl, setPlayerProxyUrl] = useState("");
-  const [savingPlayerProxy, setSavingPlayerProxy] = useState(false);
+  // (Player Proxy URL moved to EGD Router — single source of truth there.)
 
   // --- Function editor state ---
   const [list, setList] = useState<FnRow[]>([]);
@@ -238,27 +234,8 @@ export default function EgdManager({
     });
   }, []);
 
-  // ---------- Load player proxy URL ----------
-  useEffect(() => {
-    const r = ref(db, "egdManager/config/playerProxyUrl");
-    return onValue(r, (snap) => {
-      const raw = snap.val();
-      const v = typeof raw === "string" ? raw : (raw?.url ? String(raw.url) : "");
-      setPlayerProxyUrl(v);
-    });
-  }, []);
+  // ---------- (Player proxy URL is configured in EGD Router) ----------
 
-  const savePlayerProxyUrl = async () => {
-    const u = playerProxyUrl.trim();
-    if (u && !/^https?:\/\//.test(u)) { toast.error("Must start with http(s)://"); return; }
-    setSavingPlayerProxy(true);
-    try {
-      await set(ref(db, "egdManager/config/playerProxyUrl"), u);
-      toast.success(u ? "Player Proxy URL saved ✔" : "Player Proxy URL cleared");
-    } catch (e: any) {
-      toast.error("Save failed: " + (e?.message || String(e)));
-    } finally { setSavingPlayerProxy(false); }
-  };
 
 
 
