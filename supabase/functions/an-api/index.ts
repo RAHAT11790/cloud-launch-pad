@@ -15,7 +15,7 @@ const UA =
 
 const cors: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "*",
 };
 
@@ -588,8 +588,38 @@ Deno.serve(async (req) => {
   // Embed-theft protection is enforced at the UI layer instead.
 
   try {
+    // Backward-compatible JSON mode for the app/client library.
+    // Supported body shapes:
+    //   { url }                         -> raw HTML fetch
+    //   { action:"series", slug }       -> detail
+    //   { action:"movie"|"episode", slug } -> stream extraction
+    //   { action:"browse", type, page } -> raw list HTML
+    if (req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      const targetUrl = String(body?.url || "").trim();
+      if (targetUrl) return json({ success: true, html: await fetchText(targetUrl) });
+
+      const action = String(body?.action || "").trim().toLowerCase();
+      const slug = String(body?.slug || "").trim();
+      const type = String(body?.type || "series").trim();
+      if (action === "series" && slug) return json({ success: true, data: await detail(slug, "series") });
+      if ((action === "movie" || action === "episode") && slug) return json({ success: true, data: await episode(slug, action === "movie" ? "movies" : type) });
+      if (action === "browse") {
+        const safeType = type === "movies" ? "movies" : "series";
+        const page = Math.max(1, Number(body?.page || 1));
+        const listUrl = page > 1 ? `${AN_BASE}/${safeType}/page/${page}/` : `${AN_BASE}/${safeType}/`;
+        return json({ success: true, html: await fetchText(listUrl) });
+      }
+      return json({ success: false, error: "unsupported POST body" }, 400);
+    }
+
     if (path === "/" || path === "") {
       return json(API_ENDPOINTS);
+    }
+    if (path === "/raw") {
+      const target = url.searchParams.get("url") || "";
+      if (!target) return json({ error: "missing ?url=" }, 400);
+      return json({ success: true, html: await fetchText(target) });
     }
     if (path === "/search") {
       const q = url.searchParams.get("q") || "";
