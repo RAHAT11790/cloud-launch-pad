@@ -10,13 +10,14 @@ import { useBranding } from "@/hooks/useBranding";
 const LOGO_SIZE = 96;
 const RING_SIZE = 128; // a touch bigger than the logo
 
-const petals = Array.from({ length: 18 }, (_, i) => ({
-  left: `${(i * 13 + (i % 3) * 7) % 100}%`,
-  delay: `${(i * 0.41) % 6}s`,
-  dur: `${7 + (i % 5) * 0.7}s`,
-  drift: `${(i % 2 ? 1 : -1) * (32 + (i % 6) * 14)}px`,
-  size: 12 + (i % 4) * 3,
-  opacity: 0.55 + (i % 4) * 0.1,
+// Fire embers falling from top like flower petals
+const embers = Array.from({ length: 22 }, (_, i) => ({
+  left: `${(i * 11 + (i % 4) * 5) % 100}%`,
+  delay: `${(i * 0.37) % 6}s`,
+  dur: `${5.5 + (i % 5) * 0.8}s`,
+  drift: `${(i % 2 ? 1 : -1) * (28 + (i % 6) * 16)}px`,
+  size: 8 + (i % 4) * 4,
+  hue: i % 3, // 0=red, 1=orange, 2=yellow
 }));
 
 // Party-spray confetti burst (from center) — fires repeatedly
