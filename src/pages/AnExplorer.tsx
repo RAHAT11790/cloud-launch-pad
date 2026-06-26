@@ -156,7 +156,7 @@ export default function AnExplorer() {
         )}
 
         <div className="bg-[#0f1119] border border-[#262936] px-3 py-2.5 rounded-xl mt-5 font-mono text-[10px] sm:text-[11px] text-[#a4b1d0] overflow-auto break-all">
-          <b className="text-[#ff4d6d]">API:</b> GET {API_BASE}/search?q=… · /anime?slug=…&type=… · /episode?slug=…&type=…
+          <b className="text-[#ff4d6d]">API:</b> {apiBase ? `GET ${apiBase}/search?q=… · /anime?slug=…&type=… · /episode?slug=…&type=…` : "Save and enable AN API URL in EGD Router first."}
         </div>
       </div>
     </div>
