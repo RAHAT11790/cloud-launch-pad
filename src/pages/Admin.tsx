@@ -617,30 +617,29 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 };
 
 // ==================== CLOUDFLARE WORKER ROUTER SECTION ====================
-// ==================== FUNCTION URL OVERRIDES — every edge function gets a router URL field ====================
-const ROUTER_FUNCTIONS: Array<{ slug: string; label: string }> = EDGE_FUNCTION_LIBRARY.map(
- (e) => ({ slug: e.slug, label: e.label })
+// ==================== FUNCTION URL OVERRIDES — only admin self-deployed URLs ====================
+const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean }> = EDGE_FUNCTION_LIBRARY.map(
+ (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew })
 );
-
-// (No "NEW" badges — router list matches whatever the admin deploys via EGD Manager.)
 
 
 const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
- const defaultBase = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1";
  const [urls, setUrls] = useState<Record<string, string>>({});
- const [enabled, setEnabled] = useState<Record<string, boolean>>({});
+  const [enabled, setEnabled] = useState<Record<string, boolean>>({});
  const [saving, setSaving] = useState<string | null>(null);
  const [testing, setTesting] = useState<string | null>(null);
  const [testResult, setTestResult] = useState<Record<string, { ok: boolean; ms: number }>>({});
 
  useEffect(() => {
- const unsub = onValue(ref(db, "settings/functionOverrides"), (snap) => {
- const v = snap.val() || {};
+ const unsub = onValue(ref(db, "settings"), (snap) => {
+ const settings = snap.val() || {};
+ const v = settings.functionOverrides || {};
  const u: Record<string, string> = {};
  const e: Record<string, boolean> = {};
  ROUTER_FUNCTIONS.forEach(({ slug }) => {
- u[slug] = String(v?.[slug]?.customUrl || "");
- e[slug] = v?.[slug]?.enabled !== false;
+ const legacyTelegramUrl = slug === "telegram-post" ? String(settings?.telegramProvider?.url || "") : "";
+ u[slug] = String(v?.[slug]?.customUrl || legacyTelegramUrl || "");
+ e[slug] = v?.[slug]?.enabled === true || Boolean(legacyTelegramUrl);
  });
  setUrls(u);
  setEnabled(e);
@@ -652,39 +651,33 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
    setSaving(slug);
    try {
    const url = (urls[slug] || "").trim();
+    if (url && !/^https?:\/\//i.test(url)) { toast.error("Paste a valid http/https function URL"); return; }
+     const active = Boolean(url) && enabled[slug] === true;
    await set(ref(db, `settings/functionOverrides/${slug}`), {
-   enabled: enabled[slug] !== false,
+    enabled: active,
    customUrl: url,
+    updatedAt: Date.now(),
+    source: "egd-router",
    });
-   // video-proxy URL is also the Player Proxy URL used by VideoPlayer.
+    if (slug === "telegram-post") {
+    await set(ref(db, "settings/telegramProvider"), { url });
+    }
    if (slug === "video-proxy") {
-   await set(ref(db, "egdManager/config/playerProxyUrl"), url);
+    await remove(ref(db, "egdManager/config/playerProxyUrl"));
    }
-   toast.success(`Saved · ${slug}`);
+    toast.success(active ? `Activated · ${slug}` : `Disabled · ${slug}`);
    } catch (e: any) { toast.error(e?.message || "Save failed"); }
    finally { setSaving(null); }
   };
 
- const fillRecommended = (slug: string) =>
- setUrls((p) => ({ ...p, [slug]: `${defaultBase}/${slug}` }));
-
- const fillAllDefaults = async () => {
- setSaving("__all__");
- try {
- const next: Record<string, string> = {};
- for (const { slug } of ROUTER_FUNCTIONS) {
- const u = `${defaultBase}/${slug}`;
- next[slug] = u;
- await set(ref(db, `settings/functionOverrides/${slug}`), { enabled: true, customUrl: u });
- }
- setUrls(next);
- toast.success("All URLs reset to defaults");
- } catch (e: any) { toast.error(e?.message || "Save failed"); }
- finally { setSaving(null); }
+ const clearLocal = (slug: string) => {
+ setUrls((p) => ({ ...p, [slug]: "" }));
+ setEnabled((p) => ({ ...p, [slug]: false }));
  };
 
  const ping = async (slug: string) => {
- const u = (urls[slug] || `${defaultBase}/${slug}`).trim();
+ const u = (urls[slug] || "").trim();
+ if (!u) { toast.error("Paste and save a deployed URL first"); return; }
  setTesting(slug);
  const start = Date.now();
  try {
@@ -703,21 +696,16 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
  <div className="min-w-0">
  <h3 className="text-sm font-semibold flex items-center gap-2">
- <Link size={14} className="text-emerald-400" /> Edge Function URL Router
+  <Link size={14} className="text-emerald-400" /> EGD Router — Deployed URLs
  </h3>
  <p className="text-[10px] text-zinc-400 mt-1 break-words">
- Each Edge Function can be redirected to your own deployed URL. Leave empty to fall back to defaults.
+  Paste only the URLs you deployed yourself. Empty or disabled rows are not used by the app.
  </p>
  </div>
- <button onClick={fillAllDefaults} disabled={saving === "__all__"} className={`${btnSecondary} !px-3 !py-1.5 !text-[11px] inline-flex items-center gap-1.5 shrink-0`}>
- {saving === "__all__" ? <Loader2 className="animate-spin" size={12} /> : <RefreshCw size={12} />}
- Reset all to defaults
- </button>
  </div>
 
  <div className="space-y-2">
- {ROUTER_FUNCTIONS.map(({ slug, label }) => {
- const recommended = `${defaultBase}/${slug}`;
+  {ROUTER_FUNCTIONS.map(({ slug, label, isNew }) => {
  const res = testResult[slug];
  const isVideoProxy = slug === "video-proxy";
  return (
@@ -727,6 +715,11 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  <div className="min-w-0">
  <div className="text-xs font-semibold text-white truncate flex items-center gap-1.5">
  {label}
+  {isNew && (
+  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 tracking-wider">
+  NEW
+  </span>
+  )}
  {isVideoProxy && (
  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 tracking-wider">
  PLAYER PROXY
@@ -737,22 +730,26 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  </div>
  </div>
  <button
- onClick={() => setEnabled((p) => ({ ...p, [slug]: !(p[slug] !== false) }))}
- className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${enabled[slug] !== false ? 'bg-emerald-600' : 'bg-zinc-600'}`}
- title={enabled[slug] !== false ? "Enabled" : "Disabled"}
+  onClick={() => setEnabled((p) => ({ ...p, [slug]: !(p[slug] === true) }))}
+  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${enabled[slug] === true ? 'bg-emerald-600' : 'bg-zinc-600'}`}
+  title={enabled[slug] === true ? "Enabled" : "Disabled"}
  >
- <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${enabled[slug] !== false ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
+  <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${enabled[slug] === true ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
  </button>
  </div>
  <input
  value={urls[slug] || ""}
- onChange={(e) => setUrls((p) => ({ ...p, [slug]: e.target.value }))}
- placeholder={recommended}
+  onChange={(e) => {
+  const value = e.target.value;
+  setUrls((p) => ({ ...p, [slug]: value }));
+  setEnabled((p) => ({ ...p, [slug]: Boolean(value.trim()) }));
+  }}
+  placeholder={`Paste deployed ${slug} URL here`}
  className={inputClass + " w-full text-[11px]"}
  />
  <div className="flex flex-wrap gap-1.5 mt-2">
- <button onClick={() => fillRecommended(slug)} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
- Use Default
+  <button onClick={() => clearLocal(slug)} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
+  Clear
  </button>
  <button onClick={() => save(slug)} disabled={saving === slug} className={`${btnPrimary} !px-2 !py-1 !text-[10px] inline-flex items-center gap-1`}>
  {saving === slug ? <Loader2 className="animate-spin" size={10} /> : <Save size={10} />} Save
@@ -774,110 +771,9 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  );
 };
 
-const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
- const [telegramPostUrl, setTelegramPostUrl] = useState("");
- const [telegramPostUrlInput, setTelegramPostUrlInput] = useState("");
-
- const recommendedShortenerUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/shorten-arolinks`;
- const recommendedTelegramAccessUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/link-share-bot`;
- const recommendedTelegramPostUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/telegram-post`;
-
- useEffect(() => {
- const unsub = onValue(ref(db, "settings/telegramProvider"), (snap) => {
- const value = String(snap.val()?.url || "");
- setTelegramPostUrl(value);
- setTelegramPostUrlInput(value);
- });
- return () => {
- unsub();
- };
- }, []);
-
- const copyText = async (value: string, label: string) => {
- try {
- await navigator.clipboard.writeText(value);
- toast.success(label);
- } catch {
- toast.error("Copy failed");
- }
- };
-
- const saveTelegramPostUrl = async () => {
- const url = telegramPostUrlInput.trim();
- await set(ref(db, "settings/telegramProvider"), { url });
- await set(ref(db, "settings/functionOverrides/telegram-post"), { enabled: true, customUrl: url || recommendedTelegramPostUrl });
- setTelegramPostUrl(url);
- toast.success("✅ Telegram Post URL saved");
- };
-
- return (
- <div>
+const EdgeRouterSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => (
  <FunctionUrlOverrides glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
-
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
- <Send size={14} className="text-blue-400" /> Telegram Post URL
- </h3>
- <p className="text-[10px] text-zinc-400 mb-3">
- খানে only Telegram Post function URL থাকবে। remaining কা andয়া all router block removed andয়া হয়েছে।
- </p>
- <div className="space-y-2">
- <input
- value={telegramPostUrlInput}
- onChange={(e) => setTelegramPostUrlInput(e.target.value)}
- placeholder={recommendedTelegramPostUrl}
- className={inputClass}
- />
- <div className="flex gap-2">
- <button onClick={() => setTelegramPostUrlInput(recommendedTelegramPostUrl)} className={`${btnSecondary} flex-1`}>
- Use Recommended
- </button>
- <button onClick={saveTelegramPostUrl} className={`${btnPrimary} flex-1`}>
- <Save size={12} /> Save
- </button>
- </div>
- {telegramPostUrl && <p className="text-[10px] text-green-400 break-all">✓ {telegramPostUrl}</p>}
- </div>
- </div>
-
- <div className={`${glassCard} p-4 mb-4`}>
- <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
- <Link size={14} className="text-amber-400" /> Recommended 2 Links
- </h3>
- <div className="space-y-3">
- <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/30 p-3">
- <div className="flex items-center justify-between gap-2 mb-1.5">
- <div className="min-w-0">
- <p className="text-[11px] font-semibold text-white">🔗 Shortener URL</p>
- <p className="text-[9px] text-zinc-400">Use this as the Ad service shortener function</p>
- </div>
- <button onClick={() => copyText(recommendedShortenerUrl, "Shortener URL copied")} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
- Copy
- </button>
- </div>
- <code className="text-[10px] text-cyan-300 break-all block">{recommendedShortenerUrl}</code>
- </div>
-
- <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/30 p-3">
- <div className="flex items-center justify-between gap-2 mb-1.5">
- <div className="min-w-0">
- <p className="text-[11px] font-semibold text-white">🤖 Telegram Access URL</p>
- <p className="text-[9px] text-zinc-400">Use this as the Telegram verify / unlock bot function</p>
- </div>
- <button onClick={() => copyText(recommendedTelegramAccessUrl, "Telegram Access URL copied")} className={`${btnSecondary} !px-2 !py-1 !text-[10px]`}>
- Copy
- </button>
- </div>
- <code className="text-[10px] text-cyan-300 break-all block">{recommendedTelegramAccessUrl}</code>
- </div>
- </div>
- </div>
-
- <AdServicesSection glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
- <AdGateCooldownConfig glassCard={glassCard} inputClass={inputClass} btnPrimary={btnPrimary} />
- </div>
- );
-};
+);
 
 // ==================== AD GATE COOLDOWN CONFIG ====================
 const AdGateCooldownConfig = ({ glassCard, inputClass, btnPrimary }: { glassCard: string; inputClass: string; btnPrimary: string }) => {
@@ -8454,8 +8350,8 @@ ${footerLinksHtml}
  {/* Force notification re-prompt removed — FCM disabled site-wide */}
 
 
- {/* Proxy Server Selector — REMOVED. Player proxy now comes only from
-     EGD Manager → Player Proxy URL (egdManager/config/playerProxyUrl). */}
+  {/* Proxy Server Selector — REMOVED. Player proxy now comes only from
+     EGD Router → video-proxy URL (settings/functionOverrides/video-proxy). */}
 
  {/* Image Refresh from TMDB */}
  <ImageRefreshSection

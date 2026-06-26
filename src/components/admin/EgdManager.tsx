@@ -415,15 +415,7 @@ export default function EgdManager({
       if (d?.ok) {
         toast.success("Deployed ✔");
         setResultUrl(d.url || "");
-        if (d.url) {
-          await set(ref(db, `settings/functionOverrides/${slugify(slug)}`), {
-            customUrl: d.url,
-            enabled: true,
-            updatedAt: Date.now(),
-            source: "egd-manager",
-          });
-          toast.success("Function URL linked to app router ✔");
-        }
+        if (d.url) toast.success("Copy this URL and paste it in EGD Router to activate it.");
         await loadList();
         await loadProjectSecrets();
       } else {
@@ -444,7 +436,6 @@ export default function EgdManager({
       const d = await callDeployer("delete", { slug: s });
       if (d?.ok) {
         toast.success("Deleted");
-        await set(ref(db, `settings/functionOverrides/${s}`), null);
         if (selected === s) { setSelected(""); setSlug(""); setCode(STARTER); setResultUrl(""); }
         loadList();
       } else { toast.error("Delete failed"); appendError(JSON.stringify(d?.error || d)); }
@@ -651,19 +642,16 @@ export default function EgdManager({
                   entry.secrets.length > 0
                     ? entry.secrets.map((name) => ({
                         name,
-                        value: AUTO_MANAGED_SECRETS.has(name) ? lovableKey : "",
+                        value: "",
                       }))
                     : [{ name: "", value: "" }],
                 );
                 setResultUrl("");
                 setErrorLog("");
-                const manualSecrets = entry.secrets.filter((n) => !AUTO_MANAGED_SECRETS.has(n));
                 setSourceHint(
                   entry.secrets.length === 0
                     ? `Loaded "${entry.label}" — no secrets required.`
-                    : manualSecrets.length === 0
-                      ? `Loaded "${entry.label}" — all secrets auto-managed. Just hit Deploy.`
-                      : `Loaded "${entry.label}" — fill ${manualSecrets.length} secret(s) below, then Deploy.`,
+                    : `Loaded "${entry.label}" — fill ${entry.secrets.length} secret(s) below, then Deploy.`,
                 );
                 toast.success(`Loaded: ${entry.label}`);
                 if (typeof window !== "undefined") {
@@ -677,6 +665,11 @@ export default function EgdManager({
               className="relative text-left rounded-xl border border-zinc-700/60 bg-zinc-900/50 hover:bg-amber-500/5 hover:border-amber-400/60 transition p-3 min-w-0 overflow-hidden"
             >
               <div className="font-semibold text-xs text-white truncate">{entry.label}</div>
+              {entry.isNew && (
+                <div className="absolute right-2 top-2 rounded-md border border-emerald-400/50 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-emerald-200">
+                  NEW
+                </div>
+              )}
               <div className="text-[10px] text-zinc-500 truncate mt-0.5">{entry.slug}</div>
               <div className="text-[10px] text-zinc-400 mt-1 line-clamp-2 break-words">{entry.description}</div>
               {entry.secrets.length > 0 && (
@@ -753,38 +746,28 @@ export default function EgdManager({
             </div>
             <div className="space-y-2">
               {secrets.map((s, i) => {
-                const isAuto = AUTO_MANAGED_SECRETS.has(s.name);
                 return (
                   <div key={i} className="flex flex-col sm:flex-row gap-2">
                     <div className="flex-1 min-w-0 relative">
                       <input
-                        className={inputClass + " w-full" + (isAuto ? " pr-20" : "")}
+                        className={inputClass + " w-full"}
                         placeholder="SECRET_NAME"
                         value={s.name}
                         onChange={(e) => updateSecret(i, "name", e.target.value)}
-                        readOnly={isAuto}
                       />
-                      {isAuto && (
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                          AUTO
-                        </span>
-                      )}
                     </div>
                     <div className="flex gap-2">
                       <input
                         className={inputClass + " flex-1 min-w-0"}
-                        placeholder={isAuto ? (lovableKeyLoading ? "Loading Lovable key…" : lovableKey ? "Auto-filled by Lovable" : "Lovable key unavailable") : "value"}
+                        placeholder="value"
                         type="password"
-                        value={isAuto ? (lovableKey || "") : s.value}
+                        value={s.value}
                         onChange={(e) => updateSecret(i, "value", e.target.value)}
-                        readOnly={isAuto}
-                        disabled={isAuto && !lovableKey}
                       />
                       <button
                         onClick={() => removeSecretRow(i)}
                         className="px-3 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 shrink-0 disabled:opacity-40"
-                        title={isAuto ? "Auto-managed — cannot remove" : "Remove"}
-                        disabled={isAuto}
+                        title="Remove"
                       >
                         <X size={14} />
                       </button>
@@ -795,7 +778,6 @@ export default function EgdManager({
             </div>
             <p className="text-[11px] text-zinc-500 mt-1 break-words">
               Names starting with SUPABASE_ / SB_ are reserved and skipped automatically.
-              {" "}<span className="text-emerald-400">LOVABLE_API_KEY</span> is auto-managed — Lovable injects it for you and refreshes if the project changes.
             </p>
 
 

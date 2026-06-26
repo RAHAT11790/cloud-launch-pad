@@ -79,7 +79,7 @@ const entry = (
 // are permanently hidden from this deployable library.
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
-  entry("video-proxy",    "Video Proxy",    "Universal streaming proxy. HTTP servers: protection + playback help. HTTPS servers: protection only.", videoProxySource, [], { isNew: true }),
+  entry("video-proxy",    "Video Proxy",    "Universal streaming proxy. Set ALLOWED_HOSTS to your app/preview domain. HTTP servers get playback help + protection; HTTPS can be protected through the proxy.", videoProxySource, ["ALLOWED_HOSTS"], { isNew: true }),
   entry("video-download", "Video Download", "Dedicated, retry-hardened download proxy (recommended for downloads).", videoDownloadSource),
   entry("live-tv-proxy",  "Live TV Proxy",  "Dedicated HLS proxy for Live TV channels.", liveTvProxySource),
   entry("telegram-post",  "Telegram Post",  "Posts new episodes to your Telegram channel.", telegramPostSource),

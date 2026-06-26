@@ -83,23 +83,26 @@ export function buildFunctionUrl(endpoint: string, config: EdgeRouterConfig): st
   return "";
 }
 
-/** Auto-fallback Supabase URL for built-in important functions */
+const SELF_DEPLOYED_FUNCTIONS = new Set([
+  "video-proxy",
+  "video-download",
+  "live-tv-proxy",
+  "telegram-post",
+  "apk-download",
+  "link-share-bot",
+  "shorten-arolinks",
+  "an-api",
+]);
+
+/** Auto-fallback Supabase URL for Lovable-managed/internal functions only */
 function supabaseFallbackUrl(fnName: string): string {
   const base = (import.meta as any)?.env?.VITE_SUPABASE_URL || "";
   if (!base) return "";
   const ENABLED = new Set([
-    "telegram-post",
     "generate-backdrop",
     "rs-bot",
-    "video-proxy",
-    "live-tv-proxy",
-    "video-download",
-    "apk-download",
     "send-otp-email",
-    "link-share-bot",
     "process-email-queue",
-    "shorten-arolinks",
-    "an-api",
   ]);
   if (!ENABLED.has(fnName)) return "";
   return `${base.replace(/\/$/, "")}/functions/v1/${fnName}`;
@@ -124,16 +127,6 @@ function deriveFromEgdDeployerUrl(deployerUrl: string, fnName: string): string {
 
 /** Get URL for a named function — checks per-function overrides first */
 export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
-  // Telegram has its own dedicated Supabase URL
-  if (fnName === "telegram-post") {
-    try {
-      const snap = await get(ref(db, "settings/telegramProvider"));
-      const val = snap.val();
-      if (val?.url) return val.url;
-    } catch {}
-    return supabaseFallbackUrl(fnName);
-  }
-
   // generate-backdrop uses GEMINI_API_KEY inside the user's EGD-deployed
   // project only. Never allow stale app overrides or Lovable fallbacks here.
   if (fnName === "generate-backdrop") {
@@ -151,8 +144,22 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
     const override = overrideSnap.val();
     if (override?.enabled === false) return "";
     const customUrl = String(override?.customUrl || "").trim();
-    if (customUrl) return customUrl;
+    if (override?.enabled === true && customUrl) return customUrl;
   } catch {}
+
+  // Legacy compatibility only: old Telegram box data is read, but there is no
+  // automatic Supabase fallback. The Router save path now writes both places.
+  if (fnName === "telegram-post") {
+    try {
+      const snap = await get(ref(db, "settings/telegramProvider"));
+      const val = snap.val();
+      if (val?.url) return String(val.url).trim();
+    } catch {}
+  }
+
+  // User-deployable functions must be pasted and saved in EGD Router first.
+  // No hidden Lovable/Supabase default URL is used for these rows.
+  if (SELF_DEPLOYED_FUNCTIONS.has(fnName)) return "";
 
   const config = await getEdgeRouterConfig();
   // Check dynamic functions first
@@ -172,6 +179,8 @@ export async function callEdgeFunction(
 ): Promise<any> {
   let url = await getEdgeFunctionUrl(fnName);
   const method = options?.method || "POST";
+
+  if (!url) throw new Error(`Cloud function ${fnName} is not configured in EGD Router`);
 
   if (options?.queryParams) {
     url += `?${new URLSearchParams(options.queryParams).toString()}`;
