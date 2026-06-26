@@ -15,11 +15,8 @@
 // ============================================================
 import { useCallback, useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
-import { Captions, Layers, Pause, Play, RotateCcw, RotateCw, Volume2 } from "lucide-react";
+import { Layers, Pause, Play, RotateCcw, RotateCw, Volume2 } from "lucide-react";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
-
-type Sub = { language: string; name: string; uri: string };
-type Cue = { start: number; end: number; text: string };
 
 type Stream = { url: string; label: string; height: number; resolution: string; bandwidth: number };
 type Audio  = { language: string; name: string; uri: string };
@@ -27,7 +24,6 @@ type Audio  = { language: string; name: string; uri: string };
 export type AnNativeResolvedData = {
   streams: Stream[];
   audio: Audio[];
-  subtitles?: Sub[];
   preferredQualityIdx?: number;
   defaultAudioIdx?: number;
 };
@@ -91,14 +87,11 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const hlsRef = useRef<Hls | null>(null);
   const [streams, setStreams] = useState<Stream[]>(() => initialData?.streams || []);
   const [audios, setAudios]   = useState<Audio[]>(() => initialData?.audio || []);
-  const [subs, setSubs]       = useState<Sub[]>([]);
   const [qIdx, setQIdx]       = useState(() => initialData?.preferredQualityIdx ?? pickQualityIdx(initialData?.streams || []));
   const [aIdx, setAIdx]       = useState(() => initialData?.defaultAudioIdx ?? pickHindiAudioIdx(initialData?.audio || []));
-  const [sIdx, setSIdx]       = useState(-1); // -1 = off
   const [loading, setLoading] = useState(true);
   const [showQ, setShowQ]     = useState(false);
   const [showA, setShowA]     = useState(false);
-  const [showS, setShowS]     = useState(false);
   const [controlsOpen, setControlsOpen] = useState(true);
   const [paused, setPaused] = useState(true);
   const [current, setCurrent] = useState(0);
@@ -114,11 +107,6 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressActiveRef = useRef(false);
   const prevRateRef = useRef(1);
-  const subtitleCuesRef = useRef<Cue[]>([]);
-  const subtitlePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const subtitleSeqRef = useRef(0);
-  const [subtitleText, setSubtitleText] = useState("");
-  const [subtitleStatus, setSubtitleStatus] = useState("");
   // Track whether we've already applied the initial resume — so quality
   // switching mid-playback keeps current position, not the original resume.
   const resumedRef = useRef(false);
@@ -129,7 +117,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     failedRef.current = false;
     resumedRef.current = false;
     setLoading(true);
-    setStreams([]); setAudios([]); setSubs([]);
+    setStreams([]); setAudios([]);
     (async () => {
       try {
         const base = await getEdgeFunctionUrl("an-api");
@@ -139,10 +127,8 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         if (initialData?.streams?.length) {
           setStreams(initialData.streams);
           setAudios(initialData.audio || []);
-          setSubs([]);
           setQIdx(initialData.preferredQualityIdx ?? pickQualityIdx(initialData.streams));
           setAIdx(initialData.defaultAudioIdx ?? pickHindiAudioIdx(initialData.audio || []));
-          setSIdx(-1);
           onReady?.();
           return;
         }
@@ -154,13 +140,11 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         if (s.length === 0) { onFail?.("no-streams"); return; }
         setStreams(s);
         setAudios(a);
-        setSubs([]);
         setQIdx(pickQualityIdx(s));
         // Default audio = Hindi when available (matches site-wide preference).
         // Picked BEFORE the manifest builds so the first HLS playlist already
         // marks Hindi as DEFAULT=YES — no visible track switch on play.
         setAIdx(pickHindiAudioIdx(a));
-        setSIdx(-1);
         onReady?.();
       } catch (e) {
         if (cancelled) return;
