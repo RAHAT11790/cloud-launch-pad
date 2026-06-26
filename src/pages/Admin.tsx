@@ -507,15 +507,16 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
   <Link size={14} className="text-emerald-400" /> EGD Router — Deployed URLs
  </h3>
  <p className="text-[10px] text-zinc-400 mt-1 break-words">
-  Paste only the URLs you deployed yourself. Empty or disabled rows are not used by the app.
+  Paste your self-deployed URL, or hit <b>Default</b> to fall back to the Lovable-hosted copy. Empty or disabled rows are ignored.
  </p>
  </div>
  </div>
 
  <div className="space-y-2">
-  {ROUTER_FUNCTIONS.map(({ slug, label, isNew }) => {
+  {ROUTER_FUNCTIONS.map(({ slug, label, isNew, defaultUrl }) => {
  const res = testResult[slug];
  const isVideoProxy = slug === "video-proxy";
+ const isDefault = (urls[slug] || "").trim() === defaultUrl;
  return (
  <div key={slug} className="rounded-xl border bg-zinc-900/40 p-3 min-w-0 border-zinc-700/50">
  <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
