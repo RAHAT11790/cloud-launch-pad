@@ -402,6 +402,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [activeServerIndex, setActiveServerIndex] = useState(0);
   const [manualServerSelected, setManualServerSelected] = useState(false);
   const manualServerSelectedRef = useRef(false);
+  const preferredServerIndexRef = useRef<number | null>(null);
   const [showServerPanel, setShowServerPanel] = useState(false);
   const premiumServerApplied = useRef(false);
 
@@ -1695,7 +1696,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     setIsBuffering(true);
     setVideoError(false);
 
-    if (manual) manualServerSelectedRef.current = true;
+    if (manual) {
+      manualServerSelectedRef.current = true;
+      preferredServerIndexRef.current = serverIndex;
+    }
     setManualServerSelected((prev) => (manual ? true : prev));
     setActiveServerIndex(serverIndex);
     activeSourceBaseRef.current = newRawSrc;
