@@ -43,7 +43,7 @@ const decodeSubtitleEntities = (value: string) =>
     .replace(/\\u003d/g, "=")
     .replace(/\\u003f/g, "?")
     .replace(/\\u002f/gi, "/")
-    .replace(/\x([0-9a-f]{2})/gi, (_m, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+    .replace(/\\x([0-9a-f]{2})/gi, (_m, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
 
 function safeAtob(value: string): string {
   try { return atob(value); } catch {}
