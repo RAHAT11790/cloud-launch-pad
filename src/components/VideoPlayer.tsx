@@ -3811,7 +3811,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                     <span className="text-[11px] font-semibold">HLS</span>
                   </button>
                 ) : null}
-                {isHlsSrc && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
+                {(isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
                   <div className="relative">
                     <button
                       onPointerDown={(e) => e.stopPropagation()}
@@ -3899,7 +3899,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                         <span className="truncate">{currentQuality}</span>
                       </button>
                     )}
-                    {isHlsSrc && hlsSubtitleOptions.length > 0 && (
+                    {(isHlsSrc || hlsSubtitleOptions.length > 0) && hlsSubtitleOptions.length > 0 && (
                       <button
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => { e.stopPropagation(); setShowCcPanel((p) => !p); setCcTab("subtitle"); setShowAudioPanel(false); setShowQualityPanel(false); setShowSettings(false); setShowServerPanel(false); }}
@@ -3965,7 +3965,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
 
-          {!isEmbedPlayback && showCcPanel && isHlsSrc && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
+          {!isEmbedPlayback && showCcPanel && (isHlsSrc || hlsSubtitleOptions.length > 0) && (hlsAudioOptions.length > 0 || hlsSubtitleOptions.length > 0) && (
             <div
               data-player-panel="true"
               className={`absolute bottom-16 right-3 ${panelBaseClass} w-[230px] max-w-[88vw] max-h-[min(72dvh,360px)] z-[95]`}
