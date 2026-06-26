@@ -36,6 +36,21 @@ const decode = (s: string) =>
     .replace(/<[^>]+>/g, "")
     .trim();
 
+const decodeSubtitleEntities = (value: string) =>
+  decode(value)
+    .replace(/\\\//g, "/")
+    .replace(/\\u0026/g, "&")
+    .replace(/\\u003d/g, "=")
+    .replace(/\\u003f/g, "?")
+    .replace(/\\u002f/gi, "/")
+    .replace(/\x([0-9a-f]{2})/gi, (_m, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+
+function safeAtob(value: string): string {
+  try { return atob(value); } catch {}
+  try { return atob(value.replace(/-/g, "+").replace(/_/g, "/")); } catch {}
+  return "";
+}
+
 const parseHlsAttrs = (line: string): Record<string, string> => {
   const attrs: Record<string, string> = {};
   const body = line.includes(":") ? line.slice(line.indexOf(":") + 1) : line;
