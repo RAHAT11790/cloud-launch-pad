@@ -1732,10 +1732,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer, manualServerSelected]);
 
   const tryNextPlaybackRoute = useCallback((lastKnownTime = 0) => {
-    if (!currentSrc) return false;
+    const failedKey = currentSrc || activeSourceBaseRef.current || sourceBaseRef.current;
+    if (!failedKey) return false;
 
-    console.log('Video failed after retries. URL:', currentSrc);
-    failedSrcsRef.current.add(currentSrc);
+    console.log('Video failed after retries. URL:', failedKey);
+    failedSrcsRef.current.add(failedKey);
 
     // Same quality, alternate route first (admin proxy → built-in proxy, etc.)
     const sameQualityRouteFallback = buildPlaybackCandidates(
@@ -1744,7 +1745,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       proxyUrl || undefined,
       proxyApiKey || undefined,
       preferProxy
-    ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
+    ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && candidateSrc !== failedKey);
 
     if (sameQualityRouteFallback) {
       pendingSeek.current = lastKnownTime || videoRef.current?.currentTime || 0;
@@ -1769,7 +1770,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           proxyUrl || undefined,
           proxyApiKey || undefined,
           preferProxy
-        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc);
+        ).find((candidateSrc) => !failedSrcsRef.current.has(candidateSrc) && candidateSrc !== currentSrc && candidateSrc !== failedKey);
         return route ? { option: q, raw: candidateRaw, src: route } : null;
       })
       .find(Boolean) as { option: QualityOption; raw: string; src: string } | null;
