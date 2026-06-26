@@ -129,7 +129,14 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         const preferred = s.findIndex((x) => x.height === 720);
         const fallback  = s.findIndex((x) => x.height <= 720);
         setQIdx(preferred >= 0 ? preferred : (fallback >= 0 ? fallback : 0));
-        setAIdx(0);
+        // Default audio = Hindi when available (matches site-wide preference).
+        // Picked BEFORE the manifest builds so the first HLS playlist already
+        // marks Hindi as DEFAULT=YES — no visible track switch on play.
+        const hindiIdx = a.findIndex((t) => {
+          const blob = `${t?.language || ""} ${t?.name || ""}`.toLowerCase();
+          return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
+        });
+        setAIdx(hindiIdx >= 0 ? hindiIdx : 0);
         setSIdx(-1);
         onReady?.();
       } catch (e) {
