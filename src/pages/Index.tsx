@@ -312,16 +312,26 @@ const resolveSaltEmbed = (payload: any): { embedUrl: string; allEmbeds: string[]
   return { embedUrl: collected[0] || "", allEmbeds: collected };
 };
 
+const animeSaltDirectStateCache = new Map<string, Promise<Awaited<ReturnType<typeof buildAnimeSaltDirectPlaybackState>> | null>>();
+
 const getAnimeSaltDirectState = async (episodeSlug: string) => {
   if (!AN_API_BASE) return null;
-  try {
-    const response = await fetch(`${AN_API_BASE}/episode?slug=${encodeURIComponent(episodeSlug)}`);
-    if (!response.ok) return null;
-    const payload = await response.json();
-    return await buildAnimeSaltDirectPlaybackState(payload);
-  } catch {
-    return null;
-  }
+  const key = String(episodeSlug || "").trim();
+  if (!key) return null;
+  const existing = animeSaltDirectStateCache.get(key);
+  if (existing) return existing;
+  const request = (async () => {
+    try {
+      const response = await fetch(`${AN_API_BASE}/episode?slug=${encodeURIComponent(key)}`);
+      if (!response.ok) return null;
+      const payload = await response.json();
+      return await buildAnimeSaltDirectPlaybackState(payload);
+    } catch {
+      return null;
+    }
+  })();
+  animeSaltDirectStateCache.set(key, request);
+  return request;
 };
 
 // Helper: get best available src from episode (fallback if default link is empty)
