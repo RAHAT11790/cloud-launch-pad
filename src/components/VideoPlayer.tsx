@@ -3428,8 +3428,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         clearTimeout(singleTapTimerRef.current);
         singleTapTimerRef.current = null;
       }
-      if (relX < 0.33) seek(-10);
-      else if (relX > 0.66) seek(10);
+      if (relX < 0.3) seek(-10);
+      else if (relX > 0.7) seek(10);
       else {
         togglePlay();
         setSkipIndicator({ side: "center", text: playing ? "⏸" : "▶" });
@@ -3510,7 +3510,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if ((!swipeState.type || swipeState.type === "fullscreen") && Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx) * 1.2) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const relX = (swipeState.startX - rect.left) / rect.width;
-      if (relX > 0.25 && relX < 0.75) {
+      if (relX >= 0.3 && relX <= 0.7) {
         e.preventDefault();
         e.stopPropagation();
         const previewY = dy < 0
@@ -3533,7 +3533,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!swipeState.type && Math.abs(dy) > 20) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const relX = (swipeState.startX - rect.left) / rect.width;
-      setSwipeState({ ...swipeState, type: relX > 0.5 ? "volume" : "brightness" });
+      if (relX < 0.3) {
+        setSwipeState({ ...swipeState, type: "brightness" });
+      } else if (relX > 0.7) {
+        setSwipeState({ ...swipeState, type: "volume" });
+      } else {
+        return;
+      }
     }
     if (swipeState.type === "volume") {
       const newBoosted = Math.min(MAX_VOL, Math.max(0, boostedVolume - dy * 0.8));
