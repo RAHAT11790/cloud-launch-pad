@@ -743,31 +743,37 @@ div[style*="z-index: 2147483647"],
   }
 
   @keyframes confettiBurst {
-    0% { transform: translate3d(0,0,0) rotate(0deg) scale(0.4); opacity: 0; }
-    10% { opacity: 1; }
+    0% { transform: translate3d(0,0,0) rotate(0deg) scale(0.3); opacity: 0; }
+    8% { opacity: 1; }
     100% { transform: translate3d(var(--cx, 0px), var(--cy, -80px), 0) rotate(var(--cr, 540deg)) scale(1); opacity: 0; }
-  }
-
-  @keyframes confettiRibbon {
-    0% { transform: translate3d(0,-14vh,0) rotate(0deg); opacity: 0; }
-    12% { opacity: 1; }
-    100% { transform: translate3d(var(--drift, 30px), 112vh, 0) rotate(720deg); opacity: 0; }
   }
 
   @keyframes rgbConicSpin {
     to { transform: rotate(360deg); }
   }
 
-  @keyframes fireEmberFall {
-    0% { transform: translate3d(0,-12vh,0) rotate(0deg) scale(0.6); opacity: 0; }
-    10% { opacity: 1; }
-    50% { transform: translate3d(calc(var(--drift, 30px) * 0.5), 55vh, 0) rotate(180deg) scale(1); opacity: 1; }
-    100% { transform: translate3d(var(--drift, 30px), 112vh, 0) rotate(360deg) scale(0.7); opacity: 0; }
+  /* Petal/spark ejects radially from the spinner center outward */
+  @keyframes petalEject {
+    0%   { transform: translate3d(0,0,0) rotate(0deg) scale(0.2); opacity: 0; }
+    12%  { opacity: 1; }
+    100% { transform: translate3d(var(--ex, 200px), var(--ey, 0px), 0) rotate(var(--er, 720deg)) scale(1); opacity: 0; }
   }
 
-  @keyframes emberFlicker {
-    0%, 100% { filter: drop-shadow(0 0 6px #ff7a1a) drop-shadow(0 0 12px #ff3b00); }
-    50% { filter: drop-shadow(0 0 10px #ffd24a) drop-shadow(0 0 18px #ff5a00); }
+  /* Expanding aura rings emitted from spinner */
+  @keyframes auraRing {
+    0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0.85; }
+    80%  { opacity: 0.18; }
+    100% { transform: translate(-50%, -50%) scale(5); opacity: 0; }
+  }
+
+  /* Light beams rotating out of the spinner */
+  @keyframes beamSpin {
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+
+  @keyframes sparkFlicker {
+    0%, 100% { filter: drop-shadow(0 0 6px currentColor) drop-shadow(0 0 12px currentColor); }
+    50%      { filter: drop-shadow(0 0 12px currentColor) drop-shadow(0 0 22px currentColor); }
   }
 
   @keyframes runAcross {
