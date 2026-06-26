@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
-import type { Episode, Season, SubtitleTrack } from "@/data/animeData";
+import type { Episode, Season } from "@/data/animeData";
 import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
@@ -268,6 +268,7 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
     src: qualityOptions[preferredQualityIdx]?.src || qualityOptions[0]?.src || buildAnProxyUrl(primaryStream.url),
     qualityOptions: qualityOptions.length > 1 ? qualityOptions : undefined,
     audioTracks,
+    subtitleTracks: undefined,
     preferredLanguage: audio[defaultAudioIdx]
       ? (String(audio[defaultAudioIdx]?.name || audio[defaultAudioIdx]?.language || "Hindi").trim() || "Hindi")
       : undefined,
@@ -289,12 +290,10 @@ const getAnNativeDataFromEmbed = async (embedUrl: string): Promise<AnNativeResol
     const data = await response.json();
     const streams = Array.isArray(data?.streams) ? data.streams.filter((entry: any) => String(entry?.url || "").trim()) : [];
     const audio = Array.isArray(data?.audio) ? data.audio.filter((entry: any) => String(entry?.uri || "").trim()) : [];
-    const subtitles = Array.isArray(data?.subtitles) ? data.subtitles.filter((entry: any) => String(entry?.uri || "").trim()) : [];
     if (streams.length === 0) return null;
     return {
       streams,
       audio,
-      subtitles,
       preferredQualityIdx: pickAnPreferredQualityIdx(streams),
       defaultAudioIdx: pickAnDefaultAudioIdx(audio),
     };
