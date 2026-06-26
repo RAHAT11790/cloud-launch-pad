@@ -74,20 +74,20 @@ const entry = (
   secrets: autoDetectSecrets(source, extraSecrets),
 });
 
-// Only functions the admin self-deploys via EGD Manager are listed here.
-// Lovable-managed functions (rs-bot, send-otp-email, process-email-queue)
-// are auto-deployed and NOT shown to the admin.
-void rsBotSource; void sendOtpEmailSource; void processEmailQueueSource;
-
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
-  entry("video-proxy",    "Video Proxy",    "Universal streaming proxy. HTTP servers: protection + playback help. HTTPS servers: protection only.", videoProxySource),
   entry("video-download", "Video Download", "Dedicated, retry-hardened download proxy (recommended for downloads).", videoDownloadSource),
+  entry("video-proxy",    "Video Proxy",    "Universal streaming proxy used by the video player.", videoProxySource),
   entry("live-tv-proxy",  "Live TV Proxy",  "Dedicated HLS proxy for Live TV channels.", liveTvProxySource),
   entry("telegram-post",  "Telegram Post",  "Posts new episodes to your Telegram channel.", telegramPostSource),
+  entry("rs-bot",         "RS Bot (AI)",    "In-app AI chat powered by your GEMINI_API_KEY.", rsBotSource),
+  entry("send-otp-email", "Send OTP Email", "Sends 6-digit OTP via Resend.", sendOtpEmailSource),
+  entry("process-email-queue", "Process Email Queue", "Background queue worker that flushes pending OTP emails.", processEmailQueueSource),
   entry("apk-download",   "APK Download",   "Serves the user-facing APK with proper headers.", apkDownloadSource),
   entry("link-share-bot", "Link Share Bot", "Telegram bot for shareable unlock / access links.", linkShareBotSource),
   entry("shorten-arolinks", "Shorten Arolinks", "Generic shortener proxy used by ad services.", shortenArolinksSource),
-  entry("an-api",         "AN API (AnimeSalt)", "Standalone AnimeSalt scraper — search, anime, episode endpoints.", anApiSource),
+  
+  entry("an-api", "AN API (AnimeSalt)", "Standalone AnimeSalt scraper — search, anime, episode endpoints. No secrets required.", anApiSource),
+
 ];
 
 export const getLibraryEntry = (slug: string) =>

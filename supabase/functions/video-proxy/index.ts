@@ -56,29 +56,27 @@ const rewriteM3U8 = (text: string, baseUrl: string, proxyPrefix: string): string
 // ============================================================
 // Domain allowlist — block embed theft / API scraping
 // ============================================================
-// Hosts come from the ALLOWED_HOSTS secret (comma/space/newline-separated).
-// Each entry can be a plain host ("rsanime03.lovable.app") or a wildcard
-// ("*.lovable.app"). If the secret is empty, every origin is allowed (open mode).
-const ALLOWED_HOSTS_RAW = Deno.env.get("ALLOWED_HOSTS") || "";
-const ALLOWED_HOST_RX: RegExp[] = ALLOWED_HOSTS_RAW
-  .split(/[\s,]+/)
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean)
-  .map((host) => {
-    const escaped = host.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\\\*/g, "[^.]+");
-    return new RegExp("^" + escaped + "(?::\\d+)?$", "i");
-  });
-
+const VIDEO_PROXY_ALLOWED_HOST_RX = [
+  /\.lovable\.app$/i,
+  /\.lovableproject\.com$/i,
+  /^lovable\.app$/i,
+  /^lovableproject\.com$/i,
+  /^rsanime03\.lovable\.app$/i,
+  /^localhost(?::\d+)?$/i,
+  /^127\.0\.0\.1(?::\d+)?$/i,
+];
 const matchesAllowedHost = (urlStr: string | null): boolean => {
   if (!urlStr) return false;
-  if (ALLOWED_HOST_RX.length === 0) return true; // open mode
-  try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
+  try { return VIDEO_PROXY_ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
 };
 const isAllowedRequest = (req: Request): boolean => {
-  if (ALLOWED_HOST_RX.length === 0) return true;
+  // Strict allowlist: require Referer OR Origin to match an approved host.
+  // If BOTH headers are absent (some Android WebViews strip them on media
+  // Range fetches), we fall back to allow so legitimate playback isn't
+  // blocked. If either header is present and BOTH fail, we deny.
   const origin = req.headers.get("origin");
   const referer = req.headers.get("referer");
-  if (!origin && !referer) return true; // some WebViews strip both on Range
+  if (!origin && !referer) return true;
   return matchesAllowedHost(origin) || matchesAllowedHost(referer);
 };
 

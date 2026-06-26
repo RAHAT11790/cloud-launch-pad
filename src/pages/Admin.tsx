@@ -622,8 +622,9 @@ const ROUTER_FUNCTIONS: Array<{ slug: string; label: string }> = EDGE_FUNCTION_L
  (e) => ({ slug: e.slug, label: e.label })
 );
 
-// (No "NEW" badges — router list matches whatever the admin deploys via EGD Manager.)
-
+// Functions whose source was just updated — user must paste the freshly-deployed
+// URL from EGD Manager into these fields. A green "NEW" badge highlights them.
+const NEW_ROUTER_PASTE = new Set<string>(["video-proxy", "live-tv-proxy", "video-download", "an-api", "apk-download", "telegram-post"]);
 
 const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary }: { glassCard: string; inputClass: string; btnPrimary: string; btnSecondary: string }) => {
  const defaultBase = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1";
@@ -648,22 +649,17 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  return () => unsub();
  }, []);
 
-  const save = async (slug: string) => {
-   setSaving(slug);
-   try {
-   const url = (urls[slug] || "").trim();
-   await set(ref(db, `settings/functionOverrides/${slug}`), {
-   enabled: enabled[slug] !== false,
-   customUrl: url,
-   });
-   // video-proxy URL is also the Player Proxy URL used by VideoPlayer.
-   if (slug === "video-proxy") {
-   await set(ref(db, "egdManager/config/playerProxyUrl"), url);
-   }
-   toast.success(`Saved · ${slug}`);
-   } catch (e: any) { toast.error(e?.message || "Save failed"); }
-   finally { setSaving(null); }
-  };
+ const save = async (slug: string) => {
+ setSaving(slug);
+ try {
+ await set(ref(db, `settings/functionOverrides/${slug}`), {
+ enabled: enabled[slug] !== false,
+ customUrl: (urls[slug] || "").trim(),
+ });
+ toast.success(`Saved · ${slug}`);
+ } catch (e: any) { toast.error(e?.message || "Save failed"); }
+ finally { setSaving(null); }
+ };
 
  const fillRecommended = (slug: string) =>
  setUrls((p) => ({ ...p, [slug]: `${defaultBase}/${slug}` }));
@@ -719,17 +715,17 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  {ROUTER_FUNCTIONS.map(({ slug, label }) => {
  const recommended = `${defaultBase}/${slug}`;
  const res = testResult[slug];
- const isVideoProxy = slug === "video-proxy";
+ const isNew = NEW_ROUTER_PASTE.has(slug);
  return (
- <div key={slug} className="rounded-xl border bg-zinc-900/40 p-3 min-w-0 border-zinc-700/50">
+ <div key={slug} className={`rounded-xl border bg-zinc-900/40 p-3 min-w-0 ${isNew ? "border-emerald-400/70 ring-1 ring-emerald-400/40" : "border-zinc-700/50"}`}>
  <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
  <div className="min-w-0 flex items-center gap-2">
  <div className="min-w-0">
  <div className="text-xs font-semibold text-white truncate flex items-center gap-1.5">
  {label}
- {isVideoProxy && (
- <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 tracking-wider">
- PLAYER PROXY
+ {isNew && (
+ <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500 text-black tracking-wider animate-pulse">
+ NEW · paste URL
  </span>
  )}
  </div>

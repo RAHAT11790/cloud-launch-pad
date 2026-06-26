@@ -9,7 +9,12 @@ import { db, ref, onValue, set } from "@/lib/firebase";
 import { EGD_DEPLOYER_CODE } from "@/lib/egdDeployerCode";
 import { EDGE_FUNCTION_LIBRARY } from "@/lib/edgeFunctionCodeLibrary";
 
-// (No "NEW" badges; library is curated to deployable functions only.)
+// Slugs whose source was just updated and need to be re-deployed by the user.
+// A green "NEW" badge highlights them in the deploy grid below.
+// (rs-bot, send-otp-email, process-email-queue are auto-deployed by Lovable — no NEW tag.)
+const NEW_EDGE_DEPLOYS = new Set<string>(["video-proxy", "video-download", "an-api", "apk-download", "telegram-post"]);
+// Slugs that are deployed/managed by Lovable Cloud (admin doesn't deploy them).
+const LOVABLE_MANAGED = new Set<string>(["rs-bot", "send-otp-email", "process-email-queue"]);
 import { supabase } from "@/integrations/supabase/client";
 
 // Secrets that Lovable auto-provisions; the admin never needs to paste a value.
@@ -167,7 +172,11 @@ export default function EgdManager({
   const [savedDeployerUrl, setSavedDeployerUrl] = useState("");
   const [savingUrl, setSavingUrl] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
-  // (Player Proxy URL moved to EGD Router — single source of truth there.)
+  // Player proxy URL — pasted by admin after deploying video-proxy here.
+  // Single source of truth used by VideoPlayer. Stored at
+  // egdManager/config/playerProxyUrl.
+  const [playerProxyUrl, setPlayerProxyUrl] = useState("");
+  const [savingPlayerProxy, setSavingPlayerProxy] = useState(false);
 
   // --- Function editor state ---
   const [list, setList] = useState<FnRow[]>([]);
@@ -234,8 +243,27 @@ export default function EgdManager({
     });
   }, []);
 
-  // ---------- (Player proxy URL is configured in EGD Router) ----------
+  // ---------- Load player proxy URL ----------
+  useEffect(() => {
+    const r = ref(db, "egdManager/config/playerProxyUrl");
+    return onValue(r, (snap) => {
+      const raw = snap.val();
+      const v = typeof raw === "string" ? raw : (raw?.url ? String(raw.url) : "");
+      setPlayerProxyUrl(v);
+    });
+  }, []);
 
+  const savePlayerProxyUrl = async () => {
+    const u = playerProxyUrl.trim();
+    if (u && !/^https?:\/\//.test(u)) { toast.error("Must start with http(s)://"); return; }
+    setSavingPlayerProxy(true);
+    try {
+      await set(ref(db, "egdManager/config/playerProxyUrl"), u);
+      toast.success(u ? "Player Proxy URL saved ✔" : "Player Proxy URL cleared");
+    } catch (e: any) {
+      toast.error("Save failed: " + (e?.message || String(e)));
+    } finally { setSavingPlayerProxy(false); }
+  };
 
 
 
@@ -655,8 +683,33 @@ export default function EgdManager({
         </div>
       )}
 
-      {/* (Player Proxy URL lives in EGD Router → Video Proxy field.) */}
-
+      {/* ===== Player Proxy URL — single source of truth for VideoPlayer ===== */}
+      <div className={glassCard + " p-4 sm:p-5"}>
+        <h3 className="font-bold flex items-center gap-2 text-sm sm:text-base mb-2">
+          <LinkIcon size={16} className="text-cyan-400" /> Player Proxy URL
+        </h3>
+        <p className="text-[11px] text-zinc-400 mb-3 leading-relaxed">
+          Deploy <code className="bg-zinc-800 px-1 rounded">video-proxy</code> via the Code Library below, then paste its function URL here.
+          The video player uses this single URL for every server — HTTP servers get streamed through the proxy, HTTPS servers get domain-lock protection only.
+          Leave empty to play HTTPS servers directly with no protection.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            className={inputClass + " flex-1 min-w-0"}
+            placeholder="https://xxxx.supabase.co/functions/v1/video-proxy"
+            value={playerProxyUrl}
+            onChange={(e) => setPlayerProxyUrl(e.target.value)}
+          />
+          <button
+            onClick={savePlayerProxyUrl}
+            disabled={savingPlayerProxy}
+            className={btnPrimary + " inline-flex items-center justify-center gap-2 shrink-0"}
+          >
+            {savingPlayerProxy ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
+            Save
+          </button>
+        </div>
+      </div>
 
 
       {/* ===== Code Library — one click loads source + secret slots ===== */}
@@ -672,6 +725,8 @@ export default function EgdManager({
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
           {EDGE_FUNCTION_LIBRARY.map((entry) => {
+            const isNew = NEW_EDGE_DEPLOYS.has(entry.slug);
+            const isLovable = LOVABLE_MANAGED.has(entry.slug);
             return (
             <button
               key={entry.slug}
@@ -692,11 +747,13 @@ export default function EgdManager({
                 setErrorLog("");
                 const manualSecrets = entry.secrets.filter((n) => !AUTO_MANAGED_SECRETS.has(n));
                 setSourceHint(
-                  entry.secrets.length === 0
-                    ? `Loaded "${entry.label}" — no secrets required.`
-                    : manualSecrets.length === 0
-                      ? `Loaded "${entry.label}" — all secrets auto-managed. Just hit Deploy.`
-                      : `Loaded "${entry.label}" — fill ${manualSecrets.length} secret(s) below, then Deploy.`,
+                  isLovable
+                    ? `Loaded "${entry.label}" — managed by Lovable Cloud (auto-deployed). View only.`
+                    : entry.secrets.length === 0
+                      ? `Loaded "${entry.label}" — no secrets required.`
+                      : manualSecrets.length === 0
+                        ? `Loaded "${entry.label}" — all secrets auto-managed by Lovable. Just hit Deploy.`
+                        : `Loaded "${entry.label}" — fill ${manualSecrets.length} secret(s) below, then Deploy.${entry.secrets.length - manualSecrets.length > 0 ? ` (${entry.secrets.length - manualSecrets.length} auto-managed)` : ""}`,
                 );
                 toast.success(`Loaded: ${entry.label}`);
                 if (typeof window !== "undefined") {
@@ -707,8 +764,18 @@ export default function EgdManager({
                   }, 50);
                 }
               }}
-              className="relative text-left rounded-xl border border-zinc-700/60 bg-zinc-900/50 hover:bg-amber-500/5 hover:border-amber-400/60 transition p-3 min-w-0 overflow-hidden"
+              className={`relative text-left rounded-xl border bg-zinc-900/50 hover:bg-amber-500/5 transition p-3 min-w-0 overflow-hidden ${isLovable ? "border-sky-400/60 ring-1 ring-sky-400/30" : isNew ? "border-emerald-400/70 ring-1 ring-emerald-400/40" : "border-zinc-700/60 hover:border-amber-400/60"}`}
             >
+              {isLovable && (
+                <span className="absolute top-1.5 right-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded bg-sky-500 text-black tracking-wider">
+                  LOVABLE
+                </span>
+              )}
+              {isNew && !isLovable && (
+                <span className="absolute top-1.5 right-1.5 text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500 text-black tracking-wider animate-pulse">
+                  NEW
+                </span>
+              )}
               <div className="font-semibold text-xs text-white truncate">{entry.label}</div>
               <div className="text-[10px] text-zinc-500 truncate mt-0.5">{entry.slug}</div>
               <div className="text-[10px] text-zinc-400 mt-1 line-clamp-2 break-words">{entry.description}</div>
