@@ -979,6 +979,7 @@ const Index = () => {
     subtitleTracks?: SubtitleTrack[];
     nextEpisodeSrc?: string;
     resumeTime?: number;
+    anNativeData?: AnNativeResolvedData | null;
   } | null>(() => {
     try {
       const saved = sessionStorage.getItem("rs_playerState");
@@ -2038,6 +2039,7 @@ const Index = () => {
             title: anime.title,
             subtitle: subtitle || `Episode`,
             anime,
+            selectedLanguage: directState?.preferredLanguage || "Hindi",
             seasonIdx: resolvedSeasonIdx,
             epIdx: resolvedEpIdx,
             qualityOptions: directState?.qualityOptions || sourceOptions,
@@ -2078,6 +2080,7 @@ const Index = () => {
             title: anime.title,
             subtitle: "Movie",
             anime,
+            selectedLanguage: directState?.preferredLanguage || "Hindi",
             qualityOptions: directState?.qualityOptions || sourceOptions,
             audioTracks: directState?.audioTracks,
             subtitleTracks: directState?.subtitleTracks,
@@ -2454,6 +2457,7 @@ const Index = () => {
                   subtitle: `${cSeason.name} - Episode ${cEp.episodeNumber || cEp.number || eIdx + 1}`,
                   anime: fullAnime, seasonIdx: sIdx, epIdx: eIdx,
                   allEmbeds: resolved.allEmbeds,
+                  anNativeData: directState?.anNativeData || await getAnNativeDataFromEmbed(resolved.embedUrl),
                   currentEmbedIdx: 0, cropMode: 'contain', cropW: 0, cropH: 0, loading: false,
                   resumeTime: item.currentTime || 0,
                 });
@@ -2560,6 +2564,7 @@ const Index = () => {
                   title: anime.title, subtitle: `${season.name} - Episode ${ep.number}`,
                   anime: fullAnime, seasonIdx: sIdx, epIdx: eIdx,
                   allEmbeds: resolved.allEmbeds,
+                  anNativeData: directState?.anNativeData || await getAnNativeDataFromEmbed(resolved.embedUrl),
                   currentEmbedIdx: 0, cropMode: 'contain', cropW: 0, cropH: 0, loading: false,
                 });
                 return;
@@ -2850,6 +2855,7 @@ const Index = () => {
       audioTracks: nextAudioTracks,
       subtitleTracks: nextSubtitleTracks,
       qualityOptions: qOpts.length > 0 ? qOpts : undefined,
+      selectedLanguage: (directState as any)?.preferredLanguage || (nextAudioTracks?.find((t: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`))?.label) || (playerState as any)?.selectedLanguage,
       nextEpisodeSrc: undefined,
     };
     playerStateRef.current = nextState;
@@ -3283,6 +3289,7 @@ const Index = () => {
                     epIdx: nextIdx,
                      resumeTime: 0,
                      audioTracks: nextAudioTracks,
+                      selectedLanguage: (directState as any)?.preferredLanguage || (nextAudioTracks?.find((t: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`))?.label) || (playerState as any)?.selectedLanguage,
                     qualityOptions: qOpts.length > 0 ? qOpts : undefined,
                     nextEpisodeSrc: undefined,
                   };
