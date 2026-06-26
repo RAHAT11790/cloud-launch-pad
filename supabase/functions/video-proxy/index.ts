@@ -54,54 +54,12 @@ const rewriteM3U8 = (text: string, baseUrl: string, proxyPrefix: string): string
 };
 
 // ============================================================
-// Domain allowlist — block embed theft / API scraping
+// Protection intentionally DISABLED — proxy must just run fast.
+// Its only job: pass through any video URL (HTTP especially) to
+// the browser as quickly as possible. No host allow-list, no
+// origin/referer check. Anti-hotlink belongs at the player layer.
 // ============================================================
-// Hosts come from the ALLOWED_HOSTS secret (comma/space/newline-separated).
-// Each entry can be a plain host ("rsanime03.lovable.app") or a wildcard
-// ("*.lovable.app"). Lovable preview hosts are always allowed for peer-review
-// testing; production domains should still be added to ALLOWED_HOSTS.
-const ALLOWED_HOSTS_RAW = Deno.env.get("ALLOWED_HOSTS") || "";
-const escapeRegex = (value: string) => value.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-const normalizeAllowedHost = (value: string) => {
-  const raw = value.trim().toLowerCase();
-  if (!raw) return "";
-  try {
-    if (/^https?:\/\//i.test(raw)) return new URL(raw).host.toLowerCase();
-  } catch {}
-  return raw.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
-};
-const DEFAULT_ALLOWED_HOSTS = [
-  "localhost",
-  "127.0.0.1",
-  "*.lovable.app",
-  "lovable.app",
-  "*.lovableproject.com",
-  "lovableproject.com",
-];
-const ALLOWED_HOST_RX: RegExp[] = Array.from(new Set([
-  ...DEFAULT_ALLOWED_HOSTS,
-  ...ALLOWED_HOSTS_RAW.split(/[\s,]+/),
-]))
-  .map(normalizeAllowedHost)
-  .filter(Boolean)
-  .map((host) => {
-    // Correct wildcard support: "*.lovable.app" must compile and match
-    // preview--rsanime03.lovable.app. The previous replace expected an
-    // already-escaped "\\*", leaving a raw "*" and crashing the function.
-    const wildcarded = host.split("*").map(escapeRegex).join("[^.]+")
-    return new RegExp("^" + wildcarded + "(?::\\d+)?$", "i");
-  });
-
-const matchesAllowedHost = (urlStr: string | null): boolean => {
-  if (!urlStr) return false;
-  try { return ALLOWED_HOST_RX.some((rx) => rx.test(new URL(urlStr).host)); } catch { return false; }
-};
-const isAllowedRequest = (req: Request): boolean => {
-  const origin = req.headers.get("origin");
-  const referer = req.headers.get("referer");
-  if (!origin && !referer) return true; // some WebViews strip both on Range
-  return matchesAllowedHost(origin) || matchesAllowedHost(referer);
-};
+const isAllowedRequest = (_req: Request): boolean => true;
 
 Deno.serve(async (req) => {
   // CORS preflight — answer instantly
