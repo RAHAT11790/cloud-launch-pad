@@ -4355,6 +4355,17 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                   <Loader2 className="w-5 h-5 animate-spin text-primary" />
                   <span className="text-sm text-muted-foreground">Preparing links...</span>
                 </div>
+              ) : adGateError ? (
+                <div className="space-y-3 rounded-xl border border-red-500/25 bg-red-500/10 p-3">
+                  <p className="text-sm text-red-200">{adGateError}</p>
+                  <button
+                    onClick={() => loadAdGateLinks()}
+                    className="w-full py-2.5 rounded-xl bg-red-500 text-white font-semibold flex items-center justify-center gap-2 transition-all hover:scale-105 text-sm"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Retry ad link
+                  </button>
+                </div>
               ) : (
                 <div className="space-y-2">
                   {adLinks.map((link, i) => (
