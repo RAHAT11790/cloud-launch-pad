@@ -62,6 +62,10 @@ export interface AnimeItem {
   createdAt?: number;
   updatedAt?: number;
   source?: "firebase" | "animesalt" | "moviebox";
+  sourceName?: string;
+  anSlug?: string;
+  animeSaltSlug?: string;
+  displayAs?: "an" | "rs" | string;
   slug?: string;
   dubType?: "official" | "fandub";
   baseLanguage?: string;

@@ -511,7 +511,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       </div>
 
       {loading ? (
-        <div className="text-center text-xs text-zinc-400 py-8">Loading {label}…</div>
+        <div className="text-center text-xs text-zinc-400 py-8">{`Loading ${label}…`}</div>
       ) : filteredItems.length === 0 ? (
         <div className="text-center text-xs text-zinc-400 py-8">No selected items found here. Add matching AN content from AnimeSalt Manager first.</div>
       ) : (

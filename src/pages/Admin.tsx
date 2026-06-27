@@ -1989,7 +1989,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // Form states
  const [categoryInput, setCategoryInput] = useState("");
  const [seriesTab, setSeriesTab] = useState<"ws-list" | "ws-add" | "ws-manual" | "ws-weekly" | "ws-an">("ws-list");
- const [moviesTab, setMoviesTab] = useState<"mv-list" | "mv-add" | "mv-manual">("mv-list");
+ const [moviesTab, setMoviesTab] = useState<"mv-list" | "mv-add" | "mv-manual" | "mv-an">("mv-list");
  const [fetchType, setFetchType] = useState<"movie" | "tv">("movie");
  const [quickTmdbId, setQuickTmdbId] = useState("");
 
