@@ -339,17 +339,45 @@ const resolveSaltEmbed = (payload: any): { embedUrl: string; allEmbeds: string[]
 const animeSaltDirectStateCache = new Map<string, Promise<Awaited<ReturnType<typeof buildAnimeSaltDirectPlaybackState>> | null>>();
 
 const getAnimeSaltDirectState = async (episodeSlug: string) => {
-  const base = await ensureAnApiBaseUrl();
-  if (!base) return null;
   const key = String(episodeSlug || "").trim();
   if (!key) return null;
   const existing = animeSaltDirectStateCache.get(key);
   if (existing) return existing;
+
+  // Derive the series slug from the episode slug (e.g. "naruto-1x5" → "naruto").
+  const seriesSlug = key.replace(/-\d+x\d+$/i, "").replace(/-\d+$/i, "");
+
   const request = (async () => {
+    // 1) Try Firebase prefetch cache first — instant, no network round-trip to AN.
+    try {
+      const snap = await get(ref(db, `anSeries/${seriesSlug}/episodes/${key}`));
+      const cached = snap.val();
+      if (cached && !cached.broken && (cached.directUrl || (Array.isArray(cached.links) && cached.links.length))) {
+        const built = await buildAnimeSaltDirectPlaybackState(cached);
+        if (built?.src) return built;
+      }
+    } catch {}
+
+    // 2) Fall back to the live AN API and write the result back to Firebase.
+    const base = await ensureAnApiBaseUrl();
+    if (!base) return null;
     try {
       const response = await fetch(`${base}/episode?slug=${encodeURIComponent(key)}`);
       if (!response.ok) return null;
       const payload = await response.json();
+      // Fire-and-forget persist so the next visit is instant.
+      try {
+        set(ref(db, `anSeries/${seriesSlug}/episodes/${key}`), {
+          slug: key,
+          directUrl: payload?.directUrl || "",
+          links: Array.isArray(payload?.links) ? payload.links : [],
+          sources: Array.isArray(payload?.sources) ? payload.sources : [],
+          defaultAudioIdx: payload?.defaultAudioIdx ?? 0,
+          preferredAudio: payload?.preferredAudio || "",
+          broken: false,
+          updatedAt: Date.now(),
+        }).catch(() => {});
+      } catch {}
       return await buildAnimeSaltDirectPlaybackState(payload);
     } catch {
       return null;
@@ -357,9 +385,13 @@ const getAnimeSaltDirectState = async (episodeSlug: string) => {
   })();
   animeSaltDirectStateCache.set(key, request);
   request.then((value) => {
-    // Do not cache a failed/empty extraction forever. AN sources are scraped and
-    // can fail transiently; the next click should retry the fixed API endpoint.
-    if (!value?.src) animeSaltDirectStateCache.delete(key);
+    if (!value?.src) {
+      animeSaltDirectStateCache.delete(key);
+      // Mark broken in Firebase so the admin "Repair Broken" button picks it up.
+      try {
+        set(ref(db, `anSeries/${seriesSlug}/episodes/${key}/broken`), true).catch(() => {});
+      } catch {}
+    }
   }).catch(() => animeSaltDirectStateCache.delete(key));
   return request;
 };
