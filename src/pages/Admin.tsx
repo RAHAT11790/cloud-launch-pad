@@ -5103,7 +5103,7 @@ ${tgBulkFooter}
   </div>
 
   {seriesTab === "ws-an" && (
-  <AnSeriesManager glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} inputClass={inputClass} />
+  <AnSeriesManager glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} inputClass={inputClass} onEditSeries={editSeries} />
   )}
 
  {seriesTab === "ws-list" && (

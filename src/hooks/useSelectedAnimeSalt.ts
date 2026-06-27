@@ -9,6 +9,13 @@ export function useSelectedAnimeSalt() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // AN entries are now materialized into the normal RS `webseries` collection
+    // by Dashboard → Series → AN Series. Do not emit separate API-only AN cards
+    // to the user panel; otherwise duplicates and slow API playback return.
+    setItems([]);
+    setLoading(false);
+    return;
+
     // Watch BOTH animesaltSelected (admin curated catalog) AND anSeries (fetched Firebase data).
     // A card is only emitted to the user panel when BOTH exist — i.e. admin has run "Fetch"
     // via the new AN Series tab. This blocks unfetched API-only items so they don't leak.
