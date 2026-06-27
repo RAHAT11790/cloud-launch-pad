@@ -3329,7 +3329,8 @@ const Index = () => {
                     else if (m < 1440) agoLabel = `${Math.floor(m / 60)}h`;
                     else agoLabel = `${Math.floor(m / 1440)}d`;
                   }
-                  const isAn = String(item.id || "").startsWith("as_");
+                  const idStr = String(item.id || "");
+                  const isAn = idStr.startsWith("as_") || idStr.startsWith("an_") || item.source === "animesalt" || item.sourceName === "AnimeSalt" || !!item.anSlug || !!item.animeSaltSlug;
                   return (
                     <div key={item.id} onClick={() => handleContinueWatching(item)}
                       className="flex-shrink-0 w-[130px] cursor-pointer">
