@@ -65,12 +65,8 @@ const normalizeAnApiBaseUrl = (value: string): string => {
 
 const getAnApiBase = async () => normalizeAnApiBaseUrl(await getEdgeFunctionUrl("an-api"));
 
-// Direct HTTPS for the VIDEO m3u8 (faster, no proxy hop). The user explicitly
-// asked us to keep video direct. AUDIO sub-playlists from as-cdn*.top however
-// frequently fail to play because the audio segments require a Referer/Origin
-// the browser cannot send cross-origin, which results in silent playback even
-// when video works. Routing ONLY the alternate-audio URI through /an-api/hls
-// fixes audio while keeping video direct.
+// Store direct HTTPS HLS URLs in Firebase. Runtime playback must behave like RS:
+// player reads the already-saved Firebase URLs and never calls the AN API.
 const reliableHls = (_base: string, url?: string | null) => {
   const raw = String(url || "").trim();
   if (!raw) return "";
@@ -82,12 +78,7 @@ const reliableHls = (_base: string, url?: string | null) => {
 };
 
 const proxiedAudio = (base: string, url?: string | null) => {
-  const raw = reliableHls(base, url);
-  if (!raw || !base) return raw;
-  // Already proxied? leave it.
-  if (/\/an-api\/hls\?url=/i.test(raw)) return raw;
-  const cleanBase = base.replace(/\/+$/, "");
-  return `${cleanBase}/hls?url=${encodeURIComponent(raw)}`;
+  return reliableHls(base, url);
 };
 
 const encodeMaster = (content: string) => `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(content)))}`;
