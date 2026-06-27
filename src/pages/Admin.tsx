@@ -6304,10 +6304,7 @@ ${tgBulkFooter}
  ))}
  </div>
  </div>
- ); })()}
- ))}
- </div>
- </div>
+  ); })()}
  <div className="mb-4">
  <label className="block text-xs text-[#D1C4E9] mb-2 font-medium">Category</label>
  <select value={movieForm.category || ""} onChange={e => setMovieForm({ ...movieForm, category: e.target.value })} className={selectClass}>
