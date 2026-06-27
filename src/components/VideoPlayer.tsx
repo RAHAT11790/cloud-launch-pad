@@ -107,7 +107,7 @@ const isHlsLikeUrl = (url: string): boolean => {
 
 const isRawAnimeSaltHlsUrl = (url: string): boolean => {
   const value = String(url || "").trim().toLowerCase();
-  return /^https?:\/\//.test(value) && /(^|\.)as-cdn\d*\.top\//i.test(value) && value.includes("/hls/");
+  return /^https?:\/\//.test(value) && /^https?:\/\/([^/]+\.)?as-cdn\d*\.top\//i.test(value) && value.includes("/hls/");
 };
 
 const isAnApiHlsProxyUrl = (url: string): boolean => /\/an-api\/hls\?/i.test(String(url || ""));
@@ -812,7 +812,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
     const wrapAnRelay = (u: string) => {
       const unwrapped = unwrapAnRelay(u);
-      if (!isRawAnimeSaltHlsUrl(unwrapped) && !/(^|\.)as-cdn\d*\.top\//i.test(unwrapped)) return unwrapped;
+      if (!isRawAnimeSaltHlsUrl(unwrapped) && !/^https?:\/\/([^/]+\.)?as-cdn\d*\.top\//i.test(unwrapped)) return unwrapped;
       const base = normalizeAnApiBaseUrl(anApiBase || DEFAULT_AN_API_URL);
       if (!base) return unwrapped;
       return `${base}/hls?url=${encodeURIComponent(unwrapped)}`;
