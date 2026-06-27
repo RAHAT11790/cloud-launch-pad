@@ -14,7 +14,8 @@ const memCache = new Map<string, { ts: number; data: any }>();
 
 const sanitizeKey = (s: string) => String(s || '').replace(/[.#$/\[\]]/g, '_').slice(0, 200);
 
-async function readAsCache(kind: 'series' | 'movie' | 'episode', slug: string, ttl: number): Promise<any | null> {
+async function readAsCache(kind: 'series' | 'movie' | 'episode', slug: string, ttl: number, forceRefresh = false): Promise<any | null> {
+  if (forceRefresh) return null;
   const key = `${kind}:${slug}`;
   const mem = memCache.get(key);
   const now = Date.now();
@@ -40,6 +41,12 @@ async function readAsCache(kind: 'series' | 'movie' | 'episode', slug: string, t
     }
   } catch {}
   return null;
+}
+
+function clearAsCache(kind: 'series' | 'movie' | 'episode', slug: string) {
+  const key = `${kind}:${slug}`;
+  memCache.delete(key);
+  try { localStorage.removeItem(`rs_an_cache:${sanitizeKey(key)}`); } catch {}
 }
 
 function writeAsCache(kind: 'series' | 'movie' | 'episode', slug: string, data: any) {
@@ -417,14 +424,15 @@ const parsePlaybackPage = (html: string) => {
 };
 
 /** Try direct API call first, supporting both nested and top-level response formats */
-const tryDirectApi = async (proxyUrl: string, body: any): Promise<any | null> => {
+const tryDirectApi = async (proxyUrl: string, body: any, forceRefresh = false): Promise<any | null> => {
   try {
     const base = normalizeAnApiBaseUrl(proxyUrl);
     let endpoint = '';
-    if (body.action === 'search') endpoint = `${base}/search?q=${encodeURIComponent(body.q || body.query || '')}`;
-    else if (body.action === 'series') endpoint = `${base}/anime?slug=${encodeURIComponent(body.slug || '')}&type=series`;
-    else if (body.action === 'movie') endpoint = `${base}/episode?slug=${encodeURIComponent(body.slug || '')}&type=movies`;
-    else if (body.action === 'episode') endpoint = `${base}/episode?slug=${encodeURIComponent(body.slug || '')}`;
+    const refreshParam = forceRefresh ? `&force=1&_=${Date.now()}` : '';
+    if (body.action === 'search') endpoint = `${base}/search?q=${encodeURIComponent(body.q || body.query || '')}${refreshParam}`;
+    else if (body.action === 'series') endpoint = `${base}/anime?slug=${encodeURIComponent(body.slug || '')}&type=series${refreshParam}`;
+    else if (body.action === 'movie') endpoint = `${base}/episode?slug=${encodeURIComponent(body.slug || '')}&type=movies${refreshParam}`;
+    else if (body.action === 'episode') endpoint = `${base}/episode?slug=${encodeURIComponent(body.slug || '')}${refreshParam}`;
     else return null;
     const res = await fetchWithTimeout(endpoint);
     if (!res.ok) return null;
@@ -514,12 +522,13 @@ export const animeSaltApi = {
     return { success: true, items: [...sParsed, ...mParsed] };
   },
 
-  async getSeries(slug: string) {
-    const cached = await readAsCache('series', slug, CACHE_TTL_SERIES_MS);
+  async getSeries(slug: string, forceRefresh = false) {
+    if (forceRefresh) clearAsCache('series', slug);
+    const cached = await readAsCache('series', slug, CACHE_TTL_SERIES_MS, forceRefresh);
     if (cached) return { success: true, data: cached, cached: true };
 
     const proxyUrl = await getAnimeSaltProxyUrl();
-    const directResult = await tryDirectApi(proxyUrl, { action: 'series', slug });
+    const directResult = await tryDirectApi(proxyUrl, { action: 'series', slug }, forceRefresh);
     if (directResult) {
       const normalized = normalizeSeriesPayload(directResult);
       if (normalized.seasons.length > 0) {
@@ -534,8 +543,9 @@ export const animeSaltApi = {
     return { success: true, data };
   },
 
-  async getMovie(slug: string) {
-    const cached = await readAsCache('movie', slug, CACHE_TTL_PLAYBACK_MS);
+  async getMovie(slug: string, forceRefresh = false) {
+    if (forceRefresh) clearAsCache('movie', slug);
+    const cached = await readAsCache('movie', slug, CACHE_TTL_PLAYBACK_MS, forceRefresh);
     if (cached) {
       const normalizedCached = normalizePlaybackPayload(cached);
       if (normalizedCached.embedUrl || normalizedCached.links?.length || normalizedCached.allEmbeds?.length) {
@@ -544,7 +554,7 @@ export const animeSaltApi = {
     }
 
     const proxyUrl = await getAnimeSaltProxyUrl();
-    const directResult = await tryDirectApi(proxyUrl, { action: 'movie', slug });
+    const directResult = await tryDirectApi(proxyUrl, { action: 'movie', slug }, forceRefresh);
     if (directResult) {
       const normalized = normalizePlaybackPayload(directResult);
       if (normalized.embedUrl || normalized.links?.length) {
@@ -559,8 +569,9 @@ export const animeSaltApi = {
     return { success: true, data };
   },
 
-  async getEpisode(slug: string) {
-    const cached = await readAsCache('episode', slug, CACHE_TTL_PLAYBACK_MS);
+  async getEpisode(slug: string, forceRefresh = false) {
+    if (forceRefresh) clearAsCache('episode', slug);
+    const cached = await readAsCache('episode', slug, CACHE_TTL_PLAYBACK_MS, forceRefresh);
     if (cached) {
       const normalizedCached = normalizePlaybackPayload(cached);
       if (normalizedCached.embedUrl || normalizedCached.links?.length || normalizedCached.allEmbeds?.length) {
@@ -569,7 +580,7 @@ export const animeSaltApi = {
     }
 
     const proxyUrl = await getAnimeSaltProxyUrl();
-    const directResult = await tryDirectApi(proxyUrl, { action: 'episode', slug });
+    const directResult = await tryDirectApi(proxyUrl, { action: 'episode', slug }, forceRefresh);
     if (directResult) {
       const normalized = normalizePlaybackPayload(directResult);
       if (normalized.embedUrl || normalized.links?.length || normalized.allEmbeds?.length) {
