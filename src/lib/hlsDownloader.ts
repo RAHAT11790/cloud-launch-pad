@@ -105,7 +105,11 @@ const fetchLength = async (url: string, signal?: AbortSignal): Promise<number> =
       const rangeMatch = /\/(\d+)\s*$/.exec(contentRange);
       if (rangeMatch && Number(rangeMatch[1]) > 0) return Number(rangeMatch[1]);
       const len = Number(response.headers.get("content-length") || 0);
-      if (len > 0 && (init.method === "HEAD" || response.status === 206)) return len;
+      if (len > 0) return len;
+      if (init.method === "GET" && response.ok) {
+        const buf = await response.arrayBuffer();
+        if (buf.byteLength > 0) return buf.byteLength;
+      }
       try { await response.body?.cancel(); } catch {}
     } catch {}
   }
