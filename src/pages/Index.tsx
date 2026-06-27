@@ -24,6 +24,10 @@ const isInvalidPlaybackUrl = (url?: string | null) => {
 
 const isDirectMediaPlaybackUrl = (url?: string | null) => {
   const normalized = String(url || "").trim().toLowerCase();
+  // AnimeSalt native playback builds a synthetic HLS master as a data: URL.
+  // This is still direct media for hls.js; treating it as non-media forces the
+  // broken iframe path and makes AN appear fully blocked.
+  if (normalized.startsWith("data:application/vnd.apple.mpegurl")) return true;
   return /\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(normalized);
 };
 
