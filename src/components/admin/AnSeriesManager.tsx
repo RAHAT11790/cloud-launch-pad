@@ -196,10 +196,15 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   if (audio.length) {
     episode.audioTracks = audio.map((track, index) => {
       const label = String(track.name || track.language || `Audio ${index + 1}`).trim();
-      const mapped: NonNullable<RsEpisode["audioTracks"]>[number] = {
+      const rawAudioUrl = String(track.uri || "").trim();
+      const proxiedAudioUrl = proxiedAudio(base, rawAudioUrl);
+      const mapped: NonNullable<RsEpisode["audioTracks"]>[number] & { audioUrl?: string; rawAudioUrl?: string; isDefault?: boolean } = {
         language: String(track.language || label).trim(),
         label,
         link: makeUrl(preferredStream, index),
+        audioUrl: proxiedAudioUrl,
+        rawAudioUrl,
+        isDefault: index === defaultAudioIdx,
       };
       streams.forEach((stream) => {
         const field = qualityField(stream.label, stream.height);
