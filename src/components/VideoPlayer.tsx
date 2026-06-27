@@ -1652,6 +1652,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const applyServerDomain = useCallback((rawUrl: string, serverIndex: number) => {
     if (isBypassSource(rawUrl)) return rawUrl;
+    // AN / HLS playback MUST run on its own origin. Swapping the host with the
+    // admin RS server domain (e.g. bot-hosting.net) makes the player fetch the
+    // m3u8 from a server that doesn't host it, so playback fails and the UI
+    // shows the RS server name on an AN video. HLS links go straight to <video>.
+    if (isHlsLikeUrl(rawUrl)) return rawUrl;
     const server = effectiveVideoServers[serverIndex];
     if (!server?.domain) return rawUrl;
     const domainTrim = server.domain.trim().replace(/\/$/, "");
