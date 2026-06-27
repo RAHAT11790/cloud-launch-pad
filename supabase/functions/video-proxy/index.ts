@@ -18,8 +18,29 @@ const cors: Record<string, string> = {
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
+const MEDIA_CHUNK_BYTES = 4 * 1024 * 1024;
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
+const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
+
+function capLargeMediaRange(range: string | null, upstreamUrl: URL) {
+  if (!range || !isDirectMp4Like(upstreamUrl)) return range;
+  const match = range.match(/^bytes=(\d+)-(\d*)$/i);
+  if (!match) return range;
+  const start = Number(match[1]);
+  const requestedEnd = match[2] ? Number(match[2]) : Number.NaN;
+  if (!Number.isFinite(start) || start < 0) return range;
+
+  const cappedEnd = start + MEDIA_CHUNK_BYTES - 1;
+  // Chrome often asks an HTTP proxy for `bytes=0-<whole file>`. Passing that
+  // through makes Supabase/Cloudflare stream the whole MP4 before the player has
+  // metadata, which looks like a block/stall. Return small byte windows instead;
+  // the browser already knows how to request the next/tail ranges for seeking.
+  if (!Number.isFinite(requestedEnd) || requestedEnd - start + 1 > MEDIA_CHUNK_BYTES) {
+    return `bytes=${start}-${cappedEnd}`;
+  }
+  return range;
+}
 
 function proxyUrl(reqUrl: URL, target: string) {
   const base = `${reqUrl.protocol}//${reqUrl.host}${reqUrl.pathname}`;
@@ -69,7 +90,7 @@ Deno.serve(async (req) => {
   };
   for (const key of ["range", "if-range", "if-none-match", "if-modified-since", "cache-control"]) {
     const value = req.headers.get(key);
-    if (value) baseHeaders[key] = value;
+    if (value) baseHeaders[key] = key === "range" ? capLargeMediaRange(value, upstreamUrl) || value : value;
   }
 
   const ac = new AbortController();
@@ -103,6 +124,9 @@ Deno.serve(async (req) => {
   for (const k of PASS) { const v = up.headers.get(k); if (v) out.set(k, v); }
   if (!out.has("accept-ranges")) out.set("accept-ranges", "bytes");
   out.set("content-disposition", "inline");
+  out.set("Cross-Origin-Resource-Policy", "cross-origin");
+  out.set("Timing-Allow-Origin", "*");
+  if (baseHeaders.range && baseHeaders.range !== req.headers.get("range")) out.set("x-rs-proxy-range", baseHeaders.range);
 
   if (req.method !== "HEAD" && up.ok && isM3u8(upstreamUrl.toString(), up.headers.get("content-type"))) {
     const body = rewritePlaylist(await up.text(), upstreamUrl.toString(), reqUrl);
