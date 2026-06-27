@@ -5515,6 +5515,31 @@ ${tgBulkFooter}
  </button>
  </div>
 
+ {isAnSeries ? (
+   // AN entries: ONE video-quality block. AN video URLs are language-agnostic;
+   // each language only differs in its audio rendition (handled below).
+   // Saved against baseLanguage so the existing loader keeps reading them.
+   <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 px-2.5 py-2">
+   <p className="text-[10px] font-semibold text-indigo-200">Video qualities</p>
+   <p className="mt-0.5 text-[9px] text-indigo-100/60">AN video URLs are shared across every language — only audio differs.</p>
+   <div className="mt-2 space-y-2.5">
+     <div>
+       <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Default (1080p)</span>
+       <textarea value={ep.link ?? ""} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, "link", e.target.value, baseLanguage)}
+         className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder="Default video link (fallback when no quality picked)" rows={2} />
+     </div>
+     {(["link480", "link720", "link1080", "link4k"] as const).map(q => (
+       <div key={`an-video-${q}`}>
+         <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">
+           {q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"}
+         </span>
+         <textarea value={(ep as any)[q] || ""} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, q, e.target.value, baseLanguage)}
+           className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder={`${q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"} video link${q === "link4k" ? " (optional)" : ""}`} rows={2} />
+       </div>
+     ))}
+   </div>
+   </div>
+ ) : (
  <div className="rounded-lg border border-cyan-500/15 bg-cyan-500/5 px-2.5 py-2">
  <p className="text-[10px] font-semibold text-cyan-300">Language: {selectedAdminLanguage}</p>
  <p className="mt-0.5 text-[9px] text-cyan-100/60">
@@ -5541,6 +5566,7 @@ ${tgBulkFooter}
  ))}
  </div>
  </div>
+ )}
 
   {isAnSeries && (
   <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
