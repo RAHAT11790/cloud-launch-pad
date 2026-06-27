@@ -386,6 +386,8 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         visibility: existing?.data?.visibility || "public",
         type: "webseries",
         sourceName: "AnimeSalt",
+        // Default label on the public card. Admin can flip to "rs" later.
+        displayAs: existing?.data?.displayAs || "an",
         updatedAt: savedAt,
         createdAt: existing?.data?.createdAt || item.addedAt || savedAt,
       };
