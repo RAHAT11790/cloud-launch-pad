@@ -1133,6 +1133,30 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!urls.length) return;
     let cancelled = false;
     const probe = async (u: string): Promise<[string, number] | null> => {
+      if (isHlsLikeUrl(u)) {
+        try {
+          const manifestUrl = buildReliableHlsSource(u);
+          const r = await fetch(manifestUrl);
+          if (!r.ok) return null;
+          const text = await r.text();
+          const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+          const segments = lines.filter((line) => !line.startsWith("#"));
+          if (!segments.length) return null;
+          const sample = segments.slice(0, Math.min(8, segments.length));
+          let sampledBytes = 0;
+          let sampledCount = 0;
+          await Promise.all(sample.map(async (seg) => {
+            try {
+              const segUrl = new URL(seg, manifestUrl).toString();
+              const head = await fetch(segUrl, { method: "HEAD" });
+              const len = Number(head.headers.get("content-length") || 0);
+              if (len > 0) { sampledBytes += len; sampledCount += 1; }
+            } catch {}
+          }));
+          if (sampledBytes > 0 && sampledCount > 0) return [u, Math.round((sampledBytes / sampledCount) * segments.length)];
+        } catch {}
+        return null;
+      }
       const proxied = buildVideoDownloadUrl(u, "probe.mp4");
       if (!proxied) return null;
       try {
@@ -1170,7 +1194,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }
     })();
     return () => { cancelled = true; };
-  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, downloadSizeCache]);
+  }, [showDownloadQualityPicker, selectedDownloadQuality, downloadEpisodes, downloadSizeCache, buildReliableHlsSource]);
 
 
   useEffect(() => {

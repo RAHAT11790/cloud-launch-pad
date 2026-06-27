@@ -1,4 +1,5 @@
 import { triggerBackgroundVideoDownload } from "./videoDownload";
+import { isHlsUrl } from "./hlsDownloader";
 
 export type DownloadStatus = "queued" | "downloading" | "paused" | "complete" | "error" | "cancelled";
 
@@ -186,7 +187,7 @@ class DownloadManager {
 
     // HLS (.m3u8) downloads use a real in-browser segment fetcher so the
     // user gets a single concatenated .ts file (RS-style naming preserved).
-    if (item.url && /\.m3u8(?:[?#]|$)/i.test(item.url)) {
+    if (item.url && isHlsUrl(item.url)) {
       const fileName = (item.fileName || buildFileName(item.title, item.subtitle, item.quality))
         .replace(/\.(mp4|mkv|webm|m4v|mov)$/i, "") + ".ts";
       import("./hlsDownloader").then(async ({ downloadHls, saveBlobAs }) => {

@@ -40,7 +40,10 @@ const parsePlaylist = (text: string, baseUrl: string): ParsedPlaylist => {
   return { isMaster, variants, segments };
 };
 
-export const isHlsUrl = (url: string) => /\.m3u8(?:[?#]|$)/i.test(String(url || ""));
+export const isHlsUrl = (url: string) => {
+  const value = String(url || "").toLowerCase();
+  return /\.m3u8(?:[?#]|$)/i.test(value) || value.includes("/hls/") || /\/an-api\/hls\?/i.test(value);
+};
 
 export async function downloadHls(
   playlistUrl: string,
