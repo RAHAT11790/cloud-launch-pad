@@ -273,10 +273,19 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
   const skippedCount = enrichedItems.filter((item) => !item.saved && item.rsConflict).length;
   const pendingCount = Math.max(0, enrichedItems.length - addedCount - skippedCount);
 
-  const fetchAndSaveSeries = async (item: SelectedAnItem) => {
+  const fetchAndSaveSeries = async (item: SelectedAnItem, opts: { silentSkip?: boolean; force?: boolean } = {}) => {
     if (!item.slug) return;
+    // Skip if a manually-added RS series with the same title already exists.
+    // Admin can delete the RS entry and retry to allow AN to take over.
+    const rsConflict = !webseriesBySlug.get(item.slug) && !webseries[webseriesIdForSlug(item.slug)]
+      ? rsTitleIndex.map.get(rsTitleIndex.norm(item.title))
+      : null;
+    if (rsConflict && !opts.force) {
+      if (!opts.silentSkip) toast.info(`Skipped "${item.title}" — already exists in RS. Delete the RS entry to fetch from AN.`);
+      return;
+    }
     if (!item.category) {
-      toast.error(`Category missing for ${item.title}. Set it in AnimeSalt Manager first.`);
+      if (!opts.silentSkip) toast.error(`Category missing for ${item.title}. Set it in AnimeSalt Manager first.`);
       return;
     }
     setBusySlug(item.slug);
