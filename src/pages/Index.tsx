@@ -1623,7 +1623,15 @@ const Index = () => {
 
     // AN public playback is Firebase-only. Admin fetch/save is the only place
     // allowed to call the AN API; runtime must use stored RS-style URLs.
+    // Cards always open the details view; play action enforces the Firebase
+    // requirement so users can still browse AN entries without saved playback.
     if (anime.source === "animesalt") {
+      const watchTargetAn = getDefaultWatchTarget(anime);
+      const targetRouteAn = buildWatchRoute(anime.id, watchTargetAn.seasonIdx, watchTargetAn.epIdx);
+      if (location.pathname !== targetRouteAn) {
+        const fromRoutedOverlay = isSearchRoute || isNotificationsRoute;
+        navigate(targetRouteAn, { replace: fromRoutedOverlay });
+      }
       if (hasStoredFirebasePlayback(anime)) {
         await openPlayerFromAnime(anime, { seasonIdx: sIdx, epIdx: eIdx });
       } else {
@@ -1631,6 +1639,7 @@ const Index = () => {
       }
       return;
     }
+
 
     // Reflect details view in the URL so back-button works as a real route.
     // Use replace when coming from a routed overlay (search/notifications) to
