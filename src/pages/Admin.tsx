@@ -31,6 +31,7 @@ import ApkDownloadCenter from "@/components/admin/ApkDownloadCenter";
 import FirebaseMultiManager from "@/components/admin/FirebaseMultiManager";
 import AnimeNameExporter from "@/components/admin/AnimeNameExporter";
 import AnFirebasePrefetcher from "@/components/admin/AnFirebasePrefetcher";
+import AnSeriesManager from "@/components/admin/AnSeriesManager";
 import WeeklyEpisodeManager from "@/components/admin/WeeklyEpisodeManager";
 import SecurityCenter from "@/components/admin/SecurityCenter";
 import { logAdminAccess, isBlocked, isOwnerEmail, rememberDeviceName } from "@/lib/securityGuard";
@@ -1987,7 +1988,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  // Form states
  const [categoryInput, setCategoryInput] = useState("");
- const [seriesTab, setSeriesTab] = useState<"ws-list" | "ws-add" | "ws-manual" | "ws-weekly">("ws-list");
+ const [seriesTab, setSeriesTab] = useState<"ws-list" | "ws-add" | "ws-manual" | "ws-weekly" | "ws-an">("ws-list");
  const [moviesTab, setMoviesTab] = useState<"mv-list" | "mv-add" | "mv-manual">("mv-list");
  const [fetchType, setFetchType] = useState<"movie" | "tv">("movie");
  const [quickTmdbId, setQuickTmdbId] = useState("");
@@ -5095,8 +5096,15 @@ ${tgBulkFooter}
  <button onClick={() => { setSeriesTab("ws-manual"); setSeriesEditId(""); const initialSeasons = [{ name: "Season 1", seasonNumber: 1, episodes: [] }]; const initialMap = { Hindi: initialSeasons }; setSeriesForm(syncSeriesLanguageSummary({ title: "", poster: "", backdrop: "", year: "", rating: "", language: "Hindi", baseLanguage: "Hindi", selectedAdminLanguage: "Hindi", availableLanguages: ["Hindi"], category: "", storyline: "", visibility: "public", dubType: "official", weeklyEnabled: false, weeklyEveryDays: 7, weeklyDaysSinceLast: 0, audioTracks: [] }, initialMap)); setSeriesSeasonsByLanguage(initialMap); setSeasonsData(cloneSeasonList(initialSeasons)); setSeriesCast([]); }} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-manual" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
  Manual
  </button>
- {/* Weekly EP feature removed */}
- </div>
+  <button onClick={() => setSeriesTab("ws-an")} className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors ${seriesTab === "ws-an" ? "bg-emerald-600 text-white" : "bg-[#141422] border border-white/8 text-zinc-400"}`}>
+  AN Series
+  </button>
+  {/* Weekly EP feature removed */}
+  </div>
+
+  {seriesTab === "ws-an" && (
+  <AnSeriesManager glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} inputClass={inputClass} />
+  )}
 
  {seriesTab === "ws-list" && (
  <div>
@@ -8194,8 +8202,7 @@ ${footerLinksHtml}
  {/* Anime Name Exporter (RS vs AN) */}
  <AnimeNameExporter glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
 
- {/* AN → Firebase Prefetcher: store every episode's URLs permanently */}
- <AnFirebasePrefetcher glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+  {/* AN Series manager moved to Series → AN Series tab */}
  </div>
  )}
 
