@@ -73,23 +73,16 @@ const isDataHlsUrl = (url: string): boolean => {
 };
 
 const isHlsLikeUrl = (url: string): boolean => {
-  const value = String(url || "").trim();
+  const value = String(url || "").trim().toLowerCase();
   if (!value) return false;
-  if (isDataHlsUrl(value)) return true;
-  if (/\.m3u8(?:[?#].*)?$/i.test(value) || /\.m3u8(?:%3f|%23|$)/i.test(value)) return true;
-
-  try {
-    const parsed = new URL(value);
-    const nested = parsed.searchParams.get("url");
-    if (nested && nested !== value) return isHlsLikeUrl(nested);
-  } catch {}
-
-  try {
-    const decoded = decodeURIComponent(value);
-    return decoded !== value && /\.m3u8(?:[?#].*)?$/i.test(decoded);
-  } catch {
-    return false;
-  }
+  // Zero-latency AN detection: AnimeSalt CDN URLs are always /hls/<token>.
+  // Do not parse, probe, decode, or inspect nested proxy URLs here; those extra
+  // checks were slowing RS routes. The player only needs this instant marker.
+  return isDataHlsUrl(value)
+    || value.includes("/hls/")
+    || value.includes("%2fhls%2f")
+    || /\.m3u8(?:[?#].*)?$/.test(value)
+    || /\.m3u8(?:%3f|%23|$)/.test(value);
 };
 
 const isInsecureHttpSource = (url: string): boolean => {
@@ -585,7 +578,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   //                we play https sources directly from the <video> tag.
   useEffect(() => {
     const httpSrc = isInsecureHttpSource(src || "");
-    if (noProxy && !preferProxy && !httpSrc) {
+    const hlsSrc = isHlsLikeUrl(src || "");
+    if (hlsSrc || (noProxy && !preferProxy && !httpSrc)) {
       setCdnEnabled(false);
       setProxyUrl('');
       setProxyApiKey('');
