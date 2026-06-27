@@ -5,8 +5,8 @@
 //   1. Calls /an-api/embed to extract per-quality video URLs + per-language
 //      audio URLs (all direct CDN m3u8 — no master, no referer block).
 //   2. Builds a synthesized HLS master playlist (data: URL) that combines
-//      ONE video variant + ALL audio renditions, all proxied through
-//      /an-api/hls for CORS.
+//      ONE video variant + ALL audio renditions. HTTPS CDN URLs play direct
+//      for full bandwidth; only http:// is routed through /an-api/hls.
 //   3. Plays in a native <video> via hls.js. Quality switching rebuilds the
 //      master (preserves currentTime + audio track) — fixed-quality model,
 //      no ABR. Audio switching uses the hls.js audioTrack API (instant).
@@ -202,9 +202,9 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       abrBandWidthUpFactor: 0.8,
       // Bigger buffer lets the browser absorb more network instead of sipping
       // one small segment at a time.
-      maxBufferLength: 60,
+      maxBufferLength: 120,
       maxMaxBufferLength: 300,
-      maxBufferSize: 150 * 1000 * 1000,
+      maxBufferSize: 220 * 1000 * 1000,
       backBufferLength: 20,
       // Aggressive retries for flaky connections — instead of giving up,
       // retry quickly so playback recovers without user action.
