@@ -90,7 +90,7 @@ const pickQualityIdx = (streams: Stream[]) => {
   return preferred >= 0 ? preferred : (fallback >= 0 ? fallback : 0);
 };
 
-export default function AnNativeView({ embedUrl, videoStyle, videoClassName, resumeTime, onFail, onReady, onTimeUpdate, initialData }: Props) {
+export default function AnNativeView({ videoStyle, videoClassName, resumeTime, onFail, onReady, onTimeUpdate, initialData }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [streams, setStreams] = useState<Stream[]>(() => initialData?.streams || []);
@@ -143,7 +143,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       }
     })();
     return () => { cancelled = true; };
-  }, [embedUrl, initialData, onFail, onReady]);
+  }, [initialData, onFail, onReady]);
 
   // 2. Build + attach hls whenever quality changes
   useEffect(() => {
