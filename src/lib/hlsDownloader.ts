@@ -13,21 +13,36 @@ const resolveUrl = (base: string, rel: string) => {
 interface ParsedPlaylist {
   isMaster: boolean;
   variants: { url: string; bandwidth: number; resolution?: string }[];
+  audio: { url: string; name: string; language?: string; default?: boolean }[];
   segments: string[];
 }
+
+const parseAttrs = (line: string): Record<string, string> => {
+  const attrs: Record<string, string> = {};
+  const body = line.includes(":") ? line.slice(line.indexOf(":") + 1) : line;
+  const re = /([A-Z0-9-]+)=("[^"]*"|[^,]*)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body))) attrs[m[1].toUpperCase()] = String(m[2] || "").replace(/^"|"$/g, "");
+  return attrs;
+};
 
 const parsePlaylist = (text: string, baseUrl: string): ParsedPlaylist => {
   const lines = text.split(/\r?\n/);
   const variants: ParsedPlaylist["variants"] = [];
+  const audio: ParsedPlaylist["audio"] = [];
   const segments: string[] = [];
   let isMaster = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    if (line.startsWith("#EXT-X-STREAM-INF")) {
+    if (line.startsWith("#EXT-X-MEDIA") && /TYPE=AUDIO/i.test(line)) {
+      const attrs = parseAttrs(line);
+      if (attrs.URI) audio.push({ url: resolveUrl(baseUrl, attrs.URI), name: attrs.NAME || attrs.LANGUAGE || `Audio ${audio.length + 1}`, language: attrs.LANGUAGE, default: /YES/i.test(attrs.DEFAULT || "") });
+    } else if (line.startsWith("#EXT-X-STREAM-INF")) {
       isMaster = true;
-      const bw = Number(/BANDWIDTH=(\d+)/.exec(line)?.[1] || 0);
-      const res = /RESOLUTION=([^,\s]+)/.exec(line)?.[1];
+      const attrs = parseAttrs(line);
+      const bw = Number(attrs.BANDWIDTH || 0);
+      const res = attrs.RESOLUTION;
       const next = lines[i + 1]?.trim();
       if (next && !next.startsWith("#")) {
         variants.push({ url: resolveUrl(baseUrl, next), bandwidth: bw, resolution: res });
@@ -37,7 +52,7 @@ const parsePlaylist = (text: string, baseUrl: string): ParsedPlaylist => {
       segments.push(resolveUrl(baseUrl, line));
     }
   }
-  return { isMaster, variants, segments };
+  return { isMaster, variants, audio, segments };
 };
 
 export const isHlsUrl = (url: string) => {

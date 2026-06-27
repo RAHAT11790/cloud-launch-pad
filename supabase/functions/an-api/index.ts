@@ -1,3 +1,5 @@
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
+
 // ============================================================
 // an-api — NEW ultra-fast AnimeSalt extractor (NO subtitle logic)
 // ============================================================
@@ -38,7 +40,7 @@ const setCache = (key: string, data: unknown, ttl: number) => {
 };
 
 const cors: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
+  ...corsHeaders,
   "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "*",
   "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified",
@@ -297,6 +299,69 @@ function parseMaster(masterUrl: string, body: string) {
   };
 }
 
+function firstMediaUrl(body: string, baseUrl: string): string {
+  for (const raw of body.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    return resolveUrl(line, baseUrl);
+  }
+  return "";
+}
+
+async function fetchHlsText(url: string, embedUrl: string, origin: string): Promise<string> {
+  return await fetchMaster(url, embedUrl, origin);
+}
+
+async function isWorkingMediaPlaylist(url: string, embedUrl: string, origin: string): Promise<boolean> {
+  try {
+    const body = await fetchHlsText(url, embedUrl, origin);
+    if (!/^#EXTM3U/i.test(body)) return false;
+    if (/#EXT-X-STREAM-INF/i.test(body)) return true;
+    if (!/#EXTINF:/i.test(body) && !/#EXT-X-MAP/i.test(body)) return false;
+    const first = firstMediaUrl(body, url);
+    if (!first) return false;
+    const headers: Record<string, string> = {
+      "User-Agent": UA,
+      Accept: "video/*,audio/*,*/*",
+      Referer: `${origin}/`,
+      Origin: origin,
+      Range: "bytes=0-0",
+    };
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 4_500);
+    try {
+      const res = await fetch(first, { headers, redirect: "follow", signal: ac.signal });
+      return res.ok || res.status === 206 || res.status === 304;
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return false;
+  }
+}
+
+async function filterWorkingHls(parsed: any, embedUrl: string, origin: string) {
+  const [streams, audio] = await Promise.all([
+    Promise.all((parsed.streams || []).map(async (stream: any) => ({ stream, ok: await isWorkingMediaPlaylist(stream.url, embedUrl, origin) }))),
+    Promise.all((parsed.audio || []).map(async (track: any) => ({ track, ok: await isWorkingMediaPlaylist(track.uri, embedUrl, origin) }))),
+  ]);
+  const workingStreams = streams.filter((entry) => entry.ok).map((entry) => entry.stream);
+  const workingAudio = audio.filter((entry) => entry.ok).map((entry) => entry.track);
+  const masterHadSeparateAudio = Array.isArray(parsed.audio) && parsed.audio.length > 0;
+  if (masterHadSeparateAudio && workingAudio.length === 0) {
+    return { streams: [], audio: [], defaultAudioIdx: 0, preferredAudio: "", rejected: "audio tracks failed validation" };
+  }
+  const hindiIdx = workingAudio.findIndex((a: any) => a.isHindi);
+  const declaredDefaultIdx = workingAudio.findIndex((a: any) => a.default);
+  return {
+    streams: workingStreams,
+    audio: workingAudio,
+    defaultAudioIdx: hindiIdx >= 0 ? hindiIdx : (declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0),
+    preferredAudio: hindiIdx >= 0 ? "Hindi" : (workingAudio[declaredDefaultIdx]?.name || workingAudio[0]?.name || ""),
+    rejected: workingStreams.length === 0 ? "no validated video playlists" : "",
+  };
+}
+
 async function fetchMaster(master: string, embedUrl: string, origin: string) {
   const c = getCache<string>(`master:${master}`);
   if (c) return c;
@@ -358,8 +423,11 @@ async function extractFromPlayer(embedUrl: string) {
   const master = decode(String(data.videoSource || data.securedLink || data.file || data.source || ""));
   let parsed: any = { streams: [] as any[], audio: [] as any[], defaultAudioIdx: 0, preferredAudio: "" };
   if (master) {
-    try { parsed = parseMaster(master, await fetchMaster(master, embedUrl, origin)); }
+    try { parsed = await filterWorkingHls(parseMaster(master, await fetchMaster(master, embedUrl, origin)), embedUrl, origin); }
     catch (e) { return { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: [], audio: [], error: (e as Error).message }; }
+  }
+  if (master && parsed.streams.length === 0) {
+    return { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: [], audio: [], error: parsed.rejected || "no working HLS streams" };
   }
   return setCache(`embed:${embedUrl}`, { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: parsed.streams, audio: parsed.audio, defaultAudioIdx: parsed.defaultAudioIdx, preferredAudio: parsed.preferredAudio }, 8 * 60_000);
 }

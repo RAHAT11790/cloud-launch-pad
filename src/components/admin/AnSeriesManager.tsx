@@ -62,11 +62,19 @@ const normalizeAnApiBaseUrl = (value: string): string => {
 
 const getAnApiBase = async () => normalizeAnApiBaseUrl(await getEdgeFunctionUrl("an-api"));
 
-// HLS links MUST stay raw — they play directly inside the <video> tag via
-// hls.js. The player labels them as "HLS" automatically. Routing them through
-// the admin's an-api ({base}/hls?url=...) makes playback fail because the
-// admin server is not designed to relay third-party HLS segments.
-const passthroughHls = (url?: string | null) => String(url || "").trim();
+const isRawAnHls = (url?: string | null) => {
+  const value = String(url || "").trim().toLowerCase();
+  return /^https?:\/\//.test(value) && value.includes("/hls/");
+};
+
+// Chromium/hls.js must fetch HLS manifests by XHR, and AnimeSalt CDN does not
+// reliably expose CORS. Store HLS URLs through AN API's HLS relay so playback,
+// audio tracks, and the downloader all use the same validated path.
+const reliableHls = (base: string, url?: string | null) => {
+  const raw = String(url || "").trim();
+  if (!raw || !base || !isRawAnHls(raw) || /\/an-api\/hls\?/i.test(raw)) return raw;
+  return `${base.replace(/\/+$/, "")}/hls?url=${encodeURIComponent(raw)}`;
+};
 
 const encodeMaster = (content: string) => `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(content)))}`;
 
@@ -78,7 +86,7 @@ const buildSyntheticMaster = (
 ) => {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audio.forEach((track, index) => {
-    const uri = passthroughHls(track?.uri);
+    const uri = reliableHls(_base, track?.uri);
     if (!uri) return;
     const name = String(track?.name || track?.language || `Audio ${index + 1}`).replace(/"/g, "").trim();
     const lang = String(track?.language || name || `aud${index + 1}`).replace(/"/g, "").trim().toLowerCase();
@@ -87,7 +95,7 @@ const buildSyntheticMaster = (
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
   const height = Number(stream?.height || String(stream?.label || "").match(/\d{3,4}/)?.[0] || 720);
   lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max(height * 5000, 1_500_000)},RESOLUTION=${stream.resolution || `${Math.round((height * 16) / 9)}x${height}`}${audioRef}`);
-  lines.push(passthroughHls(stream.url));
+  lines.push(reliableHls(_base, stream.url));
   return encodeMaster(lines.join("\n"));
 };
 
@@ -160,7 +168,7 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
     const raw = String(stream.url || "").trim();
     const isHls = /\.m3u8(?:[?#].*)?$/i.test(raw);
     if (!isHls) return raw;
-    return audio.length ? buildSyntheticMaster(base, stream, audio, audioIdx) : passthroughHls(raw);
+    return audio.length ? buildSyntheticMaster(base, stream, audio, audioIdx) : reliableHls(base, raw);
   };
   const episode: RsEpisode = {
     episodeNumber: fallback.number,
@@ -316,6 +324,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
           const playbackPayload = ep?._moviePayload || (epSlug ? await animeSaltApi.getEpisode(epSlug) : null);
           const payload = normalizePlaybackPayload(playbackPayload || {});
           const rsEpisode = playbackToRsEpisode(base, payload, fallback);
+          if (!rsEpisode.link) continue;
           episodes.push(rsEpisode);
           (rsEpisode.audioTracks || []).forEach((track) => detectedLanguages.add(track.label || track.language));
           if (epSlug) {
