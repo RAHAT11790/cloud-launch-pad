@@ -4855,6 +4855,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               .filter(Boolean)
               .filter((candidate) => !String(candidate).includes("/functions/v1/video-proxy?"));
 
+            // HLS m3u8 — return the raw URL. downloadManager detects it and
+            // runs the in-browser HLS segment downloader (single .ts output).
+            const hlsCandidate = [u, ...candidates].find((candidate) => /\.m3u8(?:[?#]|$)/i.test(String(candidate)));
+            if (hlsCandidate) return hlsCandidate;
+
             const managedAlready = [u, ...candidates].find((candidate) => String(candidate).includes("/functions/v1/video-download?"));
             if (managedAlready) return managedAlready;
 
