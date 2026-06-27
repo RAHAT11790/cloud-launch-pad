@@ -30,7 +30,10 @@ const getCache = <T>(key: string): T | null => {
 };
 const setCache = (key: string, data: unknown, ttl: number) => {
   cache.set(key, { ts: Date.now(), ttl, data });
-  if (cache.size > 300) cache.delete(cache.keys().next().value);
+  if (cache.size > 300) {
+    const oldest = cache.keys().next().value;
+    if (oldest) cache.delete(oldest);
+  }
   return data;
 };
 
@@ -323,7 +326,7 @@ async function extractFromPlayer(embedUrl: string) {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), PLAYER_TIMEOUT_MS);
   let txt = "";
-  let res: Response;
+  let res: Response | null = null;
   try {
     res = await fetch(apiUrl, {
       method: "POST",
@@ -342,12 +345,12 @@ async function extractFromPlayer(embedUrl: string) {
   } finally {
     clearTimeout(timer);
   }
-  if (!res.ok) return { embed: embedUrl, hash, error: `player upstream ${res.status}`, raw: txt.slice(0, 200), streams: [], audio: [] };
+  if (!res?.ok) return { embed: embedUrl, hash, error: `player upstream ${res?.status || 0}`, raw: txt.slice(0, 200), streams: [], audio: [] };
 
   let data: any;
   try { data = JSON.parse(txt); } catch { return { embed: embedUrl, hash, error: "player did not return JSON", raw: txt.slice(0, 200), streams: [], audio: [] }; }
   const master = decode(String(data.videoSource || data.securedLink || data.file || data.source || ""));
-  let parsed = { streams: [] as any[], audio: [] as any[] };
+  let parsed: any = { streams: [] as any[], audio: [] as any[], defaultAudioIdx: 0, preferredAudio: "" };
   if (master) {
     try { parsed = parseMaster(master, await fetchMaster(master, embedUrl, origin)); }
     catch (e) { return { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: [], audio: [], error: (e as Error).message }; }
