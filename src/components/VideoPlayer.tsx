@@ -2313,6 +2313,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       fragLoadingRetryDelay: 180,
       capLevelToPlayerSize: false,
       renderTextTracksNatively: false,
+      xhrSetup: (xhr, url) => {
+        const normalized = normalizeHlsProxyUrl(url, anApiHlsBaseUrl);
+        if (normalized !== url) {
+          try { xhr.open("GET", normalized, true); } catch {}
+        }
+      },
     });
     hlsRef.current = hls;
 
