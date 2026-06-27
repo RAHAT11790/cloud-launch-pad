@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { db, ref, set, get, onValue } from "@/lib/firebase";
-import { useAnimeSaltData } from "@/hooks/useAnimeSaltData";
+import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { toast } from "sonner";
 import { Database, Hammer, Zap, Square, Trash2 } from "lucide-react";
