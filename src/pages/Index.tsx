@@ -386,7 +386,6 @@ import NewEpisodeReleases from "@/components/NewEpisodeReleases";
 import LoginPage from "@/components/LoginPage";
 import { useFirebaseData } from "@/hooks/useFirebaseData";
 import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
-import { animeSaltApi } from "@/lib/animeSaltApi";
 import LiveSupportChat from "@/components/LiveSupportChat";
 import LiveTvPage from "@/components/LiveTvPage";
 import { initializeUiTheme } from "@/lib/uiTheme";
@@ -395,10 +394,6 @@ import { guestStore } from "@/lib/guestStore";
 import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
 
-// Session cache for API responses to speed up continue watching
-const apiCache = new Map<string, { data: any; ts: number }>();
-const CACHE_TTL = 10 * 60 * 1000; // 10 min
-const API_TIMEOUT_MS = 15_000;
 const warmedImageUrls = new Set<string>();
 const AN_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const DETAILS_LOADING_TOAST_ID = "rs-an-details-loading-toast";
@@ -428,66 +423,6 @@ const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime:
     </div>
   </div>
 );
-
-const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
-  return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error(`${label} timed out`)), ms);
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-};
-
-const hasPlayableAnimeSaltPayload = (data: any) => {
-  const payload = data?.data || data;
-  if (!payload) return false;
-  if (payload.embedUrl || payload.directUrl || payload.streamUrl || payload.videoUrl || payload.file) return true;
-  if (Array.isArray(payload.links) && payload.links.some((x: any) => String(x?.url || x?.src || x || "").trim())) return true;
-  if (Array.isArray(payload.allEmbeds) && payload.allEmbeds.some((x: any) => String(x || "").trim())) return true;
-  if (Array.isArray(payload.sources) && payload.sources.some((source: any) =>
-    source?.master || source?.videoSource || source?.securedLink || source?.embed ||
-    (Array.isArray(source?.streams) && source.streams.some((stream: any) => String(stream?.url || "").trim()))
-  )) return true;
-  return false;
-};
-
-const isCacheableApiResponse = (key: string, data: any) => {
-  if (!data) return false;
-  // Episode/movie playback calls must contain an actual playable URL. A plain
-  // `{ success: true }` from a scraper miss must not poison cache and break AN.
-  if (/^(ep|movie)_/i.test(key)) return hasPlayableAnimeSaltPayload(data);
-  return data.success === true || data.embedUrl || data.allEmbeds?.length || data.links?.length || data.data;
-};
-
-const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
-  const cached = apiCache.get(key);
-  if (cached && Date.now() - cached.ts < CACHE_TTL) {
-    // Skip cache if previous response was a failure — allow retry
-    if (isCacheableApiResponse(key, cached.data)) return cached.data;
-  }
-  // Try up to 2 times on failure (cloudflare worker / animesalt site flake)
-  let lastErr: any = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const data = await withTimeout(fn(), API_TIMEOUT_MS, key);
-      const ok = isCacheableApiResponse(key, data);
-      if (ok) {
-        apiCache.set(key, { data, ts: Date.now() });
-        return data;
-      }
-      lastErr = new Error("empty");
-    } catch (e) { lastErr = e; }
-    if (attempt === 0) await new Promise(r => setTimeout(r, 600));
-  }
-  throw lastErr || new Error("API failed");
-};
 
 const anDetailsCacheKey = (id: string) => `rs_an_details:${String(id || "").replace(/[^a-z0-9_-]/gi, "_")}`;
 
