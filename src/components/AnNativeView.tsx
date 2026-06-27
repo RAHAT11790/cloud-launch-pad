@@ -137,6 +137,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
           setQIdx(initialData.preferredQualityIdx ?? pickQualityIdx(initialData.streams));
           setAIdx(initialData.defaultAudioIdx ?? pickHindiAudioIdx(initialData.audio || []));
           onReady?.();
+          try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
           return;
         }
         const r = await fetch(`${base}/embed?url=${encodeURIComponent(embedUrl)}`);
@@ -153,6 +154,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         // marks Hindi as DEFAULT=YES — no visible track switch on play.
         setAIdx(pickHindiAudioIdx(a));
         onReady?.();
+        try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       } catch (e) {
         if (cancelled) return;
         onFail?.((e as Error).message);
@@ -183,6 +185,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         resumedRef.current = true;
         if (!wasPaused) video.play().catch(() => {});
         setLoading(false);
+        try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       };
       video.addEventListener("loadedmetadata", onLoaded, { once: true });
       return () => video.removeEventListener("loadedmetadata", onLoaded);
@@ -253,6 +256,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       resumedRef.current = true;
       if (!wasPaused) video.play().catch(() => {});
       setLoading(false);
+      try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
     });
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
       applyPreferredAudio();
@@ -401,7 +405,10 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       setPaused(v.paused);
     };
     const onWaiting = () => setLoading(true);
-    const onReadyData = () => setLoading(false);
+    const onReadyData = () => {
+      setLoading(false);
+      try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
+    };
     v.addEventListener("timeupdate", update);
     v.addEventListener("durationchange", update);
     v.addEventListener("play", update);
