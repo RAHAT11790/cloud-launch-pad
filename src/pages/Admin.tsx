@@ -3734,6 +3734,44 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  });
  }, []);
 
+ const updateSeriesEpisodeAudioTrack = useCallback((sIdx: number, eIdx: number, tIdx: number, field: string, value: string) => {
+ setSeasonsData((prev) => {
+ const copy = [...prev];
+ const season = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
+ const episode = { ...season.episodes[eIdx] } as any;
+ const tracks = Array.isArray(episode.audioTracks) ? [...episode.audioTracks] : [];
+ tracks[tIdx] = { ...(tracks[tIdx] || buildEmptyAudioTrack()), [field]: value };
+ episode.audioTracks = tracks;
+ season.episodes[eIdx] = episode;
+ copy[sIdx] = season;
+ return copy;
+ });
+ }, [buildEmptyAudioTrack]);
+
+ const addSeriesEpisodeAudioTrack = useCallback((sIdx: number, eIdx: number) => {
+ setSeasonsData((prev) => {
+ const copy = [...prev];
+ const season = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
+ const episode = { ...season.episodes[eIdx] } as any;
+ episode.audioTracks = [...(Array.isArray(episode.audioTracks) ? episode.audioTracks : []), buildEmptyAudioTrack()];
+ season.episodes[eIdx] = episode;
+ copy[sIdx] = season;
+ return copy;
+ });
+ }, [buildEmptyAudioTrack]);
+
+ const removeSeriesEpisodeAudioTrack = useCallback((sIdx: number, eIdx: number, tIdx: number) => {
+ setSeasonsData((prev) => {
+ const copy = [...prev];
+ const season = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
+ const episode = { ...season.episodes[eIdx] } as any;
+ episode.audioTracks = (Array.isArray(episode.audioTracks) ? episode.audioTracks : []).filter((_: any, idx: number) => idx !== tIdx);
+ season.episodes[eIdx] = episode;
+ copy[sIdx] = season;
+ return copy;
+ });
+ }, []);
+
  const updateSeriesEpisodeSubtitle = useCallback((sIdx: number, eIdx: number, value: string) => {
  setSeasonsData((prev) => {
  const copy = [...prev];
