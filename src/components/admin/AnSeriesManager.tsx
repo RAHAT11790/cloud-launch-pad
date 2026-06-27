@@ -209,6 +209,18 @@ const stripUndefined = <T,>(value: T): T => {
   return value;
 };
 
+const mapLimit = async <T, R,>(items: T[], limit: number, worker: (item: T, index: number) => Promise<R>): Promise<R[]> => {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      results[idx] = await worker(items[idx], idx);
+    }
+  }));
+  return results;
+};
+
 const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEditSeries }: Props) => {
   const [selectedItems, setSelectedItems] = useState<SelectedAnItem[]>([]);
   const [webseries, setWebseries] = useState<Record<string, any>>({});
@@ -314,17 +326,19 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       const anSeriesEpisodes: Record<string, any> = {};
       const detectedLanguages = new Set<string>();
 
-      for (let sIdx = 0; sIdx < rawSeasons.length; sIdx++) {
-        const season = rawSeasons[sIdx];
-        const episodes: RsEpisode[] = [];
-        for (let eIdx = 0; eIdx < (season.episodes || []).length; eIdx++) {
+      await Promise.all(rawSeasons.map(async (season: any, sIdx: number) => {
+        const fetched = await mapLimit(season.episodes || [], 7, async (ep: any, eIdx: number) => {
           const ep = season.episodes[eIdx];
           const epSlug = String(ep?.slug || "").trim();
           const fallback = { number: Number(ep?.number || ep?.episodeNumber || eIdx + 1), title: ep?.title || `Episode ${eIdx + 1}`, slug: epSlug };
           const playbackPayload = ep?._moviePayload || (epSlug ? await animeSaltApi.getEpisode(epSlug) : null);
           const payload = normalizePlaybackPayload(playbackPayload || {});
           const rsEpisode = playbackToRsEpisode(base, payload, fallback);
-          if (!rsEpisode.link) continue;
+          return { epSlug, rsEpisode, payload, fallback };
+        });
+        const episodes: RsEpisode[] = [];
+        fetched.forEach(({ epSlug, rsEpisode, payload, fallback }) => {
+          if (!rsEpisode?.link) return;
           episodes.push(rsEpisode);
           (rsEpisode.audioTracks || []).forEach((track) => detectedLanguages.add(track.label || track.language));
           if (epSlug) {
@@ -337,13 +351,13 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
               updatedAt: Date.now(),
             };
           }
-        }
-        seasons.push({
+        });
+        seasons[sIdx] = {
           name: season?.name || `Season ${sIdx + 1}`,
           seasonNumber: Number(season?.seasonNumber || sIdx + 1),
           episodes,
-        });
-      }
+        };
+      }));
 
       const languages = Array.from(detectedLanguages).filter(Boolean);
       const baseLanguage = languages.find((lang) => /hindi/i.test(lang)) || languages[0] || "Hindi";
