@@ -551,7 +551,8 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const path = url.pathname.includes("/an-api") ? (url.pathname.split("/an-api")[1] || "/") : url.pathname;
   const prefixPath = url.pathname.includes("/an-api") ? url.pathname.split("/an-api")[0] : "";
-  const proxyPrefix = `${url.protocol}//${url.host}${prefixPath}/an-api/hls`.replace(/([^:]\/)\/+/g, "$1");
+  const normalizedPrefix = prefixPath || (url.hostname.endsWith(".supabase.co") ? "/functions/v1" : "");
+  const proxyPrefix = `${url.protocol}//${url.host}${normalizedPrefix}/an-api/hls`.replace(/([^:]\/)\/+/g, "$1");
 
   try {
     if (req.method === "POST") {
