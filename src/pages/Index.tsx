@@ -2462,13 +2462,13 @@ const Index = () => {
       }
 
       // Immediate feedback — same "Loading details..." toast as fresh card clicks.
-      // Auto-dismissed by the saltPlayerState/playerState effect when playback resolves.
+      // Every path below is wrapped so early returns/failures cannot leave it stuck.
       const continueToastId = showDetailsLoadingToast();
-      // If we have episode info, try to play that episode directly
-      if (item.episodeInfo) {
-        const hasAccess = await checkAndShowAdGate(anime, item.episodeInfo?.seasonIdx, item.episodeInfo?.epIdx);
-        if (!hasAccess) { dismissDetailsLoadingToast(); return; }
-        try {
+      try {
+        // If we have episode info, try to play that episode directly
+        if (item.episodeInfo) {
+          const hasAccess = await checkAndShowAdGate(anime, item.episodeInfo?.seasonIdx, item.episodeInfo?.epIdx);
+          if (!hasAccess) return;
           // Always check customSeasons from Firebase first (admin edited data)
           let customSeasons: any[] | null = null;
           try {
@@ -2694,12 +2694,14 @@ const Index = () => {
               }
             }
           }
-        } catch {
-          if (detailsLoadingToastRef.current === continueToastId) dismissDetailsLoadingToast();
         }
+        // Fallback: open details
+        await handleCardClick(anime);
+      } catch {
+        if (detailsLoadingToastRef.current === continueToastId) dismissDetailsLoadingToast();
+      } finally {
+        if (detailsLoadingToastRef.current === continueToastId) dismissDetailsLoadingToast();
       }
-      // Fallback: open details
-      handleCardClick(anime);
       return;
     }
 
