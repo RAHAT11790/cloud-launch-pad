@@ -6,6 +6,21 @@
 
 type ProgressFn = (loaded: number, total: number, bytes: number) => void;
 
+const decodeDataPlaylist = (value: string): { text: string; mime: string } | null => {
+  const raw = String(value || "").trim();
+  if (!raw.toLowerCase().startsWith("data:")) return null;
+  const comma = raw.indexOf(",");
+  if (comma < 0) return null;
+  const meta = raw.slice(0, comma).toLowerCase();
+  const payload = raw.slice(comma + 1);
+  try {
+    const text = meta.includes(";base64") ? decodeURIComponent(escape(atob(payload))) : decodeURIComponent(payload);
+    return { text, mime: meta.slice(5).split(";")[0] || "application/vnd.apple.mpegurl" };
+  } catch {
+    return null;
+  }
+};
+
 const resolveUrl = (base: string, rel: string) => {
   try { return new URL(rel, base).toString(); } catch { return rel; }
 };
@@ -42,7 +57,7 @@ interface ParsedPlaylist {
   isMaster: boolean;
   variants: { url: string; bandwidth: number; resolution?: string }[];
   audio: { url: string; name: string; language?: string; default?: boolean }[];
-  segments: string[];
+  segments: { url: string; range?: string; init?: boolean }[];
 }
 
 const parseAttrs = (line: string): Record<string, string> => {
@@ -59,13 +74,35 @@ const parsePlaylist = (text: string, baseUrl: string): ParsedPlaylist => {
   const variants: ParsedPlaylist["variants"] = [];
   const audio: ParsedPlaylist["audio"] = [];
   const segments: string[] = [];
+  const parts: ParsedPlaylist["segments"] = [];
   let isMaster = false;
+  let currentMap: { url: string; range?: string; key: string } | null = null;
+  let lastMapKey = "";
+  let pendingByteRange: string | undefined;
+  const toRangeHeader = (value?: string) => {
+    const raw = String(value || "").replace(/"/g, "").trim();
+    const m = /^(\d+)@(\d+)$/.exec(raw);
+    if (!m) return undefined;
+    const length = Number(m[1]);
+    const start = Number(m[2]);
+    if (!Number.isFinite(length) || !Number.isFinite(start) || length <= 0) return undefined;
+    return `bytes=${start}-${start + length - 1}`;
+  };
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
     if (line.startsWith("#EXT-X-MEDIA") && /TYPE=AUDIO/i.test(line)) {
       const attrs = parseAttrs(line);
       if (attrs.URI) audio.push({ url: normalizeHlsProxyUrl(resolveUrl(baseUrl, attrs.URI)), name: attrs.NAME || attrs.LANGUAGE || `Audio ${audio.length + 1}`, language: attrs.LANGUAGE, default: /YES/i.test(attrs.DEFAULT || "") });
+    } else if (line.startsWith("#EXT-X-MAP")) {
+      const attrs = parseAttrs(line);
+      if (attrs.URI) {
+        const mapUrl = normalizeHlsProxyUrl(resolveUrl(baseUrl, attrs.URI));
+        const range = toRangeHeader(attrs.BYTERANGE);
+        currentMap = { url: mapUrl, range, key: `${mapUrl}|${range || ""}` };
+      }
+    } else if (line.startsWith("#EXT-X-BYTERANGE")) {
+      pendingByteRange = toRangeHeader(line.slice(line.indexOf(":") + 1));
     } else if (line.startsWith("#EXT-X-STREAM-INF")) {
       isMaster = true;
       const attrs = parseAttrs(line);
@@ -77,10 +114,26 @@ const parsePlaylist = (text: string, baseUrl: string): ParsedPlaylist => {
         i++;
       }
     } else if (!line.startsWith("#")) {
-      segments.push(normalizeHlsProxyUrl(resolveUrl(baseUrl, line)));
+      const segmentUrl = normalizeHlsProxyUrl(resolveUrl(baseUrl, line));
+      segments.push(segmentUrl);
+      if (currentMap && currentMap.key !== lastMapKey) {
+        parts.push({ url: currentMap.url, range: currentMap.range, init: true });
+        lastMapKey = currentMap.key;
+      }
+      parts.push({ url: segmentUrl, range: pendingByteRange });
+      pendingByteRange = undefined;
     }
   }
-  return { isMaster, variants, audio, segments };
+  return { isMaster, variants, audio, segments: parts.length ? parts : segments.map((url) => ({ url })) };
+};
+
+const fetchPlaylistText = async (playlistUrl: string, signal?: AbortSignal) => {
+  const dataPlaylist = decodeDataPlaylist(playlistUrl);
+  if (dataPlaylist) return { text: dataPlaylist.text, url: playlistUrl };
+  const url = normalizeHlsProxyUrl(playlistUrl);
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`HLS playlist fetch failed (${res.status})`);
+  return { text: await res.text(), url };
 };
 
 export const isHlsUrl = (url: string) => {
@@ -121,28 +174,31 @@ export async function estimateHlsSize(
   sampleCount = 10,
   signal?: AbortSignal,
 ): Promise<number> {
-  let url = normalizeHlsProxyUrl(playlistUrl);
-  let res = await fetch(url, { signal });
-  if (!res.ok) return 0;
-  let text = await res.text();
+  let { text, url } = await fetchPlaylistText(playlistUrl, signal);
   let parsed = parsePlaylist(text, url);
 
   if (parsed.isMaster && parsed.variants.length) {
     const best = [...parsed.variants].sort((a, b) => b.bandwidth - a.bandwidth)[0];
     url = normalizeHlsProxyUrl(best.url);
-    res = await fetch(url, { signal });
-    if (!res.ok) return 0;
-    text = await res.text();
+    const next = await fetchPlaylistText(url, signal);
+    text = next.text;
+    url = next.url;
     parsed = parsePlaylist(text, url);
   }
 
   if (!parsed.segments.length) return 0;
-  const sample = parsed.segments.slice(0, Math.min(sampleCount, parsed.segments.length));
-  const lengths = await Promise.all(sample.map((segment) => fetchLength(segment, signal)));
+  const sample = parsed.segments.filter((segment) => !segment.init).slice(0, Math.min(sampleCount, parsed.segments.length));
+  const initParts = parsed.segments.filter((segment) => segment.init).slice(0, 3);
+  const [lengths, initLengths] = await Promise.all([
+    Promise.all(sample.map((segment) => fetchLength(segment.url, signal))),
+    Promise.all(initParts.map((segment) => fetchLength(segment.url, signal))),
+  ]);
   const known = lengths.filter((n) => n > 0);
   if (!known.length) return 0;
   const avg = known.reduce((sum, n) => sum + n, 0) / known.length;
-  return Math.round(avg * parsed.segments.length);
+  const mediaCount = parsed.segments.filter((segment) => !segment.init).length || parsed.segments.length;
+  const initTotal = initLengths.filter((n) => n > 0).reduce((sum, n) => sum + n, 0);
+  return Math.round((avg * mediaCount) + initTotal);
 }
 
 export async function downloadHls(
@@ -150,18 +206,15 @@ export async function downloadHls(
   onProgress?: ProgressFn,
   signal?: AbortSignal,
 ): Promise<Blob> {
-  let url = normalizeHlsProxyUrl(playlistUrl);
-  let res = await fetch(url, { signal });
-  if (!res.ok) throw new Error(`HLS playlist fetch failed (${res.status})`);
-  let text = await res.text();
+  let { text, url } = await fetchPlaylistText(playlistUrl, signal);
   let parsed = parsePlaylist(text, url);
 
   if (parsed.isMaster && parsed.variants.length) {
     const best = [...parsed.variants].sort((a, b) => b.bandwidth - a.bandwidth)[0];
     url = normalizeHlsProxyUrl(best.url);
-    res = await fetch(url, { signal });
-    if (!res.ok) throw new Error(`HLS variant fetch failed (${res.status})`);
-    text = await res.text();
+    const next = await fetchPlaylistText(url, signal);
+    text = next.text;
+    url = next.url;
     parsed = parsePlaylist(text, url);
   }
 
@@ -177,8 +230,10 @@ export async function downloadHls(
   const worker = async () => {
     while (cursor < total) {
       const idx = cursor++;
-      const segUrl = normalizeHlsProxyUrl(parsed.segments[idx]);
-      const r = await fetch(segUrl, { signal });
+      const part = parsed.segments[idx];
+      const segUrl = normalizeHlsProxyUrl(part.url);
+      const headers = part.range ? { Range: part.range } : undefined;
+      const r = await fetch(segUrl, { signal, headers });
       if (!r.ok) throw new Error(`Segment ${idx + 1}/${total} failed (${r.status})`);
       const buf = new Uint8Array(await r.arrayBuffer());
       chunks[idx] = buf;

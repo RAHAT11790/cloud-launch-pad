@@ -256,7 +256,6 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
 
   if (streams.length === 0) return null;
 
-  const primaryStream = streams[0];
   const defaultAudioIdx = typeof resolvedPayload?.defaultAudioIdx === "number" ? resolvedPayload.defaultAudioIdx : pickAnDefaultAudioIdx(audio);
   const preferredQualityIdx = pickAnPreferredQualityIdx(streams);
   const qualityOptions = streams.map((stream: any) => ({
@@ -278,7 +277,7 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   }
 
   return {
-    src: qualityOptions[preferredQualityIdx]?.src || qualityOptions[0]?.src || buildAnProxyUrl(primaryStream.url),
+    src: qualityOptions[preferredQualityIdx]?.src || qualityOptions[0]?.src || buildAnProxyUrl(streams[preferredQualityIdx]?.url || streams[0]?.url || ""),
     qualityOptions: qualityOptions.length > 1 ? qualityOptions : undefined,
     audioTracks,
     subtitleTracks: undefined,
