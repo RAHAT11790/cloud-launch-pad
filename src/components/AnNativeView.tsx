@@ -3,10 +3,11 @@
 //
 // Given an AnimeSalt embed URL, this component:
 //   1. Calls /an-api/embed to extract per-quality video URLs + per-language
-//      audio URLs (all direct CDN m3u8 — no master, no referer block).
+//      audio URLs (AnimeSalt CDN HLS manifests + audio renditions).
 //   2. Builds a synthesized HLS master playlist (data: URL) that combines
-//      ONE video variant + ALL audio renditions. HTTPS CDN URLs play direct
-//      for full bandwidth; only http:// is routed through /an-api/hls.
+//      ONE video variant + ALL audio renditions. AnimeSalt CDN lacks browser
+//      CORS headers, so AN CDN HLS is routed through /an-api/hls; other HTTPS
+//      media remains direct.
 //   3. Plays in a native <video> via hls.js. Quality switching rebuilds the
 //      master (preserves currentTime + audio track) — fixed-quality model,
 //      no ABR. Audio switching uses the hls.js audioTrack API (instant).
@@ -47,9 +48,8 @@ interface Props {
 
 const hlsUrl = (apiBase: string, u: string, proxyAll = false) => {
   const raw = String(u || "").trim();
-  // HTTPS AN CDN/media playlists must stay direct for full browser bandwidth.
-  // Only http:// needs the edge proxy to avoid mixed-content blocking.
-  return proxyAll || raw.toLowerCase().startsWith("http://") ? `${apiBase}/hls?url=${encodeURIComponent(raw)}` : raw;
+  const isAnimeSaltCdn = /(^|\.)as-cdn\d*\.top\//i.test(raw);
+  return proxyAll || isAnimeSaltCdn || raw.toLowerCase().startsWith("http://") ? `${apiBase}/hls?url=${encodeURIComponent(raw)}` : raw;
 };
 // AN subtitle extraction/proxy was removed from the API for stability.
 
@@ -84,8 +84,8 @@ const pickHindiAudioIdx = (audio: Audio[]) => {
 };
 
 const pickQualityIdx = (streams: Stream[]) => {
-  const preferred = streams.findIndex((x) => x.height === 720);
-  const fallback = streams.findIndex((x) => x.height <= 720);
+  const preferred = streams.findIndex((x) => x.height === 1080);
+  const fallback = streams.findIndex((x) => x.height >= 720);
   return preferred >= 0 ? preferred : (fallback >= 0 ? fallback : 0);
 };
 
