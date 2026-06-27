@@ -154,13 +154,13 @@ class DownloadManager {
   private async fetchTotalSize(url: string): Promise<number> {
     const candidate = String(url || "").trim();
     if (!candidate) return 0;
-    if (candidate.toLowerCase().startsWith("data:")) return decodeDataUriBytes(candidate);
     if (isHlsUrl(candidate)) {
       try {
         const hlsBytes = await estimateHlsSize(candidate, 8);
         if (hlsBytes > 0) return hlsBytes;
       } catch {}
     }
+    if (candidate.toLowerCase().startsWith("data:")) return decodeDataUriBytes(candidate);
     const probePlans: RequestInit[] = this.isProxyDownloadUrl(candidate)
       ? [
           { method: "HEAD" },
