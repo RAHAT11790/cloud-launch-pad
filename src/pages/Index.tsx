@@ -489,6 +489,7 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 min
 const API_TIMEOUT_MS = 15_000;
 const warmedImageUrls = new Set<string>();
 const AN_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+const DETAILS_LOADING_TOAST_ID = "rs-an-details-loading-toast";
 
 const preloadImage = (src?: string | null) => {
   const url = String(src || "").trim();
@@ -1161,11 +1162,16 @@ const Index = () => {
       toast.dismiss(activeToastId);
       detailsLoadingToastRef.current = null;
     }
+    // Fixed-ID fallback: if Sonner already recycled the toast id or the user
+    // opens AN from persisted Continue Watching cache, this still force-closes
+    // the exact loading notification. The X button uses this same path.
+    try { toast.dismiss(DETAILS_LOADING_TOAST_ID); } catch {}
   }, []);
 
   const showDetailsLoadingToast = useCallback(() => {
     dismissDetailsLoadingToast();
     const toastId = toast.loading("Loading details...", {
+      id: DETAILS_LOADING_TOAST_ID,
       duration: 12000,
       closeButton: true,
       action: {
