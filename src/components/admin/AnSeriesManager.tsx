@@ -242,10 +242,26 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
     return map;
   }, [webseries]);
 
+  // Title-based index of NON-AN (manually added in RS) series, so we can skip
+  // fetching anime that the admin already maintains in RS. AN-generated entries
+  // are excluded here because those legitimately belong to AN.
+  const rsTitleIndex = useMemo(() => {
+    const norm = (s: string) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const map = new Map<string, { id: string; data: any }>();
+    Object.entries(webseries || {}).forEach(([id, data]: [string, any]) => {
+      const anSlug = String(data?.anSlug || data?.animeSaltSlug || "").trim();
+      if (anSlug) return; // skip AN-generated
+      const title = norm(data?.title || "");
+      if (title) map.set(title, { id, data });
+    });
+    return { map, norm };
+  }, [webseries]);
+
   const enrichedItems = useMemo(() => selectedItems.map((item) => {
     const existing = webseriesBySlug.get(item.slug) || (webseries[webseriesIdForSlug(item.slug)] ? { id: webseriesIdForSlug(item.slug), data: webseries[webseriesIdForSlug(item.slug)] } : null);
-    return { ...item, webseriesId: existing?.id || "", saved: existing?.data || null };
-  }), [selectedItems, webseries, webseriesBySlug]);
+    const rsConflict = !existing ? rsTitleIndex.map.get(rsTitleIndex.norm(item.title)) || null : null;
+    return { ...item, webseriesId: existing?.id || "", saved: existing?.data || null, rsConflict };
+  }), [selectedItems, webseries, webseriesBySlug, rsTitleIndex]);
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -254,7 +270,8 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
   }, [enrichedItems, search]);
 
   const addedCount = enrichedItems.filter((item) => item.saved).length;
-  const pendingCount = Math.max(0, enrichedItems.length - addedCount);
+  const skippedCount = enrichedItems.filter((item) => !item.saved && item.rsConflict).length;
+  const pendingCount = Math.max(0, enrichedItems.length - addedCount - skippedCount);
 
   const fetchAndSaveSeries = async (item: SelectedAnItem) => {
     if (!item.slug) return;
