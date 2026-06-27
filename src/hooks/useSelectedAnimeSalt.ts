@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db, ref, onValue, get } from '@/lib/firebase';
+import { db, ref, onValue } from '@/lib/firebase';
 import type { AnimeItem } from '@/data/animeData';
 
 const normalizeUrl = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
