@@ -377,6 +377,7 @@ const getAnimeSaltDirectState = async (episodeSlug: string, forceRefresh = false
       const response = await fetch(`${base}/episode?slug=${encodeURIComponent(key)}&force=1&_=${Date.now()}`);
       if (!response.ok) return null;
       const payload = await response.json();
+      const built = await buildAnimeSaltDirectPlaybackState(payload);
       // Fire-and-forget persist so the next visit is instant.
       try {
         set(ref(db, `anSeries/${seriesSlug}/episodes/${key}`), {
@@ -384,13 +385,14 @@ const getAnimeSaltDirectState = async (episodeSlug: string, forceRefresh = false
           directUrl: payload?.directUrl || "",
           links: Array.isArray(payload?.links) ? payload.links : [],
           sources: Array.isArray(payload?.sources) ? payload.sources : [],
+          audioTracks: built?.audioTracks || [],
           defaultAudioIdx: payload?.defaultAudioIdx ?? 0,
           preferredAudio: payload?.preferredAudio || "",
           broken: false,
           updatedAt: Date.now(),
         }).catch(() => {});
       } catch {}
-      return await buildAnimeSaltDirectPlaybackState(payload);
+      return built;
     } catch {
       return null;
     }
