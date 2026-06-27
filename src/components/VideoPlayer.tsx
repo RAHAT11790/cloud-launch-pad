@@ -2236,15 +2236,29 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return;
     }
 
-    const hlsSource = buildReliableHlsSource(currentSrc);
+    let hlsObjectUrl: string | null = null;
+    let hlsSource = buildReliableHlsSource(currentSrc);
+    if (isDataHlsUrl(hlsSource)) {
+      try {
+        const comma = hlsSource.indexOf(",");
+        const meta = hlsSource.slice(0, comma).toLowerCase();
+        const payload = hlsSource.slice(comma + 1);
+        const text = meta.includes(";base64") ? decodeURIComponent(escape(atob(payload))) : decodeURIComponent(payload);
+        hlsObjectUrl = URL.createObjectURL(new Blob([text], { type: "application/vnd.apple.mpegurl" }));
+        hlsSource = hlsObjectUrl;
+      } catch {}
+    }
 
     // Safari: native HLS — still expose subtitle tracks via TextTrackList
     if (v.canPlayType("application/vnd.apple.mpegurl") && !Hls.isSupported()) {
       v.src = hlsSource;
-      return;
+      return () => { if (hlsObjectUrl) URL.revokeObjectURL(hlsObjectUrl); };
     }
 
-    if (!Hls.isSupported()) return;
+    if (!Hls.isSupported()) {
+      if (hlsObjectUrl) URL.revokeObjectURL(hlsObjectUrl);
+      return;
+    }
 
     // Fresh instance per source change
     if (hlsRef.current) {
@@ -2433,6 +2447,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return () => {
       try { hls.destroy(); } catch {}
       if (hlsRef.current === hls) hlsRef.current = null;
+      if (hlsObjectUrl) URL.revokeObjectURL(hlsObjectUrl);
     };
   }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive, tryNextPlaybackRoute, externalSubtitleOptions, selectedLanguage, buildReliableHlsSource, anApiHlsBaseUrl]);
 
