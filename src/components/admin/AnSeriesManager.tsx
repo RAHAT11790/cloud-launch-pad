@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { db, ref, set, get, onValue, remove } from "@/lib/firebase";
-import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
+// Reads animesaltSelected directly (not the gated hook) so pending items are visible to fetch.
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { toast } from "sonner";
 import {
@@ -76,7 +76,8 @@ const normalizeEpisode = (slug: string, number: number, raw: any): EpisodeRow =>
 };
 
 const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass }: Props) => {
-  const { items: saltItems, loading: saltLoading } = useSelectedAnimeSalt();
+  const [saltItems, setSaltItems] = useState<Array<{ slug: string; title: string; poster: string; type: string }>>([]);
+  const [saltLoading, setSaltLoading] = useState(true);
   const [stored, setStored] = useState<Record<string, StoredSeries>>({});
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState<string | null>(null); // slug being fetched/saved
@@ -91,7 +92,19 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass }: Pr
     const u = onValue(ref(db, "anSeries"), (snap) => {
       setStored(snap.val() || {});
     });
-    return () => u();
+    const u2 = onValue(ref(db, "animesaltSelected"), (snap) => {
+      const data = snap.val() || {};
+      const arr = Object.entries(data).map(([slug, item]: [string, any]) => ({
+        slug,
+        title: item?.title || slug,
+        poster: item?.poster || item?.tmdbPoster || item?.posterUrl || "",
+        type: item?.type === "movies" || item?.type === "movie" ? "movie" : "series",
+      }));
+      arr.sort((a, b) => a.title.localeCompare(b.title));
+      setSaltItems(arr);
+      setSaltLoading(false);
+    });
+    return () => { u(); u2(); };
   }, []);
 
   // Counts
