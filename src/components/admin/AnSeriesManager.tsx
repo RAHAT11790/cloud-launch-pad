@@ -446,7 +446,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start gap-2">
                       <h4 className="text-sm font-semibold mb-1 truncate flex-1">{item.title || "Untitled"}</h4>
-                      {saved ? <span className="text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 px-2 py-0.5 flex items-center gap-1"><CheckCircle2 size={10} /> Added</span> : <span className="text-[10px] rounded-full bg-amber-500/20 text-amber-300 px-2 py-0.5">Pending</span>}
+                      {saved ? <span className="text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 px-2 py-0.5 flex items-center gap-1"><CheckCircle2 size={10} /> Added</span> : item.rsConflict ? <span className="text-[10px] rounded-full bg-sky-500/20 text-sky-300 px-2 py-0.5">In RS</span> : <span className="text-[10px] rounded-full bg-amber-500/20 text-amber-300 px-2 py-0.5">Pending</span>}
                     </div>
                     <p className="text-[11px] text-[#D1C4E9] mb-2">{item.year || "N/A"} • {item.rating || "N/A"}⭐ • {item.category || "No Category"}</p>
                     <p className="text-[11px] text-[#D1C4E9]">{saved ? `${episodeCount} Episodes • RS-style Firebase card` : "Click Fetch to auto-fill video/audio links into RS rows"}</p>
