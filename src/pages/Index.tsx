@@ -178,6 +178,9 @@ const buildAnSyntheticMaster = (
   defaultAudioIdx?: number,
 ) => {
   const resolvedDefault = typeof defaultAudioIdx === "number" ? defaultAudioIdx : pickAnDefaultAudioIdx(audio);
+  if (!audio.length || String(stream?.url || "").trim().startsWith("data:application/vnd.apple.mpegurl")) {
+    return buildAnHlsPlaybackUrl(stream.url);
+  }
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audio.forEach((track, index) => {
     const rawName = String(track?.name || track?.language || `Audio ${index + 1}`).replace(/"/g, "").trim();
@@ -253,8 +256,35 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   const resolvedPayload = payload?.data && !Array.isArray(payload?.sources) ? payload.data : payload;
   const sourceList = Array.isArray(resolvedPayload?.sources) ? resolvedPayload.sources : [];
   const primarySource = sourceList.find((entry: any) => Array.isArray(entry?.streams) && entry.streams.length > 0) || sourceList[0];
-  const streams = Array.isArray(primarySource?.streams) ? primarySource.streams.filter((entry: any) => String(entry?.url || "").trim()) : [];
-  const audio = Array.isArray(primarySource?.audio) ? primarySource.audio.filter((entry: any) => String(entry?.uri || "").trim()) : [];
+  const linkStreams = Array.isArray(resolvedPayload?.links)
+    ? resolvedPayload.links.map((entry: any, index: number) => ({
+        url: String(entry?.url || entry?.src || "").trim(),
+        label: String(entry?.label || entry?.quality || entry?.resolution || (index === 0 ? "Auto" : `Source ${index + 1}`)).trim(),
+        height: Number(entry?.height || String(entry?.label || entry?.quality || "").match(/\d{3,4}/)?.[0] || 0) || undefined,
+        bandwidth: Number(entry?.bandwidth || 0) || undefined,
+        resolution: entry?.resolution,
+      }))
+    : [];
+  const directUrl = String(resolvedPayload?.directUrl || resolvedPayload?.master || resolvedPayload?.videoSource || resolvedPayload?.securedLink || resolvedPayload?.streamUrl || resolvedPayload?.videoUrl || resolvedPayload?.file || "").trim();
+  const streams = (
+    Array.isArray(primarySource?.streams) && primarySource.streams.length
+      ? primarySource.streams
+      : (linkStreams.length ? linkStreams : (directUrl ? [{ url: directUrl, label: "Auto" }] : []))
+  ).filter((entry: any) => String(entry?.url || "").trim());
+  const storedAudio = Array.isArray(resolvedPayload?.audioTracks)
+    ? resolvedPayload.audioTracks
+        .map((track: any) => ({
+          language: track?.language || track?.label || track?.name,
+          name: track?.label || track?.name || track?.language,
+          uri: track?.rawAudioUrl || track?.audioUrl || track?.uri || track?.url,
+        }))
+        .filter((entry: any) => String(entry?.uri || "").trim())
+    : [];
+  const audio = (
+    Array.isArray(primarySource?.audio) && primarySource.audio.length
+      ? primarySource.audio
+      : (Array.isArray(resolvedPayload?.audio) && resolvedPayload.audio.length ? resolvedPayload.audio : storedAudio)
+  ).filter((entry: any) => String(entry?.uri || "").trim());
 
   if (streams.length === 0) return null;
 
@@ -275,7 +305,20 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   // Reorder audioTracks so Hindi (when present) is first → VideoPlayer picks
   // it as the default language pill and matching HLS audio track.
   const normalized = normalizeAnAudioTracks(audio, streams);
-  let audioTracks = normalized;
+  const existingAudioTracks = Array.isArray(resolvedPayload?.audioTracks)
+    ? resolvedPayload.audioTracks
+        .map((track: any) => ({
+          language: String(track?.language || track?.label || "").trim(),
+          label: String(track?.label || track?.language || "").trim(),
+          link: String(track?.link1080 || track?.link || "").trim(),
+          link480: track?.link480,
+          link720: track?.link720,
+          link1080: track?.link1080,
+          link4k: track?.link4k,
+        }))
+        .filter((track: any) => track.label && track.link)
+    : undefined;
+  let audioTracks = normalized?.length ? normalized : existingAudioTracks;
   if (normalized && normalized.length > 1) {
     const hindiIdx = normalized.findIndex((t) =>
       /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language} ${t.label}`),
