@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { db, ref, set, get, onValue, remove } from "@/lib/firebase";
-// Reads animesaltSelected directly (not the gated hook) so pending items are visible to fetch.
+import { useAnimeSaltData } from "@/hooks/useAnimeSaltData";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { toast } from "sonner";
 import {
