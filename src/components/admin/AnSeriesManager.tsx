@@ -62,18 +62,19 @@ const normalizeAnApiBaseUrl = (value: string): string => {
 
 const getAnApiBase = async () => normalizeAnApiBaseUrl(await getEdgeFunctionUrl("an-api"));
 
-const isRawAnHls = (url?: string | null) => {
-  const value = String(url || "").trim().toLowerCase();
-  return /^https?:\/\//.test(value) && value.includes("/hls/");
-};
-
-// Chromium/hls.js must fetch HLS manifests by XHR, and AnimeSalt CDN does not
-// reliably expose CORS. Store HLS URLs through AN API's HLS relay so playback,
-// audio tracks, and the downloader all use the same validated path.
-const reliableHls = (base: string, url?: string | null) => {
+// HLS URLs from AnimeSalt are plain HTTPS and play directly through hls.js /
+// native HLS. We deliberately do NOT wrap them in the AN-API /hls relay any
+// more — direct playback is faster and removes a fragile hop. If an old URL
+// is already proxied, strip the wrapper back to the original URL so playback
+// goes straight to the CDN.
+const reliableHls = (_base: string, url?: string | null) => {
   const raw = String(url || "").trim();
-  if (!raw || !base || !isRawAnHls(raw) || /\/an-api\/hls\?/i.test(raw)) return raw;
-  return `${base.replace(/\/+$/, "")}/hls?url=${encodeURIComponent(raw)}`;
+  if (!raw) return "";
+  const proxyMatch = raw.match(/\/an-api\/hls\?url=([^&]+)/i);
+  if (proxyMatch) {
+    try { return decodeURIComponent(proxyMatch[1]); } catch { return raw; }
+  }
+  return raw;
 };
 
 const encodeMaster = (content: string) => `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(content)))}`;
