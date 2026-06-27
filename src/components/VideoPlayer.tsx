@@ -2172,17 +2172,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      // Ultra-fast start: skip bandwidth probe, assume strong link.
-      testBandwidth: false,
-      abrEwmaDefaultEstimate: 8_000_000,
-      abrBandWidthFactor: 0.95,
-      abrBandWidthUpFactor: 0.8,
+      // Fast but stable ABR: allow real bandwidth testing instead of forcing a
+      // guessed 8 Mbps path. That guess could stall AN/RS on phones, making the
+      // player appear to "sip" only 200-300KB and never build a healthy buffer.
+      testBandwidth: true,
+      abrEwmaDefaultEstimate: 3_500_000,
+      abrBandWidthFactor: 0.85,
+      abrBandWidthUpFactor: 0.7,
       // Bigger forward buffer → seeking/skipping lands inside already-loaded
       // chunks ~95% of the time. Back buffer kept tight to free memory.
       backBufferLength: 20,
-      maxBufferLength: 120,
-      maxMaxBufferLength: 300,
-      maxBufferSize: 220 * 1000 * 1000,
+      maxBufferLength: 90,
+      maxMaxBufferLength: 240,
+      maxBufferSize: 160 * 1000 * 1000,
       maxBufferHole: 0.3,
       highBufferWatchdogPeriod: 1,
       nudgeMaxRetry: 8,
