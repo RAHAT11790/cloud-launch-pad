@@ -36,7 +36,7 @@ async function fetchJson(url: string, timeoutMs = 15000): Promise<any | null> {
 }
 
 const AnFirebasePrefetcher = ({ glassCard, btnPrimary, btnSecondary }: Props) => {
-  const { items: saltItems, loading: saltLoading } = useAnimeSaltData();
+  const { items: saltItems, loading: saltLoading } = useSelectedAnimeSalt();
   const [singleSlug, setSingleSlug] = useState("");
   const [running, setRunning] = useState<null | "all" | "single" | "repair">(null);
   const [logs, setLogs] = useState<LogLine[]>([]);
