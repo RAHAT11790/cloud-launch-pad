@@ -198,6 +198,17 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
       return mapped;
     });
   }
+  // Admin editor has separate fields for Default, 1080p, 480p, 720p and 4K.
+  // The requested behavior is: the Default field must contain the 1080p AN URL
+  // whenever 1080p exists, not a generic/auto/first URL. Keep the explicit
+  // 1080p field populated with the same playable source as well.
+  if (episode.link1080) episode.link = episode.link1080;
+  if (episode.audioTracks?.length) {
+    episode.audioTracks = episode.audioTracks.map((track) => ({
+      ...track,
+      link: track.link1080 || track.link,
+    }));
+  }
   return episode;
 };
 
