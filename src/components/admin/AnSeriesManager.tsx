@@ -344,7 +344,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       };
 
       await set(ref(db, `webseries/${targetId}`), stripUndefined(seriesData));
-      await set(ref(db, `anSeries/${item.slug}/meta`), {
+      await set(ref(db, `anSeries/${item.slug}/meta`), stripUndefined({
         title: seriesData.title,
         poster,
         backdrop,
@@ -353,8 +353,8 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         episodeCount: seasons.reduce((sum, season) => sum + season.episodes.length, 0),
         webseriesId: targetId,
         updatedAt: savedAt,
-      });
-      await Promise.all(Object.entries(anSeriesEpisodes).map(([epSlug, payload]) => set(ref(db, `anSeries/${item.slug}/episodes/${epSlug}`), payload)));
+      }));
+      await Promise.all(Object.entries(anSeriesEpisodes).map(([epSlug, payload]) => set(ref(db, `anSeries/${item.slug}/episodes/${epSlug}`), stripUndefined(payload))));
       toast.success(`✓ ${seriesData.title} saved like RS series`);
     } catch (err: any) {
       toast.error(err?.message || `Fetch failed for ${item.title}`);
