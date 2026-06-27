@@ -1,74 +1,88 @@
-# AN Firebase Prefetch + Player Fixes
+## লক্ষ্য
 
-## 1. AN Link Prefetch → Firebase (Admin Panel)
-**New file:** `src/components/admin/AnFirebasePrefetcher.tsx` (mounted inside the existing AnimeSalt/AN section of `Admin.tsx`).
+দুটো আলাদা সমস্যা একসাথে সমাধান:
 
-UI:
-- **"All Series"** button — iterates every AN series currently surfaced in the user panel, calls `/anime?slug=` then `/episode?slug=` per episode, stores results.
-- **"Single Series"** — slug input, prefetches just that one.
-- **"Repair Broken"** — re-fetches only episodes flagged `broken: true`.
-- Live progress log (current series / episode / success / fail counters).
-- Concurrency: 4 episodes in parallel, 250ms throttle between series to avoid rate-limit.
+1. **AN playback এখনো slow** — Firebase-এ data থাকা সত্ত্বেও card click / episode switch-এ ~১০s delay হচ্ছে। মানে `Index.tsx`-এর AN resolver Firebase-first পথে যাচ্ছে না, বা cache lookup async API call-এর পরে চলছে।
+2. **AN Series management নেই** — RS series-এর মতো editable interface দরকার, যাতে Fetch button দিয়ে AN API থেকে data টানা যায়, প্রতিটা episode/quality/audio আলাদা ঘরে দেখা যায়, edit/refresh করা যায়, count দেখা যায়।
 
-**Firebase path (confirmed):**
+---
+
+## পরিবর্তন (২ ভাগে)
+
+### Part A — AN playback instant করা (root-cause fix)
+
+`src/pages/Index.tsx` এর `getAnimeSaltDirectState` (AN card click handler) audit করব:
+
+- নিশ্চিত করব `anSeries/{slug}/episodes/{epSlug}` Firebase node থেকে synchronously read হচ্ছে first
+- Firebase hit হলে কোনো API call, কোনো toast, কোনো `await fetch()` chain ছাড়াই direct play
+- Episode switcher (VideoPlayer পাশে) এর data source-ও Firebase-direct করব
+- শুধু Firebase miss হলে API fallback — সেক্ষেত্রে background-এ result Firebase-এ লিখে রাখবে
+
+### Part B — Admin → Series → "AN Series" tab (RS-style)
+
+**Location:** Admin → Series → Add New → Manual এর পাশে নতুন tab `"as-list" / "as-manual"`। Settings থেকে existing `AnFirebasePrefetcher` সরিয়ে নেব।
+
+**নতুন component:** `src/components/admin/AnSeriesManager.tsx`
+
+UI layout (RS series-এর design tokens মেনে):
+
+```text
+┌─ AN Series ──────────────────────────────────┐
+│ Stats: Added 42 / Total 87 · Pending 45      │
+│ [Bulk Fetch All]  [Repair Broken]            │
+├──────────────────────────────────────────────┤
+│ [Search...]                                  │
+│ ┌──────────────┬──────────────┐              │
+│ │ poster  ✓    │ poster        │  ← grid     │
+│ │ Naruto       │ Bleach        │             │
+│ │ 220 eps      │ not fetched   │             │
+│ │ [Edit]       │ [Fetch]       │             │
+│ └──────────────┴──────────────┘              │
+└──────────────────────────────────────────────┘
 ```
-anSeries/{slug}/
-  meta: { title, poster, type, updatedAt }
-  episodes/{epSlug}/
-    number, title, directUrl, links: [{quality,url}],
-    audio, defaultAudioIdx, preferredAudio,
-    updatedAt, broken: false
-```
 
-## 2. Reader Side — Read From Firebase First
-Edit `src/hooks/useAnimeSaltData.ts` (or wherever AN episode resolves in `AnNativeView.tsx` / `Index.tsx`):
-- Before calling `an-api /episode`, read `anSeries/{slug}/episodes/{epSlug}` from Firebase.
-- If found and not `broken` → return instantly (no toast).
-- If missing/broken → fall back to API, then write result back to Firebase.
-- On playback error in `VideoPlayer.tsx`, mark `broken: true` so the repair button can pick it up; auto-trigger one silent API refetch and update Firebase.
+**Edit modal** (per series):
 
-## 3. Remove "Loading details…" Toast
-- Delete `showDetailsLoadingToast()` calls in `src/pages/Index.tsx` and AN card handlers.
-- Remove the global event/toast-id wiring added for it.
+- Header: title, poster, [Refresh from AN] button
+- Episode list: শুধু AN API যতগুলো episode return করে ততগুলো ঘর (২৪ episode থাকলেও AN-এ ২০ থাকলে ২০টাই)
+- প্রতিটা episode card-এ:
+  - Episode number + slug
+  - Quality rows: 360p / 480p / 720p / 1080p — প্রত্যেকটার আলাদা URL field
+  - Audio rows: প্রতিটা audio track-এর আলাদা URL field
+  - Per-episode [Refetch] button
+- [Save All] → `anSeries/{slug}/episodes/*` Firebase-এ লেখে
 
-## 4. Player — Check Size 1 MB
-`src/components/VideoPlayer.tsx` HLS config:
-- `maxBufferSize: 1 * 1024 * 1024` (was much larger)
-- Keep `maxBufferLength` reasonable (30s) so low-power phones cope.
+**Data source:** existing `useSelectedAnimeSalt` (user panel-এ যা দেখায় ঠিক সেইগুলোই)। AN API call হবে `getEdgeFunctionUrl("an-api")` দিয়ে — existing prefetcher-এর fetch logic reuse করব।
 
-## 5. Brightness Gesture Zone (Left 30% / Middle 40% dead / Right 30% volume)
-`VideoPlayer.tsx` vertical-swipe handler:
-```
-const w = rect.width;
-const x = touch.clientX - rect.left;
-if (x < w * 0.30) → brightness
-else if (x > w * 0.70) → volume
-else → ignore (no-op, allow tap/seek)
-```
-Removes the current middle-zone brightness bug.
+**Counts:** stored series count Firebase `anSeries` থেকে live, total = saltItems.length, pending = diff।
 
-## 6. Hanging Face Server ("video লোড হয় না, কিছুই দেখায় না")
-- Inspect the server entry in admin server list (likely `huggingface.co/spaces/...` proxy).
-- Symptom = silent fail → almost certainly mixed-content / CORS on the HF Space.
-- Fix: route Hanging Face URLs through `video-proxy` like other HTTP sources, and add HF host to proxy allowlist. Add a 5s probe; if no `loadedmetadata`, mark server failed and show clear toast instead of blank.
+### Part C — Settings cleanup
 
-## 7. Testing
-After build, Playwright on preview:
-- Open one AN series, run "Single Series" prefetch, verify Firebase write.
-- Re-open episode → confirm instant load (no toast, no API call in network panel).
-- Switch episode → < 1s.
-- Verify brightness only triggers on left 30%.
-- Verify Hanging Face server now plays or fails loudly.
+`Admin.tsx` settings section থেকে `<AnFirebasePrefetcher />` mount remove, নতুন section route `"animesalt-manager"` (বা new `"an-series"`) এর Series tab-এ wire করব।
 
-## Files Touched
-- `src/components/admin/AnFirebasePrefetcher.tsx` (new)
-- `src/components/admin/Admin.tsx` or wherever AN admin section lives (mount component)
-- `src/hooks/useAnimeSaltData.ts`
-- `src/components/AnNativeView.tsx`
-- `src/components/VideoPlayer.tsx`
-- `src/pages/Index.tsx` (remove toast)
-- `supabase/functions/video-proxy/index.ts` (HF host allowlist if restricted)
+---
 
-## Out of Scope
-- No changes to RS pipeline.
-- No schema changes beyond the new `anSeries/*` Firebase node.
+## টেস্টিং
+
+1. Build/typecheck pass
+2. Playwright-এ preview-তে login → Admin → Series → AN Series tab খুলবে, একটা series fetch করব, edit modal-এ episodes ও quality ঘর দেখব, save করব
+3. User panel-এ ওই AN series card click করে measure করব — Firebase hit হলে <1s switch হচ্ছে কিনা
+4. Screenshot পাঠাব
+
+---
+
+## টেকনিক্যাল ডিটেইলস
+
+- নতুন file: `src/components/admin/AnSeriesManager.tsx` (~400 lines, RS series card grid pattern থেকে token reuse)
+- পরিবর্তিত file: `src/pages/Admin.tsx` (series tab type union-এ `"as-list" | "as-manual"` যোগ, settings থেকে prefetcher unmount, series section-এ mount), `src/pages/Index.tsx` (AN resolver-এ Firebase-first guard)
+- Firebase schema unchanged — same `anSeries/{slug}/{meta,episodes/{epSlug}}` যা prefetcher আগেই লিখছে
+- `AnFirebasePrefetcher.tsx` rename/refactor হবে না — internal-এ reuse হবে, কিন্তু UI shell নতুন
+
+---
+
+## কী touch করব না
+
+- Video player, gestures, proxy, edge functions — অপরিবর্তিত
+- AN API edge function — অপরিবর্তিত
+- RS series flow — অপরিবর্তিত
+- এইখানে আরেকটা গুরুত্বপূর্ণ জিনিস করতে হবে এটা হল বর্তমানে যতগুলা An কার্ডগুলো আছে যেগুলা এপিআই থেকে লোড হয়েছে এই সবকিছুকে স্টপ করে দিতে হবে রিমুভ করে দিতে হবে ইউজার প্যানেল থেকে বুঝেছ সবগুলাকে ইউজার প্যানেল মানে এ পি আই এন এম সিলেট থেকে মানে এনিমি ফাংশন থেকে যতগুলা কার্ড এখন আমার ইউজার প্যানেলে দেখাইতেছে ওই সবগুলোকে বন্ধ করে দিতে হবে কারণ এইগুলা যদি বন্ধ না করি তখন ওইখান থেকে যে পেচ করব ওই গুলার সাথে এগুলো ডাটা লাগিয়ে যাবে কারণ এইগুলা এখন আর এস এর মতন এড হবে তাই এগুলোর সাথে ওইগুলো এপিআই এর গুলার প্যাচ লেগে যাবে তাই এপিয়ারের সমস্ত এখন যতগুলা পোস্ট আছে এন এর যতগুলা পোস্ট আছে প্রত্যেকটা বাদ যাবে প্রত্যেকটা রিমুভ আমি ওইখান থেকে সার্চ করে যখন পেচ বাটনে ক্লিক করবো যতগুলা সিরিজ ছায়াছবি শুধু ওইগুলাই আবার ইউজার প্যানেলে যাবি পেয়ারের সবগুলা বাদ যাবে এটা গুরুত্বপূর্ণ জিনিস। 
