@@ -146,6 +146,15 @@ const buildAnProxyUrl = (url: string) => {
   return `${anApiBaseUrl}/hls?url=${encodeURIComponent(url)}`;
 };
 
+const buildAnHlsPlaybackUrl = (url: string) => {
+  const raw = String(url || "").trim();
+  if (!raw) return raw;
+  // HTTPS AnimeSalt CDN streams should play directly. Routing every segment
+  // through /an-api/hls throttles bandwidth to a few hundred KB/s on phones.
+  // Keep the edge proxy only for true http:// mixed-content sources.
+  return raw.toLowerCase().startsWith("http://") ? buildAnProxyUrl(raw) : raw;
+};
+
 // Prefer Hindi as the default audio track for AnimeSalt content.
 // Falls back to the first track when no Hindi variant exists.
 const pickAnDefaultAudioIdx = (audio: Array<{ language?: string; name?: string; uri?: string }>) => {
@@ -175,14 +184,14 @@ const buildAnSyntheticMaster = (
     const uri = String(track?.uri || "").trim();
     if (!uri) return;
     lines.push(
-      `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${rawName}",LANGUAGE="${rawLanguage || `aud${index + 1}`}",DEFAULT=${index === resolvedDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${buildAnProxyUrl(uri)}"`,
+      `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${rawName}",LANGUAGE="${rawLanguage || `aud${index + 1}`}",DEFAULT=${index === resolvedDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${buildAnHlsPlaybackUrl(uri)}"`,
     );
   });
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
   lines.push(
     `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${stream.height || 720}x${Math.round(((stream.height || 720) * 16) / 9)}`}${audioRef}`,
   );
-  lines.push(buildAnProxyUrl(stream.url));
+  lines.push(buildAnHlsPlaybackUrl(stream.url));
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(lines.join("\n"))))}`;
 };
 
