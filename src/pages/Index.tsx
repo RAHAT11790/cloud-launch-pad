@@ -189,7 +189,7 @@ const buildAnSyntheticMaster = (
   });
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
   lines.push(
-    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${stream.height || 720}x${Math.round(((stream.height || 720) * 16) / 9)}`}${audioRef}`,
+    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${Math.round(((stream.height || 720) * 16) / 9)}x${stream.height || 720}`}${audioRef}`,
   );
   lines.push(buildAnHlsPlaybackUrl(stream.url));
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(lines.join("\n"))))}`;
@@ -253,7 +253,7 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   if (streams.length === 0) return null;
 
   const primaryStream = streams[0];
-  const defaultAudioIdx = pickAnDefaultAudioIdx(audio);
+  const defaultAudioIdx = typeof resolvedPayload?.defaultAudioIdx === "number" ? resolvedPayload.defaultAudioIdx : pickAnDefaultAudioIdx(audio);
   const preferredQualityIdx = pickAnPreferredQualityIdx(streams);
   const qualityOptions = streams.map((stream: any) => ({
     label: String(stream?.label || (stream?.height ? `${stream.height}p` : "Auto")).trim() || "Auto",
