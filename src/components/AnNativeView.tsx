@@ -64,7 +64,9 @@ function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAu
     );
   });
   const audioRef = audios.length > 0 ? ',AUDIO="aud"' : "";
-  lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || stream.height * 5000},RESOLUTION=${stream.resolution || `${stream.height}p`}${audioRef}`);
+  const height = Number(stream.height || 720);
+  const resolution = stream.resolution || `${Math.round((height * 16) / 9)}x${height}`;
+  lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max(height * 5000, 2560000)},RESOLUTION=${resolution}${audioRef}`);
   lines.push(hlsUrl(apiBase, stream.url));
   const text = lines.join("\n");
   // data URL avoids needing yet another endpoint; hls.js handles it natively
