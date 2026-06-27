@@ -2180,9 +2180,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // Bigger forward buffer → seeking/skipping lands inside already-loaded
       // chunks ~95% of the time. Back buffer kept tight to free memory.
       backBufferLength: 20,
-      maxBufferLength: 60,
-      maxMaxBufferLength: 180,
-      maxBufferSize: 150 * 1000 * 1000,
+      maxBufferLength: 120,
+      maxMaxBufferLength: 300,
+      maxBufferSize: 220 * 1000 * 1000,
       maxBufferHole: 0.3,
       highBufferWatchdogPeriod: 1,
       nudgeMaxRetry: 8,
