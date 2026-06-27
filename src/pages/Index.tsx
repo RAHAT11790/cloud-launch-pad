@@ -156,6 +156,13 @@ const buildAnHlsPlaybackUrl = (url: string) => {
   return raw;
 };
 
+const buildAnAudioHlsPlaybackUrl = (url: string) => {
+  const raw = buildAnHlsPlaybackUrl(url);
+  if (!raw || !anApiBaseUrl) return raw;
+  if (/\/hls\?url=/i.test(raw)) return raw;
+  return `${anApiBaseUrl.replace(/\/+$/, "")}/hls?url=${encodeURIComponent(raw)}`;
+};
+
 // Prefer Hindi as the default audio track for AnimeSalt content.
 // Falls back to the first track when no Hindi variant exists.
 const pickAnDefaultAudioIdx = (audio: Array<{ language?: string; name?: string; uri?: string }>) => {
@@ -188,7 +195,7 @@ const buildAnSyntheticMaster = (
     const uri = String(track?.uri || "").trim();
     if (!uri) return;
     lines.push(
-      `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${rawName}",LANGUAGE="${rawLanguage || `aud${index + 1}`}",DEFAULT=${index === resolvedDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${buildAnHlsPlaybackUrl(uri)}"`,
+      `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${rawName}",LANGUAGE="${rawLanguage || `aud${index + 1}`}",DEFAULT=${index === resolvedDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${buildAnAudioHlsPlaybackUrl(uri)}"`,
     );
   });
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
