@@ -159,7 +159,10 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   const preferredStream = streams.find((stream) => stream.height === 720) || streams[0];
   const makeUrl = (stream?: any, audioIdx = defaultAudioIdx) => {
     if (!stream?.url) return "";
-    return buildSyntheticMaster(base, stream, audio, audioIdx);
+    const raw = String(stream.url || "").trim();
+    const isHls = /\.m3u8(?:[?#].*)?$/i.test(raw);
+    if (!isHls) return raw;
+    return audio.length ? buildSyntheticMaster(base, stream, audio, audioIdx) : proxifyAnHls(base, raw);
   };
   const episode: RsEpisode = {
     episodeNumber: fallback.number,
@@ -186,6 +189,18 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
     });
   }
   return episode;
+};
+
+const stripUndefined = <T,>(value: T): T => {
+  if (Array.isArray(value)) return value.map(stripUndefined) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, any>)
+        .filter(([, entry]) => entry !== undefined)
+        .map(([key, entry]) => [key, stripUndefined(entry)]),
+    ) as T;
+  }
+  return value;
 };
 
 const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEditSeries }: Props) => {
@@ -328,7 +343,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         createdAt: existing?.data?.createdAt || item.addedAt || savedAt,
       };
 
-      await set(ref(db, `webseries/${targetId}`), seriesData);
+      await set(ref(db, `webseries/${targetId}`), stripUndefined(seriesData));
       await set(ref(db, `anSeries/${item.slug}/meta`), {
         title: seriesData.title,
         poster,
