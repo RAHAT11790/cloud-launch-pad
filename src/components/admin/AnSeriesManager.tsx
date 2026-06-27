@@ -62,25 +62,23 @@ const normalizeAnApiBaseUrl = (value: string): string => {
 
 const getAnApiBase = async () => normalizeAnApiBaseUrl(await getEdgeFunctionUrl("an-api"));
 
-const proxifyAnHls = (base: string, url?: string | null) => {
-  const raw = String(url || "").trim();
-  if (!raw) return "";
-  if (!/^https?:\/\//i.test(raw)) return raw;
-  if (!/\.m3u8(?:[?#].*)?$/i.test(raw)) return raw;
-  return `${base}/hls?url=${encodeURIComponent(raw)}`;
-};
+// HLS links MUST stay raw — they play directly inside the <video> tag via
+// hls.js. The player labels them as "HLS" automatically. Routing them through
+// the admin's an-api ({base}/hls?url=...) makes playback fail because the
+// admin server is not designed to relay third-party HLS segments.
+const passthroughHls = (url?: string | null) => String(url || "").trim();
 
 const encodeMaster = (content: string) => `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(content)))}`;
 
 const buildSyntheticMaster = (
-  base: string,
+  _base: string,
   stream: { url: string; label?: string; height?: number; bandwidth?: number; resolution?: string },
   audio: Array<{ uri?: string; name?: string; language?: string }>,
   defaultAudioIdx = 0,
 ) => {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audio.forEach((track, index) => {
-    const uri = proxifyAnHls(base, track?.uri);
+    const uri = passthroughHls(track?.uri);
     if (!uri) return;
     const name = String(track?.name || track?.language || `Audio ${index + 1}`).replace(/"/g, "").trim();
     const lang = String(track?.language || name || `aud${index + 1}`).replace(/"/g, "").trim().toLowerCase();
@@ -89,7 +87,7 @@ const buildSyntheticMaster = (
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
   const height = Number(stream?.height || String(stream?.label || "").match(/\d{3,4}/)?.[0] || 720);
   lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max(height * 5000, 1_500_000)},RESOLUTION=${stream.resolution || `${Math.round((height * 16) / 9)}x${height}`}${audioRef}`);
-  lines.push(proxifyAnHls(base, stream.url));
+  lines.push(passthroughHls(stream.url));
   return encodeMaster(lines.join("\n"));
 };
 
