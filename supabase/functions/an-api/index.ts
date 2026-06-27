@@ -1,5 +1,5 @@
 // ============================================================
-// an-api — OLD/STABLE AnimeSalt extractor (NO subtitle logic)
+// an-api — NEW ultra-fast AnimeSalt extractor (NO subtitle logic)
 // ============================================================
 // Endpoints:
 //   GET  /                       → endpoint list
@@ -125,6 +125,9 @@ function uniqueBy<T>(items: T[], getKey: (item: T) => string) {
 
 // ---------- SEARCH ----------
 async function search(q: string) {
+  const cacheKey = `search:${q.toLowerCase().trim()}`;
+  const cached = getCache<any[]>(cacheKey);
+  if (cached) return cached;
   const html = await fetchText(`${AN_BASE}/?s=${encodeURIComponent(q)}`);
   const out: any[] = [];
   const seen = new Set<string>();
@@ -167,12 +170,15 @@ async function search(q: string) {
       out.push({ slug, type, title: titleM ? decode(titleM[1]) : slug.replace(/-/g, " "), poster: imgM ? resolveUrl(imgM[1], AN_BASE) : "", year: yearM?.[0] || "", detailUrl: `${AN_BASE}/${type}/${slug}/` });
     }
   }
-  return out;
+  return setCache(cacheKey, out, 15 * 60_000) as any[];
 }
 
 // ---------- DETAIL / EPISODES ----------
 async function detail(slug: string, type: string) {
   const t = type === "movies" ? "movies" : "series";
+  const cacheKey = `detail:${t}:${slug}`;
+  const cached = getCache<any>(cacheKey);
+  if (cached) return cached;
   const html = await fetchText(`${AN_BASE}/${t}/${slug}/`);
   const titleM = html.match(/<meta property=["']og:title["'] content=["']([^"']+)/i) || html.match(/<title>([^<]+)/i);
   const posterM = html.match(/<meta property=["']og:image["'] content=["']([^"']+)/i);
@@ -199,7 +205,7 @@ async function detail(slug: string, type: string) {
     episodes: s.episodes.sort((a, b) => a.number - b.number),
   }));
 
-  return {
+  return setCache(cacheKey, {
     slug,
     type: t,
     title: titleM ? decode(titleM[1]) : slug.replace(/-/g, " "),
@@ -207,7 +213,7 @@ async function detail(slug: string, type: string) {
     storyline: descM ? decode(descM[1]) : "",
     seasons: seasonsArr,
     episodeCount: seasonsArr.reduce((n, s) => n + s.episodes.length, 0),
-  };
+  }, 60 * 60_000);
 }
 
 // ---------- STREAM EXTRACTION ----------
@@ -453,7 +459,7 @@ async function hlsProxy(req: Request, target: string, proxyPrefix: string) {
 
 const API_ENDPOINTS = {
   ok: true,
-  name: "AnimeSalt Stream API — old stable",
+  name: "AnimeSalt Stream API — NEW ultra fast stable",
   subtitles: false,
   endpoints: { search: "/search?q=naruto", anime: "/anime?slug=naruto&type=series", episode: "/episode?slug=naruto-1x1", embed: "/embed?url=...", hls: "/hls?url=..." },
 };
