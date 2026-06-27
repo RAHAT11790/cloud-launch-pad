@@ -21,6 +21,7 @@ import shortenArolinksSource from "../../supabase/functions/shorten-arolinks/ind
 // via the auto-deployed `lovable-backdrop` edge function.
 
 import anApiSource from "../../supabase/functions/an-api/index.ts?raw";
+import verifyAdminPinSource from "../../supabase/functions/verify-admin-pin/index.ts?raw";
 
 
 export type EdgeFnLibraryEntry = {
