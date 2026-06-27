@@ -264,6 +264,13 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
     label: String(stream?.label || (stream?.height ? `${stream.height}p` : "Auto")).trim() || "Auto",
     src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx),
   }));
+  qualityOptions.sort((a, b) => {
+    const ah = Number(String(a.label).match(/\d{3,4}/)?.[0] || 0);
+    const bh = Number(String(b.label).match(/\d{3,4}/)?.[0] || 0);
+    if (ah === 1080) return -1;
+    if (bh === 1080) return 1;
+    return bh - ah;
+  });
 
   // Reorder audioTracks so Hindi (when present) is first → VideoPlayer picks
   // it as the default language pill and matching HLS audio track.

@@ -177,7 +177,7 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   const episode: RsEpisode = {
     episodeNumber: fallback.number,
     title: String(payload?.title || fallback.title || `Episode ${fallback.number}`).trim(),
-    link: makeUrl(preferredStream),
+    link: "",
   };
   streams.forEach((stream) => {
     const field = qualityField(stream.label, stream.height);
@@ -202,7 +202,7 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   // The requested behavior is: the Default field must contain the 1080p AN URL
   // whenever 1080p exists, not a generic/auto/first URL. Keep the explicit
   // 1080p field populated with the same playable source as well.
-  if (episode.link1080) episode.link = episode.link1080;
+  episode.link = makeUrl(streams.find((stream) => Number(stream.height) === 1080) || preferredStream);
   if (episode.audioTracks?.length) {
     episode.audioTracks = episode.audioTracks.map((track) => ({
       ...track,
