@@ -773,6 +773,28 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const buildReliableHlsSource = useCallback((rawUrl: string) => {
     const clean = String(rawUrl || "").trim();
+    if (isDataHlsUrl(clean) && anApiHlsBaseUrl) {
+      try {
+        const comma = clean.indexOf(",");
+        if (comma > 0) {
+          const meta = clean.slice(0, comma).toLowerCase();
+          const payload = clean.slice(comma + 1);
+          const decoded = meta.includes(";base64") ? decodeURIComponent(escape(atob(payload))) : decodeURIComponent(payload);
+          const wrap = (u: string) => {
+            const target = String(u || "").trim();
+            if (!isRawAnimeSaltHlsUrl(target) || isAnApiHlsProxyUrl(target)) return target;
+            return `${anApiHlsBaseUrl}/hls?url=${encodeURIComponent(target)}`;
+          };
+          const rewritten = decoded.split(/\r?\n/).map((line) => {
+            const trimmed = line.trim();
+            if (!trimmed) return line;
+            if (trimmed.startsWith("#")) return line.replace(/URI="([^"]+)"/g, (_m, u) => `URI="${wrap(u)}"`);
+            return wrap(trimmed);
+          }).join("\n");
+          return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(rewritten)))}`;
+        }
+      } catch {}
+    }
     if (!clean || !anApiHlsBaseUrl || !isRawAnimeSaltHlsUrl(clean) || isAnApiHlsProxyUrl(clean)) return clean;
     return `${anApiHlsBaseUrl}/hls?url=${encodeURIComponent(clean)}`;
   }, [anApiHlsBaseUrl]);
