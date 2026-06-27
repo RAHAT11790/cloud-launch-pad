@@ -11,6 +11,8 @@ interface Props {
   btnSecondary: string;
   inputClass: string;
   onEditSeries?: (id: string) => void;
+  onEditMovie?: (id: string) => void;
+  mode?: "series" | "movie";
 }
 
 type SelectedAnItem = {
@@ -42,6 +44,7 @@ type RsSeason = { name: string; seasonNumber: number; episodes: RsEpisode[] };
 
 const sanitizeKey = (value: string) => String(value || "").replace(/[.#$/\[\]]/g, "_").slice(0, 180);
 const webseriesIdForSlug = (slug: string) => `an_${sanitizeKey(slug)}`;
+const movieIdForSlug = (slug: string) => `an_mv_${sanitizeKey(slug)}`;
 
 const normalizeAnApiBaseUrl = (value: string): string => {
   const raw = String(value || "").trim();
@@ -163,7 +166,7 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   const streams = extractStreams(payload);
   const audio = extractAudio(payload);
   const defaultAudioIdx = typeof payload?.defaultAudioIdx === "number" ? payload.defaultAudioIdx : pickDefaultAudioIdx(audio);
-  const preferredStream = streams.find((stream) => stream.height === 720) || streams[0];
+  const preferredStream = streams.find((stream) => Number(stream.height) === 1080) || streams.find((stream) => Number(stream.height) >= 720) || streams[0];
   const makeUrl = (stream?: any, audioIdx = defaultAudioIdx) => {
     if (!stream?.url) return "";
     const raw = String(stream.url || "").trim();
@@ -222,9 +225,12 @@ const mapLimit = async <T, R,>(items: T[], limit: number, worker: (item: T, inde
   return results;
 };
 
-const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEditSeries }: Props) => {
+const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEditSeries, onEditMovie, mode = "series" }: Props) => {
+  const isMovieMode = mode === "movie";
+  const label = isMovieMode ? "AN Movies" : "AN Series";
   const [selectedItems, setSelectedItems] = useState<SelectedAnItem[]>([]);
   const [webseries, setWebseries] = useState<Record<string, any>>({});
+  const [movies, setMovies] = useState<Record<string, any>>({});
   const [search, setSearch] = useState("");
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
@@ -233,7 +239,8 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
   useEffect(() => {
     const unsubSelected = onValue(ref(db, "animesaltSelected"), (snap) => {
       const data = snap.val() || {};
-      const items = Object.entries(data).map(([slug, item]: [string, any]) => ({
+      const items = Object.entries(data)
+        .map(([slug, item]: [string, any]) => ({
         slug,
         title: item?.title || slug,
         poster: item?.poster || item?.tmdbPoster || item?.posterUrl || "",
@@ -245,23 +252,27 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         type: item?.type || "series",
         tmdbId: item?.tmdbId || null,
         addedAt: Number(item?.addedAt || item?.createdAt || 0),
-      }));
+      }))
+        .filter((item) => isMovieMode ? (item.type === "movies" || item.type === "movie") : !(item.type === "movies" || item.type === "movie"));
       items.sort((a, b) => a.title.localeCompare(b.title));
       setSelectedItems(items);
       setLoading(false);
     });
     const unsubWeb = onValue(ref(db, "webseries"), (snap) => setWebseries(snap.val() || {}));
-    return () => { unsubSelected(); unsubWeb(); };
-  }, []);
+    const unsubMovies = onValue(ref(db, "movies"), (snap) => setMovies(snap.val() || {}));
+    return () => { unsubSelected(); unsubWeb(); unsubMovies(); };
+  }, [isMovieMode]);
 
-  const webseriesBySlug = useMemo(() => {
+  const targetData = isMovieMode ? movies : webseries;
+  const targetIdForSlug = isMovieMode ? movieIdForSlug : webseriesIdForSlug;
+  const targetBySlug = useMemo(() => {
     const map = new Map<string, { id: string; data: any }>();
-    Object.entries(webseries || {}).forEach(([id, data]: [string, any]) => {
+    Object.entries(targetData || {}).forEach(([id, data]: [string, any]) => {
       const slug = String(data?.anSlug || data?.animeSaltSlug || "").trim();
       if (slug) map.set(slug, { id, data });
     });
     return map;
-  }, [webseries]);
+  }, [targetData]);
 
   // Title-based index of NON-AN (manually added in RS) series, so we can skip
   // fetching anime that the admin already maintains in RS. AN-generated entries
@@ -269,20 +280,21 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
   const rsTitleIndex = useMemo(() => {
     const norm = (s: string) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
     const map = new Map<string, { id: string; data: any }>();
-    Object.entries(webseries || {}).forEach(([id, data]: [string, any]) => {
+    Object.entries(targetData || {}).forEach(([id, data]: [string, any]) => {
       const anSlug = String(data?.anSlug || data?.animeSaltSlug || "").trim();
       if (anSlug) return; // skip AN-generated
       const title = norm(data?.title || "");
       if (title) map.set(title, { id, data });
     });
     return { map, norm };
-  }, [webseries]);
+  }, [targetData]);
 
   const enrichedItems = useMemo(() => selectedItems.map((item) => {
-    const existing = webseriesBySlug.get(item.slug) || (webseries[webseriesIdForSlug(item.slug)] ? { id: webseriesIdForSlug(item.slug), data: webseries[webseriesIdForSlug(item.slug)] } : null);
+    const itemId = targetIdForSlug(item.slug);
+    const existing = targetBySlug.get(item.slug) || (targetData[itemId] ? { id: itemId, data: targetData[itemId] } : null);
     const rsConflict = !existing ? rsTitleIndex.map.get(rsTitleIndex.norm(item.title)) || null : null;
     return { ...item, webseriesId: existing?.id || "", saved: existing?.data || null, rsConflict };
-  }), [selectedItems, webseries, webseriesBySlug, rsTitleIndex]);
+  }), [selectedItems, targetData, targetBySlug, targetIdForSlug, rsTitleIndex]);
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -298,7 +310,8 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
     if (!item.slug) return;
     // Skip if a manually-added RS series with the same title already exists.
     // Admin can delete the RS entry and retry to allow AN to take over.
-    const rsConflict = !webseriesBySlug.get(item.slug) && !webseries[webseriesIdForSlug(item.slug)]
+    const itemId = targetIdForSlug(item.slug);
+    const rsConflict = !targetBySlug.get(item.slug) && !targetData[itemId]
       ? rsTitleIndex.map.get(rsTitleIndex.norm(item.title))
       : null;
     if (rsConflict && !opts.force) {
@@ -313,9 +326,9 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
     try {
       const base = await getAnApiBase();
       if (!base) throw new Error("AN API URL is not configured in EGD Router");
-      const existing = webseriesBySlug.get(item.slug);
-      const targetId = existing?.id || webseriesIdForSlug(item.slug);
-      const isMovie = item.type === "movies" || item.type === "movie";
+      const existing = targetBySlug.get(item.slug);
+      const targetId = existing?.id || targetIdForSlug(item.slug);
+      const isMovie = isMovieMode;
       const detailResult: any = isMovie ? await animeSaltApi.getMovie(item.slug) : await animeSaltApi.getSeries(item.slug);
       const detail = detailResult?.data || detailResult;
       const apiSeasons = !isMovie && Array.isArray(detail?.seasons) ? detail.seasons : [];
@@ -328,7 +341,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       const detectedLanguages = new Set<string>();
 
       await Promise.all(rawSeasons.map(async (season: any, sIdx: number) => {
-        const fetched = await mapLimit(season.episodes || [], 7, async (ep: any, eIdx: number) => {
+        const fetched = await mapLimit(season.episodes || [], 16, async (ep: any, eIdx: number) => {
           const epSlug = String(ep?.slug || "").trim();
           const fallback = { number: Number(ep?.number || ep?.episodeNumber || eIdx + 1), title: ep?.title || `Episode ${eIdx + 1}`, slug: epSlug };
           const playbackPayload = ep?._moviePayload || (epSlug ? await animeSaltApi.getEpisode(epSlug) : null);
@@ -364,6 +377,47 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       const savedAt = Date.now();
       const poster = item.poster || detail?.poster || "";
       const backdrop = item.backdrop || detail?.backdrop || poster;
+
+      if (isMovieMode) {
+        const movieEp = seasons[0]?.episodes?.[0];
+        if (!movieEp?.link) throw new Error("No playable 1080p/direct HLS link found for this AN movie");
+        const movieData = {
+          ...(existing?.data || {}),
+          anSlug: item.slug,
+          title: detail?.title || item.title,
+          poster,
+          backdrop,
+          year: detail?.year || item.year || "",
+          rating: detail?.rating || item.rating || "",
+          category: item.category,
+          storyline: detail?.storyline || item.storyline || "",
+          tmdbId: item.tmdbId || existing?.data?.tmdbId || null,
+          language: languages.length > 2 ? "Multiple" : languages.length === 2 ? "Dual" : baseLanguage,
+          baseLanguage,
+          availableLanguages: languages.length ? languages : [baseLanguage],
+          audioTracks: movieEp.audioTracks || [],
+          movieLink: movieEp.link,
+          movieLink480: movieEp.link480 || "",
+          movieLink720: movieEp.link720 || "",
+          movieLink1080: movieEp.link1080 || movieEp.link || "",
+          movieLink4k: movieEp.link4k || "",
+          dubType: existing?.data?.dubType || "official",
+          visibility: existing?.data?.visibility || "public",
+          type: "movie",
+          source: "animesalt",
+          sourceName: "AnimeSalt",
+          displayAs: existing?.data?.displayAs || "an",
+          updatedAt: savedAt,
+          createdAt: existing?.data?.createdAt || item.addedAt || savedAt,
+        };
+        await set(ref(db, `movies/${targetId}`), stripUndefined(movieData));
+        await set(ref(db, `anSeries/${item.slug}/meta`), stripUndefined({
+          title: movieData.title, poster, backdrop, type: "movies", storyline: movieData.storyline, movieId: targetId, updatedAt: savedAt,
+        }));
+        toast.success(`✓ ${movieData.title} saved as AN movie`);
+        return;
+      }
+
       const seriesData = {
         ...(existing?.data || {}),
         anSlug: item.slug,
@@ -385,6 +439,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         dubType: existing?.data?.dubType || "official",
         visibility: existing?.data?.visibility || "public",
         type: "webseries",
+        source: "animesalt",
         sourceName: "AnimeSalt",
         // Default label on the public card. Admin can flip to "rs" later.
         displayAs: existing?.data?.displayAs || "an",
@@ -435,7 +490,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
   return (
     <div className={`${glassCard} p-4 mb-4`}>
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2"><Database size={14} className="text-emerald-400" /> AN Series</h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2"><Database size={14} className="text-emerald-400" /> {label}</h3>
         <button onClick={fetchAllPending} disabled={bulkRunning || pendingCount === 0} className={`${btnPrimary} px-3 py-2 text-[11px] flex items-center gap-1.5 disabled:opacity-50`}>
           {bulkRunning ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />} Fetch All Pending
         </button>
@@ -451,14 +506,14 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       <div className="sticky top-0 z-30 -mx-4 px-4 py-2 mb-3 bg-[#0D0D1A]/95 backdrop-blur-md border-y border-white/5">
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-500" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} className={`${inputClass} pl-9`} placeholder="Search AN selected series" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} className={`${inputClass} pl-9`} placeholder={`Search ${label}`} />
         </div>
       </div>
 
       {loading ? (
-        <div className="text-center text-xs text-zinc-400 py-8">Loading AN Series…</div>
+        <div className="text-center text-xs text-zinc-400 py-8">Loading {label}…</div>
       ) : filteredItems.length === 0 ? (
-        <div className="text-center text-xs text-zinc-400 py-8">No AN selected items found. Add them from AnimeSalt Manager first.</div>
+        <div className="text-center text-xs text-zinc-400 py-8">No selected items found here. Add matching AN content from AnimeSalt Manager first.</div>
       ) : (
         <div>
           {filteredItems.map((item) => {
@@ -475,11 +530,11 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
                       {saved ? <span className="text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 px-2 py-0.5 flex items-center gap-1"><CheckCircle2 size={10} /> Added</span> : item.rsConflict ? <span className="text-[10px] rounded-full bg-sky-500/20 text-sky-300 px-2 py-0.5">In RS</span> : <span className="text-[10px] rounded-full bg-amber-500/20 text-amber-300 px-2 py-0.5">Pending</span>}
                     </div>
                     <p className="text-[11px] text-[#D1C4E9] mb-2">{item.year || "N/A"} • {item.rating || "N/A"}⭐ • {item.category || "No Category"}</p>
-                    <p className="text-[11px] text-[#D1C4E9]">{saved ? `${episodeCount} Episodes • RS-style Firebase card` : item.rsConflict ? "Already exists in RS — delete RS entry to fetch from AN" : "Click Fetch to auto-fill video/audio links into RS rows"}</p>
+                    <p className="text-[11px] text-[#D1C4E9]">{saved ? isMovieMode ? "Movie • AN Firebase card" : `${episodeCount} Episodes • AN Firebase card` : item.rsConflict ? "Already exists in RS — delete RS entry to fetch from AN" : isMovieMode ? "Click Fetch to save direct 1080p video/audio into Movies" : "Click Fetch to save direct 1080p video/audio into Series"}</p>
                     <div className="flex flex-wrap gap-2 mt-2.5">
                       {saved ? (
                         <>
-                          <button onClick={() => onEditSeries?.(item.webseriesId)} className={`${btnSecondary} px-3.5 py-2 text-[11px] font-semibold flex items-center gap-1.5`}>
+                          <button onClick={() => (isMovieMode ? onEditMovie : onEditSeries)?.(item.webseriesId)} className={`${btnSecondary} px-3.5 py-2 text-[11px] font-semibold flex items-center gap-1.5`}>
                             <Edit size={12} /> Edit
                           </button>
                           <button onClick={() => fetchAndSaveSeries(item)} disabled={isBusy} className={`${btnSecondary} px-3.5 py-2 text-[11px] font-semibold flex items-center gap-1.5 disabled:opacity-50`}>
