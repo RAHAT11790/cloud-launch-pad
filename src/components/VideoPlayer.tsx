@@ -2182,16 +2182,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // guessed 8 Mbps path. That guess could stall AN/RS on phones, making the
       // player appear to "sip" only 200-300KB and never build a healthy buffer.
       testBandwidth: true,
-      abrEwmaDefaultEstimate: 3_500_000,
-      abrBandWidthFactor: 0.85,
-      abrBandWidthUpFactor: 0.7,
+      abrEwmaDefaultEstimate: 5_500_000,
+      abrBandWidthFactor: 0.92,
+      abrBandWidthUpFactor: 0.82,
       // Bigger forward buffer → seeking/skipping lands inside already-loaded
       // chunks ~95% of the time. Back buffer kept tight to free memory.
-      backBufferLength: 20,
-      maxBufferLength: 90,
-      maxMaxBufferLength: 240,
-      maxBufferSize: 160 * 1000 * 1000,
-      maxBufferHole: 0.3,
+      backBufferLength: 30,
+      maxBufferLength: 120,
+      maxMaxBufferLength: 300,
+      maxBufferSize: 240 * 1000 * 1000,
+      maxBufferHole: 0.45,
       highBufferWatchdogPeriod: 1,
       nudgeMaxRetry: 8,
       // Start mid-tier (auto picks higher if bw allows) — avoids 480p lock-in.
@@ -2200,14 +2200,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       progressive: true,
       // Aggressive but bounded retries so a single dead fragment never stalls
       // playback for tens of seconds.
-      manifestLoadingTimeOut: 9000,
-      manifestLoadingMaxRetry: 5,
-      manifestLoadingRetryDelay: 300,
-      levelLoadingTimeOut: 9000,
-      levelLoadingMaxRetry: 6,
-      fragLoadingTimeOut: 18000,
-      fragLoadingMaxRetry: 8,
-      fragLoadingRetryDelay: 300,
+      manifestLoadingTimeOut: 7000,
+      manifestLoadingMaxRetry: 8,
+      manifestLoadingRetryDelay: 180,
+      levelLoadingTimeOut: 7000,
+      levelLoadingMaxRetry: 8,
+      levelLoadingRetryDelay: 180,
+      fragLoadingTimeOut: 16000,
+      fragLoadingMaxRetry: 10,
+      fragLoadingRetryDelay: 180,
       capLevelToPlayerSize: false,
       renderTextTracksNatively: false,
     });
