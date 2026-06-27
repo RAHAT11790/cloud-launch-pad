@@ -416,10 +416,11 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        <div className="bg-purple-500/15 border border-purple-500/20 rounded-xl px-3 py-2"><div className="text-[10px] text-purple-300">Total</div><div className="text-lg font-bold">{enrichedItems.length}</div></div>
-        <div className="bg-emerald-500/15 border border-emerald-500/20 rounded-xl px-3 py-2"><div className="text-[10px] text-emerald-300">Added</div><div className="text-lg font-bold">{addedCount}</div></div>
-        <div className="bg-amber-500/15 border border-amber-500/20 rounded-xl px-3 py-2"><div className="text-[10px] text-amber-300">Pending</div><div className="text-lg font-bold">{pendingCount}</div></div>
+      <div className="grid grid-cols-4 gap-2 mb-3">
+        <div className="bg-purple-500/15 border border-purple-500/20 rounded-xl px-2.5 py-2"><div className="text-[10px] text-purple-300">Total</div><div className="text-base font-bold">{enrichedItems.length}</div></div>
+        <div className="bg-emerald-500/15 border border-emerald-500/20 rounded-xl px-2.5 py-2"><div className="text-[10px] text-emerald-300">Added</div><div className="text-base font-bold">{addedCount}</div></div>
+        <div className="bg-amber-500/15 border border-amber-500/20 rounded-xl px-2.5 py-2"><div className="text-[10px] text-amber-300">Pending</div><div className="text-base font-bold">{pendingCount}</div></div>
+        <div className="bg-sky-500/15 border border-sky-500/20 rounded-xl px-2.5 py-2"><div className="text-[10px] text-sky-300">In RS</div><div className="text-base font-bold">{skippedCount}</div></div>
       </div>
 
       <div className="sticky top-0 z-30 -mx-4 px-4 py-2 mb-3 bg-[#0D0D1A]/95 backdrop-blur-md border-y border-white/5">
