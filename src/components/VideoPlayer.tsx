@@ -2588,22 +2588,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       ? nextQualityOptions.find((q) => q.label === currentQuality)
       : null;
     const baseRawSrc = preservedQuality?.src || src;
+    const isFastHlsSource = isHlsLikeUrl(baseRawSrc);
     const hadManualServer = manualServerSelectedRef.current;
     const rememberedServerIndex = typeof preferredServerIndexRef.current === "number" ? preferredServerIndexRef.current : activeServerIndex;
-    const targetServerIndex = hadManualServer && effectiveVideoServers.length
+    const targetServerIndex = !isFastHlsSource && hadManualServer && effectiveVideoServers.length
       ? Math.min(Math.max(rememberedServerIndex, 0), effectiveVideoServers.length - 1)
       : 0;
 
     sourceBaseRef.current = baseRawSrc;
     activeSourceBaseRef.current = baseRawSrc;
-    premiumServerApplied.current = hadManualServer;
-    const initialRawSrc = getServerScopedSource(baseRawSrc, targetServerIndex);
+    premiumServerApplied.current = !isFastHlsSource && hadManualServer;
+    const initialRawSrc = isFastHlsSource ? baseRawSrc : getServerScopedSource(baseRawSrc, targetServerIndex);
     const resolvedSrc = resolvePlaybackSrc(initialRawSrc);
     activeSourceBaseRef.current = initialRawSrc;
     setCurrentSrc(resolvedSrc);
     currentQualityRef.current = preservedQuality?.label || "Auto";
     setCurrentQuality(preservedQuality?.label || "Auto");
-    if (!hadManualServer) {
+    if (isFastHlsSource || !hadManualServer) {
       manualServerSelectedRef.current = false;
       preferredServerIndexRef.current = null;
       setManualServerSelected(false);
@@ -2636,6 +2637,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   useEffect(() => {
     if (!playbackRouteReady || !activeSourceBaseRef.current) return;
+    if (isHlsLikeUrl(activeSourceBaseRef.current)) return;
     const nextResolved = resolvePlaybackSrc(activeSourceBaseRef.current);
     setCurrentSrc((prev) => (prev === nextResolved ? prev : nextResolved));
   }, [playbackRouteReady, proxyUrl, proxyApiKey, cdnEnabled, resolvePlaybackSrc]);
@@ -2646,6 +2648,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // domain swap has produced the final http:// URL.
   useEffect(() => {
     if (!playbackRouteReady || !effectiveVideoServers.length) return;
+    if (isHlsLikeUrl(sourceBaseRef.current || src)) return;
     const safeServerIndex = Math.min(activeServerIndex, effectiveVideoServers.length - 1);
     if (safeServerIndex !== activeServerIndex) setActiveServerIndex(safeServerIndex);
 
