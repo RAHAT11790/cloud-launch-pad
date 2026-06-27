@@ -196,15 +196,17 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      testBandwidth: false,
-      abrEwmaDefaultEstimate: 8_000_000,
-      abrBandWidthFactor: 0.95,
-      abrBandWidthUpFactor: 0.8,
+      // Let hls.js measure the real connection. A forced high estimate starts
+      // too aggressively on mobile and can stall before the buffer grows.
+      testBandwidth: true,
+      abrEwmaDefaultEstimate: 3_500_000,
+      abrBandWidthFactor: 0.85,
+      abrBandWidthUpFactor: 0.7,
       // Bigger buffer lets the browser absorb more network instead of sipping
       // one small segment at a time.
-      maxBufferLength: 120,
-      maxMaxBufferLength: 300,
-      maxBufferSize: 220 * 1000 * 1000,
+      maxBufferLength: 90,
+      maxMaxBufferLength: 240,
+      maxBufferSize: 160 * 1000 * 1000,
       backBufferLength: 20,
       // Aggressive retries for flaky connections — instead of giving up,
       // retry quickly so playback recovers without user action.
