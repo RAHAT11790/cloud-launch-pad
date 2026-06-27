@@ -184,6 +184,31 @@ class DownloadManager {
       }).catch(() => {});
     }
 
+    // HLS (.m3u8) downloads use a real in-browser segment fetcher so the
+    // user gets a single concatenated .ts file (RS-style naming preserved).
+    if (item.url && /\.m3u8(?:[?#]|$)/i.test(item.url)) {
+      const fileName = (item.fileName || buildFileName(item.title, item.subtitle, item.quality))
+        .replace(/\.(mp4|mkv|webm|m4v|mov)$/i, "") + ".ts";
+      import("./hlsDownloader").then(async ({ downloadHls, saveBlobAs }) => {
+        try {
+          const blob = await downloadHls(item.url!, (loaded, total, bytes) => {
+            const percent = Math.min(99, Math.round((loaded / total) * 100));
+            const mb = bytes / (1024 * 1024);
+            // Estimate total based on average segment size so the UI shows real numbers.
+            const avg = bytes / Math.max(1, loaded);
+            const estTotalMB = (avg * total) / (1024 * 1024);
+            this.update(id, { percent, loadedMB: mb, totalMB: Math.max(estTotalMB, mb, 1) });
+          });
+          saveBlobAs(blob, fileName);
+          const mb = blob.size / (1024 * 1024);
+          this.settleItem(id, "complete", { percent: 100, loadedMB: mb, totalMB: mb });
+        } catch (e: any) {
+          this.settleItem(id, "error", { error: e?.message || "HLS download failed" });
+        }
+      });
+      return;
+    }
+
     const timers: ItemTimers = {};
     this.timers.set(id, timers);
 
