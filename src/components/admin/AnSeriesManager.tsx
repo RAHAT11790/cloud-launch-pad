@@ -127,6 +127,31 @@ const qualityField = (label?: string, height?: number): "link480" | "link720" | 
   return null;
 };
 
+const audioLanguageKey = (value?: string | null) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+const pickTrackForLanguage = (tracks: NonNullable<RsEpisode["audioTracks"]> | undefined, language: string) => {
+  const wanted = audioLanguageKey(language);
+  if (!wanted) return undefined;
+  return (tracks || []).find((track) => audioLanguageKey(track.language) === wanted || audioLanguageKey(track.label) === wanted);
+};
+
+const cloneSeasonsForAudioLanguage = (seasons: RsSeason[], language: string): RsSeason[] => seasons.map((season) => ({
+  ...season,
+  episodes: (season.episodes || []).map((episode) => {
+    const track = pickTrackForLanguage(episode.audioTracks, language);
+    if (!track) return { ...episode, audioTracks: episode.audioTracks ? [...episode.audioTracks] : undefined };
+    return stripUndefined({
+      ...episode,
+      link: track.link || episode.link,
+      link480: track.link480 || episode.link480,
+      link720: track.link720 || episode.link720,
+      link1080: track.link1080 || episode.link1080,
+      link4k: track.link4k || episode.link4k,
+      audioTracks: episode.audioTracks ? [...episode.audioTracks] : undefined,
+    });
+  }),
+}));
+
 const normalizePlaybackPayload = (payload: any) => payload?.data && !payload?.sources ? payload.data : payload;
 
 const extractStreams = (payload: any) => {
@@ -156,8 +181,16 @@ const extractAudio = (payload: any) => {
   const fromSources = Array.isArray(payload?.sources)
     ? payload.sources.flatMap((source: any) => Array.isArray(source?.audio) ? source.audio : [])
     : [];
+  const fromTopLevel = Array.isArray(payload?.audio) ? payload.audio : [];
+  const fromStoredTracks = Array.isArray(payload?.audioTracks)
+    ? payload.audioTracks.map((track: any) => ({
+        uri: track?.rawAudioUrl || track?.audioUrl || track?.uri || track?.url,
+        name: track?.label || track?.name || track?.language,
+        language: track?.language || track?.label || track?.name,
+      }))
+    : [];
   const seen = new Set<string>();
-  return fromSources
+  return [...fromSources, ...fromTopLevel, ...fromStoredTracks]
     .map((track: any) => ({
       uri: String(track?.uri || track?.url || "").trim(),
       name: String(track?.name || track?.label || track?.language || "Audio").trim(),
@@ -219,10 +252,21 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   // 1080p field populated with the same playable source as well.
   episode.link = makeUrl(streams.find((stream) => Number(stream.height) === 1080) || preferredStream);
   if (episode.audioTracks?.length) {
+    const defaultTrack = episode.audioTracks.find((track: any) => track.isDefault) || episode.audioTracks[defaultAudioIdx] || episode.audioTracks[0];
     episode.audioTracks = episode.audioTracks.map((track) => ({
       ...track,
       link: track.link1080 || track.link,
     }));
+    const defaultMappedTrack = defaultTrack
+      ? episode.audioTracks.find((track) => audioLanguageKey(track.language) === audioLanguageKey(defaultTrack.language) || audioLanguageKey(track.label) === audioLanguageKey(defaultTrack.label))
+      : undefined;
+    if (defaultMappedTrack?.link) {
+      episode.link = defaultMappedTrack.link;
+      episode.link480 = defaultMappedTrack.link480 || episode.link480;
+      episode.link720 = defaultMappedTrack.link720 || episode.link720;
+      episode.link1080 = defaultMappedTrack.link1080 || episode.link1080;
+      episode.link4k = defaultMappedTrack.link4k || episode.link4k;
+    }
   }
   return episode;
 };
