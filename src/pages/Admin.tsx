@@ -4091,8 +4091,28 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
      return;
    }
    try {
-     const { data, error } = await supabase.functions.invoke("verify-admin-pin", { body: { pin: loginPinInput } });
-     if (error || !(data as any)?.ok) {
+     // Route through EGD Router so the admin's own deployed verify-admin-pin
+     // URL (with their private ADMIN_PIN) takes precedence over the project
+     // default. Falls back to the Lovable Cloud default automatically.
+     let ok = false;
+     try {
+       const url = await getEdgeFunctionUrl("verify-admin-pin");
+       if (url) {
+         const res = await fetch(url, {
+           method: "POST",
+           headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+           body: JSON.stringify({ pin: loginPinInput }),
+         });
+         const j = await res.json().catch(() => ({}));
+         ok = !!j?.ok;
+       }
+     } catch {}
+     if (!ok) {
+       // Hard fallback to direct Supabase invoke if router lookup failed.
+       const { data } = await supabase.functions.invoke("verify-admin-pin", { body: { pin: loginPinInput } });
+       ok = !!(data as any)?.ok;
+     }
+     if (!ok) {
        logAdminAccess({ method: "pin", success: false, reason: "wrong-pin" });
        toast.error("Wrong PIN");
        setLoginPinInput("");
