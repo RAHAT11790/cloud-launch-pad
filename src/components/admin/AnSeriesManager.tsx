@@ -460,7 +460,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass }: Pr
         <div className="text-center text-xs opacity-60 py-8">Loading catalog…</div>
       ) : filteredItems.length === 0 ? (
         <div className="text-center text-xs opacity-60 py-8">
-          {saltItems.length === 0 ? "No AN selections yet. Add some via Animesalt Manager first." : "No matching series"}
+          {saltItems.length === 0 ? "AN catalog empty — check the an-api URL in EGD Router." : "No matching series"}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
