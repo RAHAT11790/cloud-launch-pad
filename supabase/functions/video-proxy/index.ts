@@ -1,116 +1,72 @@
 // ============================================================
-// video-proxy — HTTP-only HLS/video proxy (no scripts, no protection)
+// video-proxy — Ultra-minimal HTTP-only streaming proxy
 // ============================================================
-// Use: /functions/v1/video-proxy?url=<ENCODED_HTTP_URL>
-// - Accepts ONLY http:// upstream URLs.
-// - HTTPS videos are rejected because they must play directly in <video>.
-// - Rewrites HTTP HLS playlists so variants/segments also travel through
-//   this proxy and never get blocked as mixed content.
+// Single job: stream HTTP video URLs to the browser as fast as
+// possible. No protection, no host allow-list, no HLS rewriting,
+// no scripts — just a zero-copy passthrough.
+//
+// Use:  /functions/v1/video-proxy?url=<ENCODED_HTTP_URL>
+//
+// HTTPS URLs are rejected — browsers can play them directly.
 // ============================================================
 
 const cors: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-  "Access-Control-Allow-Headers": "*",
-  "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control",
+  "Access-Control-Allow-Headers":
+    "range, content-type, accept, accept-encoding, if-range, if-none-match, if-modified-since, cache-control",
+  "Access-Control-Expose-Headers":
+    "content-length, content-range, accept-ranges, content-type, etag, last-modified",
   "Access-Control-Max-Age": "86400",
 };
 
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified", "cache-control"];
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
-const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
-
-function proxyUrl(reqUrl: URL, target: string) {
-  const base = `${reqUrl.protocol}//${reqUrl.host}${reqUrl.pathname}`;
-  return `${base}?url=${encodeURIComponent(target)}`;
-}
-
-function resolveHttpUrl(value: string, baseUrl: string) {
-  const raw = String(value || "").trim();
-  if (!raw || raw.startsWith("#")) return raw;
-  try {
-    const abs = new URL(raw, baseUrl).toString();
-    return abs.startsWith("http://") ? abs : raw;
-  } catch { return raw; }
-}
-
-function rewritePlaylist(text: string, targetUrl: string, reqUrl: URL) {
-  return text.split(/\r?\n/).map((line) => {
-    const trimmed = line.trim();
-    if (!trimmed) return line;
-    if (trimmed.startsWith("#")) {
-      return line.replace(/URI="([^"]+)"/g, (_m, uri) => {
-        const abs = resolveHttpUrl(uri, targetUrl);
-        return abs.startsWith("http://") ? `URI="${proxyUrl(reqUrl, abs)}"` : `URI="${uri}"`;
-      });
-    }
-    const abs = resolveHttpUrl(trimmed, targetUrl);
-    return abs.startsWith("http://") ? proxyUrl(reqUrl, abs) : line;
-  }).join("\n");
-}
+const PASS = ["content-type", "content-length", "content-range", "accept-ranges", "etag", "last-modified"];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-  if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405, headers: cors });
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    return new Response("Method not allowed", { status: 405, headers: cors });
+  }
 
-  const reqUrl = new URL(req.url);
-  const target = reqUrl.searchParams.get("url") || "";
+  const target = new URL(req.url).searchParams.get("url");
   if (!target) return new Response("Missing ?url=", { status: 400, headers: cors });
 
-  let upstreamUrl: URL;
-  try { upstreamUrl = new URL(target); } catch { return new Response("Invalid url", { status: 400, headers: cors }); }
-  if (upstreamUrl.protocol !== "http:") return new Response("Only http:// supported. HTTPS must play direct.", { status: 400, headers: cors });
+  let t: URL;
+  try { t = new URL(target); } catch { return new Response("Invalid url", { status: 400, headers: cors }); }
+  if (t.protocol !== "http:") {
+    return new Response("Only http:// supported — HTTPS plays directly.", { status: 400, headers: cors });
+  }
 
-  const baseHeaders: Record<string, string> = {
+  const fwd: Record<string, string> = {
     "User-Agent": UA,
     Accept: req.headers.get("accept") || "*/*",
     "Accept-Encoding": "identity",
+    Referer: `${t.protocol}//${t.host}/`,
+    Origin: `${t.protocol}//${t.host}`,
   };
-  for (const key of ["range", "if-range", "if-none-match", "if-modified-since", "cache-control"]) {
-    const value = req.headers.get(key);
-    if (value) baseHeaders[key] = value;
-  }
+  const range = req.headers.get("range"); if (range) fwd.Range = range;
+  const ifr = req.headers.get("if-range"); if (ifr) fwd["If-Range"] = ifr;
+  const inm = req.headers.get("if-none-match"); if (inm) fwd["If-None-Match"] = inm;
+  const ims = req.headers.get("if-modified-since"); if (ims) fwd["If-Modified-Since"] = ims;
 
   const ac = new AbortController();
   req.signal.addEventListener("abort", () => ac.abort(), { once: true });
 
-  let up: Response | null = null;
-  let lastError = "";
-  const origin = `${upstreamUrl.protocol}//${upstreamUrl.host}`;
-  const attempts: Record<string, string>[] = [
-    baseHeaders,
-    { ...baseHeaders, Referer: `${origin}/` },
-    { ...baseHeaders, Referer: `${origin}/`, Origin: origin },
-    { ...baseHeaders, Referer: req.headers.get("referer") || `${origin}/` },
-  ];
-
-  for (const headers of attempts) {
-    try {
-      up = await fetch(upstreamUrl.toString(), { method: req.method, headers, redirect: "follow", signal: ac.signal });
-      if (up.ok || up.status === 206 || up.status === 304) break;
-      lastError = `HTTP ${up.status}`;
-      try { await up.body?.cancel(); } catch {}
-    } catch (e) {
-      lastError = (e as Error).message;
-      up = null;
-    }
+  let up: Response;
+  try {
+    up = await fetch(t.toString(), { method: req.method, headers: fwd, redirect: "follow", signal: ac.signal });
+  } catch (e) {
+    return new Response(`Upstream failed: ${(e as Error).message}`, { status: 502, headers: cors });
   }
 
-  if (!up) return new Response(`Upstream failed: ${lastError || "network error"}`, { status: 502, headers: cors });
+  const h = new Headers(cors);
+  for (const k of PASS) { const v = up.headers.get(k); if (v) h.set(k, v); }
+  if (!h.has("accept-ranges")) h.set("accept-ranges", "bytes");
+  h.set("cache-control", "public, max-age=3600");
+  h.set("content-disposition", "inline");
 
-  const out = new Headers(cors);
-  for (const k of PASS) { const v = up.headers.get(k); if (v) out.set(k, v); }
-  if (!out.has("accept-ranges")) out.set("accept-ranges", "bytes");
-  out.set("content-disposition", "inline");
-
-  if (req.method !== "HEAD" && up.ok && isM3u8(upstreamUrl.toString(), up.headers.get("content-type"))) {
-    const body = rewritePlaylist(await up.text(), upstreamUrl.toString(), reqUrl);
-    out.delete("content-length");
-    out.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
-    out.set("cache-control", "no-store");
-    return new Response(body, { status: up.status, statusText: up.statusText, headers: out });
-  }
-
-  return new Response(req.method === "HEAD" ? null : up.body, { status: up.status, statusText: up.statusText, headers: out });
+  return new Response(up.body, { status: up.status, statusText: up.statusText, headers: h });
 });

@@ -71,25 +71,6 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   // Track latest playback position so server-switch resumes from the same point.
   const lastPosRef = useRef<number>(0);
 
-  // The AN details toast lives in Index.tsx. When this player shell is on
-  // screen, details are no longer loading, even if the video source is still
-  // buffering. Force-close prevents cached Continue Watching clicks from
-  // leaving "Loading details..." permanently stuck.
-  useEffect(() => {
-    if (!saltPlayerState.embedUrl) return;
-    try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
-  }, [saltPlayerState.embedUrl]);
-
-  const notifyDetailsLoaded = useCallback(() => {
-    try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
-  }, []);
-
-  const handleNativeFail = useCallback((reason: string) => {
-    console.warn('[AnNative] native extraction failed:', reason);
-    notifyDetailsLoaded();
-    setNativeFailed(true);
-  }, [notifyDetailsLoaded]);
-
 
   // Premium status — disables ads for paid users.
   const [isPremium, setIsPremium] = useState<boolean | null>(null);
@@ -507,8 +488,10 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
               resumeTime={saltPlayerState.resumeTime}
               videoClassName={`${isFullscreen ? 'w-full h-full' : 'absolute inset-0 w-full h-full'} bg-black`}
               videoStyle={getIframeStyle()}
-              onFail={handleNativeFail}
-              onReady={notifyDetailsLoaded}
+              onFail={(reason) => {
+                console.warn('[AnNative] native extraction failed:', reason);
+                setNativeFailed(true);
+              }}
               onTimeUpdate={(currentTime, duration) => {
                 lastPosRef.current = currentTime;
                 if (saltPlayerState.anime) {

@@ -24,10 +24,6 @@ const isInvalidPlaybackUrl = (url?: string | null) => {
 
 const isDirectMediaPlaybackUrl = (url?: string | null) => {
   const normalized = String(url || "").trim().toLowerCase();
-  // AnimeSalt native playback builds a synthetic HLS master as a data: URL.
-  // This is still direct media for hls.js; treating it as non-media forces the
-  // broken iframe path and makes AN appear fully blocked.
-  if (normalized.startsWith("data:application/vnd.apple.mpegurl")) return true;
   return /\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(normalized);
 };
 
@@ -150,15 +146,6 @@ const buildAnProxyUrl = (url: string) => {
   return `${anApiBaseUrl}/hls?url=${encodeURIComponent(url)}`;
 };
 
-const buildAnHlsPlaybackUrl = (url: string) => {
-  const raw = String(url || "").trim();
-  if (!raw) return raw;
-  // AN CDNs frequently block browser-origin HLS/CORS. The AN API /hls route is
-  // now the dedicated playback pipe for AN only; RS HTTPS still plays direct in
-  // VideoPlayer, while AN gets reliable playlist/segment headers.
-  return buildAnProxyUrl(raw);
-};
-
 // Prefer Hindi as the default audio track for AnimeSalt content.
 // Falls back to the first track when no Hindi variant exists.
 const pickAnDefaultAudioIdx = (audio: Array<{ language?: string; name?: string; uri?: string }>) => {
@@ -179,6 +166,7 @@ const buildAnSyntheticMaster = (
   stream: { url: string; bandwidth?: number; resolution?: string; height?: number },
   audio: Array<{ language?: string; name?: string; uri?: string }>,
   defaultAudioIdx?: number,
+  subtitles: Array<{ language?: string; name?: string; label?: string; uri?: string; url?: string }> = [],
 ) => {
   const resolvedDefault = typeof defaultAudioIdx === "number" ? defaultAudioIdx : pickAnDefaultAudioIdx(audio);
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
@@ -188,20 +176,32 @@ const buildAnSyntheticMaster = (
     const uri = String(track?.uri || "").trim();
     if (!uri) return;
     lines.push(
-      `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${rawName}",LANGUAGE="${rawLanguage || `aud${index + 1}`}",DEFAULT=${index === resolvedDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${buildAnHlsPlaybackUrl(uri)}"`,
+      `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${rawName}",LANGUAGE="${rawLanguage || `aud${index + 1}`}",DEFAULT=${index === resolvedDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${buildAnProxyUrl(uri)}"`,
+    );
+  });
+  subtitles.forEach((track, index) => {
+    const rawName = String(track?.name || track?.label || track?.language || `Subtitle ${index + 1}`).replace(/"/g, "").trim();
+    const rawLanguage = String(track?.language || rawName || `sub${index + 1}`).trim().toLowerCase();
+    const uri = String(track?.uri || track?.url || "").trim();
+    if (!uri) return;
+    const subUrl = anApiBaseUrl ? `${anApiBaseUrl}/subs?url=${encodeURIComponent(uri)}` : uri;
+    lines.push(
+      `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="${rawName}",LANGUAGE="${rawLanguage || `sub${index + 1}`}",DEFAULT=NO,AUTOSELECT=YES,FORCED=NO,URI="${subUrl}"`,
     );
   });
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
+  const subRef = subtitles.some((track) => String(track?.uri || track?.url || "").trim()) ? ',SUBTITLES="subs"' : "";
   lines.push(
-    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${Math.round(((stream.height || 720) * 16) / 9)}x${stream.height || 720}`}${audioRef}`,
+    `#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max((stream.height || 720) * 5000, 2560000)},RESOLUTION=${stream.resolution || `${stream.height || 720}x${Math.round(((stream.height || 720) * 16) / 9)}`}${audioRef}${subRef}`,
   );
-  lines.push(buildAnHlsPlaybackUrl(stream.url));
+  lines.push(buildAnProxyUrl(stream.url));
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(lines.join("\n"))))}`;
 };
 
 const normalizeAnAudioTracks = (
   audio: Array<{ language?: string; name?: string; uri?: string }> | undefined,
   streams: Array<{ label?: string; url?: string; height?: number }> | undefined,
+  subtitles: Array<{ language?: string; name?: string; label?: string; uri?: string; url?: string }> | undefined = [],
 ) => {
   if (!Array.isArray(audio) || audio.length === 0) return undefined;
 
@@ -222,7 +222,7 @@ const normalizeAnAudioTracks = (
         return buildAnSyntheticMaster({
           url: direct,
           height: Number(qualityLabel.replace(/\D/g, "")) || undefined,
-        }, audio, trackIndex);
+        }, audio, trackIndex, subtitles || []);
       };
       const rawLabel = String(track?.name || track?.language || "Audio").trim();
       const rawLang = String(track?.language || rawLabel).trim();
@@ -236,7 +236,7 @@ const normalizeAnAudioTracks = (
       return {
         language: normalized,
         label: normalized,
-        link: buildAnSyntheticMaster({ url: defaultStreamUrl }, audio, trackIndex),
+        link: buildAnSyntheticMaster({ url: defaultStreamUrl }, audio, trackIndex, subtitles || []),
         link480: pickStreamUrl("480p"),
         link720: pickStreamUrl("720p"),
         link1080: pickStreamUrl("1080p"),
@@ -253,20 +253,21 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   const primarySource = sourceList.find((entry: any) => Array.isArray(entry?.streams) && entry.streams.length > 0) || sourceList[0];
   const streams = Array.isArray(primarySource?.streams) ? primarySource.streams.filter((entry: any) => String(entry?.url || "").trim()) : [];
   const audio = Array.isArray(primarySource?.audio) ? primarySource.audio.filter((entry: any) => String(entry?.uri || "").trim()) : [];
+  const subtitles = Array.isArray(primarySource?.subtitles) ? primarySource.subtitles.filter((entry: any) => String(entry?.uri || entry?.url || "").trim()) : [];
 
   if (streams.length === 0) return null;
 
   const primaryStream = streams[0];
-  const defaultAudioIdx = typeof resolvedPayload?.defaultAudioIdx === "number" ? resolvedPayload.defaultAudioIdx : pickAnDefaultAudioIdx(audio);
+  const defaultAudioIdx = pickAnDefaultAudioIdx(audio);
   const preferredQualityIdx = pickAnPreferredQualityIdx(streams);
   const qualityOptions = streams.map((stream: any) => ({
     label: String(stream?.label || (stream?.height ? `${stream.height}p` : "Auto")).trim() || "Auto",
-    src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx),
+    src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx, subtitles),
   }));
 
   // Reorder audioTracks so Hindi (when present) is first → VideoPlayer picks
   // it as the default language pill and matching HLS audio track.
-  const normalized = normalizeAnAudioTracks(audio, streams);
+  const normalized = normalizeAnAudioTracks(audio, streams, subtitles);
   let audioTracks = normalized;
   if (normalized && normalized.length > 1) {
     const hindiIdx = normalized.findIndex((t) =>
@@ -277,17 +278,26 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
     }
   }
 
+  const subtitleTracks: SubtitleTrack[] | undefined = subtitles.length
+    ? subtitles.map((track: any, index: number) => ({
+        language: String(track?.language || "").trim() || undefined,
+        label: String(track?.name || track?.label || track?.language || `Subtitle ${index + 1}`).trim(),
+        url: String(track?.uri || track?.url || "").trim(),
+      }))
+    : undefined;
+
   return {
     src: qualityOptions[preferredQualityIdx]?.src || qualityOptions[0]?.src || buildAnProxyUrl(primaryStream.url),
     qualityOptions: qualityOptions.length > 1 ? qualityOptions : undefined,
     audioTracks,
-    subtitleTracks: undefined,
+    subtitleTracks,
     preferredLanguage: audio[defaultAudioIdx]
       ? (String(audio[defaultAudioIdx]?.name || audio[defaultAudioIdx]?.language || "Hindi").trim() || "Hindi")
       : undefined,
     anNativeData: {
       streams,
       audio,
+      subtitles,
       preferredQualityIdx,
       defaultAudioIdx,
     } as AnNativeResolvedData,
@@ -303,10 +313,12 @@ const getAnNativeDataFromEmbed = async (embedUrl: string): Promise<AnNativeResol
     const data = await response.json();
     const streams = Array.isArray(data?.streams) ? data.streams.filter((entry: any) => String(entry?.url || "").trim()) : [];
     const audio = Array.isArray(data?.audio) ? data.audio.filter((entry: any) => String(entry?.uri || "").trim()) : [];
+    const subtitles = Array.isArray(data?.subtitles) ? data.subtitles.filter((entry: any) => String(entry?.uri || "").trim()) : [];
     if (streams.length === 0) return null;
     return {
       streams,
       audio,
+      subtitles,
       preferredQualityIdx: pickAnPreferredQualityIdx(streams),
       defaultAudioIdx: pickAnDefaultAudioIdx(audio),
     };
@@ -492,8 +504,6 @@ const apiCache = new Map<string, { data: any; ts: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 min
 const API_TIMEOUT_MS = 15_000;
 const warmedImageUrls = new Set<string>();
-const AN_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
-const DETAILS_LOADING_TOAST_ID = "rs-an-details-loading-toast";
 
 const preloadImage = (src?: string | null) => {
   const url = String(src || "").trim();
@@ -579,40 +589,6 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
     if (attempt === 0) await new Promise(r => setTimeout(r, 600));
   }
   throw lastErr || new Error("API failed");
-};
-
-const anDetailsCacheKey = (id: string) => `rs_an_details:${String(id || "").replace(/[^a-z0-9_-]/gi, "_")}`;
-
-const isUsableAnDetailsCache = (data: any): boolean => {
-  if (!data) return false;
-  if (data.movieLink || data.movieLink480 || data.movieLink720 || data.movieLink1080 || data.movieLink4k) return true;
-  return Array.isArray(data.seasons) && data.seasons.some((season: any) =>
-    Array.isArray(season?.episodes) && season.episodes.some((ep: any) =>
-      String(ep?.link || ep?.link480 || ep?.link720 || ep?.link1080 || ep?.link4k || "").trim(),
-    ),
-  );
-};
-
-const readCachedAnDetails = (id: string): AnimeItem | null => {
-  try {
-    const raw = localStorage.getItem(anDetailsCacheKey(id));
-    if (!raw) return null;
-    const cached = JSON.parse(raw);
-    if (!cached?.ts || !cached?.data || Date.now() - Number(cached.ts) > AN_DETAILS_CACHE_TTL) {
-      localStorage.removeItem(anDetailsCacheKey(id));
-      return null;
-    }
-    if (!isUsableAnDetailsCache(cached.data)) {
-      localStorage.removeItem(anDetailsCacheKey(id));
-      return null;
-    }
-    return cached.data as AnimeItem;
-  } catch { return null; }
-};
-
-const writeCachedAnDetails = (id: string, data: AnimeItem) => {
-  if (!isUsableAnDetailsCache(data)) return;
-  try { localStorage.setItem(anDetailsCacheKey(id), JSON.stringify({ ts: Date.now(), data })); } catch {}
 };
 import { db, ref, set, onValue, get } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
@@ -1181,22 +1157,13 @@ const Index = () => {
       toast.dismiss(activeToastId);
       detailsLoadingToastRef.current = null;
     }
-    // Fixed-ID fallback: if Sonner already recycled the toast id or the user
-    // opens AN from persisted Continue Watching cache, this still force-closes
-    // the exact loading notification. The X button uses this same path.
-    try { toast.dismiss(DETAILS_LOADING_TOAST_ID); } catch {}
   }, []);
 
   const showDetailsLoadingToast = useCallback(() => {
     dismissDetailsLoadingToast();
     const toastId = toast.loading("Loading details...", {
-      id: DETAILS_LOADING_TOAST_ID,
-      duration: 12000,
+      duration: 20000,
       closeButton: true,
-      action: {
-        label: "×",
-        onClick: () => dismissDetailsLoadingToast(),
-      },
     });
 
     detailsLoadingToastRef.current = toastId;
@@ -1206,7 +1173,7 @@ const Index = () => {
         detailsLoadingToastRef.current = null;
       }
       detailsLoadingTimeoutRef.current = null;
-    }, 12000);
+    }, 20000);
 
     return toastId;
   }, [dismissDetailsLoadingToast]);
@@ -1223,22 +1190,16 @@ const Index = () => {
   }, [dismissDetailsLoadingToast]);
 
   useEffect(() => {
-    const forceClose = () => dismissDetailsLoadingToast();
-    window.addEventListener("rs:force-close-details-loader", forceClose);
-    return () => window.removeEventListener("rs:force-close-details-loader", forceClose);
-  }, [dismissDetailsLoadingToast]);
-
-  useEffect(() => {
     // Keep the "Loading details..." toast visible while the salt player is
     // still resolving the embed URL — only dismiss once playback is actually
     // ready, so users see continuous feedback (no premature silent gap, and
     // by the time the player paints the default Hindi audio is already
     // selected — no visible language switch).
     const saltReady = saltPlayerState && saltPlayerState.loading === false;
-    if (playerState || saltReady || selectedAnime) {
+    if (playerState || saltReady) {
       dismissDetailsLoadingToast();
     }
-  }, [playerState, saltPlayerState, selectedAnime, dismissDetailsLoadingToast]);
+  }, [playerState, saltPlayerState, dismissDetailsLoadingToast]);
 
   // Create a blob URL wrapper that embeds the video in a full-screen iframe (no proxy needed)
   const getCleanEmbedUrl = useCallback((embedUrl: string): string => {
@@ -1793,18 +1754,16 @@ const Index = () => {
     // AnimeSalt source
     if (anime.source === "animesalt" && anime.slug) {
       const requestId = detailsRequestRef.current;
-      const cachedDetails = detailsCacheRef.current.get(anime.id) || readCachedAnDetails(anime.id);
+      const toastId = switchingInPlayer ? null : showDetailsLoadingToast();
+      const cachedDetails = detailsCacheRef.current.get(anime.id);
       if (cachedDetails) {
-        detailsCacheRef.current.set(anime.id, cachedDetails);
         try {
           await openPlayerFromAnime(cachedDetails, { seasonIdx: sIdx, epIdx: eIdx });
         } finally {
-          dismissDetailsLoadingToast();
+          if (!switchingInPlayer && detailsLoadingToastRef.current === toastId) dismissDetailsLoadingToast();
         }
         return;
       }
-
-      const toastId = switchingInPlayer ? null : showDetailsLoadingToast();
 
       try {
         // Step 1: Try Firebase customSeasons first (no API needed)
@@ -1853,7 +1812,6 @@ const Index = () => {
             })),
           };
           detailsCacheRef.current.set(anime.id, fullAnime);
-          writeCachedAnDetails(anime.id, fullAnime);
           // Background pre-warm: kick off the episode-source fetch NOW so by
           // the time handlePlay awaits it, the cache already has the result.
           // Zero visible latency between details fetch and player open.
@@ -1999,7 +1957,6 @@ const Index = () => {
 
           if (requestId !== detailsRequestRef.current) return;
           detailsCacheRef.current.set(anime.id, fullAnime);
-          writeCachedAnDetails(anime.id, fullAnime);
           // Pre-warm target episode source while player is mounting.
           try {
             const targetSeason = fullAnime.seasons?.[sIdx ?? 0];
@@ -2023,7 +1980,6 @@ const Index = () => {
             language: anime.language || '',
           };
           detailsCacheRef.current.set(anime.id, fallbackAnime);
-          writeCachedAnDetails(anime.id, fallbackAnime);
           await openPlayerFromAnime(fallbackAnime, { seasonIdx: sIdx, epIdx: eIdx });
         }
       } catch (err) {
@@ -2449,30 +2405,14 @@ const Index = () => {
 
     // AnimeSalt source: directly play the last watched episode
     if (anime.source === "animesalt") {
-      const cachedDetails = detailsCacheRef.current.get(anime.id) || readCachedAnDetails(anime.id);
-      if (cachedDetails && item.episodeInfo) {
-        detailsCacheRef.current.set(anime.id, cachedDetails);
-        const sIdx = item.episodeInfo.seasonIdx ?? (item.episodeInfo.season - 1);
-        const eIdx = item.episodeInfo.epIdx ?? (item.episodeInfo.episode - 1);
-        const hasAccess = await checkAndShowAdGate(anime, sIdx, eIdx);
+      // Immediate feedback — same "Loading details..." toast as fresh card clicks.
+      // Auto-dismissed by the saltPlayerState/playerState effect when playback resolves.
+      showDetailsLoadingToast();
+      // If we have episode info, try to play that episode directly
+      if (item.episodeInfo) {
+        const hasAccess = await checkAndShowAdGate(anime, item.episodeInfo?.seasonIdx, item.episodeInfo?.epIdx);
         if (!hasAccess) return;
         try {
-          await openPlayerFromAnime(cachedDetails, { seasonIdx: sIdx, epIdx: eIdx });
-        } finally {
-          dismissDetailsLoadingToast();
-          try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
-        }
-        return;
-      }
-
-      // Immediate feedback — same "Loading details..." toast as fresh card clicks.
-      // Every path below is wrapped so early returns/failures cannot leave it stuck.
-      const continueToastId = showDetailsLoadingToast();
-      try {
-        // If we have episode info, try to play that episode directly
-        if (item.episodeInfo) {
-          const hasAccess = await checkAndShowAdGate(anime, item.episodeInfo?.seasonIdx, item.episodeInfo?.epIdx);
-          if (!hasAccess) return;
           // Always check customSeasons from Firebase first (admin edited data)
           let customSeasons: any[] | null = null;
           try {
@@ -2529,7 +2469,6 @@ const Index = () => {
               };
               playerStateRef.current = nextState;
               setPlayerState(nextState);
-              window.dispatchEvent(new Event("rs:force-close-details-loader"));
               addToWatchHistory(anime, sIdx, eIdx, true);
               setSelectedAnime(fullAnime);
               const targetWatchRoute = buildWatchRoute(anime.id, sIdx, eIdx);
@@ -2566,7 +2505,6 @@ const Index = () => {
                 };
                 playerStateRef.current = nextState;
                 setPlayerState(nextState);
-                window.dispatchEvent(new Event("rs:force-close-details-loader"));
                 return;
               }
               const resolved = resolveSaltEmbed(epResult);
@@ -2583,7 +2521,6 @@ const Index = () => {
                   currentEmbedIdx: 0, cropMode: 'contain', cropW: 0, cropH: 0, loading: false,
                   resumeTime: item.currentTime || 0,
                 });
-                window.dispatchEvent(new Event("rs:force-close-details-loader"));
                 return;
               }
             }
@@ -2643,7 +2580,6 @@ const Index = () => {
                 };
                 playerStateRef.current = nextState;
                 setPlayerState(nextState);
-                window.dispatchEvent(new Event("rs:force-close-details-loader"));
                 addToWatchHistory(anime, sIdx, eIdx, true);
                 setSelectedAnime(fullAnime);
                 const targetWatchRoute = buildWatchRoute(anime.id, sIdx, eIdx);
@@ -2678,7 +2614,6 @@ const Index = () => {
                 };
                 playerStateRef.current = nextState;
                 setPlayerState(nextState);
-                window.dispatchEvent(new Event("rs:force-close-details-loader"));
                 return;
               }
               const resolved = resolveSaltEmbed(epResult);
@@ -2693,19 +2628,14 @@ const Index = () => {
                   anNativeData: directState?.anNativeData || await getAnNativeDataFromEmbed(resolved.embedUrl),
                   currentEmbedIdx: 0, cropMode: 'contain', cropW: 0, cropH: 0, loading: false,
                 });
-                window.dispatchEvent(new Event("rs:force-close-details-loader"));
                 return;
               }
             }
           }
-        }
-        // Fallback: open details
-        await handleCardClick(anime);
-      } catch {
-        if (detailsLoadingToastRef.current === continueToastId) dismissDetailsLoadingToast();
-      } finally {
-        if (detailsLoadingToastRef.current === continueToastId) dismissDetailsLoadingToast();
+        } catch {}
       }
+      // Fallback: open details
+      handleCardClick(anime);
       return;
     }
 
