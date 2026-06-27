@@ -399,7 +399,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       const existing = targetBySlug.get(item.slug);
       const targetId = existing?.id || targetIdForSlug(item.slug);
       const isMovie = isMovieMode;
-      const detailResult: any = isMovie ? await animeSaltApi.getMovie(item.slug) : await animeSaltApi.getSeries(item.slug);
+      const detailResult: any = isMovie ? await animeSaltApi.getMovie(item.slug, true) : await animeSaltApi.getSeries(item.slug, true);
       const detail = detailResult?.data || detailResult;
       const apiSeasons = !isMovie && Array.isArray(detail?.seasons) ? detail.seasons : [];
       const rawSeasons = apiSeasons.length
@@ -414,7 +414,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         const fetched = await mapLimit(season.episodes || [], 16, async (ep: any, eIdx: number) => {
           const epSlug = String(ep?.slug || "").trim();
           const fallback = { number: Number(ep?.number || ep?.episodeNumber || eIdx + 1), title: ep?.title || `Episode ${eIdx + 1}`, slug: epSlug };
-          const playbackPayload = ep?._moviePayload || (epSlug ? await animeSaltApi.getEpisode(epSlug) : null);
+          const playbackPayload = ep?._moviePayload || (epSlug ? await animeSaltApi.getEpisode(epSlug, true) : null);
           const payload = normalizePlaybackPayload(playbackPayload || {});
           const rsEpisode = playbackToRsEpisode(base, payload, fallback);
           return { epSlug, rsEpisode, payload, fallback };
@@ -430,6 +430,12 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
               slug: epSlug,
               number: fallback.number,
               title: rsEpisode.title,
+              directUrl: payload?.directUrl || payload?.master || payload?.videoSource || payload?.securedLink || rsEpisode.link || "",
+              links: Array.isArray(payload?.links) ? payload.links : [],
+              sources: Array.isArray(payload?.sources) ? payload.sources : [],
+              audioTracks: rsEpisode.audioTracks || [],
+              defaultAudioIdx: payload?.defaultAudioIdx ?? (rsEpisode.audioTracks || []).findIndex((track: any) => track?.isDefault),
+              preferredAudio: payload?.preferredAudio || (rsEpisode.audioTracks || []).find((track: any) => track?.isDefault)?.label || "",
               broken: !rsEpisode.link,
               updatedAt: Date.now(),
             };
@@ -442,8 +448,12 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         };
       }));
 
-      const languages = Array.from(detectedLanguages).filter(Boolean);
+      const languages = Array.from(new Set(Array.from(detectedLanguages).map((lang) => String(lang || "").trim()).filter(Boolean)));
       const baseLanguage = languages.find((lang) => /hindi/i.test(lang)) || languages[0] || "Hindi";
+      const orderedLanguages = Array.from(new Set([baseLanguage, ...languages].filter(Boolean)));
+      const seasonsByLanguage = Object.fromEntries(
+        orderedLanguages.map((lang) => [lang, cloneSeasonsForAudioLanguage(seasons, lang)]),
+      );
       const savedAt = Date.now();
       const poster = item.poster || detail?.poster || "";
       const backdrop = item.backdrop || detail?.backdrop || poster;
@@ -462,9 +472,9 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
           category: item.category,
           storyline: detail?.storyline || item.storyline || "",
           tmdbId: item.tmdbId || existing?.data?.tmdbId || null,
-          language: languages.length > 2 ? "Multiple" : languages.length === 2 ? "Dual" : baseLanguage,
+          language: orderedLanguages.length > 2 ? "Multiple" : orderedLanguages.length === 2 ? "Dual" : baseLanguage,
           baseLanguage,
-          availableLanguages: languages.length ? languages : [baseLanguage],
+          availableLanguages: orderedLanguages.length ? orderedLanguages : [baseLanguage],
           audioTracks: movieEp.audioTracks || [],
           movieLink: movieEp.link,
           movieLink480: movieEp.link480 || "",
@@ -484,6 +494,19 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         await set(ref(db, `anSeries/${item.slug}/meta`), stripUndefined({
           title: movieData.title, poster, backdrop, type: "movies", storyline: movieData.storyline, movieId: targetId, updatedAt: savedAt,
         }));
+        await set(ref(db, `anSeries/${item.slug}/episodes/${item.slug}`), stripUndefined({
+          ...(normalizePlaybackPayload(detail || {}) || {}),
+          slug: item.slug,
+          title: movieEp.title || movieData.title,
+          directUrl: movieEp.link || movieEp.link1080 || "",
+          links: Array.isArray(detail?.links) ? detail.links : [],
+          sources: Array.isArray(detail?.sources) ? detail.sources : [],
+          audioTracks: movieEp.audioTracks || [],
+          defaultAudioIdx: (movieEp.audioTracks || []).findIndex((track: any) => track?.isDefault),
+          preferredAudio: (movieEp.audioTracks || []).find((track: any) => track?.isDefault)?.label || baseLanguage,
+          broken: !movieEp.link,
+          updatedAt: savedAt,
+        }));
         toast.success(`✓ ${movieData.title} saved as AN movie`);
         return;
       }
@@ -499,13 +522,13 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         category: item.category,
         storyline: detail?.storyline || item.storyline || "",
         tmdbId: item.tmdbId || existing?.data?.tmdbId || null,
-        language: languages.length > 2 ? "Multiple" : languages.length === 2 ? "Dual" : baseLanguage,
+        language: orderedLanguages.length > 2 ? "Multiple" : orderedLanguages.length === 2 ? "Dual" : baseLanguage,
         baseLanguage,
         selectedAdminLanguage: baseLanguage,
-        availableLanguages: languages.length ? languages : [baseLanguage],
+        availableLanguages: orderedLanguages.length ? orderedLanguages : [baseLanguage],
         seasons,
-        seasonsByLanguage: { [baseLanguage]: seasons },
-        audioTracks: (languages.length ? languages : [baseLanguage]).map((lang) => ({ language: lang, label: lang, link: "" })),
+        seasonsByLanguage,
+        audioTracks: (orderedLanguages.length ? orderedLanguages : [baseLanguage]).map((lang) => ({ language: lang, label: lang, link: "" })),
         dubType: existing?.data?.dubType || "official",
         visibility: existing?.data?.visibility || "public",
         type: "webseries",
