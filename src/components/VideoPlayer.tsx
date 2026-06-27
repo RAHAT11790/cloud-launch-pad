@@ -65,6 +65,8 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   return url;
 };
 
+const DEFAULT_VIDEO_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy`;
+
 const isDataHlsUrl = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
   return normalized.startsWith("data:application/vnd.apple.mpegurl");
@@ -115,6 +117,9 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
 
   const isHttp = isInsecureHttpSource(url);
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+  const nativeProxyCandidate = isHttp && DEFAULT_VIDEO_PROXY_URL
+    ? buildProxyPlaybackUrl(DEFAULT_VIDEO_PROXY_URL, url)
+    : null;
 
   // STRICT SERVER ISOLATION: each server in the admin panel uses ONLY its own
   // configured URL. We never silently mirror across servers — that previously
@@ -126,6 +131,7 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     // Live TV / fragile HLS streams should use the admin-selected proxy first,
     // then fall back to direct only if proxy is unavailable.
     if (customProxyCandidate) addCandidate(customProxyCandidate);
+    if (isHttp) addCandidate(nativeProxyCandidate);
     if (!isHttp) addCandidate(url);
     return candidates;
   }
@@ -136,6 +142,7 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     // Never inject the raw http:// URL into an https page: browsers block it as
     // mixed content and the player appears broken before failover can help.
     addCandidate(customProxyCandidate);
+    addCandidate(nativeProxyCandidate);
   } else {
     // HTTPS source — strict direct playback only. Never route one HTTPS video
     // server through another proxy/server; if Render is down, HuggingFace/other
@@ -605,12 +612,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // SINGLE PROXY SOURCE — EGD Router row: video-proxy.
     // The proxy is HTTP-only. HTTPS sources always play directly, so probing the
     // proxy with an HTTPS URL is wrong and can make a good admin proxy look bad.
-    const NATIVE_PROXY = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy`;
     const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       const raw = snap.val();
       const enabled = raw?.enabled === true;
       let url = enabled ? String(raw?.customUrl || raw?.url || "").trim() : "";
-      if (!url) url = NATIVE_PROXY;
+      if (!url) url = DEFAULT_VIDEO_PROXY_URL;
       if (cancelled) return;
       setProxyUrl(url);
       setProxyApiKey('');
