@@ -1,0 +1,18 @@
+import { chromium } from '@playwright/test';
+const browser = await chromium.launch({ headless: true, executablePath: '/bin/chromium', args: ['--autoplay-policy=no-user-gesture-required'] });
+const page = await browser.newPage({ viewport: { width: 390, height: 844 }, ignoreHTTPSErrors: true });
+const reqs=[]; const logs=[];
+page.on('console', msg => logs.push(`${msg.type()}: ${msg.text()}`));
+page.on('response', res => { const u=res.url(); if(/an-api|as-cdn|hls|m3u8/.test(u)) reqs.push({status:res.status(), url:u.slice(0,180), ct:res.headers()['content-type']}); });
+page.on('requestfailed', req => { const u=req.url(); if(/an-api|as-cdn|hls|m3u8/.test(u)) reqs.push({failed:u.slice(0,180), reason:req.failure()?.errorText}); });
+await page.goto('http://127.0.0.1:8080/', { waitUntil:'domcontentloaded', timeout:45000 });
+await page.waitForTimeout(2500);
+await page.getByText(/365 Days to the Wedding/i).first().click({ timeout: 15000 });
+await page.waitForTimeout(2500);
+const play = page.getByText(/Play Now/i).first();
+if (await play.isVisible().catch(()=>false)) await play.click();
+await page.waitForTimeout(12000);
+await page.screenshot({ path:'/mnt/documents/an-365-click-playback-test.png', fullPage:true });
+const state=await page.evaluate(() => { const v=document.querySelector('video'); return { url:location.href, text:document.body.innerText.slice(0,1200), video:v?{src:v.currentSrc||v.src, readyState:v.readyState, currentTime:v.currentTime, paused:v.paused, duration:v.duration, error:v.error?{code:v.error.code,message:v.error.message}:null}:null }; });
+console.log(JSON.stringify({state, reqs:reqs.slice(-100), logs:logs.slice(-60)}, null, 2));
+await browser.close();
