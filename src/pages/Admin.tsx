@@ -8192,6 +8192,9 @@ ${footerLinksHtml}
 
  {/* Anime Name Exporter (RS vs AN) */}
  <AnimeNameExporter glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
+
+ {/* AN → Firebase Prefetcher: store every episode's URLs permanently */}
+ <AnFirebasePrefetcher glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} />
  </div>
  )}
 
