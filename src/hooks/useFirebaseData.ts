@@ -53,9 +53,15 @@ export function useFirebaseData() {
       const publicItems: AnimeItem[] = [];
       Object.entries(data).forEach(([id, item]: [string, any]) => {
         if (item.visibility === "private") return; // skip private content
+        // AN-generated series carry `anSlug` / `sourceName === "AnimeSalt"`.
+        // Tag them as `animesalt` so the card shows the "AN" badge by default.
+        // Admin can override per-series via `displayAs: "rs"`.
+        const isAn = Boolean(item.anSlug || item.animeSaltSlug || item.sourceName === "AnimeSalt");
+        const displayAs = String(item.displayAs || (isAn ? "an" : "rs")).toLowerCase();
+        const cardSource: AnimeItem["source"] = displayAs === "an" ? "animesalt" : "firebase";
         const mappedItem: AnimeItem = {
           id,
-          source: "firebase" as const,
+          source: cardSource,
           title: item.title || "",
           poster: item.poster || "",
           backdrop: item.backdrop || "",
