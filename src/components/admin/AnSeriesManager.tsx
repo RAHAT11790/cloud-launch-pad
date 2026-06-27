@@ -65,11 +65,12 @@ const normalizeAnApiBaseUrl = (value: string): string => {
 
 const getAnApiBase = async () => normalizeAnApiBaseUrl(await getEdgeFunctionUrl("an-api"));
 
-// HLS URLs from AnimeSalt are plain HTTPS and play directly through hls.js /
-// native HLS. We deliberately do NOT wrap them in the AN-API /hls relay any
-// more — direct playback is faster and removes a fragile hop. If an old URL
-// is already proxied, strip the wrapper back to the original URL so playback
-// goes straight to the CDN.
+// Direct HTTPS for the VIDEO m3u8 (faster, no proxy hop). The user explicitly
+// asked us to keep video direct. AUDIO sub-playlists from as-cdn*.top however
+// frequently fail to play because the audio segments require a Referer/Origin
+// the browser cannot send cross-origin, which results in silent playback even
+// when video works. Routing ONLY the alternate-audio URI through /an-api/hls
+// fixes audio while keeping video direct.
 const reliableHls = (_base: string, url?: string | null) => {
   const raw = String(url || "").trim();
   if (!raw) return "";
@@ -80,17 +81,26 @@ const reliableHls = (_base: string, url?: string | null) => {
   return raw;
 };
 
+const proxiedAudio = (base: string, url?: string | null) => {
+  const raw = reliableHls(base, url);
+  if (!raw || !base) return raw;
+  // Already proxied? leave it.
+  if (/\/an-api\/hls\?url=/i.test(raw)) return raw;
+  const cleanBase = base.replace(/\/+$/, "");
+  return `${cleanBase}/hls?url=${encodeURIComponent(raw)}`;
+};
+
 const encodeMaster = (content: string) => `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(content)))}`;
 
 const buildSyntheticMaster = (
-  _base: string,
+  base: string,
   stream: { url: string; label?: string; height?: number; bandwidth?: number; resolution?: string },
   audio: Array<{ uri?: string; name?: string; language?: string }>,
   defaultAudioIdx = 0,
 ) => {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audio.forEach((track, index) => {
-    const uri = reliableHls(_base, track?.uri);
+    const uri = proxiedAudio(base, track?.uri);
     if (!uri) return;
     const name = String(track?.name || track?.language || `Audio ${index + 1}`).replace(/"/g, "").trim();
     const lang = String(track?.language || name || `aud${index + 1}`).replace(/"/g, "").trim().toLowerCase();
@@ -99,7 +109,7 @@ const buildSyntheticMaster = (
   const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
   const height = Number(stream?.height || String(stream?.label || "").match(/\d{3,4}/)?.[0] || 720);
   lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max(height * 5000, 1_500_000)},RESOLUTION=${stream.resolution || `${Math.round((height * 16) / 9)}x${height}`}${audioRef}`);
-  lines.push(reliableHls(_base, stream.url));
+  lines.push(reliableHls(base, stream.url));
   return encodeMaster(lines.join("\n"));
 };
 
