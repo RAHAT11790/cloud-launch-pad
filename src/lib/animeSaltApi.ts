@@ -6,7 +6,7 @@ const PLAYABLE_EXT_RE = /\.(?:m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/i;
 const ASSET_EXT_RE = /\.(?:js|css|json|jpe?g|png|gif|svg|webp|ico|woff2?|ttf)(?:[?#].*)?$/i;
 const FETCH_TIMEOUT_MS = 12_000;
 
-// Firebase-backed cache for AnimeSalt API responses.
+// LocalStorage-first + Firebase-backed cache for AnimeSalt API responses.
 // Series structure rarely changes -> long TTL. Playback URLs may be signed -> shorter TTL.
 const CACHE_TTL_SERIES_MS = 7 * 24 * 60 * 60 * 1000;   // 7 days
 const CACHE_TTL_PLAYBACK_MS = 10 * 60 * 1000;          // playback links expire; keep fresh
@@ -20,10 +20,22 @@ async function readAsCache(kind: 'series' | 'movie' | 'episode', slug: string, t
   const now = Date.now();
   if (mem && now - mem.ts < ttl) return mem.data;
   try {
+    const raw = localStorage.getItem(`rs_an_cache:${sanitizeKey(key)}`);
+    if (raw) {
+      const val = JSON.parse(raw);
+      if (val && val.ts && val.data && now - Number(val.ts) < ttl) {
+        memCache.set(key, { ts: Number(val.ts), data: val.data });
+        return val.data;
+      }
+      localStorage.removeItem(`rs_an_cache:${sanitizeKey(key)}`);
+    }
+  } catch {}
+  try {
     const snap = await get(ref(db, `animesaltCache/${kind}/${sanitizeKey(slug)}`));
     const val = snap.val();
     if (val && val.ts && val.data && now - Number(val.ts) < ttl) {
       memCache.set(key, { ts: Number(val.ts), data: val.data });
+      try { localStorage.setItem(`rs_an_cache:${sanitizeKey(key)}`, JSON.stringify({ ts: Number(val.ts), data: val.data })); } catch {}
       return val.data;
     }
   } catch {}
@@ -32,7 +44,9 @@ async function readAsCache(kind: 'series' | 'movie' | 'episode', slug: string, t
 
 function writeAsCache(kind: 'series' | 'movie' | 'episode', slug: string, data: any) {
   const ts = Date.now();
-  memCache.set(`${kind}:${slug}`, { ts, data });
+  const key = `${kind}:${slug}`;
+  memCache.set(key, { ts, data });
+  try { localStorage.setItem(`rs_an_cache:${sanitizeKey(key)}`, JSON.stringify({ ts, data })); } catch {}
   try {
     // Fire-and-forget; never block UX on cache writes.
     set(ref(db, `animesaltCache/${kind}/${sanitizeKey(slug)}`), { ts, data }).catch(() => {});
