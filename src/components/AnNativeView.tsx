@@ -45,7 +45,12 @@ interface Props {
   initialData?: AnNativeResolvedData | null;
 }
 
-const proxied = (apiBase: string, u: string) => `${apiBase}/hls?url=${encodeURIComponent(u)}`;
+const hlsUrl = (apiBase: string, u: string) => {
+  const raw = String(u || "").trim();
+  // HTTPS AN CDN/media playlists must stay direct for full browser bandwidth.
+  // Only http:// needs the edge proxy to avoid mixed-content blocking.
+  return raw.toLowerCase().startsWith("http://") ? `${apiBase}/hls?url=${encodeURIComponent(raw)}` : raw;
+};
 // AN subtitle extraction/proxy was removed from the API for stability.
 
 function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAudioIdx: number): string {
@@ -55,12 +60,12 @@ function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAu
     lines.push(
       `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${a.name.replace(/"/g, "")}",` +
       `LANGUAGE="${a.language || a.name.slice(0, 2).toLowerCase()}",` +
-      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${proxied(apiBase, a.uri)}"`
+      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${hlsUrl(apiBase, a.uri)}"`
     );
   });
   const audioRef = audios.length > 0 ? ',AUDIO="aud"' : "";
   lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || stream.height * 5000},RESOLUTION=${stream.resolution || `${stream.height}p`}${audioRef}`);
-  lines.push(proxied(apiBase, stream.url));
+  lines.push(hlsUrl(apiBase, stream.url));
   const text = lines.join("\n");
   // data URL avoids needing yet another endpoint; hls.js handles it natively
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(text)))}`;
@@ -186,11 +191,16 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      // Start small so first segment arrives fast, then ramp up.
-      maxBufferLength: 30,
+      testBandwidth: false,
+      abrEwmaDefaultEstimate: 8_000_000,
+      abrBandWidthFactor: 0.95,
+      abrBandWidthUpFactor: 0.8,
+      // Bigger buffer lets the browser absorb more network instead of sipping
+      // one small segment at a time.
+      maxBufferLength: 60,
       maxMaxBufferLength: 300,
-      maxBufferSize: 60 * 1000 * 1000,
-      backBufferLength: 30,
+      maxBufferSize: 150 * 1000 * 1000,
+      backBufferLength: 20,
       // Aggressive retries for flaky connections — instead of giving up,
       // retry quickly so playback recovers without user action.
       manifestLoadingTimeOut: 15000,
@@ -203,6 +213,8 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       fragLoadingMaxRetry: 6,
       fragLoadingRetryDelay: 500,
       nudgeMaxRetry: 10,
+      progressive: true,
+      highBufferWatchdogPeriod: 1,
       // We feed exactly one variant, so ABR is irrelevant.
       capLevelToPlayerSize: false,
       // Start loading from the resume position — does NOT pull bytes from 0.
