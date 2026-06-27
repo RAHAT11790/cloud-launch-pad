@@ -3938,7 +3938,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                       className={`player-touch-button h-[30px] px-2 rounded-full flex items-center justify-center gap-1 transition-transform duration-150 active:scale-95 shrink-0 ${manualServerSelected ? 'ring-1 ring-primary bg-primary/25' : ''}`}
                     >
                       <Server className="w-3.5 h-3.5" />
-                      <span className="text-[11px] font-semibold whitespace-nowrap max-w-[78px] truncate">{effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`}</span>
+                      <span className="text-[11px] font-semibold whitespace-nowrap max-w-[78px] truncate">{isHlsSrc ? "HLS" : (effectiveVideoServers[activeServerIndex]?.name || `Server ${activeServerIndex + 1}`)}</span>
                     </button>
                   </div>
                 ) : isHlsSrc ? (
