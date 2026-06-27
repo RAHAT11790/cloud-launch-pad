@@ -33,7 +33,6 @@ interface SaltPlayerProps {
   saltPlayerState: SaltPlayerState;
   setSaltPlayerState: (state: SaltPlayerState | null) => void;
   getCleanEmbedUrl: (url: string) => string;
-  animeSaltApi: any;
   addToWatchHistory: (anime: AnimeItem, seasonIdx?: number, epIdx?: number, preserveProgress?: boolean) => void;
   onRequireUnlock?: (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => Promise<boolean>;
   suggestedAnime?: AnimeItem[];
@@ -54,7 +53,7 @@ const CROP_PRESETS = [
   { label: "21:9", w: 21, h: 9 },
 ];
 
-export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCleanEmbedUrl, animeSaltApi, addToWatchHistory, onRequireUnlock, suggestedAnime, onSuggestedClick }: SaltPlayerProps) {
+export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCleanEmbedUrl, addToWatchHistory, onRequireUnlock, suggestedAnime, onSuggestedClick }: SaltPlayerProps) {
   const [epSearch, setEpSearch] = useState("");
   const [selectedSeasonIdx, setSelectedSeasonIdx] = useState<number>(saltPlayerState.seasonIdx ?? 0);
   const [showCropPanel, setShowCropPanel] = useState(false);
@@ -269,35 +268,7 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   const handleEpisodeClick = async (ep: any, season: any, sIdx: number, eIdx: number) => {
     const epSrc = ep.link;
     if (epSrc?.startsWith("animesalt://")) {
-      // AN content plays without unlock gating — guest and logged-in users
-      // are treated identically (priority to logged-in users, no asymmetric
-      // gating). The earlier ad-gate redirect for AN was the root cause of
-      // "File not found" loops for signed-in accounts.
-      const epSlug = epSrc.replace("animesalt://", "");
-      try {
-        const result = await animeSaltApi.getEpisode(epSlug);
-        if (result.embedUrl) {
-          if (saltPlayerState.anime) {
-            addToWatchHistory(saltPlayerState.anime, sIdx, eIdx, true);
-          }
-          setSaltPlayerState({
-            ...saltPlayerState,
-            embedUrl: result.embedUrl,
-            cleanEmbedUrl: getCleanEmbedUrl(result.embedUrl),
-            subtitle: `${season.name} - Episode ${ep.episodeNumber}`,
-            seasonIdx: sIdx,
-            epIdx: eIdx,
-            allEmbeds: result.allEmbeds || [result.embedUrl],
-            currentEmbedIdx: 0,
-            loading: false,
-            resumeTime: 0,
-          });
-        } else {
-          toast.error("This episode source is not available right now. Try another server.");
-        }
-      } catch {
-        toast.error("Failed to load this episode. Try another server.");
-      }
+      toast.error("AN episode URL is not saved in Firebase yet. Fetch it from Admin first.");
     }
   };
 
