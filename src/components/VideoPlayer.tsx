@@ -4961,12 +4961,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           const startMovieDownload = async (quality: string) => {
             const { toast } = await import("sonner");
             const movieLabel = String(title || subtitle || "video").trim();
+            const cleanTitle = sanitizeAnimeDownloadTitle(title) || title;
             const directHttpsUrl = getDownloadUrl(src, quality, movieLabel, [src]);
             if (!directHttpsUrl) { toast.error("Download not available"); return; }
             downloadManager.startDownload({
               id: buildDlId(quality, movieLabel),
               url: directHttpsUrl,
-              title,
+              title: cleanTitle,
               subtitle: movieLabel,
               poster,
               quality,
@@ -5003,7 +5004,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 hlsBatch.push({
                   id: buildDlId(quality, episodeLabel),
                   url: epUrl,
-                  title,
+                  title: sanitizeAnimeDownloadTitle(title) || title,
                   subtitle: episodeLabel,
                   poster,
                   quality,
@@ -5014,7 +5015,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 downloadManager.registerExternalDownload({
                   id: buildDlId(quality, episodeLabel),
                   url: epUrl,
-                  title,
+                  title: sanitizeAnimeDownloadTitle(title) || title,
                   subtitle: episodeLabel,
                   poster,
                   quality,
