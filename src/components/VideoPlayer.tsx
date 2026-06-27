@@ -45,6 +45,7 @@ import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { buildDirectDownloadUrl, buildVideoDownloadUrl, triggerBulkBackgroundDownloads } from "@/lib/videoDownload";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import { estimateHlsSize, normalizeHlsProxyUrl } from "@/lib/hlsDownloader";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
@@ -95,10 +96,15 @@ const isAnApiHlsProxyUrl = (url: string): boolean => /\/an-api\/hls\?/i.test(Str
 
 const sanitizeAnimeDownloadTitle = (value: string): string => {
   return String(value || "")
+    .replace(/\b1\s*[x×]\s*1\b/gi, "")
+    .replace(/\bone\s*x\s*one\b/gi, "")
     .replace(/one\s*x\s*one/gi, "")
+    .replace(/anime\s*salt/gi, "")
     .replace(/anime\s*slate/gi, "")
     .replace(/animesalt/gi, "")
+    .replace(/watch\s*now\s*in\s*[^|•—-]+/gi, "")
     .replace(/\s*[•|]+\s*/g, " ")
+    .replace(/\s*[—-]\s*$/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
 };
@@ -2276,9 +2282,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // guessed 8 Mbps path. That guess could stall AN/RS on phones, making the
       // player appear to "sip" only 200-300KB and never build a healthy buffer.
       testBandwidth: true,
-      abrEwmaDefaultEstimate: 5_500_000,
-      abrBandWidthFactor: 0.92,
-      abrBandWidthUpFactor: 0.82,
+      abrEwmaDefaultEstimate: 2_500_000,
+      abrBandWidthFactor: 0.82,
+      abrBandWidthUpFactor: 0.72,
       // Bigger forward buffer → seeking/skipping lands inside already-loaded
       // chunks ~95% of the time. Back buffer kept tight to free memory.
       backBufferLength: 15,
@@ -2286,7 +2292,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       maxMaxBufferLength: 60,
       // Cap forward check/buffer to 1 MB so low-power phones don't choke loading
       // huge HLS windows. Player still pre-fetches the next fragment.
-      maxBufferSize: 1 * 1024 * 1024,
+      maxBufferSize: 12 * 1024 * 1024,
       maxBufferHole: 0.45,
       highBufferWatchdogPeriod: 1,
       nudgeMaxRetry: 8,
