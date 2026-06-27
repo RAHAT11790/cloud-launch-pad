@@ -5,7 +5,6 @@ import logoImg from "@/assets/logo.png";
 import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
-import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import type { AnNativeResolvedData } from "@/components/AnNativeView";
 
 const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: number) => {
@@ -29,120 +28,6 @@ const isDirectMediaPlaybackUrl = (url?: string | null) => {
   // broken iframe path and makes AN appear fully blocked.
   if (normalized.startsWith("data:application/vnd.apple.mpegurl")) return true;
   return /\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(normalized);
-};
-
-const normalizeAnimeSaltPlaybackUrl = (url?: string | null) => {
-  const raw = String(url || "").trim();
-  if (!raw) return "";
-  try {
-    const parsed = new URL(raw);
-    const isMultiLangPlayer = /(^|\.)animesalt\.(ac|top)$/i.test(parsed.hostname) && /\/multi-lang-plyr\/player\.php$/i.test(parsed.pathname);
-    if (isMultiLangPlayer) {
-      return `https://codecryptic.net/player/multi-lang-plyr.php${parsed.search}`;
-    }
-  } catch {}
-  return raw;
-};
-
-const getAnimeSaltSourcePriority = (url?: string | null) => {
-  const value = String(url || "").trim().toLowerCase();
-  if (!value) return 99;
-  if (/multi-lang-plyr|codecryptic\.net\/player|player\.php\?data=/.test(value)) return 0;
-  if (/hf\.space|huggingface/.test(value)) return 1;
-  if (/embed|watch|player/.test(value)) return 2;
-  if (/as-cdn\d+\.top\/video\/[a-f0-9]{16,}/.test(value)) return 6;
-  return 3;
-};
-
-const getAnimeSaltPlaybackSources = (payload: any): { primarySrc: string; qualityOptions?: { label: string; src: string }[] } => {
-  payload = payload?.data && !payload?.links && !payload?.sources ? payload.data : payload;
-  const seen = new Set<string>();
-  const normalize = (value?: string | null) => normalizeAnimeSaltPlaybackUrl(value);
-  const pushUnique = (list: { label: string; src: string }[], label: string, src?: string | null) => {
-    const cleanSrc = normalize(src);
-    if (!cleanSrc || seen.has(cleanSrc)) return;
-    seen.add(cleanSrc);
-    list.push({ label, src: cleanSrc });
-  };
-
-  const directOptions: { label: string; src: string }[] = [];
-  const embedOptions: { label: string; src: string }[] = [];
-
-  const links = Array.isArray(payload?.links) ? payload.links : [];
-  links.forEach((entry: any, index: number) => {
-    const cleanSrc = normalize(entry?.url || entry?.src);
-    if (!cleanSrc) return;
-    const label = String(entry?.quality || entry?.label || `Source ${index + 1}`);
-    if (isDirectMediaPlaybackUrl(cleanSrc)) {
-      pushUnique(directOptions, label, cleanSrc);
-    } else {
-      pushUnique(embedOptions, `Server ${embedOptions.length + 1}`, cleanSrc);
-    }
-  });
-
-  [payload?.streamUrl, payload?.videoUrl, payload?.directUrl, payload?.file].forEach((candidate, index) => {
-    if (isDirectMediaPlaybackUrl(candidate)) {
-      pushUnique(directOptions, index === 0 ? "Auto" : `Source ${index + 1}`, candidate);
-    }
-  });
-
-  const embedCandidates = [payload?.embedUrl, payload?.movieEmbedUrl, ...(Array.isArray(payload?.allEmbeds) ? payload.allEmbeds : [])];
-  embedCandidates.forEach((candidate) => {
-    if (isDirectMediaPlaybackUrl(candidate)) {
-      pushUnique(directOptions, `Source ${directOptions.length + 1}`, candidate);
-    } else {
-      pushUnique(embedOptions, `Server ${embedOptions.length + 1}`, candidate);
-    }
-  });
-
-  // Keep upstream order intact so AnimeSalt Server 1 always remains the
-  // default first option shown to users. Re-sorting here can accidentally push
-  // a problematic mirror ahead of the original server.
-
-  if (directOptions.length > 0) {
-    return {
-      primarySrc: directOptions[0].src,
-      qualityOptions: directOptions.length > 1 ? directOptions : undefined,
-    };
-  }
-
-  return {
-    primarySrc: embedOptions[0]?.src || "",
-    qualityOptions: embedOptions.length > 1 ? embedOptions : undefined,
-  };
-};
-
-let anApiBaseUrl = "";
-let anApiBasePromise: Promise<string> | null = null;
-
-const normalizeAnApiBaseUrl = (value: string): string => {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  try {
-    const url = new URL(raw);
-    url.search = "";
-    url.hash = "";
-    const endpointNames = new Set(["raw", "search", "anime", "episode", "embed", "hls", "subs"]);
-    const parts = url.pathname.split("/").filter(Boolean);
-    while (parts.length && endpointNames.has(parts[parts.length - 1].toLowerCase())) parts.pop();
-    url.pathname = `/${parts.join("/")}`.replace(/\/+$/, "");
-    return url.toString().replace(/\/+$/, "");
-  } catch {
-    return raw.replace(/\/(?:raw|search|anime|episode|embed|hls|subs)(?:\?.*)?$/i, "").replace(/\/+$/, "");
-  }
-};
-
-const ensureAnApiBaseUrl = async (): Promise<string> => {
-  if (anApiBaseUrl) return anApiBaseUrl;
-  if (!anApiBasePromise) {
-    anApiBasePromise = getEdgeFunctionUrl("an-api")
-      .then((url) => {
-        anApiBaseUrl = normalizeAnApiBaseUrl(url || "");
-        return anApiBaseUrl;
-      })
-      .catch(() => "");
-  }
-  return anApiBasePromise;
 };
 
 const buildAnHlsPlaybackUrl = (url: string) => {
