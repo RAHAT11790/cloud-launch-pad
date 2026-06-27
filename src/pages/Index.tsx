@@ -402,9 +402,11 @@ const getAnimeSaltDirectState = async (episodeSlug: string, forceRefresh = false
     if (!value?.src || !value.audioTracks?.length) {
       animeSaltDirectStateCache.delete(key);
       // Mark broken in Firebase so the admin "Repair Broken" button picks it up.
-      try {
-        set(ref(db, `anSeries/${seriesSlug}/episodes/${key}/broken`), true).catch(() => {});
-      } catch {}
+      if (!value?.src) {
+        try {
+          set(ref(db, `anSeries/${seriesSlug}/episodes/${key}/broken`), true).catch(() => {});
+        } catch {}
+      }
     }
   }).catch(() => animeSaltDirectStateCache.delete(key));
   return request;
