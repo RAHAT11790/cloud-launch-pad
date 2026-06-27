@@ -346,9 +346,10 @@ const resolveSaltEmbed = (payload: any): { embedUrl: string; allEmbeds: string[]
 
 const animeSaltDirectStateCache = new Map<string, Promise<Awaited<ReturnType<typeof buildAnimeSaltDirectPlaybackState>> | null>>();
 
-const getAnimeSaltDirectState = async (episodeSlug: string) => {
+const getAnimeSaltDirectState = async (episodeSlug: string, forceRefresh = false) => {
   const key = String(episodeSlug || "").trim();
   if (!key) return null;
+  if (forceRefresh) animeSaltDirectStateCache.delete(key);
   const existing = animeSaltDirectStateCache.get(key);
   if (existing) return existing;
 
@@ -360,9 +361,12 @@ const getAnimeSaltDirectState = async (episodeSlug: string) => {
     try {
       const snap = await get(ref(db, `anSeries/${seriesSlug}/episodes/${key}`));
       const cached = snap.val();
-      if (cached && !cached.broken && (cached.directUrl || (Array.isArray(cached.links) && cached.links.length))) {
+      if (!forceRefresh && cached && !cached.broken && (cached.directUrl || (Array.isArray(cached.links) && cached.links.length) || (Array.isArray(cached.sources) && cached.sources.length))) {
         const built = await buildAnimeSaltDirectPlaybackState(cached);
-        if (built?.src) return built;
+        // Old Firebase rows were saved before audio extraction existed. If audio
+        // is missing, keep going to live AN API and repair the row instead of
+        // returning a silent/one-audio player from Continue Watching.
+        if (built?.src && built.audioTracks?.length) return built;
       }
     } catch {}
 
@@ -370,7 +374,7 @@ const getAnimeSaltDirectState = async (episodeSlug: string) => {
     const base = await ensureAnApiBaseUrl();
     if (!base) return null;
     try {
-      const response = await fetch(`${base}/episode?slug=${encodeURIComponent(key)}`);
+      const response = await fetch(`${base}/episode?slug=${encodeURIComponent(key)}&force=1&_=${Date.now()}`);
       if (!response.ok) return null;
       const payload = await response.json();
       // Fire-and-forget persist so the next visit is instant.
@@ -393,7 +397,7 @@ const getAnimeSaltDirectState = async (episodeSlug: string) => {
   })();
   animeSaltDirectStateCache.set(key, request);
   request.then((value) => {
-    if (!value?.src) {
+    if (!value?.src || !value.audioTracks?.length) {
       animeSaltDirectStateCache.delete(key);
       // Mark broken in Firebase so the admin "Repair Broken" button picks it up.
       try {
