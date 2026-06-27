@@ -149,10 +149,10 @@ const buildAnProxyUrl = (url: string) => {
 const buildAnHlsPlaybackUrl = (url: string) => {
   const raw = String(url || "").trim();
   if (!raw) return raw;
-  // HTTPS AnimeSalt CDN streams should play directly. Routing every segment
-  // through /an-api/hls throttles bandwidth to a few hundred KB/s on phones.
-  // Keep the edge proxy only for true http:// mixed-content sources.
-  return raw.toLowerCase().startsWith("http://") ? buildAnProxyUrl(raw) : raw;
+  // AN CDNs frequently block browser-origin HLS/CORS. The AN API /hls route is
+  // now the dedicated playback pipe for AN only; RS HTTPS still plays direct in
+  // VideoPlayer, while AN gets reliable playlist/segment headers.
+  return buildAnProxyUrl(raw);
 };
 
 // Prefer Hindi as the default audio track for AnimeSalt content.

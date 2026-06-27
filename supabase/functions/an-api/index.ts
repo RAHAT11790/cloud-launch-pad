@@ -425,16 +425,30 @@ function rewriteM3U8(text: string, baseUrl: string, proxyPrefix: string): string
 async function hlsProxy(req: Request, target: string, proxyPrefix: string) {
   const targetUrl = new URL(target);
   const origin = `${targetUrl.protocol}//${targetUrl.host}`;
-  const headers: Record<string, string> = {
+  const baseHeaders: Record<string, string> = {
     "User-Agent": UA,
     Accept: "application/vnd.apple.mpegurl,video/*,*/*",
     "Accept-Encoding": "identity",
-    Referer: `${origin}/`,
-    Origin: origin,
   };
   const range = req.headers.get("range");
-  if (range) headers.Range = range;
-  const upstream = await fetch(target, { headers, redirect: "follow" });
+  if (range) baseHeaders.Range = range;
+  let upstream: Response | null = null;
+  const attempts: Record<string, string>[] = [
+    baseHeaders,
+    { ...baseHeaders, Referer: `${origin}/` },
+    { ...baseHeaders, Referer: `${AN_BASE}/`, Origin: AN_BASE },
+    { ...baseHeaders, Referer: `${origin}/`, Origin: origin },
+  ];
+  for (const headers of attempts) {
+    try {
+      upstream = await fetch(target, { headers, redirect: "follow" });
+      if (upstream.ok || upstream.status === 206 || upstream.status === 304) break;
+      try { await upstream.body?.cancel(); } catch {}
+    } catch {
+      upstream = null;
+    }
+  }
+  if (!upstream) return new Response("AN upstream fetch failed: network", { status: 502, headers: cors });
   if (!upstream.ok && upstream.status !== 206 && upstream.status !== 304) {
     return new Response(`AN upstream fetch failed: ${upstream.status}`, { status: 502, headers: cors });
   }

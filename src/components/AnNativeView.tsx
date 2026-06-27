@@ -45,29 +45,29 @@ interface Props {
   initialData?: AnNativeResolvedData | null;
 }
 
-const hlsUrl = (apiBase: string, u: string) => {
+const hlsUrl = (apiBase: string, u: string, proxyAll = false) => {
   const raw = String(u || "").trim();
   // HTTPS AN CDN/media playlists must stay direct for full browser bandwidth.
   // Only http:// needs the edge proxy to avoid mixed-content blocking.
-  return raw.toLowerCase().startsWith("http://") ? `${apiBase}/hls?url=${encodeURIComponent(raw)}` : raw;
+  return proxyAll || raw.toLowerCase().startsWith("http://") ? `${apiBase}/hls?url=${encodeURIComponent(raw)}` : raw;
 };
 // AN subtitle extraction/proxy was removed from the API for stability.
 
-function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAudioIdx: number): string {
+function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAudioIdx: number, proxyAll = false): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audios.forEach((a, i) => {
     const isDefault = i === defaultAudioIdx;
     lines.push(
       `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${a.name.replace(/"/g, "")}",` +
       `LANGUAGE="${a.language || a.name.slice(0, 2).toLowerCase()}",` +
-      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${hlsUrl(apiBase, a.uri)}"`
+      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${hlsUrl(apiBase, a.uri, proxyAll)}"`
     );
   });
   const audioRef = audios.length > 0 ? ',AUDIO="aud"' : "";
   const height = Number(stream.height || 720);
   const resolution = stream.resolution || `${Math.round((height * 16) / 9)}x${height}`;
   lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max(height * 5000, 2560000)},RESOLUTION=${resolution}${audioRef}`);
-  lines.push(hlsUrl(apiBase, stream.url));
+  lines.push(hlsUrl(apiBase, stream.url, proxyAll));
   const text = lines.join("\n");
   // data URL avoids needing yet another endpoint; hls.js handles it natively
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(text)))}`;
@@ -106,6 +106,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const [skipHint, setSkipHint] = useState<{ side: "left" | "right"; total: number } | null>(null);
   const [speedBoost, setSpeedBoost] = useState(false);
   const [apiBase, setApiBase] = useState("");
+  const [proxyAllHls, setProxyAllHls] = useState(false);
   const failedRef = useRef(false);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipTotalsRef = useRef({ left: 0, right: 0 });
@@ -123,6 +124,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     let cancelled = false;
     failedRef.current = false;
     resumedRef.current = false;
+    setProxyAllHls(false);
     setLoading(true);
     setStreams([]); setAudios([]);
     (async () => {
@@ -169,7 +171,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     if (!video || streams.length === 0 || !apiBase) return;
     const stream = streams[qIdx];
     if (!stream) return;
-    const master = buildMaster(apiBase, stream, audios, aIdx);
+    const master = buildMaster(apiBase, stream, audios, aIdx, proxyAllHls);
     // First mount → use the resumeTime prop (continue-watching). After that,
     // preserve the live currentTime across quality swaps.
     const initialStart = !resumedRef.current
@@ -268,6 +270,10 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       // Try non-destructive recovery before giving up — many "fatal" media
       // errors on slow networks are actually recoverable buffer stalls.
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        if (!proxyAllHls) {
+          setProxyAllHls(true);
+          return;
+        }
         try { hls.startLoad(); return; } catch {}
       }
       if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
@@ -281,7 +287,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     // resumeTime intentionally NOT in deps — re-running on resume change
     // would tear down hls mid-playback. Only embed/quality/audio rebuilds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streams, qIdx, audios, aIdx, onFail, apiBase]);
+  }, [streams, qIdx, audios, aIdx, onFail, apiBase, proxyAllHls]);
 
   // Bubble timeupdate to parent for progress persistence (continue-watching).
   useEffect(() => {
