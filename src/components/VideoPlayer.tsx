@@ -68,6 +68,24 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
 };
 
 const DEFAULT_VIDEO_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy`;
+const DEFAULT_AN_API_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/an-api`;
+
+const normalizeAnApiBaseUrl = (value: string): string => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    url.search = "";
+    url.hash = "";
+    const endpointNames = new Set(["raw", "search", "anime", "episode", "embed", "hls", "subs"]);
+    const parts = url.pathname.split("/").filter(Boolean);
+    while (parts.length && endpointNames.has(parts[parts.length - 1].toLowerCase())) parts.pop();
+    url.pathname = `/${parts.join("/")}`.replace(/\/+$/, "");
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return raw.replace(/\/(?:raw|search|anime|episode|embed|hls|subs)(?:\?.*)?$/i, "").replace(/\/+$/, "");
+  }
+};
 
 const isDataHlsUrl = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
