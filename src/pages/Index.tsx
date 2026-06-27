@@ -1928,28 +1928,20 @@ const Index = () => {
       if (!hasAccess) return;
       const epSlug = src.replace("animesalt://", "");
       try {
-        // Parallel, but isolated: if the metadata wrapper fails, do not kill the
-        // direct stream extraction path that actually makes AN playback work.
-        const [resultSettled, directSettled] = await Promise.allSettled([
-          cachedApiCall(`ep_${epSlug}`, () => animeSaltApi.getEpisode(epSlug)),
-          getAnimeSaltDirectState(epSlug),
-        ]);
-        const result = resultSettled.status === "fulfilled" ? resultSettled.value : null;
-        const directState = directSettled.status === "fulfilled" ? directSettled.value : null;
-        const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result || {});
-        if (directState?.src || primarySrc) {
+        const directState = await getAnimeSaltDirectState(epSlug);
+        if (directState?.src) {
           addToWatchHistory(anime, resolvedSeasonIdx, resolvedEpIdx, true);
           setPlayerState({
-            src: directState?.src || primarySrc,
+            src: directState.src,
             title: anime.title,
             subtitle: subtitle || `Episode`,
             anime,
-            selectedLanguage: directState?.preferredLanguage || "Hindi",
+            selectedLanguage: directState.preferredLanguage || "Hindi",
             seasonIdx: resolvedSeasonIdx,
             epIdx: resolvedEpIdx,
-            qualityOptions: directState?.qualityOptions || sourceOptions,
-            audioTracks: directState?.audioTracks,
-            subtitleTracks: directState?.subtitleTracks,
+            qualityOptions: directState.qualityOptions,
+            audioTracks: directState.audioTracks,
+            subtitleTracks: directState.subtitleTracks,
             nextEpisodeSrc:
               anime.type === "webseries" && anime.seasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined
                 ? getEpisodeSrc(anime.seasons[resolvedSeasonIdx]?.episodes?.[resolvedEpIdx + 1] as Episode)
@@ -1958,9 +1950,9 @@ const Index = () => {
           setSelectedAnime(null);
           inPlayerSwitchRef.current = false;
         } else {
-          console.warn("[AN] no source for episode", epSlug, result);
+          console.warn("[AN] no Firebase-saved source for episode", epSlug);
           inPlayerSwitchRef.current = false;
-          toast.error("Episode source not available. Try another server or episode.");
+          toast.error("Episode source is not saved in Firebase. Refresh this series from Admin.");
         }
       } catch (e) {
         console.warn("[AN] episode load failed", epSlug, e);
@@ -1976,30 +1968,24 @@ const Index = () => {
       if (!hasAccess) return;
       const movieSlug = src.replace("animesalt_movie://", "");
       try {
-        const [resultSettled, directSettled] = await Promise.allSettled([
-          cachedApiCall(`movie_${movieSlug}`, () => animeSaltApi.getMovie(movieSlug)),
-          getAnimeSaltDirectState(movieSlug),
-        ]);
-        const result = resultSettled.status === "fulfilled" ? resultSettled.value : null;
-        const directState = directSettled.status === "fulfilled" ? directSettled.value : null;
-        const { primarySrc, qualityOptions: sourceOptions } = getAnimeSaltPlaybackSources(result?.success ? result.data : result);
-        if (directState?.src || primarySrc) {
+        const directState = await getAnimeSaltDirectState(movieSlug);
+        if (directState?.src) {
           addToWatchHistory(anime, undefined, undefined, true);
           setPlayerState({
-            src: directState?.src || primarySrc,
+            src: directState.src,
             title: anime.title,
             subtitle: "Movie",
             anime,
-            selectedLanguage: directState?.preferredLanguage || "Hindi",
-            qualityOptions: directState?.qualityOptions || sourceOptions,
-            audioTracks: directState?.audioTracks,
-            subtitleTracks: directState?.subtitleTracks,
+            selectedLanguage: directState.preferredLanguage || "Hindi",
+            qualityOptions: directState.qualityOptions,
+            audioTracks: directState.audioTracks,
+            subtitleTracks: directState.subtitleTracks,
           } as any);
           setSelectedAnime(null);
           inPlayerSwitchRef.current = false;
         } else {
           inPlayerSwitchRef.current = false;
-          toast.error("Movie source not found");
+          toast.error("Movie source is not saved in Firebase. Refresh this movie from Admin.");
         }
       } catch {
         inPlayerSwitchRef.current = false;
