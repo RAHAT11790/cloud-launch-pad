@@ -463,6 +463,8 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
                             <Trash2 size={12} /> Delete
                           </button>
                         </>
+                      ) : item.rsConflict ? (
+                        <span className="text-[11px] text-sky-300/80 px-1 py-2">Skipped (in RS)</span>
                       ) : (
                         <button onClick={() => fetchAndSaveSeries(item)} disabled={isBusy || bulkRunning} className={`${btnPrimary} px-3.5 py-2 text-[11px] font-semibold flex items-center gap-1.5 disabled:opacity-50`}>
                           {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />} Fetch
