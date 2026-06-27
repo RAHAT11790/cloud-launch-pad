@@ -37,7 +37,10 @@ function capLargeMediaRange(range: string | null, upstreamUrl: URL) {
   // through makes Supabase/Cloudflare stream the whole MP4 before the player has
   // metadata, which looks like a block/stall. Return small byte windows instead;
   // the browser already knows how to request the next/tail ranges for seeking.
-  if (!hasExplicitEnd && start > 0) return range;
+  // Keep tail/seek requests intact (Chrome uses an open-ended tail range to find
+  // the MP4 moov atom), but cap early open-ended media reads so playback starts
+  // immediately instead of dragging the entire file through the edge function.
+  if (!hasExplicitEnd && start > 8 * 1024 * 1024) return range;
   if (!Number.isFinite(requestedEnd) || requestedEnd - start + 1 > MEDIA_CHUNK_BYTES) {
     return `bytes=${start}-${cappedEnd}`;
   }
