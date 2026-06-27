@@ -22,7 +22,11 @@ const UA =
 const TEXT_TIMEOUT_MS = 9_000;
 const PLAYER_TIMEOUT_MS = 8_000;
 const cache = new Map<string, { ts: number; ttl: number; data: unknown }>();
-const getCache = <T>(key: string): T | null => {
+const getCache = <T>(key: string, forceRefresh = false): T | null => {
+  if (forceRefresh) {
+    cache.delete(key);
+    return null;
+  }
   const hit = cache.get(key);
   if (!hit || Date.now() - hit.ts > hit.ttl) {
     if (hit) cache.delete(key);
@@ -176,10 +180,10 @@ async function search(q: string) {
 }
 
 // ---------- DETAIL / EPISODES ----------
-async function detail(slug: string, type: string) {
+async function detail(slug: string, type: string, forceRefresh = false) {
   const t = type === "movies" ? "movies" : "series";
   const cacheKey = `detail:${t}:${slug}`;
-  const cached = getCache<any>(cacheKey);
+  const cached = getCache<any>(cacheKey, forceRefresh);
   if (cached) return cached;
   const html = await fetchText(`${AN_BASE}/${t}/${slug}/`);
   const titleM = html.match(/<meta property=["']og:title["'] content=["']([^"']+)/i) || html.match(/<title>([^<]+)/i);
@@ -386,8 +390,8 @@ async function fetchMaster(master: string, embedUrl: string, origin: string) {
   throw new Error("master fetch failed");
 }
 
-async function extractFromPlayer(embedUrl: string) {
-  const cached = getCache<any>(`embed:${embedUrl}`);
+async function extractFromPlayer(embedUrl: string, forceRefresh = false) {
+  const cached = getCache<any>(`embed:${embedUrl}`, forceRefresh);
   if (cached) return cached;
   const m = embedUrl.match(/^(https?:\/\/[^/]+)\/video\/([a-f0-9]+)/i);
   if (!m) return { embed: embedUrl, error: "unrecognized embed format", streams: [], audio: [] };
@@ -432,9 +436,9 @@ async function extractFromPlayer(embedUrl: string) {
   return setCache(`embed:${embedUrl}`, { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: parsed.streams, audio: parsed.audio, defaultAudioIdx: parsed.defaultAudioIdx, preferredAudio: parsed.preferredAudio }, 8 * 60_000);
 }
 
-async function episode(slug: string, type?: string) {
+async function episode(slug: string, type?: string, forceRefresh = false) {
   const cacheKey = `episode:${type || ""}:${slug}`;
-  const cached = getCache<any>(cacheKey);
+  const cached = getCache<any>(cacheKey, forceRefresh);
   if (cached) return cached;
   const candidates = type === "movies"
     ? [`${AN_BASE}/movies/${slug}/`, `${AN_BASE}/episode/${slug}/`]
@@ -454,7 +458,7 @@ async function episode(slug: string, type?: string) {
 
   const titleM = html.match(/<meta property=["']og:title["'] content=["']([^"']+)/i) || html.match(/<title>([^<]+)/i);
   const sources = await Promise.all(embeds.map(async (embed) => {
-    try { return await extractFromPlayer(embed); }
+    try { return await extractFromPlayer(embed, forceRefresh); }
     catch (e) { return { embed, error: (e as Error).message, streams: [], audio: [] }; }
   }));
 
@@ -550,7 +554,32 @@ async function hlsProxy(req: Request, target: string, proxyPrefix: string) {
     h.set("content-disposition", "inline");
   }
   if (!h.has("accept-ranges")) h.set("accept-ranges", "bytes");
-  return new Response(req.method === "HEAD" ? null : upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: h });
+  const body = req.method === "HEAD" ? null : new ReadableStream({
+    async start(controller) {
+      const reader = upstream?.body?.getReader();
+      if (!reader) {
+        controller.close();
+        return;
+      }
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          controller.enqueue(value);
+        }
+      } catch {
+        // Browser cancelled the HLS segment/playlist request (BadResource in Deno).
+        // This is normal when users leave Continue Watching or switch episodes.
+      } finally {
+        try { reader.releaseLock(); } catch {}
+        try { controller.close(); } catch {}
+      }
+    },
+    cancel() {
+      try { upstream?.body?.cancel(); } catch {}
+    },
+  });
+  return new Response(body, { status: upstream.status, statusText: upstream.statusText, headers: h });
 }
 
 const API_ENDPOINTS = {
@@ -578,8 +607,9 @@ Deno.serve(async (req) => {
       const action = String(body?.action || "").trim().toLowerCase();
       const slug = String(body?.slug || "").trim();
       const type = String(body?.type || "series").trim();
-      if (action === "series" && slug) return json({ success: true, data: await detail(slug, "series") });
-      if ((action === "movie" || action === "episode") && slug) return json({ success: true, data: await episode(slug, action === "movie" ? "movies" : type) });
+      const forceRefresh = body?.force === true || body?.refresh === true || body?.forceRefresh === true;
+      if (action === "series" && slug) return json({ success: true, data: await detail(slug, "series", forceRefresh) });
+      if ((action === "movie" || action === "episode") && slug) return json({ success: true, data: await episode(slug, action === "movie" ? "movies" : type, forceRefresh) });
       if (action === "browse") {
         const safeType = type === "movies" ? "movies" : "series";
         const page = Math.max(1, Number(body?.page || 1));
@@ -604,18 +634,18 @@ Deno.serve(async (req) => {
       const slug = url.searchParams.get("slug") || "";
       const type = url.searchParams.get("type") || "series";
       if (!slug) return json({ error: "missing ?slug=" }, 400);
-      return json(await detail(slug, type));
+      return json(await detail(slug, type, url.searchParams.get("force") === "1"));
     }
     if (path === "/episode") {
       const slug = url.searchParams.get("slug") || "";
       const type = url.searchParams.get("type") || "";
       if (!slug) return json({ error: "missing ?slug=" }, 400);
-      return json(await episode(slug, type));
+      return json(await episode(slug, type, url.searchParams.get("force") === "1"));
     }
     if (path === "/embed") {
       const embedUrl = url.searchParams.get("url") || "";
       if (!embedUrl) return json({ error: "missing ?url=" }, 400);
-      return json(await extractFromPlayer(embedUrl));
+      return json(await extractFromPlayer(embedUrl, url.searchParams.get("force") === "1"));
     }
     if (path === "/hls") {
       const target = url.searchParams.get("url") || "";
