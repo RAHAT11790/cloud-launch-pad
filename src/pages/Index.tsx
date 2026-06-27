@@ -1188,27 +1188,11 @@ const Index = () => {
   }, []);
 
   const showDetailsLoadingToast = useCallback(() => {
+    // Disabled: AN data is now pre-fetched to Firebase (anSeries/*), so episodes
+    // open instantly like RS. The "Loading details..." notification is removed
+    // per user request — anything still relying on the returned id is a no-op.
     dismissDetailsLoadingToast();
-    const toastId = toast.loading("Loading details...", {
-      id: DETAILS_LOADING_TOAST_ID,
-      duration: 12000,
-      closeButton: true,
-      action: {
-        label: "×",
-        onClick: () => dismissDetailsLoadingToast(),
-      },
-    });
-
-    detailsLoadingToastRef.current = toastId;
-    detailsLoadingTimeoutRef.current = setTimeout(() => {
-      if (detailsLoadingToastRef.current === toastId) {
-        toast.dismiss(toastId);
-        detailsLoadingToastRef.current = null;
-      }
-      detailsLoadingTimeoutRef.current = null;
-    }, 12000);
-
-    return toastId;
+    return null as unknown as string | number;
   }, [dismissDetailsLoadingToast]);
 
   // Invalidate cached full details when source list refreshes
