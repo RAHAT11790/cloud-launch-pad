@@ -1,5 +1,5 @@
 import { triggerBackgroundVideoDownload } from "./videoDownload";
-import { isHlsUrl } from "./hlsDownloader";
+import { estimateHlsSize, isHlsUrl, normalizeHlsProxyUrl } from "./hlsDownloader";
 
 export type DownloadStatus = "queued" | "downloading" | "paused" | "complete" | "error" | "cancelled";
 
@@ -52,6 +52,21 @@ const buildFileName = (title: string, subtitle?: string, quality?: string) => {
     .map((part) => createFileSafeName(String(part || "")))
     .filter(Boolean);
   return `${parts.join(" - ") || "video"}.mp4`;
+};
+
+const decodeDataUriBytes = (value: string): number => {
+  const raw = String(value || "").trim();
+  if (!raw.toLowerCase().startsWith("data:")) return 0;
+  const comma = raw.indexOf(",");
+  if (comma < 0) return 0;
+  const meta = raw.slice(0, comma).toLowerCase();
+  const payload = raw.slice(comma + 1);
+  try {
+    if (meta.includes(";base64")) return Uint8Array.from(atob(payload), (c) => c.charCodeAt(0)).byteLength;
+    return new TextEncoder().encode(decodeURIComponent(payload)).byteLength;
+  } catch {
+    return 0;
+  }
 };
 
 interface ItemTimers {
@@ -139,6 +154,13 @@ class DownloadManager {
   private async fetchTotalSize(url: string): Promise<number> {
     const candidate = String(url || "").trim();
     if (!candidate) return 0;
+    if (candidate.toLowerCase().startsWith("data:")) return decodeDataUriBytes(candidate);
+    if (isHlsUrl(candidate)) {
+      try {
+        const hlsBytes = await estimateHlsSize(candidate, 8);
+        if (hlsBytes > 0) return hlsBytes;
+      } catch {}
+    }
     const probePlans: RequestInit[] = this.isProxyDownloadUrl(candidate)
       ? [
           { method: "HEAD" },
@@ -192,13 +214,13 @@ class DownloadManager {
         .replace(/\.(mp4|mkv|webm|m4v|mov)$/i, "") + ".ts";
       import("./hlsDownloader").then(async ({ downloadHls, saveBlobAs }) => {
         try {
-          const blob = await downloadHls(item.url!, (loaded, total, bytes) => {
+          const blob = await downloadHls(normalizeHlsProxyUrl(item.url!), (loaded, total, bytes) => {
             const percent = Math.min(99, Math.round((loaded / total) * 100));
             const mb = bytes / (1024 * 1024);
             // Estimate total based on average segment size so the UI shows real numbers.
             const avg = bytes / Math.max(1, loaded);
             const estTotalMB = (avg * total) / (1024 * 1024);
-            this.update(id, { percent, loadedMB: mb, totalMB: Math.max(estTotalMB, mb, 1) });
+            this.update(id, { percent, loadedMB: mb, totalMB: Math.max(estTotalMB, mb, item.totalMB || 1) });
           });
           saveBlobAs(blob, fileName);
           const mb = blob.size / (1024 * 1024);
