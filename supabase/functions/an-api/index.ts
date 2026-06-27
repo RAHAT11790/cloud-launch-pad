@@ -493,6 +493,7 @@ function rewriteM3U8(text: string, baseUrl: string, proxyPrefix: string): string
 async function hlsProxy(req: Request, target: string, proxyPrefix: string) {
   const targetUrl = new URL(target);
   const origin = `${targetUrl.protocol}//${targetUrl.host}`;
+  const upstreamMethod = req.method === "HEAD" ? "HEAD" : "GET";
   const baseHeaders: Record<string, string> = {
     "User-Agent": UA,
     Accept: "application/vnd.apple.mpegurl,video/*,*/*",
@@ -509,7 +510,7 @@ async function hlsProxy(req: Request, target: string, proxyPrefix: string) {
   ];
   for (const headers of attempts) {
     try {
-      upstream = await fetch(target, { headers, redirect: "follow" });
+      upstream = await fetch(target, { method: upstreamMethod, headers, redirect: "follow" });
       if (upstream.ok || upstream.status === 206 || upstream.status === 304) break;
       try { await upstream.body?.cancel(); } catch {}
     } catch {
@@ -529,14 +530,27 @@ async function hlsProxy(req: Request, target: string, proxyPrefix: string) {
   const ct = (upstream.headers.get("content-type") || "").toLowerCase();
   const isM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(?:\?|$)/i.test(target);
   if (isM3u8) {
+    if (req.method === "HEAD") {
+      h.delete("content-length");
+      h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
+      h.set("cache-control", "no-store");
+      return new Response(null, { status: upstream.status, headers: h });
+    }
     const rewritten = rewriteM3U8(await upstream.text(), target, proxyPrefix);
     h.delete("content-length");
     h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
     h.set("cache-control", "no-store");
     return new Response(rewritten, { status: upstream.status, headers: h });
   }
+  // AnimeSalt serves MPEG-TS fragments from .js URLs with
+  // application/javascript. hls.js can fetch the bytes, but mobile browsers are
+  // stricter when the MIME looks like script. Force media headers on fragments.
+  if (/\/p\//i.test(targetUrl.pathname) || /javascript|text\/plain/i.test(ct)) {
+    h.set("content-type", "video/mp2t");
+    h.set("content-disposition", "inline");
+  }
   if (!h.has("accept-ranges")) h.set("accept-ranges", "bytes");
-  return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: h });
+  return new Response(req.method === "HEAD" ? null : upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: h });
 }
 
 const API_ENDPOINTS = {
