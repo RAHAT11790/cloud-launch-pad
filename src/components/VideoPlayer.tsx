@@ -3986,7 +3986,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
 
-          {swipeState?.type && (
+          {(swipeState?.type === "volume" || swipeState?.type === "brightness") && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 player-glass px-6 py-3 rounded-xl text-center">
               {swipeState.type === "volume" ? (
                 <div className="flex items-center gap-2">
