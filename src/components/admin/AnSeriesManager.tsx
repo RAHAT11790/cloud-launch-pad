@@ -388,11 +388,15 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
   };
 
   const fetchAllPending = async () => {
-    const pending = enrichedItems.filter((item) => !item.saved);
-    if (!pending.length) return;
+    const pending = enrichedItems.filter((item) => !item.saved && !item.rsConflict);
+    if (!pending.length) {
+      toast.info(skippedCount ? `Nothing to fetch — ${skippedCount} series skipped (already in RS).` : "Nothing pending.");
+      return;
+    }
     setBulkRunning(true);
-    for (const item of pending) await fetchAndSaveSeries(item);
+    for (const item of pending) await fetchAndSaveSeries(item, { silentSkip: true });
     setBulkRunning(false);
+    toast.success(`Fetched ${pending.length} series${skippedCount ? ` • Skipped ${skippedCount} (already in RS)` : ""}`);
   };
 
   const deleteGeneratedSeries = async (item: SelectedAnItem & { webseriesId?: string }) => {
