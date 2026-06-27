@@ -3028,6 +3028,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const onLoaded = () => {
       setDuration(v.duration);
       applyPendingSeek(v);
+      try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       // Only autoplay if ad gate is not active
       if (!adGateActive) {
         // Keep native audio path; do not force muted autoplay fallback
@@ -3110,6 +3111,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const onCanPlay = () => {
       setVideoError(false);
       setIsBuffering(false);
+      try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       // Also apply pending seek here in case loadedmetadata didn't fire
       applyPendingSeek(v);
       if (v.paused && !adGateActive) {
@@ -3133,6 +3135,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
       setIsBuffering(false);
+      try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
     };
     const onLoadStart = () => {
       if (subtitleSwitchingUntilRef.current > Date.now()) return;
