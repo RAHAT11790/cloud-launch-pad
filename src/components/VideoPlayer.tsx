@@ -2187,10 +2187,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       abrBandWidthUpFactor: 0.82,
       // Bigger forward buffer → seeking/skipping lands inside already-loaded
       // chunks ~95% of the time. Back buffer kept tight to free memory.
-      backBufferLength: 30,
-      maxBufferLength: 120,
-      maxMaxBufferLength: 300,
-      maxBufferSize: 240 * 1000 * 1000,
+      backBufferLength: 15,
+      maxBufferLength: 30,
+      maxMaxBufferLength: 60,
+      // Cap forward check/buffer to 1 MB so low-power phones don't choke loading
+      // huge HLS windows. Player still pre-fetches the next fragment.
+      maxBufferSize: 1 * 1024 * 1024,
       maxBufferHole: 0.45,
       highBufferWatchdogPeriod: 1,
       nudgeMaxRetry: 8,
