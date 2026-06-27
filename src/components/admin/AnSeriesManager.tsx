@@ -213,7 +213,7 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   const makeUrl = (stream?: any, audioIdx = defaultAudioIdx) => {
     if (!stream?.url) return "";
     const raw = String(stream.url || "").trim();
-    const isHls = /\.m3u8(?:[?#].*)?$/i.test(raw);
+    const isHls = /\.m3u8(?:[?#].*)?$/i.test(raw) || /\/hls\//i.test(raw) || /as-cdn\d+\.top/i.test(raw);
     if (!isHls) return raw;
     return audio.length ? buildSyntheticMaster(base, stream, audio, audioIdx) : reliableHls(base, raw);
   };
