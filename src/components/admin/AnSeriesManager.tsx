@@ -160,7 +160,7 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
     const raw = String(stream.url || "").trim();
     const isHls = /\.m3u8(?:[?#].*)?$/i.test(raw);
     if (!isHls) return raw;
-    return audio.length ? buildSyntheticMaster(base, stream, audio, audioIdx) : proxifyAnHls(base, raw);
+    return audio.length ? buildSyntheticMaster(base, stream, audio, audioIdx) : passthroughHls(raw);
   };
   const episode: RsEpisode = {
     episodeNumber: fallback.number,
