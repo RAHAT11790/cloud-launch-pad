@@ -479,6 +479,7 @@ const apiCache = new Map<string, { data: any; ts: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 min
 const API_TIMEOUT_MS = 15_000;
 const warmedImageUrls = new Set<string>();
+const AN_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 
 const preloadImage = (src?: string | null) => {
   const url = String(src || "").trim();
@@ -564,6 +565,25 @@ const cachedApiCall = async (key: string, fn: () => Promise<any>) => {
     if (attempt === 0) await new Promise(r => setTimeout(r, 600));
   }
   throw lastErr || new Error("API failed");
+};
+
+const anDetailsCacheKey = (id: string) => `rs_an_details:${String(id || "").replace(/[^a-z0-9_-]/gi, "_")}`;
+
+const readCachedAnDetails = (id: string): AnimeItem | null => {
+  try {
+    const raw = localStorage.getItem(anDetailsCacheKey(id));
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (!cached?.ts || !cached?.data || Date.now() - Number(cached.ts) > AN_DETAILS_CACHE_TTL) {
+      localStorage.removeItem(anDetailsCacheKey(id));
+      return null;
+    }
+    return cached.data as AnimeItem;
+  } catch { return null; }
+};
+
+const writeCachedAnDetails = (id: string, data: AnimeItem) => {
+  try { localStorage.setItem(anDetailsCacheKey(id), JSON.stringify({ ts: Date.now(), data })); } catch {}
 };
 import { db, ref, set, onValue, get } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
@@ -1137,8 +1157,12 @@ const Index = () => {
   const showDetailsLoadingToast = useCallback(() => {
     dismissDetailsLoadingToast();
     const toastId = toast.loading("Loading details...", {
-      duration: 20000,
+      duration: 12000,
       closeButton: true,
+      action: {
+        label: "×",
+        onClick: () => dismissDetailsLoadingToast(),
+      },
     });
 
     detailsLoadingToastRef.current = toastId;
@@ -1148,7 +1172,7 @@ const Index = () => {
         detailsLoadingToastRef.current = null;
       }
       detailsLoadingTimeoutRef.current = null;
-    }, 20000);
+    }, 12000);
 
     return toastId;
   }, [dismissDetailsLoadingToast]);
@@ -1165,16 +1189,22 @@ const Index = () => {
   }, [dismissDetailsLoadingToast]);
 
   useEffect(() => {
+    const forceClose = () => dismissDetailsLoadingToast();
+    window.addEventListener("rs:force-close-details-loader", forceClose);
+    return () => window.removeEventListener("rs:force-close-details-loader", forceClose);
+  }, [dismissDetailsLoadingToast]);
+
+  useEffect(() => {
     // Keep the "Loading details..." toast visible while the salt player is
     // still resolving the embed URL — only dismiss once playback is actually
     // ready, so users see continuous feedback (no premature silent gap, and
     // by the time the player paints the default Hindi audio is already
     // selected — no visible language switch).
     const saltReady = saltPlayerState && saltPlayerState.loading === false;
-    if (playerState || saltReady) {
+    if (playerState || saltReady || selectedAnime) {
       dismissDetailsLoadingToast();
     }
-  }, [playerState, saltPlayerState, dismissDetailsLoadingToast]);
+  }, [playerState, saltPlayerState, selectedAnime, dismissDetailsLoadingToast]);
 
   // Create a blob URL wrapper that embeds the video in a full-screen iframe (no proxy needed)
   const getCleanEmbedUrl = useCallback((embedUrl: string): string => {
@@ -1729,16 +1759,18 @@ const Index = () => {
     // AnimeSalt source
     if (anime.source === "animesalt" && anime.slug) {
       const requestId = detailsRequestRef.current;
-      const toastId = switchingInPlayer ? null : showDetailsLoadingToast();
-      const cachedDetails = detailsCacheRef.current.get(anime.id);
+      const cachedDetails = detailsCacheRef.current.get(anime.id) || readCachedAnDetails(anime.id);
       if (cachedDetails) {
+        detailsCacheRef.current.set(anime.id, cachedDetails);
         try {
           await openPlayerFromAnime(cachedDetails, { seasonIdx: sIdx, epIdx: eIdx });
         } finally {
-          if (!switchingInPlayer && detailsLoadingToastRef.current === toastId) dismissDetailsLoadingToast();
+          dismissDetailsLoadingToast();
         }
         return;
       }
+
+      const toastId = switchingInPlayer ? null : showDetailsLoadingToast();
 
       try {
         // Step 1: Try Firebase customSeasons first (no API needed)
@@ -1787,6 +1819,7 @@ const Index = () => {
             })),
           };
           detailsCacheRef.current.set(anime.id, fullAnime);
+          writeCachedAnDetails(anime.id, fullAnime);
           // Background pre-warm: kick off the episode-source fetch NOW so by
           // the time handlePlay awaits it, the cache already has the result.
           // Zero visible latency between details fetch and player open.
@@ -1932,6 +1965,7 @@ const Index = () => {
 
           if (requestId !== detailsRequestRef.current) return;
           detailsCacheRef.current.set(anime.id, fullAnime);
+          writeCachedAnDetails(anime.id, fullAnime);
           // Pre-warm target episode source while player is mounting.
           try {
             const targetSeason = fullAnime.seasons?.[sIdx ?? 0];
@@ -1955,6 +1989,7 @@ const Index = () => {
             language: anime.language || '',
           };
           detailsCacheRef.current.set(anime.id, fallbackAnime);
+          writeCachedAnDetails(anime.id, fallbackAnime);
           await openPlayerFromAnime(fallbackAnime, { seasonIdx: sIdx, epIdx: eIdx });
         }
       } catch (err) {
@@ -2382,11 +2417,11 @@ const Index = () => {
     if (anime.source === "animesalt") {
       // Immediate feedback — same "Loading details..." toast as fresh card clicks.
       // Auto-dismissed by the saltPlayerState/playerState effect when playback resolves.
-      showDetailsLoadingToast();
+      const continueToastId = showDetailsLoadingToast();
       // If we have episode info, try to play that episode directly
       if (item.episodeInfo) {
         const hasAccess = await checkAndShowAdGate(anime, item.episodeInfo?.seasonIdx, item.episodeInfo?.epIdx);
-        if (!hasAccess) return;
+        if (!hasAccess) { dismissDetailsLoadingToast(); return; }
         try {
           // Always check customSeasons from Firebase first (admin edited data)
           let customSeasons: any[] | null = null;
@@ -2444,6 +2479,7 @@ const Index = () => {
               };
               playerStateRef.current = nextState;
               setPlayerState(nextState);
+              window.dispatchEvent(new Event("rs:force-close-details-loader"));
               addToWatchHistory(anime, sIdx, eIdx, true);
               setSelectedAnime(fullAnime);
               const targetWatchRoute = buildWatchRoute(anime.id, sIdx, eIdx);
@@ -2480,6 +2516,7 @@ const Index = () => {
                 };
                 playerStateRef.current = nextState;
                 setPlayerState(nextState);
+                window.dispatchEvent(new Event("rs:force-close-details-loader"));
                 return;
               }
               const resolved = resolveSaltEmbed(epResult);
@@ -2496,6 +2533,7 @@ const Index = () => {
                   currentEmbedIdx: 0, cropMode: 'contain', cropW: 0, cropH: 0, loading: false,
                   resumeTime: item.currentTime || 0,
                 });
+                window.dispatchEvent(new Event("rs:force-close-details-loader"));
                 return;
               }
             }
@@ -2555,6 +2593,7 @@ const Index = () => {
                 };
                 playerStateRef.current = nextState;
                 setPlayerState(nextState);
+                window.dispatchEvent(new Event("rs:force-close-details-loader"));
                 addToWatchHistory(anime, sIdx, eIdx, true);
                 setSelectedAnime(fullAnime);
                 const targetWatchRoute = buildWatchRoute(anime.id, sIdx, eIdx);
@@ -2589,6 +2628,7 @@ const Index = () => {
                 };
                 playerStateRef.current = nextState;
                 setPlayerState(nextState);
+                window.dispatchEvent(new Event("rs:force-close-details-loader"));
                 return;
               }
               const resolved = resolveSaltEmbed(epResult);
@@ -2603,11 +2643,14 @@ const Index = () => {
                   anNativeData: directState?.anNativeData || await getAnNativeDataFromEmbed(resolved.embedUrl),
                   currentEmbedIdx: 0, cropMode: 'contain', cropW: 0, cropH: 0, loading: false,
                 });
+                window.dispatchEvent(new Event("rs:force-close-details-loader"));
                 return;
               }
             }
           }
-        } catch {}
+        } catch {
+          if (detailsLoadingToastRef.current === continueToastId) dismissDetailsLoadingToast();
+        }
       }
       // Fallback: open details
       handleCardClick(anime);
