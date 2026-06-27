@@ -80,6 +80,16 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
     try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
   }, [saltPlayerState.embedUrl]);
 
+  const notifyDetailsLoaded = useCallback(() => {
+    try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
+  }, []);
+
+  const handleNativeFail = useCallback((reason: string) => {
+    console.warn('[AnNative] native extraction failed:', reason);
+    notifyDetailsLoaded();
+    setNativeFailed(true);
+  }, [notifyDetailsLoaded]);
+
 
   // Premium status — disables ads for paid users.
   const [isPremium, setIsPremium] = useState<boolean | null>(null);
@@ -497,17 +507,8 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
               resumeTime={saltPlayerState.resumeTime}
               videoClassName={`${isFullscreen ? 'w-full h-full' : 'absolute inset-0 w-full h-full'} bg-black`}
               videoStyle={getIframeStyle()}
-              onFail={(reason) => {
-                console.warn('[AnNative] native extraction failed:', reason);
-                try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
-                setNativeFailed(true);
-              }}
-              onReady={() => {
-                try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
-                if (saltPlayerState.loading) {
-                  setSaltPlayerState({ ...saltPlayerState, loading: false });
-                }
-              }}
+              onFail={handleNativeFail}
+              onReady={notifyDetailsLoaded}
               onTimeUpdate={(currentTime, duration) => {
                 lastPosRef.current = currentTime;
                 if (saltPlayerState.anime) {
