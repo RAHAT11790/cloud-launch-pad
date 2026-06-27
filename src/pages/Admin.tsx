@@ -5572,39 +5572,34 @@ ${tgBulkFooter}
   <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
   <div className="mb-2 flex items-center justify-between gap-2">
   <div>
-  <p className="text-[11px] font-bold text-amber-200">AN Audio Links</p>
-  <p className="text-[9px] text-amber-100/60">Episode {ep.episodeNumber} এর multiple audio manifest/link এখানে store হয়।</p>
+  <p className="text-[11px] font-bold text-amber-200">Audio tracks (per language)</p>
+  <p className="text-[9px] text-amber-100/60">One audio URL per language. Player plays the video stream with the selected audio synced at decoder level via HLS multi-audio (no latency).</p>
   </div>
   <button type="button" onClick={() => addSeriesEpisodeAudioTrack(sIdx, eIdx)} className="rounded-lg bg-amber-500/15 px-2.5 py-1.5 text-[10px] font-bold text-amber-200 hover:bg-amber-500/25">
-  <Plus size={10} className="mr-1 inline" /> Audio
+  <Plus size={10} className="mr-1 inline" /> Add language
   </button>
   </div>
   {episodeAudioTracks.length === 0 ? (
-  <p className="rounded-lg border border-dashed border-amber-500/20 bg-black/20 px-2.5 py-2 text-[10px] text-amber-100/55">No audio tracks saved for this episode yet.</p>
+  <p className="rounded-lg border border-dashed border-amber-500/20 bg-black/20 px-2.5 py-2 text-[10px] text-amber-100/55">No audio languages saved yet.</p>
   ) : (
   <div className="space-y-2.5">
-  {episodeAudioTracks.map((track, tIdx) => (
+  {episodeAudioTracks.map((track, tIdx) => {
+  const isHindi = /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${(track as any)?.language || ""} ${(track as any)?.label || ""}`);
+  return (
   <div key={`an-audio-${tIdx}`} className="rounded-lg border border-white/5 bg-black/25 p-2.5">
   <div className="mb-2 flex items-center justify-between gap-2">
-  <span className="text-[10px] font-semibold text-amber-200">Audio {tIdx + 1}: {track?.label || track?.language || "Unnamed"}</span>
+  <span className="text-[10px] font-semibold text-amber-200">{(track as any)?.label || (track as any)?.language || `Audio ${tIdx + 1}`}{isHindi ? " • default" : ""}</span>
   <button type="button" onClick={() => removeSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx)} className="rounded-md bg-red-500/15 p-1 text-pink-400 hover:bg-red-500/25"><Trash2 size={10} /></button>
   </div>
   <div className="grid grid-cols-2 gap-2 mb-2">
-  <input value={track?.label || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "label", e.target.value)} className={`${inputClass} !py-1.5 !text-[10px]`} placeholder="Label (Hindi)" />
-  <input value={track?.language || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "language", e.target.value)} className={`${inputClass} !py-1.5 !text-[10px]`} placeholder="Language code" />
+  <input value={(track as any)?.label || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "label", e.target.value)} className={`${inputClass} !py-1.5 !text-[10px]`} placeholder="Label (e.g. Hindi)" />
+  <input value={(track as any)?.language || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "language", e.target.value)} className={`${inputClass} !py-1.5 !text-[10px]`} placeholder="Lang code (hi/ta/te/en)" />
   </div>
-  {[
-  ["link", "Default audio URL"],
-  ["link480", "480p audio URL"],
-  ["link720", "720p audio URL"],
-  ["link1080", "1080p audio URL"],
-  ["link4k", "4K audio URL"],
-  ].map(([field, label]) => (
-  <textarea key={field} value={track?.[field] || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, field, e.target.value)}
-  className={`${inputClass} mb-1.5 w-full !py-1.5 !text-[10px] min-h-[36px] resize-none break-all font-mono`} placeholder={label} rows={1} />
-  ))}
+  <textarea value={(track as any)?.link || (track as any)?.audioUrl || (track as any)?.rawAudioUrl || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "link", e.target.value)}
+  className={`${inputClass} w-full !py-1.5 !text-[10px] min-h-[44px] resize-none break-all font-mono`} placeholder="Audio HLS URL for this language" rows={2} />
   </div>
-  ))}
+  );
+  })}
   </div>
   )}
   </div>
