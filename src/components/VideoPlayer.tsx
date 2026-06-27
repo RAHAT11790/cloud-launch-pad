@@ -1163,25 +1163,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const probe = async (u: string): Promise<[string, number] | null> => {
       if (isHlsLikeUrl(u)) {
         try {
-          const manifestUrl = buildReliableHlsSource(u);
-          const r = await fetch(manifestUrl);
-          if (!r.ok) return null;
-          const text = await r.text();
-          const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-          const segments = lines.filter((line) => !line.startsWith("#"));
-          if (!segments.length) return null;
-          const sample = segments.slice(0, Math.min(8, segments.length));
-          let sampledBytes = 0;
-          let sampledCount = 0;
-          await Promise.all(sample.map(async (seg) => {
-            try {
-              const segUrl = new URL(seg, manifestUrl).toString();
-              const head = await fetch(segUrl, { method: "HEAD" });
-              const len = Number(head.headers.get("content-length") || 0);
-              if (len > 0) { sampledBytes += len; sampledCount += 1; }
-            } catch {}
-          }));
-          if (sampledBytes > 0 && sampledCount > 0) return [u, Math.round((sampledBytes / sampledCount) * segments.length)];
+          const bytes = await estimateHlsSize(buildReliableHlsSource(u), 8);
+          if (bytes > 0) return [u, bytes];
         } catch {}
         return null;
       }
