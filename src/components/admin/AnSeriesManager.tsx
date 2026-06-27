@@ -411,7 +411,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       const detectedLanguages = new Set<string>();
 
       await Promise.all(rawSeasons.map(async (season: any, sIdx: number) => {
-        const fetched = await mapLimit(season.episodes || [], 16, async (ep: any, eIdx: number) => {
+        const fetched = await mapLimit(season.episodes || [], 4, async (ep: any, eIdx: number) => {
           const epSlug = String(ep?.slug || "").trim();
           const fallback = { number: Number(ep?.number || ep?.episodeNumber || eIdx + 1), title: ep?.title || `Episode ${eIdx + 1}`, slug: epSlug };
           const playbackPayload = ep?._moviePayload || (epSlug ? await animeSaltApi.getEpisode(epSlug, true) : null);
