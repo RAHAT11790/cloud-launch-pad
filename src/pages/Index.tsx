@@ -2447,10 +2447,9 @@ const Index = () => {
       let nextAudioTracks = clickedEp.audioTracks;
       let nextSubtitleTracks = (clickedEp as any).subtitleTracks;
       let preferredLanguage = (playerState as any)?.selectedLanguage;
-        if (playerState?.anime.source === "animesalt" && String(clickedEp.link || "").startsWith("animesalt://")) {
+      if (playerState?.anime.source === "animesalt" && String(clickedEp.link || "").startsWith("animesalt://")) {
         const epSlug = String(clickedEp.link).replace("animesalt://", "");
         try {
-          const epResult = await animeSaltApi.getEpisode(epSlug);
           const directState = await getAnimeSaltDirectState(epSlug);
           if (directState?.src) {
             nextSrc = directState.src;
@@ -2458,13 +2457,6 @@ const Index = () => {
             nextAudioTracks = directState.audioTracks;
             nextSubtitleTracks = directState.subtitleTracks;
             preferredLanguage = directState.preferredLanguage || (nextAudioTracks?.find((t: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`))?.label) || preferredLanguage;
-          } else {
-            const resolved = resolveSaltEmbed(epResult);
-            const embedServers = resolved.allEmbeds.filter(Boolean);
-            nextSrc = resolved.embedUrl || nextSrc;
-            qOpts = embedServers.length > 1
-              ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
-              : [];
           }
         } catch {}
       }
@@ -2502,7 +2494,6 @@ const Index = () => {
     if (playerState.anime.source === "animesalt" && String(ep.link || "").startsWith("animesalt://")) {
       const epSlug = String(ep.link).replace("animesalt://", "");
       try {
-        const epResult = await animeSaltApi.getEpisode(epSlug);
         const directState = await getAnimeSaltDirectState(epSlug);
         if (directState?.src) {
           nextSrc = directState.src;
@@ -2510,13 +2501,6 @@ const Index = () => {
           nextAudioTracks = directState.audioTracks;
           nextSubtitleTracks = directState.subtitleTracks;
           preferredLanguage = directState.preferredLanguage || (nextAudioTracks?.find((t: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`))?.label) || preferredLanguage;
-        } else {
-          const resolved = resolveSaltEmbed(epResult);
-          const embedServers = resolved.allEmbeds.filter(Boolean);
-          nextSrc = resolved.embedUrl || nextSrc;
-          qOpts = embedServers.length > 1
-            ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
-            : [];
         }
       } catch {}
     }
@@ -2943,20 +2927,12 @@ const Index = () => {
                   if (playerState.anime.source === "animesalt" && String(nextEp.link || "").startsWith("animesalt://")) {
                     const epSlug = String(nextEp.link).replace("animesalt://", "");
                     try {
-                      const epResult = await animeSaltApi.getEpisode(epSlug);
                       const directState = await getAnimeSaltDirectState(epSlug);
                       if (directState?.src) {
                         nextSrc = directState.src;
                         qOpts = directState.qualityOptions || [];
                         nextAudioTracks = directState.audioTracks;
                         preferredLanguage = directState.preferredLanguage || (nextAudioTracks?.find((t: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`))?.label) || preferredLanguage;
-                      } else {
-                        const resolved = resolveSaltEmbed(epResult);
-                        const embedServers = resolved.allEmbeds.filter(Boolean);
-                        nextSrc = resolved.embedUrl || nextSrc;
-                        qOpts = embedServers.length > 1
-                          ? embedServers.map((serverUrl: string, index: number) => ({ label: `Server ${index + 1}`, src: serverUrl }))
-                          : [];
                       }
                     } catch {}
                   }
