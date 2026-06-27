@@ -71,6 +71,15 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   // Track latest playback position so server-switch resumes from the same point.
   const lastPosRef = useRef<number>(0);
 
+  // The AN details toast lives in Index.tsx. When this player shell is on
+  // screen, details are no longer loading, even if the video source is still
+  // buffering. Force-close prevents cached Continue Watching clicks from
+  // leaving "Loading details..." permanently stuck.
+  useEffect(() => {
+    if (!saltPlayerState.embedUrl) return;
+    try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
+  }, [saltPlayerState.embedUrl]);
+
 
   // Premium status — disables ads for paid users.
   const [isPremium, setIsPremium] = useState<boolean | null>(null);
@@ -490,7 +499,14 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
               videoStyle={getIframeStyle()}
               onFail={(reason) => {
                 console.warn('[AnNative] native extraction failed:', reason);
+                try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
                 setNativeFailed(true);
+              }}
+              onReady={() => {
+                try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
+                if (saltPlayerState.loading) {
+                  setSaltPlayerState({ ...saltPlayerState, loading: false });
+                }
               }}
               onTimeUpdate={(currentTime, duration) => {
                 lastPosRef.current = currentTime;
