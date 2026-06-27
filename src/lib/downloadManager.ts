@@ -1,5 +1,5 @@
 import { triggerBackgroundVideoDownload } from "./videoDownload";
-import { estimateHlsSize, isHlsUrl, normalizeHlsProxyUrl } from "./hlsDownloader";
+import { isHlsUrl } from "./hlsDownloader";
 
 export type DownloadStatus = "queued" | "downloading" | "paused" | "complete" | "error" | "cancelled";
 
