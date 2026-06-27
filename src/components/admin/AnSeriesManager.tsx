@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { db, ref, set, get, onValue, remove } from "@/lib/firebase";
-import { useAnimeSaltData } from "@/hooks/useAnimeSaltData";
+// Catalog source: animesaltSelected (admin's curated AnimeSalt selection). AN API is used only to fetch links.
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 import { toast } from "sonner";
 import {
