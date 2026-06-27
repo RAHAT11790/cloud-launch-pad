@@ -92,6 +92,7 @@ const SELF_DEPLOYED_FUNCTIONS = new Set([
   "link-share-bot",
   "shorten-arolinks",
   "an-api",
+  "verify-admin-pin",
 ]);
 
 /** Auto-fallback Supabase URL for Lovable-managed/internal functions only */
@@ -107,6 +108,7 @@ function supabaseFallbackUrl(fnName: string): string {
     // deployment, but preview/runtime must still have a working backup.
     "an-api",
     "video-proxy",
+    "verify-admin-pin",
   ]);
   if (!ENABLED.has(fnName)) return "";
   return `${base.replace(/\/$/, "")}/functions/v1/${fnName}`;
