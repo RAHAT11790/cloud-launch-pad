@@ -1,14 +1,13 @@
 // ============================================================
 // AnNativeView — native HLS player for AN content (no iframe).
 //
-// Given an AnimeSalt embed URL, this component:
-//   1. Calls /an-api/embed to extract per-quality video URLs + per-language
-//      audio URLs (AnimeSalt CDN HLS manifests + audio renditions).
-//   2. Builds a synthesized HLS master playlist (data: URL) that combines
-//      ONE video variant + ALL audio renditions. AnimeSalt CDN lacks browser
-//      CORS headers, so AN CDN HLS is routed through /an-api/hls; other HTTPS
-//      media remains direct.
-//   3. Plays in a native <video> via hls.js. Quality switching rebuilds the
+// Given already-saved Firebase AnimeSalt HLS data, this component:
+//   1. Builds a synthesized HLS master playlist (data: URL) that combines
+//      ONE video variant + ALL stored audio renditions.
+//   2. Plays direct Firebase-stored URLs in a native <video> via hls.js.
+//      Runtime playback must never call AN API/proxy; Admin fetch is the only
+//      place where AnimeSalt API is allowed to populate Firebase.
+//   3. Quality switching rebuilds the
 //      master (preserves currentTime + audio track) — fixed-quality model,
 //      no ABR. Audio switching uses the hls.js audioTrack API (instant).
 //
@@ -17,7 +16,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { Layers, Pause, Play, RotateCcw, RotateCw, Volume2 } from "lucide-react";
-import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 
 type Stream = { url: string; label: string; height: number; resolution: string; bandwidth: number };
 type Audio  = { language: string; name: string; uri: string };
@@ -46,28 +44,31 @@ interface Props {
   initialData?: AnNativeResolvedData | null;
 }
 
-const hlsUrl = (apiBase: string, u: string, proxyAll = false) => {
+const hlsUrl = (u: string) => {
   const raw = String(u || "").trim();
-  const isAnimeSaltCdn = /^https?:\/\/([^/]+\.)?as-cdn\d*\.top\//i.test(raw);
-  return proxyAll || isAnimeSaltCdn || raw.toLowerCase().startsWith("http://") ? `${apiBase}/hls?url=${encodeURIComponent(raw)}` : raw;
+  const proxyMatch = raw.match(/\/an-api\/hls\?url=([^&]+)/i);
+  if (proxyMatch) {
+    try { return decodeURIComponent(proxyMatch[1]); } catch { return raw; }
+  }
+  return raw;
 };
 // AN subtitle extraction/proxy was removed from the API for stability.
 
-function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAudioIdx: number, proxyAll = false): string {
+function buildMaster(stream: Stream, audios: Audio[], defaultAudioIdx: number): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audios.forEach((a, i) => {
     const isDefault = i === defaultAudioIdx;
     lines.push(
       `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${a.name.replace(/"/g, "")}",` +
       `LANGUAGE="${a.language || a.name.slice(0, 2).toLowerCase()}",` +
-      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${hlsUrl(apiBase, a.uri, proxyAll)}"`
+      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${hlsUrl(a.uri)}"`
     );
   });
   const audioRef = audios.length > 0 ? ',AUDIO="aud"' : "";
   const height = Number(stream.height || 720);
   const resolution = stream.resolution || `${Math.round((height * 16) / 9)}x${height}`;
   lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max(height * 5000, 2560000)},RESOLUTION=${resolution}${audioRef}`);
-  lines.push(hlsUrl(apiBase, stream.url, proxyAll));
+  lines.push(hlsUrl(stream.url));
   const text = lines.join("\n");
   // data URL avoids needing yet another endpoint; hls.js handles it natively
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(text)))}`;
@@ -105,8 +106,6 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const [duration, setDuration] = useState(0);
   const [skipHint, setSkipHint] = useState<{ side: "left" | "right"; total: number } | null>(null);
   const [speedBoost, setSpeedBoost] = useState(false);
-  const [apiBase, setApiBase] = useState("");
-  const [proxyAllHls, setProxyAllHls] = useState(false);
   const failedRef = useRef(false);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipTotalsRef = useRef({ left: 0, right: 0 });
@@ -119,20 +118,15 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   // switching mid-playback keeps current position, not the original resume.
   const resumedRef = useRef(false);
 
-  // 1. Fetch streams + audio from edge function
+  // 1. Load streams + audio strictly from initialData/Firebase state.
   useEffect(() => {
     let cancelled = false;
     failedRef.current = false;
     resumedRef.current = false;
-    setProxyAllHls(false);
     setLoading(true);
     setStreams([]); setAudios([]);
     (async () => {
       try {
-        const base = await getEdgeFunctionUrl("an-api");
-        if (!base) throw new Error("AN API URL is not saved in EGD Router");
-        if (cancelled) return;
-        setApiBase(base);
         if (initialData?.streams?.length) {
           setStreams(initialData.streams);
           setAudios(initialData.audio || []);
@@ -142,21 +136,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
           try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
           return;
         }
-        const r = await fetch(`${base}/embed?url=${encodeURIComponent(embedUrl)}`);
-        const d = await r.json();
-        if (cancelled) return;
-        const s: Stream[] = Array.isArray(d?.streams) ? d.streams : [];
-        const a: Audio[]  = Array.isArray(d?.audio)   ? d.audio   : [];
-        if (s.length === 0) { onFail?.("no-streams"); return; }
-        setStreams(s);
-        setAudios(a);
-        setQIdx(pickQualityIdx(s));
-        // Default audio = Hindi when available (matches site-wide preference).
-        // Picked BEFORE the manifest builds so the first HLS playlist already
-        // marks Hindi as DEFAULT=YES — no visible track switch on play.
-        setAIdx(pickHindiAudioIdx(a));
-        onReady?.();
-        try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
+        onFail?.("firebase-an-media-missing");
       } catch (e) {
         if (cancelled) return;
         onFail?.((e as Error).message);
@@ -168,10 +148,10 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   // 2. Build + attach hls whenever quality changes
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || streams.length === 0 || !apiBase) return;
+    if (!video || streams.length === 0) return;
     const stream = streams[qIdx];
     if (!stream) return;
-    const master = buildMaster(apiBase, stream, audios, aIdx, proxyAllHls);
+    const master = buildMaster(stream, audios, aIdx);
     // First mount → use the resumeTime prop (continue-watching). After that,
     // preserve the live currentTime across quality swaps.
     const initialStart = !resumedRef.current
@@ -270,10 +250,6 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       // Try non-destructive recovery before giving up — many "fatal" media
       // errors on slow networks are actually recoverable buffer stalls.
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-        if (!proxyAllHls) {
-          setProxyAllHls(true);
-          return;
-        }
         try { hls.startLoad(); return; } catch {}
       }
       if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
@@ -287,7 +263,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     // resumeTime intentionally NOT in deps — re-running on resume change
     // would tear down hls mid-playback. Only embed/quality/audio rebuilds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streams, qIdx, audios, aIdx, onFail, apiBase, proxyAllHls]);
+  }, [streams, qIdx, audios, aIdx, onFail]);
 
   // Bubble timeupdate to parent for progress persistence (continue-watching).
   useEffect(() => {
