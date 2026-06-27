@@ -5,8 +5,8 @@
 //   1. Calls /an-api/embed to extract per-quality video URLs + per-language
 //      audio URLs (all direct CDN m3u8 — no master, no referer block).
 //   2. Builds a synthesized HLS master playlist (data: URL) that combines
-//      ONE video variant + ALL audio renditions, all proxied through
-//      /an-api/hls for CORS.
+//      ONE video variant + ALL audio renditions. HTTPS CDN URLs play direct
+//      for full bandwidth; only http:// is routed through /an-api/hls.
 //   3. Plays in a native <video> via hls.js. Quality switching rebuilds the
 //      master (preserves currentTime + audio track) — fixed-quality model,
 //      no ABR. Audio switching uses the hls.js audioTrack API (instant).
@@ -45,22 +45,29 @@ interface Props {
   initialData?: AnNativeResolvedData | null;
 }
 
-const proxied = (apiBase: string, u: string) => `${apiBase}/hls?url=${encodeURIComponent(u)}`;
+const hlsUrl = (apiBase: string, u: string, proxyAll = false) => {
+  const raw = String(u || "").trim();
+  // HTTPS AN CDN/media playlists must stay direct for full browser bandwidth.
+  // Only http:// needs the edge proxy to avoid mixed-content blocking.
+  return proxyAll || raw.toLowerCase().startsWith("http://") ? `${apiBase}/hls?url=${encodeURIComponent(raw)}` : raw;
+};
 // AN subtitle extraction/proxy was removed from the API for stability.
 
-function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAudioIdx: number): string {
+function buildMaster(apiBase: string, stream: Stream, audios: Audio[], defaultAudioIdx: number, proxyAll = false): string {
   const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
   audios.forEach((a, i) => {
     const isDefault = i === defaultAudioIdx;
     lines.push(
       `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${a.name.replace(/"/g, "")}",` +
       `LANGUAGE="${a.language || a.name.slice(0, 2).toLowerCase()}",` +
-      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${proxied(apiBase, a.uri)}"`
+      `DEFAULT=${isDefault ? "YES" : "NO"},AUTOSELECT=YES,URI="${hlsUrl(apiBase, a.uri, proxyAll)}"`
     );
   });
   const audioRef = audios.length > 0 ? ',AUDIO="aud"' : "";
-  lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || stream.height * 5000},RESOLUTION=${stream.resolution || `${stream.height}p`}${audioRef}`);
-  lines.push(proxied(apiBase, stream.url));
+  const height = Number(stream.height || 720);
+  const resolution = stream.resolution || `${Math.round((height * 16) / 9)}x${height}`;
+  lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max(height * 5000, 2560000)},RESOLUTION=${resolution}${audioRef}`);
+  lines.push(hlsUrl(apiBase, stream.url, proxyAll));
   const text = lines.join("\n");
   // data URL avoids needing yet another endpoint; hls.js handles it natively
   return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(text)))}`;
@@ -99,6 +106,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
   const [skipHint, setSkipHint] = useState<{ side: "left" | "right"; total: number } | null>(null);
   const [speedBoost, setSpeedBoost] = useState(false);
   const [apiBase, setApiBase] = useState("");
+  const [proxyAllHls, setProxyAllHls] = useState(false);
   const failedRef = useRef(false);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipTotalsRef = useRef({ left: 0, right: 0 });
@@ -116,6 +124,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     let cancelled = false;
     failedRef.current = false;
     resumedRef.current = false;
+    setProxyAllHls(false);
     setLoading(true);
     setStreams([]); setAudios([]);
     (async () => {
@@ -130,6 +139,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
           setQIdx(initialData.preferredQualityIdx ?? pickQualityIdx(initialData.streams));
           setAIdx(initialData.defaultAudioIdx ?? pickHindiAudioIdx(initialData.audio || []));
           onReady?.();
+          try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
           return;
         }
         const r = await fetch(`${base}/embed?url=${encodeURIComponent(embedUrl)}`);
@@ -146,6 +156,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         // marks Hindi as DEFAULT=YES — no visible track switch on play.
         setAIdx(pickHindiAudioIdx(a));
         onReady?.();
+        try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       } catch (e) {
         if (cancelled) return;
         onFail?.((e as Error).message);
@@ -160,7 +171,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     if (!video || streams.length === 0 || !apiBase) return;
     const stream = streams[qIdx];
     if (!stream) return;
-    const master = buildMaster(apiBase, stream, audios, aIdx);
+    const master = buildMaster(apiBase, stream, audios, aIdx, proxyAllHls);
     // First mount → use the resumeTime prop (continue-watching). After that,
     // preserve the live currentTime across quality swaps.
     const initialStart = !resumedRef.current
@@ -176,6 +187,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
         resumedRef.current = true;
         if (!wasPaused) video.play().catch(() => {});
         setLoading(false);
+        try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       };
       video.addEventListener("loadedmetadata", onLoaded, { once: true });
       return () => video.removeEventListener("loadedmetadata", onLoaded);
@@ -186,23 +198,32 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      // Start small so first segment arrives fast, then ramp up.
-      maxBufferLength: 30,
+      // Let hls.js measure the real connection. A forced high estimate starts
+      // too aggressively on mobile and can stall before the buffer grows.
+      testBandwidth: true,
+      abrEwmaDefaultEstimate: 5_500_000,
+      abrBandWidthFactor: 0.92,
+      abrBandWidthUpFactor: 0.82,
+      // Bigger buffer lets the browser absorb more network instead of sipping
+      // one small segment at a time.
+      maxBufferLength: 120,
       maxMaxBufferLength: 300,
-      maxBufferSize: 60 * 1000 * 1000,
+      maxBufferSize: 240 * 1000 * 1000,
       backBufferLength: 30,
       // Aggressive retries for flaky connections — instead of giving up,
       // retry quickly so playback recovers without user action.
-      manifestLoadingTimeOut: 15000,
-      manifestLoadingMaxRetry: 4,
-      manifestLoadingRetryDelay: 500,
-      levelLoadingTimeOut: 15000,
-      levelLoadingMaxRetry: 4,
-      levelLoadingRetryDelay: 500,
-      fragLoadingTimeOut: 30000,
-      fragLoadingMaxRetry: 6,
-      fragLoadingRetryDelay: 500,
+      manifestLoadingTimeOut: 9000,
+      manifestLoadingMaxRetry: 8,
+      manifestLoadingRetryDelay: 180,
+      levelLoadingTimeOut: 9000,
+      levelLoadingMaxRetry: 8,
+      levelLoadingRetryDelay: 180,
+      fragLoadingTimeOut: 18000,
+      fragLoadingMaxRetry: 10,
+      fragLoadingRetryDelay: 180,
       nudgeMaxRetry: 10,
+      progressive: true,
+      highBufferWatchdogPeriod: 1,
       // We feed exactly one variant, so ABR is irrelevant.
       capLevelToPlayerSize: false,
       // Start loading from the resume position — does NOT pull bytes from 0.
@@ -239,6 +260,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       resumedRef.current = true;
       if (!wasPaused) video.play().catch(() => {});
       setLoading(false);
+      try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
     });
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
       applyPreferredAudio();
@@ -248,6 +270,10 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       // Try non-destructive recovery before giving up — many "fatal" media
       // errors on slow networks are actually recoverable buffer stalls.
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        if (!proxyAllHls) {
+          setProxyAllHls(true);
+          return;
+        }
         try { hls.startLoad(); return; } catch {}
       }
       if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
@@ -261,7 +287,7 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
     // resumeTime intentionally NOT in deps — re-running on resume change
     // would tear down hls mid-playback. Only embed/quality/audio rebuilds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [streams, qIdx, audios, aIdx, onFail, apiBase]);
+  }, [streams, qIdx, audios, aIdx, onFail, apiBase, proxyAllHls]);
 
   // Bubble timeupdate to parent for progress persistence (continue-watching).
   useEffect(() => {
@@ -387,7 +413,10 @@ export default function AnNativeView({ embedUrl, videoStyle, videoClassName, res
       setPaused(v.paused);
     };
     const onWaiting = () => setLoading(true);
-    const onReadyData = () => setLoading(false);
+    const onReadyData = () => {
+      setLoading(false);
+      try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
+    };
     v.addEventListener("timeupdate", update);
     v.addEventListener("durationchange", update);
     v.addEventListener("play", update);

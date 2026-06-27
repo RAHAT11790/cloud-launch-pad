@@ -11,7 +11,7 @@
 const cors: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-  "Access-Control-Allow-Headers": "range, content-type, accept, accept-encoding, if-range, if-none-match, if-modified-since, cache-control",
+  "Access-Control-Allow-Headers": "*",
   "Access-Control-Expose-Headers": "content-length, content-range, accept-ranges, content-type, etag, last-modified, cache-control",
   "Access-Control-Max-Age": "86400",
 };
@@ -62,24 +62,42 @@ Deno.serve(async (req) => {
   try { upstreamUrl = new URL(target); } catch { return new Response("Invalid url", { status: 400, headers: cors }); }
   if (upstreamUrl.protocol !== "http:") return new Response("Only http:// supported. HTTPS must play direct.", { status: 400, headers: cors });
 
-  const headers: Record<string, string> = {
+  const baseHeaders: Record<string, string> = {
     "User-Agent": UA,
     Accept: req.headers.get("accept") || "*/*",
     "Accept-Encoding": "identity",
-    Referer: `${upstreamUrl.protocol}//${upstreamUrl.host}/`,
-    Origin: `${upstreamUrl.protocol}//${upstreamUrl.host}`,
   };
   for (const key of ["range", "if-range", "if-none-match", "if-modified-since", "cache-control"]) {
     const value = req.headers.get(key);
-    if (value) headers[key] = value;
+    if (value) baseHeaders[key] = value;
   }
 
   const ac = new AbortController();
   req.signal.addEventListener("abort", () => ac.abort(), { once: true });
 
-  let up: Response;
-  try { up = await fetch(upstreamUrl.toString(), { method: req.method, headers, redirect: "follow", signal: ac.signal }); }
-  catch (e) { return new Response(`Upstream failed: ${(e as Error).message}`, { status: 502, headers: cors }); }
+  let up: Response | null = null;
+  let lastError = "";
+  const origin = `${upstreamUrl.protocol}//${upstreamUrl.host}`;
+  const attempts: Record<string, string>[] = [
+    baseHeaders,
+    { ...baseHeaders, Referer: `${origin}/` },
+    { ...baseHeaders, Referer: `${origin}/`, Origin: origin },
+    { ...baseHeaders, Referer: req.headers.get("referer") || `${origin}/` },
+  ];
+
+  for (const headers of attempts) {
+    try {
+      up = await fetch(upstreamUrl.toString(), { method: req.method, headers, redirect: "follow", signal: ac.signal });
+      if (up.ok || up.status === 206 || up.status === 304) break;
+      lastError = `HTTP ${up.status}`;
+      try { await up.body?.cancel(); } catch {}
+    } catch (e) {
+      lastError = (e as Error).message;
+      up = null;
+    }
+  }
+
+  if (!up) return new Response(`Upstream failed: ${lastError || "network error"}`, { status: 502, headers: cors });
 
   const out = new Headers(cors);
   for (const k of PASS) { const v = up.headers.get(k); if (v) out.set(k, v); }

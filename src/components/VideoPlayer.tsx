@@ -65,6 +65,8 @@ const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: st
   return url;
 };
 
+const DEFAULT_VIDEO_PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy`;
+
 const isDataHlsUrl = (url: string): boolean => {
   const normalized = String(url || "").trim().toLowerCase();
   return normalized.startsWith("data:application/vnd.apple.mpegurl");
@@ -115,6 +117,9 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
 
   const isHttp = isInsecureHttpSource(url);
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
+  const nativeProxyCandidate = isHttp && DEFAULT_VIDEO_PROXY_URL
+    ? buildProxyPlaybackUrl(DEFAULT_VIDEO_PROXY_URL, url)
+    : null;
 
   // STRICT SERVER ISOLATION: each server in the admin panel uses ONLY its own
   // configured URL. We never silently mirror across servers — that previously
@@ -126,6 +131,7 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     // Live TV / fragile HLS streams should use the admin-selected proxy first,
     // then fall back to direct only if proxy is unavailable.
     if (customProxyCandidate) addCandidate(customProxyCandidate);
+    if (isHttp) addCandidate(nativeProxyCandidate);
     if (!isHttp) addCandidate(url);
     return candidates;
   }
@@ -136,6 +142,7 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     // Never inject the raw http:// URL into an https page: browsers block it as
     // mixed content and the player appears broken before failover can help.
     addCandidate(customProxyCandidate);
+    addCandidate(nativeProxyCandidate);
   } else {
     // HTTPS source — strict direct playback only. Never route one HTTPS video
     // server through another proxy/server; if Render is down, HuggingFace/other
@@ -605,12 +612,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // SINGLE PROXY SOURCE — EGD Router row: video-proxy.
     // The proxy is HTTP-only. HTTPS sources always play directly, so probing the
     // proxy with an HTTPS URL is wrong and can make a good admin proxy look bad.
-    const NATIVE_PROXY = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/video-proxy`;
     const unsub2 = onValue(ref(db, "settings/functionOverrides/video-proxy"), (snap) => {
       const raw = snap.val();
       const enabled = raw?.enabled === true;
       let url = enabled ? String(raw?.customUrl || raw?.url || "").trim() : "";
-      if (!url) url = NATIVE_PROXY;
+      if (!url) url = DEFAULT_VIDEO_PROXY_URL;
       if (cancelled) return;
       setProxyUrl(url);
       setProxyApiKey('');
@@ -2172,18 +2178,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      // Ultra-fast start: skip bandwidth probe, assume strong link.
-      testBandwidth: false,
-      abrEwmaDefaultEstimate: 8_000_000,
-      abrBandWidthFactor: 0.95,
-      abrBandWidthUpFactor: 0.8,
+      // Fast but stable ABR: allow real bandwidth testing instead of forcing a
+      // guessed 8 Mbps path. That guess could stall AN/RS on phones, making the
+      // player appear to "sip" only 200-300KB and never build a healthy buffer.
+      testBandwidth: true,
+      abrEwmaDefaultEstimate: 5_500_000,
+      abrBandWidthFactor: 0.92,
+      abrBandWidthUpFactor: 0.82,
       // Bigger forward buffer → seeking/skipping lands inside already-loaded
       // chunks ~95% of the time. Back buffer kept tight to free memory.
-      backBufferLength: 20,
-      maxBufferLength: 60,
-      maxMaxBufferLength: 180,
-      maxBufferSize: 150 * 1000 * 1000,
-      maxBufferHole: 0.3,
+      backBufferLength: 30,
+      maxBufferLength: 120,
+      maxMaxBufferLength: 300,
+      maxBufferSize: 240 * 1000 * 1000,
+      maxBufferHole: 0.45,
       highBufferWatchdogPeriod: 1,
       nudgeMaxRetry: 8,
       // Start mid-tier (auto picks higher if bw allows) — avoids 480p lock-in.
@@ -2192,14 +2200,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       progressive: true,
       // Aggressive but bounded retries so a single dead fragment never stalls
       // playback for tens of seconds.
-      manifestLoadingTimeOut: 9000,
-      manifestLoadingMaxRetry: 5,
-      manifestLoadingRetryDelay: 300,
-      levelLoadingTimeOut: 9000,
-      levelLoadingMaxRetry: 6,
-      fragLoadingTimeOut: 18000,
-      fragLoadingMaxRetry: 8,
-      fragLoadingRetryDelay: 300,
+      manifestLoadingTimeOut: 7000,
+      manifestLoadingMaxRetry: 8,
+      manifestLoadingRetryDelay: 180,
+      levelLoadingTimeOut: 7000,
+      levelLoadingMaxRetry: 8,
+      levelLoadingRetryDelay: 180,
+      fragLoadingTimeOut: 16000,
+      fragLoadingMaxRetry: 10,
+      fragLoadingRetryDelay: 180,
       capLevelToPlayerSize: false,
       renderTextTracksNatively: false,
     });
@@ -3028,6 +3037,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const onLoaded = () => {
       setDuration(v.duration);
       applyPendingSeek(v);
+      try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       // Only autoplay if ad gate is not active
       if (!adGateActive) {
         // Keep native audio path; do not force muted autoplay fallback
@@ -3110,6 +3120,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const onCanPlay = () => {
       setVideoError(false);
       setIsBuffering(false);
+      try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       // Also apply pending seek here in case loadedmetadata didn't fire
       applyPendingSeek(v);
       if (v.paused && !adGateActive) {
@@ -3133,6 +3144,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const onPlaying = () => {
       if (waitingTimer) { clearTimeout(waitingTimer); waitingTimer = null; }
       setIsBuffering(false);
+      try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
     };
     const onLoadStart = () => {
       if (subtitleSwitchingUntilRef.current > Date.now()) return;

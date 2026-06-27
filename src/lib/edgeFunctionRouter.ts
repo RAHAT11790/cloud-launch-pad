@@ -103,6 +103,10 @@ function supabaseFallbackUrl(fnName: string): string {
     "rs-bot",
     "send-otp-email",
     "process-email-queue",
+    // Playback critical defaults: EGD Router may point to the user's own
+    // deployment, but preview/runtime must still have a working backup.
+    "an-api",
+    "video-proxy",
   ]);
   if (!ENABLED.has(fnName)) return "";
   return `${base.replace(/\/$/, "")}/functions/v1/${fnName}`;
@@ -147,9 +151,11 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
     if (override?.enabled === true && customUrl) return customUrl;
   } catch {}
 
-  // User-deployable functions must be pasted and saved in EGD Router first.
-  // No hidden Lovable/Supabase default URL is used for these rows.
-  if (SELF_DEPLOYED_FUNCTIONS.has(fnName)) return "";
+  // User-deployable functions normally come from EGD Router. Playback-critical
+  // functions still fall back to the project default so AN/HTTP playback does
+  // not go dead when the custom deployment is missing or credits run out.
+  const selfDeployedFallback = supabaseFallbackUrl(fnName);
+  if (SELF_DEPLOYED_FUNCTIONS.has(fnName) && !selfDeployedFallback) return "";
 
   const config = await getEdgeRouterConfig();
   // Check dynamic functions first
@@ -158,7 +164,7 @@ export async function getEdgeFunctionUrl(fnName: string): Promise<string> {
   const built = buildFunctionUrl(fnName, config);
   if (built) return built;
 
-  return supabaseFallbackUrl(fnName);
+  return selfDeployedFallback || supabaseFallbackUrl(fnName);
 }
 
 /** Call a cloud function */
