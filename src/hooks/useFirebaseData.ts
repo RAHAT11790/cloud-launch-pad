@@ -62,6 +62,11 @@ export function useFirebaseData() {
         const mappedItem: AnimeItem = {
           id,
           source: cardSource,
+          sourceName: item.sourceName || (isAn ? "AnimeSalt" : undefined),
+          anSlug: item.anSlug || item.animeSaltSlug || undefined,
+          animeSaltSlug: item.animeSaltSlug || item.anSlug || undefined,
+          displayAs: item.displayAs || undefined,
+          slug: item.slug || item.anSlug || item.animeSaltSlug || undefined,
           title: item.title || "",
           poster: item.poster || "",
           backdrop: item.backdrop || "",
