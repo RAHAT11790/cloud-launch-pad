@@ -145,11 +145,6 @@ const ensureAnApiBaseUrl = async (): Promise<string> => {
   return anApiBasePromise;
 };
 
-const buildAnProxyUrl = (url: string) => {
-  if (!anApiBaseUrl || !url) return url;
-  return `${anApiBaseUrl}/hls?url=${encodeURIComponent(url)}`;
-};
-
 const buildAnHlsPlaybackUrl = (url: string) => {
   const raw = String(url || "").trim();
   if (!raw) return raw;
