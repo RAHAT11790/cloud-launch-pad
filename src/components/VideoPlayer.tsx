@@ -3627,12 +3627,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         return;
       }
     }
-    if (!swipeState.type && Math.abs(dy) > 20) {
+    if (!swipeState.type && Math.abs(dy) > 26 && Math.abs(dy) > Math.abs(dx) * 1.4) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const relX = (swipeState.startX - rect.left) / rect.width;
-      if (relX < 0.3) {
+      const startRelX = (swipeState.startX - rect.left) / rect.width;
+      const currRelX = (t.clientX - rect.left) / rect.width;
+      // STRICT: brightness only on LEFT 30%, volume only on RIGHT 30%.
+      // Middle 40% is a hard dead-zone — must be true for BOTH start and current
+      // finger position so a stray middle swipe never triggers brightness.
+      if (startRelX < 0.30 && currRelX < 0.35) {
         setSwipeState({ ...swipeState, type: "brightness" });
-      } else if (relX > 0.7) {
+      } else if (startRelX > 0.70 && currRelX > 0.65) {
         setSwipeState({ ...swipeState, type: "volume" });
       } else {
         return;
