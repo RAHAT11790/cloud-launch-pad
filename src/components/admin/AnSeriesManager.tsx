@@ -328,7 +328,6 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
 
       await Promise.all(rawSeasons.map(async (season: any, sIdx: number) => {
         const fetched = await mapLimit(season.episodes || [], 7, async (ep: any, eIdx: number) => {
-          const ep = season.episodes[eIdx];
           const epSlug = String(ep?.slug || "").trim();
           const fallback = { number: Number(ep?.number || ep?.episodeNumber || eIdx + 1), title: ep?.title || `Episode ${eIdx + 1}`, slug: epSlug };
           const playbackPayload = ep?._moviePayload || (epSlug ? await animeSaltApi.getEpisode(epSlug) : null);
