@@ -31,11 +31,13 @@ function capLargeMediaRange(range: string | null, upstreamUrl: URL) {
   const requestedEnd = match[2] ? Number(match[2]) : Number.NaN;
   if (!Number.isFinite(start) || start < 0) return range;
 
+  const hasExplicitEnd = Boolean(match[2]);
   const cappedEnd = start + MEDIA_CHUNK_BYTES - 1;
   // Chrome often asks an HTTP proxy for `bytes=0-<whole file>`. Passing that
   // through makes Supabase/Cloudflare stream the whole MP4 before the player has
   // metadata, which looks like a block/stall. Return small byte windows instead;
   // the browser already knows how to request the next/tail ranges for seeking.
+  if (!hasExplicitEnd && start > 0) return range;
   if (!Number.isFinite(requestedEnd) || requestedEnd - start + 1 > MEDIA_CHUNK_BYTES) {
     return `bytes=${start}-${cappedEnd}`;
   }
