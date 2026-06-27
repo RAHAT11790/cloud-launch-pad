@@ -650,10 +650,14 @@ const anDetailsCacheKey = (id: string) => `rs_an_details:${String(id || "").repl
 
 const isUsableAnDetailsCache = (data: any): boolean => {
   if (!data) return false;
-  if (data.movieLink || data.movieLink480 || data.movieLink720 || data.movieLink1080 || data.movieLink4k) return true;
+  const isStoredUrl = (url?: string | null) => {
+    const value = String(url || "").trim();
+    return !!value && !value.startsWith("animesalt://") && !value.startsWith("animesalt_movie://");
+  };
+  if ([data.movieLink, data.movieLink480, data.movieLink720, data.movieLink1080, data.movieLink4k].some(isStoredUrl)) return true;
   return Array.isArray(data.seasons) && data.seasons.some((season: any) =>
     Array.isArray(season?.episodes) && season.episodes.some((ep: any) =>
-      String(ep?.link || ep?.link480 || ep?.link720 || ep?.link1080 || ep?.link4k || "").trim(),
+      [ep?.link, ep?.link480, ep?.link720, ep?.link1080, ep?.link4k].some(isStoredUrl),
     ),
   );
 };
