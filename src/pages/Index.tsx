@@ -233,48 +233,6 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   };
 };
 
-const getAnNativeDataFromEmbed = async (embedUrl: string): Promise<AnNativeResolvedData | null> => {
-  const base = await ensureAnApiBaseUrl();
-  if (!base || !embedUrl) return null;
-  try {
-    const response = await fetch(`${base}/embed?url=${encodeURIComponent(embedUrl)}`);
-    if (!response.ok) return null;
-    const data = await response.json();
-    const streams = Array.isArray(data?.streams) ? data.streams.filter((entry: any) => String(entry?.url || "").trim()) : [];
-    const audio = Array.isArray(data?.audio) ? data.audio.filter((entry: any) => String(entry?.uri || "").trim()) : [];
-    if (streams.length === 0) return null;
-    return {
-      streams,
-      audio,
-      preferredQualityIdx: pickAnPreferredQualityIdx(streams),
-      defaultAudioIdx: pickAnDefaultAudioIdx(audio),
-    };
-  } catch {
-    return null;
-  }
-};
-
-// Derive a playable embed URL from any AnimeSalt episode payload shape.
-// Handles older `embedUrl`/`allEmbeds` and the newer `links[]` array
-// returned by parseEpisodePage so Continue Watching + direct routes work.
-const resolveSaltEmbed = (payload: any): { embedUrl: string; allEmbeds: string[] } => {
-  const collected: string[] = [];
-  const push = (u?: string | null) => {
-    const v = normalizeAnimeSaltPlaybackUrl(u);
-    if (v && !collected.includes(v)) collected.push(v);
-  };
-  // Preserve upstream order — Server 1 is always first as returned by the
-  // AnimeSalt source. Do NOT re-rank by extension; Server 2 contains
-  // third-party ads, so the upstream default (Server 1) must win.
-  push(payload?.embedUrl);
-  push(payload?.movieEmbedUrl);
-  (Array.isArray(payload?.allEmbeds) ? payload.allEmbeds : []).forEach(push);
-  (Array.isArray(payload?.links) ? payload.links : []).forEach((l: any) => push(l?.url || l?.src));
-  [payload?.streamUrl, payload?.videoUrl, payload?.directUrl, payload?.file].forEach(push);
-
-  return { embedUrl: collected[0] || "", allEmbeds: collected };
-};
-
 const animeSaltDirectStateCache = new Map<string, Promise<Awaited<ReturnType<typeof buildAnimeSaltDirectPlaybackState>> | null>>();
 
 const getAnimeSaltDirectState = async (episodeSlug: string, forceRefresh = false) => {
