@@ -44,6 +44,7 @@ interface VideoServerOption {
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { buildDirectDownloadUrl, buildVideoDownloadUrl, triggerBulkBackgroundDownloads } from "@/lib/videoDownload";
+import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
@@ -83,6 +84,23 @@ const isHlsLikeUrl = (url: string): boolean => {
     || value.includes("%2fhls%2f")
     || /\.m3u8(?:[?#].*)?$/.test(value)
     || /\.m3u8(?:%3f|%23|$)/.test(value);
+};
+
+const isRawAnimeSaltHlsUrl = (url: string): boolean => {
+  const value = String(url || "").trim().toLowerCase();
+  return /^https?:\/\//.test(value) && /(^|\.)as-cdn\d*\.top\//i.test(value) && value.includes("/hls/");
+};
+
+const isAnApiHlsProxyUrl = (url: string): boolean => /\/an-api\/hls\?/i.test(String(url || ""));
+
+const sanitizeAnimeDownloadTitle = (value: string): string => {
+  return String(value || "")
+    .replace(/one\s*x\s*one/gi, "")
+    .replace(/anime\s*slate/gi, "")
+    .replace(/animesalt/gi, "")
+    .replace(/\s*[•|]+\s*/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 };
 
 const isInsecureHttpSource = (url: string): boolean => {
@@ -238,9 +256,10 @@ const getShortSeasonLabel = (seasonName: string | undefined, index: number) => {
 };
 
 const buildEpisodeDownloadName = (animeTitle: string, seasonLabel: string | undefined, episodeNumber: number | undefined) => {
+  const cleanTitle = sanitizeAnimeDownloadTitle(animeTitle) || "Anime";
   const seasonPart = String(seasonLabel || "Season 01").trim();
   const episodePart = `Episode ${String(episodeNumber || 1).padStart(2, "0")}`;
-  return [animeTitle, seasonPart, episodePart].map((part) => String(part || "").trim()).filter(Boolean).join(" - ");
+  return [cleanTitle, seasonPart, episodePart].map((part) => String(part || "").trim()).filter(Boolean).join(" - ");
 };
 
 const LANGUAGE_NAME_MAP: Record<string, string> = {
@@ -380,6 +399,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [proxyApiKey, setProxyApiKey] = useState<string>('');
   const [playbackRouteReady, setPlaybackRouteReady] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(''); // resolved playback src
+  const [anApiHlsBaseUrl, setAnApiHlsBaseUrl] = useState<string>("");
   const activeSourceBaseRef = useRef(src); // currently selected raw source (before proxy/CDN)
   const sourceBaseRef = useRef(src);
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
@@ -737,6 +757,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     () => anime?.source === "animesalt" || String(anime?.id || "").startsWith("as_"),
     [anime?.id, anime?.source],
   );
+
+  useEffect(() => {
+    if (!isHlsLikeUrl(src) && !(qualityOptions || []).some((q) => isHlsLikeUrl(q.src))) return;
+    let cancelled = false;
+    getEdgeFunctionUrl("an-api")
+      .then((url) => {
+        if (cancelled) return;
+        const clean = String(url || "").trim().replace(/\/+(?:raw|search|anime|episode|embed|hls)?(?:\?.*)?$/i, "");
+        setAnApiHlsBaseUrl(clean);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [qualityOptions, src]);
+
+  const buildReliableHlsSource = useCallback((rawUrl: string) => {
+    const clean = String(rawUrl || "").trim();
+    if (!clean || !anApiHlsBaseUrl || !isRawAnimeSaltHlsUrl(clean) || isAnApiHlsProxyUrl(clean)) return clean;
+    return `${anApiHlsBaseUrl}/hls?url=${encodeURIComponent(clean)}`;
+  }, [anApiHlsBaseUrl]);
 
   const currentLangLabel = useMemo(() => {
     // AnimeSalt: before HLS exposes tracks, fall back to the real available
@@ -2162,9 +2201,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       return;
     }
 
+    const hlsSource = buildReliableHlsSource(currentSrc);
+
     // Safari: native HLS — still expose subtitle tracks via TextTrackList
     if (v.canPlayType("application/vnd.apple.mpegurl") && !Hls.isSupported()) {
-      v.src = currentSrc;
+      v.src = hlsSource;
       return;
     }
 
@@ -2223,7 +2264,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     });
     hlsRef.current = hls;
 
-    hls.loadSource(currentSrc);
+    hls.loadSource(hlsSource);
     hls.attachMedia(v);
 
     const applyPreferredHlsAudio = () => {
@@ -2352,7 +2393,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       try { hls.destroy(); } catch {}
       if (hlsRef.current === hls) hlsRef.current = null;
     };
-  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive, tryNextPlaybackRoute, externalSubtitleOptions, selectedLanguage]);
+  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive, tryNextPlaybackRoute, externalSubtitleOptions, selectedLanguage, buildReliableHlsSource]);
 
   // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
   // users reported when returning to home. Detaches HLS, clears <video>, kills timers.
@@ -3749,7 +3790,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             <video
               ref={videoRef}
               src={adGateActive || (isHlsSrc && Hls.isSupported()) ? undefined : currentSrc}
-              crossOrigin={isHlsSrc ? "anonymous" : undefined}
+              crossOrigin={undefined}
                 className="w-full h-full bg-black pointer-events-none"
               style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
               playsInline
@@ -4792,45 +4833,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           );
         })()}
 
-        {/* AN Download Not-Available overlay (always rendered, even in embed mode) */}
-        {!isFullscreen && !adGateActive && showDownloadQualityPicker && anime?.source === "animesalt" && (
-          <div
-            className="fixed left-0 right-0 bottom-0 z-[260] border-t border-white/10 bg-black text-white flex flex-col overflow-hidden"
-            style={inlineSheetStyle}
-            data-player-panel="true"
-          >
-            <div className="sticky top-0 z-10 bg-black flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
-              <p className="text-[15px] font-bold tracking-tight text-white truncate">Download</p>
-              <button
-                onClick={() => { closeInlineSheets(); }}
-                className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95 flex-shrink-0 ml-3"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="px-5 pt-7 pb-8 flex flex-col items-center text-center gap-4 flex-1 overflow-y-auto">
-              <div className="w-16 h-16 rounded-full bg-amber-400/15 border border-amber-400/40 flex items-center justify-center">
-                <Download className="w-7 h-7 text-amber-300" />
-              </div>
-              <h3 className="text-[17px] font-bold text-white">Download not available</h3>
-              <p className="text-[13px] leading-relaxed text-white/75 max-w-sm">
-                Sorry — <span className="font-bold text-amber-300">AN</span> videos can&apos;t be downloaded.
-                Only <span className="font-bold text-amber-300">RS</span> videos support offline download.
-                Please look for the <span className="font-bold text-amber-300">RS</span> version of this title to enjoy it offline.
-              </p>
-              <p className="text-[12px] text-white/55">Thanks for visiting 💛</p>
-              <button
-                onClick={() => { closeInlineSheets(); }}
-                className="mt-2 px-7 py-2.5 rounded-full bg-white text-black text-[13px] font-bold active:scale-95 transition-transform inline-flex items-center gap-2"
-              >
-                <X className="w-4 h-4" /> Close
-              </button>
-            </div>
-          </div>
-        )}
-
+        
         {/* Download Button (single) + Multi-Episode Picker + Offline Playback */}
-        {!isFullscreen && !adGateActive && !hideDownload && !isEmbedPlayback && anime?.source !== "animesalt" && (() => {
+        {!isFullscreen && !adGateActive && !hideDownload && !isEmbedPlayback && (() => {
           // Check if this episode is already saved in IndexedDB
           const savedEpisode = downloadedEpisodes.find(d => d.subtitle === subtitle);
           const isAlreadySaved = !!savedEpisode;
@@ -4855,7 +4860,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             return ordered;
           };
           const buildDownloadFileName = (label: string, quality?: string) => {
-            const parts = [label, quality && quality !== "Auto" ? quality : ""]
+            const parts = [sanitizeAnimeDownloadTitle(label), quality && quality !== "Auto" ? quality : ""]
               .map((part) => String(part || "").trim())
               .filter(Boolean);
             return `${parts.join(" - ") || "video"}.mp4`;
@@ -4867,8 +4872,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
             // HLS m3u8 — return the raw URL. downloadManager detects it and
             // runs the in-browser HLS segment downloader (single .ts output).
-            const hlsCandidate = [u, ...candidates].find((candidate) => /\.m3u8(?:[?#]|$)/i.test(String(candidate)));
-            if (hlsCandidate) return hlsCandidate;
+            const hlsCandidate = [u, ...candidates].find((candidate) => isHlsLikeUrl(String(candidate)));
+            if (hlsCandidate) return buildReliableHlsSource(hlsCandidate);
 
             const managedAlready = [u, ...candidates].find((candidate) => String(candidate).includes("/functions/v1/video-download?"));
             if (managedAlready) return managedAlready;
@@ -4949,7 +4954,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
                 Object.values(ep.qualityLinks),
               );
               if (!epUrl) continue;
-              const isHls = /\.m3u8(?:[?#]|$)/i.test(epUrl);
+              const isHls = isHlsLikeUrl(epUrl);
               const fileName = isHls
                 ? buildDownloadFileName(episodeLabel, quality).replace(/\.mp4$/i, "") + ".ts"
                 : buildDownloadFileName(episodeLabel, quality);
