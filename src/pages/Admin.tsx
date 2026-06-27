@@ -6252,10 +6252,14 @@ ${tgBulkFooter}
  {languageOptions.map(l => <option key={l} value={l}>{l}</option>)}
  </select>
  </div>
- <div className="mb-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+ {(() => { const isAnMovie = !!(movieForm.anSlug || movieForm.animeSaltSlug || /animesalt/i.test(String(movieForm.sourceName || ""))); return (
+ <div className={`mb-4 rounded-xl border p-3 ${isAnMovie ? "border-amber-500/20 bg-amber-500/5" : "border-cyan-500/20 bg-cyan-500/5"}`}>
  <div className="flex items-center justify-between mb-2">
- <label className="block text-xs text-cyan-300 font-medium">Movie Language Links</label>
- <button type="button" onClick={() => setMovieForm({ ...movieForm, audioTracks: [...(movieForm.audioTracks || []), buildEmptyAudioTrack()] })} className="text-[10px] text-cyan-300 hover:text-cyan-200 flex items-center gap-1">
+ <div>
+ <label className={`block text-xs font-medium ${isAnMovie ? "text-amber-200" : "text-cyan-300"}`}>{isAnMovie ? "Audio tracks (per language)" : "Movie Language Links"}</label>
+ {isAnMovie && <p className="text-[9px] text-amber-100/60 mt-0.5">One audio URL per language — video stream is shared; player selects audio with decoder-level sync.</p>}
+ </div>
+ <button type="button" onClick={() => setMovieForm({ ...movieForm, audioTracks: [...(movieForm.audioTracks || []), buildEmptyAudioTrack()] })} className={`text-[10px] hover:opacity-80 flex items-center gap-1 ${isAnMovie ? "text-amber-200" : "text-cyan-300"}`}>
  <Plus size={10} /> Add Language
  </button>
  </div>
@@ -6267,19 +6271,20 @@ ${tgBulkFooter}
  const next = [...(prev.audioTracks || [])];
  next[index] = { ...next[index], label: e.target.value };
  return { ...prev, audioTracks: next };
- })} className={`${inputClass} flex-1 !py-1.5 !text-[10px]`} placeholder="Label (Hindi dub)" />
+ })} className={`${inputClass} flex-1 !py-1.5 !text-[10px]`} placeholder={isAnMovie ? "Label (e.g. Hindi)" : "Label (Hindi dub)"} />
  <input value={track.language || ""} onChange={e => setMovieForm((prev: any) => {
  const next = [...(prev.audioTracks || [])];
  next[index] = { ...next[index], language: e.target.value };
  return { ...prev, audioTracks: next };
- })} className={`${inputClass} w-24 !py-1.5 !text-[10px]`} placeholder="Language" />
+ })} className={`${inputClass} w-24 !py-1.5 !text-[10px]`} placeholder={isAnMovie ? "hi/ta/te/en" : "Language"} />
  <button type="button" onClick={() => setMovieForm((prev: any) => ({ ...prev, audioTracks: (prev.audioTracks || []).filter((_: any, i: number) => i !== index) }))} className="text-red-400 hover:text-red-300 p-1"><Trash2 size={10} /></button>
  </div>
- <input value={track.link || ""} onChange={e => setMovieForm((prev: any) => {
+ <textarea value={track.link || ""} onChange={e => setMovieForm((prev: any) => {
  const next = [...(prev.audioTracks || [])];
  next[index] = { ...next[index], link: e.target.value };
  return { ...prev, audioTracks: next };
- })} className={`${inputClass} w-full !py-1.5 !text-[10px] mb-2`} placeholder="Default language link" />
+ })} className={`${inputClass} w-full !py-1.5 !text-[10px] mb-2 ${isAnMovie ? "min-h-[44px] resize-none break-all font-mono" : ""}`} placeholder={isAnMovie ? "Audio HLS URL for this language" : "Default language link"} rows={isAnMovie ? 2 : 1} />
+ {!isAnMovie && (
  <div className="grid grid-cols-2 gap-1">
  {[
  ["link480", "480p"],
@@ -6294,7 +6299,12 @@ ${tgBulkFooter}
  })} className={`${inputClass} !py-1 !text-[9px]`} placeholder={`${label} link`} />
  ))}
  </div>
+ )}
  </div>
+ ))}
+ </div>
+ </div>
+ ); })()}
  ))}
  </div>
  </div>
