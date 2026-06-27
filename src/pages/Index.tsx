@@ -153,10 +153,12 @@ const buildAnProxyUrl = (url: string) => {
 const buildAnHlsPlaybackUrl = (url: string) => {
   const raw = String(url || "").trim();
   if (!raw) return raw;
-  // AN CDNs frequently block browser-origin HLS/CORS. The AN API /hls route is
-  // now the dedicated playback pipe for AN only; RS HTTPS still plays direct in
-  // VideoPlayer, while AN gets reliable playlist/segment headers.
-  return buildAnProxyUrl(raw);
+  // AN playback must be direct HTTPS/HLS only — no proxy wrapper.
+  const proxyMatch = raw.match(/\/an-api\/hls\?url=([^&]+)/i);
+  if (proxyMatch) {
+    try { return decodeURIComponent(proxyMatch[1]); } catch { return raw; }
+  }
+  return raw;
 };
 
 // Prefer Hindi as the default audio track for AnimeSalt content.
@@ -170,8 +172,8 @@ const pickAnDefaultAudioIdx = (audio: Array<{ language?: string; name?: string; 
 };
 
 const pickAnPreferredQualityIdx = (streams: Array<{ height?: number }>) => {
-  const preferred = streams.findIndex((x) => Number(x?.height) === 720);
-  const fallback = streams.findIndex((x) => Number(x?.height) <= 720);
+  const preferred = streams.findIndex((x) => Number(x?.height) === 1080);
+  const fallback = streams.findIndex((x) => Number(x?.height) >= 720);
   return preferred >= 0 ? preferred : (fallback >= 0 ? fallback : 0);
 };
 
@@ -232,7 +234,12 @@ const normalizeAnAudioTracks = (
       const uri = String(track?.uri || "").trim();
       if (!uri) return null;
       seen.add(key);
-      const defaultStreamUrl = String(streams?.[0]?.url || "").trim() || uri;
+      const defaultStreamUrl = String(
+        streams?.find((stream: any) => Number(stream?.height) === 1080)?.url ||
+        streams?.find((stream: any) => Number(stream?.height) >= 720)?.url ||
+        streams?.[0]?.url ||
+        "",
+      ).trim() || uri;
       return {
         language: normalized,
         label: normalized,
@@ -761,14 +768,14 @@ const Index = () => {
   }, [firebaseAnime, activeSaltItems]);
 
   const allSeries = useMemo(() => {
-    const saltSeries = activeSaltItems.filter(i => i.type === 'webseries');
-    return [...webseries, ...saltSeries];
-  }, [webseries, activeSaltItems]);
+    // All Series must be RS/Firebase only. AN-generated cards stay in AN areas / continue watching, not mixed here.
+    return webseries.filter(i => i.source !== 'animesalt' && !String(i.id || '').startsWith('as_'));
+  }, [webseries]);
 
   const allMovies = useMemo(() => {
-    const saltMovies = activeSaltItems.filter(i => i.type === 'movie');
-    return [...movies, ...saltMovies];
-  }, [movies, activeSaltItems]);
+    // All Movies must be RS/Firebase only. AN movies are managed separately.
+    return movies.filter(i => i.source !== 'animesalt' && !String(i.id || '').startsWith('as_'));
+  }, [movies]);
   
   // Maintenance mode check
   const [maintenance, setMaintenance] = useState<any>(null);
