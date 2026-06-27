@@ -428,6 +428,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [currentAudioTrack, setCurrentAudioTrack] = useState<string>("Default");
   const [showAudioPanel, setShowAudioPanel] = useState(false);
   const [shareFallback, setShareFallback] = useState<{ url: string; title: string } | null>(null);
+  const [anApiBase, setAnApiBase] = useState<string>(normalizeAnApiBaseUrl(DEFAULT_AN_API_URL));
 
   // ===== AN iframe minimal overlay auto-hide =====
   // Buttons start visible, then auto-hide after 3s. Tapping the iframe area
@@ -781,16 +782,40 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     [anime?.anSlug, anime?.animeSaltSlug, anime?.id, anime?.source, anime?.sourceName],
   );
 
+  useEffect(() => {
+    if (!isAnimeSaltContent) return;
+    let cancelled = false;
+    getEdgeFunctionUrl("an-api")
+      .then((url) => {
+        if (cancelled) return;
+        const normalized = normalizeAnApiBaseUrl(url || DEFAULT_AN_API_URL);
+        if (normalized) setAnApiBase(normalized);
+      })
+      .catch(() => {
+        if (!cancelled) setAnApiBase(normalizeAnApiBaseUrl(DEFAULT_AN_API_URL));
+      });
+    return () => { cancelled = true; };
+  }, [isAnimeSaltContent]);
+
   const buildReliableHlsSource = useCallback((rawUrl: string) => {
-    // AN HLS streams are plain HTTPS — play them directly through hls.js /
-    // native HLS. If an old saved URL still points at the AN-API /hls relay,
-    // strip the wrapper so segments come straight from the CDN.
+    // AnimeSalt's HTTPS manifests do not send browser CORS headers. A native
+    // <video> tag can consume same-origin/proxy-safe media bytes, but hls.js has
+    // to fetch the manifest/segments with fetch/XHR, so raw as-cdn*.top URLs fail
+    // with CORS in Chromium. Keep normal HLS direct, but route AN CDN manifests
+    // through the AN API HLS relay; the relay rewrites segment URLs and adds CORS.
     const clean = String(rawUrl || "").trim();
     if (!clean) return clean;
-    const unwrap = (u: string) => {
+    const unwrapAnRelay = (u: string) => {
       const m = String(u || "").match(/\/an-api\/hls\?url=([^&]+)/i);
       if (!m) return u;
       try { return decodeURIComponent(m[1]); } catch { return u; }
+    };
+    const wrapAnRelay = (u: string) => {
+      const unwrapped = unwrapAnRelay(u);
+      if (!isRawAnimeSaltHlsUrl(unwrapped) && !/(^|\.)as-cdn\d*\.top\//i.test(unwrapped)) return unwrapped;
+      const base = normalizeAnApiBaseUrl(anApiBase || DEFAULT_AN_API_URL);
+      if (!base) return unwrapped;
+      return `${base}/hls?url=${encodeURIComponent(unwrapped)}`;
     };
     if (isDataHlsUrl(clean)) {
       try {
@@ -802,15 +827,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           const rewritten = decoded.split(/\r?\n/).map((line) => {
             const trimmed = line.trim();
             if (!trimmed) return line;
-            if (trimmed.startsWith("#")) return line.replace(/URI="([^"]+)"/g, (_m, u) => `URI="${unwrap(u)}"`);
-            return unwrap(trimmed);
+            if (trimmed.startsWith("#")) return line.replace(/URI="([^"]+)"/g, (_m, u) => `URI="${wrapAnRelay(u)}"`);
+            return wrapAnRelay(trimmed);
           }).join("\n");
           return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(rewritten)))}`;
         }
       } catch {}
     }
-    return unwrap(clean);
-  }, []);
+    return wrapAnRelay(clean);
+  }, [anApiBase]);
 
   const currentLangLabel = useMemo(() => {
     // AnimeSalt: before HLS exposes tracks, fall back to the real available
