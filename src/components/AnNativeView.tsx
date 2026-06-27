@@ -48,7 +48,7 @@ interface Props {
 
 const hlsUrl = (apiBase: string, u: string, proxyAll = false) => {
   const raw = String(u || "").trim();
-  const isAnimeSaltCdn = /(^|\.)as-cdn\d*\.top\//i.test(raw);
+  const isAnimeSaltCdn = /^https?:\/\/([^/]+\.)?as-cdn\d*\.top\//i.test(raw);
   return proxyAll || isAnimeSaltCdn || raw.toLowerCase().startsWith("http://") ? `${apiBase}/hls?url=${encodeURIComponent(raw)}` : raw;
 };
 // AN subtitle extraction/proxy was removed from the API for stability.
