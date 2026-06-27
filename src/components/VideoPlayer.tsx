@@ -115,6 +115,14 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
     return candidates;
   }
 
+  // HLS (m3u8 / data:HLS master) must always play directly via hls.js — never
+  // route through the admin video-proxy. The proxy domain-locks responses and
+  // breaks segment fetches, and the player should label the server as "HLS".
+  if (isHlsLikeUrl(url)) {
+    addCandidate(url);
+    return candidates;
+  }
+
   const isHttp = isInsecureHttpSource(url);
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
   const nativeProxyCandidate = isHttp && DEFAULT_VIDEO_PROXY_URL
