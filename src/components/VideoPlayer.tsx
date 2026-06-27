@@ -759,8 +759,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [poster, subtitle, title]);
 
   const isAnimeSaltContent = useMemo(
-    () => anime?.source === "animesalt" || String(anime?.id || "").startsWith("as_"),
-    [anime?.id, anime?.source],
+    () => anime?.source === "animesalt" || anime?.sourceName === "AnimeSalt" || !!anime?.anSlug || !!anime?.animeSaltSlug || /^as_|^an_/i.test(String(anime?.id || "")),
+    [anime?.anSlug, anime?.animeSaltSlug, anime?.id, anime?.source, anime?.sourceName],
   );
 
   const buildReliableHlsSource = useCallback((rawUrl: string) => {

@@ -284,7 +284,7 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   }
 
   return {
-    src: qualityOptions[preferredQualityIdx]?.src || qualityOptions[0]?.src || buildAnProxyUrl(streams[preferredQualityIdx]?.url || streams[0]?.url || ""),
+    src: qualityOptions[preferredQualityIdx]?.src || qualityOptions[0]?.src || buildAnHlsPlaybackUrl(streams[preferredQualityIdx]?.url || streams[0]?.url || ""),
     qualityOptions: qualityOptions.length > 1 ? qualityOptions : undefined,
     audioTracks,
     subtitleTracks: undefined,
@@ -769,12 +769,12 @@ const Index = () => {
 
   const allSeries = useMemo(() => {
     // All Series must be RS/Firebase only. AN-generated cards stay in AN areas / continue watching, not mixed here.
-    return webseries.filter(i => i.source !== 'animesalt' && !String(i.id || '').startsWith('as_'));
+    return webseries.filter(i => i.source !== 'animesalt' && i.sourceName !== 'AnimeSalt' && !i.anSlug && !i.animeSaltSlug && !String(i.id || '').startsWith('as_') && !String(i.id || '').startsWith('an_'));
   }, [webseries]);
 
   const allMovies = useMemo(() => {
     // All Movies must be RS/Firebase only. AN movies are managed separately.
-    return movies.filter(i => i.source !== 'animesalt' && !String(i.id || '').startsWith('as_'));
+    return movies.filter(i => i.source !== 'animesalt' && i.sourceName !== 'AnimeSalt' && !i.anSlug && !i.animeSaltSlug && !String(i.id || '').startsWith('as_') && !String(i.id || '').startsWith('an_'));
   }, [movies]);
   
   // Maintenance mode check
