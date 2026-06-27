@@ -2430,6 +2430,22 @@ const Index = () => {
 
     // AnimeSalt source: directly play the last watched episode
     if (anime.source === "animesalt") {
+      const cachedDetails = detailsCacheRef.current.get(anime.id) || readCachedAnDetails(anime.id);
+      if (cachedDetails && item.episodeInfo) {
+        detailsCacheRef.current.set(anime.id, cachedDetails);
+        const sIdx = item.episodeInfo.seasonIdx ?? (item.episodeInfo.season - 1);
+        const eIdx = item.episodeInfo.epIdx ?? (item.episodeInfo.episode - 1);
+        const hasAccess = await checkAndShowAdGate(anime, sIdx, eIdx);
+        if (!hasAccess) return;
+        try {
+          await openPlayerFromAnime(cachedDetails, { seasonIdx: sIdx, epIdx: eIdx });
+        } finally {
+          dismissDetailsLoadingToast();
+          try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
+        }
+        return;
+      }
+
       // Immediate feedback — same "Loading details..." toast as fresh card clicks.
       // Auto-dismissed by the saltPlayerState/playerState effect when playback resolves.
       const continueToastId = showDetailsLoadingToast();
