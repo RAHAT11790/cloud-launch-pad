@@ -1,125 +1,74 @@
-# Ultra Security Hardening Plan
+# AN Firebase Prefetch + Player Fixes
 
-চারটা layer-এ security add করব। প্রতিটা layer আলাদা ভাবে কাজ করে যাতে কেউ একটা break করলেও বাকিগুলা ধরে রাখে।
+## 1. AN Link Prefetch → Firebase (Admin Panel)
+**New file:** `src/components/admin/AnFirebasePrefetcher.tsx` (mounted inside the existing AnimeSalt/AN section of `Admin.tsx`).
 
----
+UI:
+- **"All Series"** button — iterates every AN series currently surfaced in the user panel, calls `/anime?slug=` then `/episode?slug=` per episode, stores results.
+- **"Single Series"** — slug input, prefetches just that one.
+- **"Repair Broken"** — re-fetches only episodes flagged `broken: true`.
+- Live progress log (current series / episode / success / fail counters).
+- Concurrency: 4 episodes in parallel, 250ms throttle between series to avoid rate-limit.
 
-## Layer 1 — Domain-Locked Video & API (সবচেয়ে important)
-
-**Goal:** আমার video URL/API অন্য কারো website বা app-এ play হবে না। শুধু `rsanime03.lovable.app` + lovable preview domain-এ চলবে।
-
-### Edge functions hardening (`video-proxy`, `video-download`, `an-api`, `rs-bot`, etc.)
-- Origin/Referer **allowlist**: `rsanime03.lovable.app`, `*.lovable.app` (preview), `localhost` (dev only)
-- Reject অন্য সব origin → `403 Forbidden` JSON: `{ error: "Access denied" }`
-- `OPTIONS` (CORS preflight) থেকেও non-allowed origin block — অন্য site থেকে browser fetch বন্ধ হবে
-- Bot/script direct hit (no Origin header) → require a rotating short-lived `x-rs-token` header (HMAC of timestamp with `RS_API_KEY`, ±90s window) → frontend automatically attaches it
-- Server-to-server scrapers fail কারণ token-এর secret browser-এ exposed না
-
-### Frontend helper
-- নতুন `src/lib/secureFetch.ts` — wrapping `fetch` to auto-add `x-rs-token` + correct origin
-- All edge-function calls এই helper দিয়ে যাবে
-
-**Result:** কেউ DevTools দিয়ে URL copy করে অন্য site-এ embed করলে 403, server-to-server scrape করলেও token mismatch → 403.
-
----
-
-## Layer 2 — Browser Anti-Theft UI
-
-**Goal:** কেউ image save / text copy / right-click / drag করতে পারবে না।
-
-Global CSS (`src/index.css`) এ add:
-```css
-html, body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-img, video { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
-input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
+**Firebase path (confirmed):**
+```
+anSeries/{slug}/
+  meta: { title, poster, type, updatedAt }
+  episodes/{epSlug}/
+    number, title, directUrl, links: [{quality,url}],
+    audio, defaultAudioIdx, preferredAudio,
+    updatedAt, broken: false
 ```
 
-Global JS guard (`src/lib/uiGuard.ts`, mounted in `App.tsx`):
-- `contextmenu` event → preventDefault (right-click + long-press image menu বন্ধ)
-- `dragstart` on images → preventDefault
-- `keydown`: F12, Ctrl+Shift+I/J/C, Ctrl+U, Ctrl+S → preventDefault
-- `copy` event on non-input → preventDefault
-- Mobile long-press on images → suppress save dialog via `touch-action` + callout disable
+## 2. Reader Side — Read From Firebase First
+Edit `src/hooks/useAnimeSaltData.ts` (or wherever AN episode resolves in `AnNativeView.tsx` / `Index.tsx`):
+- Before calling `an-api /episode`, read `anSeries/{slug}/episodes/{epSlug}` from Firebase.
+- If found and not `broken` → return instantly (no toast).
+- If missing/broken → fall back to API, then write result back to Firebase.
+- On playback error in `VideoPlayer.tsx`, mark `broken: true` so the repair button can pick it up; auto-trigger one silent API refetch and update Firebase.
 
-Card images-এ explicit `draggable={false}` + `onContextMenu={preventDefault}` wrapper.
+## 3. Remove "Loading details…" Toast
+- Delete `showDetailsLoadingToast()` calls in `src/pages/Index.tsx` and AN card handlers.
+- Remove the global event/toast-id wiring added for it.
 
-**Note:** এগুলো friction add করে, determined attacker DevTools বন্ধ করতে পারবে না (browser-level limit) — কিন্তু সাধারণ user/casual scraper সম্পূর্ণ block।
+## 4. Player — Check Size 1 MB
+`src/components/VideoPlayer.tsx` HLS config:
+- `maxBufferSize: 1 * 1024 * 1024` (was much larger)
+- Keep `maxBufferLength` reasonable (30s) so low-power phones cope.
 
----
-
-## Layer 3 — Admin Login History & Block System
-
-**Goal:** Admin panel-এ কে কে ঢুকছে list দেখা + intruder permanently block + owner immune।
-
-### Owner protection (hard-coded)
-`src/lib/adminGuard.ts` এ:
-```ts
-export const OWNER_EMAILS = ["rahatsarker224@gmail.com", "sarkeremon207@gmail.com"];
+## 5. Brightness Gesture Zone (Left 30% / Middle 40% dead / Right 30% volume)
+`VideoPlayer.tsx` vertical-swipe handler:
 ```
-Block check skips these emails — কেউ owner-কে block করলে effect হবে না।
-
-### New Firebase nodes
+const w = rect.width;
+const x = touch.clientX - rect.left;
+if (x < w * 0.30) → brightness
+else if (x > w * 0.70) → volume
+else → ignore (no-op, allow tap/seek)
 ```
-adminAccess/
-  logs/{pushId}     → { email, uid, ip, userAgent, country, success, ts, reason }
-  blocked/{key}     → { email|uid|ip, blockedAt, blockedBy, reason }
-  sessions/{pushId} → { email, ip, startedAt, lastSeen, deviceFingerprint }
-```
+Removes the current middle-zone brightness bug.
 
-### Login flow change
-- Admin PIN modal-এ entry-এর সময় → log every attempt (success/fail) to `adminAccess/logs`
-- IP/country fetch থেকে `ipapi.co/json` (free tier)
-- Device fingerprint = existing canvas hash
-- Check `adminAccess/blocked` before granting access — owner email skip block check
+## 6. Hanging Face Server ("video লোড হয় না, কিছুই দেখায় না")
+- Inspect the server entry in admin server list (likely `huggingface.co/spaces/...` proxy).
+- Symptom = silent fail → almost certainly mixed-content / CORS on the HF Space.
+- Fix: route Hanging Face URLs through `video-proxy` like other HTTP sources, and add HF host to proxy allowlist. Add a 5s probe; if no `loadedmetadata`, mark server failed and show clear toast instead of blank.
 
-### New Admin UI tab: "Security & Access"
-- **Login History** table: time, email, IP, country, device, status (✓/✗)
-- **Active Sessions**: real-time current admins
-- **Blocked List**: with unblock button
-- One-click "Block" beside each log entry (greyed out for owner emails)
-- Filter by date/email/IP
+## 7. Testing
+After build, Playwright on preview:
+- Open one AN series, run "Single Series" prefetch, verify Firebase write.
+- Re-open episode → confirm instant load (no toast, no API call in network panel).
+- Switch episode → < 1s.
+- Verify brightness only triggers on left 30%.
+- Verify Hanging Face server now plays or fails loudly.
 
-**Result:** intruder login attempt → আপনি list-এ দেখবেন → এক click-এ block → তার IP/email/fingerprint পরের attempt-এ deny।
+## Files Touched
+- `src/components/admin/AnFirebasePrefetcher.tsx` (new)
+- `src/components/admin/Admin.tsx` or wherever AN admin section lives (mount component)
+- `src/hooks/useAnimeSaltData.ts`
+- `src/components/AnNativeView.tsx`
+- `src/components/VideoPlayer.tsx`
+- `src/pages/Index.tsx` (remove toast)
+- `supabase/functions/video-proxy/index.ts` (HF host allowlist if restricted)
 
----
-
-## Layer 4 — Firebase Data Protection
-
-**Goal:** Database থেকে কেউ bulk read/dump করতে না পারে।
-
-- Existing Firebase rules check — sensitive nodes (`adminAccess/*`, `users/*/private/*`) read-only for matching uid বা owner
-- Bulk-read guard: client-side throttle in `useFirebaseData` — single `onValue` per node, no `get()` loop pattern
-- `siteConfig` public read OK; auth/admin nodes locked
-- Document which nodes are public vs locked in `mem://infrastructure/firebase-rules`
-
----
-
-## Technical Implementation Order
-
-1. **Edge function origin/token guard** (Layer 1) — most impactful, blocks API misuse instantly
-2. **Frontend `secureFetch` helper** + replace existing fetch calls in critical paths
-3. **CSS + `uiGuard.ts`** mounted in `App.tsx` (Layer 2)
-4. **Admin login logging + block table** Firebase nodes + UI tab (Layer 3)
-5. **Owner email immunity** hardcoded in `adminGuard.ts`
-6. **Firebase rules audit** documented in memory
-
----
-
-## What This Will NOT Do (honest limits)
-
-- Direct HTTPS video URLs (যেগুলা proxy bypass করে play হয়) — upstream server-এর control আমাদের নাই, ওগুলা সম্পূর্ণ lock করা impossible without re-proxying everything (latency cost বাড়বে)
-- DevTools open করে browsing — browser-level feature, কেউ চাইলে disable করতে পারবে না 100%
-- Screenshot/screen-record — OS-level, browser block করতে পারে না
-
-কিন্তু **API scraping, embed theft, casual copy/download — সব block হবে।**
-
----
-
-## Decisions Needed From You
-
-1. **Allowlist domains** — শুধু `rsanime03.lovable.app` + `*.lovable.app`? নাকি custom domain-ও যোগ হবে?
-2. **Direct HTTPS videos**ও কি proxy-র মধ্যে force করব (slower but fully locked) নাকি current speed-priority রাখব?
-3. **Owner emails** — উপরে যে দুইটা লিখেছি ঠিক আছে, নাকি আরও add করব?
-4. **Existing admin PIN (553300)** — keep as fallback বা remove করে শুধু email+password authentic admin auth use করব?
-
-Approve করলে এই sequence-এ build start করব।
+## Out of Scope
+- No changes to RS pipeline.
+- No schema changes beyond the new `anSeries/*` Firebase node.
