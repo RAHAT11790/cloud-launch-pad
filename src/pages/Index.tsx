@@ -157,10 +157,7 @@ const buildAnHlsPlaybackUrl = (url: string) => {
 };
 
 const buildAnAudioHlsPlaybackUrl = (url: string) => {
-  const raw = buildAnHlsPlaybackUrl(url);
-  if (!raw || !anApiBaseUrl) return raw;
-  if (/\/hls\?url=/i.test(raw)) return raw;
-  return `${anApiBaseUrl.replace(/\/+$/, "")}/hls?url=${encodeURIComponent(raw)}`;
+  return buildAnHlsPlaybackUrl(url);
 };
 
 // Prefer Hindi as the default audio track for AnimeSalt content.
@@ -259,7 +256,6 @@ const normalizeAnAudioTracks = (
 };
 
 const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
-  await ensureAnApiBaseUrl();
   const resolvedPayload = payload?.data && !Array.isArray(payload?.sources) ? payload.data : payload;
   const sourceList = Array.isArray(resolvedPayload?.sources) ? resolvedPayload.sources : [];
   const primarySource = sourceList.find((entry: any) => Array.isArray(entry?.streams) && entry.streams.length > 0) || sourceList[0];
@@ -407,56 +403,21 @@ const getAnimeSaltDirectState = async (episodeSlug: string, forceRefresh = false
   const seriesSlug = key.replace(/-\d+x\d+$/i, "").replace(/-\d+$/i, "");
 
   const request = (async () => {
-    // 1) Try Firebase prefetch cache first — instant, no network round-trip to AN.
+    // Runtime is Firebase-only. The AN API is allowed only in Admin fetch/save.
     try {
       const snap = await get(ref(db, `anSeries/${seriesSlug}/episodes/${key}`));
       const cached = snap.val();
       if (!forceRefresh && cached && !cached.broken && (cached.directUrl || (Array.isArray(cached.links) && cached.links.length) || (Array.isArray(cached.sources) && cached.sources.length))) {
         const built = await buildAnimeSaltDirectPlaybackState(cached);
-        // Old Firebase rows were saved before audio extraction existed. If audio
-        // is missing, keep going to live AN API and repair the row instead of
-        // returning a silent/one-audio player from Continue Watching.
-        if (built?.src && built.audioTracks?.length) return built;
+        if (built?.src) return built;
       }
     } catch {}
-
-    // 2) Fall back to the live AN API and write the result back to Firebase.
-    const base = await ensureAnApiBaseUrl();
-    if (!base) return null;
-    try {
-      const response = await fetch(`${base}/episode?slug=${encodeURIComponent(key)}&force=1&_=${Date.now()}`);
-      if (!response.ok) return null;
-      const payload = await response.json();
-      const built = await buildAnimeSaltDirectPlaybackState(payload);
-      // Fire-and-forget persist so the next visit is instant.
-      try {
-        set(ref(db, `anSeries/${seriesSlug}/episodes/${key}`), {
-          slug: key,
-          directUrl: payload?.directUrl || "",
-          links: Array.isArray(payload?.links) ? payload.links : [],
-          sources: Array.isArray(payload?.sources) ? payload.sources : [],
-          audioTracks: built?.audioTracks || [],
-          defaultAudioIdx: payload?.defaultAudioIdx ?? 0,
-          preferredAudio: payload?.preferredAudio || "",
-          broken: false,
-          updatedAt: Date.now(),
-        }).catch(() => {});
-      } catch {}
-      return built;
-    } catch {
-      return null;
-    }
+    return null;
   })();
   animeSaltDirectStateCache.set(key, request);
   request.then((value) => {
-    if (!value?.src || !value.audioTracks?.length) {
+    if (!value?.src) {
       animeSaltDirectStateCache.delete(key);
-      // Mark broken in Firebase so the admin "Repair Broken" button picks it up.
-      if (!value?.src) {
-        try {
-          set(ref(db, `anSeries/${seriesSlug}/episodes/${key}/broken`), true).catch(() => {});
-        } catch {}
-      }
     }
   }).catch(() => animeSaltDirectStateCache.delete(key));
   return request;
@@ -470,6 +431,12 @@ const getEpisodeSrc = (ep?: Episode | null): string => {
 
 const getMovieSrc = (anime: AnimeItem): string => {
   return [anime.movieLink, anime.movieLink480, anime.movieLink720, anime.movieLink1080, anime.movieLink4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
+};
+
+const hasStoredFirebasePlayback = (anime: AnimeItem): boolean => {
+  if (getMovieSrc(anime)) return true;
+  const seasons = resolveAnimeSeasonsForLanguage(anime, anime.baseLanguage || anime.language);
+  return !!seasons?.some((season) => season?.episodes?.some((ep) => !!getEpisodeSrc(ep as Episode)));
 };
 
 const getMovieQualityOptions = (anime: AnimeItem): { label: string; src: string }[] => {
