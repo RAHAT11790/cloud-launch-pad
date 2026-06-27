@@ -17,6 +17,22 @@
 const AN_BASE = "https://animesalt.ac";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const TEXT_TIMEOUT_MS = 9_000;
+const PLAYER_TIMEOUT_MS = 8_000;
+const cache = new Map<string, { ts: number; ttl: number; data: unknown }>();
+const getCache = <T>(key: string): T | null => {
+  const hit = cache.get(key);
+  if (!hit || Date.now() - hit.ts > hit.ttl) {
+    if (hit) cache.delete(key);
+    return null;
+  }
+  return hit.data as T;
+};
+const setCache = (key: string, data: unknown, ttl: number) => {
+  cache.set(key, { ts: Date.now(), ttl, data });
+  if (cache.size > 300) cache.delete(cache.keys().next().value);
+  return data;
+};
 
 const cors: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -63,19 +79,26 @@ function safeAtob(value: string): string {
 
 async function fetchText(url: string, init?: RequestInit): Promise<string> {
   const target = new URL(url);
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      "User-Agent": UA,
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.9",
-      Referer: target.origin === AN_BASE ? `${AN_BASE}/` : `${target.origin}/`,
-      ...(init?.headers || {}),
-    },
-    redirect: "follow",
-  });
-  if (!res.ok) throw new Error(`Upstream ${res.status} for ${url}`);
-  return await res.text();
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), TEXT_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      ...init,
+      signal: ac.signal,
+      headers: {
+        "User-Agent": UA,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        Referer: target.origin === AN_BASE ? `${AN_BASE}/` : `${target.origin}/`,
+        ...(init?.headers || {}),
+      },
+      redirect: "follow",
+    });
+    if (!res.ok) throw new Error(`Upstream ${res.status} for ${url}`);
+    return await res.text();
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function parseHlsAttrs(line: string): Record<string, string> {
@@ -226,7 +249,18 @@ function parseMaster(masterUrl: string, body: string) {
     if (line.startsWith("#EXT-X-MEDIA") && /TYPE=AUDIO/i.test(line)) {
       const attrs = parseHlsAttrs(line);
       const uri = attrs.URI || "";
-      if (uri) audio.push({ language: attrs.LANGUAGE || "", name: attrs.NAME || attrs.LANGUAGE || `Audio ${audio.length + 1}`, uri: resolve(uri) });
+      if (uri) {
+        const name = attrs.NAME || attrs.LANGUAGE || `Audio ${audio.length + 1}`;
+        const language = attrs.LANGUAGE || "";
+        const blob = `${name} ${language}`.toLowerCase();
+        audio.push({
+          language,
+          name,
+          uri: resolve(uri),
+          default: /YES/i.test(attrs.DEFAULT || ""),
+          isHindi: /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob),
+        });
+      }
     } else if (line.startsWith("#EXT-X-STREAM-INF")) {
       const next = (lines[i + 1] || "").trim();
       if (!next || next.startsWith("#")) continue;
@@ -243,42 +277,71 @@ function parseMaster(masterUrl: string, body: string) {
   }
 
   streams.sort((a, b) => b.height - a.height);
-  return { streams: uniqueBy(streams, (s) => s.url), audio: uniqueBy(audio, (a) => a.uri) };
+  const uniqueAudio = uniqueBy(audio, (a) => a.uri);
+  const hindiIdx = uniqueAudio.findIndex((a) => a.isHindi);
+  const declaredDefaultIdx = uniqueAudio.findIndex((a) => a.default);
+  return {
+    streams: uniqueBy(streams, (s) => s.url),
+    audio: uniqueAudio,
+    defaultAudioIdx: hindiIdx >= 0 ? hindiIdx : (declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0),
+    preferredAudio: hindiIdx >= 0 ? "Hindi" : (uniqueAudio[declaredDefaultIdx]?.name || uniqueAudio[0]?.name || ""),
+  };
 }
 
 async function fetchMaster(master: string, embedUrl: string, origin: string) {
+  const c = getCache<string>(`master:${master}`);
+  if (c) return c;
   const attempts = [
     { "User-Agent": UA, Accept: "application/vnd.apple.mpegurl,*/*" },
     { "User-Agent": UA, Accept: "application/vnd.apple.mpegurl,*/*", Referer: `${origin}/`, Origin: origin },
     { "User-Agent": UA, Accept: "application/vnd.apple.mpegurl,*/*", Referer: embedUrl, Origin: origin },
   ];
   for (const headers of attempts) {
-    const res = await fetch(master, { headers, redirect: "follow" });
-    if (res.ok) return await res.text();
-    try { await res.body?.cancel(); } catch {}
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), PLAYER_TIMEOUT_MS);
+    try {
+      const res = await fetch(master, { headers, redirect: "follow", signal: ac.signal });
+      if (res.ok) return setCache(`master:${master}`, await res.text(), 90_000) as string;
+      try { await res.body?.cancel(); } catch {}
+    } catch {
+      // try next header strategy
+    } finally {
+      clearTimeout(timer);
+    }
   }
   throw new Error("master fetch failed");
 }
 
 async function extractFromPlayer(embedUrl: string) {
+  const cached = getCache<any>(`embed:${embedUrl}`);
+  if (cached) return cached;
   const m = embedUrl.match(/^(https?:\/\/[^/]+)\/video\/([a-f0-9]+)/i);
   if (!m) return { embed: embedUrl, error: "unrecognized embed format", streams: [], audio: [] };
   const origin = m[1];
   const hash = m[2];
   const apiUrl = `${origin}/player/index.php?data=${hash}&do=getVideo`;
-  const res = await fetch(apiUrl, {
-    method: "POST",
-    headers: {
-      "User-Agent": UA,
-      Referer: embedUrl,
-      Origin: origin,
-      "X-Requested-With": "XMLHttpRequest",
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({ hash, r: `${AN_BASE}/` }).toString(),
-    redirect: "follow",
-  });
-  const txt = await res.text();
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), PLAYER_TIMEOUT_MS);
+  let txt = "";
+  let res: Response;
+  try {
+    res = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "User-Agent": UA,
+        Referer: embedUrl,
+        Origin: origin,
+        "X-Requested-With": "XMLHttpRequest",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ hash, r: `${AN_BASE}/` }).toString(),
+      redirect: "follow",
+      signal: ac.signal,
+    });
+    txt = await res.text();
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) return { embed: embedUrl, hash, error: `player upstream ${res.status}`, raw: txt.slice(0, 200), streams: [], audio: [] };
 
   let data: any;
@@ -289,10 +352,13 @@ async function extractFromPlayer(embedUrl: string) {
     try { parsed = parseMaster(master, await fetchMaster(master, embedUrl, origin)); }
     catch (e) { return { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: [], audio: [], error: (e as Error).message }; }
   }
-  return { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: parsed.streams, audio: parsed.audio };
+  return setCache(`embed:${embedUrl}`, { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: parsed.streams, audio: parsed.audio, defaultAudioIdx: parsed.defaultAudioIdx, preferredAudio: parsed.preferredAudio }, 8 * 60_000);
 }
 
 async function episode(slug: string, type?: string) {
+  const cacheKey = `episode:${type || ""}:${slug}`;
+  const cached = getCache<any>(cacheKey);
+  if (cached) return cached;
   const candidates = type === "movies"
     ? [`${AN_BASE}/movies/${slug}/`, `${AN_BASE}/episode/${slug}/`]
     : [`${AN_BASE}/episode/${slug}/`, `${AN_BASE}/movies/${slug}/`, `${AN_BASE}/series/${slug}/`];
@@ -322,7 +388,8 @@ async function episode(slug: string, type?: string) {
       : [{ quality: "Auto", url: source.master }]
   ).filter((x) => x.url);
 
-  return {
+  const primary = playableSources[0] as any;
+  return setCache(cacheKey, {
     slug,
     title: titleM ? decode(titleM[1]) : slug.replace(/-/g, " "),
     pageUrl,
@@ -331,7 +398,9 @@ async function episode(slug: string, type?: string) {
     embedUrl: sources[0]?.embed || "",
     allEmbeds: sources.map((s) => s.embed).filter(Boolean),
     directUrl: playableSources[0]?.master || links[0]?.url || "",
-  };
+    defaultAudioIdx: typeof primary?.defaultAudioIdx === "number" ? primary.defaultAudioIdx : 0,
+    preferredAudio: primary?.preferredAudio || "Hindi",
+  }, 8 * 60_000);
 }
 
 // ---------- HLS PROXY ----------
