@@ -1,88 +1,80 @@
-## লক্ষ্য
+## Core understanding (confirm before I touch code)
 
-দুটো আলাদা সমস্যা একসাথে সমাধান:
+**AN (AnimeSalt) is NOT RS.** API returns per episode:
 
-1. **AN playback এখনো slow** — Firebase-এ data থাকা সত্ত্বেও card click / episode switch-এ ~১০s delay হচ্ছে। মানে `Index.tsx`-এর AN resolver Firebase-first পথে যাচ্ছে না, বা cache lookup async API call-এর পরে চলছে।
-2. **AN Series management নেই** — RS series-এর মতো editable interface দরকার, যাতে Fetch button দিয়ে AN API থেকে data টানা যায়, প্রতিটা episode/quality/audio আলাদা ঘরে দেখা যায়, edit/refresh করা যায়, count দেখা যায়।
+- 4 video URLs (480p / 720p / 1080p, and default URL 1080p ) — **video only, no audio, language-agnostic**
+- N audio URLs — **one per language** (Hindi / Tamil / Telugu / English / …)
 
----
+Player must play **video stream + audio stream simultaneously**, perfectly synced (audio element slaved to video's `currentTime`). Default audio = Hindi. Switching audio swaps only the audio element — video keeps playing. Switching quality swaps only the video element — audio keeps playing.
 
-## পরিবর্তন (২ ভাগে)
+RS keeps its current per-language `seasonsByLanguage` shape. **Zero RS changes.**
 
-### Part A — AN playback instant করা (root-cause fix)
+## Changes
 
-`src/pages/Index.tsx` এর `getAnimeSaltDirectState` (AN card click handler) audit করব:
+### 1. AN admin editor (`AnSeriesManager.tsx`) — AN branch only
 
-- নিশ্চিত করব `anSeries/{slug}/episodes/{epSlug}` Firebase node থেকে synchronously read হচ্ছে first
-- Firebase hit হলে কোনো API call, কোনো toast, কোনো `await fetch()` chain ছাড়াই direct play
-- Episode switcher (VideoPlayer পাশে) এর data source-ও Firebase-direct করব
-- শুধু Firebase miss হলে API fallback — সেক্ষেত্রে background-এ result Firebase-এ লিখে রাখবে
+Per episode, render:
 
-### Part B — Admin → Series → "AN Series" tab (RS-style)
-
-**Location:** Admin → Series → Add New → Manual এর পাশে নতুন tab `"as-list" / "as-manual"`। Settings থেকে existing `AnFirebasePrefetcher` সরিয়ে নেব।
-
-**নতুন component:** `src/components/admin/AnSeriesManager.tsx`
-
-UI layout (RS series-এর design tokens মেনে):
-
-```text
-┌─ AN Series ──────────────────────────────────┐
-│ Stats: Added 42 / Total 87 · Pending 45      │
-│ [Bulk Fetch All]  [Repair Broken]            │
-├──────────────────────────────────────────────┤
-│ [Search...]                                  │
-│ ┌──────────────┬──────────────┐              │
-│ │ poster  ✓    │ poster        │  ← grid     │
-│ │ Naruto       │ Bleach        │             │
-│ │ 220 eps      │ not fetched   │             │
-│ │ [Edit]       │ [Fetch]       │             │
-│ └──────────────┴──────────────┘              │
-└──────────────────────────────────────────────┘
+```
+Episode 1
+  Video qualities (single set, no language selector)
+    [480p]  [720p]  [1080p]  [4K optional]
+  Audio tracks (one row per language returned by API)
+    Hindi  [audio URL]   (default ●)
+    Tamil  [audio URL]   ( ○ )
+    Telugu [audio URL]   ( ○ )
 ```
 
-**Edit modal** (per series):
+- Remove the "Language: Hindi / This is the base language" selector for AN entries.
+- Save shape: `episode = { link480, link720, link1080, link4k?, audioTracks: [{language,label,link,isDefault}] }`. No `seasonsByLanguage` duplication for AN.
+- Fetch button populates this exact shape from `an-api` (single call, fills all qualities + all audio rows). RS fetch path untouched.
 
-- Header: title, poster, [Refresh from AN] button
-- Episode list: শুধু AN API যতগুলো episode return করে ততগুলো ঘর (২৪ episode থাকলেও AN-এ ২০ থাকলে ২০টাই)
-- প্রতিটা episode card-এ:
-  - Episode number + slug
-  - Quality rows: 360p / 480p / 720p / 1080p — প্রত্যেকটার আলাদা URL field
-  - Audio rows: প্রতিটা audio track-এর আলাদা URL field
-  - Per-episode [Refetch] button
-- [Save All] → `anSeries/{slug}/episodes/*` Firebase-এ লেখে
+### 2. AN card click fix (`AnNativeView.tsx` / `Index.tsx`)
 
-**Data source:** existing `useSelectedAnimeSalt` (user panel-এ যা দেখায় ঠিক সেইগুলোই)। AN API call হবে `getEdgeFunctionUrl("an-api")` দিয়ে — existing prefetcher-এর fetch logic reuse করব।
+AN cards currently don't open the detail/player view. Restore the click handler so tapping an AN card opens AnimeDetails like any other card.
 
-**Counts:** stored series count Firebase `anSeries` থেকে live, total = saltItems.length, pending = diff।
+### 3. Dual-stream player for AN (`VideoPlayer.tsx`, AN branch only)
 
-### Part C — Settings cleanup
+- Detect AN entry → mount hidden `<audio>` alongside `<video>`.
+- Video src = selected quality URL.
+- Audio src = selected language URL (default Hindi, fallback first available).
+- Sync rules (millisecond-tight):
+  - On `play/pause/seeking/seeked/ratechange` → mirror to audio element.
+  - On every `timeupdate` and every 250 ms, if `|audio.currentTime − video.currentTime| > 0.05s` → set `audio.currentTime = video.currentTime`.
+  - Wait for both `canplay` before starting playback; if audio buffers, pause video; resume both together (prevents video-ahead-of-audio drift).
+- Quality menu lists 480/720/1080/4K from stored URLs (no API calls).
+- New audio menu lists languages from `audioTracks` (no API calls).
+- RS path in VideoPlayer untouched.
 
-`Admin.tsx` settings section থেকে `<AnFirebasePrefetcher />` mount remove, নতুন section route `"animesalt-manager"` (বা new `"an-series"`) এর Series tab-এ wire করব।
+### 4. Migration / compatibility
 
----
+Reader tolerates old AN rows that stored `seasonsByLanguage`: flatten to the new shape on load (pick base-language video URLs, collect all language audio URLs). No data wipe needed.
 
-## টেস্টিং
+### 5. Verification (mandatory before reporting done)
 
-1. Build/typecheck pass
-2. Playwright-এ preview-তে login → Admin → Series → AN Series tab খুলবে, একটা series fetch করব, edit modal-এ episodes ও quality ঘর দেখব, save করব
-3. User panel-এ ওই AN series card click করে measure করব — Firebase hit হলে <1s switch হচ্ছে কিনা
-4. Screenshot পাঠাব
+Run Playwright against `localhost:8080`:
 
----
+1. Open home → click an AN card → screenshot detail page open.
+2. Click Play → screenshot player with video playing.
+3. Assert `<video>` has `currentTime > 0`, `<audio>` has `currentTime > 0`, `|Δ| < 0.1s`.
+4. Switch audio language → screenshot, assert video keeps playing without reload, audio source changed.
+5. Save all screenshots to `/mnt/documents/an-redesign-*.png` and surface them.
 
-## টেকনিক্যাল ডিটেইলস
+Will not stop until those screenshots show: AN card opens, video + audio play together in sync, language switch works.
 
-- নতুন file: `src/components/admin/AnSeriesManager.tsx` (~400 lines, RS series card grid pattern থেকে token reuse)
-- পরিবর্তিত file: `src/pages/Admin.tsx` (series tab type union-এ `"as-list" | "as-manual"` যোগ, settings থেকে prefetcher unmount, series section-এ mount), `src/pages/Index.tsx` (AN resolver-এ Firebase-first guard)
-- Firebase schema unchanged — same `anSeries/{slug}/{meta,episodes/{epSlug}}` যা prefetcher আগেই লিখছে
-- `AnFirebasePrefetcher.tsx` rename/refactor হবে না — internal-এ reuse হবে, কিন্তু UI shell নতুন
+## Files touched
 
----
+- `src/components/admin/AnSeriesManager.tsx` (AN branch UI + save shape)
+- `src/components/AnNativeView.tsx` and/or `src/pages/Index.tsx` (card click)
+- `src/components/VideoPlayer.tsx` (dual-stream AN branch, guarded `if (isAn)`)
+- Possibly `src/data/animeData.ts` types (add explicit video-only quality fields already exist)
 
-## কী touch করব না
+## Files NOT touched
 
-- Video player, gestures, proxy, edge functions — অপরিবর্তিত
-- AN API edge function — অপরিবর্তিত
-- RS series flow — অপরিবর্তিত
-- এইখানে আরেকটা গুরুত্বপূর্ণ জিনিস করতে হবে এটা হল বর্তমানে যতগুলা An কার্ডগুলো আছে যেগুলা এপিআই থেকে লোড হয়েছে এই সবকিছুকে স্টপ করে দিতে হবে রিমুভ করে দিতে হবে ইউজার প্যানেল থেকে বুঝেছ সবগুলাকে ইউজার প্যানেল মানে এ পি আই এন এম সিলেট থেকে মানে এনিমি ফাংশন থেকে যতগুলা কার্ড এখন আমার ইউজার প্যানেলে দেখাইতেছে ওই সবগুলোকে বন্ধ করে দিতে হবে কারণ এইগুলা যদি বন্ধ না করি তখন ওইখান থেকে যে পেচ করব ওই গুলার সাথে এগুলো ডাটা লাগিয়ে যাবে কারণ এইগুলা এখন আর এস এর মতন এড হবে তাই এগুলোর সাথে ওইগুলো এপিআই এর গুলার প্যাচ লেগে যাবে তাই এপিয়ারের সমস্ত এখন যতগুলা পোস্ট আছে এন এর যতগুলা পোস্ট আছে প্রত্যেকটা বাদ যাবে প্রত্যেকটা রিমুভ আমি ওইখান থেকে সার্চ করে যখন পেচ বাটনে ক্লিক করবো যতগুলা সিরিজ ছায়াছবি শুধু ওইগুলাই আবার ইউজার প্যানেলে যাবি পেয়ারের সবগুলা বাদ যাবে এটা গুরুত্বপূর্ণ জিনিস। 
+- Any RS playback code path
+- `an-api` edge function (already returns correct data)
+- Firebase rules, auth, notifications, anything else
+
+Approve and I'll execute end-to-end and return with the screenshots.
+
+সিরিজের ক্ষেত্রেও এটাই আর মুভিস এর ক্ষেত্রেও এটাই মুভি ফাংশটা আবার ভুলে যেও না দোনোটা কিন্তু এক্স একই রকমের একইভাবে কাজ করবে আর P review তে যতক্ষণ পর্যন্ত না টেস্টিং করে ছবি পাঠাইবা কাজ কোনভাবেই শেষ হবে না এখানে দুই নাম্বার চ্যাট লাগানো যাবে না এক চ্যাটের মাঝে সবগুলো করতে হবে এবং টেস্টিংও এক চ্যাটের মাঝে করতে হবে এখানে অজুহাত দিলে চলবে না যে পরের যেটের মাঝে টেস্টিং করব ছবি পাঠাবো এই চ্যাটের মাঝে সব ঠিক করে ছবি পাঠাতে হবে এটা বাধ্যতামূলক এখানে দুই নাম্বার চ্যাটের আশ্বাস নেওয়া একবারেই যাবে না এটা আমি বলে রাখি এটা আমার সম্পূর্ণ আদেশ এটা অমান্য করলে কোন কাজই হবে না। 
