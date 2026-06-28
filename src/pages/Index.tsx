@@ -2325,17 +2325,8 @@ const Index = () => {
         }
       }
       if (playerState?.anime.source === "animesalt" && String(clickedEp.link || "").startsWith("animesalt://")) {
-        const epSlug = String(clickedEp.link).replace("animesalt://", "");
-        try {
-          const directState = await getAnimeSaltDirectState(epSlug);
-          if (directState?.src) {
-            nextSrc = directState.src;
-            qOpts = directState.qualityOptions || [];
-            nextAudioTracks = directState.audioTracks;
-            nextSubtitleTracks = directState.subtitleTracks;
-            preferredLanguage = directState.preferredLanguage || (nextAudioTracks?.find((t: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`))?.label) || preferredLanguage;
-          }
-        } catch {}
+        toast.error("This AN episode has no saved Firebase HLS URL. Refresh it from Admin.");
+        return;
       }
       addToWatchHistory(playerState!.anime, playerState!.seasonIdx, i);
       const nextState = {
@@ -2378,17 +2369,8 @@ const Index = () => {
       }
     }
     if (playerState.anime.source === "animesalt" && String(ep.link || "").startsWith("animesalt://")) {
-      const epSlug = String(ep.link).replace("animesalt://", "");
-      try {
-        const directState = await getAnimeSaltDirectState(epSlug);
-        if (directState?.src) {
-          nextSrc = directState.src;
-          qOpts = directState.qualityOptions || [];
-          nextAudioTracks = directState.audioTracks;
-          nextSubtitleTracks = directState.subtitleTracks;
-          preferredLanguage = directState.preferredLanguage || (nextAudioTracks?.find((t: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`))?.label) || preferredLanguage;
-        }
-      } catch {}
+      toast.error("This AN episode has no saved Firebase HLS URL. Refresh it from Admin.");
+      return;
     }
     addToWatchHistory(playerState.anime, newSeasonIdx, 0);
     const nextState = {
