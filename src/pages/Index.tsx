@@ -2802,16 +2802,8 @@ const Index = () => {
                     }
                   }
                   if (playerState.anime.source === "animesalt" && String(nextEp.link || "").startsWith("animesalt://")) {
-                    const epSlug = String(nextEp.link).replace("animesalt://", "");
-                    try {
-                      const directState = await getAnimeSaltDirectState(epSlug);
-                      if (directState?.src) {
-                        nextSrc = directState.src;
-                        qOpts = directState.qualityOptions || [];
-                        nextAudioTracks = directState.audioTracks;
-                        preferredLanguage = directState.preferredLanguage || (nextAudioTracks?.find((t: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`))?.label) || preferredLanguage;
-                      }
-                    } catch {}
+                    toast.error("This AN episode has no saved Firebase HLS URL. Refresh it from Admin.");
+                    return;
                   }
                   addToWatchHistory(playerState.anime, playerState.seasonIdx, nextIdx);
                   const nextState = {
@@ -2858,15 +2850,8 @@ const Index = () => {
             }
 
             if (anime.source === "animesalt" && String(ep.link || "").startsWith("animesalt://")) {
-              const epSlug = String(ep.link).replace("animesalt://", "");
-              try {
-                const directState = await getAnimeSaltDirectState(epSlug);
-                if (directState?.src) {
-                  nextSrc = directState.src;
-                  qOpts = directState.qualityOptions || [];
-                  nextAudioTracks = directState.audioTracks;
-                }
-              } catch {}
+              toast.error("This AN episode has no saved Firebase HLS URL. Refresh it from Admin.");
+              return;
             }
 
             const newAnime = { ...anime, seasons: newSeasons, baseLanguage: resolvedLabel, language: resolvedLabel };
