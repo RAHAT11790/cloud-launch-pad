@@ -5534,7 +5534,9 @@ ${tgBulkFooter}
  )}
  {/* Hidden file input for per-season JSON import */}
  <input type="file" ref={wsSeasonJsonFileRef} accept=".json,application/json" multiple onChange={wsHandleSeasonJsonFile} className="hidden" />
- {seasonsData.map((season, sIdx) => (
+ {(Array.isArray(seasonsData) ? seasonsData : []).map((rawSeason, sIdx) => {
+ const season = { ...(rawSeason as any), episodes: Array.isArray((rawSeason as any)?.episodes) ? (rawSeason as any).episodes : [] } as Season;
+ return (
  <div key={sIdx} className="bg-black/30 rounded-xl p-3.5 mb-3 border border-white/5">
  <div className="flex items-center gap-2.5 mb-3">
  <input value={season.name} onChange={e => updateSeasonName(sIdx, e.target.value)} className={`${inputClass} flex-1`} />
@@ -5672,7 +5674,8 @@ ${tgBulkFooter}
  <textarea value={(currentLanguageFields as any)[q] || ""} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, q, e.target.value, selectedAdminLanguage)}
  className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder={`${q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"} link (optional)`} rows={2} />
  </div>
- ))}
+ );
+ })}
  </div>
  </div>
  )}
