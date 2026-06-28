@@ -1814,6 +1814,13 @@ const Index = () => {
       subtitle = "Movie";
         qualityOptions = getMovieQualityOptions(anime);
         if (anime.audioTracks?.length) audioTracks = anime.audioTracks;
+        // AN movies: wrap into synthetic master so video + Hindi audio play together
+        const anMovie = buildAnMoviePlayback(anime);
+        if (anMovie?.src) {
+          src = anMovie.src;
+          qualityOptions = anMovie.qualityOptions;
+          audioTracks = anMovie.audioTracks as any;
+        }
     }
 
     // Handle AnimeSalt video - check ad-gate first
