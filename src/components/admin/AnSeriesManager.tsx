@@ -80,6 +80,20 @@ const reliableHls = (_base: string, url?: string | null) => {
   return raw;
 };
 
+const ABSOLUTE_AN_URL_RE = /^https?:\/\/[^\s"'<>]+/i;
+
+const extractLikelyHlsUrlFromText = (value?: string | null) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const direct = raw.match(/https?:\/\/[^\s"'<>]+?\.m3u8(?:\?[^\s"'<>]*)?/i)?.[0];
+  if (direct) return direct;
+  const encoded = raw.match(/https?%3A%2F%2F[^\s"'<>]+?\.m3u8(?:%3F[^\s"'<>]*)?/i)?.[0];
+  if (encoded) {
+    try { return decodeURIComponent(encoded); } catch {}
+  }
+  return raw;
+};
+
 const pickDefaultAudioIdx = (audio: Array<{ language?: string; name?: string }>) => {
   const hindi = audio.findIndex((track) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${track?.language || ""} ${track?.name || ""}`));
   return hindi >= 0 ? hindi : 0;
@@ -181,7 +195,7 @@ const extractStreams = (payload: any) => {
   return [...sourceStreams, ...linkStreams]
     .filter((entry: any) => entry?.url)
     .map((entry: any, index: number) => ({
-      url: String(entry.url).trim(),
+      url: extractLikelyHlsUrlFromText(entry.url),
       label: String(entry.label || (entry.height ? `${entry.height}p` : `Source ${index + 1}`)),
       height: getStreamHeight(entry),
       bandwidth: Number(entry.bandwidth || 0) || undefined,
@@ -207,7 +221,7 @@ const extractAudio = (payload: any) => {
   const seen = new Set<string>();
   return [...fromSources, ...fromTopLevel, ...fromStoredTracks]
     .map((track: any) => ({
-      uri: String(track?.uri || track?.url || "").trim(),
+      uri: extractLikelyHlsUrlFromText(track?.uri || track?.url || ""),
       name: String(track?.name || track?.label || track?.language || "Audio").trim(),
       language: String(track?.language || track?.name || track?.label || "Audio").trim(),
     }))
