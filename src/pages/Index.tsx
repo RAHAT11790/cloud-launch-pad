@@ -2153,14 +2153,15 @@ const Index = () => {
       if (anime.movieLink) {
         const hasAccess = await checkAndShowAdGate(anime);
         if (!hasAccess) return;
+        const anMovie = buildAnMoviePlayback(anime);
         const nextState = {
-          src: getMovieSrc(anime),
+          src: anMovie?.src || getMovieSrc(anime),
           title: anime.title,
           subtitle: "Movie",
           anime,
-          audioTracks: anime.audioTracks,
+          audioTracks: (anMovie?.audioTracks as any) || anime.audioTracks,
           subtitleTracks: (anime as any).subtitleTracks,
-          qualityOptions: getMovieQualityOptions(anime),
+          qualityOptions: anMovie?.qualityOptions || getMovieQualityOptions(anime),
           resumeTime: item.currentTime || 0,
         };
         if (!nextState.src) {
