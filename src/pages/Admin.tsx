@@ -10676,6 +10676,45 @@ const normalizeAnimeSaltAudioTracks = (tracks: any, defaultAudio?: any) => {
  return cleaned;
 };
 
+const buildAnimeSaltEditorAudioTrack = (track: any = {}, index = 0, isDefault = false) => {
+ const label = String(track?.label || track?.name || track?.language || (isDefault ? "Hindi / Default" : `Audio ${index + 1}`)).trim();
+ const language = String(track?.language || (isDefault ? "Hindi" : label)).trim();
+ const link = String(track?.link || track?.audioUrl || track?.rawAudioUrl || track?.url || track?.uri || "").trim();
+ return {
+ language,
+ label,
+ link,
+ audioUrl: String(track?.audioUrl || link || "").trim(),
+ rawAudioUrl: String(track?.rawAudioUrl || link || "").trim(),
+ isDefault,
+ };
+};
+
+const normalizeAnimeSaltEditorEpisode = (ep: any = {}, eIdx = 0) => {
+ const tracks = normalizeAnimeSaltAudioTracks(ep?.audioTracks, ep?.defaultAudio);
+ const audioTracks = tracks.length > 0 ? tracks : [buildAnimeSaltEditorAudioTrack({}, 0, true)];
+ const defaultIndex = audioTracks.findIndex((track: any) => track?.isDefault);
+ const resolvedAudioTracks = audioTracks.map((track: any, idx: number) => ({
+ ...track,
+ isDefault: defaultIndex >= 0 ? idx === defaultIndex : idx === 0,
+ }));
+ const defaultAudio = resolvedAudioTracks.find((track: any) => track?.isDefault) || resolvedAudioTracks[0] || null;
+ return {
+ number: ep?.number || ep?.episodeNumber || eIdx + 1,
+ title: ep?.title || `Episode ${ep?.number || ep?.episodeNumber || eIdx + 1}`,
+ slug: ep?.slug || "",
+ hasAnimeSaltLink: !!ep?.slug || !!ep?.hasAnimeSaltLink,
+ link: ep?.link || "",
+ link480: ep?.link480 || ep?.qualityLinks?.p480 || "",
+ link720: ep?.link720 || ep?.qualityLinks?.p720 || "",
+ link1080: ep?.link1080 || ep?.qualityLinks?.p1080 || "",
+ link4k: ep?.link4k || ep?.qualityLinks?.p4k || "",
+ audioTracks: resolvedAudioTracks,
+ defaultAudio,
+ subtitleTracks: Array.isArray(ep?.subtitleTracks) ? ep.subtitleTracks : [],
+ };
+};
+
 const AnimeSaltManagerSection = ({
  glassCard, inputClass, btnPrimary, btnSecondary, categoryList, selectClass,
 }: {
