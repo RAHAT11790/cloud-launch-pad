@@ -10912,7 +10912,15 @@ const AnimeSaltManagerSection = ({
  const snap = await get(ref(db, `animesaltSelected/${slug}/customSeasons`));
  const saved = snap.val();
  if (saved && Array.isArray(saved) && saved.length > 0) {
- setEpEditorSeasons(saved);
+  setEpEditorSeasons(saved.map((season: any, sIdx: number) => ({
+  ...season,
+  name: season?.name || `Season ${sIdx + 1}`,
+  episodes: (Array.isArray(season?.episodes) ? season.episodes : []).map((ep: any, eIdx: number) => {
+  const audioTracks = normalizeAudioTrackList(ep?.audioTracks?.length ? ep.audioTracks : (ep?.defaultAudio ? [ep.defaultAudio] : []));
+  const defaultAudio = audioTracks.find((track: any) => track?.isDefault) || audioTracks[0] || null;
+  return { ...ep, number: ep?.number || ep?.episodeNumber || eIdx + 1, title: ep?.title || `Episode ${eIdx + 1}`, audioTracks, defaultAudio };
+  }),
+  })));
  setEpEditorLoading(false);
  return;
  }
@@ -10934,12 +10942,12 @@ const AnimeSaltManagerSection = ({
  if (result?.success && result.data?.seasons?.length > 0) {
  setEpEditorSeasons(result.data.seasons.map((s: any, sIdx: number) => ({
  name: s.name || `Season ${sIdx + 1}`,
- episodes: s.episodes.map((ep: any, eIdx: number) => ({
+  episodes: (Array.isArray(s?.episodes) ? s.episodes : []).map((ep: any, eIdx: number) => ({
  number: ep.number || eIdx + 1,
  title: ep.title || `Episode ${ep.number || eIdx + 1}`,
  slug: ep.slug || '',
  hasAnimeSaltLink: !!ep.slug,
- link: '', link480: '', link720: '', link1080: '', link4k: '',
+  link: '', link480: '', link720: '', link1080: '', link4k: '', audioTracks: [], defaultAudio: null,
  })),
  })));
  } else {
@@ -10958,12 +10966,12 @@ const AnimeSaltManagerSection = ({
  if (result?.success && result.data?.seasons?.length > 0) {
  const apiSeasons = result.data.seasons.map((s: any, sIdx: number) => ({
  name: s.name || `Season ${sIdx + 1}`,
- episodes: s.episodes.map((ep: any, eIdx: number) => ({
+  episodes: (Array.isArray(s?.episodes) ? s.episodes : []).map((ep: any, eIdx: number) => ({
  number: ep.number || eIdx + 1,
  title: ep.title || `Episode ${ep.number || eIdx + 1}`,
  slug: ep.slug || '',
  hasAnimeSaltLink: !!ep.slug,
- link: '', link480: '', link720: '', link1080: '', link4k: '',
+  link: '', link480: '', link720: '', link1080: '', link4k: '', audioTracks: [], defaultAudio: null,
  })),
  }));
  // Merge: add only seasons not already present by name
