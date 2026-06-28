@@ -427,11 +427,20 @@ async function extractFromPlayer(embedUrl: string, forceRefresh = false) {
   const master = decode(String(data.videoSource || data.securedLink || data.file || data.source || ""));
   let parsed: any = { streams: [] as any[], audio: [] as any[], defaultAudioIdx: 0, preferredAudio: "" };
   if (master) {
-    try { parsed = await filterWorkingHls(parseMaster(master, await fetchMaster(master, embedUrl, origin)), embedUrl, origin); }
+    try {
+      // Do NOT segment-probe the variant/audio playlists here. AnimeSalt's
+      // variant URLs are the exact URLs the admin needs to store (480/720/1080
+      // video-only + all separate audio renditions). Probing the first segment
+      // from the Edge Function can fail because of CDN/referrer rules even when
+      // the playlist is perfectly playable in the browser via hls.js. That made
+      // Fetch save zero quality URLs. Parse the master and return every playlist
+      // URL; the public player will combine video+audio from Firebase only.
+      parsed = parseMaster(master, await fetchMaster(master, embedUrl, origin));
+    }
     catch (e) { return { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: [], audio: [], error: (e as Error).message }; }
   }
   if (master && parsed.streams.length === 0) {
-    return { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: [], audio: [], error: parsed.rejected || "no working HLS streams" };
+    return { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: [], audio: [], error: "no HLS variant playlists found" };
   }
   return setCache(`embed:${embedUrl}`, { embed: embedUrl, hash, poster: data.videoImage || "", master, videoSource: master, securedLink: master, streams: parsed.streams, audio: parsed.audio, defaultAudioIdx: parsed.defaultAudioIdx, preferredAudio: parsed.preferredAudio }, 8 * 60_000);
 }
