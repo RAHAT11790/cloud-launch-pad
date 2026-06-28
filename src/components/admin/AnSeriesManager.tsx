@@ -93,8 +93,8 @@ const extractLikelyHlsUrlFromText = (value?: string | null) => {
 };
 
 const pickDefaultAudioIdx = (audio: Array<{ language?: string; name?: string }>) => {
-  const hindi = audio.findIndex((track) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${track?.language || ""} ${track?.name || ""}`));
-  return hindi >= 0 ? hindi : 0;
+  const explicit = audio.findIndex((track: any) => track?.default === true || track?.isDefault === true);
+  return explicit >= 0 ? explicit : 0;
 };
 
 const normalizeStoredAudioTracks = (tracks: any, defaultAudio?: any): RsEpisode["audioTracks"] => {
@@ -121,8 +121,7 @@ const normalizeStoredAudioTracks = (tracks: any, defaultAudio?: any): RsEpisode[
     })
     .filter((track: any) => track.label || track.language || track.link);
   if (cleaned.length > 0 && !cleaned.some((track: any) => track.isDefault)) {
-    const idx = cleaned.findIndex((track: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${track.language} ${track.label}`));
-    cleaned[Math.max(0, idx)].isDefault = true;
+    cleaned[0].isDefault = true;
   }
   return cleaned;
 };
@@ -169,7 +168,7 @@ const isLikelyHlsPlaylistUrl = (value?: string | null) => {
   // thumbnails, JS player chunks, or any random CDN asset as a video/audio URL.
   if (/\.key(?:[?#]|$)/i.test(lower) || /(?:^|[?&])key=/.test(lower) || /\b(encryption|license)\b/.test(lower)) return false;
   if (/\.(?:ts|m4s|mp4|js|css|json|jpe?g|png|webp|gif|svg|ico)(?:[?#]|$)/i.test(lower)) return false;
-  return /\.m3u8(?:[?#].*)?$/i.test(lower) || /\/hls\/[^?#]+\.m3u8(?:[?#].*)?$/i.test(lower);
+  return /\.m3u8(?:[?#].*)?$/i.test(lower) || /\/hls\//i.test(lower);
 };
 
 const normalizePlaybackPayload = (payload: any) => payload?.data && !payload?.sources ? payload.data : payload;
@@ -222,6 +221,7 @@ const extractAudio = (payload: any) => {
       uri: extractLikelyHlsUrlFromText(track?.uri || track?.url || ""),
       name: String(track?.name || track?.label || track?.language || "Audio").trim(),
       language: String(track?.language || track?.name || track?.label || "Audio").trim(),
+      default: track?.default === true || track?.isDefault === true,
     }))
     .filter((track) => {
       const key = `${track.language.toLowerCase()}|${track.uri}`;
@@ -525,7 +525,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       }));
 
       const languages = Array.from(new Set(Array.from(detectedLanguages).map((lang) => String(lang || "").trim()).filter(Boolean)));
-      const baseLanguage = languages.find((lang) => /hindi/i.test(lang)) || languages[0] || "Hindi";
+      const baseLanguage = languages[0] || "Multi";
       const orderedLanguages = Array.from(new Set([baseLanguage, ...languages].filter(Boolean)));
       const seasonsByLanguage = Object.fromEntries(
         orderedLanguages.map((lang) => [lang, cloneSeasonsForAudioLanguage(seasons, lang)]),
