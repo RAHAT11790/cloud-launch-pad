@@ -131,8 +131,14 @@ const normalizeStoredAudioTracks = (tracks: any, defaultAudio?: any): RsEpisode[
       };
     })
     .filter((track: any) => track.label || track.language || track.link);
-  if (cleaned.length > 0 && !cleaned.some((track: any) => track.isDefault)) {
-    cleaned[0].isDefault = true;
+  if (cleaned.length > 0) {
+    // Re-assert Hindi as default whenever it exists — never let Japanese or
+    // any other language sneak in as default through stored data.
+    const hindiIdx = cleaned.findIndex(isHindiAudioEntry);
+    const targetIdx = hindiIdx >= 0
+      ? hindiIdx
+      : (cleaned.findIndex((t: any) => t.isDefault) >= 0 ? cleaned.findIndex((t: any) => t.isDefault) : 0);
+    cleaned.forEach((t: any, i: number) => { t.isDefault = i === targetIdx; });
   }
   return cleaned;
 };
