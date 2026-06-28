@@ -129,6 +129,11 @@ const isLikelyHlsPlaylistUrl = (value?: string | null) => {
 const normalizePlaybackPayload = (payload: any) => payload?.data && !payload?.sources ? payload.data : payload;
 
 const extractStreams = (payload: any) => {
+  // ONLY use the per-quality video-only streams parsed from the HLS master
+  // playlist (sources[].streams[] = 480p/720p/1080p variants). Never include
+  // the combined master / directUrl / "Auto" link — that one carries
+  // video+all-audio muxed together and is what expires first, so storing it
+  // would write broken URLs into Firebase and break playback.
   const sourceStreams = Array.isArray(payload?.sources)
     ? payload.sources.flatMap((source: any) => Array.isArray(source?.streams) ? source.streams : [])
     : [];
@@ -139,17 +144,18 @@ const extractStreams = (payload: any) => {
         height: Number(entry?.height || String(entry?.label || entry?.quality || "").match(/\d{3,4}/)?.[0] || 0) || undefined,
       }))
     : [];
-  const direct = String(payload?.directUrl || payload?.streamUrl || payload?.videoUrl || payload?.file || "").trim();
-  return [...sourceStreams, ...linkStreams, direct ? { url: direct, label: "Auto" } : null]
+  return [...sourceStreams, ...linkStreams]
     .filter((entry: any) => entry?.url)
     .map((entry: any, index: number) => ({
       url: String(entry.url).trim(),
-      label: String(entry.label || (entry.height ? `${entry.height}p` : index === 0 ? "Auto" : `Source ${index + 1}`)),
+      label: String(entry.label || (entry.height ? `${entry.height}p` : `Source ${index + 1}`)),
       height: getStreamHeight(entry),
       bandwidth: Number(entry.bandwidth || 0) || undefined,
       resolution: entry.resolution,
     }))
-    .filter((entry) => isLikelyHlsPlaylistUrl(entry.url));
+    // Keep only the named quality variants (480/720/1080/4K). Anything without
+    // a recognizable quality field is either the muxed master or junk.
+    .filter((entry) => isLikelyHlsPlaylistUrl(entry.url) && qualityField(entry.label, entry.height) !== null);
 };
 
 const extractAudio = (payload: any) => {
