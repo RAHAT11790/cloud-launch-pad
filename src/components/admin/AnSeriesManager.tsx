@@ -119,8 +119,11 @@ const isLikelyHlsPlaylistUrl = (value?: string | null) => {
   const raw = String(value || "").trim();
   if (!raw) return false;
   const lower = raw.toLowerCase();
-  if (/\.key(?:[?#]|$)/i.test(lower) || /(?:^|[?&])key=/.test(lower) || /\b(encryption|license|\.ts|\.m4s|\.mp4|\.jpg|\.png|\.webp)\b/.test(lower)) return false;
-  return /\.m3u8(?:[?#].*)?$/i.test(lower) || /\/hls\//i.test(lower) || /as-cdn\d+\.top/i.test(lower);
+  // Only save HLS playlist URLs in Firebase. Never save key files, fragments,
+  // thumbnails, JS player chunks, or any random CDN asset as a video/audio URL.
+  if (/\.key(?:[?#]|$)/i.test(lower) || /(?:^|[?&])key=/.test(lower) || /\b(encryption|license)\b/.test(lower)) return false;
+  if (/\.(?:ts|m4s|mp4|js|css|json|jpe?g|png|webp|gif|svg|ico)(?:[?#]|$)/i.test(lower)) return false;
+  return /\.m3u8(?:[?#].*)?$/i.test(lower) || /\/hls\/[^?#]+\.m3u8(?:[?#].*)?$/i.test(lower);
 };
 
 const normalizePlaybackPayload = (payload: any) => payload?.data && !payload?.sources ? payload.data : payload;
