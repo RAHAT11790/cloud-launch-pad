@@ -235,7 +235,7 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   const payload = normalizePlaybackPayload(rawPayload);
   const streams = extractStreams(payload);
   const audio = extractAudio(payload);
-  const defaultAudioIdx = typeof payload?.defaultAudioIdx === "number" ? payload.defaultAudioIdx : pickDefaultAudioIdx(audio);
+  const defaultAudioIdx = pickDefaultAudioIdx(audio);
   const uniqueStreams = Array.from(new Map(streams.map((stream: any) => [`${getStreamHeight(stream) || stream.label || stream.url}:${stream.url}`, { ...stream, height: getStreamHeight(stream) }])).values());
   const preferredStream = uniqueStreams.find((stream) => Number(stream.height) === 1080) || uniqueStreams.find((stream) => Number(stream.height) >= 720) || uniqueStreams[0];
   const makeUrl = (stream?: any) => {
