@@ -127,16 +127,8 @@ const normalizeAnAudioTracks = (
   });
 
   const seen = new Set<string>();
-  return audio
+  const list = audio
     .map((track, trackIndex) => {
-      const pickStreamUrl = (qualityLabel: string) => {
-        const direct = qualityMap.get(qualityLabel);
-        if (!direct) return undefined;
-        return buildAnSyntheticMaster({
-          url: direct,
-          height: Number(qualityLabel.replace(/\D/g, "")) || undefined,
-        }, audio, trackIndex);
-      };
       const rawLabel = String(track?.name || track?.language || "Audio").trim();
       const rawLang = String(track?.language || rawLabel).trim();
       const normalized = normalizeLanguageName(rawLang) || normalizeLanguageName(rawLabel) || rawLabel;
@@ -145,12 +137,6 @@ const normalizeAnAudioTracks = (
       const uri = String(track?.uri || "").trim();
       if (!isAnPlayableHlsUrl(uri)) return null;
       seen.add(key);
-      const defaultStreamUrl = String(
-        streams?.find((stream: any) => Number(stream?.height) === 1080)?.url ||
-        streams?.find((stream: any) => Number(stream?.height) >= 720)?.url ||
-        streams?.[0]?.url ||
-        "",
-      ).trim() || uri;
       return {
         language: normalized,
         label: normalized,
@@ -163,7 +149,14 @@ const normalizeAnAudioTracks = (
         isDefault: track?.isDefault === true,
       };
     })
-    .filter(Boolean) as { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string }[];
+    .filter(Boolean) as { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string; isDefault?: boolean }[];
+  if (list.length) {
+    // Always force Hindi as the default when present.
+    const hindi = list.findIndex((t) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language} ${t.label}`));
+    const targetIdx = hindi >= 0 ? hindi : Math.max(0, list.findIndex((t) => t.isDefault));
+    list.forEach((t, i) => { t.isDefault = i === targetIdx; });
+  }
+  return list;
 };
 
 const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
