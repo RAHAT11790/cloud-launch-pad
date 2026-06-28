@@ -541,7 +541,7 @@ async function hlsProxy(req: Request, target: string, proxyPrefix: string) {
     if (v) h.set(k, v);
   }
   const ct = (upstream.headers.get("content-type") || "").toLowerCase();
-  const isM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(?:\?|$)/i.test(target);
+  const isM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(?:\?|$)/i.test(target) || /\/hls\//i.test(targetUrl.pathname);
   if (isM3u8) {
     if (req.method === "HEAD") {
       h.delete("content-length");
