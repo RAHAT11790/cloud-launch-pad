@@ -5735,52 +5735,56 @@ ${tgBulkFooter}
  )}
 
   {isAnSeries && (
-  <div className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
-  <div className="mb-2 flex items-center justify-between gap-2">
+  <div className="mt-3 rounded-xl border-2 border-amber-500/35 bg-gradient-to-b from-amber-500/10 to-orange-500/5 p-3 shadow-[0_0_18px_rgba(245,158,11,0.08)]">
+  <div className="mb-3 flex items-start justify-between gap-2">
   <div>
-  <p className="text-[11px] font-bold text-amber-200">Audio tracks (per language)</p>
-   <p className="text-[9px] text-amber-100/60">Default audio + every other audio URL is stored inside this episode.</p>
+  <p className="text-[12px] font-black uppercase tracking-wide text-amber-100">🎧 AN AUDIO URL ROOMS</p>
+   <p className="text-[9px] leading-relaxed text-amber-100/70">RS নয়: উপরের 480/720/1080 video-only link + নিচের প্রতিটা audio URL একসাথে player এ যাবে। যত audio আছে, তত row/ঘর এখানে থাকবে।</p>
+   <p className="mt-1 text-[9px] font-bold text-emerald-200">Saved audio rows: {episodeAudioTracks.length}</p>
   </div>
-  <button type="button" onClick={() => addSeriesEpisodeAudioTrack(sIdx, eIdx)} className="rounded-lg bg-amber-500/15 px-2.5 py-1.5 text-[10px] font-bold text-amber-200 hover:bg-amber-500/25">
-  <Plus size={10} className="mr-1 inline" /> Add language
+  <div className="flex flex-col gap-1.5 shrink-0">
+  <button type="button" onClick={() => addSeriesEpisodeAudioTrack(sIdx, eIdx)} className="rounded-lg bg-amber-500/20 px-2.5 py-1.5 text-[10px] font-bold text-amber-100 hover:bg-amber-500/30">
+  <Plus size={10} className="mr-1 inline" /> Add audio row
+  </button>
+  <button type="button" onClick={() => { addSeriesEpisodeAudioTrack(sIdx, eIdx); addSeriesEpisodeAudioTrack(sIdx, eIdx); addSeriesEpisodeAudioTrack(sIdx, eIdx); addSeriesEpisodeAudioTrack(sIdx, eIdx); }} className="rounded-lg bg-white/5 px-2.5 py-1.5 text-[9px] font-bold text-zinc-300 hover:bg-white/10">
+  +4 empty rooms
   </button>
   </div>
+  </div>
    {defaultAudioTrack && (
-   <div className="mb-2.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-2.5">
+   <div className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2.5">
    <div className="mb-2 flex items-center justify-between gap-2">
-   <span className="text-[10px] font-bold text-emerald-200">Default audio: {(defaultAudioTrack as any)?.label || (defaultAudioTrack as any)?.language || `Audio ${resolvedDefaultAudioIdx + 1}`}</span>
-   <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[9px] font-bold text-emerald-200">DEFAULT</span>
+   <span className="text-[10px] font-bold text-emerald-100">Default audio room: {(defaultAudioTrack as any)?.label || (defaultAudioTrack as any)?.language || `Audio ${resolvedDefaultAudioIdx + 1}`}</span>
+   <span className="rounded-md bg-emerald-500/25 px-2 py-0.5 text-[9px] font-black text-emerald-100">DEFAULT</span>
    </div>
    <textarea value={(defaultAudioTrack as any)?.link || (defaultAudioTrack as any)?.audioUrl || (defaultAudioTrack as any)?.rawAudioUrl || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, resolvedDefaultAudioIdx, "link", e.target.value)}
-   className={`${inputClass} w-full !py-1.5 !text-[10px] min-h-[44px] resize-none break-all font-mono`} placeholder="Default audio HLS URL" rows={2} />
+   className={`${inputClass} w-full !py-2 !text-[10px] min-h-[54px] resize-none break-all font-mono`} placeholder="Default audio .m3u8 URL" rows={2} />
    </div>
    )}
-  {episodeAudioTracks.length === 0 ? (
-  <p className="rounded-lg border border-dashed border-amber-500/20 bg-black/20 px-2.5 py-2 text-[10px] text-amber-100/55">No audio languages saved yet.</p>
-  ) : (
   <div className="space-y-2.5">
-  {episodeAudioTracks.map((track, tIdx) => {
+  {(episodeAudioTracks.length > 0 ? episodeAudioTracks : [{ label: "", language: "", link: "", audioUrl: "", rawAudioUrl: "", isDefault: true }]).map((track, tIdx) => {
+  const isPlaceholderAudio = episodeAudioTracks.length === 0;
   const isHindi = /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${(track as any)?.language || ""} ${(track as any)?.label || ""}`);
+  const audioValue = (track as any)?.link || (track as any)?.audioUrl || (track as any)?.rawAudioUrl || "";
   return (
-  <div key={`an-audio-${tIdx}`} className="rounded-lg border border-white/5 bg-black/25 p-2.5">
+  <div key={`an-audio-${tIdx}`} className="rounded-xl border border-amber-300/15 bg-black/35 p-2.5">
   <div className="mb-2 flex items-center justify-between gap-2">
-   <span className="text-[10px] font-semibold text-amber-200">{(track as any)?.label || (track as any)?.language || `Audio ${tIdx + 1}`}{tIdx === resolvedDefaultAudioIdx ? " • default" : isHindi ? " • Hindi" : ""}</span>
+   <span className="text-[10px] font-black text-amber-100">Audio room {tIdx + 1}{isPlaceholderAudio ? " • empty" : tIdx === resolvedDefaultAudioIdx ? " • default" : isHindi ? " • Hindi" : ""}</span>
    <div className="flex items-center gap-1.5">
-   <button type="button" onClick={() => setSeriesEpisodeDefaultAudioTrack(sIdx, eIdx, tIdx)} className={`rounded-md px-2 py-1 text-[9px] font-bold ${tIdx === resolvedDefaultAudioIdx ? "bg-emerald-500/25 text-emerald-200" : "bg-white/5 text-zinc-400 hover:bg-emerald-500/15 hover:text-emerald-200"}`}>Default</button>
-  <button type="button" onClick={() => removeSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx)} className="rounded-md bg-red-500/15 p-1 text-pink-400 hover:bg-red-500/25"><Trash2 size={10} /></button>
+   {!isPlaceholderAudio && <button type="button" onClick={() => setSeriesEpisodeDefaultAudioTrack(sIdx, eIdx, tIdx)} className={`rounded-md px-2 py-1 text-[9px] font-bold ${tIdx === resolvedDefaultAudioIdx ? "bg-emerald-500/25 text-emerald-100" : "bg-white/5 text-zinc-400 hover:bg-emerald-500/15 hover:text-emerald-200"}`}>Default</button>}
+  {!isPlaceholderAudio && <button type="button" onClick={() => removeSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx)} className="rounded-md bg-red-500/15 p-1 text-pink-400 hover:bg-red-500/25"><Trash2 size={10} /></button>}
    </div>
   </div>
   <div className="grid grid-cols-2 gap-2 mb-2">
-  <input value={(track as any)?.label || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "label", e.target.value)} className={`${inputClass} !py-1.5 !text-[10px]`} placeholder="Label (e.g. Hindi)" />
-  <input value={(track as any)?.language || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "language", e.target.value)} className={`${inputClass} !py-1.5 !text-[10px]`} placeholder="Lang code (hi/ta/te/en)" />
+  <input value={(track as any)?.label || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "label", e.target.value)} className={`${inputClass} !py-1.5 !text-[10px]`} placeholder="Audio name: Japanese / Telugu / Tamil / Hindi" />
+  <input value={(track as any)?.language || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "language", e.target.value)} className={`${inputClass} !py-1.5 !text-[10px]`} placeholder="Language label/code" />
   </div>
-  <textarea value={(track as any)?.link || (track as any)?.audioUrl || (track as any)?.rawAudioUrl || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "link", e.target.value)}
-  className={`${inputClass} w-full !py-1.5 !text-[10px] min-h-[44px] resize-none break-all font-mono`} placeholder="Audio HLS URL for this language" rows={2} />
+  <textarea value={audioValue} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "link", e.target.value)}
+  className={`${inputClass} w-full !py-2 !text-[10px] min-h-[58px] resize-none break-all font-mono`} placeholder="Paste separate audio-only .m3u8 URL here (not video master)" rows={2} />
   </div>
   );
   })}
   </div>
-  )}
   </div>
   )}
 
