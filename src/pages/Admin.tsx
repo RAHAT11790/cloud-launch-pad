@@ -3487,8 +3487,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const series = webseriesData.find(s => s.id === contentId);
  if (series?.seasons?.[parseInt(value)]) {
  const season = series.seasons[parseInt(value)];
- if (season.episodes?.length > 0) {
- setReleaseEpisodes(season.episodes.map((ep: any, i: number) => ({ index: i, name: `Episode ${ep.episodeNumber || i + 1}` })));
+  const safeEpisodes = Array.isArray(season?.episodes) ? season.episodes : [];
+  if (safeEpisodes.length > 0) {
+  setReleaseEpisodes(safeEpisodes.map((ep: any, i: number) => ({ index: i, name: `Episode ${ep?.episodeNumber || i + 1}` })));
  } else { toast.error("No episodes in this season"); }
  }
  } else if (contentType === "movie") {
@@ -3927,16 +3928,17 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  const updateSeriesEpisodeSubtitle = useCallback((sIdx: number, eIdx: number, value: string) => {
  setSeasonsData((prev) => {
- const copy = [...prev];
- const season = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
- const episode = { ...season.episodes[eIdx] } as any;
+  const copy = Array.isArray(prev) ? [...prev] : [];
+  const rawSeason = copy[sIdx] || { name: `Season ${sIdx + 1}`, seasonNumber: sIdx + 1, episodes: [] };
+  const season = { ...rawSeason, episodes: Array.isArray((rawSeason as any).episodes) ? [...(rawSeason as any).episodes] : [] } as any;
+  const episode = { ...(season.episodes[eIdx] || normalizeEpisodeStructure({ episodeNumber: eIdx + 1 }, eIdx)) } as any;
  const url = value.trim();
  episode.subtitleTracks = url ? [{ label: "Default", language: "", url }] : [];
  season.episodes[eIdx] = episode;
  copy[sIdx] = season;
  return copy;
  });
- }, []);
+  }, [normalizeEpisodeStructure]);
 
  const ensureSeriesLanguageTab = useCallback((language: string) => {
  const normalized = normalizeLanguageValue(language);
@@ -5596,7 +5598,7 @@ ${tgBulkFooter}
  <button onClick={() => removeSeason(sIdx)} className="bg-red-500/20 text-pink-500 p-2.5 rounded-lg"><Trash2 size={14} /></button>
  </div>
  <div className="mb-2.5 flex justify-between items-center">
- <span className="text-xs text-[#D1C4E9]">Episodes: {season.episodes.length}</span>
+  <span className="text-xs text-[#D1C4E9]">Episodes: {(Array.isArray(season.episodes) ? season.episodes : []).length}</span>
  <div className="flex gap-1.5 items-center">
  <button onClick={() => { setWsSeasonJsonTarget(sIdx); wsSeasonJsonFileRef.current?.click(); }}
  className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/40 transition-all flex items-center gap-1">
@@ -5645,12 +5647,12 @@ ${tgBulkFooter}
  className="w-full mb-3 py-3 rounded-lg text-[12px] font-bold bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/20">
  <Plus size={13} /> Add Episode {(season.episodes?.length || 0) + 1} (Quick)
  </button>
- {season.episodes.length > 0 && (
+  {(Array.isArray(season.episodes) ? season.episodes : []).length > 0 && (
  <p className="text-[10px] text-zinc-500 mb-2 px-1">
- Showing newest first • {season.episodes.length} episode{season.episodes.length === 1 ? "" : "s"}
+  Showing newest first • {(Array.isArray(season.episodes) ? season.episodes : []).length} episode{(Array.isArray(season.episodes) ? season.episodes : []).length === 1 ? "" : "s"}
  </p>
  )}
- {season.episodes
+  {(Array.isArray(season.episodes) ? season.episodes : [])
  .map((ep, eIdx) => ({ ep, eIdx }))
  .slice()
  .reverse()
