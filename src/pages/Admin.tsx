@@ -3950,7 +3950,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  };
 
  const addEpisode = async (sIdx: number) => {
- const season = seasonsData[sIdx];
+ const season = { ...(seasonsData[sIdx] as any), episodes: Array.isArray((seasonsData[sIdx] as any)?.episodes) ? (seasonsData[sIdx] as any).episodes : [] } as Season;
  const num = season.episodes.length + 1;
  let epTitle = `Episode ${num}`;
 
@@ -3969,7 +3969,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  setSeasonsData(prev => {
  const copy = [...prev];
- const s = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
+ const s = { ...copy[sIdx], episodes: Array.isArray(copy[sIdx]?.episodes) ? [...copy[sIdx].episodes] : [] };
  s.episodes.push(normalizeEpisodeStructure({ episodeNumber: num, title: epTitle, link: "", link480: "", link720: "", link1080: "", link4k: "", audioTracks: [] }, num - 1));
  copy[sIdx] = s;
  return copy;
@@ -5801,15 +5801,15 @@ ${tgBulkFooter}
  const nw = inlineNewDomain.trim();
  let totalLinks = 0, replacedLinks = 0;
 
- const updatedSeasons = seasonsData.map(season => ({
+  const updatedSeasons = (Array.isArray(seasonsData) ? seasonsData : []).map(season => ({
  ...season,
- episodes: season.episodes.map(ep => {
+  episodes: (Array.isArray((season as any).episodes) ? (season as any).episodes : []).map(ep => {
  const updatedEp = { ...ep } as any;
  ["link", "link480", "link720", "link1080", "link4k"].forEach(field => {
  if (updatedEp[field]) { totalLinks++; if (updatedEp[field].includes(old)) { updatedEp[field] = updatedEp[field].replace(old, nw); replacedLinks++; } }
  });
- if (updatedEp.audioTracks) {
- updatedEp.audioTracks = updatedEp.audioTracks.map((at: any) => {
+  if (updatedEp.audioTracks) {
+  updatedEp.audioTracks = normalizeAudioTrackList(updatedEp.audioTracks).map((at: any) => {
  const u = { ...at };
  ["link", "link480", "link720", "link1080", "link4k"].forEach(f => { if (u[f]) { totalLinks++; if (u[f].includes(old)) { u[f] = u[f].replace(old, nw); replacedLinks++; } } });
  return u;
@@ -5885,10 +5885,10 @@ ${tgBulkFooter}
  <button onClick={() => {
  const exportData = {
  title: seriesForm?.title || "Unknown",
- seasons: seasonsData.map(s => ({
+  seasons: (Array.isArray(seasonsData) ? seasonsData : []).map(s => ({
  name: s.name,
  seasonNumber: s.seasonNumber,
- episodes: s.episodes.map(ep => {
+  episodes: (Array.isArray((s as any).episodes) ? (s as any).episodes : []).map(ep => {
  const epData: any = {
  episodeNumber: ep.episodeNumber,
  title: ep.title,
