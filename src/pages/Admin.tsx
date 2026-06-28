@@ -3984,10 +3984,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const removeEpisode = (sIdx: number, eIdx: number) => {
  if (!confirm("Remove this episode?")) return;
  setSeasonsData(prev => {
- const copy = [...prev];
- const s = { ...copy[sIdx], episodes: copy[sIdx].episodes.filter((_, i) => i !== eIdx) };
+  const copy = Array.isArray(prev) ? [...prev] : [];
+  const rawSeason = copy[sIdx] || { name: `Season ${sIdx + 1}`, seasonNumber: sIdx + 1, episodes: [] };
+  const s = { ...rawSeason, episodes: (Array.isArray((rawSeason as any).episodes) ? (rawSeason as any).episodes : []).filter((_: any, i: number) => i !== eIdx) };
  // Re-number episodes
- s.episodes = s.episodes.map((ep, i) => ({ ...ep, episodeNumber: i + 1 }));
+  s.episodes = s.episodes.map((ep: any, i: number) => ({ ...ep, episodeNumber: i + 1 }));
  copy[sIdx] = s;
  return copy;
  });
