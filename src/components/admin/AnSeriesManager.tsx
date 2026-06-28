@@ -91,6 +91,12 @@ const qualityField = (label?: string, height?: number): "link480" | "link720" | 
   return null;
 };
 
+const getStreamHeight = (stream: any) => {
+  const text = `${stream?.height || ""} ${stream?.label || ""} ${stream?.resolution || ""} ${stream?.filename || ""} ${stream?.url || ""}`;
+  const match = text.match(/(?:^|[^0-9])(2160|1080|720|480)(?:[^0-9]|$)/i);
+  return Number(stream?.height || match?.[1] || 0) || undefined;
+};
+
 const audioLanguageKey = (value?: string | null) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 
 const pickTrackForLanguage = (tracks: NonNullable<RsEpisode["audioTracks"]> | undefined, language: string) => {
@@ -113,7 +119,7 @@ const isLikelyHlsPlaylistUrl = (value?: string | null) => {
   const raw = String(value || "").trim();
   if (!raw) return false;
   const lower = raw.toLowerCase();
-  if (/\.key(?:[?#]|$)/i.test(lower) || /(?:^|[?&])key=/.test(lower) || /\b(encryption|license)\b/.test(lower)) return false;
+  if (/\.key(?:[?#]|$)/i.test(lower) || /(?:^|[?&])key=/.test(lower) || /\b(encryption|license|\.ts|\.m4s|\.mp4|\.jpg|\.png|\.webp)\b/.test(lower)) return false;
   return /\.m3u8(?:[?#].*)?$/i.test(lower) || /\/hls\//i.test(lower) || /as-cdn\d+\.top/i.test(lower);
 };
 
@@ -136,7 +142,7 @@ const extractStreams = (payload: any) => {
     .map((entry: any, index: number) => ({
       url: String(entry.url).trim(),
       label: String(entry.label || (entry.height ? `${entry.height}p` : index === 0 ? "Auto" : `Source ${index + 1}`)),
-      height: Number(entry.height || String(entry.label || "").match(/\d{3,4}/)?.[0] || 0) || undefined,
+      height: getStreamHeight(entry),
       bandwidth: Number(entry.bandwidth || 0) || undefined,
       resolution: entry.resolution,
     }))
@@ -175,7 +181,8 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   const streams = extractStreams(payload);
   const audio = extractAudio(payload);
   const defaultAudioIdx = typeof payload?.defaultAudioIdx === "number" ? payload.defaultAudioIdx : pickDefaultAudioIdx(audio);
-  const preferredStream = streams.find((stream) => Number(stream.height) === 1080) || streams.find((stream) => Number(stream.height) >= 720) || streams[0];
+  const uniqueStreams = Array.from(new Map(streams.map((stream: any) => [`${getStreamHeight(stream) || stream.label || stream.url}:${stream.url}`, { ...stream, height: getStreamHeight(stream) }])).values());
+  const preferredStream = uniqueStreams.find((stream) => Number(stream.height) === 1080) || uniqueStreams.find((stream) => Number(stream.height) >= 720) || uniqueStreams[0];
   const makeUrl = (stream?: any) => {
     if (!stream?.url) return "";
     const raw = String(stream.url || "").trim();
@@ -186,7 +193,7 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
     title: String(payload?.title || fallback.title || `Episode ${fallback.number}`).trim(),
     link: "",
   };
-  streams.forEach((stream) => {
+  uniqueStreams.forEach((stream) => {
     const field = qualityField(stream.label, stream.height);
     if (field && !episode[field]) episode[field] = makeUrl(stream);
   });
@@ -212,7 +219,7 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   // The requested behavior is: the Default field must contain the 1080p AN URL
   // whenever 1080p exists, not a generic/auto/first URL. Keep the explicit
   // 1080p field populated with the same playable source as well.
-  episode.link = makeUrl(streams.find((stream) => Number(stream.height) === 1080) || preferredStream);
+  episode.link = makeUrl(uniqueStreams.find((stream) => Number(stream.height) === 1080) || preferredStream);
   if (!episode.link1080 && episode.link) episode.link1080 = episode.link;
   return episode;
 };
