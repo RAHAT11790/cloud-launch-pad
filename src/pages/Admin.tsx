@@ -3905,7 +3905,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const addSeason = (name = "", episodeCount = 1) => {
  setSeasonsData(prev => [...prev, {
  name: name || `Season ${prev.length + 1}`, seasonNumber: prev.length + 1,
- episodes: Array(episodeCount).fill(null).map((_, i) => ({ episodeNumber: i + 1, title: `Episode ${i + 1}`, link: "" }))
+ episodes: Array(episodeCount).fill(null).map((_, i) => normalizeEpisodeStructure({ episodeNumber: i + 1, title: `Episode ${i + 1}`, link: "" }, i))
  }]);
  };
 
@@ -3934,7 +3934,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  setSeasonsData(prev => {
  const copy = [...prev];
  const s = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
- s.episodes.push({ episodeNumber: num, title: epTitle, link: "", link480: "", link720: "", link1080: "", link4k: "", audioTracks: [] });
+ s.episodes.push(normalizeEpisodeStructure({ episodeNumber: num, title: epTitle, link: "", link480: "", link720: "", link1080: "", link4k: "", audioTracks: [] }, num - 1));
  copy[sIdx] = s;
  return copy;
  });
@@ -3975,6 +3975,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  link720: ep.link720 || '',
  link1080: ep.link1080 || '',
  link4k: ep.link4k || '',
+ qualityLinks: ep.qualityLinks || {},
+ audioTracks: normalizeAudioTrackList(ep.audioTracks),
+ defaultAudio: normalizeAudioTrackList(ep.audioTracks).find((track: any) => track?.isDefault) || normalizeAudioTrackList(ep.audioTracks)[0] || null,
  })),
  }));
  setSeasonsData(prev => {
@@ -4007,7 +4010,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  link720: ep.link720 || '',
  link1080: ep.link1080 || '',
  link4k: ep.link4k || '',
- audioTracks: Array.isArray(ep.audioTracks) ? ep.audioTracks : ep.audioTracks ? Object.values(ep.audioTracks) : [],
+ qualityLinks: ep.qualityLinks || {},
+ audioTracks: normalizeAudioTrackList(ep.audioTracks),
  }));
 
  const newSeason: Season = {
@@ -4084,7 +4088,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  link720: ep.link720 || '',
  link1080: ep.link1080 || '',
  link4k: ep.link4k || '',
- audioTracks: Array.isArray(ep.audioTracks) ? ep.audioTracks : ep.audioTracks ? Object.values(ep.audioTracks) : [],
+ qualityLinks: ep.qualityLinks || {},
+ audioTracks: normalizeAudioTrackList(ep.audioTracks),
  }));
  setSeasonsData(prev => {
  const copy = [...prev];
