@@ -3169,6 +3169,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  setSeriesForm(syncSeriesLanguageSummary({
  tmdbId: data.tmdbId || "", title: data.title || "", logo: data.logo || "", poster: data.poster || "",
  backdrop: data.backdrop || "", trailer: data.trailer || "", year: data.year || "", rating: data.rating || "",
+  anSlug: data.anSlug || "", animeSaltSlug: data.animeSaltSlug || "", source: data.source || "", sourceName: data.sourceName || "", displayAs: data.displayAs || "",
  language: data.language || "Hindi", baseLanguage: data.baseLanguage || data.language || "Hindi", selectedAdminLanguage: data.selectedAdminLanguage || data.baseLanguage || data.language || "Hindi", availableLanguages: Array.isArray(data.availableLanguages) ? data.availableLanguages : [], category: data.category || "", dubType: data.dubType || "official", storyline: data.storyline || "", visibility: data.visibility || "public",
  weeklyEnabled: data.weeklyEnabled === true, weeklyEveryDays: Math.max(1, Number(data.weeklyEveryDays) || 7), weeklyDaysSinceLast: 0,
  telegramCustomButtonText: data.telegramCustomButton?.text || "",
