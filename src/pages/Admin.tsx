@@ -10944,7 +10944,7 @@ const AnimeSaltManagerSection = ({
   ...season,
   name: season?.name || `Season ${sIdx + 1}`,
   episodes: (Array.isArray(season?.episodes) ? season.episodes : []).map((ep: any, eIdx: number) => {
-  const audioTracks = normalizeAudioTrackList(ep?.audioTracks?.length ? ep.audioTracks : (ep?.defaultAudio ? [ep.defaultAudio] : []));
+  const audioTracks = normalizeAnimeSaltAudioTracks(ep?.audioTracks?.length ? ep.audioTracks : (ep?.defaultAudio ? [ep.defaultAudio] : []));
   const defaultAudio = audioTracks.find((track: any) => track?.isDefault) || audioTracks[0] || null;
   return { ...ep, number: ep?.number || ep?.episodeNumber || eIdx + 1, title: ep?.title || `Episode ${eIdx + 1}`, audioTracks, defaultAudio };
   }),
