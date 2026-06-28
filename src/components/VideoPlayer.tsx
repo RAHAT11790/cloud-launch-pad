@@ -759,15 +759,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   );
 
   const buildReliableHlsSource = useCallback((rawUrl: string) => {
-    // Runtime playback is Firebase-only. If old Firebase rows still contain an
-    // `/an-api/hls?url=...` wrapper, unwrap it instead of calling the API relay.
+    // Runtime playback still reads Firebase-stored URLs only. AnimeSalt CDN does
+    // not send CORS headers for hls.js, so synthetic masters may contain the
+    // `/an-api/hls?url=...` runtime wrapper. Do not unwrap it here; that wrapper
+    // is required for video-only + separate audio playlists to load together.
     const clean = String(rawUrl || "").trim();
     if (!clean) return clean;
-    const unwrapAnRelay = (u: string) => {
-      const m = String(u || "").match(/\/an-api\/hls\?url=([^&]+)/i);
-      if (!m) return u;
-      try { return decodeURIComponent(m[1]); } catch { return u; }
-    };
     if (isDataHlsUrl(clean)) {
       try {
         const comma = clean.indexOf(",");
@@ -775,17 +772,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           const meta = clean.slice(0, comma).toLowerCase();
           const payload = clean.slice(comma + 1);
           const decoded = meta.includes(";base64") ? decodeURIComponent(escape(atob(payload))) : decodeURIComponent(payload);
-          const rewritten = decoded.split(/\r?\n/).map((line) => {
-            const trimmed = line.trim();
-            if (!trimmed) return line;
-            if (trimmed.startsWith("#")) return line.replace(/URI="([^"]+)"/g, (_m, u) => `URI="${unwrapAnRelay(u)}"`);
-            return unwrapAnRelay(trimmed);
-          }).join("\n");
-          return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(rewritten)))}`;
+          return `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(decoded)))}`;
         }
       } catch {}
     }
-    return unwrapAnRelay(clean);
+    return clean;
   }, []);
 
   const currentLangLabel = useMemo(() => {
