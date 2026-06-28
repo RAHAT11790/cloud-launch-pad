@@ -10648,6 +10648,34 @@ const normalizeAnimeSaltManagerItem = (item: any) => ({
  type: normalizeAnimeSaltManagerType(item?.type),
 });
 
+const normalizeAnimeSaltAudioTracks = (tracks: any, defaultAudio?: any) => {
+ const list = Array.isArray(tracks)
+ ? tracks
+ : tracks && typeof tracks === "object"
+ ? Object.values(tracks)
+ : defaultAudio
+ ? [defaultAudio]
+ : [];
+ const cleaned = list.map((track: any, index: number) => {
+ const label = String(track?.label || track?.name || track?.language || `Audio ${index + 1}`).trim();
+ const language = String(track?.language || track?.label || label).trim();
+ const link = String(track?.link || track?.audioUrl || track?.rawAudioUrl || track?.url || track?.uri || "").trim();
+ return {
+ language,
+ label,
+ link,
+ audioUrl: String(track?.audioUrl || link || "").trim(),
+ rawAudioUrl: String(track?.rawAudioUrl || link || "").trim(),
+ isDefault: track?.isDefault === true,
+ };
+ }).filter((track: any) => track.label || track.language || track.link);
+ if (cleaned.length > 0 && !cleaned.some((track: any) => track.isDefault)) {
+ const hindiIdx = cleaned.findIndex((track: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${track.language} ${track.label}`));
+ cleaned[Math.max(0, hindiIdx)].isDefault = true;
+ }
+ return cleaned;
+};
+
 const AnimeSaltManagerSection = ({
  glassCard, inputClass, btnPrimary, btnSecondary, categoryList, selectClass,
 }: {
