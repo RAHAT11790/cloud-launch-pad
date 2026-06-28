@@ -28,6 +28,7 @@ const isDirectMediaPlaybackUrl = (url?: string | null) => {
   // This is still direct media for hls.js; treating it as non-media forces the
   // broken iframe path and makes AN appear fully blocked.
   if (normalized.startsWith("data:application/vnd.apple.mpegurl")) return true;
+  if (normalized.includes("/hls/")) return true;
   return /\.(m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/.test(normalized);
 };
 
@@ -49,6 +50,7 @@ const isAnPlayableHlsUrl = (url?: string | null) => {
   if (/\.key(?:[?#]|$)/i.test(lower) || /(?:^|[?&])key=/.test(lower) || /\b(encryption|license)\b/.test(lower)) return false;
   if (/\.(?:ts|m4s|mp4|js|css|json|jpe?g|png|webp|gif|svg|ico)(?:[?#]|$)/i.test(lower)) return false;
   return lower.startsWith("data:application/vnd.apple.mpegurl")
+    || /\/hls\//i.test(lower)
     || /\.m3u8(?:[?#].*)?$/i.test(lower)
     || /\/hls\/[^?#]+\.m3u8(?:[?#].*)?$/i.test(lower);
 };
@@ -62,16 +64,12 @@ const buildAnAudioHlsPlaybackUrl = (url: string) => {
   return buildAnHlsPlaybackUrl(url);
 };
 
-// Prefer Hindi as the default audio track for AnimeSalt content.
-// Falls back to the first track when no Hindi variant exists.
+// AnimeSalt audio is independent from RS language logic: keep the API/admin
+// order unless one row is explicitly marked default.
 const pickAnDefaultAudioIdx = (audio: Array<{ language?: string; name?: string; uri?: string; isDefault?: boolean }>) => {
   const explicit = audio.findIndex((t) => t?.isDefault === true);
   if (explicit >= 0) return explicit;
-  const idx = audio.findIndex((t) => {
-    const blob = `${t?.language || ""} ${t?.name || ""}`.toLowerCase();
-    return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
-  });
-  return idx >= 0 ? idx : 0;
+  return 0;
 };
 
 const pickAnPreferredQualityIdx = (streams: Array<{ height?: number }>) => {
@@ -363,12 +361,12 @@ const buildAnimeSaltEpisodePlaybackFromFirebase = (ep?: Episode | null) => {
   }));
   const preferred = qualityOptions.find((option) => Number(option.height) === 1080) || qualityOptions[0];
   const normalizedAudio = normalizeAnAudioTracks(audio, streams) || (ep as any).audioTracks;
-  const hindi = (normalizedAudio || []).find((track: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${track?.language || ""} ${track?.label || ""}`));
+  const defaultAudio = (normalizedAudio || []).find((track: any) => track?.isDefault) || normalizedAudio?.[0];
   return {
     src: preferred?.src || buildAnHlsPlaybackUrl(streams[0].url),
     qualityOptions,
     audioTracks: normalizedAudio,
-    preferredLanguage: hindi?.label || hindi?.language || (normalizedAudio?.[0]?.label || normalizedAudio?.[0]?.language),
+    preferredLanguage: defaultAudio?.label || defaultAudio?.language,
   };
 };
 
