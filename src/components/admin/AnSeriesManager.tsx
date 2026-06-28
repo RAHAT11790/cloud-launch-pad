@@ -37,7 +37,9 @@ type RsEpisode = {
   link720?: string;
   link1080?: string;
   link4k?: string;
-  audioTracks?: { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string; isDefault?: boolean }[];
+  qualityLinks?: { default: string; p480: string; p720: string; p1080: string; p4k: string };
+  audioTracks: { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string; isDefault?: boolean }[];
+  defaultAudio?: { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string; isDefault?: boolean } | null;
 };
 
 type RsSeason = { name: string; seasonNumber: number; episodes: RsEpisode[] };
@@ -111,7 +113,8 @@ const cloneSeasonsForAudioLanguage = (seasons: RsSeason[], _language: string): R
     ...episode,
     // AN stores video URLs once per episode. Language selection is handled only
     // through episode.audioTracks; never replace video fields with audio URLs.
-    audioTracks: episode.audioTracks ? [...episode.audioTracks] : undefined,
+    audioTracks: Array.isArray(episode.audioTracks) ? [...episode.audioTracks] : [],
+    defaultAudio: episode.defaultAudio || (Array.isArray(episode.audioTracks) ? episode.audioTracks.find((track) => track?.isDefault) || episode.audioTracks[0] || null : null),
   })),
 }));
 
@@ -201,6 +204,9 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
     episodeNumber: fallback.number,
     title: String(payload?.title || fallback.title || `Episode ${fallback.number}`).trim(),
     link: "",
+    qualityLinks: { default: "", p480: "", p720: "", p1080: "", p4k: "" },
+    audioTracks: [],
+    defaultAudio: null,
   };
   uniqueStreams.forEach((stream) => {
     const field = qualityField(stream.label, stream.height);
@@ -232,8 +238,49 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   const defaultStream = pick1080 || pick720 || pick480;
   episode.link = makeUrl(defaultStream);
   if (!episode.link1080 && pick1080) episode.link1080 = makeUrl(pick1080);
+  episode.qualityLinks = {
+    default: episode.link || episode.link1080 || episode.link720 || episode.link480 || "",
+    p480: episode.link480 || "",
+    p720: episode.link720 || "",
+    p1080: episode.link1080 || episode.link || "",
+    p4k: episode.link4k || "",
+  };
+  const markedDefaultAudio = episode.audioTracks.find((track) => track?.isDefault) || episode.audioTracks[0] || null;
+  episode.defaultAudio = markedDefaultAudio ? { ...markedDefaultAudio, isDefault: true } : null;
+  if (episode.defaultAudio) {
+    episode.audioTracks = episode.audioTracks.map((track) => ({ ...track, isDefault: track === markedDefaultAudio }));
+  }
   return episode;
 };
+
+const episodeQualityStreams = (episode: RsEpisode) => [
+  episode.link480 ? { label: "480p", height: 480, url: episode.link480 } : null,
+  episode.link720 ? { label: "720p", height: 720, url: episode.link720 } : null,
+  (episode.link1080 || episode.link) ? { label: "1080p", height: 1080, url: episode.link1080 || episode.link } : null,
+  episode.link4k ? { label: "4K", height: 2160, url: episode.link4k } : null,
+].filter(Boolean);
+
+const cleanStoredAnEpisodePayload = (episode: RsEpisode, payload: any, fallback: { number: number; title: string }, epSlug: string, savedAt: number) => stripUndefined({
+  slug: epSlug,
+  number: fallback.number,
+  title: episode.title,
+  directUrl: episode.link || episode.link1080 || "",
+  link: episode.link || "",
+  link480: episode.link480 || "",
+  link720: episode.link720 || "",
+  link1080: episode.link1080 || episode.link || "",
+  link4k: episode.link4k || "",
+  qualityLinks: episode.qualityLinks || { default: episode.link || "", p480: episode.link480 || "", p720: episode.link720 || "", p1080: episode.link1080 || episode.link || "", p4k: episode.link4k || "" },
+  sources: [{ type: "video", streams: episodeQualityStreams(episode) }],
+  links: episodeQualityStreams(episode),
+  audioTracks: Array.isArray(episode.audioTracks) ? episode.audioTracks : [],
+  defaultAudio: episode.defaultAudio || (Array.isArray(episode.audioTracks) ? episode.audioTracks.find((track) => track?.isDefault) || episode.audioTracks[0] || null : null),
+  defaultAudioIdx: Math.max(0, (Array.isArray(episode.audioTracks) ? episode.audioTracks : []).findIndex((track: any) => track?.isDefault)),
+  preferredAudio: episode.defaultAudio?.label || episode.defaultAudio?.language || "",
+  subtitles: payload?.subtitles || payload?.subtitleTracks || [],
+  broken: !episode.link,
+  updatedAt: savedAt,
+});
 
 const stripUndefined = <T,>(value: T): T => {
   if (Array.isArray(value)) return value.map(stripUndefined) as T;
