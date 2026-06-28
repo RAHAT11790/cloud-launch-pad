@@ -3633,10 +3633,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  language: "",
  label: "",
  link: "",
- link480: "",
- link720: "",
- link1080: "",
- link4k: "",
+  audioUrl: "",
+  rawAudioUrl: "",
  }), []);
 
  const normalizeLanguageValue = useCallback((value?: string | null) => String(value || "").trim(), []);
@@ -3740,7 +3738,12 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const season = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
  const episode = { ...season.episodes[eIdx] } as any;
  const tracks = Array.isArray(episode.audioTracks) ? [...episode.audioTracks] : [];
- tracks[tIdx] = { ...(tracks[tIdx] || buildEmptyAudioTrack()), [field]: value };
+ const nextTrack: any = { ...(tracks[tIdx] || buildEmptyAudioTrack()), [field]: value };
+ if (field === "link") {
+  nextTrack.audioUrl = value;
+  nextTrack.rawAudioUrl = value;
+ }
+ tracks[tIdx] = nextTrack;
  episode.audioTracks = tracks;
  season.episodes[eIdx] = episode;
  copy[sIdx] = season;
