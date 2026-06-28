@@ -15,6 +15,8 @@ const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: numbe
   return `${window.location.origin}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
 };
 
+const AN_API_HLS_PROXY_PREFIX = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-api/hls`;
+
 const isInvalidPlaybackUrl = (url?: string | null) => {
   const normalized = String(url || "").trim().toLowerCase().split("?")[0].split("#")[0];
   if (!normalized) return true;
@@ -35,12 +37,12 @@ const isDirectMediaPlaybackUrl = (url?: string | null) => {
 const buildAnHlsPlaybackUrl = (url: string) => {
   const raw = String(url || "").trim();
   if (!raw) return raw;
-  // AN playback must be direct HTTPS/HLS only — no proxy wrapper.
-  const proxyMatch = raw.match(/\/an-api\/hls\?url=([^&]+)/i);
-  if (proxyMatch) {
-    try { return decodeURIComponent(proxyMatch[1]); } catch { return raw; }
-  }
-  return raw;
+  if (raw.startsWith("data:application/vnd.apple.mpegurl")) return raw;
+  if (/\/an-api\/hls\?/i.test(raw)) return raw;
+  // Firebase stores raw AnimeSalt video/audio URLs, but Android/desktop hls.js
+  // cannot read AnimeSalt CDN directly because those playlists do not expose
+  // CORS headers. Playback therefore wraps only at runtime; storage stays raw.
+  return AN_API_HLS_PROXY_PREFIX ? `${AN_API_HLS_PROXY_PREFIX}?url=${encodeURIComponent(raw)}` : raw;
 };
 
 const isAnPlayableHlsUrl = (url?: string | null) => {
