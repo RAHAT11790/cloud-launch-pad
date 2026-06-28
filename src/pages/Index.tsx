@@ -298,6 +298,27 @@ const getMovieSrc = (anime: AnimeItem): string => {
   return [anime.movieLink, anime.movieLink1080, anime.movieLink720, anime.movieLink480, anime.movieLink4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
 };
 
+// Convert an AN movie row into the same shape buildAnimeSaltEpisodePlaybackFromFirebase
+// expects, so we get a synthetic HLS master that mounts video + Hindi audio together.
+const movieToAnEpisode = (anime: AnimeItem): Episode => ({
+  episodeNumber: 1,
+  title: anime.title || "Movie",
+  link: anime.movieLink || "",
+  link480: anime.movieLink480 || undefined,
+  link720: anime.movieLink720 || undefined,
+  link1080: anime.movieLink1080 || anime.movieLink || undefined,
+  link4k: anime.movieLink4k || undefined,
+  audioTracks: anime.audioTracks as any,
+});
+
+const isAnMovie = (anime: AnimeItem) =>
+  anime?.type === "movie" && (anime?.source === "animesalt" || anime?.sourceName === "AnimeSalt" || !!anime?.anSlug || !!anime?.animeSaltSlug);
+
+const buildAnMoviePlayback = (anime: AnimeItem) => {
+  if (!isAnMovie(anime)) return null;
+  return buildAnimeSaltEpisodePlaybackFromFirebase(movieToAnEpisode(anime));
+};
+
 const hasStoredFirebasePlayback = (anime: AnimeItem): boolean => {
   if (getMovieSrc(anime)) return true;
   const seasons = resolveAnimeSeasonsForLanguage(anime, anime.baseLanguage || anime.language);
@@ -305,6 +326,14 @@ const hasStoredFirebasePlayback = (anime: AnimeItem): boolean => {
 };
 
 const getMovieQualityOptions = (anime: AnimeItem): { label: string; src: string }[] => {
+  // AN movies must wrap their video-only HLS variants together with the Hindi
+  // audio track via a synthetic master. Raw HLS variant URLs play silent video.
+  if (isAnMovie(anime) && (anime.audioTracks?.length || 0) > 0) {
+    const built = buildAnMoviePlayback(anime);
+    if (built?.qualityOptions?.length) {
+      return built.qualityOptions.map((q) => ({ label: q.label, src: q.src }));
+    }
+  }
   const qualityOptions: { label: string; src: string }[] = [];
   if (!isInvalidPlaybackUrl(anime.movieLink480)) qualityOptions.push({ label: "480p", src: anime.movieLink480! });
   if (!isInvalidPlaybackUrl(anime.movieLink720)) qualityOptions.push({ label: "720p", src: anime.movieLink720! });
