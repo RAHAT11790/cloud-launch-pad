@@ -11819,7 +11819,7 @@ const AnimeSaltManagerSection = ({
  </button>
  </div>
  <div className="px-3 pb-3 flex items-center justify-between">
- <span className="text-[11px] text-[#D1C4E9]">Episodes: {season.episodes.length}</span>
+  <span className="text-[11px] text-[#D1C4E9]">Episodes: {(Array.isArray(season?.episodes) ? season.episodes : []).length}</span>
  <div className="flex gap-1.5 items-center">
  <button onClick={() => { setEpSeasonJsonTarget(sIdx); epSeasonJsonFileRef.current?.click(); }}
  className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:bg-blue-500/40 transition-all flex items-center gap-1">
@@ -11835,8 +11835,10 @@ const AnimeSaltManagerSection = ({
  {/* Episodes expanded */}
  {epEditorExpandedSeason === sIdx && (
  <div className="px-3 pb-3 space-y-2">
- {season.episodes.map((ep: any, eIdx: number) => {
+  {(Array.isArray(season?.episodes) ? season.episodes : []).map((ep: any, eIdx: number) => {
  const hasCustomLink = !!(ep.link || ep.link480 || ep.link720 || ep.link1080 || ep.link4k);
+  const audioTracks = normalizeAnimeSaltAudioTracks(ep?.audioTracks, ep?.defaultAudio);
+  const safeAudioTracks = audioTracks.length > 0 ? audioTracks : [buildAnimeSaltEditorAudioTrack({}, 0, true)];
  return (
  <div key={eIdx} className={`bg-[#1A1A2E] rounded-xl p-3 border ${hasCustomLink ? 'border-green-500/30' : 'border-white/5'}`}>
  <div className="flex items-center justify-between mb-2">
@@ -11869,21 +11871,72 @@ const AnimeSaltManagerSection = ({
  rows={2}
  />
  </div>
- {['480p', '720p', '1080p', '4K'].map(q => {
- const qKey = `link${q === '4K' ? '4k' : q}`;
+  {[
+  { label: '480p', key: 'link480' },
+  { label: '720p', key: 'link720' },
+  { label: '1080p', key: 'link1080' },
+  { label: '4K', key: 'link4k' },
+  ].map(({ label, key }) => {
  return (
- <div key={q}>
- <span className="text-[9px] text-[#957DAD] font-medium mb-1 block">{q}</span>
+  <div key={key} className="rounded-xl border border-cyan-500/15 bg-cyan-500/5 p-2">
+  <span className="text-[9px] text-cyan-300 font-bold mb-1 block">{label} video-only quality URL</span>
  <textarea
- value={ep[qKey] || ''}
- onChange={e => epUpdateEpisodeField(sIdx, eIdx, qKey, e.target.value)}
+  value={ep[key] || ''}
+  onChange={e => epUpdateEpisodeField(sIdx, eIdx, key, e.target.value)}
  className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`}
- placeholder={`${q} link (optional)`}
+  placeholder={`${label} .m3u8 video-only link এখানে paste করো`}
  rows={2}
  />
  </div>
  );
  })}
+  <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-3 space-y-3">
+  <div className="flex items-center justify-between gap-2">
+  <div>
+  <p className="text-[11px] font-bold text-emerald-300">🔊 Episode Audio Storage</p>
+  <p className="text-[9px] text-emerald-200/70">Default audio + যতগুলো extra audio আছে সব URL এখানে store হবে।</p>
+  </div>
+  <button type="button" onClick={() => epAddAudioTrack(sIdx, eIdx)}
+  className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/35 flex items-center gap-1">
+  <Plus size={10} /> Audio
+  </button>
+  </div>
+  {safeAudioTracks.map((track: any, aIdx: number) => {
+  const isDefault = !!track?.isDefault || aIdx === 0 && !safeAudioTracks.some((t: any) => t?.isDefault);
+  return (
+  <div key={aIdx} className={`rounded-xl border p-2.5 space-y-2 ${isDefault ? 'border-yellow-500/40 bg-yellow-500/10' : 'border-white/10 bg-black/20'}`}>
+  <div className="flex items-center justify-between gap-2">
+  <span className={`text-[10px] font-bold ${isDefault ? 'text-yellow-300' : 'text-emerald-300'}`}>{isDefault ? '⭐ Default Audio (Hindi/Primary)' : `Audio ${aIdx + 1}`}</span>
+  <div className="flex items-center gap-1">
+  {!isDefault && <button type="button" onClick={() => epSetDefaultAudioTrack(sIdx, eIdx, aIdx)} className="px-2 py-1 rounded-md text-[9px] bg-yellow-500/15 text-yellow-300 border border-yellow-500/25">Make Default</button>}
+  {safeAudioTracks.length > 1 && <button type="button" onClick={() => epRemoveAudioTrack(sIdx, eIdx, aIdx)} className="p-1 rounded-md bg-red-500/15 text-red-300 border border-red-500/25"><Trash2 size={10} /></button>}
+  </div>
+  </div>
+  <div className="grid grid-cols-2 gap-2">
+  <input
+  value={track?.language || ''}
+  onChange={e => epUpdateAudioTrack(sIdx, eIdx, aIdx, 'language', e.target.value)}
+  className={`${inputClass} !py-2 !text-[10px]`}
+  placeholder="Language (Hindi)"
+  />
+  <input
+  value={track?.label || ''}
+  onChange={e => epUpdateAudioTrack(sIdx, eIdx, aIdx, 'label', e.target.value)}
+  className={`${inputClass} !py-2 !text-[10px]`}
+  placeholder="Label (Hindi)"
+  />
+  </div>
+  <textarea
+  value={track?.link || track?.audioUrl || track?.rawAudioUrl || ''}
+  onChange={e => epUpdateAudioTrack(sIdx, eIdx, aIdx, 'link', e.target.value)}
+  className={`${inputClass} w-full !py-2 !text-[10px] min-h-[48px] resize-none break-all`}
+  placeholder="Audio .m3u8 URL এখানে paste করো"
+  rows={2}
+  />
+  </div>
+  );
+  })}
+  </div>
   <div>
   <span className="text-[10px] text-[#D1C4E9] font-medium mb-1 block">Subtitle / CC (VTT or SRT)</span>
   <textarea value={(ep as any).subtitleTracks?.[0]?.url || ""} onChange={e => epUpdateEpisodeField(sIdx, eIdx, 'subtitleTracks', e.target.value.trim() ? [{ label: 'Default', language: '', url: e.target.value.trim() }] : [])}
