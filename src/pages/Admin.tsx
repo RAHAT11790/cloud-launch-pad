@@ -3125,7 +3125,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  });
  });
  const orderedAnLanguages = Array.from(anLanguages);
- const anBaseLanguage = orderedAnLanguages.find((lang) => /hindi|হিন্দি|हिन्दी|हिंदी/i.test(lang)) || syncedForm.baseLanguage || orderedAnLanguages[0] || "Hindi";
+ const anBaseLanguage = orderedAnLanguages[0] || syncedForm.baseLanguage || "Multi";
  data.seasons = normalizedSeasons;
  data.seasonsByLanguage = { [anBaseLanguage]: normalizedSeasons };
  data.baseLanguage = anBaseLanguage;
@@ -3696,8 +3696,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  })
  .filter((track: any) => String(track.label || track.language || track.link || "").trim());
  if (cleaned.length > 0 && !cleaned.some((track: any) => track.isDefault)) {
- const hindiIdx = cleaned.findIndex((track: any) => /hindi|হিন্দি|हिन्दी|हिंदी|\bhin\b/i.test(`${track.language} ${track.label}`));
- cleaned[Math.max(0, hindiIdx)].isDefault = true;
+ cleaned[0].isDefault = true;
  }
  return cleaned;
  }, [normalizeLanguageValue]);
