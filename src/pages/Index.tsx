@@ -66,9 +66,14 @@ const buildAnAudioHlsPlaybackUrl = (url: string) => {
   return buildAnHlsPlaybackUrl(url);
 };
 
-// AnimeSalt audio is independent from RS language logic: keep the API/admin
-// order unless one row is explicitly marked default.
+// AN default audio policy: Hindi ALWAYS wins when present (overrides Japanese
+// or any other language marked default upstream). Falls back to the first
+// available track only when no Hindi track exists.
+const isHindiAnTrack = (t: any) =>
+  /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t?.language || ""} ${t?.name || ""} ${t?.label || ""}`);
 const pickAnDefaultAudioIdx = (audio: Array<{ language?: string; name?: string; uri?: string; isDefault?: boolean }>) => {
+  const hindi = audio.findIndex(isHindiAnTrack);
+  if (hindi >= 0) return hindi;
   const explicit = audio.findIndex((t) => t?.isDefault === true);
   if (explicit >= 0) return explicit;
   return 0;
