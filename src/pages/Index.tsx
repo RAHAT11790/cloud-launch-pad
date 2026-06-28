@@ -41,6 +41,22 @@ const buildAnHlsPlaybackUrl = (url: string) => {
   return raw;
 };
 
+const isAnPlayableHlsUrl = (url?: string | null) => {
+  const raw = String(url || "").trim();
+  if (!raw) return false;
+  const lower = raw.toLowerCase();
+  if (/\.key(?:[?#]|$)/i.test(lower) || /(?:^|[?&])key=/.test(lower) || /\b(encryption|license)\b/.test(lower)) return false;
+  return lower.startsWith("data:application/vnd.apple.mpegurl")
+    || /\.m3u8(?:[?#].*)?$/i.test(lower)
+    || /\/hls\//i.test(lower)
+    || /as-cdn\d+\.top/i.test(lower);
+};
+
+const getAnAudioUrlFromTrack = (track: any) => {
+  const link = String(track?.link || "").trim();
+  return String(track?.rawAudioUrl || track?.audioUrl || track?.uri || track?.url || (link.startsWith("data:") ? "" : link) || "").trim();
+};
+
 const buildAnAudioHlsPlaybackUrl = (url: string) => {
   return buildAnHlsPlaybackUrl(url);
 };
@@ -98,7 +114,7 @@ const normalizeAnAudioTracks = (
   (streams || []).forEach((stream) => {
     const label = String(stream?.label || "").trim().toLowerCase();
     const url = String(stream?.url || "").trim();
-    if (!label || !url) return;
+    if (!label || !isAnPlayableHlsUrl(url)) return;
     qualityMap.set(label, url);
   });
 
@@ -119,7 +135,7 @@ const normalizeAnAudioTracks = (
       const key = normalized.toLowerCase();
       if (seen.has(key)) return null;
       const uri = String(track?.uri || "").trim();
-      if (!uri) return null;
+      if (!isAnPlayableHlsUrl(uri)) return null;
       seen.add(key);
       const defaultStreamUrl = String(
         streams?.find((stream: any) => Number(stream?.height) === 1080)?.url ||
@@ -130,14 +146,15 @@ const normalizeAnAudioTracks = (
       return {
         language: normalized,
         label: normalized,
-        link: buildAnSyntheticMaster({ url: defaultStreamUrl }, audio, trackIndex),
-        link480: pickStreamUrl("480p"),
-        link720: pickStreamUrl("720p"),
-        link1080: pickStreamUrl("1080p"),
-        link4k: pickStreamUrl("4k") || pickStreamUrl("2160p"),
+        // This is the raw audio HLS URL shown/saved in Admin. Runtime playback
+        // uses buildAnSyntheticMaster() on the selected video quality so video
+        // and audio are mounted together as one HLS master.
+        link: buildAnAudioHlsPlaybackUrl(uri),
+        audioUrl: buildAnAudioHlsPlaybackUrl(uri),
+        rawAudioUrl: uri,
       };
     })
-    .filter(Boolean) as { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
+    .filter(Boolean) as { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string }[];
 };
 
 const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
@@ -152,27 +169,28 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
         bandwidth: Number(entry?.bandwidth || 0) || undefined,
         resolution: entry?.resolution,
       }))
+        .filter((entry: any) => isAnPlayableHlsUrl(entry.url))
     : [];
   const directUrl = String(resolvedPayload?.directUrl || resolvedPayload?.master || resolvedPayload?.videoSource || resolvedPayload?.securedLink || resolvedPayload?.streamUrl || resolvedPayload?.videoUrl || resolvedPayload?.file || "").trim();
   const streams = (
     Array.isArray(primarySource?.streams) && primarySource.streams.length
       ? primarySource.streams
       : (linkStreams.length ? linkStreams : (directUrl ? [{ url: directUrl, label: "Auto" }] : []))
-  ).filter((entry: any) => String(entry?.url || "").trim());
+  ).filter((entry: any) => isAnPlayableHlsUrl(entry?.url));
   const storedAudio = Array.isArray(resolvedPayload?.audioTracks)
     ? resolvedPayload.audioTracks
         .map((track: any) => ({
           language: track?.language || track?.label || track?.name,
           name: track?.label || track?.name || track?.language,
-          uri: track?.rawAudioUrl || track?.audioUrl || track?.uri || track?.url,
+          uri: getAnAudioUrlFromTrack(track),
         }))
-        .filter((entry: any) => String(entry?.uri || "").trim())
+        .filter((entry: any) => isAnPlayableHlsUrl(entry?.uri))
     : [];
   const audio = (
     Array.isArray(primarySource?.audio) && primarySource.audio.length
       ? primarySource.audio
       : (Array.isArray(resolvedPayload?.audio) && resolvedPayload.audio.length ? resolvedPayload.audio : storedAudio)
-  ).filter((entry: any) => String(entry?.uri || "").trim());
+  ).filter((entry: any) => isAnPlayableHlsUrl(entry?.uri));
 
   if (streams.length === 0) return null;
 
@@ -180,6 +198,7 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   const preferredQualityIdx = pickAnPreferredQualityIdx(streams);
   const qualityOptions = streams.map((stream: any) => ({
     label: String(stream?.label || (stream?.height ? `${stream.height}p` : "Auto")).trim() || "Auto",
+    height: Number(stream?.height || String(stream?.label || "").match(/\d{3,4}/)?.[0] || 0) || undefined,
     src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx),
   }));
   qualityOptions.sort((a, b) => {
@@ -192,19 +211,18 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
 
   // Reorder audioTracks so Hindi (when present) is first → VideoPlayer picks
   // it as the default language pill and matching HLS audio track.
+  const preferredQuality = qualityOptions.find((option) => Number(option.height) === 1080) || qualityOptions[0];
   const normalized = normalizeAnAudioTracks(audio, streams);
   const existingAudioTracks = Array.isArray(resolvedPayload?.audioTracks)
     ? resolvedPayload.audioTracks
         .map((track: any) => ({
           language: String(track?.language || track?.label || "").trim(),
           label: String(track?.label || track?.language || "").trim(),
-          link: String(track?.link1080 || track?.link || "").trim(),
-          link480: track?.link480,
-          link720: track?.link720,
-          link1080: track?.link1080,
-          link4k: track?.link4k,
+          link: getAnAudioUrlFromTrack(track),
+          audioUrl: getAnAudioUrlFromTrack(track),
+          rawAudioUrl: getAnAudioUrlFromTrack(track),
         }))
-        .filter((track: any) => track.label && track.link)
+        .filter((track: any) => track.label && isAnPlayableHlsUrl(track.link))
     : undefined;
   let audioTracks = normalized?.length ? normalized : existingAudioTracks;
   if (normalized && normalized.length > 1) {
@@ -217,7 +235,7 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
   }
 
   return {
-    src: qualityOptions[preferredQualityIdx]?.src || qualityOptions[0]?.src || buildAnHlsPlaybackUrl(streams[preferredQualityIdx]?.url || streams[0]?.url || ""),
+    src: preferredQuality?.src || qualityOptions[0]?.src || buildAnHlsPlaybackUrl(streams[preferredQualityIdx]?.url || streams[0]?.url || ""),
     qualityOptions: qualityOptions.length > 1 ? qualityOptions : undefined,
     audioTracks,
     subtitleTracks: undefined,
