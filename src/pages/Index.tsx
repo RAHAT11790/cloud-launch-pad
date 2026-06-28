@@ -47,9 +47,10 @@ const isAnPlayableHlsUrl = (url?: string | null) => {
   if (!raw) return false;
   const lower = raw.toLowerCase();
   if (/\.key(?:[?#]|$)/i.test(lower) || /(?:^|[?&])key=/.test(lower) || /\b(encryption|license)\b/.test(lower)) return false;
+  if (/\.(?:ts|m4s|mp4|js|css|json|jpe?g|png|webp|gif|svg|ico)(?:[?#]|$)/i.test(lower)) return false;
   return lower.startsWith("data:application/vnd.apple.mpegurl")
     || /\.m3u8(?:[?#].*)?$/i.test(lower)
-    || /\/hls\//i.test(lower);
+    || /\/hls\/[^?#]+\.m3u8(?:[?#].*)?$/i.test(lower);
 };
 
 const getAnAudioUrlFromTrack = (track: any) => {
