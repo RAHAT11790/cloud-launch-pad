@@ -2809,6 +2809,15 @@ const Index = () => {
                   let qOpts = getEpisodeQualityOptions(nextEp);
                   let nextAudioTracks = nextEp.audioTracks;
                   let preferredLanguage = (playerState as any)?.selectedLanguage;
+                  if (playerState.anime.source === "animesalt") {
+                    const directFromFirebase = buildAnimeSaltEpisodePlaybackFromFirebase(nextEp);
+                    if (directFromFirebase?.src) {
+                      nextSrc = directFromFirebase.src;
+                      qOpts = directFromFirebase.qualityOptions || [];
+                      nextAudioTracks = directFromFirebase.audioTracks;
+                      preferredLanguage = directFromFirebase.preferredLanguage || preferredLanguage;
+                    }
+                  }
                   if (playerState.anime.source === "animesalt" && String(nextEp.link || "").startsWith("animesalt://")) {
                     const epSlug = String(nextEp.link).replace("animesalt://", "");
                     try {
@@ -2856,6 +2865,14 @@ const Index = () => {
             let nextSrc = getEpisodeSrc(ep);
             let qOpts = getEpisodeQualityOptions(ep);
             let nextAudioTracks = ep.audioTracks || anime.audioTracks;
+            if (anime.source === "animesalt") {
+              const directFromFirebase = buildAnimeSaltEpisodePlaybackFromFirebase(ep);
+              if (directFromFirebase?.src) {
+                nextSrc = directFromFirebase.src;
+                qOpts = directFromFirebase.qualityOptions || [];
+                nextAudioTracks = directFromFirebase.audioTracks;
+              }
+            }
 
             if (anime.source === "animesalt" && String(ep.link || "").startsWith("animesalt://")) {
               const epSlug = String(ep.link).replace("animesalt://", "");
