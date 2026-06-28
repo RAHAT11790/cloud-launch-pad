@@ -293,12 +293,17 @@ function parseMaster(masterUrl: string, body: string) {
 
   streams.sort((a, b) => b.height - a.height);
   const uniqueAudio = uniqueBy(audio, (a) => a.uri);
+  // Default audio policy: Hindi ALWAYS wins. Only fall back to the HLS-declared
+  // default (or the first track) when no Hindi track exists.
+  const hindiIdx = uniqueAudio.findIndex((a: any) => a.isHindi || /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a.name || ""} ${a.language || ""}`));
   const declaredDefaultIdx = uniqueAudio.findIndex((a) => a.default);
+  const defaultIdx = hindiIdx >= 0 ? hindiIdx : (declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0);
+  uniqueAudio.forEach((a: any, i: number) => { a.default = i === defaultIdx; });
   return {
     streams: uniqueBy(streams, (s) => s.url),
     audio: uniqueAudio,
-    defaultAudioIdx: declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0,
-    preferredAudio: uniqueAudio[declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0]?.name || "",
+    defaultAudioIdx: defaultIdx,
+    preferredAudio: uniqueAudio[defaultIdx]?.name || "",
   };
 }
 
