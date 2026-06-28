@@ -3734,7 +3734,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  const getEpisodeTrackForLanguage = useCallback((episode: any, language: string) => {
  const key = normalizeLanguageValue(language).toLowerCase();
- return ((episode?.audioTracks || []) as any[]).find((track) => {
+ const tracks = Array.isArray(episode?.audioTracks) ? episode.audioTracks : episode?.audioTracks && typeof episode.audioTracks === "object" ? Object.values(episode.audioTracks) : [];
+ return (tracks as any[]).find((track) => {
  const label = normalizeLanguageValue(track?.label || track?.language).toLowerCase();
  return !!label && label === key;
  });
