@@ -37,7 +37,7 @@ type RsEpisode = {
   link720?: string;
   link1080?: string;
   link4k?: string;
-  audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
+  audioTracks?: { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string; isDefault?: boolean }[];
 };
 
 type RsSeason = { name: string; seasonNumber: number; episodes: RsEpisode[] };
@@ -77,33 +77,6 @@ const reliableHls = (_base: string, url?: string | null) => {
   return raw;
 };
 
-const proxiedAudio = (base: string, url?: string | null) => {
-  return reliableHls(base, url);
-};
-
-const encodeMaster = (content: string) => `data:application/vnd.apple.mpegurl;base64,${btoa(unescape(encodeURIComponent(content)))}`;
-
-const buildSyntheticMaster = (
-  base: string,
-  stream: { url: string; label?: string; height?: number; bandwidth?: number; resolution?: string },
-  audio: Array<{ uri?: string; name?: string; language?: string }>,
-  defaultAudioIdx = 0,
-) => {
-  const lines = ["#EXTM3U", "#EXT-X-VERSION:6"];
-  audio.forEach((track, index) => {
-    const uri = proxiedAudio(base, track?.uri);
-    if (!uri) return;
-    const name = String(track?.name || track?.language || `Audio ${index + 1}`).replace(/"/g, "").trim();
-    const lang = String(track?.language || name || `aud${index + 1}`).replace(/"/g, "").trim().toLowerCase();
-    lines.push(`#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="${name}",LANGUAGE="${lang}",DEFAULT=${index === defaultAudioIdx ? "YES" : "NO"},AUTOSELECT=YES,URI="${uri}"`);
-  });
-  const audioRef = audio.some((track) => String(track?.uri || "").trim()) ? ',AUDIO="aud"' : "";
-  const height = Number(stream?.height || String(stream?.label || "").match(/\d{3,4}/)?.[0] || 720);
-  lines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${stream.bandwidth || Math.max(height * 5000, 1_500_000)},RESOLUTION=${stream.resolution || `${Math.round((height * 16) / 9)}x${height}`}${audioRef}`);
-  lines.push(reliableHls(base, stream.url));
-  return encodeMaster(lines.join("\n"));
-};
-
 const pickDefaultAudioIdx = (audio: Array<{ language?: string; name?: string }>) => {
   const hindi = audio.findIndex((track) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${track?.language || ""} ${track?.name || ""}`));
   return hindi >= 0 ? hindi : 0;
@@ -126,22 +99,23 @@ const pickTrackForLanguage = (tracks: NonNullable<RsEpisode["audioTracks"]> | un
   return (tracks || []).find((track) => audioLanguageKey(track.language) === wanted || audioLanguageKey(track.label) === wanted);
 };
 
-const cloneSeasonsForAudioLanguage = (seasons: RsSeason[], language: string): RsSeason[] => seasons.map((season) => ({
+const cloneSeasonsForAudioLanguage = (seasons: RsSeason[], _language: string): RsSeason[] => seasons.map((season) => ({
   ...season,
-  episodes: (season.episodes || []).map((episode) => {
-    const track = pickTrackForLanguage(episode.audioTracks, language);
-    if (!track) return { ...episode, audioTracks: episode.audioTracks ? [...episode.audioTracks] : undefined };
-    return stripUndefined({
-      ...episode,
-      link: track.link || episode.link,
-      link480: track.link480 || episode.link480,
-      link720: track.link720 || episode.link720,
-      link1080: track.link1080 || episode.link1080,
-      link4k: track.link4k || episode.link4k,
-      audioTracks: episode.audioTracks ? [...episode.audioTracks] : undefined,
-    });
-  }),
+  episodes: (season.episodes || []).map((episode) => stripUndefined({
+    ...episode,
+    // AN stores video URLs once per episode. Language selection is handled only
+    // through episode.audioTracks; never replace video fields with audio URLs.
+    audioTracks: episode.audioTracks ? [...episode.audioTracks] : undefined,
+  })),
 }));
+
+const isLikelyHlsPlaylistUrl = (value?: string | null) => {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  const lower = raw.toLowerCase();
+  if (/\.key(?:[?#]|$)/i.test(lower) || /(?:^|[?&])key=/.test(lower) || /\b(encryption|license)\b/.test(lower)) return false;
+  return /\.m3u8(?:[?#].*)?$/i.test(lower) || /\/hls\//i.test(lower) || /as-cdn\d+\.top/i.test(lower);
+};
 
 const normalizePlaybackPayload = (payload: any) => payload?.data && !payload?.sources ? payload.data : payload;
 
@@ -165,7 +139,8 @@ const extractStreams = (payload: any) => {
       height: Number(entry.height || String(entry.label || "").match(/\d{3,4}/)?.[0] || 0) || undefined,
       bandwidth: Number(entry.bandwidth || 0) || undefined,
       resolution: entry.resolution,
-    }));
+    }))
+    .filter((entry) => isLikelyHlsPlaylistUrl(entry.url));
 };
 
 const extractAudio = (payload: any) => {
@@ -175,7 +150,7 @@ const extractAudio = (payload: any) => {
   const fromTopLevel = Array.isArray(payload?.audio) ? payload.audio : [];
   const fromStoredTracks = Array.isArray(payload?.audioTracks)
     ? payload.audioTracks.map((track: any) => ({
-        uri: track?.rawAudioUrl || track?.audioUrl || track?.uri || track?.url,
+        uri: track?.rawAudioUrl || track?.audioUrl || track?.uri || track?.url || (String(track?.link || "").startsWith("data:") ? "" : track?.link),
         name: track?.label || track?.name || track?.language,
         language: track?.language || track?.label || track?.name,
       }))
@@ -189,7 +164,7 @@ const extractAudio = (payload: any) => {
     }))
     .filter((track) => {
       const key = `${track.language.toLowerCase()}|${track.uri}`;
-      if (!track.uri || seen.has(key)) return false;
+      if (!track.uri || seen.has(key) || !isLikelyHlsPlaylistUrl(track.uri)) return false;
       seen.add(key);
       return true;
     });
@@ -201,12 +176,10 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   const audio = extractAudio(payload);
   const defaultAudioIdx = typeof payload?.defaultAudioIdx === "number" ? payload.defaultAudioIdx : pickDefaultAudioIdx(audio);
   const preferredStream = streams.find((stream) => Number(stream.height) === 1080) || streams.find((stream) => Number(stream.height) >= 720) || streams[0];
-  const makeUrl = (stream?: any, audioIdx = defaultAudioIdx) => {
+  const makeUrl = (stream?: any) => {
     if (!stream?.url) return "";
     const raw = String(stream.url || "").trim();
-    const isHls = /\.m3u8(?:[?#].*)?$/i.test(raw) || /\/hls\//i.test(raw) || /as-cdn\d+\.top/i.test(raw);
-    if (!isHls) return raw;
-    return audio.length ? buildSyntheticMaster(base, stream, audio, audioIdx) : reliableHls(base, raw);
+    return reliableHls(base, raw);
   };
   const episode: RsEpisode = {
     episodeNumber: fallback.number,
@@ -221,19 +194,17 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
     episode.audioTracks = audio.map((track, index) => {
       const label = String(track.name || track.language || `Audio ${index + 1}`).trim();
       const rawAudioUrl = String(track.uri || "").trim();
-      const proxiedAudioUrl = proxiedAudio(base, rawAudioUrl);
-      const mapped: NonNullable<RsEpisode["audioTracks"]>[number] & { audioUrl?: string; rawAudioUrl?: string; isDefault?: boolean } = {
+      const audioUrl = reliableHls(base, rawAudioUrl);
+      const mapped: NonNullable<RsEpisode["audioTracks"]>[number] = {
         language: String(track.language || label).trim(),
         label,
-        link: makeUrl(preferredStream, index),
-        audioUrl: proxiedAudioUrl,
+        // Store the raw audio HLS URL in the audio row. Video fields above stay
+        // raw video-only 480/720/1080 URLs so Admin can see/edit the real links.
+        link: audioUrl,
+        audioUrl,
         rawAudioUrl,
         isDefault: index === defaultAudioIdx,
       };
-      streams.forEach((stream) => {
-        const field = qualityField(stream.label, stream.height);
-        if (field && !(mapped as any)[field]) (mapped as any)[field] = makeUrl(stream, index);
-      });
       return mapped;
     });
   }
@@ -242,23 +213,7 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   // whenever 1080p exists, not a generic/auto/first URL. Keep the explicit
   // 1080p field populated with the same playable source as well.
   episode.link = makeUrl(streams.find((stream) => Number(stream.height) === 1080) || preferredStream);
-  if (episode.audioTracks?.length) {
-    const defaultTrack = episode.audioTracks.find((track: any) => track.isDefault) || episode.audioTracks[defaultAudioIdx] || episode.audioTracks[0];
-    episode.audioTracks = episode.audioTracks.map((track) => ({
-      ...track,
-      link: track.link1080 || track.link,
-    }));
-    const defaultMappedTrack = defaultTrack
-      ? episode.audioTracks.find((track) => audioLanguageKey(track.language) === audioLanguageKey(defaultTrack.language) || audioLanguageKey(track.label) === audioLanguageKey(defaultTrack.label))
-      : undefined;
-    if (defaultMappedTrack?.link) {
-      episode.link = defaultMappedTrack.link;
-      episode.link480 = defaultMappedTrack.link480 || episode.link480;
-      episode.link720 = defaultMappedTrack.link720 || episode.link720;
-      episode.link1080 = defaultMappedTrack.link1080 || episode.link1080;
-      episode.link4k = defaultMappedTrack.link4k || episode.link4k;
-    }
-  }
+  if (!episode.link1080 && episode.link) episode.link1080 = episode.link;
   return episode;
 };
 
