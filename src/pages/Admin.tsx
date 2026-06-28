@@ -3083,7 +3083,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  });
  const syncedForm = syncSeriesLanguageSummary(seriesForm, nextMap);
  setSeriesForm(syncedForm);
- const data = {
+ const data: any = {
  ...syncedForm,
  cast: seriesCast,
  audioTracks: Array.isArray(syncedForm.audioTracks)
@@ -3136,7 +3136,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  data.source = "animesalt";
  data.sourceName = "AnimeSalt";
  }
- setSeriesSeasonsByLanguage(nextMap);
+ setSeriesSeasonsByLanguage(isAnSeriesSave ? data.seasonsByLanguage : nextMap);
  let saveRef;
  let newId = seriesEditId || "";
  if (seriesEditId) {
