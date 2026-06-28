@@ -697,7 +697,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
             return (
               <div key={item.slug} className="bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-all">
                 <div className="flex gap-3.5">
-                  <img src={item.poster || ""} alt="" className="w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0 bg-black/40" loading="lazy" />
+                  <CachedImg src={item.poster || ""} alt="" className="w-20 h-[115px] rounded-[10px] object-cover flex-shrink-0 bg-black/40" loading="lazy" decoding="async" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start gap-2">
                       <h4 className="text-sm font-semibold mb-1 truncate flex-1">{item.title || "Untitled"}</h4>
