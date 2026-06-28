@@ -3101,6 +3101,41 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  : null,
  updatedAt: Date.now(),
  };
+ const isAnSeriesSave = !!(syncedForm?.anSlug || syncedForm?.animeSaltSlug || /animesalt/i.test(String(syncedForm?.sourceName || "")));
+ if (isAnSeriesSave) {
+ const normalizedSeasons = cloneSeasonList(seasonsData);
+ const anLanguages = new Set<string>();
+ normalizedSeasons.forEach((season: any) => {
+ (Array.isArray(season?.episodes) ? season.episodes : []).forEach((ep: any) => {
+ ep.audioTracks = normalizeAudioTrackList(ep.audioTracks);
+ const defaultTrack = ep.audioTracks.find((track: any) => track?.isDefault) || ep.audioTracks[0] || null;
+ ep.defaultAudio = defaultTrack ? { ...defaultTrack, isDefault: true } : null;
+ if (ep.defaultAudio) ep.audioTracks = ep.audioTracks.map((track: any) => ({ ...track, isDefault: track === defaultTrack }));
+ ep.qualityLinks = {
+ default: ep.link || ep.link1080 || ep.link720 || ep.link480 || "",
+ p480: ep.link480 || "",
+ p720: ep.link720 || "",
+ p1080: ep.link1080 || ep.link || "",
+ p4k: ep.link4k || "",
+ };
+ ep.audioTracks.forEach((track: any) => {
+ const label = normalizeLanguageValue(track?.label || track?.language);
+ if (label) anLanguages.add(label);
+ });
+ });
+ });
+ const orderedAnLanguages = Array.from(anLanguages);
+ const anBaseLanguage = orderedAnLanguages.find((lang) => /hindi|হিন্দি|हिन्दी|हिंदी/i.test(lang)) || syncedForm.baseLanguage || orderedAnLanguages[0] || "Hindi";
+ data.seasons = normalizedSeasons;
+ data.seasonsByLanguage = { [anBaseLanguage]: normalizedSeasons };
+ data.baseLanguage = anBaseLanguage;
+ data.selectedAdminLanguage = anBaseLanguage;
+ data.availableLanguages = orderedAnLanguages.length ? orderedAnLanguages : [anBaseLanguage];
+ data.language = orderedAnLanguages.length > 2 ? "Multiple" : orderedAnLanguages.length === 2 ? "Dual" : anBaseLanguage;
+ data.audioTracks = orderedAnLanguages.map((lang) => ({ language: lang, label: lang, link: "" }));
+ data.source = "animesalt";
+ data.sourceName = "AnimeSalt";
+ }
  setSeriesSeasonsByLanguage(nextMap);
  let saveRef;
  let newId = seriesEditId || "";
