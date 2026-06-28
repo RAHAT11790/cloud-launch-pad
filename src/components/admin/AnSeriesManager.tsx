@@ -92,7 +92,18 @@ const extractLikelyHlsUrlFromText = (value?: string | null) => {
   return raw;
 };
 
+const isHindiAudioEntry = (track: any) => {
+  const blob = `${track?.language || ""} ${track?.name || ""} ${track?.label || ""}`.toLowerCase();
+  return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
+};
+
+// Default audio policy: Hindi ALWAYS wins when present. If the upstream marks
+// some other language as default (e.g. Japanese), we override it here so that
+// every AN series/movie stored in Firebase opens in Hindi by default. Fallback
+// to the first track only when no Hindi track exists at all.
 const pickDefaultAudioIdx = (audio: Array<{ language?: string; name?: string }>) => {
+  const hindi = audio.findIndex(isHindiAudioEntry);
+  if (hindi >= 0) return hindi;
   const explicit = audio.findIndex((track: any) => track?.default === true || track?.isDefault === true);
   return explicit >= 0 ? explicit : 0;
 };
