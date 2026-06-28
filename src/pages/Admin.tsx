@@ -3702,8 +3702,19 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  }, [normalizeLanguageValue]);
 
  const normalizeEpisodeStructure = useCallback((episode: any, index = 0): Episode => {
- const audioTracks = normalizeAudioTrackList(episode?.audioTracks);
- const defaultAudio = audioTracks.find((track: any) => track?.isDefault) || audioTracks[0] || null;
+ const audioTracks = normalizeAudioTrackList(
+  Array.isArray(episode?.audioTracks) && episode.audioTracks.length > 0
+   ? episode.audioTracks
+   : episode?.defaultAudio
+    ? [episode.defaultAudio]
+    : [],
+ );
+ const defaultAudioIndex = audioTracks.findIndex((track: any) => track?.isDefault);
+ const resolvedAudioTracks = audioTracks.map((track: any, idx: number) => ({
+  ...track,
+  isDefault: defaultAudioIndex >= 0 ? idx === defaultAudioIndex : idx === 0,
+ }));
+ const defaultAudio = resolvedAudioTracks.find((track: any) => track?.isDefault) || resolvedAudioTracks[0] || null;
  const link = String(episode?.link || episode?.link1080 || episode?.directUrl || episode?.movieLink || "").trim();
  const link480 = String(episode?.link480 || episode?.qualityLinks?.p480 || "").trim();
  const link720 = String(episode?.link720 || episode?.qualityLinks?.p720 || "").trim();
@@ -3724,7 +3735,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  p1080: link1080 || link,
  p4k: link4k,
  },
- audioTracks,
+ audioTracks: resolvedAudioTracks,
  defaultAudio,
  subtitleTracks: Array.isArray(episode?.subtitleTracks) ? episode.subtitleTracks : [],
  };
