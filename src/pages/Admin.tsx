@@ -5898,7 +5898,9 @@ ${tgBulkFooter}
  if (ep.link720) epData.link720 = ep.link720;
  if (ep.link1080) epData.link1080 = ep.link1080;
  if (ep.link4k) epData.link4k = ep.link4k;
+ if ((ep as any).qualityLinks) epData.qualityLinks = (ep as any).qualityLinks;
  if ((ep as any).audioTracks?.length) epData.audioTracks = (ep as any).audioTracks;
+ if ((ep as any).defaultAudio) epData.defaultAudio = (ep as any).defaultAudio;
  return epData;
  }),
  })),
