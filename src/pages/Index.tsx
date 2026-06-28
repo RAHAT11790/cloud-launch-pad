@@ -18,6 +18,7 @@ const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: numbe
 const isInvalidPlaybackUrl = (url?: string | null) => {
   const normalized = String(url || "").trim().toLowerCase().split("?")[0].split("#")[0];
   if (!normalized) return true;
+  if (/\.key$/i.test(normalized) || /(?:^|[?&])key=/i.test(String(url || ""))) return true;
   return /\.(avif|gif|jpe?g|png|svg|webp|bmp)$/i.test(normalized);
 };
 
@@ -48,8 +49,7 @@ const isAnPlayableHlsUrl = (url?: string | null) => {
   if (/\.key(?:[?#]|$)/i.test(lower) || /(?:^|[?&])key=/.test(lower) || /\b(encryption|license)\b/.test(lower)) return false;
   return lower.startsWith("data:application/vnd.apple.mpegurl")
     || /\.m3u8(?:[?#].*)?$/i.test(lower)
-    || /\/hls\//i.test(lower)
-    || /as-cdn\d+\.top/i.test(lower);
+    || /\/hls\//i.test(lower);
 };
 
 const getAnAudioUrlFromTrack = (track: any) => {
@@ -287,11 +287,11 @@ const getAnimeSaltDirectState = async (episodeSlug: string, forceRefresh = false
 // Helper: get best available src from episode (fallback if default link is empty)
 const getEpisodeSrc = (ep?: Episode | null): string => {
   if (!ep) return "";
-  return [ep.link, ep.link480, ep.link720, ep.link1080, ep.link4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
+  return [ep.link, ep.link1080, ep.link720, ep.link480, ep.link4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
 };
 
 const getMovieSrc = (anime: AnimeItem): string => {
-  return [anime.movieLink, anime.movieLink480, anime.movieLink720, anime.movieLink1080, anime.movieLink4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
+  return [anime.movieLink, anime.movieLink1080, anime.movieLink720, anime.movieLink480, anime.movieLink4k].find((url) => !isInvalidPlaybackUrl(url)) || "";
 };
 
 const hasStoredFirebasePlayback = (anime: AnimeItem): boolean => {
@@ -316,6 +316,53 @@ const getEpisodeQualityOptions = (ep: Episode): { label: string; src: string }[]
   if (!isInvalidPlaybackUrl(ep.link1080)) qualityOptions.push({ label: "1080p", src: ep.link1080! });
   if (!isInvalidPlaybackUrl(ep.link4k)) qualityOptions.push({ label: "4K", src: ep.link4k! });
   return qualityOptions;
+};
+
+const buildAnimeSaltEpisodePlaybackFromFirebase = (ep?: Episode | null) => {
+  if (!ep) return null;
+  const pushStream = (list: any[], label: string, url?: string | null, height?: number) => {
+    const clean = String(url || "").trim();
+    if (!isAnPlayableHlsUrl(clean)) return;
+    if (list.some((item) => item.url === clean)) return;
+    list.push({ label, url: clean, height });
+  };
+
+  const streams: any[] = [];
+  pushStream(streams, "480p", ep.link480, 480);
+  pushStream(streams, "720p", ep.link720, 720);
+  pushStream(streams, "1080p", ep.link1080 || ep.link, 1080);
+  pushStream(streams, "4K", ep.link4k, 2160);
+  pushStream(streams, "Auto", ep.link, Number(String(ep.link || "").match(/(480|720|1080|2160)/)?.[1]) || undefined);
+  if (streams.length === 0) return null;
+
+  const audio = (Array.isArray((ep as any).audioTracks) ? (ep as any).audioTracks : [])
+    .map((track: any, index: number) => {
+      const uri = getAnAudioUrlFromTrack(track);
+      if (!isAnPlayableHlsUrl(uri)) return null;
+      const label = String(track?.label || track?.language || `Audio ${index + 1}`).trim();
+      return {
+        language: String(track?.language || label).trim(),
+        name: label,
+        uri,
+      };
+    })
+    .filter(Boolean) as Array<{ language?: string; name?: string; uri?: string }>;
+
+  const defaultAudioIdx = pickAnDefaultAudioIdx(audio);
+  const qualityOptions = streams.map((stream) => ({
+    label: stream.label,
+    height: stream.height,
+    src: buildAnSyntheticMaster(stream, audio, defaultAudioIdx),
+  }));
+  const preferred = qualityOptions.find((option) => Number(option.height) === 1080) || qualityOptions[0];
+  const normalizedAudio = normalizeAnAudioTracks(audio, streams) || (ep as any).audioTracks;
+  const hindi = (normalizedAudio || []).find((track: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${track?.language || ""} ${track?.label || ""}`));
+  return {
+    src: preferred?.src || buildAnHlsPlaybackUrl(streams[0].url),
+    qualityOptions,
+    audioTracks: normalizedAudio,
+    preferredLanguage: hindi?.label || hindi?.language || (normalizedAudio?.[0]?.label || normalizedAudio?.[0]?.language),
+  };
 };
 
 const splitLanguageTokens = (value: string | undefined | null) =>
