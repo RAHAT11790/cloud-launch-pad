@@ -5674,8 +5674,7 @@ ${tgBulkFooter}
  <textarea value={(currentLanguageFields as any)[q] || ""} onChange={e => updateSeriesEpisodeLanguageLink(sIdx, eIdx, q, e.target.value, selectedAdminLanguage)}
  className={`${inputClass} w-full !py-2 !text-[10px] min-h-[44px] resize-none break-all`} placeholder={`${q === "link480" ? "480p" : q === "link720" ? "720p" : q === "link1080" ? "1080p" : "4K"} link (optional)`} rows={2} />
  </div>
- );
- })}
+ ))}
  </div>
  </div>
  )}
@@ -5736,7 +5735,8 @@ ${tgBulkFooter}
  </div>
  )}
  </div>
- ))}
+ );
+ })}
  </div>
 
  {/* Inline URL Changer for current series */}
