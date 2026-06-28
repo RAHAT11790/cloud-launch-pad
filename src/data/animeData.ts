@@ -12,10 +12,13 @@ export interface AudioTrack {
   language: string;
   label: string;
   link: string;
+  audioUrl?: string;
+  rawAudioUrl?: string;
   link480?: string;
   link720?: string;
   link1080?: string;
   link4k?: string;
+  isDefault?: boolean;
 }
 
 export interface SubtitleTrack {
