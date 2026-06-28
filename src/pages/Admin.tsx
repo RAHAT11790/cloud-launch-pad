@@ -11067,17 +11067,7 @@ const AnimeSaltManagerSection = ({
  // Multiple seasons
  const newSeasons = jsonData.seasons.map((s: any, sIdx: number) => ({
  name: s.name || `Season ${sIdx + 1}`,
- episodes: (s.episodes || []).map((ep: any, eIdx: number) => ({
- number: ep.episodeNumber || ep.number || eIdx + 1,
- title: ep.title || `Episode ${ep.episodeNumber || ep.number || eIdx + 1}`,
- slug: '',
- hasAnimeSaltLink: false,
- link: ep.link || '',
- link480: ep.link480 || '',
- link720: ep.link720 || '',
- link1080: ep.link1080 || '',
- link4k: ep.link4k || '',
- })),
+  episodes: (Array.isArray(s?.episodes) ? s.episodes : []).map((ep: any, eIdx: number) => normalizeAnimeSaltEditorEpisode({ ...ep, slug: '', hasAnimeSaltLink: false }, eIdx)),
  }));
  setEpEditorSeasons(prev => {
  const updated = [...prev, ...newSeasons];
@@ -11099,17 +11089,7 @@ const AnimeSaltManagerSection = ({
  return;
  }
 
- const mappedEpisodes = episodes.map((ep: any, eIdx: number) => ({
- number: ep.episodeNumber || ep.number || eIdx + 1,
- title: ep.title || `Episode ${ep.episodeNumber || ep.number || eIdx + 1}`,
- slug: '',
- hasAnimeSaltLink: false,
- link: ep.link || '',
- link480: ep.link480 || '',
- link720: ep.link720 || '',
- link1080: ep.link1080 || '',
- link4k: ep.link4k || '',
- }));
+  const mappedEpisodes = episodes.map((ep: any, eIdx: number) => normalizeAnimeSaltEditorEpisode({ ...ep, slug: '', hasAnimeSaltLink: false }, eIdx));
 
  const newSeason = {
  name: seasonName || `Season ${epEditorSeasons.length + 1}`,
@@ -11176,17 +11156,7 @@ const AnimeSaltManagerSection = ({
  return;
  }
  if (episodes.length === 0) { toast.error('No episodes found'); return; }
- const mapped = episodes.map((ep: any, eIdx: number) => ({
- number: ep.episodeNumber || ep.number || eIdx + 1,
- title: ep.title || `Episode ${ep.episodeNumber || ep.number || eIdx + 1}`,
- slug: '',
- hasAnimeSaltLink: false,
- link: ep.link || '',
- link480: ep.link480 || '',
- link720: ep.link720 || '',
- link1080: ep.link1080 || '',
- link4k: ep.link4k || '',
- }));
+  const mapped = episodes.map((ep: any, eIdx: number) => normalizeAnimeSaltEditorEpisode({ ...ep, slug: '', hasAnimeSaltLink: false }, eIdx));
  setEpEditorSeasons(prev => {
  const copy = [...prev];
  const existing = [...(copy[sIdx]?.episodes || [])];
@@ -11226,17 +11196,7 @@ const AnimeSaltManagerSection = ({
  if (Array.isArray(parsed)) eps = parsed;
  else if (parsed.episodes && Array.isArray(parsed.episodes)) eps = parsed.episodes;
  eps.forEach((ep: any, eIdx: number) => {
- allEpisodes.push({
- number: ep.episodeNumber || ep.number || eIdx + 1,
- title: ep.title || `Episode ${ep.episodeNumber || ep.number || eIdx + 1}`,
- slug: '',
- hasAnimeSaltLink: false,
- link: ep.link || '',
- link480: ep.link480 || '',
- link720: ep.link720 || '',
- link1080: ep.link1080 || '',
- link4k: ep.link4k || '',
- });
+  allEpisodes.push(normalizeAnimeSaltEditorEpisode({ ...ep, slug: '', hasAnimeSaltLink: false }, eIdx));
  });
  processed++;
  } catch { failed++; }
@@ -11282,9 +11242,9 @@ const AnimeSaltManagerSection = ({
  const epAddEpisode = (sIdx: number) => {
  setEpEditorSeasons(prev => {
  const copy = [...prev];
- const s = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
+  const s = { ...copy[sIdx], episodes: [...(Array.isArray(copy[sIdx]?.episodes) ? copy[sIdx].episodes : [])] };
  const num = s.episodes.length + 1;
- s.episodes.push({ number: num, title: `Episode ${num}`, slug: '', hasAnimeSaltLink: false, link: '', link480: '', link720: '', link1080: '', link4k: '' });
+  s.episodes.push(normalizeAnimeSaltEditorEpisode({ number: num, title: `Episode ${num}` }, num - 1));
  copy[sIdx] = s;
  return copy;
  });
@@ -11294,7 +11254,7 @@ const AnimeSaltManagerSection = ({
  if (!confirm('this episode delete Continue?')) return;
  setEpEditorSeasons(prev => {
  const copy = [...prev];
- const s = { ...copy[sIdx], episodes: copy[sIdx].episodes.filter((_: any, i: number) => i !== eIdx) };
+  const s = { ...copy[sIdx], episodes: (Array.isArray(copy[sIdx]?.episodes) ? copy[sIdx].episodes : []).filter((_: any, i: number) => i !== eIdx) };
  s.episodes = s.episodes.map((ep: any, i: number) => ({ ...ep, number: i + 1 }));
  copy[sIdx] = s;
  return copy;
@@ -11304,7 +11264,7 @@ const AnimeSaltManagerSection = ({
  const epUpdateEpisodeField = (sIdx: number, eIdx: number, field: string, value: any) => {
  setEpEditorSeasons(prev => {
  const copy = [...prev];
- const s = { ...copy[sIdx], episodes: [...copy[sIdx].episodes] };
+  const s = { ...copy[sIdx], episodes: [...(Array.isArray(copy[sIdx]?.episodes) ? copy[sIdx].episodes : [])] };
  s.episodes[eIdx] = { ...s.episodes[eIdx], [field]: value };
  copy[sIdx] = s;
  return copy;
