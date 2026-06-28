@@ -188,6 +188,8 @@ interface AudioTrackOption {
   language: string;
   label: string;
   src?: string; // If set, switch to this URL for this language
+  audioUrl?: string;
+  rawAudioUrl?: string;
   src480?: string;
   src720?: string;
   src1080?: string;
@@ -216,7 +218,7 @@ interface VideoPlayerProps {
   onNextEpisode?: () => void;
   episodeList?: { number: number; title?: string; active: boolean; onClick: () => void }[];
   qualityOptions?: QualityOption[];
-  audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
+  audioTracks?: { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
   subtitleTracks?: { language?: string; label: string; url: string }[];
   animeId?: string;
   onSaveProgress?: (currentTime: number, duration: number) => void;
@@ -859,7 +861,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       unique.set(label.toLowerCase(), {
         language: getPrimaryLanguageToken(track.language || label) || label,
         label,
-        link: String(track.link || src || "").trim(),
+        link: String(track.link || track.audioUrl || track.rawAudioUrl || src || "").trim(),
+        audioUrl: (track as any).audioUrl,
+        rawAudioUrl: (track as any).rawAudioUrl,
         link480: track.link480,
         link720: track.link720,
         link1080: track.link1080,
@@ -2485,7 +2489,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // Add manual audio tracks from props
     if (propAudioTracks?.length) {
       propAudioTracks.forEach(t => {
-        tracks.push({ language: t.language, label: t.label, src: t.link, src480: t.link480, src720: t.link720, src1080: t.link1080, src4k: t.link4k });
+        tracks.push({ language: t.language, label: t.label, src: t.link || t.audioUrl || t.rawAudioUrl, audioUrl: t.audioUrl, rawAudioUrl: t.rawAudioUrl, src480: t.link480, src720: t.link720, src1080: t.link1080, src4k: t.link4k });
       });
     }
     setAudioTrackOptions(tracks);
@@ -2563,6 +2567,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setCurrentAudioTrack(track.label);
       setSelectedLanguageLabel(track.label || track.language || "");
     } else if (track.src) {
+      if (isAnimeSaltContent && isHlsLikeUrl(track.src) && !isDataHlsUrl(track.src)) {
+        // For AnimeSalt the prop track URL is an audio-only HLS rendition.
+        // Never replace the video source with that URL; real switching must go
+        // through hls.js audioTrack from the synthetic multi-audio master.
+        setCurrentAudioTrack(track.label);
+        setSelectedLanguageLabel(track.label || track.language || "");
+        setShowAudioPanel(false);
+        return;
+      }
       // Pick quality-matched audio URL based on current quality selection
       let audioUrl = track.src;
       const q = currentQuality.toLowerCase();
