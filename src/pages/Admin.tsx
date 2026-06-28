@@ -10874,7 +10874,8 @@ const AnimeSaltManagerSection = ({
 
  if (!backdrop) backdrop = poster;
 
- await set(ref(db, `animesaltSelected/${item.slug}`), {
+  const existingSelected = selectedItems[item.slug] || {};
+  await set(ref(db, `animesaltSelected/${item.slug}`), {
  title: item.title,
  poster,
  backdrop,
@@ -10884,6 +10885,8 @@ const AnimeSaltManagerSection = ({
  category: item._rematch ? (item._savedCategory || addCategory) : addCategory,
  type: item.type || 'series',
  tmdbId,
+  customSeasons: Array.isArray(existingSelected?.customSeasons) ? existingSelected.customSeasons : (Array.isArray(item?.customSeasons) ? item.customSeasons : []),
+  episodeOverrides: existingSelected?.episodeOverrides || null,
  addedAt: item._rematch ? (selectedItems[item.slug]?.addedAt || Date.now()) : Date.now(),
  });
  toast.success(item._rematch ? `✅ "${item.title}" TMDB update done!` : `✅ "${item.title}" add done!`);
@@ -11277,7 +11280,10 @@ const AnimeSaltManagerSection = ({
   const s = { ...copy[sIdx], episodes: [...(Array.isArray(copy[sIdx]?.episodes) ? copy[sIdx].episodes : [])] };
   const ep = normalizeAnimeSaltEditorEpisode(s.episodes[eIdx] || {}, eIdx);
   const tracks = [...(Array.isArray(ep.audioTracks) ? ep.audioTracks : [])];
-  tracks[aIdx] = { ...(tracks[aIdx] || buildAnimeSaltEditorAudioTrack({}, aIdx, aIdx === 0)), [field]: value };
+  const existingTrack = tracks[aIdx] || buildAnimeSaltEditorAudioTrack({}, aIdx, aIdx === 0);
+  tracks[aIdx] = field === 'link'
+  ? { ...existingTrack, link: value, audioUrl: value, rawAudioUrl: value }
+  : { ...existingTrack, [field]: value };
   const normalized = normalizeAnimeSaltAudioTracks(tracks);
   const defaultAudio = normalized.find((track: any) => track?.isDefault) || normalized[0] || null;
   s.episodes[eIdx] = { ...ep, audioTracks: normalized, defaultAudio };
@@ -11351,6 +11357,7 @@ const AnimeSaltManagerSection = ({
   }));
   // Save full custom seasons data to Firebase
   await set(ref(db, `animesaltSelected/${epEditorSlug}/customSeasons`), sanitizedSeasons);
+  setEpEditorSeasons(sanitizedSeasons);
  // Also generate episodeOverrides for backward compatibility with playback
  const overrides: Record<string, any> = {};
   sanitizedSeasons.forEach((season, sIdx) => {
