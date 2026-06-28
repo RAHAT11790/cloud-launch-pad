@@ -3637,17 +3637,82 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  link: "",
   audioUrl: "",
   rawAudioUrl: "",
+  isDefault: false,
  }), []);
 
  const normalizeLanguageValue = useCallback((value?: string | null) => String(value || "").trim(), []);
 
+ const normalizeAudioTrackList = useCallback((tracks?: any[] | Record<string, any> | null) => {
+ const list = Array.isArray(tracks) ? tracks : tracks && typeof tracks === "object" ? Object.values(tracks) : [];
+ const cleaned = list
+ .map((track: any, index: number) => {
+ const label = normalizeLanguageValue(track?.label || track?.language || track?.name || `Audio ${index + 1}`) || `Audio ${index + 1}`;
+ const language = normalizeLanguageValue(track?.language || track?.label || label) || label;
+ const link = String(track?.link || track?.audioUrl || track?.rawAudioUrl || track?.uri || track?.url || "").trim();
+ return {
+ language,
+ label,
+ link,
+ audioUrl: String(track?.audioUrl || link || "").trim(),
+ rawAudioUrl: String(track?.rawAudioUrl || link || "").trim(),
+ isDefault: track?.isDefault === true,
+ };
+ })
+ .filter((track: any) => String(track.label || track.language || track.link || "").trim());
+ if (cleaned.length > 0 && !cleaned.some((track: any) => track.isDefault)) {
+ const hindiIdx = cleaned.findIndex((track: any) => /hindi|হিন্দি|हिन्दी|हिंदी|\bhin\b/i.test(`${track.language} ${track.label}`));
+ cleaned[Math.max(0, hindiIdx)].isDefault = true;
+ }
+ return cleaned;
+ }, [normalizeLanguageValue]);
+
+ const normalizeEpisodeStructure = useCallback((episode: any, index = 0): Episode => {
+ const audioTracks = normalizeAudioTrackList(episode?.audioTracks);
+ const defaultAudio = audioTracks.find((track: any) => track?.isDefault) || audioTracks[0] || null;
+ const link = String(episode?.link || episode?.link1080 || episode?.directUrl || episode?.movieLink || "").trim();
+ const link480 = String(episode?.link480 || episode?.qualityLinks?.p480 || "").trim();
+ const link720 = String(episode?.link720 || episode?.qualityLinks?.p720 || "").trim();
+ const link1080 = String(episode?.link1080 || episode?.qualityLinks?.p1080 || link || "").trim();
+ const link4k = String(episode?.link4k || episode?.qualityLinks?.p4k || "").trim();
+ return {
+ episodeNumber: Number(episode?.episodeNumber || episode?.number || index + 1),
+ title: episode?.title || `Episode ${Number(episode?.episodeNumber || episode?.number || index + 1)}`,
+ link,
+ link480,
+ link720,
+ link1080,
+ link4k,
+ qualityLinks: {
+ default: link || link1080 || link720 || link480 || "",
+ p480: link480,
+ p720: link720,
+ p1080: link1080 || link,
+ p4k: link4k,
+ },
+ audioTracks,
+ defaultAudio,
+ subtitleTracks: Array.isArray(episode?.subtitleTracks) ? episode.subtitleTracks : [],
+ };
+ }, [normalizeAudioTrackList]);
+
  const cloneSeasonList = useCallback((seasons?: Season[]) => {
  try {
- return JSON.parse(JSON.stringify(seasons || [])) as Season[];
+ const cloned = JSON.parse(JSON.stringify(seasons || [])) as Season[];
+ return cloned.map((season: any, sIdx: number) => ({
+ ...season,
+ name: season?.name || `Season ${sIdx + 1}`,
+ seasonNumber: Number(season?.seasonNumber || sIdx + 1),
+ episodes: Array.isArray(season?.episodes) ? season.episodes.map((episode: any, eIdx: number) => normalizeEpisodeStructure(episode, eIdx)) : [],
+ })) as Season[];
  } catch {
- return Array.isArray(seasons) ? [...seasons] : [];
+ return Array.isArray(seasons) ? seasons.map((season: any, sIdx: number) => ({
+ ...season,
+ name: season?.name || `Season ${sIdx + 1}`,
+ seasonNumber: Number(season?.seasonNumber || sIdx + 1),
+ episodes: Array.isArray(season?.episodes) ? season.episodes.map((episode: any, eIdx: number) => normalizeEpisodeStructure(episode, eIdx)) : [],
+ })) as Season[] : [];
  }
- }, []);
+ }, [normalizeEpisodeStructure]);
 
  const sanitizeSeasonLanguageMap = useCallback((map?: SeasonsByLanguage | null) => {
  const cleaned: SeasonsByLanguage = {};
