@@ -293,13 +293,12 @@ function parseMaster(masterUrl: string, body: string) {
 
   streams.sort((a, b) => b.height - a.height);
   const uniqueAudio = uniqueBy(audio, (a) => a.uri);
-  const hindiIdx = uniqueAudio.findIndex((a) => a.isHindi);
   const declaredDefaultIdx = uniqueAudio.findIndex((a) => a.default);
   return {
     streams: uniqueBy(streams, (s) => s.url),
     audio: uniqueAudio,
-    defaultAudioIdx: hindiIdx >= 0 ? hindiIdx : (declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0),
-    preferredAudio: hindiIdx >= 0 ? "Hindi" : (uniqueAudio[declaredDefaultIdx]?.name || uniqueAudio[0]?.name || ""),
+    defaultAudioIdx: declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0,
+    preferredAudio: uniqueAudio[declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0]?.name || "",
   };
 }
 
@@ -355,13 +354,12 @@ async function filterWorkingHls(parsed: any, embedUrl: string, origin: string) {
   if (masterHadSeparateAudio && workingAudio.length === 0) {
     return { streams: [], audio: [], defaultAudioIdx: 0, preferredAudio: "", rejected: "audio tracks failed validation" };
   }
-  const hindiIdx = workingAudio.findIndex((a: any) => a.isHindi);
   const declaredDefaultIdx = workingAudio.findIndex((a: any) => a.default);
   return {
     streams: workingStreams,
     audio: workingAudio,
-    defaultAudioIdx: hindiIdx >= 0 ? hindiIdx : (declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0),
-    preferredAudio: hindiIdx >= 0 ? "Hindi" : (workingAudio[declaredDefaultIdx]?.name || workingAudio[0]?.name || ""),
+    defaultAudioIdx: declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0,
+    preferredAudio: workingAudio[declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0]?.name || "",
     rejected: workingStreams.length === 0 ? "no validated video playlists" : "",
   };
 }
@@ -489,7 +487,7 @@ async function episode(slug: string, type?: string, forceRefresh = false) {
     allEmbeds: sources.map((s) => s.embed).filter(Boolean),
     directUrl: playableSources[0]?.master || links[0]?.url || "",
     defaultAudioIdx: typeof primary?.defaultAudioIdx === "number" ? primary.defaultAudioIdx : 0,
-    preferredAudio: primary?.preferredAudio || "Hindi",
+    preferredAudio: primary?.preferredAudio || "",
   }, 8 * 60_000);
 }
 
