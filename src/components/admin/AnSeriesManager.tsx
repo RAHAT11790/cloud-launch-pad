@@ -420,6 +420,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       const seasons: RsSeason[] = [];
       const anSeriesEpisodes: Record<string, any> = {};
       const detectedLanguages = new Set<string>();
+      const savedAt = Date.now();
 
       await Promise.all(rawSeasons.map(async (season: any, sIdx: number) => {
         const fetched = await mapLimit(season.episodes || [], 4, async (ep: any, eIdx: number) => {
@@ -434,22 +435,9 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         fetched.forEach(({ epSlug, rsEpisode, payload, fallback }) => {
           if (!rsEpisode?.link) return;
           episodes.push(rsEpisode);
-          (rsEpisode.audioTracks || []).forEach((track) => detectedLanguages.add(track.label || track.language));
+          rsEpisode.audioTracks.forEach((track) => detectedLanguages.add(track.label || track.language));
           if (epSlug) {
-            anSeriesEpisodes[epSlug] = {
-              ...payload,
-              slug: epSlug,
-              number: fallback.number,
-              title: rsEpisode.title,
-              directUrl: payload?.directUrl || payload?.master || payload?.videoSource || payload?.securedLink || rsEpisode.link || "",
-              links: Array.isArray(payload?.links) ? payload.links : [],
-              sources: Array.isArray(payload?.sources) ? payload.sources : [],
-              audioTracks: rsEpisode.audioTracks || [],
-              defaultAudioIdx: payload?.defaultAudioIdx ?? (rsEpisode.audioTracks || []).findIndex((track: any) => track?.isDefault),
-              preferredAudio: payload?.preferredAudio || (rsEpisode.audioTracks || []).find((track: any) => track?.isDefault)?.label || "",
-              broken: !rsEpisode.link,
-              updatedAt: Date.now(),
-            };
+            anSeriesEpisodes[epSlug] = cleanStoredAnEpisodePayload(rsEpisode, payload, fallback, epSlug, savedAt);
           }
         });
         seasons[sIdx] = {
@@ -465,7 +453,6 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       const seasonsByLanguage = Object.fromEntries(
         orderedLanguages.map((lang) => [lang, cloneSeasonsForAudioLanguage(seasons, lang)]),
       );
-      const savedAt = Date.now();
       const poster = item.poster || detail?.poster || "";
       const backdrop = item.backdrop || detail?.backdrop || poster;
 
@@ -487,6 +474,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
           baseLanguage,
           availableLanguages: orderedLanguages.length ? orderedLanguages : [baseLanguage],
           audioTracks: movieEp.audioTracks || [],
+          defaultAudio: movieEp.defaultAudio || null,
           movieLink: movieEp.link,
           movieLink480: movieEp.link480 || "",
           movieLink720: movieEp.link720 || "",
@@ -505,19 +493,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         await set(ref(db, `anSeries/${item.slug}/meta`), stripUndefined({
           title: movieData.title, poster, backdrop, type: "movies", storyline: movieData.storyline, movieId: targetId, updatedAt: savedAt,
         }));
-        await set(ref(db, `anSeries/${item.slug}/episodes/${item.slug}`), stripUndefined({
-          ...(normalizePlaybackPayload(detail || {}) || {}),
-          slug: item.slug,
-          title: movieEp.title || movieData.title,
-          directUrl: movieEp.link || movieEp.link1080 || "",
-          links: Array.isArray(detail?.links) ? detail.links : [],
-          sources: Array.isArray(detail?.sources) ? detail.sources : [],
-          audioTracks: movieEp.audioTracks || [],
-          defaultAudioIdx: (movieEp.audioTracks || []).findIndex((track: any) => track?.isDefault),
-          preferredAudio: (movieEp.audioTracks || []).find((track: any) => track?.isDefault)?.label || baseLanguage,
-          broken: !movieEp.link,
-          updatedAt: savedAt,
-        }));
+        await set(ref(db, `anSeries/${item.slug}/episodes/${item.slug}`), cleanStoredAnEpisodePayload(movieEp, normalizePlaybackPayload(detail || {}) || {}, { number: 1, title: movieEp.title || movieData.title }, item.slug, savedAt));
         toast.success(`✓ ${movieData.title} saved as AN movie`);
         return;
       }
