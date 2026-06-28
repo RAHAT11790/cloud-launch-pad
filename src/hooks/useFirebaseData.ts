@@ -185,9 +185,19 @@ export function useFirebaseData() {
       const publicItems: AnimeItem[] = [];
       Object.entries(data).forEach(([id, item]: [string, any]) => {
         if (item.visibility === "private") return; // skip private content
+        // Mirror the webseries branch: tag AN-generated movies so they get the
+        // "AN" badge and route through the AN playback path (synthetic master).
+        const isAn = Boolean(item.anSlug || item.animeSaltSlug || item.sourceName === "AnimeSalt" || item.source === "animesalt");
+        const displayAs = String(item.displayAs || (isAn ? "an" : "rs")).toLowerCase();
+        const cardSource: AnimeItem["source"] = displayAs === "an" ? "animesalt" : "firebase";
         const mappedItem: AnimeItem = {
           id,
-          source: "firebase" as const,
+          source: cardSource,
+          sourceName: item.sourceName || (isAn ? "AnimeSalt" : undefined),
+          anSlug: item.anSlug || item.animeSaltSlug || undefined,
+          animeSaltSlug: item.animeSaltSlug || item.anSlug || undefined,
+          displayAs: item.displayAs || undefined,
+          slug: item.slug || item.anSlug || item.animeSaltSlug || undefined,
           title: item.title || "",
           poster: item.poster || "",
           backdrop: item.backdrop || "",
