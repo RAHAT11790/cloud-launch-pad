@@ -64,7 +64,9 @@ const buildAnAudioHlsPlaybackUrl = (url: string) => {
 
 // Prefer Hindi as the default audio track for AnimeSalt content.
 // Falls back to the first track when no Hindi variant exists.
-const pickAnDefaultAudioIdx = (audio: Array<{ language?: string; name?: string; uri?: string }>) => {
+const pickAnDefaultAudioIdx = (audio: Array<{ language?: string; name?: string; uri?: string; isDefault?: boolean }>) => {
+  const explicit = audio.findIndex((t) => t?.isDefault === true);
+  if (explicit >= 0) return explicit;
   const idx = audio.findIndex((t) => {
     const blob = `${t?.language || ""} ${t?.name || ""}`.toLowerCase();
     return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
@@ -106,7 +108,7 @@ const buildAnSyntheticMaster = (
 };
 
 const normalizeAnAudioTracks = (
-  audio: Array<{ language?: string; name?: string; uri?: string }> | undefined,
+  audio: Array<{ language?: string; name?: string; uri?: string; isDefault?: boolean }> | undefined,
   streams: Array<{ label?: string; url?: string; height?: number }> | undefined,
 ) => {
   if (!Array.isArray(audio) || audio.length === 0) return undefined;
@@ -153,6 +155,7 @@ const normalizeAnAudioTracks = (
         link: buildAnAudioHlsPlaybackUrl(uri),
         audioUrl: buildAnAudioHlsPlaybackUrl(uri),
         rawAudioUrl: uri,
+        isDefault: track?.isDefault === true,
       };
     })
     .filter(Boolean) as { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string }[];
@@ -184,6 +187,7 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
           language: track?.language || track?.label || track?.name,
           name: track?.label || track?.name || track?.language,
           uri: getAnAudioUrlFromTrack(track),
+          isDefault: track?.isDefault === true,
         }))
         .filter((entry: any) => isAnPlayableHlsUrl(entry?.uri))
     : [];
@@ -222,6 +226,7 @@ const buildAnimeSaltDirectPlaybackState = async (payload: any) => {
           link: getAnAudioUrlFromTrack(track),
           audioUrl: getAnAudioUrlFromTrack(track),
           rawAudioUrl: getAnAudioUrlFromTrack(track),
+          isDefault: track?.isDefault === true,
         }))
         .filter((track: any) => track.label && isAnPlayableHlsUrl(track.link))
     : undefined;
@@ -345,6 +350,7 @@ const buildAnimeSaltEpisodePlaybackFromFirebase = (ep?: Episode | null) => {
         language: String(track?.language || label).trim(),
         name: label,
         uri,
+        isDefault: track?.isDefault === true,
       };
     })
     .filter(Boolean) as Array<{ language?: string; name?: string; uri?: string }>;
