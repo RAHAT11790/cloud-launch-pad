@@ -11271,19 +11271,96 @@ const AnimeSaltManagerSection = ({
  });
  };
 
+  const epUpdateAudioTrack = (sIdx: number, eIdx: number, aIdx: number, field: string, value: any) => {
+  setEpEditorSeasons(prev => {
+  const copy = [...prev];
+  const s = { ...copy[sIdx], episodes: [...(Array.isArray(copy[sIdx]?.episodes) ? copy[sIdx].episodes : [])] };
+  const ep = normalizeAnimeSaltEditorEpisode(s.episodes[eIdx] || {}, eIdx);
+  const tracks = [...(Array.isArray(ep.audioTracks) ? ep.audioTracks : [])];
+  tracks[aIdx] = { ...(tracks[aIdx] || buildAnimeSaltEditorAudioTrack({}, aIdx, aIdx === 0)), [field]: value };
+  const normalized = normalizeAnimeSaltAudioTracks(tracks);
+  const defaultAudio = normalized.find((track: any) => track?.isDefault) || normalized[0] || null;
+  s.episodes[eIdx] = { ...ep, audioTracks: normalized, defaultAudio };
+  copy[sIdx] = s;
+  return copy;
+  });
+  };
+
+  const epAddAudioTrack = (sIdx: number, eIdx: number) => {
+  setEpEditorSeasons(prev => {
+  const copy = [...prev];
+  const s = { ...copy[sIdx], episodes: [...(Array.isArray(copy[sIdx]?.episodes) ? copy[sIdx].episodes : [])] };
+  const ep = normalizeAnimeSaltEditorEpisode(s.episodes[eIdx] || {}, eIdx);
+  const tracks = [...(Array.isArray(ep.audioTracks) ? ep.audioTracks : [])];
+  tracks.push(buildAnimeSaltEditorAudioTrack({}, tracks.length, false));
+  s.episodes[eIdx] = { ...ep, audioTracks: tracks, defaultAudio: tracks.find((track: any) => track?.isDefault) || tracks[0] || null };
+  copy[sIdx] = s;
+  return copy;
+  });
+  };
+
+  const epRemoveAudioTrack = (sIdx: number, eIdx: number, aIdx: number) => {
+  setEpEditorSeasons(prev => {
+  const copy = [...prev];
+  const s = { ...copy[sIdx], episodes: [...(Array.isArray(copy[sIdx]?.episodes) ? copy[sIdx].episodes : [])] };
+  const ep = normalizeAnimeSaltEditorEpisode(s.episodes[eIdx] || {}, eIdx);
+  let tracks = (Array.isArray(ep.audioTracks) ? ep.audioTracks : []).filter((_: any, idx: number) => idx !== aIdx);
+  if (tracks.length === 0) tracks = [buildAnimeSaltEditorAudioTrack({}, 0, true)];
+  if (!tracks.some((track: any) => track?.isDefault)) tracks = tracks.map((track: any, idx: number) => ({ ...track, isDefault: idx === 0 }));
+  s.episodes[eIdx] = { ...ep, audioTracks: tracks, defaultAudio: tracks.find((track: any) => track?.isDefault) || tracks[0] || null };
+  copy[sIdx] = s;
+  return copy;
+  });
+  };
+
+  const epSetDefaultAudioTrack = (sIdx: number, eIdx: number, aIdx: number) => {
+  setEpEditorSeasons(prev => {
+  const copy = [...prev];
+  const s = { ...copy[sIdx], episodes: [...(Array.isArray(copy[sIdx]?.episodes) ? copy[sIdx].episodes : [])] };
+  const ep = normalizeAnimeSaltEditorEpisode(s.episodes[eIdx] || {}, eIdx);
+  const tracks = (Array.isArray(ep.audioTracks) ? ep.audioTracks : []).map((track: any, idx: number) => ({ ...track, isDefault: idx === aIdx }));
+  s.episodes[eIdx] = { ...ep, audioTracks: tracks, defaultAudio: tracks[aIdx] || tracks[0] || null };
+  copy[sIdx] = s;
+  return copy;
+  });
+  };
+
  const saveEpisodeData = async () => {
  if (!epEditorSlug) return;
  setEpEditorSaving(true);
  try {
- // Save full custom seasons data to Firebase
- await set(ref(db, `animesaltSelected/${epEditorSlug}/customSeasons`), epEditorSeasons);
+  const sanitizedSeasons = epEditorSeasons.map((season: any, sIdx: number) => ({
+  name: season?.name || `Season ${sIdx + 1}`,
+  episodes: (Array.isArray(season?.episodes) ? season.episodes : []).map((ep: any, eIdx: number) => {
+  const normalized = normalizeAnimeSaltEditorEpisode(ep, eIdx);
+  const audioTracks = normalizeAnimeSaltAudioTracks(normalized.audioTracks, normalized.defaultAudio);
+  const defaultAudio = audioTracks.find((track: any) => track?.isDefault) || audioTracks[0] || null;
+  return {
+  ...normalized,
+  qualityLinks: {
+  default: normalized.link || normalized.link1080 || normalized.link720 || normalized.link480 || "",
+  p480: normalized.link480 || "",
+  p720: normalized.link720 || "",
+  p1080: normalized.link1080 || normalized.link || "",
+  p4k: normalized.link4k || "",
+  },
+  audioTracks,
+  defaultAudio,
+  };
+  }),
+  }));
+  // Save full custom seasons data to Firebase
+  await set(ref(db, `animesaltSelected/${epEditorSlug}/customSeasons`), sanitizedSeasons);
  // Also generate episodeOverrides for backward compatibility with playback
  const overrides: Record<string, any> = {};
- epEditorSeasons.forEach((season, sIdx) => {
- season.episodes.forEach((ep: any, eIdx: number) => {
- if (ep.link || ep.link480 || ep.link720 || ep.link1080 || ep.link4k) {
+  sanitizedSeasons.forEach((season, sIdx) => {
+  (Array.isArray(season?.episodes) ? season.episodes : []).forEach((ep: any, eIdx: number) => {
+  if (ep.link || ep.link480 || ep.link720 || ep.link1080 || ep.link4k || (Array.isArray(ep.audioTracks) && ep.audioTracks.some((track: any) => track?.link || track?.audioUrl || track?.rawAudioUrl))) {
  overrides[`s${sIdx}_e${eIdx}`] = {
  link: ep.link || '', link480: ep.link480 || '', link720: ep.link720 || '', link1080: ep.link1080 || '', link4k: ep.link4k || '',
+  qualityLinks: ep.qualityLinks || {},
+  audioTracks: ep.audioTracks || [],
+  defaultAudio: ep.defaultAudio || null,
  };
  }
  });
