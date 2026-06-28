@@ -224,12 +224,14 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
       return mapped;
     });
   }
-  // Admin editor has separate fields for Default, 1080p, 480p, 720p and 4K.
-  // The requested behavior is: the Default field must contain the 1080p AN URL
-  // whenever 1080p exists, not a generic/auto/first URL. Keep the explicit
-  // 1080p field populated with the same playable source as well.
-  episode.link = makeUrl(uniqueStreams.find((stream) => Number(stream.height) === 1080) || preferredStream);
-  if (!episode.link1080 && episode.link) episode.link1080 = episode.link;
+  // Default field MUST be the 1080p video-only URL whenever 1080p exists.
+  // Fall back to 720p, then 480p — never to the muxed master/Auto URL.
+  const pick1080 = uniqueStreams.find((stream) => Number(stream.height) === 1080);
+  const pick720 = uniqueStreams.find((stream) => Number(stream.height) === 720);
+  const pick480 = uniqueStreams.find((stream) => Number(stream.height) === 480);
+  const defaultStream = pick1080 || pick720 || pick480;
+  episode.link = makeUrl(defaultStream);
+  if (!episode.link1080 && pick1080) episode.link1080 = makeUrl(pick1080);
   return episode;
 };
 
