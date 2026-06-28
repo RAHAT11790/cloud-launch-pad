@@ -5599,6 +5599,9 @@ ${tgBulkFooter}
  const baseLanguage = normalizeLanguageValue(seriesForm?.baseLanguage || seriesForm?.language || "Hindi");
   const isAnSeries = !!(seriesForm?.anSlug || seriesForm?.animeSaltSlug || /animesalt/i.test(String(seriesForm?.sourceName || "")));
   const episodeAudioTracks = Array.isArray((ep as any).audioTracks) ? ((ep as any).audioTracks as any[]) : [];
+   const explicitDefaultAudioIdx = episodeAudioTracks.findIndex((track: any) => track?.isDefault === true);
+   const resolvedDefaultAudioIdx = explicitDefaultAudioIdx >= 0 ? explicitDefaultAudioIdx : (episodeAudioTracks.length > 0 ? 0 : -1);
+   const defaultAudioTrack = resolvedDefaultAudioIdx >= 0 ? episodeAudioTracks[resolvedDefaultAudioIdx] : null;
  const currentLanguageFields = {
  link: ep.link ?? "",
  link480: ep.link480 ?? "",
@@ -5674,12 +5677,22 @@ ${tgBulkFooter}
   <div className="mb-2 flex items-center justify-between gap-2">
   <div>
   <p className="text-[11px] font-bold text-amber-200">Audio tracks (per language)</p>
-  <p className="text-[9px] text-amber-100/60">One audio URL per language. Player plays the video stream with the selected audio synced at decoder level via HLS multi-audio (no latency).</p>
+   <p className="text-[9px] text-amber-100/60">Default audio + every other audio URL is stored inside this episode.</p>
   </div>
   <button type="button" onClick={() => addSeriesEpisodeAudioTrack(sIdx, eIdx)} className="rounded-lg bg-amber-500/15 px-2.5 py-1.5 text-[10px] font-bold text-amber-200 hover:bg-amber-500/25">
   <Plus size={10} className="mr-1 inline" /> Add language
   </button>
   </div>
+   {defaultAudioTrack && (
+   <div className="mb-2.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-2.5">
+   <div className="mb-2 flex items-center justify-between gap-2">
+   <span className="text-[10px] font-bold text-emerald-200">Default audio: {(defaultAudioTrack as any)?.label || (defaultAudioTrack as any)?.language || `Audio ${resolvedDefaultAudioIdx + 1}`}</span>
+   <span className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[9px] font-bold text-emerald-200">DEFAULT</span>
+   </div>
+   <textarea value={(defaultAudioTrack as any)?.link || (defaultAudioTrack as any)?.audioUrl || (defaultAudioTrack as any)?.rawAudioUrl || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, resolvedDefaultAudioIdx, "link", e.target.value)}
+   className={`${inputClass} w-full !py-1.5 !text-[10px] min-h-[44px] resize-none break-all font-mono`} placeholder="Default audio HLS URL" rows={2} />
+   </div>
+   )}
   {episodeAudioTracks.length === 0 ? (
   <p className="rounded-lg border border-dashed border-amber-500/20 bg-black/20 px-2.5 py-2 text-[10px] text-amber-100/55">No audio languages saved yet.</p>
   ) : (
@@ -5689,8 +5702,11 @@ ${tgBulkFooter}
   return (
   <div key={`an-audio-${tIdx}`} className="rounded-lg border border-white/5 bg-black/25 p-2.5">
   <div className="mb-2 flex items-center justify-between gap-2">
-  <span className="text-[10px] font-semibold text-amber-200">{(track as any)?.label || (track as any)?.language || `Audio ${tIdx + 1}`}{isHindi ? " • default" : ""}</span>
+   <span className="text-[10px] font-semibold text-amber-200">{(track as any)?.label || (track as any)?.language || `Audio ${tIdx + 1}`}{tIdx === resolvedDefaultAudioIdx ? " • default" : isHindi ? " • Hindi" : ""}</span>
+   <div className="flex items-center gap-1.5">
+   <button type="button" onClick={() => setSeriesEpisodeDefaultAudioTrack(sIdx, eIdx, tIdx)} className={`rounded-md px-2 py-1 text-[9px] font-bold ${tIdx === resolvedDefaultAudioIdx ? "bg-emerald-500/25 text-emerald-200" : "bg-white/5 text-zinc-400 hover:bg-emerald-500/15 hover:text-emerald-200"}`}>Default</button>
   <button type="button" onClick={() => removeSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx)} className="rounded-md bg-red-500/15 p-1 text-pink-400 hover:bg-red-500/25"><Trash2 size={10} /></button>
+   </div>
   </div>
   <div className="grid grid-cols-2 gap-2 mb-2">
   <input value={(track as any)?.label || ""} onChange={e => updateSeriesEpisodeAudioTrack(sIdx, eIdx, tIdx, "label", e.target.value)} className={`${inputClass} !py-1.5 !text-[10px]`} placeholder="Label (e.g. Hindi)" />
