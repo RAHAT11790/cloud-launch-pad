@@ -359,12 +359,15 @@ async function filterWorkingHls(parsed: any, embedUrl: string, origin: string) {
   if (masterHadSeparateAudio && workingAudio.length === 0) {
     return { streams: [], audio: [], defaultAudioIdx: 0, preferredAudio: "", rejected: "audio tracks failed validation" };
   }
+  const hindiIdx = workingAudio.findIndex((a: any) => a.isHindi || /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a.name || ""} ${a.language || ""}`));
   const declaredDefaultIdx = workingAudio.findIndex((a: any) => a.default);
+  const defaultIdx = hindiIdx >= 0 ? hindiIdx : (declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0);
+  workingAudio.forEach((a: any, i: number) => { a.default = i === defaultIdx; });
   return {
     streams: workingStreams,
     audio: workingAudio,
-    defaultAudioIdx: declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0,
-    preferredAudio: workingAudio[declaredDefaultIdx >= 0 ? declaredDefaultIdx : 0]?.name || "",
+    defaultAudioIdx: defaultIdx,
+    preferredAudio: workingAudio[defaultIdx]?.name || "",
     rejected: workingStreams.length === 0 ? "no validated video playlists" : "",
   };
 }
