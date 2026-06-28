@@ -27,6 +27,7 @@ type SelectedAnItem = {
   type?: "series" | "movies" | "movie";
   tmdbId?: string | number | null;
   addedAt?: number;
+  customSeasons?: any[];
 };
 
 type RsEpisode = {
@@ -82,6 +83,36 @@ const reliableHls = (_base: string, url?: string | null) => {
 const pickDefaultAudioIdx = (audio: Array<{ language?: string; name?: string }>) => {
   const hindi = audio.findIndex((track) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${track?.language || ""} ${track?.name || ""}`));
   return hindi >= 0 ? hindi : 0;
+};
+
+const normalizeStoredAudioTracks = (tracks: any, defaultAudio?: any): RsEpisode["audioTracks"] => {
+  const list = Array.isArray(tracks)
+    ? tracks
+    : tracks && typeof tracks === "object"
+      ? Object.values(tracks)
+      : defaultAudio
+        ? [defaultAudio]
+        : [];
+  const cleaned = list
+    .map((track: any, index: number) => {
+      const label = String(track?.label || track?.name || track?.language || `Audio ${index + 1}`).trim();
+      const language = String(track?.language || track?.label || label).trim();
+      const link = String(track?.link || track?.audioUrl || track?.rawAudioUrl || track?.uri || track?.url || "").trim();
+      return {
+        language,
+        label,
+        link,
+        audioUrl: String(track?.audioUrl || link || "").trim(),
+        rawAudioUrl: String(track?.rawAudioUrl || link || "").trim(),
+        isDefault: track?.isDefault === true,
+      };
+    })
+    .filter((track: any) => track.label || track.language || track.link);
+  if (cleaned.length > 0 && !cleaned.some((track: any) => track.isDefault)) {
+    const idx = cleaned.findIndex((track: any) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${track.language} ${track.label}`));
+    cleaned[Math.max(0, idx)].isDefault = true;
+  }
+  return cleaned;
 };
 
 const qualityField = (label?: string, height?: number): "link480" | "link720" | "link1080" | "link4k" | null => {
@@ -253,6 +284,35 @@ const playbackToRsEpisode = (base: string, rawPayload: any, fallback: { number: 
   return episode;
 };
 
+const mergeCustomEpisodeFields = (episode: RsEpisode, custom: any, fallback: { number: number; title: string }): RsEpisode => {
+  const merged: RsEpisode = { ...episode, episodeNumber: fallback.number, title: custom?.title || episode.title || fallback.title };
+  (["link", "link480", "link720", "link1080", "link4k"] as const).forEach((field) => {
+    const value = String(custom?.[field] || "").trim();
+    if (value) (merged as any)[field] = value;
+  });
+  if (!merged.link) merged.link = merged.link1080 || merged.link720 || merged.link480 || "";
+  if (!merged.link1080 && merged.link) merged.link1080 = merged.link;
+  merged.qualityLinks = {
+    default: merged.link || merged.link1080 || merged.link720 || merged.link480 || "",
+    p480: merged.link480 || "",
+    p720: merged.link720 || "",
+    p1080: merged.link1080 || merged.link || "",
+    p4k: merged.link4k || "",
+  };
+  const customTracks = normalizeStoredAudioTracks(custom?.audioTracks, custom?.defaultAudio);
+  if (customTracks.length > 0) {
+    const marked = customTracks.find((track) => track?.isDefault) || customTracks[0];
+    merged.audioTracks = customTracks.map((track) => ({ ...track, isDefault: track === marked }));
+    merged.defaultAudio = { ...marked, isDefault: true };
+  } else {
+    const tracks = normalizeStoredAudioTracks(merged.audioTracks, merged.defaultAudio);
+    const marked = tracks.find((track) => track?.isDefault) || tracks[0] || null;
+    merged.audioTracks = marked ? tracks.map((track) => ({ ...track, isDefault: track === marked })) : tracks;
+    merged.defaultAudio = marked ? { ...marked, isDefault: true } : null;
+  }
+  return merged;
+};
+
 const episodeQualityStreams = (episode: RsEpisode) => [
   episode.link480 ? { label: "480p", height: 480, url: episode.link480 } : null,
   episode.link720 ? { label: "720p", height: 720, url: episode.link720 } : null,
@@ -333,6 +393,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         type: item?.type || "series",
         tmdbId: item?.tmdbId || null,
         addedAt: Number(item?.addedAt || item?.createdAt || 0),
+        customSeasons: Array.isArray(item?.customSeasons) ? item.customSeasons : [],
       }))
         .filter((item) => isMovieMode ? (item.type === "movies" || item.type === "movie") : !(item.type === "movies" || item.type === "movie"));
       items.sort((a, b) => a.title.localeCompare(b.title));
@@ -412,8 +473,11 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       const isMovie = isMovieMode;
       const detailResult: any = isMovie ? await animeSaltApi.getMovie(item.slug, true) : await animeSaltApi.getSeries(item.slug, true);
       const detail = detailResult?.data || detailResult;
+      const customSeasons = !isMovie && Array.isArray(item.customSeasons) && item.customSeasons.length > 0 ? item.customSeasons : [];
       const apiSeasons = !isMovie && Array.isArray(detail?.seasons) ? detail.seasons : [];
-      const rawSeasons = apiSeasons.length
+      const rawSeasons = customSeasons.length
+        ? customSeasons
+        : apiSeasons.length
         ? apiSeasons
         : [{ name: "Season 1", episodes: [{ number: 1, title: detail?.title || item.title, slug: item.slug, _moviePayload: detail }] }];
 
@@ -426,10 +490,11 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         const fetched = await mapLimit(season.episodes || [], 4, async (ep: any, eIdx: number) => {
           const epSlug = String(ep?.slug || "").trim();
           const fallback = { number: Number(ep?.number || ep?.episodeNumber || eIdx + 1), title: ep?.title || `Episode ${eIdx + 1}`, slug: epSlug };
+          const hasManualLinks = !!(ep?.link || ep?.link480 || ep?.link720 || ep?.link1080 || ep?.link4k || (Array.isArray(ep?.audioTracks) && ep.audioTracks.length));
           const playbackPayload = ep?._moviePayload || (epSlug ? await animeSaltApi.getEpisode(epSlug, true) : null);
           const payload = normalizePlaybackPayload(playbackPayload || {});
-          const rsEpisode = playbackToRsEpisode(base, payload, fallback);
-          return { epSlug, rsEpisode, payload, fallback };
+          const rsEpisode = mergeCustomEpisodeFields(playbackToRsEpisode(base, payload, fallback), hasManualLinks ? ep : {}, fallback);
+          return { epSlug: epSlug || `s${sIdx}_e${eIdx}`, rsEpisode, payload, fallback };
         });
         const episodes: RsEpisode[] = [];
         fetched.forEach(({ epSlug, rsEpisode, payload, fallback }) => {
