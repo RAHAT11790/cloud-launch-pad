@@ -790,10 +790,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         });
         if (match) return getPrimaryLanguageToken(match.label || match.language || "") || selectedLanguageLabel;
       }
-      const hindi = propAudioTracks.find((t) =>
-        /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`),
-      );
-      const pick = hindi || propAudioTracks[0];
+      const pick = propAudioTracks.find((t: any) => t?.isDefault) || propAudioTracks[0];
       return getPrimaryLanguageToken(pick.label || pick.language || "") || pick.label || pick.language || "Hindi";
     }
     if (selectedLanguageLabel) return selectedLanguageLabel;
@@ -822,7 +819,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       (propAudioTracks || []).forEach((track) => add(String(track.label || track.language || "")));
     }
     if (labels.size === 0 && currentLangLabel) add(currentLangLabel);
-    // Sort: Hindi first, then alphabetical
+    // AnimeSalt keeps the stored API/admin audio order; RS/non-AN stays sorted.
+    if (isAnimeSaltContent) return Array.from(labels);
     return Array.from(labels).sort((a, b) => {
       const ah = a.toLowerCase() === "hindi" ? 0 : 1;
       const bh = b.toLowerCase() === "hindi" ? 0 : 1;
@@ -1059,10 +1057,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               return label.toLowerCase() === preferred.toLowerCase();
             })
           : null;
-        const hindi = propAudioTracks.find((t) =>
-          /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${t.language || ""} ${t.label || ""}`),
-        );
-        const pick = preferredMatch || hindi || propAudioTracks[0];
+        const pick = preferredMatch || propAudioTracks.find((t: any) => t?.isDefault) || propAudioTracks[0];
         const nextLabel = getPrimaryLanguageToken(pick.label || pick.language || "") || pick.label || pick.language || "";
         return nextLabel || existing;
       });
@@ -2305,12 +2300,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             return blob.includes(preferredToken);
           })
         : -1;
-      const hindiIdx = tracks.findIndex((track: any) => {
-        const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
-        return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
-      });
       const defaultIdx = tracks.findIndex((track: any) => track?.default);
-      const wanted = preferredIdx >= 0 ? preferredIdx : (hindiIdx >= 0 ? hindiIdx : (defaultIdx >= 0 ? defaultIdx : 0));
+      const wanted = preferredIdx >= 0 ? preferredIdx : (defaultIdx >= 0 ? defaultIdx : 0);
       try { hls.audioTrack = wanted; } catch {}
     };
 
