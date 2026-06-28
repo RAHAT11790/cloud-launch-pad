@@ -1787,39 +1787,8 @@ const Index = () => {
     if (src.startsWith("animesalt://")) {
       const hasAccess = await checkAndShowAdGate(anime, resolvedSeasonIdx, resolvedEpIdx);
       if (!hasAccess) return;
-      const epSlug = src.replace("animesalt://", "");
-      try {
-        const directState = await getAnimeSaltDirectState(epSlug);
-        if (directState?.src) {
-          addToWatchHistory(anime, resolvedSeasonIdx, resolvedEpIdx, true);
-          setPlayerState({
-            src: directState.src,
-            title: anime.title,
-            subtitle: subtitle || `Episode`,
-            anime,
-            selectedLanguage: directState.preferredLanguage || "Hindi",
-            seasonIdx: resolvedSeasonIdx,
-            epIdx: resolvedEpIdx,
-            qualityOptions: directState.qualityOptions,
-            audioTracks: directState.audioTracks,
-            subtitleTracks: directState.subtitleTracks,
-            nextEpisodeSrc:
-              anime.type === "webseries" && anime.seasons && resolvedSeasonIdx !== undefined && resolvedEpIdx !== undefined
-                ? getEpisodeSrc(anime.seasons[resolvedSeasonIdx]?.episodes?.[resolvedEpIdx + 1] as Episode)
-                : undefined,
-          } as any);
-          setSelectedAnime(null);
-          inPlayerSwitchRef.current = false;
-        } else {
-          console.warn("[AN] no Firebase-saved source for episode", epSlug);
-          inPlayerSwitchRef.current = false;
-          toast.error("Episode source is not saved in Firebase. Refresh this series from Admin.");
-        }
-      } catch (e) {
-        console.warn("[AN] episode load failed", epSlug, e);
-        inPlayerSwitchRef.current = false;
-        toast.error("Failed to load episode. Please try again.");
-      }
+      inPlayerSwitchRef.current = false;
+      toast.error("This AN episode has no saved 480p/720p/1080p Firebase HLS URL. Refresh this series from Admin.");
       return;
     }
 
@@ -1827,31 +1796,8 @@ const Index = () => {
     if (src.startsWith("animesalt_movie://")) {
       const hasAccess = await checkAndShowAdGate(anime, seasonIdx, epIdx);
       if (!hasAccess) return;
-      const movieSlug = src.replace("animesalt_movie://", "");
-      try {
-        const directState = await getAnimeSaltDirectState(movieSlug);
-        if (directState?.src) {
-          addToWatchHistory(anime, undefined, undefined, true);
-          setPlayerState({
-            src: directState.src,
-            title: anime.title,
-            subtitle: "Movie",
-            anime,
-            selectedLanguage: directState.preferredLanguage || "Hindi",
-            qualityOptions: directState.qualityOptions,
-            audioTracks: directState.audioTracks,
-            subtitleTracks: directState.subtitleTracks,
-          } as any);
-          setSelectedAnime(null);
-          inPlayerSwitchRef.current = false;
-        } else {
-          inPlayerSwitchRef.current = false;
-          toast.error("Movie source is not saved in Firebase. Refresh this movie from Admin.");
-        }
-      } catch {
-        inPlayerSwitchRef.current = false;
-        toast.error("Failed to load movie");
-      }
+      inPlayerSwitchRef.current = false;
+      toast.error("This AN movie has no saved Firebase HLS URL. Refresh this movie from Admin.");
       return;
     }
 
