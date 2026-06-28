@@ -101,7 +101,9 @@ interface Episode {
  link720?: string;
  link1080?: string;
  link4k?: string;
- audioTracks?: { language: string; label: string; link: string; link480?: string; link720?: string; link1080?: string; link4k?: string }[];
+ qualityLinks?: { default?: string; p480?: string; p720?: string; p1080?: string; p4k?: string };
+ audioTracks?: { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string; link480?: string; link720?: string; link1080?: string; link4k?: string; isDefault?: boolean }[];
+ defaultAudio?: { language: string; label: string; link: string; audioUrl?: string; rawAudioUrl?: string; isDefault?: boolean } | null;
  subtitleTracks?: { language?: string; label: string; url: string }[];
 }
 
