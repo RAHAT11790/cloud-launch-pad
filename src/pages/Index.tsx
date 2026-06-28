@@ -1767,6 +1767,14 @@ const Index = () => {
       if (episode.link1080) qualityOptions.push({ label: "1080p", src: episode.link1080 });
       if (episode.link4k) qualityOptions.push({ label: "4K", src: episode.link4k });
       if (episode.audioTracks?.length) audioTracks = episode.audioTracks;
+      if (isAnimeSaltContent) {
+        const directFromFirebase = buildAnimeSaltEpisodePlaybackFromFirebase(episode);
+        if (directFromFirebase?.src) {
+          src = directFromFirebase.src;
+          qualityOptions = directFromFirebase.qualityOptions;
+          audioTracks = directFromFirebase.audioTracks;
+        }
+      }
       } else if (anime.movieLink) {
         src = getMovieSrc(anime);
       subtitle = "Movie";
@@ -2120,6 +2128,13 @@ const Index = () => {
         if (episode.link720) qualityOptions.push({ label: "720p", src: episode.link720 });
         if (episode.link1080) qualityOptions.push({ label: "1080p", src: episode.link1080 });
         if (episode.link4k) qualityOptions.push({ label: "4K", src: episode.link4k });
+        if (anime.source === "animesalt") {
+          const directFromFirebase = buildAnimeSaltEpisodePlaybackFromFirebase(episode);
+          if (directFromFirebase?.src) {
+            src = directFromFirebase.src;
+            qualityOptions = directFromFirebase.qualityOptions;
+          }
+        }
       }
       if (src) {
         const hasAccess = await checkAndShowAdGate(anime, sIdx, eIdx);
@@ -2132,7 +2147,7 @@ const Index = () => {
           selectedLanguage,
           seasonIdx: sIdx,
           epIdx: eIdx,
-          audioTracks: episode?.audioTracks,
+          audioTracks: anime.source === "animesalt" ? (buildAnimeSaltEpisodePlaybackFromFirebase(episode)?.audioTracks || episode?.audioTracks) : episode?.audioTracks,
           subtitleTracks: (episode as any)?.subtitleTracks,
           resumeTime: item.currentTime || 0,
           qualityOptions: qualityOptions.length > 0 ? qualityOptions : undefined,
