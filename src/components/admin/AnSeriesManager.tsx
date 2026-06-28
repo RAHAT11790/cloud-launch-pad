@@ -80,8 +80,6 @@ const reliableHls = (_base: string, url?: string | null) => {
   return raw;
 };
 
-const ABSOLUTE_AN_URL_RE = /^https?:\/\/[^\s"'<>]+/i;
-
 const extractLikelyHlsUrlFromText = (value?: string | null) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
