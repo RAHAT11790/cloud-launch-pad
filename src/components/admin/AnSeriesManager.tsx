@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import CachedImg from "@/components/CachedImg";
 import { db, ref, set, get, onValue, remove } from "@/lib/firebase";
 import { animeSaltApi } from "@/lib/animeSaltApi";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
