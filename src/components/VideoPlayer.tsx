@@ -848,6 +848,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       language: fallbackLanguage,
       label: fallbackLanguage,
       link: src,
+      audioUrl: undefined as string | undefined,
+      rawAudioUrl: undefined as string | undefined,
       link480: anime?.movieLink480,
       link720: anime?.movieLink720,
       link1080: anime?.movieLink1080,
@@ -858,12 +860,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     pool.forEach((track) => {
       const label = getPrimaryLanguageToken(track.label || track.language || fallbackLanguage) || fallbackLanguage;
       if (!label || unique.has(label.toLowerCase())) return;
+      const anyTrack = track as any;
       unique.set(label.toLowerCase(), {
         language: getPrimaryLanguageToken(track.language || label) || label,
         label,
-        link: String(track.link || track.audioUrl || track.rawAudioUrl || src || "").trim(),
-        audioUrl: (track as any).audioUrl,
-        rawAudioUrl: (track as any).rawAudioUrl,
+        link: String(track.link || anyTrack.audioUrl || anyTrack.rawAudioUrl || src || "").trim(),
+        audioUrl: anyTrack.audioUrl,
+        rawAudioUrl: anyTrack.rawAudioUrl,
         link480: track.link480,
         link720: track.link720,
         link1080: track.link1080,
