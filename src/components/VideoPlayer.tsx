@@ -2954,9 +2954,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, []);
 
   const stopAndClosePlayer = useCallback(() => {
+    if (closingRef.current) return;
+    closingRef.current = true;
     // INSTANT close: fire onClose synchronously so React unmounts the player
     // overlay immediately. All teardown happens after, off the critical path.
     clearHideTimer();
+    setIsClosing(true);
     setShowControls(false);
     setLocked(false);
     setShowSettings(false);
@@ -2977,8 +2980,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     try { hlsRef.current?.destroy(); } catch {}
     hlsRef.current = null;
 
-    // Notify parent NOW — don't await anything before this call.
-    onClose();
+    // Notify parent after a tiny compositor-only transition; no blocking cleanup.
+    window.setTimeout(() => onClose(), 120);
 
     // Heavy / async cleanup deferred to next tick so it never blocks close.
     setTimeout(() => {
