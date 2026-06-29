@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { db, ref, onValue, get } from "@/lib/firebase";
+import { db, ref, onValue, get, firebaseDatabaseURL } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 
 const LS_WS = "rs_cache_webseries_v2";
 const LS_MOV = "rs_cache_movies_v2";
 const LS_CATS = "rs_cache_categories_v1";
+const LS_META = "rs_cache_catalog_meta_v1";
+const CATALOG_REFRESH_MS = 6 * 60 * 60 * 1000;
+const LOADER_FAILSAFE_MS = 1200;
 
 const readCache = <T,>(key: string, fallback: T): T => {
   try {
@@ -16,6 +19,8 @@ const readCache = <T,>(key: string, fallback: T): T => {
 const writeCache = (key: string, value: unknown) => {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 };
+const readCacheMeta = () => readCache<{ fetchedAt?: number }>(LS_META, {});
+const writeCacheMeta = () => writeCache(LS_META, { fetchedAt: Date.now() });
 
 // Count episodes for display badge ("12 EP", "2S · 24 EP") without keeping
 // the full episode payload in memory — that payload alone can be hundreds of
@@ -52,7 +57,9 @@ const mapWebseriesLite = (id: string, item: any): AnimeItem => {
   const isAn = Boolean(item.anSlug || item.animeSaltSlug || item.sourceName === "AnimeSalt");
   const displayAs = String(item.displayAs || (isAn ? "an" : "rs")).toLowerCase();
   const cardSource: AnimeItem["source"] = displayAs === "an" ? "animesalt" : "firebase";
-  const counts = countEpisodesShallow(item.seasons);
+  const counts = typeof item.episodeCount === "number"
+    ? { seasons: Number(item.seasonsCount || item.seasonCount || 0) || 0, episodes: Number(item.episodeCount || 0) || 0 }
+    : countEpisodesShallow(item.seasons);
   return {
     id,
     source: cardSource,
