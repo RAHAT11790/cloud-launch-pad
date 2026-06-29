@@ -1,11 +1,11 @@
 // ============================================================
-// video-proxy — HTTP-only HLS/video proxy (no scripts, no protection)
+// video-proxy — Universal HLS/video proxy (no scripts, no protection)
 // ============================================================
-// Use: /functions/v1/video-proxy?url=<ENCODED_HTTP_URL>
-// - Accepts ONLY http:// upstream URLs.
-// - HTTPS videos are rejected because they must play directly in <video>.
-// - Rewrites HTTP HLS playlists so variants/segments also travel through
-//   this proxy and never get blocked as mixed content.
+// Use: /functions/v1/video-proxy?url=<ENCODED_VIDEO_URL>
+// - Accepts http:// and https:// upstream URLs.
+// - Rewrites HLS playlists so variants/segments also travel through this proxy.
+// - For known RS mirrors, tries sibling mirrors with the same path when one host
+//   is blocked/down, while preserving normal per-server direct playback first.
 // ============================================================
 
 const cors: Record<string, string> = {
@@ -22,6 +22,33 @@ const MEDIA_CHUNK_BYTES = 4 * 1024 * 1024;
 
 const isM3u8 = (url: string, contentType: string | null) => /mpegurl|m3u8/i.test(contentType || "") || /\.m3u8(?:[?#]|$)/i.test(url);
 const isDirectMp4Like = (url: URL) => /\.(?:mp4|m4v|mov|webm|mkv)(?:$|[?#])/i.test(url.pathname + url.search);
+
+const RS_MIRROR_ORIGINS = [
+  "https://rahat1102-video-hosting-bot.hf.space",
+  "http://fi3.bot-hosting.net:22854",
+  "https://rs-stream-bot-12.onrender.com",
+  "https://rs-stream-bot-1.onrender.com",
+];
+
+function isKnownRsMirror(url: URL) {
+  const host = url.host.toLowerCase();
+  return host === "rahat1102-video-hosting-bot.hf.space" ||
+    host === "fi3.bot-hosting.net:22854" ||
+    host === "rs-stream-bot-12.onrender.com" ||
+    host === "rs-stream-bot-1.onrender.com";
+}
+
+function buildUpstreamCandidates(target: URL): URL[] {
+  const out: URL[] = [target];
+  if (!isKnownRsMirror(target) || !isDirectMp4Like(target)) return out;
+  for (const origin of RS_MIRROR_ORIGINS) {
+    try {
+      const candidate = new URL(`${origin}${target.pathname}${target.search}${target.hash}`);
+      if (!out.some((u) => u.toString() === candidate.toString())) out.push(candidate);
+    } catch { /* skip */ }
+  }
+  return out;
+}
 
 function capLargeMediaRange(range: string | null, upstreamUrl: URL) {
   if (!range || !isDirectMp4Like(upstreamUrl)) return range;
@@ -56,8 +83,7 @@ function resolveHttpUrl(value: string, baseUrl: string) {
   const raw = String(value || "").trim();
   if (!raw || raw.startsWith("#")) return raw;
   try {
-    const abs = new URL(raw, baseUrl).toString();
-    return abs.startsWith("http://") ? abs : raw;
+    return new URL(raw, baseUrl).toString();
   } catch { return raw; }
 }
 
@@ -68,11 +94,11 @@ function rewritePlaylist(text: string, targetUrl: string, reqUrl: URL) {
     if (trimmed.startsWith("#")) {
       return line.replace(/URI="([^"]+)"/g, (_m, uri) => {
         const abs = resolveHttpUrl(uri, targetUrl);
-        return abs.startsWith("http://") ? `URI="${proxyUrl(reqUrl, abs)}"` : `URI="${uri}"`;
+        return /^https?:\/\//i.test(abs) ? `URI="${proxyUrl(reqUrl, abs)}"` : `URI="${uri}"`;
       });
     }
     const abs = resolveHttpUrl(trimmed, targetUrl);
-    return abs.startsWith("http://") ? proxyUrl(reqUrl, abs) : line;
+    return /^https?:\/\//i.test(abs) ? proxyUrl(reqUrl, abs) : line;
   }).join("\n");
 }
 
@@ -86,7 +112,7 @@ Deno.serve(async (req) => {
 
   let upstreamUrl: URL;
   try { upstreamUrl = new URL(target); } catch { return new Response("Invalid url", { status: 400, headers: cors }); }
-  if (upstreamUrl.protocol !== "http:") return new Response("Only http:// supported. HTTPS must play direct.", { status: 400, headers: cors });
+  if (upstreamUrl.protocol !== "http:" && upstreamUrl.protocol !== "https:") return new Response("Only http/https supported", { status: 400, headers: cors });
 
   const baseHeaders: Record<string, string> = {
     "User-Agent": UA,
@@ -103,24 +129,33 @@ Deno.serve(async (req) => {
 
   let up: Response | null = null;
   let lastError = "";
-  const origin = `${upstreamUrl.protocol}//${upstreamUrl.host}`;
-  const attempts: Record<string, string>[] = [
-    baseHeaders,
-    { ...baseHeaders, Referer: `${origin}/` },
-    { ...baseHeaders, Referer: `${origin}/`, Origin: origin },
-    { ...baseHeaders, Referer: req.headers.get("referer") || `${origin}/` },
-  ];
-
-  for (const headers of attempts) {
-    try {
-      up = await fetch(upstreamUrl.toString(), { method: req.method, headers, redirect: "follow", signal: ac.signal });
-      if (up.ok || up.status === 206 || up.status === 304) break;
-      lastError = `HTTP ${up.status}`;
-      try { await up.body?.cancel(); } catch {}
-    } catch (e) {
-      lastError = (e as Error).message;
-      up = null;
+  let effectiveUrl = upstreamUrl;
+  for (const candidate of buildUpstreamCandidates(upstreamUrl)) {
+    const origin = `${candidate.protocol}//${candidate.host}`;
+    const candidateBaseHeaders = { ...baseHeaders };
+    const rawRange = req.headers.get("range");
+    if (rawRange) candidateBaseHeaders.range = capLargeMediaRange(rawRange, candidate) || rawRange;
+    const attempts: Record<string, string>[] = [
+      candidateBaseHeaders,
+      { ...candidateBaseHeaders, Referer: `${origin}/` },
+      { ...candidateBaseHeaders, Referer: `${origin}/`, Origin: origin },
+      { ...candidateBaseHeaders, Referer: req.headers.get("referer") || `${origin}/` },
+    ];
+    for (const headers of attempts) {
+      try {
+        up = await fetch(candidate.toString(), { method: req.method, headers, redirect: "follow", signal: ac.signal });
+        if (up.ok || up.status === 206 || up.status === 304) {
+          effectiveUrl = candidate;
+          break;
+        }
+        lastError = `HTTP ${up.status}`;
+        try { await up.body?.cancel(); } catch {}
+      } catch (e) {
+        lastError = (e as Error).message;
+        up = null;
+      }
     }
+    if (up && (up.ok || up.status === 206 || up.status === 304)) break;
   }
 
   if (!up) return new Response(`Upstream failed: ${lastError || "network error"}`, { status: 502, headers: cors });
@@ -133,8 +168,8 @@ Deno.serve(async (req) => {
   out.set("Timing-Allow-Origin", "*");
   if (baseHeaders.range && baseHeaders.range !== req.headers.get("range")) out.set("x-rs-proxy-range", baseHeaders.range);
 
-  if (req.method !== "HEAD" && up.ok && isM3u8(upstreamUrl.toString(), up.headers.get("content-type"))) {
-    const body = rewritePlaylist(await up.text(), upstreamUrl.toString(), reqUrl);
+  if (req.method !== "HEAD" && up.ok && isM3u8(effectiveUrl.toString(), up.headers.get("content-type"))) {
+    const body = rewritePlaylist(await up.text(), effectiveUrl.toString(), reqUrl);
     out.delete("content-length");
     out.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
     out.set("cache-control", "no-store");
