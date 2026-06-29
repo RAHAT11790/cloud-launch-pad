@@ -1960,6 +1960,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     return false;
   }, [activeServerIndex, availableQualities, cdnEnabled, currentQuality, currentSrc, effectiveVideoServers, getServerScopedSource, isAnimeSaltContent, isPremium, preferProxy, proxyApiKey, proxyUrl, src, switchServer]);
 
+  const tryNextPlaybackRouteRef = useRef(tryNextPlaybackRoute);
+  useEffect(() => {
+    tryNextPlaybackRouteRef.current = tryNextPlaybackRoute;
+  }, [tryNextPlaybackRoute]);
+
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
   const [hlsAudioOptions, setHlsAudioOptions] = useState<AudioTrackOption[]>([]);
   const [currentHlsAudio, setCurrentHlsAudio] = useState<number>(-1);
