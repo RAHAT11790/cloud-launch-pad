@@ -55,9 +55,12 @@ const loadBackfillCards = async (
   try {
     const keys = await firebaseRestShallowKeys(path);
     if (cancelled()) return;
-    const missing = keys.filter((id) => !currentIds.has(id)).slice(-BACKFILL_CACHE_LIMIT).reverse();
-    for (let i = 0; i < missing.length && !cancelled(); i += BACKFILL_PAGE_SIZE) {
-      const chunk = missing.slice(i, i + BACKFILL_PAGE_SIZE);
+    const reversed = keys.slice(-BACKFILL_CACHE_LIMIT).reverse();
+    const refresh = currentIds.size ? reversed.filter((id) => currentIds.has(id)).slice(0, 4) : [];
+    const missing = reversed.filter((id) => !currentIds.has(id));
+    const workKeys = Array.from(new Set([...refresh, ...missing]));
+    for (let i = 0; i < workKeys.length && !cancelled(); i += BACKFILL_PAGE_SIZE) {
+      const chunk = workKeys.slice(i, i + BACKFILL_PAGE_SIZE);
       const rows = await Promise.all(chunk.map(async (id) => {
         try {
           const item = await firebaseRestGet<any>(`${path}/${id}`);
