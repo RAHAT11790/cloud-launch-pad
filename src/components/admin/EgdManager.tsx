@@ -665,9 +665,13 @@ export default function EgdManager({
               className="relative text-left rounded-xl border border-zinc-700/60 bg-zinc-900/50 hover:bg-amber-500/5 hover:border-amber-400/60 transition p-3 min-w-0 overflow-hidden"
             >
               <div className="font-semibold text-xs text-white truncate">{entry.label}</div>
-              {entry.isNew && (
-                <div className="absolute right-2 top-2 rounded-md border border-emerald-400/50 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-emerald-200">
-                  NEW
+              {(entry.badgeText || entry.isNew) && (
+                <div className={`absolute right-2 top-2 rounded-md px-1.5 py-0.5 text-[9px] font-bold tracking-wide ${
+                  entry.badgeTone === "cyan" ? "border border-cyan-400/50 bg-cyan-500/15 text-cyan-200" :
+                  entry.badgeTone === "amber" ? "border border-amber-400/50 bg-amber-500/15 text-amber-200" :
+                  "border border-emerald-400/50 bg-emerald-500/15 text-emerald-200"
+                }`}>
+                  {entry.badgeText || "NEW"}
                 </div>
               )}
               <div className="text-[10px] text-zinc-500 truncate mt-0.5">{entry.slug}</div>
