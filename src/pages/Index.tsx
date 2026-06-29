@@ -2418,7 +2418,7 @@ const Index = () => {
       let score = categoryScore;
       if (currentLanguage && lang === currentLanguage) score += 4;
       if (a.type === current.type) score += 2;
-      score += Math.min(500, getPopularity(a.id)) / 100;
+      score += Math.min(100, Number(a.rating) || 0) / 100;
       return { anime: a, score };
     });
 
@@ -2428,7 +2428,7 @@ const Index = () => {
       || String(a.anime.title || "").localeCompare(String(b.anime.title || ""))
     );
     return scored.map(s => s.anime).slice(0, 15);
-  }, [playerState?.anime, saltPlayerState?.anime, allAnime, getPopularity]);
+  }, [playerState?.anime?.id, saltPlayerState?.anime?.id, allAnime]);
 
   const suggestedAnimeImmediate = useMemo(() => suggestedAnime.slice(0, 15), [suggestedAnime]);
 
