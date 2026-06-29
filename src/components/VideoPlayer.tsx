@@ -3857,7 +3857,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       : "scale(1)";
 
   return (
-    <div className={`rs-video-player-root fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'}`} ref={containerRef}>
+    <div className={`rs-video-player-root fixed inset-0 z-[300] bg-background/[0.98] flex flex-col items-center ${isFullscreen ? '' : 'overflow-y-auto'} ${isClosing ? 'animate-out fade-out zoom-out-95 duration-150' : ''}`} ref={containerRef}>
       {/* Back arrow lives inside the controls overlay below, so it hides/shows with controls */}
 
 
@@ -4041,22 +4041,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
 
-          {/* ===== ALWAYS-ON BACK BUTTON =====
-              Sits above all overlays so a single tap exits the player even
-              when controls are faded out. Prevents the "tap 2-3 times" lag. */}
-          {!locked && (
-            <button
-              onPointerDown={(e) => { e.stopPropagation(); handleBackPress(); }}
-              onClick={(e) => { e.stopPropagation(); }}
-              className="absolute top-2 left-2 z-[120] w-10 h-10 rounded-full flex items-center justify-center bg-black/55 backdrop-blur-sm active:scale-90 transition-transform duration-100"
-              style={{ pointerEvents: "auto", WebkitTapHighlightColor: "transparent" }}
-              aria-label="Back"
-            >
-              <ArrowLeft className="w-5 h-5 text-white" />
-            </button>
-          )}
-
-
           {/* ===== EMBED-ONLY MINIMAL OVERLAY (AnimeStill iframe) =====
               AN's iframe has its own play/pause/seek/quality. We only show:
               - Server change  - Fullscreen (since AN iframe lacks one)
@@ -4067,7 +4051,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               onMouseEnter={() => { if (anOverlayTimer.current) clearTimeout(anOverlayTimer.current); }}
               onMouseLeave={scheduleAnOverlayHide}
             >
-              <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center bg-black/70 backdrop-blur" aria-label="Back">
+              <button onPointerDown={(e) => { e.stopPropagation(); handleBackPress(); }} onClick={(e) => e.stopPropagation()} className="player-touch-button w-9 h-9 rounded-full flex items-center justify-center bg-black/70 backdrop-blur" aria-label="Back">
                 <ArrowLeft className="w-4 h-4 text-white" />
               </button>
               <div className="flex items-center gap-2">
@@ -4111,7 +4095,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               >
               {/* Top controls */}
               <div className="flex justify-between items-start gap-1 px-2.5 pt-2.5">
-                <button onClick={(e) => { e.stopPropagation(); handleBackPress(); }} className="player-touch-button h-[40px] w-[40px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
+                <button onPointerDown={(e) => { e.stopPropagation(); handleBackPress(); }} onClick={(e) => e.stopPropagation()} className="player-touch-button h-[40px] w-[40px] rounded-full flex items-center justify-center transition-transform duration-150 active:scale-90" aria-label="Back">
                   <ArrowLeft className="w-[22px] h-[22px]" />
                 </button>
                 <div className="flex max-w-[calc(100%-46px)] items-center justify-end gap-1 overflow-x-auto scrollbar-hide pb-1">
