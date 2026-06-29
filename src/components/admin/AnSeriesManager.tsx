@@ -3,7 +3,6 @@ import CachedImg from "@/components/CachedImg";
 import { db, ref, set, get, onValue, remove } from "@/lib/firebase";
 import { animeSaltApi } from "@/lib/animeSaltApi";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
-import { removePublicCatalogItem, savePublicCatalogItem } from "@/lib/publicCatalog";
 import { toast } from "sonner";
 import { CheckCircle2, Database, Edit, Loader2, RefreshCw, Search, Trash2, Zap } from "lucide-react";
 
@@ -586,7 +585,6 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
           createdAt: existing?.data?.createdAt || item.addedAt || savedAt,
         };
         await set(ref(db, `movies/${targetId}`), stripUndefined(movieData));
-        await savePublicCatalogItem("movies", targetId, movieData);
         await set(ref(db, `anSeries/${item.slug}/meta`), stripUndefined({
           title: movieData.title, poster, backdrop, type: "movies", storyline: movieData.storyline, movieId: targetId, updatedAt: savedAt,
         }));
@@ -625,7 +623,6 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       };
 
       await set(ref(db, `webseries/${targetId}`), stripUndefined(seriesData));
-      await savePublicCatalogItem("webseries", targetId, seriesData);
       await set(ref(db, `anSeries/${item.slug}/meta`), stripUndefined({
         title: seriesData.title,
         poster,
@@ -661,7 +658,6 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
     const targetId = item.webseriesId || targetIdForSlug(item.slug);
     if (!confirm(`Delete generated ${label} card for "${item.title}"?`)) return;
     await remove(ref(db, `${isMovieMode ? "movies" : "webseries"}/${targetId}`));
-    await removePublicCatalogItem(isMovieMode ? "movies" : "webseries", targetId);
     await remove(ref(db, `anSeries/${item.slug}`));
     toast.success(`Generated ${label} card deleted`);
   };

@@ -129,29 +129,24 @@ const HeroSlider = ({ slides, onPlay, onInfo }: HeroSliderProps) => {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Cross-fade backdrops — keep only current + neighbors mounted so home does not download every hero image at once. */}
-      {slides.map((s, i) => {
-        const prevIdx = (current - 1 + slides.length) % slides.length;
-        const nextIdx = (current + 1) % slides.length;
-        const shouldLoad = i === current || i === prevIdx || i === nextIdx;
-        return (
-          <img
-            key={s.id + i}
-            src={shouldLoad ? optimizedImageUrl(s.backdrop, "backdrop") : undefined}
-            alt={s.title}
-            aria-hidden={i !== current}
-            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-            style={{
-              opacity: i === current ? 1 : 0,
-              transition: "opacity 600ms ease",
-              willChange: i === current ? "opacity" : undefined,
-            }}
-            loading={i === current ? "eager" : "lazy"}
-            decoding="async"
-            draggable={false}
-          />
-        );
-      })}
+      {/* Cross-fade backdrops — single layer per slide, pure CSS opacity */}
+      {slides.map((s, i) => (
+        <img
+          key={s.id + i}
+          src={optimizedImageUrl(s.backdrop, "backdrop")}
+          alt={s.title}
+          aria-hidden={i !== current}
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          style={{
+            opacity: i === current ? 1 : 0,
+            transition: "opacity 600ms ease",
+            willChange: i === current ? "opacity" : undefined,
+          }}
+          loading={i === current ? "eager" : "lazy"}
+          decoding="async"
+          draggable={false}
+        />
+      ))}
 
       {/* Gradient overlays */}
       <div className="absolute inset-0 pointer-events-none" style={{

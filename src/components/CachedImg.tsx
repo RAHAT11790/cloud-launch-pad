@@ -1,4 +1,4 @@
-import { forwardRef, ImgHTMLAttributes, MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, ImgHTMLAttributes, useEffect, useState, useRef } from "react";
 
 /**
  * CachedImg — drop-in replacement for <img> that:
@@ -49,17 +49,8 @@ const CachedImg = forwardRef<HTMLImageElement, Props>(function CachedImg(
 ) {
   const url = typeof src === "string" ? src : "";
   const wasCached = !!url && decodedCache.has(url);
-  const lazy = loading !== "eager";
-  const imgRef = useRef<HTMLImageElement | null>(null);
   const [ready, setReady] = useState(wasCached || !url);
-  const [shouldLoad, setShouldLoad] = useState(!lazy || wasCached || !url);
   const mounted = useRef(true);
-
-  const setRefs = useCallback((node: HTMLImageElement | null) => {
-    imgRef.current = node;
-    if (typeof ref === "function") ref(node);
-    else if (ref) (ref as MutableRefObject<HTMLImageElement | null>).current = node;
-  }, [ref]);
 
   useEffect(() => {
     mounted.current = true;
@@ -69,30 +60,6 @@ const CachedImg = forwardRef<HTMLImageElement, Props>(function CachedImg(
   }, []);
 
   useEffect(() => {
-    const cached = !!url && decodedCache.has(url);
-    setReady(cached || !url);
-    setShouldLoad(!lazy || cached || !url);
-  }, [url, lazy]);
-
-  useEffect(() => {
-    if (!url || !lazy || shouldLoad || decodedCache.has(url)) return;
-    const node = imgRef.current;
-    if (!node || typeof IntersectionObserver === "undefined") {
-      setShouldLoad(true);
-      return;
-    }
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting || entry.intersectionRatio > 0)) {
-        setShouldLoad(true);
-        observer.disconnect();
-      }
-    }, { rootMargin: "650px 0px" });
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [url, lazy, shouldLoad]);
-
-  useEffect(() => {
-    if (!shouldLoad) return;
     if (!url) {
       setReady(true);
       return;
@@ -109,11 +76,11 @@ const CachedImg = forwardRef<HTMLImageElement, Props>(function CachedImg(
       .catch(() => {
         if (mounted.current) setReady(true); // let native onError fire
       });
-  }, [url, shouldLoad]);
+  }, [url]);
 
   return (
     <img
-      ref={setRefs}
+      ref={ref}
       {...rest}
       src={ready ? url : undefined}
       loading={loading ?? "lazy"}

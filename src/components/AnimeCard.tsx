@@ -4,7 +4,6 @@ import type { AnimeItem } from "@/data/animeData";
 import { db, ref, set, remove, get } from "@/lib/firebase";
 import { getBrandingSync } from "@/hooks/useBranding";
 import { optimizedImageUrl } from "@/lib/imageCache";
-import CachedImg from "./CachedImg";
 
 const watchlistCacheByUser = new Map<string, Set<string>>();
 const watchlistLoadByUser = new Map<string, Promise<Set<string>>>();
@@ -127,11 +126,11 @@ const AnimeCard = ({ anime, onClick }: AnimeCardProps) => {
         background: "linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--card)) 100%)",
       }}
     >
-      <CachedImg
+      <img
         src={optimizedImageUrl(anime.poster, "poster")}
         alt={anime.title}
         className="poster-img w-full h-full object-cover"
-        loading="lazy"
+        loading="eager"
         decoding="async"
       />
       <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />

@@ -19,7 +19,6 @@ import {
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
-import { removePublicCatalogItem, savePublicCatalogItem } from "@/lib/publicCatalog";
 const WeeklyEpTabButton = () => null;
 const WeeklyEpManager = () => null;
 // AdminNotificationBell removed
@@ -3150,7 +3149,6 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  lastSavedSeriesIdRef.current = newId;
  set(saveRef, data)
  .then(async () => {
- await savePublicCatalogItem("webseries", newId, data);
  toast.success(seriesEditId ? "Series updated!" : "Series saved!");
  // Weekly EP feature removed — no sync needed
  setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list");
@@ -3208,16 +3206,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  const deleteSeries = (id: string) => {
  if (confirm("Delete this series?")) {
- Promise.all([remove(ref(db, `webseries/${id}`)), removePublicCatalogItem("webseries", id)]).then(() => toast.success("Deleted!")).catch(err => toast.error("Error: " + err.message));
+ remove(ref(db, `webseries/${id}`)).then(() => toast.success("Deleted!")).catch(err => toast.error("Error: " + err.message));
  }
  };
 
  const updateSeriesVisibility = async (id: string, visibility: "public" | "private") => {
  try {
- const updatedAt = Date.now();
- await update(ref(db, `webseries/${id}`), { visibility, updatedAt });
- const existing = webseriesData.find((s: any) => s.id === id) || {};
- await savePublicCatalogItem("webseries", id, { ...existing, visibility, updatedAt });
+ await update(ref(db, `webseries/${id}`), { visibility, updatedAt: Date.now() });
  toast.success(visibility === "private" ? "Series moved to Private" : "Series moved to Public");
  } catch (err: any) {
  toast.error("Error: " + err.message);
@@ -3322,17 +3317,14 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  updatedAt: Date.now(),
  };
  let saveRef;
-  let newId = movieEditId || "";
  if (movieEditId) {
  saveRef = ref(db, `movies/${movieEditId}`);
  } else {
  saveRef = push(ref(db, "movies"));
-  newId = saveRef.key || "";
  data.createdAt = Date.now();
  }
  set(saveRef, data)
-  .then(async () => {
-  await savePublicCatalogItem("movies", newId, data);
+ .then(() => {
  toast.success(movieEditId ? "Movie updated!" : "Movie saved!");
  setMovieForm(null); setMovieCast([]); setMovieEditId(""); setMoviesTab("mv-list");
  })
@@ -3364,16 +3356,13 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  const deleteMovie = (id: string) => {
  if (confirm("Delete this movie?")) {
- Promise.all([remove(ref(db, `movies/${id}`)), removePublicCatalogItem("movies", id)]).then(() => toast.success("Deleted!")).catch(err => toast.error("Error: " + err.message));
+ remove(ref(db, `movies/${id}`)).then(() => toast.success("Deleted!")).catch(err => toast.error("Error: " + err.message));
  }
  };
 
  const updateMovieVisibility = async (id: string, visibility: "public" | "private") => {
  try {
- const updatedAt = Date.now();
- await update(ref(db, `movies/${id}`), { visibility, updatedAt });
- const existing = moviesData.find((m: any) => m.id === id) || {};
- await savePublicCatalogItem("movies", id, { ...existing, visibility, updatedAt });
+ await update(ref(db, `movies/${id}`), { visibility, updatedAt: Date.now() });
  toast.success(visibility === "private" ? "Movie moved to Private" : "Movie moved to Public");
  } catch (err: any) {
  toast.error("Error: " + err.message);
@@ -10496,9 +10485,7 @@ const AutoImportSection = ({
  type: "webseries",
  createdAt: Date.now(),
  };
- const newSeriesRef = push(ref(db, "webseries"));
- await set(newSeriesRef, seriesData);
- await savePublicCatalogItem("webseries", newSeriesRef.key || "", seriesData);
+ await set(push(ref(db, "webseries")), seriesData);
  toast.success(`✅ "${data.name}" auto-imported as Series!`);
  } else {
  const movieData = {
@@ -10518,9 +10505,7 @@ const AutoImportSection = ({
  type: "movie",
  createdAt: Date.now(),
  };
- const newMovieRef = push(ref(db, "movies"));
- await set(newMovieRef, movieData);
- await savePublicCatalogItem("movies", newMovieRef.key || "", movieData);
+ await set(push(ref(db, "movies")), movieData);
  toast.success(`✅ "${data.title}" auto-imported as Movie!`);
  }
  } catch (err: any) {

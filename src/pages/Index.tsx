@@ -6,7 +6,6 @@ import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
 import type { AnNativeResolvedData } from "@/components/AnNativeView";
-import CachedImg from "@/components/CachedImg";
 
 const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: number) => {
   const params = new URLSearchParams();
@@ -514,7 +513,7 @@ const preloadImage = (src?: string | null) => {
 
 const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime: AnimeItem) => void }) => (
   <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" onClick={() => onClick(anime)}>
-    <CachedImg src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="lazy" decoding="async" />
+    <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.22) 42%, transparent 72%)" }} />
     <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
     {(anime as any).dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
@@ -615,7 +614,7 @@ const Index = () => {
   const isRoutedOverlay = isSearchRoute || isNotificationsRoute || isAnimeRoute || isWatchRoute;
   const animeRouteId = animeRouteMatch?.params.animeId ? decodeURIComponent(animeRouteMatch.params.animeId) : null;
   const watchRouteAnimeId = watchRouteMatch?.params.animeId ? decodeURIComponent(watchRouteMatch.params.animeId) : null;
-  const { webseries, movies, allAnime: firebaseAnime, categories, loading, hydrate } = useFirebaseData();
+  const { webseries, movies, allAnime: firebaseAnime, categories, loading } = useFirebaseData();
   const { items: animeSaltItems, loading: saltLoading } = useSelectedAnimeSalt();
   const brandingConfig = useBranding();
   const displaySiteName = brandingConfig.siteName || "RS ANIME";
@@ -634,11 +633,11 @@ const Index = () => {
       cancelled = true;
       setSplashHold(false);
     };
-    const cap = window.setTimeout(release, 1400);
-    const min = new Promise<void>((r) => window.setTimeout(r, 450));
+    const cap = window.setTimeout(release, 4000);
+    const min = new Promise<void>((r) => window.setTimeout(r, 900));
     const waitForAssets = async () => {
       await new Promise((r) => window.setTimeout(r, 60));
-      const targets = splashAssetTargetsRef.current.slice(0, 6).filter(Boolean);
+      const targets = splashAssetTargetsRef.current.slice(0, 14).filter(Boolean);
       if (targets.length === 0) return;
       await Promise.all(targets.map((u) => preloadImage(u)));
     };
@@ -677,15 +676,13 @@ const Index = () => {
   }, [firebaseAnime, activeSaltItems]);
 
   const allSeries = useMemo(() => {
-    // Show ALL series (RS + AN). AN cards are stored in Firebase webseries
-    // collection by AnSeriesManager, so they're already cached in localStorage
-    // alongside RS cards — no extra fetch, no flicker.
-    return webseries;
+    // All Series must be RS/Firebase only. AN-generated cards stay in AN areas / continue watching, not mixed here.
+    return webseries.filter(i => i.source !== 'animesalt' && i.sourceName !== 'AnimeSalt' && !i.anSlug && !i.animeSaltSlug && !String(i.id || '').startsWith('as_') && !String(i.id || '').startsWith('an_'));
   }, [webseries]);
 
   const allMovies = useMemo(() => {
-    // Show ALL movies (RS + AN), same rationale as allSeries.
-    return movies;
+    // All Movies must be RS/Firebase only. AN movies are managed separately.
+    return movies.filter(i => i.source !== 'animesalt' && i.sourceName !== 'AnimeSalt' && !i.anSlug && !i.animeSaltSlug && !String(i.id || '').startsWith('as_') && !String(i.id || '').startsWith('an_'));
   }, [movies]);
   
   // Maintenance mode check
@@ -1409,18 +1406,10 @@ const Index = () => {
   const [analyticsTotals, setAnalyticsTotals] = useState<Record<string, any>>({});
   const [analyticsClicks, setAnalyticsClicks] = useState<Record<string, any>>({});
   useEffect(() => {
-    // Do not subscribe to root analytics nodes on the public homepage. Those
-    // counters can grow very large and were causing the same loader/data drain
-    // problem as the old root catalog listeners. Keep cached lightweight totals
-    // only; fresh analytics can be read inside Admin where it is expected.
-    try {
-      const raw = localStorage.getItem("rs_public_analytics_lite_v1");
-      if (raw) {
-        const cached = JSON.parse(raw);
-        setAnalyticsTotals(cached?.views || {});
-        setAnalyticsClicks(cached?.clicks || {});
-      }
-    } catch {}
+    const unsubV = onValue(ref(db, "analytics/views"), (snap) => setAnalyticsViews(snap.val() || {}));
+    const unsubT = onValue(ref(db, "analytics/totals/views"), (snap) => setAnalyticsTotals(snap.val() || {}));
+    const unsubC = onValue(ref(db, "analytics/totals/clicks"), (snap) => setAnalyticsClicks(snap.val() || {}));
+    return () => { unsubV(); unsubT(); unsubC(); };
   }, []);
 
   const getViewCount = useCallback((id: string): number => {
@@ -1716,10 +1705,6 @@ const Index = () => {
   }
 
   const handleCardClick = async (anime: AnimeItem, sIdx?: number, eIdx?: number) => {
-    // List items are LITE (no seasons/audioTracks) — hydrate the full record
-    // from Firebase before opening details or playback. Avoids loading the
-    // entire 100MB+ webseries payload upfront.
-    anime = await hydrate(anime);
     // Cancel any stale in-flight AnimeSalt details requests when switching content
     detailsRequestRef.current += 1;
     const switchingInPlayer = keepPlayerAliveRef.current;
@@ -1778,10 +1763,6 @@ const Index = () => {
       return;
     }
 
-    // List is lite — hydrate the full record (seasons / audioTracks) before playback.
-    anime = await hydrate(anime);
-
-
     const fallbackTarget = getDefaultWatchTarget(anime);
     const resolvedSeasonIdx = seasonIdx ?? fallbackTarget.seasonIdx;
     const resolvedEpIdx = epIdx ?? fallbackTarget.epIdx;
@@ -1804,9 +1785,8 @@ const Index = () => {
       }
     }
 
-    const resolvedLanguageBase = resolvePlayableLanguage(anime, anime.baseLanguage || anime.language);
-    let resolvedLanguage = resolvedLanguageBase;
-    const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, resolvedLanguageBase);
+    const resolvedLanguage = resolvePlayableLanguage(anime, anime.baseLanguage || anime.language);
+    const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, resolvedLanguage);
     let src = "";
     let subtitle = "";
     let qualityOptions: { label: string; src: string }[] = [];
@@ -1827,10 +1807,6 @@ const Index = () => {
           src = directFromFirebase.src;
           qualityOptions = directFromFirebase.qualityOptions;
           audioTracks = directFromFirebase.audioTracks;
-          // Force VideoPlayer to pick the Hindi (default) audio track from
-          // the synthetic master instead of falling back to anime.language
-          // (which is typically "Japanese" on AnimeSalt metadata).
-          resolvedLanguage = directFromFirebase.preferredLanguage || "Hindi";
         }
       }
       } else if (anime.movieLink) {
@@ -1844,7 +1820,6 @@ const Index = () => {
           src = anMovie.src;
           qualityOptions = anMovie.qualityOptions;
           audioTracks = anMovie.audioTracks as any;
-          resolvedLanguage = (anMovie as any).preferredLanguage || "Hindi";
         }
     }
 
@@ -2110,13 +2085,11 @@ const Index = () => {
     }
 
     const preferredSource = item.source || "firebase";
-    const anime0 =
+    const anime =
       allAnime.find(a => a.id === item.id && (a.source || "firebase") === preferredSource) ||
       allAnime.find(a => a.id === item.id && (a.source || "firebase") === "firebase") ||
       allAnime.find(a => a.id === item.id);
-    if (!anime0) return;
-    // Hydrate full record (seasons/audioTracks) — list is lite to keep memory low.
-    const anime = await hydrate(anime0);
+    if (!anime) return;
 
     if (anime.source === "animesalt" && !hasStoredFirebasePlayback(anime)) {
       toast.error("AN video/audio is not saved in Firebase yet. Refresh it from Admin first.");
@@ -2216,10 +2189,9 @@ const Index = () => {
     }
     const anime = allAnime.find(a => a.id === slide.id);
     if (!anime) return;
-    if (anime.type === "webseries") {
-      // List is lite — handlePlay() hydrates and picks the first episode.
+    if (anime.type === "webseries" && anime.seasons && anime.seasons.length > 0 && anime.seasons[0].episodes?.length > 0) {
       handlePlay(anime, 0, 0);
-    } else if (anime.type === "movie") {
+    } else if (anime.movieLink) {
       handlePlay(anime);
     } else {
       handleCardClick(anime);
@@ -2624,7 +2596,7 @@ const Index = () => {
     );
   }
 
-  if ((loading || splashHold) && firebaseAnime.length === 0 && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute && !isAnimeRoute && !isWatchRoute) {
+  if ((loading || splashHold) && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute && !isAnimeRoute && !isWatchRoute) {
     return <SplashLoader />;
   }
 
@@ -2718,7 +2690,7 @@ const Index = () => {
                     <div key={item.id} onClick={() => handleContinueWatching(item)}
                       className="flex-shrink-0 w-[130px] cursor-pointer">
                       <div data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden poster-hover mb-1">
-                        <CachedImg src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="lazy" decoding="async" />
+                        <img src={optimizedImageUrl(item.poster, "poster")} alt={item.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
                         <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)" }} />
                         <span className={`absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider z-10 ${isAn ? "bg-accent/85 text-accent-foreground" : "bg-primary/85 text-primary-foreground"}`}>{isAn ? "AN" : "RS"}</span>
                         {agoLabel && (
