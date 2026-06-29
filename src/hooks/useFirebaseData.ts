@@ -111,6 +111,8 @@ export function useFirebaseData() {
 
     let cancelled = false;
     const cancelIdle = scheduleIdle(async () => {
+      checkLoaded();
+      checkLoaded();
       await loadBackfillCards(
         "webseries",
         new Set(readCache<AnimeItem[]>(LS_WS, []).map((item) => item.id)),
@@ -134,8 +136,6 @@ export function useFirebaseData() {
         }),
         () => cancelled,
       );
-      checkLoaded();
-      checkLoaded();
     });
 
     return () => {
