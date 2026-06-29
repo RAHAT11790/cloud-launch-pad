@@ -3208,13 +3208,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  const deleteSeries = (id: string) => {
  if (confirm("Delete this series?")) {
- remove(ref(db, `webseries/${id}`)).then(() => toast.success("Deleted!")).catch(err => toast.error("Error: " + err.message));
+ Promise.all([remove(ref(db, `webseries/${id}`)), removePublicCatalogItem("webseries", id)]).then(() => toast.success("Deleted!")).catch(err => toast.error("Error: " + err.message));
  }
  };
 
  const updateSeriesVisibility = async (id: string, visibility: "public" | "private") => {
  try {
- await update(ref(db, `webseries/${id}`), { visibility, updatedAt: Date.now() });
+ const updatedAt = Date.now();
+ await update(ref(db, `webseries/${id}`), { visibility, updatedAt });
+ const existing = webseriesData.find((s: any) => s.id === id) || {};
+ await savePublicCatalogItem("webseries", id, { ...existing, visibility, updatedAt });
  toast.success(visibility === "private" ? "Series moved to Private" : "Series moved to Public");
  } catch (err: any) {
  toast.error("Error: " + err.message);
