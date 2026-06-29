@@ -305,7 +305,6 @@ const fetchPublicCatalog = async () => {
 
 const fetchLiteCatalog = async () => {
   const publicCatalog = await fetchPublicCatalog();
-  if (publicCatalog) return publicCatalog;
 
   const [wsKeysRaw, movKeysRaw] = await Promise.all([
     fetchDbJson<Record<string, boolean>>("webseries", "shallow=true"),
@@ -313,20 +312,30 @@ const fetchLiteCatalog = async () => {
   ]);
   const wsKeys = Object.keys(wsKeysRaw || {});
   const movKeys = Object.keys(movKeysRaw || {});
+  const publicWsById = new Map((publicCatalog?.webseries || []).map((item) => [item.id, item]));
+  const publicMovById = new Map((publicCatalog?.movies || []).map((item) => [item.id, item]));
+  const wsMissing = wsKeys.filter((id) => !publicWsById.has(id));
+  const movMissing = movKeys.filter((id) => !publicMovById.has(id));
 
   const [wsRecords, movRecords] = await Promise.all([
-    mapLimit(wsKeys, 8, async (id) => ({ id, item: await fetchLiteRecord("webseries", id) })),
-    mapLimit(movKeys, 8, async (id) => ({ id, item: await fetchLiteRecord("movies", id) })),
+    mapLimit(wsMissing, 8, async (id) => ({ id, item: await fetchLiteRecord("webseries", id) })),
+    mapLimit(movMissing, 8, async (id) => ({ id, item: await fetchLiteRecord("movies", id) })),
   ]);
 
   return {
-    webseries: wsRecords
+    webseries: [
+      ...Array.from(publicWsById.values()),
+      ...wsRecords
       .filter(({ item }) => item?.visibility !== "private" && item?.title)
-      .map(({ id, item }) => mapWebseriesLite(id, item))
+      .map(({ id, item }) => mapWebseriesLite(id, item)),
+    ]
       .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)),
-    movies: movRecords
+    movies: [
+      ...Array.from(publicMovById.values()),
+      ...movRecords
       .filter(({ item }) => item?.visibility !== "private" && item?.title)
-      .map(({ id, item }) => mapMovieLite(id, item))
+      .map(({ id, item }) => mapMovieLite(id, item)),
+    ]
       .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)),
   };
 };
