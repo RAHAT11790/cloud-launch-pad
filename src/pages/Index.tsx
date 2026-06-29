@@ -6,6 +6,7 @@ import SplashLoader from "@/components/SplashLoader";
 import { Lock, ExternalLink, Loader2 } from "lucide-react";
 import { TELEGRAM_CHANNEL_URL } from "@/lib/siteConfig";
 import type { AnNativeResolvedData } from "@/components/AnNativeView";
+import CachedImg from "@/components/CachedImg";
 
 const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: number) => {
   const params = new URLSearchParams();
@@ -513,7 +514,7 @@ const preloadImage = (src?: string | null) => {
 
 const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime: AnimeItem) => void }) => (
   <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" onClick={() => onClick(anime)}>
-    <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
+    <CachedImg src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="lazy" decoding="async" />
     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.22) 42%, transparent 72%)" }} />
     <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
     {(anime as any).dubType === "fandub" && <span className="absolute top-1.5 left-1.5 bg-orange-600 px-1.5 py-0.5 rounded text-[8px] font-bold text-white">FAN</span>}
@@ -633,11 +634,11 @@ const Index = () => {
       cancelled = true;
       setSplashHold(false);
     };
-    const cap = window.setTimeout(release, 4000);
-    const min = new Promise<void>((r) => window.setTimeout(r, 900));
+    const cap = window.setTimeout(release, 1400);
+    const min = new Promise<void>((r) => window.setTimeout(r, 450));
     const waitForAssets = async () => {
       await new Promise((r) => window.setTimeout(r, 60));
-      const targets = splashAssetTargetsRef.current.slice(0, 14).filter(Boolean);
+      const targets = splashAssetTargetsRef.current.slice(0, 6).filter(Boolean);
       if (targets.length === 0) return;
       await Promise.all(targets.map((u) => preloadImage(u)));
     };
