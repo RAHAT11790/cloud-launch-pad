@@ -3150,6 +3150,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  lastSavedSeriesIdRef.current = newId;
  set(saveRef, data)
  .then(async () => {
+ await savePublicCatalogItem("webseries", newId, data);
  toast.success(seriesEditId ? "Series updated!" : "Series saved!");
  // Weekly EP feature removed — no sync needed
  setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list");
