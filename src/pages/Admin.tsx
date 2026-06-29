@@ -3319,14 +3319,17 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  updatedAt: Date.now(),
  };
  let saveRef;
+  let newId = movieEditId || "";
  if (movieEditId) {
  saveRef = ref(db, `movies/${movieEditId}`);
  } else {
  saveRef = push(ref(db, "movies"));
+  newId = saveRef.key || "";
  data.createdAt = Date.now();
  }
  set(saveRef, data)
- .then(() => {
+  .then(async () => {
+  await savePublicCatalogItem("movies", newId, data);
  toast.success(movieEditId ? "Movie updated!" : "Movie saved!");
  setMovieForm(null); setMovieCast([]); setMovieEditId(""); setMoviesTab("mv-list");
  })
