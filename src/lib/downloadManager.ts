@@ -282,7 +282,11 @@ class DownloadManager {
 
   private async runItemDownload(id: string, controller: AbortController) {
     const item = this.downloads.get(id);
-    if (!item || item.status !== "downloading" || !item.url) return;
+    if (!item || item.status !== "downloading") return;
+    if (!item.url) {
+      this.settleItem(id, "error", { error: "Download link is invalid" });
+      return;
+    }
 
     const rawUrl = String(item.url || "").trim();
     let fileName = item.fileName || buildFileName(item.title, item.subtitle, item.quality);
