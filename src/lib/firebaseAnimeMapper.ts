@@ -66,6 +66,20 @@ const countEpisodes = (seasons: any): number | undefined => {
   return total > 0 ? total : undefined;
 };
 
+const countBestEpisodes = (item: any): number | undefined => {
+  const stored = Number(item?.episodeCount || 0) || 0;
+  if (stored > 0) return stored;
+  const direct = countEpisodes(item?.seasons);
+  if (direct) return direct;
+  const custom = countEpisodes(item?.customSeasons);
+  if (custom) return custom;
+  if (item?.seasonsByLanguage && typeof item.seasonsByLanguage === "object") {
+    const best = Math.max(0, ...Object.values(item.seasonsByLanguage).map((seasons) => countEpisodes(seasons) || 0));
+    return best > 0 ? best : undefined;
+  }
+  return undefined;
+};
+
 const isAnimeSaltRow = (item: any) => Boolean(item?.anSlug || item?.animeSaltSlug || item?.sourceName === "AnimeSalt" || item?.source === "animesalt");
 
 export const mapFirebaseWebseriesItem = (id: string, item: any, opts: MapOptions = {}): AnimeItem => {
@@ -102,7 +116,7 @@ export const mapFirebaseWebseriesItem = (id: string, item: any, opts: MapOptions
     audioTracks: opts.full ? mapAudioTracks(item?.audioTracks) : undefined,
     dubType: item?.dubType || "official",
     seasons,
-    episodeCount: opts.full ? undefined : (Number(item?.episodeCount || 0) || countEpisodes(item?.seasons)),
+    episodeCount: opts.full ? undefined : countBestEpisodes(item),
     trailer: item?.trailer || undefined,
     movieLink: undefined,
     createdAt: item?.createdAt || 0,
@@ -170,6 +184,6 @@ export const mapAnimeSaltSelectedItem = (slug: string, item: any): AnimeItem => 
     dubType: item?.dubType || "official",
     createdAt: item?.createdAt || item?.addedAt || 0,
     updatedAt: item?.updatedAt || item?.addedAt || 0,
-    episodeCount: Number(item?.episodeCount || 0) || (Array.isArray(item?.customSeasons) ? countEpisodes(item.customSeasons) : undefined),
+    episodeCount: countBestEpisodes(item),
   };
 };

@@ -13,7 +13,26 @@ const toArray = (value: any): any[] => Array.isArray(value) ? value : [];
 
 const countEpisodes = (item: any) => {
   if (Number.isFinite(Number(item?.episodeCount))) return Number(item.episodeCount) || 0;
-  return toArray(item?.seasons).reduce((sum, season) => sum + toArray(season?.episodes).length, 0);
+  const countSeasonList = (seasons: any) => toArray(seasons).reduce((sum, season) => sum + toArray(season?.episodes).length, 0);
+  const direct = countSeasonList(item?.seasons);
+  if (direct > 0) return direct;
+  const custom = countSeasonList(item?.customSeasons);
+  if (custom > 0) return custom;
+  if (item?.seasonsByLanguage && typeof item.seasonsByLanguage === "object") {
+    return Math.max(0, ...Object.values(item.seasonsByLanguage).map(countSeasonList));
+  }
+  return 0;
+};
+
+const countSeasons = (item: any) => {
+  const direct = toArray(item?.seasons).length;
+  if (direct > 0) return direct;
+  const custom = toArray(item?.customSeasons).length;
+  if (custom > 0) return custom;
+  if (item?.seasonsByLanguage && typeof item.seasonsByLanguage === "object") {
+    return Math.max(0, ...Object.values(item.seasonsByLanguage).map((seasons) => toArray(seasons).length));
+  }
+  return 0;
 };
 
 export const buildAdminContentIndexItem = (id: string, item: any, kind: AdminContentKind) => ({
@@ -34,7 +53,7 @@ export const buildAdminContentIndexItem = (id: string, item: any, kind: AdminCon
   sourceName: String(item?.sourceName || ""),
   displayAs: String(item?.displayAs || ""),
   dubType: String(item?.dubType || "official"),
-  seasonCount: kind === "webseries" ? toArray(item?.seasons).length : 0,
+  seasonCount: kind === "webseries" ? countSeasons(item) : 0,
   episodeCount: kind === "webseries" ? countEpisodes(item) : 0,
   createdAt: Number(item?.createdAt || 0),
   updatedAt: Number(item?.updatedAt || item?.createdAt || 0),

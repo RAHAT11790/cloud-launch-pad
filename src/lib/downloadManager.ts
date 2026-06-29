@@ -154,7 +154,7 @@ class DownloadManager {
   private async fetchTotalSize(url: string): Promise<number> {
     const candidate = String(url || "").trim();
     if (!candidate) return 0;
-    // HLS downloads are blocked — don't probe segment sizes.
+    // HLS size is estimated in the picker; avoid probing every segment here.
     if (isHlsUrl(candidate)) return 0;
     if (candidate.toLowerCase().startsWith("data:")) return decodeDataUriBytes(candidate);
     const probePlans: RequestInit[] = this.isProxyDownloadUrl(candidate)
@@ -201,18 +201,6 @@ class DownloadManager {
           this.update(id, { totalMB: mb });
         }
       }).catch(() => {});
-    }
-
-    // HLS (.m3u8) streams are AN-content. Per product decision the in-browser
-    // segment downloader is disabled — show a friendly error instead of trying
-    // to bundle .ts segments. RS (direct mp4) downloads continue below.
-    if (item.url && isHlsUrl(item.url)) {
-      this.settleItem(id, "error", { error: "AN video download করা যাবে না" });
-      try {
-        // Lazy import so we don't pull sonner into download bundle for everyone.
-        import("sonner").then(({ toast }) => toast.error("AN video download করা যাবে না"));
-      } catch {}
-      return;
     }
 
     const timers: ItemTimers = {};

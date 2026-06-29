@@ -2276,7 +2276,7 @@ const Index = () => {
     if (!anime) return;
     if (anime.type === "webseries" && anime.seasons && anime.seasons.length > 0 && anime.seasons[0].episodes?.length > 0) {
       handlePlay(anime, 0, 0);
-    } else if (anime.movieLink) {
+    } else if (getMovieSrc(anime)) {
       handlePlay(anime);
     } else {
       handleCardClick(anime);
