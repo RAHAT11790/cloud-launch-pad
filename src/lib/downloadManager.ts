@@ -99,12 +99,19 @@ class DownloadManager {
     try {
       const response = await fetch(url, init);
       const len = response.headers.get("content-length");
-      if (len && Number(len) > 0) return Number(len);
+      if (len && Number(len) > 0) {
+        try { await response.body?.cancel(); } catch {}
+        return Number(len);
+      }
       const range = response.headers.get("content-range");
       if (range) {
         const match = /\/(\d+)\s*$/.exec(range);
-        if (match && Number(match[1]) > 0) return Number(match[1]);
+        if (match && Number(match[1]) > 0) {
+          try { await response.body?.cancel(); } catch {}
+          return Number(match[1]);
+        }
       }
+      try { await response.body?.cancel(); } catch {}
     } catch {}
     return 0;
   }
