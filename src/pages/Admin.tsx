@@ -530,10 +530,13 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  </div>
 
  <div className="space-y-2">
-  {ROUTER_FUNCTIONS.map(({ slug, label, isNew, defaultUrl }) => {
+  {ROUTER_FUNCTIONS.map(({ slug, label, isNew, badgeText, badgeTone, defaultUrl }) => {
  const res = testResult[slug];
  const isVideoProxy = slug === "video-proxy";
  const isDefault = (urls[slug] || "").trim() === defaultUrl;
+ const badgeClass = badgeTone === "cyan" ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+   : badgeTone === "amber" ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+   : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
  return (
  <div key={slug} className="rounded-xl border bg-zinc-900/40 p-3 min-w-0 border-zinc-700/50">
  <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
@@ -541,9 +544,9 @@ const FunctionUrlOverrides = ({ glassCard, inputClass, btnPrimary, btnSecondary 
  <div className="min-w-0">
  <div className="text-xs font-semibold text-white truncate flex items-center gap-1.5">
  {label}
-  {isNew && (
-  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 tracking-wider">
-  NEW
+  {(badgeText || isNew) && (
+  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded border tracking-wider ${badgeClass}`}>
+  {badgeText || "NEW"}
   </span>
   )}
  {isVideoProxy && (
