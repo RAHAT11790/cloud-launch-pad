@@ -753,21 +753,16 @@ const Index = () => {
   // Merge AnimeSalt items into main data lists (only when enabled)
   const activeSaltItems = useMemo(() => animeSaltEnabled ? animeSaltItems : [], [animeSaltEnabled, animeSaltItems]);
 
-  const allAnime = useMemo(() => {
-    const combined = [...firebaseAnime, ...activeSaltItems];
-    combined.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-    return combined;
-  }, [firebaseAnime, activeSaltItems]);
+  const allAnime = useMemo(() => mergeAnimeCards(firebaseAnime, activeSaltItems), [firebaseAnime, activeSaltItems]);
 
   const allSeries = useMemo(() => {
-    // Include BOTH RS (Firebase) and AN-generated webseries on the Series page.
-    return webseries;
-  }, [webseries]);
+    // Include BOTH saved Firebase rows and selected AN/Ad rows; dedupe by AN slug.
+    return mergeAnimeCards(webseries, activeSaltItems.filter((item) => item.type === "webseries"));
+  }, [webseries, activeSaltItems]);
 
   const allMovies = useMemo(() => {
-    // Include BOTH RS (Firebase) and AN-generated movies on the Movies page.
-    return movies;
-  }, [movies]);
+    return mergeAnimeCards(movies, activeSaltItems.filter((item) => item.type === "movie"));
+  }, [movies, activeSaltItems]);
   
   // Maintenance mode check
   const [maintenance, setMaintenance] = useState<any>(null);
