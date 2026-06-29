@@ -590,8 +590,18 @@ const API_ENDPOINTS = {
   ok: true,
   name: "AnimeSalt Stream API — NEW ultra fast stable",
   subtitles: false,
-  endpoints: { search: "/search?q=naruto", anime: "/anime?slug=naruto&type=series", episode: "/episode?slug=naruto-1x1", embed: "/embed?url=...", hls: "/hls?url=..." },
+  endpoints: { series: "/series?page=1", movies: "/movies?page=1", search: "/search?q=naruto", anime: "/anime?slug=naruto&type=series", episode: "/episode?slug=naruto-1x1", embed: "/embed?url=...", hls: "/hls?url=..." },
 };
+
+async function browse(type: string, page = 1, forceRefresh = false) {
+  const safeType = type === "movies" ? "movies" : "series";
+  const safePage = Math.max(1, Number(page || 1));
+  const cacheKey = `browse:${safeType}:${safePage}`;
+  const cached = getCache<any>(cacheKey, forceRefresh);
+  if (cached) return cached;
+  const listUrl = safePage > 1 ? `${AN_BASE}/${safeType}/page/${safePage}/` : `${AN_BASE}/${safeType}/`;
+  return setCache(cacheKey, { html: await fetchText(listUrl), currentPage: safePage }, 15 * 60_000);
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
@@ -615,10 +625,8 @@ Deno.serve(async (req) => {
       if (action === "series" && slug) return json({ success: true, data: await detail(slug, "series", forceRefresh) });
       if ((action === "movie" || action === "episode") && slug) return json({ success: true, data: await episode(slug, action === "movie" ? "movies" : type, forceRefresh) });
       if (action === "browse") {
-        const safeType = type === "movies" ? "movies" : "series";
-        const page = Math.max(1, Number(body?.page || 1));
-        const listUrl = page > 1 ? `${AN_BASE}/${safeType}/page/${page}/` : `${AN_BASE}/${safeType}/`;
-        return json({ success: true, html: await fetchText(listUrl) });
+        const result = await browse(type, body?.page || 1, forceRefresh);
+        return json({ success: true, ...result });
       }
       return json({ success: false, error: "unsupported POST body" }, 400);
     }
@@ -633,6 +641,10 @@ Deno.serve(async (req) => {
       const q = url.searchParams.get("q") || "";
       if (!q.trim()) return json({ error: "missing ?q=" }, 400);
       return json(await search(q.trim()));
+    }
+    if (path === "/series" || path === "/movies") {
+      const result = await browse(path === "/movies" ? "movies" : "series", Number(url.searchParams.get("page") || 1), url.searchParams.get("force") === "1");
+      return json({ success: true, ...result });
     }
     if (path === "/anime") {
       const slug = url.searchParams.get("slug") || "";
