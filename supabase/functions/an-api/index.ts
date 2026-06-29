@@ -222,7 +222,6 @@ async function detail(slug: string, type: string, forceRefresh = false) {
 
   if (postId && seasonNums.length) {
     await Promise.all(seasonNums.map(async (sNum) => {
-      if (seasons.get(sNum)?.episodes.length) return; // already harvested from static HTML
       try {
         const seasonHtml = await fetchText(`${AN_BASE}/wp-admin/admin-ajax.php?action=action_select_season&season=${sNum}&post=${postId}`, {
           headers: { "X-Requested-With": "XMLHttpRequest", Accept: "text/html,*/*" },

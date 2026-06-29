@@ -541,7 +541,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       const isMovie = isMovieMode;
       const detailResult: any = isMovie ? await animeSaltApi.getMovie(item.slug, true) : await animeSaltApi.getSeries(item.slug, true);
       const detail = detailResult?.data || detailResult;
-      const customSeasons = !isMovie && Array.isArray(item.customSeasons) && item.customSeasons.length > 0 ? item.customSeasons : [];
+      const customSeasons = !isMovie && opts.force && Array.isArray(item.customSeasons) && item.customSeasons.length > 0 ? item.customSeasons : [];
       const apiSeasons = !isMovie && Array.isArray(detail?.seasons) ? detail.seasons : [];
       const rawSeasons = customSeasons.length
         ? customSeasons
@@ -555,7 +555,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       const savedAt = Date.now();
 
       await Promise.all(rawSeasons.map(async (season: any, sIdx: number) => {
-        const fetched = await mapLimit(season.episodes || [], 4, async (ep: any, eIdx: number) => {
+        const fetched = await mapLimit(season.episodes || [], 12, async (ep: any, eIdx: number) => {
           const epSlug = String(ep?.slug || "").trim();
           const fallback = { number: Number(ep?.number || ep?.episodeNumber || eIdx + 1), title: ep?.title || `Episode ${eIdx + 1}`, slug: epSlug };
           const hasManualLinks = !!(ep?.link || ep?.link480 || ep?.link720 || ep?.link1080 || ep?.link4k || (Array.isArray(ep?.audioTracks) && ep.audioTracks.length));
@@ -696,7 +696,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       return;
     }
     setBulkRunning(true);
-    for (const item of pending) await fetchAndSaveSeries(item, { silentSkip: true });
+    await mapLimit(pending, 3, (item) => fetchAndSaveSeries(item, { silentSkip: true }));
     setBulkRunning(false);
     toast.success(`${label}: fetched ${pending.length}${skippedCount ? ` • Skipped ${skippedCount} (already in RS)` : ""}`);
   };

@@ -4956,28 +4956,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             setDlSelectedEpisodes(new Set());
           };
 
-          if (isAnimeSaltContent) {
-            return (
-              <div className="w-full">
-                {showDownloadQualityPicker && (
-                  <div className="fixed left-0 right-0 bottom-0 z-[260] border-t border-white/10 bg-black text-white flex flex-col overflow-hidden" style={inlineSheetStyle} data-player-panel="true">
-                    <div className="sticky top-0 z-10 bg-black flex items-center justify-between px-4 pt-3 pb-2 border-b border-white/10">
-                      <p className="text-[15px] font-bold tracking-tight text-white truncate">Download</p>
-                      <button onClick={closePanel} className="h-8 w-8 flex items-center justify-center text-white/70 active:scale-95 flex-shrink-0 ml-3"><X className="w-5 h-5" /></button>
-                    </div>
-                    <div className="px-5 pt-7 pb-8 flex flex-col items-center text-center gap-4 flex-1 overflow-y-auto">
-                      <div className="w-16 h-16 rounded-full bg-amber-400/15 border border-amber-400/40 flex items-center justify-center"><Download className="w-7 h-7 text-amber-300" /></div>
-                      <h3 className="text-[17px] font-bold text-white">Download not available</h3>
-                      <p className="text-[13px] leading-relaxed text-white/75 max-w-sm">Sorry — <span className="font-bold text-amber-300">AN</span> videos can't be downloaded. Only <span className="font-bold text-amber-300">RS</span> videos support offline download. Please look for the RS version of this title to enjoy it offline.</p>
-                      <p className="text-[11px] text-white/50 italic mt-2">Thanks for visiting @</p>
-                      <button onClick={closePanel} className="mt-2 px-7 py-2.5 rounded-full bg-white text-black text-[13px] font-bold active:scale-95 transition-transform inline-flex items-center gap-2"><X className="w-4 h-4" /> Close</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          }
-
           const startMovieDownload = async (quality: string) => {
             const { toast } = await import("sonner");
             const movieLabel = String(title || subtitle || "video").trim();
