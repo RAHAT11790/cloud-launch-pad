@@ -1787,8 +1787,9 @@ const Index = () => {
       }
     }
 
-    const resolvedLanguage = resolvePlayableLanguage(anime, anime.baseLanguage || anime.language);
-    const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, resolvedLanguage);
+    const resolvedLanguageBase = resolvePlayableLanguage(anime, anime.baseLanguage || anime.language);
+    let resolvedLanguage = resolvedLanguageBase;
+    const resolvedSeasons = resolveAnimeSeasonsForLanguage(anime, resolvedLanguageBase);
     let src = "";
     let subtitle = "";
     let qualityOptions: { label: string; src: string }[] = [];
@@ -1809,6 +1810,10 @@ const Index = () => {
           src = directFromFirebase.src;
           qualityOptions = directFromFirebase.qualityOptions;
           audioTracks = directFromFirebase.audioTracks;
+          // Force VideoPlayer to pick the Hindi (default) audio track from
+          // the synthetic master instead of falling back to anime.language
+          // (which is typically "Japanese" on AnimeSalt metadata).
+          resolvedLanguage = directFromFirebase.preferredLanguage || "Hindi";
         }
       }
       } else if (anime.movieLink) {
@@ -1822,6 +1827,7 @@ const Index = () => {
           src = anMovie.src;
           qualityOptions = anMovie.qualityOptions;
           audioTracks = anMovie.audioTracks as any;
+          resolvedLanguage = (anMovie as any).preferredLanguage || "Hindi";
         }
     }
 
