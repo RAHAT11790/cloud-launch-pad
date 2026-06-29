@@ -780,18 +780,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, []);
 
   const currentLangLabel = useMemo(() => {
-    // AnimeSalt: before HLS exposes tracks, fall back to the real available
-    // track list only — never invent a language pill that does not exist.
-    if (isAnimeSaltContent && propAudioTracks?.length) {
-      if (selectedLanguageLabel) {
+    // AnimeSalt: lock to Hindi as the visible label whenever AN content is
+    // playing. AN's default audio policy is Hindi-first (Index.tsx forces it
+    // via pickAnDefaultAudioIdx), so showing anything else would just flash
+    // before the player swaps back. Only honor an explicit user override.
+    if (isAnimeSaltContent) {
+      if (selectedLanguageLabel && propAudioTracks?.length) {
         const match = propAudioTracks.find((t) => {
           const lbl = getPrimaryLanguageToken(t.label || t.language || "") || "";
           return lbl.toLowerCase() === selectedLanguageLabel.trim().toLowerCase();
         });
         if (match) return getPrimaryLanguageToken(match.label || match.language || "") || selectedLanguageLabel;
       }
-      const pick = propAudioTracks.find((t: any) => t?.isDefault) || propAudioTracks[0];
-      return getPrimaryLanguageToken(pick.label || pick.language || "") || pick.label || pick.language || "Hindi";
+      return "Hindi";
     }
     if (selectedLanguageLabel) return selectedLanguageLabel;
     if (selectedLanguage) return getPrimaryLanguageToken(selectedLanguage) || selectedLanguage;
