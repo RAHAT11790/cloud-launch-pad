@@ -415,6 +415,80 @@ const mapLimit = async <T, R,>(items: T[], limit: number, worker: (item: T, inde
   return results;
 };
 
+const seasonKey = (season: any, index: number) => {
+  const explicit = Number(season?.seasonNumber || String(season?.name || "").match(/season\s*(\d+)/i)?.[1] || 0);
+  return explicit > 0 ? `n:${explicit}` : `i:${index}`;
+};
+
+const mergeApiAndCustomSeasons = (apiSeasons: any[], customSeasons: any[]) => {
+  if (!apiSeasons.length) return customSeasons;
+  if (!customSeasons.length) return apiSeasons;
+
+  const out = apiSeasons.map((season: any, sIdx: number) => ({
+    ...season,
+    name: season?.name || `Season ${sIdx + 1}`,
+    seasonNumber: Number(season?.seasonNumber || String(season?.name || "").match(/season\s*(\d+)/i)?.[1] || sIdx + 1),
+    episodes: listValues(season?.episodes),
+  }));
+  const indexByKey = new Map(out.map((season, idx) => [seasonKey(season, idx), idx]));
+
+  customSeasons.forEach((customSeason: any, customIdx: number) => {
+    const key = seasonKey(customSeason, customIdx);
+    const targetIdx = indexByKey.get(key);
+    if (targetIdx === undefined) {
+      out.push({
+        ...customSeason,
+        name: customSeason?.name || `Season ${out.length + 1}`,
+        seasonNumber: Number(customSeason?.seasonNumber || out.length + 1),
+        episodes: listValues(customSeason?.episodes),
+      });
+      return;
+    }
+
+    const customEpisodes = listValues(customSeason?.episodes);
+    const bySlug = new Map<string, any>();
+    const byNumber = new Map<number, any>();
+    customEpisodes.forEach((ep: any, idx: number) => {
+      const slug = String(ep?.slug || ep?.episodeSlug || "").trim();
+      if (slug) bySlug.set(slug, ep);
+      byNumber.set(Number(ep?.number || ep?.episodeNumber || idx + 1), ep);
+    });
+    const apiEpisodes = listValues(out[targetIdx]?.episodes);
+    const used = new Set<any>();
+
+    out[targetIdx] = {
+      ...out[targetIdx],
+      ...customSeason,
+      // API episodes are the source of truth for count/slug; custom fields only
+      // overlay manual video/audio edits. This prevents old 1-episode custom
+      // seasons from replacing a fresh 25-episode API season.
+      episodes: apiEpisodes.map((apiEp: any, epIdx: number) => {
+        const slug = String(apiEp?.slug || apiEp?.episodeSlug || "").trim();
+        const num = Number(apiEp?.number || apiEp?.episodeNumber || epIdx + 1);
+        const custom = (slug && bySlug.get(slug)) || byNumber.get(num);
+        if (custom) used.add(custom);
+        return custom ? {
+          ...apiEp,
+          title: custom.title || apiEp.title,
+          link: custom.link || apiEp.link,
+          link480: custom.link480 || apiEp.link480,
+          link720: custom.link720 || apiEp.link720,
+          link1080: custom.link1080 || apiEp.link1080,
+          link4k: custom.link4k || apiEp.link4k,
+          audioTracks: Array.isArray(custom.audioTracks) && custom.audioTracks.length ? custom.audioTracks : apiEp.audioTracks,
+          defaultAudio: custom.defaultAudio || apiEp.defaultAudio,
+        } : apiEp;
+      }),
+    };
+
+    customEpisodes.forEach((customEp: any) => {
+      if (!used.has(customEp)) out[targetIdx].episodes.push(customEp);
+    });
+  });
+
+  return out.filter((season) => listValues(season?.episodes).length > 0);
+};
+
 const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEditSeries, onEditMovie, onSaved, mode = "series" }: Props) => {
   const isMovieMode = mode === "movie";
   const label = isMovieMode ? "AN Movies" : "AN Series";
@@ -545,10 +619,10 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       const detail = detailResult?.data || detailResult;
       const customSeasons = !isMovie && Array.isArray(item.customSeasons) && item.customSeasons.length > 0 ? item.customSeasons : [];
       const apiSeasons = !isMovie && Array.isArray(detail?.seasons) ? detail.seasons : [];
-      const rawSeasons = customSeasons.length
+      const rawSeasons = !isMovie && apiSeasons.length
+        ? mergeApiAndCustomSeasons(apiSeasons, customSeasons)
+        : customSeasons.length
         ? customSeasons
-        : apiSeasons.length
-        ? apiSeasons
         : [{ name: "Season 1", episodes: [{ number: 1, title: detail?.title || item.title, slug: item.slug, _moviePayload: detail }] }];
 
       const seasons: RsSeason[] = [];
@@ -583,7 +657,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       }));
 
       const languages = Array.from(new Set(Array.from(detectedLanguages).map((lang) => String(lang || "").trim()).filter(Boolean)));
-      const baseLanguage = languages[0] || "Multi";
+      const baseLanguage = languages.find((lang) => /hindi|हिन्दी|हिंदी|\bhin\b/i.test(lang)) || languages[0] || "Multi";
       const orderedLanguages = Array.from(new Set([baseLanguage, ...languages].filter(Boolean)));
       const seasonsByLanguage = Object.fromEntries(
         orderedLanguages.map((lang) => [lang, cloneSeasonsForAudioLanguage(seasons, lang)]),
@@ -652,7 +726,8 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         baseLanguage,
         selectedAdminLanguage: baseLanguage,
         availableLanguages: orderedLanguages.length ? orderedLanguages : [baseLanguage],
-          episodeCount: seasons.reduce((sum, season) => sum + season.episodes.length, 0),
+        seasonCount: seasons.length,
+        episodeCount: seasons.reduce((sum, season) => sum + season.episodes.length, 0),
         seasons,
         seasonsByLanguage,
         audioTracks: (orderedLanguages.length ? orderedLanguages : [baseLanguage]).map((lang) => ({ language: lang, label: lang, link: "" })),

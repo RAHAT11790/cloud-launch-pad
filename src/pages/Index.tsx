@@ -586,6 +586,31 @@ const mergeAnimeCards = (...groups: AnimeItem[][]) => {
   return Array.from(byKey.values()).sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
 };
 
+const normalizeRouteLookup = (value?: string | null) => String(value || "").trim().toLowerCase();
+
+const animeRouteKeys = (item: AnimeItem) => {
+  const keys = new Set<string>();
+  const add = (value?: string | null) => {
+    const key = normalizeRouteLookup(value);
+    if (key) keys.add(key);
+  };
+  const slug = normalizeRouteLookup(item.anSlug || item.animeSaltSlug || item.slug);
+  add(item.id);
+  add(item.slug);
+  add(item.anSlug);
+  add(item.animeSaltSlug);
+  if (slug) {
+    add(`as_${slug}`);
+    add(item.type === "movie" ? `an_mv_${slug}` : `an_${slug}`);
+  }
+  return keys;
+};
+
+const matchesAnimeRouteId = (item: AnimeItem, routeId?: string | null) => {
+  const normalized = normalizeRouteLookup(routeId);
+  return !!normalized && animeRouteKeys(item).has(normalized);
+};
+
 const preloadImage = (src?: string | null) => {
   const url = String(src || "").trim();
   if (!url || warmedImageUrls.has(url) || typeof window === "undefined") return Promise.resolve();
@@ -1898,7 +1923,7 @@ const Index = () => {
           audioTracks = directFromFirebase.audioTracks;
         }
       }
-      } else if (anime.movieLink) {
+      } else if (getMovieSrc(anime)) {
         src = getMovieSrc(anime);
       subtitle = "Movie";
         qualityOptions = getMovieQualityOptions(anime);
@@ -1973,11 +1998,11 @@ const Index = () => {
     const params = new URLSearchParams(location.search);
     const nextSeasonIdx = params.get("s") !== null ? Number(params.get("s")) : undefined;
     const nextEpIdx = params.get("e") !== null ? Number(params.get("e")) : undefined;
-    const targetAnime = allAnime.find((item) => item.id === watchRouteAnimeId);
+    const targetAnime = allAnime.find((item) => matchesAnimeRouteId(item, watchRouteAnimeId));
     if (!targetAnime) return;
 
     const current = playerStateRef.current;
-    const sameAnime = current?.anime.id === watchRouteAnimeId;
+    const sameAnime = !!current?.anime && matchesAnimeRouteId(current.anime, watchRouteAnimeId);
     const sameSeason = (current?.seasonIdx ?? undefined) === nextSeasonIdx;
     const sameEpisode = (current?.epIdx ?? undefined) === nextEpIdx;
     if (sameAnime && sameSeason && sameEpisode && current) return;
