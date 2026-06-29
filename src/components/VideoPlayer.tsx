@@ -5060,11 +5060,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             }
           };
 
-          // "Default" বাটন hide — শুধু explicit quality (480/720/1080/4K) বাটন থাকবে
-          const qualityChoices = availableDownloadQualities.filter((q) => q !== "Default");
+          // Show explicit qualities when present; otherwise fall back to the
+          // "Default" entry (this is the case for AN HLS where a single
+          // master contains every quality).
+          const explicitChoices = availableDownloadQualities.filter((q) => q !== "Default");
+          const qualityChoices = explicitChoices.length > 0
+            ? explicitChoices
+            : (availableDownloadQualities.includes("Default") ? ["Default"] : []);
           const activeQuality = selectedDownloadQuality && qualityChoices.includes(selectedDownloadQuality)
             ? selectedDownloadQuality
-            : (qualityChoices.find((q) => q !== "Default") || "");
+            : (qualityChoices[0] || "");
 
           return (
             <div className="w-full">
