@@ -4012,6 +4012,22 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             </div>
           )}
 
+          {/* ===== ALWAYS-ON BACK BUTTON =====
+              Sits above all overlays so a single tap exits the player even
+              when controls are faded out. Prevents the "tap 2-3 times" lag. */}
+          {!locked && (
+            <button
+              onPointerDown={(e) => { e.stopPropagation(); handleBackPress(); }}
+              onClick={(e) => { e.stopPropagation(); }}
+              className="absolute top-2 left-2 z-[120] w-10 h-10 rounded-full flex items-center justify-center bg-black/55 backdrop-blur-sm active:scale-90 transition-transform duration-100"
+              style={{ pointerEvents: "auto", WebkitTapHighlightColor: "transparent" }}
+              aria-label="Back"
+            >
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </button>
+          )}
+
+
           {/* ===== EMBED-ONLY MINIMAL OVERLAY (AnimeStill iframe) =====
               AN's iframe has its own play/pause/seek/quality. We only show:
               - Server change  - Fullscreen (since AN iframe lacks one)
