@@ -7,7 +7,7 @@ const LS_MOV = "rs_cache_movies_v2";
 const LS_CATS = "rs_cache_categories_v1";
 const LS_META = "rs_cache_catalog_meta_v1";
 const CATALOG_REFRESH_MS = 6 * 60 * 60 * 1000;
-const LOADER_FAILSAFE_MS = 1200;
+const LOADER_FAILSAFE_MS = 10000;
 
 const readCache = <T,>(key: string, fallback: T): T => {
   try {
@@ -341,6 +341,83 @@ const fetchLiteCatalog = async () => {
   };
 };
 
+const mergeLiteItems = (base: AnimeItem[], incoming: AnimeItem[]) => {
+  const byId = new Map<string, AnimeItem>();
+  base.forEach((item) => { if (item?.id) byId.set(item.id, item); });
+  incoming.forEach((item) => { if (item?.id) byId.set(item.id, item); });
+  return Array.from(byId.values())
+    .filter((item: any) => item?.title && item?.visibility !== "private")
+    .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+};
+
+const chunk = <T,>(items: T[], size: number) => {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+};
+
+const refreshCatalogProgressively = async (
+  cachedWs: AnimeItem[],
+  cachedMov: AnimeItem[],
+  onProgress: (webseries: AnimeItem[], movies: AnimeItem[], done?: boolean) => void,
+) => {
+  let currentWs = cachedWs;
+  let currentMov = cachedMov;
+
+  const publicCatalog = await fetchPublicCatalog().catch(() => null);
+  if (publicCatalog) {
+    currentWs = mergeLiteItems(currentWs, publicCatalog.webseries || []);
+    currentMov = mergeLiteItems(currentMov, publicCatalog.movies || []);
+    onProgress(currentWs, currentMov);
+  }
+
+  const [wsKeysRaw, movKeysRaw] = await Promise.all([
+    fetchDbJson<Record<string, boolean>>("webseries", "shallow=true").catch(() => null),
+    fetchDbJson<Record<string, boolean>>("movies", "shallow=true").catch(() => null),
+  ]);
+
+  const wsKeys = Object.keys(wsKeysRaw || {});
+  const movKeys = Object.keys(movKeysRaw || {});
+  const knownWsSig = new Map(currentWs.map((item) => [item.id, item.updatedAt || item.createdAt || 0]));
+  const knownMovSig = new Map(currentMov.map((item) => [item.id, item.updatedAt || item.createdAt || 0]));
+
+  // Direct Firebase fallback: existing databases may not yet have /publicCatalog.
+  // Fetch only card-safe fields from Firebase, and publish each chunk immediately
+  // so the user panel shows RS + AN cards as soon as the first Firebase records arrive.
+  const loadWebseries = async () => {
+    for (const ids of chunk(wsKeys, 4)) {
+      const records = await Promise.all(ids.map(async (id) => ({ id, item: await fetchLiteRecord("webseries", id).catch(() => null) })));
+      const mapped = records
+        .filter(({ item }) => item?.visibility !== "private" && item?.title)
+        .map(({ id, item }) => mapWebseriesLite(id, item));
+      const changed = mapped.filter((item) => (item.updatedAt || item.createdAt || 0) !== knownWsSig.get(item.id));
+      if (changed.length) {
+        changed.forEach((item) => knownWsSig.set(item.id, item.updatedAt || item.createdAt || 0));
+        currentWs = mergeLiteItems(currentWs, changed);
+        onProgress(currentWs, currentMov);
+      }
+    }
+  };
+
+  const loadMovies = async () => {
+    for (const ids of chunk(movKeys, 4)) {
+      const records = await Promise.all(ids.map(async (id) => ({ id, item: await fetchLiteRecord("movies", id).catch(() => null) })));
+      const mapped = records
+        .filter(({ item }) => item?.visibility !== "private" && item?.title)
+        .map(({ id, item }) => mapMovieLite(id, item));
+      const changed = mapped.filter((item) => (item.updatedAt || item.createdAt || 0) !== knownMovSig.get(item.id));
+      if (changed.length) {
+        changed.forEach((item) => knownMovSig.set(item.id, item.updatedAt || item.createdAt || 0));
+        currentMov = mergeLiteItems(currentMov, changed);
+        onProgress(currentWs, currentMov);
+      }
+    }
+  };
+
+  await Promise.all([loadWebseries(), loadMovies()]);
+  onProgress(currentWs, currentMov, true);
+};
+
 export function useFirebaseData() {
   const [webseries, setWebseries] = useState<AnimeItem[]>(() => readCache<AnimeItem[]>(LS_WS, []));
   const [movies, setMovies] = useState<AnimeItem[]>(() => readCache<AnimeItem[]>(LS_MOV, []));
@@ -352,8 +429,10 @@ export function useFirebaseData() {
   useEffect(() => {
     let cancelled = false;
     let lastCatsSig = readCache<string[]>(LS_CATS, []).join("|");
-    let lastWsSig = fingerprint(readCache<AnimeItem[]>(LS_WS, []));
-    let lastMovSig = fingerprint(readCache<AnimeItem[]>(LS_MOV, []));
+    const cachedWs = readCache<AnimeItem[]>(LS_WS, []);
+    const cachedMov = readCache<AnimeItem[]>(LS_MOV, []);
+    let lastWsSig = fingerprint(cachedWs);
+    let lastMovSig = fingerprint(cachedMov);
     const releaseLoader = () => { if (!cancelled) setLoading(false); };
     const failSafe = window.setTimeout(releaseLoader, LOADER_FAILSAFE_MS);
 
@@ -370,7 +449,18 @@ export function useFirebaseData() {
       }
     });
 
-    const applyCatalog = (nextWs: AnimeItem[], nextMov: AnimeItem[]) => {
+    let cacheWriteTimer: number | null = null;
+    const persistCatalogSoon = (nextWs: AnimeItem[], nextMov: AnimeItem[], done?: boolean) => {
+      if (cacheWriteTimer) window.clearTimeout(cacheWriteTimer);
+      cacheWriteTimer = window.setTimeout(() => {
+        cacheWriteTimer = null;
+        writeCache(LS_WS, nextWs);
+        writeCache(LS_MOV, nextMov);
+        if (done) writeCacheMeta();
+      }, done ? 0 : 450);
+    };
+
+    const applyCatalog = (nextWs: AnimeItem[], nextMov: AnimeItem[], done?: boolean) => {
       const wsSig = fingerprint(nextWs);
       const movSig = fingerprint(nextMov);
       if (wsSig !== lastWsSig) {
@@ -381,15 +471,16 @@ export function useFirebaseData() {
       if (movSig !== lastMovSig) {
         lastMovSig = movSig;
         setMovies(nextMov);
-        writeCache(LS_MOV, nextMov);
       }
-      writeCacheMeta();
+      persistCatalogSoon(nextWs, nextMov, done);
+      if (nextWs.length || nextMov.length || done) releaseLoader();
     };
 
     const refreshCatalog = async () => {
       try {
-        const catalog = await fetchLiteCatalog();
-        if (!cancelled) applyCatalog(catalog.webseries, catalog.movies);
+        await refreshCatalogProgressively(cachedWs, cachedMov, (nextWs, nextMov, done) => {
+          if (!cancelled) applyCatalog(nextWs, nextMov, done);
+        });
       } catch (err) {
         console.warn("Lite catalog refresh failed; using local cache", err);
       } finally {
@@ -407,6 +498,7 @@ export function useFirebaseData() {
     return () => {
       cancelled = true;
       window.clearTimeout(failSafe);
+      if (cacheWriteTimer) window.clearTimeout(cacheWriteTimer);
       unsubCats();
     };
   }, []);
