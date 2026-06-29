@@ -19,6 +19,13 @@ export const firebaseRestUrl = (path: string, params?: Record<string, string | n
 };
 
 export const firebaseRestGet = async <T,>(path: string, params?: Record<string, string | number | boolean>): Promise<T | null> => {
+  if (typeof window !== "undefined") {
+    const key = `rs_rest_cache:${path}`;
+    try {
+      const cached = sessionStorage.getItem(key);
+      if (cached) return JSON.parse(cached) as T;
+    } catch {}
+  }
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 12_000);
   try {
@@ -28,7 +35,11 @@ export const firebaseRestGet = async <T,>(path: string, params?: Record<string, 
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(`Firebase REST ${res.status}`);
-    return (await res.json()) as T;
+    const data = (await res.json()) as T;
+    if (typeof window !== "undefined" && !params?.shallow) {
+      try { sessionStorage.setItem(`rs_rest_cache:${path}`, JSON.stringify(data)); } catch {}
+    }
+    return data;
   } finally {
     window.clearTimeout(timeout);
   }
