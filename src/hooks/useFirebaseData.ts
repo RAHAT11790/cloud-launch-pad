@@ -239,6 +239,98 @@ const fingerprint = (items: AnimeItem[]) => {
   return s;
 };
 
+const DB_URL = String(firebaseDatabaseURL || "").replace(/\/+$/, "");
+const encodePath = (path: string) => path.split("/").filter(Boolean).map(encodeURIComponent).join("/");
+
+const fetchDbJson = async <T,>(path: string, query = ""): Promise<T | null> => {
+  if (!DB_URL) return null;
+  const suffix = query ? `?${query}` : "";
+  const res = await fetch(`${DB_URL}/${encodePath(path)}.json${suffix}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Firebase REST ${res.status}`);
+  const data = await res.json();
+  if (data?.error) throw new Error(String(data.error));
+  return data as T;
+};
+
+const mapLimit = async <T, R>(items: T[], limit: number, worker: (item: T, index: number) => Promise<R>): Promise<R[]> => {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await worker(items[index], index);
+    }
+  }));
+  return results;
+};
+
+const WEB_LITE_FIELDS = [
+  "title", "poster", "backdrop", "year", "rating", "language", "baseLanguage", "availableLanguages",
+  "category", "dubType", "createdAt", "updatedAt", "visibility", "source", "sourceName", "anSlug",
+  "animeSaltSlug", "displayAs", "slug", "type", "tmdbId", "episodeCount", "seasonsCount", "seasonCount",
+];
+
+const MOVIE_LITE_FIELDS = [
+  "title", "poster", "backdrop", "year", "rating", "language", "baseLanguage", "availableLanguages",
+  "category", "dubType", "createdAt", "updatedAt", "visibility", "source", "sourceName", "anSlug",
+  "animeSaltSlug", "displayAs", "slug", "type", "tmdbId", "movieLink", "movieLink480", "movieLink720",
+  "movieLink1080", "movieLink4k",
+];
+
+const fetchLiteRecord = async (collection: "webseries" | "movies", id: string) => {
+  const fields = collection === "webseries" ? WEB_LITE_FIELDS : MOVIE_LITE_FIELDS;
+  const values = await Promise.all(fields.map((field) => fetchDbJson<any>(`${collection}/${id}/${field}`).catch(() => null)));
+  return Object.fromEntries(fields.map((field, index) => [field, values[index]]));
+};
+
+const fetchPublicCatalog = async () => {
+  const [wsRaw, movRaw] = await Promise.all([
+    fetchDbJson<Record<string, any>>("publicCatalog/webseries").catch(() => null),
+    fetchDbJson<Record<string, any>>("publicCatalog/movies").catch(() => null),
+  ]);
+  const wsEntries = Object.entries(wsRaw || {});
+  const movEntries = Object.entries(movRaw || {});
+  if (wsEntries.length === 0 && movEntries.length === 0) return null;
+  return {
+    webseries: wsEntries
+      .filter(([, item]) => item?.visibility !== "private")
+      .map(([id, item]) => mapWebseriesLite(id, item))
+      .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)),
+    movies: movEntries
+      .filter(([, item]) => item?.visibility !== "private")
+      .map(([id, item]) => mapMovieLite(id, item))
+      .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)),
+  };
+};
+
+const fetchLiteCatalog = async () => {
+  const publicCatalog = await fetchPublicCatalog();
+  if (publicCatalog) return publicCatalog;
+
+  const [wsKeysRaw, movKeysRaw] = await Promise.all([
+    fetchDbJson<Record<string, boolean>>("webseries", "shallow=true"),
+    fetchDbJson<Record<string, boolean>>("movies", "shallow=true"),
+  ]);
+  const wsKeys = Object.keys(wsKeysRaw || {});
+  const movKeys = Object.keys(movKeysRaw || {});
+
+  const [wsRecords, movRecords] = await Promise.all([
+    mapLimit(wsKeys, 8, async (id) => ({ id, item: await fetchLiteRecord("webseries", id) })),
+    mapLimit(movKeys, 8, async (id) => ({ id, item: await fetchLiteRecord("movies", id) })),
+  ]);
+
+  return {
+    webseries: wsRecords
+      .filter(({ item }) => item?.visibility !== "private" && item?.title)
+      .map(({ id, item }) => mapWebseriesLite(id, item))
+      .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)),
+    movies: movRecords
+      .filter(({ item }) => item?.visibility !== "private" && item?.title)
+      .map(({ id, item }) => mapMovieLite(id, item))
+      .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)),
+  };
+};
+
 export function useFirebaseData() {
   const [webseries, setWebseries] = useState<AnimeItem[]>(() => readCache<AnimeItem[]>(LS_WS, []));
   const [movies, setMovies] = useState<AnimeItem[]>(() => readCache<AnimeItem[]>(LS_MOV, []));
