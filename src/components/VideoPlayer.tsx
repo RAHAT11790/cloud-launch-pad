@@ -2502,7 +2502,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (hlsFatalRetriesRef.current > fatalRetryLimit) {
         try { hls.destroy(); } catch {}
         hlsRef.current = null;
-        tryNextPlaybackRoute(savedBeforeRecovery);
+        tryNextPlaybackRouteRef.current(savedBeforeRecovery);
         return;
       }
 
@@ -2521,7 +2521,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (hlsRef.current === hls) hlsRef.current = null;
       if (hlsObjectUrl) URL.revokeObjectURL(hlsObjectUrl);
     };
-  }, [currentSrc, isHlsSrc, isEmbedPlayback, tryNextPlaybackRoute, buildReliableHlsSource, preserveResumePoint]);
+  }, [currentSrc, isHlsSrc, isEmbedPlayback, buildReliableHlsSource, preserveResumePoint]);
 
   // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
   // users reported when returning to home. Detaches HLS, clears <video>, kills timers.
