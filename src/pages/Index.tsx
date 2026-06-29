@@ -676,13 +676,13 @@ const Index = () => {
   }, [firebaseAnime, activeSaltItems]);
 
   const allSeries = useMemo(() => {
-    // All Series must be RS/Firebase only. AN-generated cards stay in AN areas / continue watching, not mixed here.
-    return webseries.filter(i => i.source !== 'animesalt' && i.sourceName !== 'AnimeSalt' && !i.anSlug && !i.animeSaltSlug && !String(i.id || '').startsWith('as_') && !String(i.id || '').startsWith('an_'));
+    // Include BOTH RS (Firebase) and AN-generated webseries on the Series page.
+    return webseries;
   }, [webseries]);
 
   const allMovies = useMemo(() => {
-    // All Movies must be RS/Firebase only. AN movies are managed separately.
-    return movies.filter(i => i.source !== 'animesalt' && i.sourceName !== 'AnimeSalt' && !i.anSlug && !i.animeSaltSlug && !String(i.id || '').startsWith('as_') && !String(i.id || '').startsWith('an_'));
+    // Include BOTH RS (Firebase) and AN-generated movies on the Movies page.
+    return movies;
   }, [movies]);
   
   // Maintenance mode check
