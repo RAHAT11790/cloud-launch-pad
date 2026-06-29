@@ -325,6 +325,45 @@ const hasStoredFirebasePlayback = (anime: AnimeItem): boolean => {
   return !!seasons?.some((season) => season?.episodes?.some((ep) => !!getEpisodeSrc(ep as Episode)));
 };
 
+const fullFirebaseItemLoadCache = new Map<string, Promise<AnimeItem | null>>();
+
+const loadFullFirebaseAnimeItem = async (anime: AnimeItem): Promise<AnimeItem | null> => {
+  const collection = anime.type === "movie" ? "movies" : "webseries";
+  const candidates = Array.from(new Set([
+    anime.id,
+    anime.type === "movie" && anime.anSlug ? `an_mv_${sanitizeFirebaseKey(anime.anSlug)}` : "",
+    anime.type === "movie" && anime.animeSaltSlug ? `an_mv_${sanitizeFirebaseKey(anime.animeSaltSlug)}` : "",
+    anime.type === "webseries" && anime.anSlug ? `an_${sanitizeFirebaseKey(anime.anSlug)}` : "",
+    anime.type === "webseries" && anime.animeSaltSlug ? `an_${sanitizeFirebaseKey(anime.animeSaltSlug)}` : "",
+  ].filter(Boolean)));
+  const cacheId = candidates[0] || anime.id;
+  const cached = readFullFirebaseItemCache(anime.type, cacheId);
+  if (cached) return { ...anime, ...cached, id: cached.id || anime.id };
+
+  const loadKey = `${collection}:${candidates.join("|")}`;
+  const pending = fullFirebaseItemLoadCache.get(loadKey);
+  if (pending) return pending;
+
+  const request = (async () => {
+    for (const id of candidates) {
+      try {
+        const snap = await get(ref(db, `${collection}/${id}`));
+        const row = snap.val();
+        if (!row || row.visibility === "private") continue;
+        const mapped = anime.type === "movie"
+          ? mapFirebaseMovieItem(id, row, { full: true })
+          : mapFirebaseWebseriesItem(id, row, { full: true });
+        writeFullFirebaseItemCache(anime.type, id, mapped);
+        return { ...anime, ...mapped, id: mapped.id || anime.id };
+      } catch {}
+    }
+    return null;
+  })();
+  fullFirebaseItemLoadCache.set(loadKey, request);
+  request.finally(() => fullFirebaseItemLoadCache.delete(loadKey));
+  return request;
+};
+
 const getMovieQualityOptions = (anime: AnimeItem): { label: string; src: string }[] => {
   // AN movies must wrap their video-only HLS variants together with the Hindi
   // audio track via a synthetic master. Raw HLS variant URLs play silent video.
