@@ -288,8 +288,8 @@ const fetchPublicCatalog = async () => {
     fetchDbJson<Record<string, any>>("publicCatalog/webseries").catch(() => null),
     fetchDbJson<Record<string, any>>("publicCatalog/movies").catch(() => null),
   ]);
-  const wsEntries = Object.entries(wsRaw || {});
-  const movEntries = Object.entries(movRaw || {});
+  const wsEntries = Object.entries((wsRaw || {}) as Record<string, any>);
+  const movEntries = Object.entries((movRaw || {}) as Record<string, any>);
   if (wsEntries.length === 0 && movEntries.length === 0) return null;
   return {
     webseries: wsEntries
