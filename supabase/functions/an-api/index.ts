@@ -192,20 +192,46 @@ async function detail(slug: string, type: string, forceRefresh = false) {
 
   const seasons = new Map<number, { name: string; seasonNumber: number; episodes: any[] }>();
 
+  const addEpisode = (epSlug: string, defaultSeason: number, rawTitle = "") => {
+    const cleanSlug = String(epSlug || "").trim().replace(/^\/+|\/+$/g, "");
+    if (!cleanSlug) return;
+    const sx = cleanSlug.match(/(?:^|[-_])(\d+)x(\d+)$/i) || cleanSlug.match(/s(\d+)e(\d+)$/i);
+    const seasonNum = sx ? Number(sx[1]) : defaultSeason;
+    const epNum = sx ? Number(sx[2]) : 0;
+    if (!Number.isFinite(seasonNum) || seasonNum <= 0) return;
+    if (!seasons.has(seasonNum)) seasons.set(seasonNum, { name: `Season ${seasonNum}`, seasonNumber: seasonNum, episodes: [] });
+    const bucket = seasons.get(seasonNum)!.episodes;
+    if (bucket.some((e) => e.slug === cleanSlug)) return;
+    const number = epNum || bucket.length + 1;
+    bucket.push({
+      number,
+      episodeNumber: number,
+      title: decode(rawTitle).replace(/\s+/g, " ") || `Episode ${number}`,
+      slug: cleanSlug,
+      link: `animesalt://${cleanSlug}`,
+    });
+  };
+
   const harvestEpisodes = (body: string, defaultSeason: number) => {
-    const epRe = /href=["']https?:\/\/animesalt\.(?:ac|top)\/episode\/([^"'/?#]+)\/?["'][^>]*>([\s\S]*?)<\/a>/gi;
+    // AnimeSalt's AJAX fragments are small <li> blocks, but the markup shifts
+    // between pages.  The old extractor depended on a complete closing </a> and
+    // therefore sometimes captured only one later-season episode.  First parse
+    // every episode href (the reliable source of truth), then optionally improve
+    // the title from the surrounding anchor text.
+    const hrefRe = /href=["'](?:https?:\/\/animesalt\.(?:ac|top))?\/episode\/([^"'/?#]+)\/?["']/gi;
     let m: RegExpExecArray | null;
-    while ((m = epRe.exec(body))) {
-      const epSlug = m[1];
-      if (!epSlug) continue;
-      const sx = epSlug.match(/(\d+)x(\d+)$/i);
-      const seasonNum = sx ? Number(sx[1]) : defaultSeason;
-      const epNum = sx ? Number(sx[2]) : 0;
-      if (!seasons.has(seasonNum)) seasons.set(seasonNum, { name: `Season ${seasonNum}`, seasonNumber: seasonNum, episodes: [] });
-      const bucket = seasons.get(seasonNum)!.episodes;
-      if (bucket.some((e) => e.slug === epSlug)) continue;
-      bucket.push({ number: epNum || bucket.length + 1, episodeNumber: epNum || bucket.length + 1, title: decode(m[2]) || `Episode ${epNum || bucket.length + 1}`, slug: epSlug, link: `animesalt://${epSlug}` });
+    while ((m = hrefRe.exec(body))) {
+      const start = Math.max(0, m.index - 250);
+      const end = Math.min(body.length, m.index + 1200);
+      const around = body.slice(start, end);
+      const anchor = around.match(/<a\b[^>]*href=["'](?:https?:\/\/animesalt\.(?:ac|top))?\/episode\/[^"']+["'][^>]*>([\s\S]*?)<\/a>/i);
+      addEpisode(m[1], defaultSeason, anchor?.[1] || "");
     }
+
+    // Fallback for JS-escaped URLs or future markup that exposes episode URLs
+    // outside href attributes.
+    const urlRe = /(?:https?:)?\\?\/\\?\/animesalt\.(?:ac|top)\\?\/episode\\?\/([a-z0-9-]+)\\?\/?/gi;
+    while ((m = urlRe.exec(body))) addEpisode(m[1], defaultSeason);
   };
 
   // Static HTML usually contains only the currently-selected season (Season 1).
