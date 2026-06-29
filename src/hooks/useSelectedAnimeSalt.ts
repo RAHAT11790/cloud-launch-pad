@@ -50,9 +50,14 @@ export function useSelectedAnimeSalt() {
     // node. Read keys shallow, then hydrate small chunks into localStorage.
     const cancelIdle = scheduleIdle(async () => {
       try {
+        const cachedSlugs = new Set(readCache().map((item) => item.anSlug || item.animeSaltSlug || item.slug).filter(Boolean));
         const keys = (await firebaseRestShallowKeys("animesaltSelected")).reverse().slice(0, SELECTED_CACHE_LIMIT);
-        for (let i = 0; i < keys.length && !cancelled; i += SELECTED_CARD_PAGE_SIZE) {
-          const chunk = keys.slice(i, i + SELECTED_CARD_PAGE_SIZE);
+        const refreshKeys = keys.slice(0, cachedSlugs.size ? 4 : SELECTED_CARD_PAGE_SIZE);
+        const missingKeys = keys.filter((slug) => !cachedSlugs.has(slug));
+        const workKeys = Array.from(new Set([...refreshKeys, ...missingKeys]));
+        if (!workKeys.length) setLoading(false);
+        for (let i = 0; i < workKeys.length && !cancelled; i += SELECTED_CARD_PAGE_SIZE) {
+          const chunk = workKeys.slice(i, i + SELECTED_CARD_PAGE_SIZE);
           const rows = await Promise.all(chunk.map(async (slug) => {
             try {
               const row = await firebaseRestGet<any>(`animesaltSelected/${slug}`);
