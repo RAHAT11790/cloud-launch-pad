@@ -1707,6 +1707,10 @@ const Index = () => {
   }
 
   const handleCardClick = async (anime: AnimeItem, sIdx?: number, eIdx?: number) => {
+    // List items are LITE (no seasons/audioTracks) — hydrate the full record
+    // from Firebase before opening details or playback. Avoids loading the
+    // entire 100MB+ webseries payload upfront.
+    anime = await hydrate(anime);
     // Cancel any stale in-flight AnimeSalt details requests when switching content
     detailsRequestRef.current += 1;
     const switchingInPlayer = keepPlayerAliveRef.current;
