@@ -3191,18 +3191,20 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       applyPendingSeek(v);
       try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       // Only autoplay if ad gate is not active
-      if (!adGateActive) {
+      if (!adGateActive && userPlaybackIntentRef.current) {
         // Keep native audio path; do not force muted autoplay fallback
         v.play().catch(() => {});
       }
     };
     const onPlay = () => {
+      userPlaybackIntentRef.current = true;
       setPlaying(true);
       // Start RAF loop for smooth progress
       const tick = () => {
         if (!v.paused && !v.ended) {
           const ct = v.currentTime;
           if (ct > 0) lastKnownTime = ct;
+          if (ct > 0) lastPlaybackPositionRef.current = ct;
           const dur = v.duration;
           // Direct DOM updates for progress bar — 60fps, no React re-render
           if (progressRef.current && dur > 0) {
@@ -3225,6 +3227,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       rafId.current = requestAnimationFrame(tick);
     };
     const onPause = () => {
+      userPlaybackIntentRef.current = false;
+      if (v.currentTime > 0) lastPlaybackPositionRef.current = v.currentTime;
       setPlaying(false);
       cancelAnimationFrame(rafId.current);
     };
@@ -3275,7 +3279,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       // Also apply pending seek here in case loadedmetadata didn't fire
       applyPendingSeek(v);
-      if (v.paused && !adGateActive) {
+      if (v.paused && !adGateActive && userPlaybackIntentRef.current) {
         // Keep native audio path; manual user interaction will start playback if autoplay is blocked
         v.play().catch(() => {});
       }
@@ -3327,6 +3331,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const ct = v.currentTime;
       const dur = v.duration;
       if (ct > 0) lastKnownTime = ct;
+      if (ct > 0) lastPlaybackPositionRef.current = ct;
       if (progressRef.current && dur > 0) {
         progressRef.current.style.width = `${(ct / dur) * 100}%`;
       }
