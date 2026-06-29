@@ -666,6 +666,7 @@ type MainPage = "home" | "series" | "livetv" | "movies";
 const MAIN_PAGE_ORDER: MainPage[] = ["home", "series", "livetv", "movies"];
 const TAB_GRID_INITIAL_COUNT = 48;
 const TAB_GRID_BATCH_COUNT = 48;
+const HOME_CATEGORY_GRID_LIMIT = 60;
 
 // Public URL paths for each main page — gives real router routes
 // (back-button works, share-friendly URLs) without dismantling the swipe strip.
@@ -2739,7 +2740,7 @@ const Index = () => {
           <h2 className="text-base font-bold mb-3 flex items-center category-bar">{activeCategory}</h2>
           {filteredAnime.length > 0 ? (
             <div className="grid grid-cols-3 gap-2.5">
-              {filteredAnime.map((anime) => (
+              {filteredAnime.slice(0, HOME_CATEGORY_GRID_LIMIT).map((anime) => (
                 <PosterGridCard key={anime.id} anime={anime} onClick={handleCardClick} />
               ))}
             </div>
