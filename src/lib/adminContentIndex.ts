@@ -4,7 +4,7 @@ import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
 export type AdminContentKind = "webseries" | "movies";
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
-const DEFAULT_RECENT_LIMIT = 120;
+const DEFAULT_RECENT_LIMIT = 500;
 
 const cacheKeyFor = (kind: AdminContentKind) => `rs_admin_${kind}_index_v1`;
 const indexPathFor = (kind: AdminContentKind) => `adminContentIndex/${kind}`;

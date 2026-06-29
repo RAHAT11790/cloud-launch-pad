@@ -5428,7 +5428,7 @@ ${tgBulkFooter}
  <h4 className="text-sm font-semibold mb-1 truncate">{item.title || "Untitled"}</h4>
  <p className="text-[11px] text-[#D1C4E9] mb-2">{item.year || "N/A"} • {item.rating || "N/A"}⭐ • {item.language || "N/A"}</p>
  <div className="flex items-center gap-2 flex-wrap">
- <p className="text-[11px] text-[#D1C4E9]">{item.seasons?.length || 0} Seasons • {item.category || "Uncategorized"}</p>
+ <p className="text-[11px] text-[#D1C4E9]">{item.seasonCount ?? item.seasons?.length ?? 0} Seasons • {item.episodeCount ? `${item.episodeCount} Episodes • ` : ""}{item.category || "Uncategorized"}</p>
  </div>
  <div className="flex flex-wrap gap-2 mt-2.5">
  <button onClick={() => editSeries(item.id)} className={`${btnSecondary} px-3.5 py-2 text-[11px] font-semibold flex items-center gap-1.5`}>

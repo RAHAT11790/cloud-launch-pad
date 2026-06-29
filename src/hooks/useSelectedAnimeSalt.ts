@@ -47,7 +47,21 @@ export function useSelectedAnimeSalt() {
     let cancelled = false;
     const cancelIdle = scheduleIdle(async () => {
       try {
-        const keys = (await firebaseRestShallowKeys("animesaltSelected")).reverse().slice(0, SELECTED_CACHE_LIMIT);
+        const [selectedKeys, wsIndex, movIndex] = await Promise.all([
+          firebaseRestShallowKeys("animesaltSelected"),
+          firebaseRestGet<Record<string, any>>("adminContentIndex/webseries").catch(() => null),
+          firebaseRestGet<Record<string, any>>("adminContentIndex/movies").catch(() => null),
+        ]);
+        const keys = selectedKeys.reverse().slice(0, SELECTED_CACHE_LIMIT);
+        const generatedSlugSet = new Set<string>();
+        Object.values(wsIndex || {}).forEach((item: any) => {
+          const slug = String(item?.anSlug || item?.animeSaltSlug || "").trim();
+          if (slug) generatedSlugSet.add(slug);
+        });
+        Object.values(movIndex || {}).forEach((item: any) => {
+          const slug = String(item?.anSlug || item?.animeSaltSlug || "").trim();
+          if (slug) generatedSlugSet.add(slug);
+        });
         const liveSet = new Set(keys);
         
         setItems((prev) => {
@@ -75,6 +89,7 @@ export function useSelectedAnimeSalt() {
                 ? seasons
                 : seasons && typeof seasons === "object" ? Object.values(seasons) : [];
               
+              const hasGeneratedFirebaseCard = generatedSlugSet.has(slug);
               const hasPlayableEpisode = seasonList.some((season: any) => {
                 const eps = Array.isArray(season?.episodes)
                   ? season.episodes
@@ -84,7 +99,7 @@ export function useSelectedAnimeSalt() {
                 );
               });
 
-              if (!hasPlayableEpisode) return null;
+              if (!hasGeneratedFirebaseCard && !hasPlayableEpisode) return null;
               return mapAnimeSaltSelectedItem(slug, row);
             } catch { return null; }
           }));

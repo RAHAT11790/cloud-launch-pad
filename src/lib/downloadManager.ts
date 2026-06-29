@@ -1,5 +1,5 @@
 import { triggerBackgroundVideoDownload } from "./videoDownload";
-import { isHlsUrl } from "./hlsDownloader";
+import { estimateHlsSize, isHlsUrl } from "./hlsDownloader";
 
 export type DownloadStatus = "queued" | "downloading" | "paused" | "complete" | "error" | "cancelled";
 
@@ -154,8 +154,9 @@ class DownloadManager {
   private async fetchTotalSize(url: string): Promise<number> {
     const candidate = String(url || "").trim();
     if (!candidate) return 0;
-    // HLS size is estimated in the picker; avoid probing every segment here.
-    if (isHlsUrl(candidate)) return 0;
+    if (isHlsUrl(candidate)) {
+      try { return await estimateHlsSize(candidate, 8); } catch { return 0; }
+    }
     if (candidate.toLowerCase().startsWith("data:")) return decodeDataUriBytes(candidate);
     const probePlans: RequestInit[] = this.isProxyDownloadUrl(candidate)
       ? [

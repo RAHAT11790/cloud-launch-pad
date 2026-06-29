@@ -471,15 +471,20 @@ const getLanguageBadgeLabel = (anime: AnimeItem): string => {
 const resolveAnimeSeasonsForLanguage = (anime: AnimeItem, language?: string | null) => {
   const requested = String(language || "").trim().toLowerCase();
   const byLanguage = anime.seasonsByLanguage && typeof anime.seasonsByLanguage === "object" ? anime.seasonsByLanguage : undefined;
+  const hasEpisodes = (seasons: any) => Array.isArray(seasons) && seasons.some((season: any) => Array.isArray(season?.episodes) && season.episodes.length > 0);
   if (byLanguage) {
     const entries = Object.entries(byLanguage);
     const exact = requested
       ? entries.find(([lang]) => String(lang || "").trim().toLowerCase() === requested)?.[1]
       : undefined;
-    if (exact) return exact;
+    if (hasEpisodes(exact)) return exact;
     const fallbackLanguage = String(anime.baseLanguage || anime.language || "").trim().toLowerCase();
     const fallback = entries.find(([lang]) => String(lang || "").trim().toLowerCase() === fallbackLanguage)?.[1];
-    if (fallback) return fallback;
+    if (hasEpisodes(fallback)) return fallback;
+    const hindi = entries.find(([lang]) => /hindi|हिन्दी|हिंदी|hin/i.test(String(lang || "")))?.[1];
+    if (hasEpisodes(hindi)) return hindi;
+    const firstPlayable = entries.map(([, seasons]) => seasons).find(hasEpisodes);
+    if (firstPlayable) return firstPlayable as Season[];
   }
   return anime.seasons || [];
 };

@@ -61,6 +61,8 @@ type RsSeason = { name: string; seasonNumber: number; episodes: RsEpisode[] };
 const sanitizeKey = (value: string) => String(value || "").replace(/[.#$/\[\]]/g, "_").slice(0, 180);
 const webseriesIdForSlug = (slug: string) => `an_${sanitizeKey(slug)}`;
 const movieIdForSlug = (slug: string) => `an_mv_${sanitizeKey(slug)}`;
+const listValues = (value: any): any[] => Array.isArray(value) ? value : (value && typeof value === "object" ? Object.values(value) : []);
+const countSavedEpisodes = (item: any) => Number(item?.episodeCount || 0) || listValues(item?.seasons).reduce((sum, season: any) => sum + listValues(season?.episodes).length, 0) || listValues(item?.customSeasons).reduce((sum, season: any) => sum + listValues(season?.episodes).length, 0);
 
 const normalizeAnApiBaseUrl = (value: string): string => {
   const raw = String(value || "").trim();
@@ -463,7 +465,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         type: item?.type || "series",
         tmdbId: item?.tmdbId || null,
         addedAt: Number(item?.addedAt || item?.createdAt || 0),
-        customSeasons: Array.isArray(item?.customSeasons) ? item.customSeasons : [],
+        customSeasons: listValues(item?.customSeasons),
       }))
         .filter((item) => isMovieMode ? (item.type === "movies" || item.type === "movie") : !(item.type === "movies" || item.type === "movie"));
       items.sort((a, b) => a.title.localeCompare(b.title));
@@ -541,7 +543,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       const isMovie = isMovieMode;
       const detailResult: any = isMovie ? await animeSaltApi.getMovie(item.slug, true) : await animeSaltApi.getSeries(item.slug, true);
       const detail = detailResult?.data || detailResult;
-      const customSeasons = !isMovie && opts.force && Array.isArray(item.customSeasons) && item.customSeasons.length > 0 ? item.customSeasons : [];
+      const customSeasons = !isMovie && Array.isArray(item.customSeasons) && item.customSeasons.length > 0 ? item.customSeasons : [];
       const apiSeasons = !isMovie && Array.isArray(detail?.seasons) ? detail.seasons : [];
       const rawSeasons = customSeasons.length
         ? customSeasons
@@ -748,7 +750,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         <div>
           {filteredItems.map((item) => {
             const saved = !!item.saved;
-            const episodeCount = item.saved?.episodeCount || (item.saved?.seasons ? Object.values(item.saved.seasons).reduce((sum: number, season: any) => sum + (season?.episodes ? Object.values(season.episodes).length : 0), 0) : 0);
+            const episodeCount = countSavedEpisodes(item.saved);
             const isBusy = busySlug === item.slug;
             return (
               <div key={item.slug} className="bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-all">
@@ -760,7 +762,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
                       {saved ? <span className="text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 px-2 py-0.5 flex items-center gap-1"><CheckCircle2 size={10} /> Added</span> : item.rsConflict ? <span className="text-[10px] rounded-full bg-sky-500/20 text-sky-300 px-2 py-0.5">In RS</span> : <span className="text-[10px] rounded-full bg-amber-500/20 text-amber-300 px-2 py-0.5">Pending</span>}
                     </div>
                     <p className="text-[11px] text-[#D1C4E9] mb-2">{item.year || "N/A"} • {item.rating || "N/A"}⭐ • {item.category || "No Category"}</p>
-                    <p className="text-[11px] text-[#D1C4E9]">{saved ? isMovieMode ? "Movie • AN Firebase card" : `${episodeCount} Episodes • AN Firebase card` : item.rsConflict ? "Already exists in RS — delete RS entry to fetch from AN" : isMovieMode ? "Click Fetch to save direct 1080p video/audio into Movies" : "Click Fetch to save direct 1080p video/audio into Series"}</p>
+                    <p className="text-[11px] text-[#D1C4E9]">{saved ? isMovieMode ? "Movie • AN Firebase card" : `${item.saved?.seasonCount ?? listValues(item.saved?.seasons).length ?? 0} Seasons • ${episodeCount} Episodes • AN Firebase card` : item.rsConflict ? "Already exists in RS — delete RS entry to fetch from AN" : isMovieMode ? "Click Fetch to save direct 1080p video/audio into Movies" : "Click Fetch to save direct 1080p video/audio into Series"}</p>
                     <div className="flex flex-wrap gap-2 mt-2.5">
                       {saved ? (
                         <>

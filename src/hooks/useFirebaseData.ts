@@ -113,11 +113,19 @@ export function useFirebaseData() {
         if (!cancelled) {
           if (idxWs) {
             const items = Object.entries(idxWs).map(([id, item]: [string, any]) => ({ ...item, id }));
-            setWebseries(prev => mergeById(prev, items as any[]));
+            setWebseries(prev => {
+              const merged = mergeById(prev, items as any[]);
+              writeCache(LS_WS, merged);
+              return merged;
+            });
           }
           if (idxMov) {
             const items = Object.entries(idxMov).map(([id, item]: [string, any]) => ({ ...item, id }));
-            setMovies(prev => mergeById(prev, items as any[]));
+            setMovies(prev => {
+              const merged = mergeById(prev, items as any[]);
+              writeCache(LS_MOV, merged);
+              return merged;
+            });
           }
         }
       } catch (e) { console.error("Index load failed", e); }
