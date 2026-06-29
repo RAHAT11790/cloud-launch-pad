@@ -2062,6 +2062,39 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const manualSeekUntilRef = useRef(0);
   const mediaRecoverySeekRef = useRef<number | null>(null);
+  const playbackCheckpointKeyRef = useRef("");
+  const checkpointWriteAtRef = useRef(0);
+
+  useEffect(() => {
+    playbackCheckpointKeyRef.current = animeId
+      ? `rs_player_checkpoint:${animeId}:${currentSeasonIdx ?? "movie"}:${currentEpisodeIdx ?? "movie"}`
+      : "";
+    try {
+      const raw = playbackCheckpointKeyRef.current ? sessionStorage.getItem(playbackCheckpointKeyRef.current) : null;
+      const saved = raw ? JSON.parse(raw) : null;
+      const savedTime = Number(saved?.time || 0);
+      const savedAt = Number(saved?.savedAt || 0);
+      if (savedTime > 1 && (!savedAt || Date.now() - savedAt < 12 * 60 * 60 * 1000)) {
+        lastPlaybackPositionRef.current = Math.max(lastPlaybackPositionRef.current || 0, savedTime);
+        mediaRecoverySeekRef.current = Math.max(mediaRecoverySeekRef.current || 0, savedTime);
+        pendingSeek.current = Math.max(Number(pendingSeek.current || 0), savedTime);
+        setCurrentTime((prev) => Math.max(prev || 0, savedTime));
+      }
+    } catch {}
+  }, [animeId, currentEpisodeIdx, currentSeasonIdx]);
+
+  const persistResumeCheckpoint = useCallback((time: number, duration?: number) => {
+    if (!Number.isFinite(time) || time <= 1) return;
+    const key = playbackCheckpointKeyRef.current;
+    if (!key) return;
+    try {
+      sessionStorage.setItem(key, JSON.stringify({
+        time,
+        duration: Number.isFinite(duration || 0) ? duration || 0 : 0,
+        savedAt: Date.now(),
+      }));
+    } catch {}
+  }, []);
 
   const preserveResumePoint = useCallback((candidate = 0) => {
     const v = videoRef.current;
@@ -2072,9 +2105,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       lastPlaybackPositionRef.current = target;
       mediaRecoverySeekRef.current = target;
       pendingSeek.current = target;
+      persistResumeCheckpoint(target, v?.duration);
     }
     return target;
-  }, []);
+  }, [persistResumeCheckpoint]);
 
   const repairUnexpectedReset = useCallback((targetVideo?: HTMLVideoElement | null) => {
     const v = targetVideo || videoRef.current;
