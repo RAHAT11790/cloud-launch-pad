@@ -289,42 +289,6 @@ const getAnimeSaltDirectState = async (episodeSlug: string, forceRefresh = false
   return request;
 };
 
-// Live AN API fetch — bypasses stale Firebase URLs (AnimeSalt signs URLs with
-// short expiries, so stored links return 410 after a few hours). We always try
-// to refresh from /an-api/episode at play time and overlay fresh URLs on the
-// player state.
-const animeSaltLiveCache = new Map<string, Promise<Awaited<ReturnType<typeof buildAnimeSaltDirectPlaybackState>> | null>>();
-const animeSaltLiveSettled = new Map<string, Awaited<ReturnType<typeof buildAnimeSaltDirectPlaybackState>> | null>();
-const peekAnLivePlayback = (slug: string, type?: string) => {
-  if (!slug) return null;
-  return animeSaltLiveSettled.get(`${slug}|${type || ""}`) || null;
-};
-const fetchAnLivePlayback = (slug: string, type?: string, forceRefresh = false) => {
-  const key = `${slug}|${type || ""}`;
-  if (!slug) return Promise.resolve(null);
-  if (forceRefresh) { animeSaltLiveCache.delete(key); animeSaltLiveSettled.delete(key); }
-  const cached = animeSaltLiveCache.get(key);
-  if (cached) return cached;
-  const req = (async () => {
-    try {
-      const url = `${AN_API_BASE}/episode?slug=${encodeURIComponent(slug)}${type ? `&type=${encodeURIComponent(type)}` : ""}`;
-      const r = await fetch(url, { cache: "no-store" });
-      if (!r.ok) return null;
-      const data = await r.json();
-      return await buildAnimeSaltDirectPlaybackState(data);
-    } catch { return null; }
-  })();
-  animeSaltLiveCache.set(key, req);
-  req.then((value) => { animeSaltLiveSettled.set(key, value); }).catch(() => {});
-  // 10 min TTL — AnimeSalt URLs typically expire ~hour, but we re-fetch on each
-  // new playback session anyway.
-  setTimeout(() => { animeSaltLiveCache.delete(key); animeSaltLiveSettled.delete(key); }, 10 * 60_000);
-  req.catch(() => animeSaltLiveCache.delete(key));
-  return req;
-};
-
-
-
 // Helper: get best available src from episode (fallback if default link is empty)
 const getEpisodeSrc = (ep?: Episode | null): string => {
   if (!ep) return "";
@@ -662,23 +626,11 @@ const preloadImage = (src?: string | null) => {
   });
 };
 
-// Ultra-opt: warm Firebase row + AN live URL on pointerdown so by tap-release
-// (~120-300ms finger contact) the network round-trips are already in flight or
-// resolved. This is what makes RS feel instant — AN now matches.
+// Ultra-opt: warm the saved Firebase row on pointerdown. Runtime AN API/live URL
+// refresh is intentionally disabled; playback must use Admin-saved data only.
 const prefetchAnimePlayback = (anime: AnimeItem) => {
   if (!anime) return;
   try { loadFullFirebaseAnimeItem(anime); } catch {}
-  const isAn = anime.source === "animesalt" || anime.sourceName === "AnimeSalt" || String(anime.id || "").startsWith("an_") || !!anime.anSlug || !!(anime as any).animeSaltSlug;
-  if (!isAn) return;
-  const baseSlug = String(anime.anSlug || (anime as any).animeSaltSlug || "").trim();
-  if (!baseSlug) return;
-  try {
-    if (anime.type === "movie") {
-      fetchAnLivePlayback(baseSlug, "movies");
-    } else {
-      fetchAnLivePlayback(`${baseSlug}-1x1`, "tvshows");
-    }
-  } catch {}
 };
 
 // Expose so AnimeCard (separate file) can warm too without prop drilling.
@@ -1206,54 +1158,6 @@ const Index = () => {
   // stale value — prevents handlePlay from firing twice and the RS player
   // from flashing Hindi ↔ English while playerState catches up.
   playerStateRef.current = playerState;
-
-  // Refresh AN playback URLs from the live AN API whenever an AN item starts
-  // playing. AnimeSalt CDN URLs are time-signed and expire, so stored Firebase
-  // links go stale (HTTP 410). We re-fetch fresh sources and overlay them on
-  // the player state without disrupting the rest of the session.
-  useEffect(() => {
-    const ps = playerState;
-    if (!ps?.anime) return;
-    const a: any = ps.anime;
-    const isAn = a.source === "animesalt" || a.sourceName === "AnimeSalt" || String(a.id || "").startsWith("an_") || !!a.anSlug || !!a.animeSaltSlug;
-    if (!isAn) return;
-    const baseSlug: string = String(a.anSlug || a.animeSaltSlug || "").trim();
-    if (!baseSlug) return;
-    let slug = "";
-    let type: string | undefined;
-    if (a.type === "movie") {
-      slug = baseSlug;
-      type = "movies";
-    } else {
-      const seasons = Array.isArray(a.seasons) ? a.seasons : [];
-      const sIdx = Number(ps.seasonIdx ?? 0);
-      const eIdx = Number(ps.epIdx ?? 0);
-      const season: any = seasons[sIdx];
-      const ep: any = season?.episodes?.[eIdx];
-      const sNum = Number(season?.seasonNumber || sIdx + 1);
-      const eNum = Number(ep?.episodeNumber || eIdx + 1);
-      slug = `${baseSlug}-${sNum}x${eNum}`;
-      type = "tvshows";
-    }
-    if (!slug) return;
-    let cancelled = false;
-    fetchAnLivePlayback(slug, type).then((fresh) => {
-      if (cancelled || !fresh?.src) return;
-      setPlayerState((prev) => {
-        if (!prev || prev.anime?.id !== ps.anime.id || prev.seasonIdx !== ps.seasonIdx || prev.epIdx !== ps.epIdx) return prev;
-        return {
-          ...prev,
-          src: fresh.src,
-          qualityOptions: fresh.qualityOptions?.length ? (fresh.qualityOptions as any) : prev.qualityOptions,
-          audioTracks: (fresh.audioTracks as any)?.length ? (fresh.audioTracks as any) : prev.audioTracks,
-          anNativeData: fresh.anNativeData || prev.anNativeData,
-        };
-      });
-    });
-    return () => { cancelled = true; };
-  }, [playerState?.anime?.id, playerState?.seasonIdx, playerState?.epIdx]);
-
-
 
   // AnimeSalt iframe player state
   const [saltPlayerState, setSaltPlayerState] = useState<{
@@ -2029,20 +1933,6 @@ const Index = () => {
           qualityOptions = directFromFirebase.qualityOptions;
           audioTracks = directFromFirebase.audioTracks;
         }
-        // Ultra-opt: if we already prefetched the fresh AN URL on pointerdown,
-        // use it as the initial src so the player doesn't first attempt a stale
-        // signed URL and then swap mid-load.
-        const baseSlugAn = String((anime as any).anSlug || (anime as any).animeSaltSlug || "").trim();
-        if (baseSlugAn) {
-          const sNum = Number((season as any)?.seasonNumber || (resolvedSeasonIdx ?? 0) + 1);
-          const eNum = Number(episode?.episodeNumber || (resolvedEpIdx ?? 0) + 1);
-          const fresh = peekAnLivePlayback(`${baseSlugAn}-${sNum}x${eNum}`, "tvshows");
-          if (fresh?.src) {
-            src = fresh.src;
-            if (fresh.qualityOptions?.length) qualityOptions = fresh.qualityOptions as any;
-            if ((fresh.audioTracks as any)?.length) audioTracks = fresh.audioTracks as any;
-          }
-        }
       }
       } else if (getMovieSrc(anime)) {
         src = getMovieSrc(anime);
@@ -2055,18 +1945,6 @@ const Index = () => {
           src = anMovie.src;
           qualityOptions = anMovie.qualityOptions;
           audioTracks = anMovie.audioTracks as any;
-        }
-        // Ultra-opt: prefer prefetched fresh AN movie URL when available.
-        if (isAnMovie(anime)) {
-          const baseSlugAn = String((anime as any).anSlug || (anime as any).animeSaltSlug || "").trim();
-          if (baseSlugAn) {
-            const fresh = peekAnLivePlayback(baseSlugAn, "movies");
-            if (fresh?.src) {
-              src = fresh.src;
-              if (fresh.qualityOptions?.length) qualityOptions = fresh.qualityOptions as any;
-              if ((fresh.audioTracks as any)?.length) audioTracks = fresh.audioTracks as any;
-            }
-          }
         }
     }
 

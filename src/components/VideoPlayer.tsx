@@ -659,6 +659,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [noProxy, preferProxy, src]);
   const [isPremium, setIsPremium] = useState<boolean | null>(null); // null = loading
   const [adGateActive, setAdGateActive] = useState(false);
+  const adGateActiveRef = useRef(false);
+  useEffect(() => { adGateActiveRef.current = adGateActive; }, [adGateActive]);
   const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
   const [shortenLoading, setShortenLoading] = useState(false);
   const [adGateError, setAdGateError] = useState("");
@@ -1534,7 +1536,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setAdGateError("");
       if (videoRef.current) {
         videoRef.current.pause();
-        videoRef.current.src = "";
       }
       return;
     }
@@ -1870,6 +1871,11 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [isPremium, effectiveVideoServers, activeServerIndex, switchServer, manualServerSelected]);
 
   const tryNextPlaybackRoute = useCallback((lastKnownTime = 0) => {
+    if (isAnimeSaltContent) {
+      setVideoError(true);
+      return false;
+    }
+
     const failedKey = currentSrc || activeSourceBaseRef.current || sourceBaseRef.current;
     if (!failedKey) return false;
 
@@ -1950,7 +1956,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     setVideoError(true);
     return false;
-  }, [activeServerIndex, availableQualities, cdnEnabled, currentQuality, currentSrc, effectiveVideoServers, getServerScopedSource, isPremium, preferProxy, proxyApiKey, proxyUrl, src, switchServer]);
+  }, [activeServerIndex, availableQualities, cdnEnabled, currentQuality, currentSrc, effectiveVideoServers, getServerScopedSource, isAnimeSaltContent, isPremium, preferProxy, proxyApiKey, proxyUrl, src, switchServer]);
 
   const [audioTrackOptions, setAudioTrackOptions] = useState<AudioTrackOption[]>([]);
   const [hlsAudioOptions, setHlsAudioOptions] = useState<AudioTrackOption[]>([]);
@@ -2226,7 +2232,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // (native HLS) only gets used when hls.js can't run.
   useEffect(() => {
     const v = videoRef.current;
-    if (!v || !currentSrc || !isHlsSrc || isEmbedPlayback || adGateActive) {
+    if (!v || !currentSrc || !isHlsSrc || isEmbedPlayback) {
       // Tear down any existing instance when not in HLS mode
       if (hlsRef.current) {
         try { hlsRef.current.destroy(); } catch {}
@@ -2237,7 +2243,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // of hiding the button completely.
       setHlsAudioOptions([]);
       setCurrentHlsAudio(-1);
-      if (externalSubtitleOptions.length > 0 && currentSrc && !isEmbedPlayback && !adGateActive) {
+      if (externalSubtitleOptions.length > 0 && currentSrc && !isEmbedPlayback) {
         hlsSubtitleMetaRef.current = externalSubtitleOptions;
         setHlsSubtitleOptions(externalSubtitleOptions);
         setCurrentHlsSubtitle((prev) => externalSubtitleOptions.some((track) => track.id === prev) ? prev : -1);
@@ -2406,7 +2412,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       applyPreferredHlsAudio();
       refreshHlsAudio();
       refreshHlsSubs();
-      if (userPlaybackIntentRef.current) v.play().catch(() => {});
+      if (userPlaybackIntentRef.current && !adGateActiveRef.current) v.play().catch(() => {});
     });
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
       applyPreferredHlsAudio();
@@ -2462,7 +2468,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (hlsRef.current === hls) hlsRef.current = null;
       if (hlsObjectUrl) URL.revokeObjectURL(hlsObjectUrl);
     };
-  }, [currentSrc, isHlsSrc, isEmbedPlayback, adGateActive, tryNextPlaybackRoute, externalSubtitleOptions, selectedLanguage, buildReliableHlsSource]);
+  }, [currentSrc, isHlsSrc, isEmbedPlayback, tryNextPlaybackRoute, externalSubtitleOptions, selectedLanguage, buildReliableHlsSource]);
 
   // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
   // users reported when returning to home. Detaches HLS, clears <video>, kills timers.
@@ -2700,9 +2706,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const episodeKey = `${(anime as any)?.id ?? ""}__${currentSeasonIdx ?? "movie"}__${currentEpisodeIdx ?? "movie"}`;
     const nextFingerprint = `${src}__${episodeKey}`;
     if (lastSourceFingerprintRef.current === nextFingerprint) return; // same episode/movie source
-    // If only `src` changed for the SAME episode (e.g. AN live URL refresh),
-    // preserve playback position so pause→resume / URL refresh never restarts
-    // from 0.
+    // If only `src` changed for the SAME episode, preserve playback position so
+    // pause→resume / parent re-render never restarts from 0.
     const sameEpisodeUrlRefresh =
       lastSourceFingerprintRef.current !== "" && lastEpisodeKeyRef.current === episodeKey;
     lastSourceFingerprintRef.current = nextFingerprint;
@@ -2728,10 +2733,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       ? Math.max(livePosition || 0, lastPlaybackPositionRef.current || 0)
       : 0;
 
-    // AN live URL refresh must never disturb a paused viewer. If a fresher HLS
-    // URL arrives for the same episode while paused, keep the current media
-    // pipeline mounted; resume continues from the same frame instead of 0:00.
-    if (sameEpisodeUrlRefresh && isAnimeSaltContent && _v?.paused) {
+    // AN runtime source refresh is completely disabled. Admin-saved data is the
+    // source of truth; same-episode prop URL changes must never rebuild HLS or
+    // reset the playhead after pause/ad/overlay state changes.
+    if (sameEpisodeUrlRefresh && isAnimeSaltContent) {
       pendingSeek.current = preservedTime > 0 ? preservedTime : null;
       return;
     }
@@ -3053,7 +3058,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     stopAndClosePlayer();
   }, [isFullscreen, stopAndClosePlayer]);
 
-  // Auto-close when user leaves the page/app — pause when tab hidden, fully close on pagehide.
+  // Pause when user leaves the page/app. Never clear src here: ad popups / app
+  // switching can fire pagehide, and wiping the media source restarts playback.
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
@@ -3063,10 +3069,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
     const onPageHide = () => {
       const v = videoRef.current;
-      if (v) {
-        try { v.pause(); } catch {}
-        try { v.removeAttribute("src"); v.src = ""; v.load(); } catch {}
-      }
+      if (v) { try { v.pause(); } catch {} }
     };
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", onPageHide);
@@ -3910,7 +3913,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           ) : (
             <video
               ref={videoRef}
-              src={adGateActive || (isHlsSrc && Hls.isSupported()) ? undefined : currentSrc}
+              src={(isHlsSrc && Hls.isSupported()) ? undefined : currentSrc}
               crossOrigin={undefined}
                 className="w-full h-full bg-black pointer-events-none"
               style={{ objectFit: cropModes[cropIndex], WebkitTouchCallout: "none", userSelect: "none" }}
