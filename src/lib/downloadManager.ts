@@ -333,24 +333,6 @@ class DownloadManager {
       this.settleItem(id, "error", {
         error: String((error as { message?: string })?.message || "Download failed"),
       });
-
-      if (controller.signal.aborted) return;
-      saveBlobAs(blob, fileName);
-      this.writeCachedSize(rawUrl, blob.size);
-      this.settleItem(id, "complete", { percent: 100, loadedMB: bytesToMb(blob.size), totalMB: bytesToMb(blob.size) });
-    } catch (error) {
-      const latest = this.downloads.get(id);
-      if (controller.signal.aborted || !latest || latest.status === "paused" || latest.status === "cancelled" || isAbortError(error)) return;
-
-      if (!isHls && triggerBackgroundVideoDownload(rawUrl, fileName)) {
-        const size = latest.totalMB > 1 ? latest.totalMB : Math.max(latest.loadedMB, 1);
-        this.settleItem(id, "complete", { percent: 100, loadedMB: size, totalMB: size });
-        return;
-      }
-
-      this.settleItem(id, "error", {
-        error: String((error as { message?: string })?.message || "Download failed"),
-      });
     } finally {
       if (this.controllers.get(id) === controller) this.controllers.delete(id);
     }
