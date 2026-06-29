@@ -44,7 +44,7 @@ interface VideoServerOption {
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
 import { buildDirectDownloadUrl, buildVideoDownloadUrl } from "@/lib/videoDownload";
-import { estimateHlsSize } from "@/lib/hlsDownloader";
+
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
 const buildProxyPlaybackUrl = (proxyBase: string, targetUrl: string, apiKey?: string): string => {
