@@ -1893,9 +1893,9 @@ const Index = () => {
           audioTracks = directFromFirebase.audioTracks;
         }
       }
-      } else if (anime.type === "movie" && (getMovieSrc(anime) || isAnMovie(anime))) {
+      } else if (anime.movieLink) {
         src = getMovieSrc(anime);
-        subtitle = "Movie";
+      subtitle = "Movie";
         qualityOptions = getMovieQualityOptions(anime);
         if (anime.audioTracks?.length) audioTracks = anime.audioTracks;
         // AN movies: wrap into synthetic master so video + Hindi audio play together
@@ -2235,7 +2235,7 @@ const Index = () => {
         setSelectedAnime(null);
       }
     } else {
-      if (anime.type === "movie" && (getMovieSrc(anime) || isAnMovie(anime))) {
+      if (anime.movieLink) {
         const hasAccess = await checkAndShowAdGate(anime);
         if (!hasAccess) return;
         const anMovie = buildAnMoviePlayback(anime);
