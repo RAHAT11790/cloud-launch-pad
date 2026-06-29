@@ -31,6 +31,8 @@ export type EdgeFnLibraryEntry = {
   source: string;        // index.ts content
   secrets: string[];     // Required secret names (user must fill before deploy)
   isNew?: boolean;       // Only current update gets a NEW badge
+  badgeText?: string;    // Custom badge text overriding NEW
+  badgeTone?: "emerald" | "cyan" | "amber"; // Badge color tone
 };
 
 // Regex auto-detects Deno.env.get("XXX") references and offers them as
