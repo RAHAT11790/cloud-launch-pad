@@ -2097,11 +2097,13 @@ const Index = () => {
     }
 
     const preferredSource = item.source || "firebase";
-    const anime =
+    const anime0 =
       allAnime.find(a => a.id === item.id && (a.source || "firebase") === preferredSource) ||
       allAnime.find(a => a.id === item.id && (a.source || "firebase") === "firebase") ||
       allAnime.find(a => a.id === item.id);
-    if (!anime) return;
+    if (!anime0) return;
+    // Hydrate full record (seasons/audioTracks) — list is lite to keep memory low.
+    const anime = await hydrate(anime0);
 
     if (anime.source === "animesalt" && !hasStoredFirebasePlayback(anime)) {
       toast.error("AN video/audio is not saved in Firebase yet. Refresh it from Admin first.");
