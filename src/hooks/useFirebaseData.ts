@@ -7,7 +7,7 @@ import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
 const LS_WS = "rs_cache_webseries_v1";
 const LS_MOV = "rs_cache_movies_v1";
 const LS_CATS = "rs_cache_categories_v1";
-const BACKFILL_PAGE_SIZE = 8;
+const BACKFILL_PAGE_SIZE = 4;
 const BACKFILL_CACHE_LIMIT = 120;
 const MAX_CACHE_BYTES = 2_500_000;
 
@@ -70,7 +70,7 @@ const loadBackfillCards = async (
       }));
       const mapped = rows.filter(Boolean) as AnimeItem[];
       if (mapped.length && !cancelled()) apply(mapped);
-      await new Promise((resolve) => window.setTimeout(resolve, 320));
+      await new Promise((resolve) => window.setTimeout(resolve, 650));
     }
   } catch {}
 };
