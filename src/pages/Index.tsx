@@ -289,6 +289,36 @@ const getAnimeSaltDirectState = async (episodeSlug: string, forceRefresh = false
   return request;
 };
 
+// Live AN API fetch — bypasses stale Firebase URLs (AnimeSalt signs URLs with
+// short expiries, so stored links return 410 after a few hours). We always try
+// to refresh from /an-api/episode at play time and overlay fresh URLs on the
+// player state.
+const animeSaltLiveCache = new Map<string, Promise<Awaited<ReturnType<typeof buildAnimeSaltDirectPlaybackState>> | null>>();
+const fetchAnLivePlayback = (slug: string, type?: string, forceRefresh = false) => {
+  const key = `${slug}|${type || ""}`;
+  if (!slug) return Promise.resolve(null);
+  if (forceRefresh) animeSaltLiveCache.delete(key);
+  const cached = animeSaltLiveCache.get(key);
+  if (cached) return cached;
+  const req = (async () => {
+    try {
+      const url = `${AN_API_BASE}/episode?slug=${encodeURIComponent(slug)}${type ? `&type=${encodeURIComponent(type)}` : ""}`;
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) return null;
+      const data = await r.json();
+      return await buildAnimeSaltDirectPlaybackState(data);
+    } catch { return null; }
+  })();
+  animeSaltLiveCache.set(key, req);
+  // 10 min TTL — AnimeSalt URLs typically expire ~hour, but we re-fetch on each
+  // new playback session anyway.
+  setTimeout(() => animeSaltLiveCache.delete(key), 10 * 60_000);
+  req.catch(() => animeSaltLiveCache.delete(key));
+  return req;
+};
+
+
+
 // Helper: get best available src from episode (fallback if default link is empty)
 const getEpisodeSrc = (ep?: Episode | null): string => {
   if (!ep) return "";
