@@ -52,6 +52,13 @@ export function useSelectedAnimeSalt() {
       try {
         const cachedSlugs = new Set(readCache().map((item) => item.anSlug || item.animeSaltSlug || item.slug).filter(Boolean));
         const keys = (await firebaseRestShallowKeys("animesaltSelected")).reverse().slice(0, SELECTED_CACHE_LIMIT);
+        // Reconcile: drop cached cards whose Firebase row no longer exists.
+        const liveSet = new Set(keys);
+        setItems((prev) => {
+          const next = prev.filter((item) => liveSet.has(item.anSlug || item.animeSaltSlug || item.slug || ""));
+          if (next.length !== prev.length) writeCache(next);
+          return next;
+        });
         const refreshKeys = keys.slice(0, cachedSlugs.size ? 4 : SELECTED_CARD_PAGE_SIZE);
         const missingKeys = keys.filter((slug) => !cachedSlugs.has(slug));
         const workKeys = Array.from(new Set([...refreshKeys, ...missingKeys]));
