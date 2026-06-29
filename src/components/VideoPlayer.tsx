@@ -5006,7 +5006,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               return;
             }
             const orderedIdxs = Array.from(dlSelectedEpisodes).sort((a, b) => a - b);
-            const batchItems: Array<{ url: string; fileName: string }> = [];
+            const httpBatch: Array<{ id: string; url: string; title: string; subtitle: string; poster?: string; quality: string; fileName: string }> = [];
             const hlsBatch: Array<{ id: string; url: string; title: string; subtitle: string; poster?: string; quality: string; fileName: string }> = [];
             for (const idx of orderedIdxs) {
               const ep = panelEpisodes.find((episode) => episode.index === idx);
@@ -5024,35 +5024,25 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               const fileName = isHls
                 ? buildDownloadFileName(episodeLabel, quality).replace(/\.mp4$/i, "") + ".ts"
                 : buildDownloadFileName(episodeLabel, quality);
-              if (isHls) {
-                hlsBatch.push({
-                  id: buildDlId(quality, episodeLabel),
-                  url: epUrl,
-                  title: sanitizeAnimeDownloadTitle(title) || title,
-                  subtitle: episodeLabel,
-                  poster,
-                  quality,
-                  fileName,
-                });
-              } else {
-                batchItems.push({ url: epUrl, fileName });
-                downloadManager.registerExternalDownload({
-                  id: buildDlId(quality, episodeLabel),
-                  url: epUrl,
-                  title: sanitizeAnimeDownloadTitle(title) || title,
-                  subtitle: episodeLabel,
-                  poster,
-                  quality,
-                  fileName,
-                });
-              }
+              const entry = {
+                id: buildDlId(quality, episodeLabel),
+                url: epUrl,
+                title: sanitizeAnimeDownloadTitle(title) || title,
+                subtitle: episodeLabel,
+                poster,
+                quality,
+                fileName,
+              };
+              (isHls ? hlsBatch : httpBatch).push(entry);
             }
-            if (hlsBatch.length) downloadManager.enqueueBatch(hlsBatch);
-            const fired = batchItems.length ? triggerBulkBackgroundDownloads(batchItems) : 0;
-            const total = fired + hlsBatch.length;
+            // Single unified batch — the download manager owns RS and AN
+            // alike (real fetch + saved blob + size + progress). No more
+            // parallel anchor clicks that the browser silently blocks.
+            const combined = [...httpBatch, ...hlsBatch];
+            if (combined.length) downloadManager.enqueueBatch(combined);
             closePanel();
-            if (total === 0) toast.error("No downloadable links found");
-            else toast.success(`Started ${total} download${total > 1 ? "s" : ""}`);
+            if (combined.length === 0) toast.error("No downloadable links found");
+            else toast.success(`Started ${combined.length} download${combined.length > 1 ? "s" : ""}`);
           };
 
           const playOffline = async (episodeData?: any) => {
