@@ -1,20 +1,34 @@
 import { useState, useEffect, useMemo } from "react";
-import { db, ref, onValue } from "@/lib/firebase";
+import { db, ref, onValue, query, orderByChild, limitToLast } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
+import { mapFirebaseMovieItem, mapFirebaseWebseriesItem } from "@/lib/firebaseAnimeMapper";
 
 const LS_WS = "rs_cache_webseries_v1";
 const LS_MOV = "rs_cache_movies_v1";
 const LS_CATS = "rs_cache_categories_v1";
+const PUBLIC_BATCH_LIMIT = 160;
+const MAX_CACHE_BYTES = 2_500_000;
 
 const readCache = <T,>(key: string, fallback: T): T => {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
+    if (raw.length > MAX_CACHE_BYTES) {
+      localStorage.removeItem(key);
+      return fallback;
+    }
     return JSON.parse(raw) as T;
   } catch { return fallback; }
 };
 const writeCache = (key: string, value: unknown) => {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+};
+
+const mergeById = (cached: AnimeItem[], fresh: AnimeItem[]) => {
+  const map = new Map<string, AnimeItem>();
+  cached.forEach((item) => { if (item?.id) map.set(item.id, item); });
+  fresh.forEach((item) => { if (item?.id) map.set(item.id, item); });
+  return Array.from(map.values()).sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
 };
 
 export function useFirebaseData() {
@@ -46,198 +60,41 @@ export function useFirebaseData() {
       checkLoaded();
     });
 
-    // Load webseries
-    const wsRef = ref(db, "webseries");
+    // Load only the latest lightweight card rows first. Full episode/audio data
+    // is fetched on play, so AN/Ad series cannot crash the homepage by sending
+    // every season/episode/audio URL at once.
+    const wsRef = query(ref(db, "webseries"), orderByChild("updatedAt"), limitToLast(PUBLIC_BATCH_LIMIT));
     const unsubWs = onValue(wsRef, (snapshot) => {
       const data = snapshot.val() || {};
       const publicItems: AnimeItem[] = [];
       Object.entries(data).forEach(([id, item]: [string, any]) => {
         if (item.visibility === "private") return; // skip private content
-        // AN-generated series carry `anSlug` / `sourceName === "AnimeSalt"`.
-        // Tag them as `animesalt` so the card shows the "AN" badge by default.
-        // Admin can override per-series via `displayAs: "rs"`.
-        const isAn = Boolean(item.anSlug || item.animeSaltSlug || item.sourceName === "AnimeSalt");
-        const displayAs = String(item.displayAs || (isAn ? "an" : "rs")).toLowerCase();
-        const cardSource: AnimeItem["source"] = displayAs === "an" ? "animesalt" : "firebase";
-        const mappedItem: AnimeItem = {
-          id,
-          source: cardSource,
-          sourceName: item.sourceName || (isAn ? "AnimeSalt" : undefined),
-          anSlug: item.anSlug || item.animeSaltSlug || undefined,
-          animeSaltSlug: item.animeSaltSlug || item.anSlug || undefined,
-          displayAs: item.displayAs || undefined,
-          slug: item.slug || item.anSlug || item.animeSaltSlug || undefined,
-          title: item.title || "",
-          poster: item.poster || "",
-          backdrop: item.backdrop || "",
-          year: item.year || "",
-          rating: item.rating || "",
-          language: item.language || "",
-          baseLanguage: item.baseLanguage || item.language || "",
-          availableLanguages: Array.isArray(item.availableLanguages) ? item.availableLanguages : undefined,
-          seasonsByLanguage: item.seasonsByLanguage && typeof item.seasonsByLanguage === "object"
-            ? Object.fromEntries(
-                Object.entries(item.seasonsByLanguage).map(([lang, seasons]: [string, any]) => [
-                  lang,
-                  Array.isArray(seasons)
-                    ? seasons.map((s: any) => ({
-                        name: s.name || "",
-                        episodes: s.episodes
-                          ? Object.values(s.episodes).map((ep: any) => ({
-                              episodeNumber: ep.episodeNumber || 0,
-                              title: ep.title || "",
-                              link: ep.link || "",
-                              link480: ep.link480 || undefined,
-                              link720: ep.link720 || undefined,
-                              link1080: ep.link1080 || undefined,
-                              link4k: ep.link4k || undefined,
-                              subtitleTracks: ep.subtitleTracks ? Object.values(ep.subtitleTracks).map((st: any) => ({
-                                language: st.language || undefined,
-                                label: st.label || st.language || "Subtitle",
-                                url: st.url || st.link || "",
-                              })).filter((st: any) => st.url) : undefined,
-                              audioTracks: ep.audioTracks ? Object.values(ep.audioTracks).map((at: any) => ({
-                                language: at.language || "",
-                                label: at.label || at.language || "",
-                                link: at.link || at.audioUrl || at.rawAudioUrl || "",
-                                audioUrl: at.audioUrl || at.link || at.rawAudioUrl || undefined,
-                                rawAudioUrl: at.rawAudioUrl || at.audioUrl || at.link || undefined,
-                                isDefault: at.isDefault === true,
-                                link480: at.link480 || undefined,
-                                link720: at.link720 || undefined,
-                                link1080: at.link1080 || undefined,
-                                link4k: at.link4k || undefined,
-                              })) : undefined,
-                            }))
-                          : [],
-                      }))
-                    : [],
-                ]),
-              )
-            : undefined,
-          category: item.category || "",
-          type: "webseries",
-          storyline: item.storyline || "",
-          cast: Array.isArray(item.cast) ? item.cast : item.cast ? Object.values(item.cast) : undefined,
-          audioTracks: item.audioTracks ? Object.values(item.audioTracks).map((at: any) => ({
-            language: at.language || "",
-            label: at.label || at.language || "",
-            link: at.link || at.audioUrl || at.rawAudioUrl || "",
-            audioUrl: at.audioUrl || at.link || at.rawAudioUrl || undefined,
-            rawAudioUrl: at.rawAudioUrl || at.audioUrl || at.link || undefined,
-            isDefault: at.isDefault === true,
-            link480: at.link480 || undefined,
-            link720: at.link720 || undefined,
-            link1080: at.link1080 || undefined,
-            link4k: at.link4k || undefined,
-          })) : undefined,
-          dubType: item.dubType || "official",
-          seasons: item.seasons
-            ? Object.values(item.seasons).map((s: any) => ({
-                name: s.name || "",
-                episodes: s.episodes
-                  ? Object.values(s.episodes).map((ep: any) => ({
-                      episodeNumber: ep.episodeNumber || 0,
-                      title: ep.title || "",
-                      link: ep.link || "",
-                      link480: ep.link480 || undefined,
-                      link720: ep.link720 || undefined,
-                      link1080: ep.link1080 || undefined,
-                      link4k: ep.link4k || undefined,
-                      subtitleTracks: ep.subtitleTracks ? Object.values(ep.subtitleTracks).map((st: any) => ({
-                        language: st.language || undefined,
-                        label: st.label || st.language || "Subtitle",
-                        url: st.url || st.link || "",
-                      })).filter((st: any) => st.url) : undefined,
-                      audioTracks: ep.audioTracks ? Object.values(ep.audioTracks).map((at: any) => ({
-                        language: at.language || "",
-                        label: at.label || "",
-                        link: at.link || at.audioUrl || at.rawAudioUrl || "",
-                        audioUrl: at.audioUrl || at.link || at.rawAudioUrl || undefined,
-                        rawAudioUrl: at.rawAudioUrl || at.audioUrl || at.link || undefined,
-                        isDefault: at.isDefault === true,
-                        link480: at.link480 || undefined,
-                        link720: at.link720 || undefined,
-                        link1080: at.link1080 || undefined,
-                        link4k: at.link4k || undefined,
-                      })) : undefined,
-                    }))
-                  : [],
-              }))
-            : undefined,
-          trailer: item.trailer || undefined,
-          movieLink: undefined,
-          createdAt: item.createdAt || 0,
-          updatedAt: item.updatedAt || 0,
-        };
-        publicItems.push(mappedItem);
+        publicItems.push(mapFirebaseWebseriesItem(id, item, { full: false }));
       });
       publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      setWebseries(publicItems);
-      writeCache(LS_WS, publicItems);
+      setWebseries((prev) => {
+        const merged = mergeById(prev, publicItems);
+        writeCache(LS_WS, merged);
+        return merged;
+      });
       checkLoaded();
     });
 
-    // Load movies
-    const movRef = ref(db, "movies");
+    // Load movies in the same lightweight, cache-first way.
+    const movRef = query(ref(db, "movies"), orderByChild("updatedAt"), limitToLast(PUBLIC_BATCH_LIMIT));
     const unsubMov = onValue(movRef, (snapshot) => {
       const data = snapshot.val() || {};
       const publicItems: AnimeItem[] = [];
       Object.entries(data).forEach(([id, item]: [string, any]) => {
         if (item.visibility === "private") return; // skip private content
-        // Mirror the webseries branch: tag AN-generated movies so they get the
-        // "AN" badge and route through the AN playback path (synthetic master).
-        const isAn = Boolean(item.anSlug || item.animeSaltSlug || item.sourceName === "AnimeSalt" || item.source === "animesalt");
-        const displayAs = String(item.displayAs || (isAn ? "an" : "rs")).toLowerCase();
-        const cardSource: AnimeItem["source"] = displayAs === "an" ? "animesalt" : "firebase";
-        const mappedItem: AnimeItem = {
-          id,
-          source: cardSource,
-          sourceName: item.sourceName || (isAn ? "AnimeSalt" : undefined),
-          anSlug: item.anSlug || item.animeSaltSlug || undefined,
-          animeSaltSlug: item.animeSaltSlug || item.anSlug || undefined,
-          displayAs: item.displayAs || undefined,
-          slug: item.slug || item.anSlug || item.animeSaltSlug || undefined,
-          title: item.title || "",
-          poster: item.poster || "",
-          backdrop: item.backdrop || "",
-          year: item.year || "",
-          rating: item.rating || "",
-          language: item.language || "",
-          baseLanguage: item.baseLanguage || item.language || "",
-          availableLanguages: Array.isArray(item.availableLanguages) ? item.availableLanguages : undefined,
-          category: item.category || "",
-          type: "movie",
-          storyline: item.storyline || "",
-          cast: Array.isArray(item.cast) ? item.cast : item.cast ? Object.values(item.cast) : undefined,
-          audioTracks: item.audioTracks ? Object.values(item.audioTracks).map((at: any) => ({
-            language: at.language || "",
-            label: at.label || at.language || "",
-            link: at.link || at.audioUrl || at.rawAudioUrl || "",
-            audioUrl: at.audioUrl || at.link || at.rawAudioUrl || undefined,
-            rawAudioUrl: at.rawAudioUrl || at.audioUrl || at.link || undefined,
-            isDefault: at.isDefault === true,
-            link480: at.link480 || undefined,
-            link720: at.link720 || undefined,
-            link1080: at.link1080 || undefined,
-            link4k: at.link4k || undefined,
-          })) : undefined,
-          dubType: item.dubType || "official",
-          movieLink: item.movieLink || "",
-          movieLink480: item.movieLink480 || undefined,
-          movieLink720: item.movieLink720 || undefined,
-          movieLink1080: item.movieLink1080 || undefined,
-          movieLink4k: item.movieLink4k || undefined,
-          trailer: item.trailer || undefined,
-          seasons: undefined,
-          createdAt: item.createdAt || 0,
-          updatedAt: item.updatedAt || 0,
-        };
-        publicItems.push(mappedItem);
+        publicItems.push(mapFirebaseMovieItem(id, item, { full: false }));
       });
       publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      setMovies(publicItems);
-      writeCache(LS_MOV, publicItems);
+      setMovies((prev) => {
+        const merged = mergeById(prev, publicItems);
+        writeCache(LS_MOV, merged);
+        return merged;
+      });
       checkLoaded();
     });
 
