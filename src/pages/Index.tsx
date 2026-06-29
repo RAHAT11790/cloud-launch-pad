@@ -492,10 +492,55 @@ import { useBranding } from "@/hooks/useBranding";
 import { guestStore } from "@/lib/guestStore";
 import { clearActiveDisplayName, clearActiveProfilePhoto, writeDisplayName, writeProfilePhoto } from "@/lib/localUser";
 import { optimizedImageUrl } from "@/lib/imageCache";
+import { mapFirebaseMovieItem, mapFirebaseWebseriesItem } from "@/lib/firebaseAnimeMapper";
 
 const warmedImageUrls = new Set<string>();
 const AN_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const DETAILS_LOADING_TOAST_ID = "rs-an-details-loading-toast";
+const FIREBASE_FULL_ITEM_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+
+const sanitizeFirebaseKey = (value: string) => String(value || "").replace(/[.#$/\[\]]/g, "_").slice(0, 180);
+
+const fullFirebaseItemCacheKey = (type: AnimeItem["type"], id: string) => `rs_full_item:${type}:${sanitizeFirebaseKey(id)}`;
+
+const readFullFirebaseItemCache = (type: AnimeItem["type"], id: string): AnimeItem | null => {
+  try {
+    const raw = localStorage.getItem(fullFirebaseItemCacheKey(type, id));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.ts || Date.now() - Number(parsed.ts) > FIREBASE_FULL_ITEM_CACHE_TTL) {
+      localStorage.removeItem(fullFirebaseItemCacheKey(type, id));
+      return null;
+    }
+    return parsed.data || null;
+  } catch { return null; }
+};
+
+const writeFullFirebaseItemCache = (type: AnimeItem["type"], id: string, data: AnimeItem) => {
+  try { localStorage.setItem(fullFirebaseItemCacheKey(type, id), JSON.stringify({ ts: Date.now(), data })); } catch {}
+};
+
+const mergeAnimeCards = (...groups: AnimeItem[][]) => {
+  const byKey = new Map<string, AnimeItem>();
+  const keyFor = (item: AnimeItem) => {
+    const slug = String(item.anSlug || item.animeSaltSlug || item.slug || "").trim().toLowerCase();
+    if (slug && (item.source === "animesalt" || item.sourceName === "AnimeSalt")) return `${item.type}:an:${slug}`;
+    return `${item.type}:id:${item.id}`;
+  };
+  const score = (item: AnimeItem) =>
+    (item.seasons?.length ? 100 : 0)
+    + (item.movieLink ? 100 : 0)
+    + (item.id.startsWith("an_") || item.id.startsWith("an_mv_") ? 20 : 0)
+    + (item.poster ? 2 : 0)
+    + (item.backdrop ? 1 : 0);
+  groups.flat().forEach((item) => {
+    if (!item?.id) return;
+    const key = keyFor(item);
+    const prev = byKey.get(key);
+    if (!prev || score(item) >= score(prev)) byKey.set(key, item);
+  });
+  return Array.from(byKey.values()).sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+};
 
 const preloadImage = (src?: string | null) => {
   const url = String(src || "").trim();
