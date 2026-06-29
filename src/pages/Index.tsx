@@ -2168,11 +2168,12 @@ const Index = () => {
     }
 
     const preferredSource = item.source || "firebase";
-    const anime =
+    let anime =
       allAnime.find(a => a.id === item.id && (a.source || "firebase") === preferredSource) ||
       allAnime.find(a => a.id === item.id && (a.source || "firebase") === "firebase") ||
       allAnime.find(a => a.id === item.id);
     if (!anime) return;
+    anime = (await loadFullFirebaseAnimeItem(anime)) || anime;
 
     if (anime.source === "animesalt" && !hasStoredFirebasePlayback(anime)) {
       toast.error("AN video/audio is not saved in Firebase yet. Refresh it from Admin first.");
