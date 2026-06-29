@@ -6,6 +6,17 @@ const isHttpUrl = (value: string) => /^https?:\/\//i.test(value);
 
 const isManagedVideoDownloadUrl = (value: string) => /\/functions\/v1\/video-download\?/i.test(String(value || ""));
 const isManagedVideoProxyUrl = (value: string) => /\/functions\/v1\/video-proxy\?/i.test(String(value || ""));
+const isCustomManagedVideoDownloadUrl = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw || !overrideBaseUrl) return false;
+  try {
+    const u = new URL(raw);
+    const base = new URL(overrideBaseUrl);
+    return u.origin === base.origin
+      && u.pathname.replace(/\/+$/, "") === base.pathname.replace(/\/+$/, "")
+      && u.searchParams.has("url");
+  } catch { return false; }
+};
 
 const buildSafeFileName = (rawName: string) => {
   const cleaned = String(rawName || "video")
@@ -39,7 +50,7 @@ const resolveBaseSync = (): string => {
 export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): string | null {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return null;
-  if (isManagedVideoDownloadUrl(trimmedUrl)) return trimmedUrl;
+  if (isManagedVideoDownloadUrl(trimmedUrl) || isCustomManagedVideoDownloadUrl(trimmedUrl)) return trimmedUrl;
   if (isManagedVideoProxyUrl(trimmedUrl)) {
     try {
       const inner = new URL(trimmedUrl).searchParams.get("url");
@@ -55,7 +66,7 @@ export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): stri
 export function unwrapManagedVideoUrl(value: string): string {
   const trimmed = String(value || "").trim();
   if (!trimmed) return "";
-  if (isManagedVideoDownloadUrl(trimmed) || isManagedVideoProxyUrl(trimmed)) {
+  if (isManagedVideoDownloadUrl(trimmed) || isCustomManagedVideoDownloadUrl(trimmed) || isManagedVideoProxyUrl(trimmed)) {
     try {
       return new URL(trimmed).searchParams.get("url") || trimmed;
     } catch {
@@ -116,7 +127,8 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
   // Use the admin video-download function first; direct is only a last fallback.
   const preferDirect = false;
   const directUrl = buildDirectDownloadUrl(trimmedUrl);
-  const proxiedUrl = buildVideoDownloadUrl(trimmedUrl, fileName);
+  const alreadyManaged = isManagedVideoDownloadUrl(trimmedUrl) || isCustomManagedVideoDownloadUrl(trimmedUrl);
+  const proxiedUrl = alreadyManaged ? trimmedUrl : buildVideoDownloadUrl(trimmedUrl, fileName);
   const finalUrl = preferDirect ? (directUrl || proxiedUrl) : (proxiedUrl || directUrl);
   if (!finalUrl) {
     toast.error("Download service is unavailable");
