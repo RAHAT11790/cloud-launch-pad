@@ -448,8 +448,8 @@ const EmailServiceSection = ({ glassCard, inputClass, btnPrimary, btnSecondary }
 // "Default" button pastes the Lovable-hosted URL so admin can fall back when
 // self-hosted credits run out, and switch back to their own URL anytime.
 const LOVABLE_DEFAULT_BASE = "https://kqxpzqegtvaiwgdusrin.supabase.co/functions/v1";
-const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean; defaultUrl: string }> = EDGE_FUNCTION_LIBRARY.map(
- (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew, defaultUrl: `${LOVABLE_DEFAULT_BASE}/${e.slug}` })
+const ROUTER_FUNCTIONS: Array<{ slug: string; label: string; isNew?: boolean; badgeText?: string; badgeTone?: "emerald" | "cyan" | "amber"; defaultUrl: string }> = EDGE_FUNCTION_LIBRARY.map(
+ (e) => ({ slug: e.slug, label: e.label, isNew: e.isNew, badgeText: e.badgeText, badgeTone: e.badgeTone, defaultUrl: `${LOVABLE_DEFAULT_BASE}/${e.slug}` })
 );
 
 
