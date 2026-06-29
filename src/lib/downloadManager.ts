@@ -242,16 +242,10 @@ class DownloadManager {
     if (candidate.toLowerCase().startsWith("data:")) return decodeDataUriBytes(candidate);
     const resolved = this.resolveHttpDownloadUrl(candidate, "probe.mp4");
     const probeTarget = resolved || candidate;
-    const probePlans: RequestInit[] = this.isProxyDownloadUrl(candidate)
-      ? [
-          { method: "HEAD", mode: "cors" },
-          { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" },
-        ]
-      : [
-          { method: "HEAD", mode: "cors" },
-          { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" },
-          { method: "GET", mode: "cors" },
-        ];
+    const probePlans: RequestInit[] = [
+      { method: "HEAD", mode: "cors" },
+      { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" },
+    ];
 
     for (const init of probePlans) {
       const length = await this.fetchContentLength(probeTarget, init);
