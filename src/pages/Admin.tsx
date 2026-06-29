@@ -3364,13 +3364,16 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  const deleteMovie = (id: string) => {
  if (confirm("Delete this movie?")) {
- remove(ref(db, `movies/${id}`)).then(() => toast.success("Deleted!")).catch(err => toast.error("Error: " + err.message));
+ Promise.all([remove(ref(db, `movies/${id}`)), removePublicCatalogItem("movies", id)]).then(() => toast.success("Deleted!")).catch(err => toast.error("Error: " + err.message));
  }
  };
 
  const updateMovieVisibility = async (id: string, visibility: "public" | "private") => {
  try {
- await update(ref(db, `movies/${id}`), { visibility, updatedAt: Date.now() });
+ const updatedAt = Date.now();
+ await update(ref(db, `movies/${id}`), { visibility, updatedAt });
+ const existing = moviesData.find((m: any) => m.id === id) || {};
+ await savePublicCatalogItem("movies", id, { ...existing, visibility, updatedAt });
  toast.success(visibility === "private" ? "Movie moved to Private" : "Movie moved to Public");
  } catch (err: any) {
  toast.error("Error: " + err.message);
