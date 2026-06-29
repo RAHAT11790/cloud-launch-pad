@@ -2034,7 +2034,7 @@ const Index = () => {
         // signed URL and then swap mid-load.
         const baseSlugAn = String((anime as any).anSlug || (anime as any).animeSaltSlug || "").trim();
         if (baseSlugAn) {
-          const sNum = Number(season?.seasonNumber || (resolvedSeasonIdx ?? 0) + 1);
+          const sNum = Number((season as any)?.seasonNumber || (resolvedSeasonIdx ?? 0) + 1);
           const eNum = Number(episode?.episodeNumber || (resolvedEpIdx ?? 0) + 1);
           const fresh = peekAnLivePlayback(`${baseSlugAn}-${sNum}x${eNum}`, "tvshows");
           if (fresh?.src) {
