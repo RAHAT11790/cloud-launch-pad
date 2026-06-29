@@ -236,6 +236,20 @@ const loadFullFirebaseAnimeItem = async (anime: AnimeItem): Promise<AnimeItem | 
   return request;
 };
 
+const loadFullFirebaseAnimeItemWithTimeout = async (anime: AnimeItem, timeoutMs = 1400): Promise<AnimeItem | null> => {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      loadFullFirebaseAnimeItem(anime),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 const getMovieQualityOptions = (anime: AnimeItem): { label: string; src: string }[] => {
   // AN movies must wrap their video-only HLS variants together with the Hindi
   // audio track via a synthetic master. Raw HLS variant URLs play silent video.
@@ -457,6 +471,12 @@ const mergeAnimeCards = (...groups: AnimeItem[][]) => {
   });
   return Array.from(byKey.values()).sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
 };
+
+const splitCategoryTokens = (value?: string | null) =>
+  String(value || "")
+    .split(/[,/|•·]+/)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
 
 const normalizeRouteLookup = (value?: string | null) => String(value || "").trim().toLowerCase();
 
@@ -1711,7 +1731,18 @@ const Index = () => {
       });
     } catch {}
 
-    const fullAnime = await loadFullFirebaseAnimeItem(anime);
+    const routeTarget = {
+      ...getDefaultWatchTarget(anime),
+      ...(sIdx !== undefined ? { seasonIdx: sIdx } : {}),
+      ...(eIdx !== undefined ? { epIdx: eIdx } : {}),
+    };
+    const immediateRoute = buildWatchRoute(anime.id, routeTarget.seasonIdx, routeTarget.epIdx);
+    if (location.pathname !== immediateRoute || location.search !== new URL(immediateRoute, window.location.origin).search) {
+      const fromRoutedOverlay = isSearchRoute || isNotificationsRoute;
+      navigate(immediateRoute, { replace: fromRoutedOverlay || switchingInPlayer });
+    }
+
+    const fullAnime = await loadFullFirebaseAnimeItemWithTimeout(anime);
     const playableAnime = fullAnime || anime;
 
     // AN public playback is Firebase-only. Admin fetch/save is the only place
@@ -1719,12 +1750,6 @@ const Index = () => {
     // Cards always open the details view; play action enforces the Firebase
     // requirement so users can still browse AN entries without saved playback.
     if (playableAnime.source === "animesalt") {
-      const watchTargetAn = getDefaultWatchTarget(playableAnime);
-      const targetRouteAn = buildWatchRoute(playableAnime.id, watchTargetAn.seasonIdx, watchTargetAn.epIdx);
-      if (location.pathname !== targetRouteAn) {
-        const fromRoutedOverlay = isSearchRoute || isNotificationsRoute;
-        navigate(targetRouteAn, { replace: fromRoutedOverlay });
-      }
       if (hasStoredFirebasePlayback(playableAnime)) {
         await openPlayerFromAnime(playableAnime, { seasonIdx: sIdx, epIdx: eIdx });
       } else {
@@ -1737,13 +1762,6 @@ const Index = () => {
     // Reflect details view in the URL so back-button works as a real route.
     // Use replace when coming from a routed overlay (search/notifications) to
     // avoid stacking duplicate entries; push from anywhere else.
-    const watchTarget = getDefaultWatchTarget(playableAnime);
-    const targetRoute = buildWatchRoute(playableAnime.id, watchTarget.seasonIdx, watchTarget.epIdx);
-    if (location.pathname !== targetRoute) {
-      const fromRoutedOverlay = isSearchRoute || isNotificationsRoute;
-      navigate(targetRoute, { replace: fromRoutedOverlay });
-    }
-
     await openPlayerFromAnime(playableAnime, { seasonIdx: sIdx, epIdx: eIdx });
   };
 
@@ -1753,11 +1771,12 @@ const Index = () => {
       return;
     }
 
-    if (!freeAccessLoaded) {
+    const isAnimeSaltContentEarly = anime.source === "animesalt" || String(anime.id || "").startsWith("as_");
+    if (!freeAccessLoaded && isLoggedIn && !isAnimeSaltContentEarly) {
       return;
     }
 
-    anime = (await loadFullFirebaseAnimeItem(anime)) || anime;
+    anime = (await loadFullFirebaseAnimeItemWithTimeout(anime)) || anime;
 
     const fallbackTarget = getDefaultWatchTarget(anime);
     const resolvedSeasonIdx = seasonIdx ?? fallbackTarget.seasonIdx;
@@ -1865,6 +1884,9 @@ const Index = () => {
       });
       setSelectedAnime(null);
       inPlayerSwitchRef.current = false;
+    } else {
+      inPlayerSwitchRef.current = false;
+      toast.error("Video source is still loading. Please tap again in a moment.");
     }
   };
 
@@ -2375,35 +2397,38 @@ const Index = () => {
     navigate(buildWatchRoute(playerState.anime.id, newSeasonIdx, 0), { replace: true });
   }, [checkAndShowAdGate, playerState, navigate, buildWatchRoute]);
 
-  // Suggested anime: prioritize same category, then same language, excluding current
+  // Suggested anime: fixed, deterministic, same-category recommendations only.
   const suggestedAnime = useMemo(() => {
     const current = playerState?.anime || saltPlayerState?.anime;
     if (!current) return [];
-    const currentCategory = (current.category || "").toLowerCase().trim();
+    const currentCategoryTokens = splitCategoryTokens(current.category);
     const currentLanguage = (current.language || "").toLowerCase().trim();
-    
+    const currentTokenSet = new Set(currentCategoryTokens);
+
     const candidates = allAnime.filter(a => a.id !== current.id);
-    
-    // Score each candidate: category match = 10, language match = 3
-    const scored = candidates.map(a => {
-      let score = 0;
-      const cat = (a.category || "").toLowerCase().trim();
+
+    const categoryMatched = currentCategoryTokens.length > 0
+      ? candidates.filter((a) => splitCategoryTokens(a.category).some((token) => currentTokenSet.has(token)))
+      : candidates.filter((a) => a.type === current.type);
+
+    const scored = categoryMatched.map(a => {
+      const tokens = splitCategoryTokens(a.category);
+      const categoryScore = tokens.filter((token) => currentTokenSet.has(token)).length * 20;
       const lang = (a.language || "").toLowerCase().trim();
-      if (currentCategory && cat === currentCategory) score += 10;
-      if (currentLanguage && lang === currentLanguage) score += 3;
-      // Bonus for same type (movie/webseries)
-      if (a.type === current.type) score += 1;
+      let score = categoryScore;
+      if (currentLanguage && lang === currentLanguage) score += 4;
+      if (a.type === current.type) score += 2;
+      score += Math.min(500, getPopularity(a.id)) / 100;
       return { anime: a, score };
     });
-    
-    scored.sort((a, b) => b.score - a.score || Math.random() - 0.5);
-    const matched = scored.filter(s => s.score > 0).map(s => s.anime);
-    if (matched.length >= 15) return matched.slice(0, 15);
-    // Fill up to 15 with random other items so the row is always full
-    const matchedIds = new Set(matched.map(a => a.id));
-    const fillers = candidates.filter(a => !matchedIds.has(a.id)).sort(() => Math.random() - 0.5);
-    return [...matched, ...fillers].slice(0, 15);
-  }, [playerState?.anime, saltPlayerState?.anime, allAnime]);
+
+    scored.sort((a, b) =>
+      b.score - a.score
+      || ((b.anime.updatedAt || b.anime.createdAt || 0) - (a.anime.updatedAt || a.anime.createdAt || 0))
+      || String(a.anime.title || "").localeCompare(String(b.anime.title || ""))
+    );
+    return scored.map(s => s.anime).slice(0, 15);
+  }, [playerState?.anime, saltPlayerState?.anime, allAnime, getPopularity]);
 
   const suggestedAnimeImmediate = useMemo(() => suggestedAnime.slice(0, 15), [suggestedAnime]);
 
