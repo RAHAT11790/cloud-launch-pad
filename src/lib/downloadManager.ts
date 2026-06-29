@@ -159,8 +159,8 @@ class DownloadManager {
     if (candidate.toLowerCase().startsWith("data:")) return decodeDataUriBytes(candidate);
     const probePlans: RequestInit[] = this.isProxyDownloadUrl(candidate)
       ? [
-          { method: "HEAD" },
-          { method: "GET", headers: { Range: "bytes=0-0" } },
+          { method: "HEAD", mode: "cors" },
+          { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" },
         ]
       : [
           { method: "HEAD", mode: "cors" },

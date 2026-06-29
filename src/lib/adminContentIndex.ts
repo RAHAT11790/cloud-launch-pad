@@ -9,11 +9,11 @@ const DEFAULT_RECENT_LIMIT = 120;
 const cacheKeyFor = (kind: AdminContentKind) => `rs_admin_${kind}_index_v1`;
 const indexPathFor = (kind: AdminContentKind) => `adminContentIndex/${kind}`;
 
-const toArray = (value: any): any[] => Array.isArray(value) ? value : [];
+const values = (value: any): any[] => Array.isArray(value) ? value : (value && typeof value === "object" ? Object.values(value) : []);
 
 const countEpisodes = (item: any) => {
   if (Number.isFinite(Number(item?.episodeCount))) return Number(item.episodeCount) || 0;
-  const countSeasonList = (seasons: any) => toArray(seasons).reduce((sum, season) => sum + toArray(season?.episodes).length, 0);
+  const countSeasonList = (seasons: any) => values(seasons).reduce((sum, season) => sum + values(season?.episodes).length, 0);
   const direct = countSeasonList(item?.seasons);
   if (direct > 0) return direct;
   const custom = countSeasonList(item?.customSeasons);
@@ -25,12 +25,12 @@ const countEpisodes = (item: any) => {
 };
 
 const countSeasons = (item: any) => {
-  const direct = toArray(item?.seasons).length;
+  const direct = values(item?.seasons).length;
   if (direct > 0) return direct;
-  const custom = toArray(item?.customSeasons).length;
+  const custom = values(item?.customSeasons).length;
   if (custom > 0) return custom;
   if (item?.seasonsByLanguage && typeof item.seasonsByLanguage === "object") {
-    return Math.max(0, ...Object.values(item.seasonsByLanguage).map((seasons) => toArray(seasons).length));
+    return Math.max(0, ...Object.values(item.seasonsByLanguage).map((seasons) => values(seasons).length));
   }
   return 0;
 };

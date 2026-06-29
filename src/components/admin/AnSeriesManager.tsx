@@ -10,7 +10,7 @@ import {
   mergeAdminContentLists,
   readCachedAdminContentList,
   removeAdminContentIndex,
-  upsertAdminContentIndex,
+  upsertAdminContentIndex, primeAdminContentIndexFromList,
   writeCachedAdminContentList,
   type AdminContentKind,
 } from "@/lib/adminContentIndex";
@@ -716,9 +716,14 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
     <div className={`${glassCard} p-4 mb-4`}>
       <div className="flex items-center justify-between gap-3 mb-3">
         <h3 className="text-sm font-semibold flex items-center gap-2"><Database size={14} className="text-emerald-400" /> {label}</h3>
-        <button onClick={fetchAllPending} disabled={bulkRunning || pendingCount === 0} className={`${btnPrimary} px-3 py-2 text-[11px] flex items-center gap-1.5 disabled:opacity-50`}>
-          {bulkRunning ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />} Fetch All Pending
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => primeAdminContentIndexFromList(targetKind, Object.values(targetData)).then(() => toast.success("Index updated"))} disabled={loading} className={`${btnSecondary} px-3 py-2 text-[11px] flex items-center gap-1.5`}>
+            <RefreshCw size={12} /> Sync Index
+          </button>
+          <button onClick={fetchAllPending} disabled={bulkRunning || pendingCount === 0} className={`${btnPrimary} px-3 py-2 text-[11px] flex items-center gap-1.5 disabled:opacity-50`}>
+            {bulkRunning ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />} Fetch All Pending
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-4 gap-2 mb-3">
@@ -743,7 +748,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         <div>
           {filteredItems.map((item) => {
             const saved = !!item.saved;
-            const episodeCount = item.saved?.seasons?.reduce((sum: number, season: any) => sum + (season?.episodes?.length || 0), 0) || 0;
+            const episodeCount = item.saved?.episodeCount || (item.saved?.seasons ? Object.values(item.saved.seasons).reduce((sum: number, season: any) => sum + (season?.episodes ? Object.values(season.episodes).length : 0), 0) : 0);
             const isBusy = busySlug === item.slug;
             return (
               <div key={item.slug} className="bg-[#1A1A2E] border border-white/5 rounded-[14px] p-3.5 mb-3 hover:border-purple-500/30 transition-all">

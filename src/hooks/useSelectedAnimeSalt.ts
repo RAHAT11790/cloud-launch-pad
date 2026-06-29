@@ -5,7 +5,7 @@ import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
 
 const CACHE_KEY = "rs_cache_animesalt_selected_cards_v1";
 const SELECTED_CARD_PAGE_SIZE = 4;
-const SELECTED_CACHE_LIMIT = 160;
+const SELECTED_CACHE_LIMIT = 500;
 
 const readCache = (): AnimeItem[] => {
   try {
@@ -45,37 +45,36 @@ export function useSelectedAnimeSalt() {
 
   useEffect(() => {
     let cancelled = false;
-    // Firebase-selected AN/Ad rows are real cards, but animesaltSelected may
-    // contain large customSeasons/audio data. So do NOT subscribe to the whole
-    // node. Read keys shallow, then hydrate small chunks into localStorage.
     const cancelIdle = scheduleIdle(async () => {
       try {
-        const cachedSlugs = new Set(readCache().map((item) => item.anSlug || item.animeSaltSlug || item.slug).filter(Boolean));
         const keys = (await firebaseRestShallowKeys("animesaltSelected")).reverse().slice(0, SELECTED_CACHE_LIMIT);
-        // Reconcile: drop cached cards whose Firebase row no longer exists.
         const liveSet = new Set(keys);
+        
         setItems((prev) => {
           const next = prev.filter((item) => liveSet.has(item.anSlug || item.animeSaltSlug || item.slug || ""));
           if (next.length !== prev.length) writeCache(next);
           return next;
         });
+
+        const cachedSlugs = new Set(readCache().map((item) => item.anSlug || item.animeSaltSlug || item.slug).filter(Boolean));
         const refreshKeys = keys.slice(0, cachedSlugs.size ? 4 : SELECTED_CARD_PAGE_SIZE);
         const missingKeys = keys.filter((slug) => !cachedSlugs.has(slug));
         const workKeys = Array.from(new Set([...refreshKeys, ...missingKeys]));
+        
         if (!workKeys.length) setLoading(false);
+
         for (let i = 0; i < workKeys.length && !cancelled; i += SELECTED_CARD_PAGE_SIZE) {
           const chunk = workKeys.slice(i, i + SELECTED_CARD_PAGE_SIZE);
           const rows = await Promise.all(chunk.map(async (slug) => {
             try {
               const row = await firebaseRestGet<any>(`animesaltSelected/${slug}`);
               if (!row) return null;
-              // Only surface cards that have been ACTUALLY fetched by admin.
-              // Wishlisted-but-not-fetched rows (e.g. Naruto added but never
-              // fetched) must not appear in the user panel.
+              
               const seasons = row.customSeasons;
               const seasonList = Array.isArray(seasons)
                 ? seasons
                 : seasons && typeof seasons === "object" ? Object.values(seasons) : [];
+              
               const hasPlayableEpisode = seasonList.some((season: any) => {
                 const eps = Array.isArray(season?.episodes)
                   ? season.episodes
@@ -84,10 +83,12 @@ export function useSelectedAnimeSalt() {
                   String(ep?.link || ep?.link1080 || ep?.link720 || ep?.link480 || ep?.link4k || "").trim().length > 0,
                 );
               });
+
               if (!hasPlayableEpisode) return null;
               return mapAnimeSaltSelectedItem(slug, row);
             } catch { return null; }
           }));
+
           const mapped = (rows.filter(Boolean) as AnimeItem[]).filter((item) => item.title && item.poster);
           if (mapped.length && !cancelled) {
             setItems((prev) => {

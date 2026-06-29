@@ -8,7 +8,7 @@ const LS_WS = "rs_cache_webseries_v1";
 const LS_MOV = "rs_cache_movies_v1";
 const LS_CATS = "rs_cache_categories_v1";
 const BACKFILL_PAGE_SIZE = 4;
-const BACKFILL_CACHE_LIMIT = 120;
+const BACKFILL_CACHE_LIMIT = 500;
 const MAX_CACHE_BYTES = 2_500_000;
 
 const readCache = <T,>(key: string, fallback: T): T => {
@@ -80,7 +80,6 @@ export function useFirebaseData() {
   const [movies, setMovies] = useState<AnimeItem[]>(() => readCache<AnimeItem[]>(LS_MOV, []));
   const [categories, setCategories] = useState<string[]>(() => readCache<string[]>(LS_CATS, []));
   const [loading, setLoading] = useState(() => {
-    // If we already have cached data, treat as ready immediately for zero-latency UI
     return !(readCache<AnimeItem[]>(LS_WS, []).length || readCache<AnimeItem[]>(LS_MOV, []).length);
   });
 
@@ -91,7 +90,6 @@ export function useFirebaseData() {
       if (loadedCount >= 3) setLoading(false);
     };
 
-    // Load categories
     const catsRef = ref(db, "categories");
     const unsubCats = onValue(catsRef, (snapshot) => {
       const data = snapshot.val() || {};
@@ -104,18 +102,30 @@ export function useFirebaseData() {
       checkLoaded();
     });
 
-    // Load only the latest lightweight card rows first. Full episode/audio data
-    // is fetched on play, so AN/Ad series cannot crash the homepage by sending
-    // every season/episode/audio URL at once.
-    // IMPORTANT: do not use onValue(query(webseries/movies)) here. RTDB sends
-    // the full child payload (all seasons/audio URLs), so even a limited query
-    // can crash the browser. We read keys shallow, then hydrate cards in small
-    // chunks and cache them permanently in localStorage.
-
     let cancelled = false;
     const cancelIdle = scheduleIdle(async () => {
+      // 1. Try to load index first (Fast path for all cards)
+      try {
+        const [idxWs, idxMov] = await Promise.all([
+          firebaseRestGet<Record<string, any>>("adminContentIndex/webseries"),
+          firebaseRestGet<Record<string, any>>("adminContentIndex/movies")
+        ]);
+        if (!cancelled) {
+          if (idxWs) {
+            const items = Object.entries(idxWs).map(([id, item]: [string, any]) => ({ ...item, id }));
+            setWebseries(prev => mergeById(prev, items as any[]));
+          }
+          if (idxMov) {
+            const items = Object.entries(idxMov).map(([id, item]: [string, any]) => ({ ...item, id }));
+            setMovies(prev => mergeById(prev, items as any[]));
+          }
+        }
+      } catch (e) { console.error("Index load failed", e); }
+
       checkLoaded();
       checkLoaded();
+
+      // 2. Do the backfill to get fresh full cards for the latest few
       await loadBackfillCards(
         "webseries",
         new Set(readCache<AnimeItem[]>(LS_WS, []).map((item) => item.id)),
