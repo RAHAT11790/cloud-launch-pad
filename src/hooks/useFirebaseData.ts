@@ -466,7 +466,6 @@ export function useFirebaseData() {
       if (wsSig !== lastWsSig) {
         lastWsSig = wsSig;
         setWebseries(nextWs);
-        writeCache(LS_WS, nextWs);
       }
       if (movSig !== lastMovSig) {
         lastMovSig = movSig;
