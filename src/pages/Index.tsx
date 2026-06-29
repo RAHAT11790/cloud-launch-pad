@@ -2207,9 +2207,10 @@ const Index = () => {
     }
     const anime = allAnime.find(a => a.id === slide.id);
     if (!anime) return;
-    if (anime.type === "webseries" && anime.seasons && anime.seasons.length > 0 && anime.seasons[0].episodes?.length > 0) {
+    if (anime.type === "webseries") {
+      // List is lite — handlePlay() hydrates and picks the first episode.
       handlePlay(anime, 0, 0);
-    } else if (anime.movieLink) {
+    } else if (anime.type === "movie") {
       handlePlay(anime);
     } else {
       handleCardClick(anime);
