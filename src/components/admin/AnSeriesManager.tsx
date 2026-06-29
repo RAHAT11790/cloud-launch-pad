@@ -608,6 +608,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
         baseLanguage,
         selectedAdminLanguage: baseLanguage,
         availableLanguages: orderedLanguages.length ? orderedLanguages : [baseLanguage],
+          episodeCount: seasons.reduce((sum, season) => sum + season.episodes.length, 0),
         seasons,
         seasonsByLanguage,
         audioTracks: (orderedLanguages.length ? orderedLanguages : [baseLanguage]).map((lang) => ({ language: lang, label: lang, link: "" })),
