@@ -41,8 +41,10 @@ export type DownloadParams = {
 
 type Subscriber = (snapshot: DownloadQueueSnapshot) => void;
 
-// Allow several downloads in parallel. Browsers handle this fine.
-const MAX_CONCURRENT = 4;
+// Real downloads are blob/HLS based and can be large, so run one item at a
+// time. Select-all still queues everything with one click, but avoids RAM
+// spikes and browser-blocked parallel saves.
+const MAX_CONCURRENT = 1;
 
 const createFileSafeName = (value: string) =>
   value.replace(/[^a-zA-Z0-9\s\-_]/g, "").replace(/\s+/g, " ").trim();
