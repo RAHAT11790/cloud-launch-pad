@@ -4,7 +4,7 @@ import { mapAnimeSaltSelectedItem } from "@/lib/firebaseAnimeMapper";
 import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
 
 const CACHE_KEY = "rs_cache_animesalt_selected_cards_v1";
-const SELECTED_CARD_PAGE_SIZE = 8;
+const SELECTED_CARD_PAGE_SIZE = 4;
 const SELECTED_CACHE_LIMIT = 160;
 
 const readCache = (): AnimeItem[] => {
@@ -73,7 +73,7 @@ export function useSelectedAnimeSalt() {
             });
           }
           setLoading(false);
-          await new Promise((resolve) => window.setTimeout(resolve, 320));
+          await new Promise((resolve) => window.setTimeout(resolve, 650));
         }
       } catch {
         setLoading(false);
