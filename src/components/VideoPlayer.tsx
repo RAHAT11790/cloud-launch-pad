@@ -3454,6 +3454,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const togglePlay = useCallback(() => {
     if (isEmbedPlayback) {
+      userPlaybackIntentRef.current = !playing;
       sendEmbedCmd(playing ? "pause" : "play");
       setPlaying((p) => !p);
       resetHideTimer();
@@ -3461,7 +3462,14 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     }
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) v.play(); else v.pause();
+    if (v.paused) {
+      userPlaybackIntentRef.current = true;
+      v.play();
+    } else {
+      userPlaybackIntentRef.current = false;
+      if (v.currentTime > 0) lastPlaybackPositionRef.current = v.currentTime;
+      v.pause();
+    }
     resetHideTimer();
   }, [isEmbedPlayback, playing, resetHideTimer, sendEmbedCmd]);
 
