@@ -1,5 +1,17 @@
 import { buildVideoDownloadUrl, triggerBackgroundVideoDownload, unwrapManagedVideoUrl } from "./videoDownload";
-import { downloadHls, estimateHlsSize, isHlsUrl, saveBlobAs, toHlsFileName } from "./hlsDownloader";
+
+// HLS/AN downloads are intentionally unsupported in this build — only direct
+// HTTP(S) RS files can be downloaded. Detect HLS-style URLs to reject early.
+const isHlsUrl = (url: string): boolean => {
+  const value = String(url || "").toLowerCase();
+  return value.startsWith("data:application/vnd.apple.mpegurl")
+    || value.startsWith("data:application/x-mpegurl")
+    || /\.m3u8(?:[?#]|$)/i.test(value)
+    || /\/hls(?:\/|\?)/i.test(value)
+    || /\/an-api\//i.test(value);
+};
+
+const AN_DOWNLOAD_BLOCK_MESSAGE = "AN downloads are not supported. Please use our Telegram channel to get this episode.";
 
 export type DownloadStatus = "queued" | "downloading" | "paused" | "complete" | "error" | "cancelled";
 
