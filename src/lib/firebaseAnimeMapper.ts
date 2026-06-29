@@ -134,6 +134,7 @@ export const mapFirebaseMovieItem = (id: string, item: any, opts: MapOptions = {
     storyline: item?.storyline || "",
     cast: opts.full ? (Array.isArray(item?.cast) ? item.cast : item?.cast ? Object.values(item.cast) : undefined) : undefined,
     audioTracks: mapAudioTracks(item?.audioTracks),
+    dubType: item?.dubType || "official",
     movieLink: item?.movieLink || "",
     movieLink480: item?.movieLink480 || undefined,
     movieLink720: item?.movieLink720 || undefined,
