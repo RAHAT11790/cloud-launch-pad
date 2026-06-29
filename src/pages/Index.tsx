@@ -1179,6 +1179,54 @@ const Index = () => {
   // from flashing Hindi ↔ English while playerState catches up.
   playerStateRef.current = playerState;
 
+  // Refresh AN playback URLs from the live AN API whenever an AN item starts
+  // playing. AnimeSalt CDN URLs are time-signed and expire, so stored Firebase
+  // links go stale (HTTP 410). We re-fetch fresh sources and overlay them on
+  // the player state without disrupting the rest of the session.
+  useEffect(() => {
+    const ps = playerState;
+    if (!ps?.anime) return;
+    const a: any = ps.anime;
+    const isAn = a.source === "animesalt" || a.sourceName === "AnimeSalt" || String(a.id || "").startsWith("an_") || !!a.anSlug || !!a.animeSaltSlug;
+    if (!isAn) return;
+    const baseSlug: string = String(a.anSlug || a.animeSaltSlug || "").trim();
+    if (!baseSlug) return;
+    let slug = "";
+    let type: string | undefined;
+    if (a.type === "movie") {
+      slug = baseSlug;
+      type = "movies";
+    } else {
+      const seasons = Array.isArray(a.seasons) ? a.seasons : [];
+      const sIdx = Number(ps.seasonIdx ?? 0);
+      const eIdx = Number(ps.epIdx ?? 0);
+      const season: any = seasons[sIdx];
+      const ep: any = season?.episodes?.[eIdx];
+      const sNum = Number(season?.seasonNumber || sIdx + 1);
+      const eNum = Number(ep?.episodeNumber || eIdx + 1);
+      slug = `${baseSlug}-${sNum}x${eNum}`;
+      type = "tvshows";
+    }
+    if (!slug) return;
+    let cancelled = false;
+    fetchAnLivePlayback(slug, type).then((fresh) => {
+      if (cancelled || !fresh?.src) return;
+      setPlayerState((prev) => {
+        if (!prev || prev.anime?.id !== ps.anime.id || prev.seasonIdx !== ps.seasonIdx || prev.epIdx !== ps.epIdx) return prev;
+        return {
+          ...prev,
+          src: fresh.src,
+          qualityOptions: fresh.qualityOptions?.length ? (fresh.qualityOptions as any) : prev.qualityOptions,
+          audioTracks: (fresh.audioTracks as any)?.length ? (fresh.audioTracks as any) : prev.audioTracks,
+          anNativeData: fresh.anNativeData || prev.anNativeData,
+        };
+      });
+    });
+    return () => { cancelled = true; };
+  }, [playerState?.anime?.id, playerState?.seasonIdx, playerState?.epIdx]);
+
+
+
   // AnimeSalt iframe player state
   const [saltPlayerState, setSaltPlayerState] = useState<{
     embedUrl: string;
