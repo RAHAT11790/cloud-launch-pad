@@ -1798,20 +1798,22 @@ const Index = () => {
       });
     } catch {}
 
+    const fullAnime = await loadFullFirebaseAnimeItem(anime);
+    const playableAnime = fullAnime || anime;
 
     // AN public playback is Firebase-only. Admin fetch/save is the only place
     // allowed to call the AN API; runtime must use stored RS-style URLs.
     // Cards always open the details view; play action enforces the Firebase
     // requirement so users can still browse AN entries without saved playback.
-    if (anime.source === "animesalt") {
-      const watchTargetAn = getDefaultWatchTarget(anime);
-      const targetRouteAn = buildWatchRoute(anime.id, watchTargetAn.seasonIdx, watchTargetAn.epIdx);
+    if (playableAnime.source === "animesalt") {
+      const watchTargetAn = getDefaultWatchTarget(playableAnime);
+      const targetRouteAn = buildWatchRoute(playableAnime.id, watchTargetAn.seasonIdx, watchTargetAn.epIdx);
       if (location.pathname !== targetRouteAn) {
         const fromRoutedOverlay = isSearchRoute || isNotificationsRoute;
         navigate(targetRouteAn, { replace: fromRoutedOverlay });
       }
-      if (hasStoredFirebasePlayback(anime)) {
-        await openPlayerFromAnime(anime, { seasonIdx: sIdx, epIdx: eIdx });
+      if (hasStoredFirebasePlayback(playableAnime)) {
+        await openPlayerFromAnime(playableAnime, { seasonIdx: sIdx, epIdx: eIdx });
       } else {
         toast.error("AN video/audio is not saved in Firebase yet. Fetch it from Admin first.");
       }
@@ -1822,14 +1824,14 @@ const Index = () => {
     // Reflect details view in the URL so back-button works as a real route.
     // Use replace when coming from a routed overlay (search/notifications) to
     // avoid stacking duplicate entries; push from anywhere else.
-    const watchTarget = getDefaultWatchTarget(anime);
-    const targetRoute = buildWatchRoute(anime.id, watchTarget.seasonIdx, watchTarget.epIdx);
+    const watchTarget = getDefaultWatchTarget(playableAnime);
+    const targetRoute = buildWatchRoute(playableAnime.id, watchTarget.seasonIdx, watchTarget.epIdx);
     if (location.pathname !== targetRoute) {
       const fromRoutedOverlay = isSearchRoute || isNotificationsRoute;
       navigate(targetRoute, { replace: fromRoutedOverlay });
     }
 
-    await openPlayerFromAnime(anime, { seasonIdx: sIdx, epIdx: eIdx });
+    await openPlayerFromAnime(playableAnime, { seasonIdx: sIdx, epIdx: eIdx });
   };
 
   const handlePlay = async (anime: AnimeItem, seasonIdx?: number, epIdx?: number) => {
