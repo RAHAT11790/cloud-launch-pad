@@ -10496,7 +10496,9 @@ const AutoImportSection = ({
  type: "webseries",
  createdAt: Date.now(),
  };
- await set(push(ref(db, "webseries")), seriesData);
+ const newSeriesRef = push(ref(db, "webseries"));
+ await set(newSeriesRef, seriesData);
+ await savePublicCatalogItem("webseries", newSeriesRef.key || "", seriesData);
  toast.success(`✅ "${data.name}" auto-imported as Series!`);
  } else {
  const movieData = {
@@ -10516,7 +10518,9 @@ const AutoImportSection = ({
  type: "movie",
  createdAt: Date.now(),
  };
- await set(push(ref(db, "movies")), movieData);
+ const newMovieRef = push(ref(db, "movies"));
+ await set(newMovieRef, movieData);
+ await savePublicCatalogItem("movies", newMovieRef.key || "", movieData);
  toast.success(`✅ "${data.title}" auto-imported as Movie!`);
  }
  } catch (err: any) {
