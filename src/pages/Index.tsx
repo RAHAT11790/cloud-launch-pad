@@ -1769,6 +1769,10 @@ const Index = () => {
       return;
     }
 
+    // List is lite — hydrate the full record (seasons / audioTracks) before playback.
+    anime = await hydrate(anime);
+
+
     const fallbackTarget = getDefaultWatchTarget(anime);
     const resolvedSeasonIdx = seasonIdx ?? fallbackTarget.seasonIdx;
     const resolvedEpIdx = epIdx ?? fallbackTarget.epIdx;
