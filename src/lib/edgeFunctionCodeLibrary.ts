@@ -84,7 +84,7 @@ const entry = (
 // are permanently hidden from this deployable library.
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
-  entry("video-proxy",    "Video Proxy",    "HTTP-only fast video/HLS proxy with playlist rewriting. No scripts, no protection. HTTPS plays directly without the proxy.", videoProxySource, [], { isNew: true }),
+  entry("video-proxy",    "Video Proxy",    "Universal RS video/HLS proxy with HTTP+HTTPS support, playlist rewriting, range streaming, and RS mirror fallback.", videoProxySource, [], { isNew: true }),
   entry("an-api",         "AN API (AnimeSalt)", "Single AnimeSalt API powering BOTH admin fetching AND user-panel video playback (live signed URL refresh, multi-season AJAX harvest, Hindi-first audio, HLS proxy). Deploy this and paste the URL in EGD Router → AN API to switch playback to your own deployment.", anApiSource, [], { badgeText: "AN API WORKING", badgeTone: "emerald" }),
   entry("video-download", "Video Download", "Dedicated, retry-hardened download proxy (recommended for downloads).", videoDownloadSource),
   entry("live-tv-proxy",  "Live TV Proxy",  "Dedicated HLS proxy for Live TV channels.", liveTvProxySource),
