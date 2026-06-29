@@ -2397,10 +2397,15 @@ const Index = () => {
     navigate(buildWatchRoute(playerState.anime.id, newSeasonIdx, 0), { replace: true });
   }, [checkAndShowAdGate, playerState, navigate, buildWatchRoute]);
 
+  const suggestedAnimeCacheRef = useRef<Map<string, AnimeItem[]>>(new Map());
+
   // Suggested anime: fixed, deterministic, same-category recommendations only.
   const suggestedAnime = useMemo(() => {
     const current = playerState?.anime || saltPlayerState?.anime;
     if (!current) return [];
+    const cacheKey = `${current.id}:${String(current.category || "").toLowerCase().trim()}:${current.type}`;
+    const cached = suggestedAnimeCacheRef.current.get(cacheKey);
+    if (cached?.length) return cached;
     const currentCategoryTokens = splitCategoryTokens(current.category);
     const currentLanguage = (current.language || "").toLowerCase().trim();
     const currentTokenSet = new Set(currentCategoryTokens);
@@ -2427,7 +2432,9 @@ const Index = () => {
       || ((b.anime.updatedAt || b.anime.createdAt || 0) - (a.anime.updatedAt || a.anime.createdAt || 0))
       || String(a.anime.title || "").localeCompare(String(b.anime.title || ""))
     );
-    return scored.map(s => s.anime).slice(0, 15);
+    const next = scored.map(s => s.anime).slice(0, 15);
+    if (next.length) suggestedAnimeCacheRef.current.set(cacheKey, next);
+    return next;
   }, [playerState?.anime?.id, saltPlayerState?.anime?.id, allAnime]);
 
   const suggestedAnimeImmediate = useMemo(() => suggestedAnime.slice(0, 15), [suggestedAnime]);
