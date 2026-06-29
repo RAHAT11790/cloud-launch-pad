@@ -1,4 +1,4 @@
-import { forwardRef, ImgHTMLAttributes, useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, ImgHTMLAttributes, MutableRefObject, useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * CachedImg — drop-in replacement for <img> that:
@@ -58,7 +58,7 @@ const CachedImg = forwardRef<HTMLImageElement, Props>(function CachedImg(
   const setRefs = useCallback((node: HTMLImageElement | null) => {
     imgRef.current = node;
     if (typeof ref === "function") ref(node);
-    else if (ref) (ref as React.MutableRefObject<HTMLImageElement | null>).current = node;
+    else if (ref) (ref as MutableRefObject<HTMLImageElement | null>).current = node;
   }, [ref]);
 
   useEffect(() => {
