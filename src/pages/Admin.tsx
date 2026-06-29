@@ -19,6 +19,19 @@ import {
 
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE, SITE_URL, SITE_NAME, SITE_ICON_URL, TELEGRAM_CHANNEL, TELEGRAM_CHANNEL_URL, TELEGRAM_ADMIN_URL, CLOUDFLARE_CDN_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/siteConfig";
 import { EDGE_FUNCTIONS, DEFAULT_CF_FUNCTIONS, type EdgeFunctionName, type EdgeRouterConfig, type CloudFunction, checkFunctionStatus, getAllFunctions, getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import {
+ buildAdminContentIndexItem,
+ fetchAdminContentIndex,
+ fetchRecentAdminContentList,
+ mergeAdminContentLists,
+ primeAdminContentIndexFromList,
+ readCachedAdminContentList,
+ removeAdminContentIndex,
+ sortAdminContentList,
+ upsertAdminContentIndex,
+ writeCachedAdminContentList,
+ type AdminContentKind,
+} from "@/lib/adminContentIndex";
 const WeeklyEpTabButton = () => null;
 const WeeklyEpManager = () => null;
 // AdminNotificationBell removed
@@ -1966,6 +1979,30 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [categoriesData, setCategoriesData] = useState<Record<string, any>>({});
  const [webseriesData, setWebseriesData] = useState<any[]>([]);
  const [moviesData, setMoviesData] = useState<any[]>([]);
+ const upsertAdminContentListItem = useCallback((kind: AdminContentKind, id: string, item: any) => {
+  const listItem = buildAdminContentIndexItem(id, item, kind);
+  const setter = kind === "movies" ? setMoviesData : setWebseriesData;
+  setter(prev => {
+   const next = mergeAdminContentLists(prev, [listItem]);
+   writeCachedAdminContentList(kind, next);
+   return next;
+  });
+ }, []);
+ const removeAdminContentListItem = useCallback((kind: AdminContentKind, id: string) => {
+  const setter = kind === "movies" ? setMoviesData : setWebseriesData;
+  setter(prev => {
+   const next = sortAdminContentList(prev.filter((item: any) => item.id !== id));
+   writeCachedAdminContentList(kind, next);
+   return next;
+  });
+ }, []);
+ const getFullAdminContentItem = useCallback(async (kind: AdminContentKind, id: string) => {
+  const snap = await get(ref(db, `${kind}/${id}`));
+  const data = snap.val();
+  if (!data) return null;
+  upsertAdminContentListItem(kind, id, data);
+  return { id, ...data };
+ }, [upsertAdminContentListItem]);
  const [usersData, setUsersData] = useState<any[]>([]);
  const [appUsersGlobal, setAppUsersGlobal] = useState<Record<string, any>>({});
  const [userSearchQuery, setUserSearchQuery] = useState("");
@@ -2400,7 +2437,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  return () => unsub();
  }, []);
 
- // Load CORE data (always needed: categories, webseries, movies, maintenance)
+ // Load CORE data. Heavy content collections are loaded from a tiny admin index
+ // + a small recent window, never full onValue subscriptions. This stops Admin
+ // from downloading every season/episode/audio URL on every open.
  useEffect(() => {
  const unsubs: (() => void)[] = [];
 
@@ -2408,15 +2447,26 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  setCategoriesData(snap.val() || {});
  }));
 
- unsubs.push(onValue(ref(db, "webseries"), (snap) => {
- const data = snap.val() || {};
- setWebseriesData(Object.entries(data).map(([id, item]: any) => ({ id, ...item })));
- }));
+ const loadContentList = async (kind: AdminContentKind) => {
+  const setter = kind === "movies" ? setMoviesData : setWebseriesData;
+  const cached = readCachedAdminContentList(kind);
+  if (cached.length) setter(sortAdminContentList(cached));
+  try {
+   const [indexed, recent] = await Promise.all([
+    fetchAdminContentIndex(kind).catch(() => []),
+    fetchRecentAdminContentList(kind).catch(() => []),
+   ]);
+   const merged = mergeAdminContentLists(cached, indexed, recent);
+   setter(merged);
+   writeCachedAdminContentList(kind, merged);
+   if (!indexed.length && recent.length) primeAdminContentIndexFromList(kind, recent).catch(() => {});
+  } catch (err) {
+   console.warn(`[Admin] ${kind} light index load failed`, err);
+  }
+ };
 
- unsubs.push(onValue(ref(db, "movies"), (snap) => {
- const data = snap.val() || {};
- setMoviesData(Object.entries(data).map(([id, item]: any) => ({ id, ...item })));
- }));
+ loadContentList("webseries");
+ loadContentList("movies");
 
  unsubs.push(onValue(ref(db, "maintenance"), (snap) => {
  setCurrentMaintenance(snap.val());
@@ -2466,7 +2516,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  // Lazy-load USERS data (only when dashboard, users, notifications, or free-access section)
  useEffect(() => {
- const needsUsers = ["dashboard", "users", "notifications", "new-releases", "free-access", "analytics"].includes(activeSection);
+ const needsUsers = ["users", "notifications", "new-releases", "free-access", "analytics"].includes(activeSection);
  if (!needsUsers) return;
 
  const unsubs: (() => void)[] = [];
@@ -2504,7 +2554,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  // Lazy-load NEW RELEASES data
  useEffect(() => {
- if (activeSection !== "new-releases" && activeSection !== "dashboard" && activeSection !== "telegram-post") return;
+ if (activeSection !== "new-releases" && activeSection !== "telegram-post") return;
  const unsub = onValue(ref(db, "newEpisodeReleases"), (snap) => {
  const data = snap.val() || {};
  const arr = Object.entries(data).map(([id, r]: any) => ({ id, ...r }));
@@ -2516,7 +2566,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  // Lazy-load AnimeSalt selected data for content options
  useEffect(() => {
- if (activeSection !== "new-releases" && activeSection !== "notifications" && activeSection !== "dashboard") return;
+ if (activeSection !== "new-releases" && activeSection !== "notifications") return;
  const unsub = onValue(ref(db, 'animesaltSelected'), (snap) => {
  setAnimesaltSelectedData(snap.val() || {});
  });
@@ -3149,6 +3199,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  lastSavedSeriesIdRef.current = newId;
  set(saveRef, data)
  .then(async () => {
+  upsertAdminContentListItem("webseries", newId, data);
+  await upsertAdminContentIndex("webseries", newId, data).catch(() => {});
  toast.success(seriesEditId ? "Series updated!" : "Series saved!");
  // Weekly EP feature removed — no sync needed
  setSeriesForm(null); setSeasonsData([]); setSeriesCast([]); setSeriesEditId(""); setSeriesTab("ws-list");
@@ -3158,8 +3210,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  const editSeries = async (id: string) => {
  savedScrollPos.current = window.scrollY;
- const snap = await get(ref(db, `webseries/${id}`));
- const data = snap.val();
+ const item = await getFullAdminContentItem("webseries", id);
+ const data = item ? { ...item } : null;
  if (!data) return;
  const loadedMap = sanitizeSeasonLanguageMap(data.seasonsByLanguage && typeof data.seasonsByLanguage === "object"
  ? data.seasonsByLanguage
@@ -3206,7 +3258,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  const deleteSeries = (id: string) => {
  if (confirm("Delete this series?")) {
- remove(ref(db, `webseries/${id}`)).then(() => toast.success("Deleted!")).catch(err => toast.error("Error: " + err.message));
+ remove(ref(db, `webseries/${id}`)).then(async () => {
+ removeAdminContentListItem("webseries", id);
+ await removeAdminContentIndex("webseries", id).catch(() => {});
+ toast.success("Deleted!");
+ }).catch(err => toast.error("Error: " + err.message));
  }
  };
 
@@ -3317,14 +3373,18 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  updatedAt: Date.now(),
  };
  let saveRef;
+ let newMovieId = movieEditId || "";
  if (movieEditId) {
  saveRef = ref(db, `movies/${movieEditId}`);
  } else {
  saveRef = push(ref(db, "movies"));
+  newMovieId = saveRef.key || "";
  data.createdAt = Date.now();
  }
  set(saveRef, data)
- .then(() => {
+ .then(async () => {
+  upsertAdminContentListItem("movies", newMovieId, data);
+  await upsertAdminContentIndex("movies", newMovieId, data).catch(() => {});
  toast.success(movieEditId ? "Movie updated!" : "Movie saved!");
  setMovieForm(null); setMovieCast([]); setMovieEditId(""); setMoviesTab("mv-list");
  })
@@ -3333,8 +3393,8 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  const editMovie = async (id: string) => {
  savedScrollPos.current = window.scrollY;
- const snap = await get(ref(db, `movies/${id}`));
- const data = snap.val();
+ const item = await getFullAdminContentItem("movies", id);
+ const data = item ? { ...item } : null;
  if (!data) return;
  setMovieForm({
  tmdbId: data.tmdbId || "", title: data.title || "", logo: data.logo || "", poster: data.poster || "",
@@ -3356,7 +3416,11 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
 
  const deleteMovie = (id: string) => {
  if (confirm("Delete this movie?")) {
- remove(ref(db, `movies/${id}`)).then(() => toast.success("Deleted!")).catch(err => toast.error("Error: " + err.message));
+ remove(ref(db, `movies/${id}`)).then(async () => {
+ removeAdminContentListItem("movies", id);
+ await removeAdminContentIndex("movies", id).catch(() => {});
+ toast.success("Deleted!");
+ }).catch(err => toast.error("Error: " + err.message));
  }
  };
 
@@ -3464,7 +3528,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  if (!value) { setShowSeasonEpisode(false); return; }
  const [contentId, contentType] = value.split("|");
  if (contentType === "webseries") {
- const series = webseriesData.find(s => s.id === contentId);
+ const series = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
  if (series?.seasons?.length > 0) {
  setReleaseSeasons(series.seasons.map((s: any, i: number) => ({ index: i, name: s.name || `Season ${i + 1}` })));
  setShowSeasonEpisode(true);
@@ -3477,7 +3541,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  }
  };
 
- const handleReleaseSeasonChange = (value: string) => {
+ const handleReleaseSeasonChange = async (value: string) => {
  setReleaseSeason(value); setReleaseEpisode(""); setReleaseEpisodes([]);
  if (!releaseContent || value === "") return;
  const [contentId, contentType] = releaseContent.split("|");
@@ -3485,7 +3549,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  // AnimeSalt no longer supported in releases - skip
  toast.error("AnimeSalt content is not supported in New Releases"); return;
  } else if (contentType === "webseries") {
- const series = webseriesData.find(s => s.id === contentId);
+ const series = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
  if (series?.seasons?.[parseInt(value)]) {
  const season = series.seasons[parseInt(value)];
   const safeEpisodes = Array.isArray(season?.episodes) ? season.episodes : [];
@@ -3506,7 +3570,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  const [contentId, contentType] = releaseContent.split("|");
  let content: any; let episodeInfo: any = {};
  if (contentType === "webseries") {
- content = webseriesData.find(s => s.id === contentId);
+ content = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
  if (content?.seasons?.[parseInt(releaseSeason)]) {
  const season = content.seasons[parseInt(releaseSeason)];
  const episode = season.episodes?.[parseInt(releaseEpisode)];
@@ -3517,7 +3581,7 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
  };
  }
  } else {
- content = moviesData.find(m => m.id === contentId);
+ content = (await getFullAdminContentItem("movies", contentId)) || moviesData.find(m => m.id === contentId);
  episodeInfo = { type: "movie", seasonName: "Movie" };
  }
  if (!content) { toast.error("Content not found"); return; }
@@ -4645,10 +4709,10 @@ ${tgBulkFooter}
  const [cId, cType] = [release.contentId, release.contentType || "webseries"];
  let backdropUrl = "";
  if (cType === "webseries") {
- const ws = webseriesData.find(s => s.id === cId);
+ const ws = (await getFullAdminContentItem("webseries", cId)) || webseriesData.find(s => s.id === cId);
  if (ws?.backdrop) backdropUrl = ws.backdrop;
  } else if (cType === "movie") {
- const mv = moviesData.find(m => m.id === cId);
+ const mv = (await getFullAdminContentItem("movies", cId)) || moviesData.find(m => m.id === cId);
  if (mv?.backdrop) backdropUrl = mv.backdrop;
  }
  // Use backdrop if available (16:9), else fallback to poster with w500
@@ -4676,7 +4740,7 @@ ${tgBulkFooter}
  ? [release.contentId, release.contentType] : [release.contentId, "webseries"];
  let qualities: string[] = [];
  if (contentType === "webseries") {
- const ws = webseriesData.find(s => s.id === contentId);
+ const ws = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
  if (ws?.seasons) {
  ws.seasons.forEach((s: any) => {
  s.episodes?.forEach((ep: any) => {
@@ -4688,7 +4752,7 @@ ${tgBulkFooter}
  });
  }
  } else if (contentType === "movie") {
- const mv = moviesData.find(m => m.id === contentId);
+ const mv = (await getFullAdminContentItem("movies", contentId)) || moviesData.find(m => m.id === contentId);
  if (mv?.link480) qualities.push("480p");
  if (mv?.link720) qualities.push("720p");
  if (mv?.link1080) qualities.push("1080p");
@@ -4699,7 +4763,7 @@ ${tgBulkFooter}
  }
  // Count total episodes per-season using TMDB
  if (contentType === "webseries") {
- const ws = webseriesData.find(s => s.id === contentId);
+ const ws = (await getFullAdminContentItem("webseries", contentId)) || webseriesData.find(s => s.id === contentId);
  const seasonNum = release.episodeInfo?.seasonNumber || 1;
  const tmdbId = ws?.tmdbId;
  if (tmdbId) {
@@ -4757,7 +4821,7 @@ ${tgBulkFooter}
  } catch {}
  // Auto-set dub type from content
  if (cType === "webseries") {
- const ws = webseriesData.find(s => s.id === cId);
+ const ws = (await getFullAdminContentItem("webseries", cId)) || webseriesData.find(s => s.id === cId);
  setTgDubType(ws?.dubType === "fandub" ? "fandub" : "official");
  // Auto-set language from content
  if (ws?.language) setTgLanguages(String(ws.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
@@ -4772,7 +4836,7 @@ ${tgBulkFooter}
  if (ws?.rating) setTgRating(String(ws.rating));
  }
  } else if (cType === "movie") {
- const mv = moviesData.find(m => m.id === cId);
+ const mv = (await getFullAdminContentItem("movies", cId)) || moviesData.find(m => m.id === cId);
  setTgDubType(mv?.dubType === "fandub" ? "fandub" : "official");
  if (mv?.language) setTgLanguages(String(mv.language).replace(/\s*\/\s*/g, ", ").replace(/\s*\|\s*/g, ", "));
  if (mv?.tmdbId) {
@@ -5307,7 +5371,7 @@ ${tgBulkFooter}
   </div>
 
   {seriesTab === "ws-an" && (
-  <AnSeriesManager glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} inputClass={inputClass} onEditSeries={editSeries} />
+  <AnSeriesManager glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} inputClass={inputClass} onEditSeries={editSeries} onSaved={upsertAdminContentListItem} />
   )}
 
  {seriesTab === "ws-list" && (
@@ -6305,7 +6369,7 @@ ${tgBulkFooter}
  </div>
 
  {moviesTab === "mv-an" && (
- <AnSeriesManager glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} inputClass={inputClass} mode="movie" onEditMovie={editMovie} />
+ <AnSeriesManager glassCard={glassCard} btnPrimary={btnPrimary} btnSecondary={btnSecondary} inputClass={inputClass} mode="movie" onEditMovie={editMovie} onSaved={upsertAdminContentListItem} />
  )}
 
  {moviesTab === "mv-list" && (

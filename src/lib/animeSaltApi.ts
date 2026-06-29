@@ -229,10 +229,21 @@ const parseMeta = (html: string) => {
 
 /** Get AnimeSalt proxy URL from the EGD Router only. */
 const getAnimeSaltProxyUrl = async (): Promise<string> => {
-  const proxyUrl = await getEdgeFunctionUrl('an-api');
+  const proxyUrl = (await getAnimeSaltProxyUrls())[0] || '';
   const normalized = normalizeAnApiBaseUrl(proxyUrl);
   if (!normalized) throw new Error('AN API URL is not saved/enabled in EGD Router.');
   return normalized;
+};
+
+const getAnimeSaltProxyUrls = async (): Promise<string[]> => {
+  const fallback = String((import.meta as any)?.env?.VITE_SUPABASE_URL || '').trim()
+    ? `${String((import.meta as any).env.VITE_SUPABASE_URL).replace(/\/$/, '')}/functions/v1/an-api`
+    : '';
+  const configured = await getEdgeFunctionUrl('an-api').catch(() => '');
+  // Use the app's bundled Supabase function first. It is the version that
+  // matches this codebase; a stale EGD/custom URL is the usual cause of the
+  // Admin "Failed to fetch" button error.
+  return Array.from(new Set([fallback, configured].map(normalizeAnApiBaseUrl).filter(Boolean)));
 };
 
 const normalizeAnApiBaseUrl = (value: string): string => {
@@ -253,7 +264,8 @@ const normalizeAnApiBaseUrl = (value: string): string => {
 };
 
 const fetchPage = async (url: string): Promise<string> => {
-  const proxyUrl = await getAnimeSaltProxyUrl();
+  const proxyUrls = await getAnimeSaltProxyUrls();
+  let lastError: any = null;
 
   // Important: do NOT call `/raw?url=...` from the app. The AN API contract
   // exposed in EGD Manager is structured (`/search`, `/anime`, `/episode`,
@@ -262,16 +274,23 @@ const fetchPage = async (url: string): Promise<string> => {
   //   supabase/functions/raw?url=https://animesalt.ac/episode/.../index.ts
   // Keep the raw HTML fallback only through the backwards-compatible POST
   // shape supported by our deployable `an-api` source, never as a GET path.
-  const res = await fetchWithTimeout(proxyUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
-  });
+  for (const proxyUrl of proxyUrls) {
+    try {
+      const res = await fetchWithTimeout(proxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
 
-  if (!res.ok) throw new Error(`AnimeSalt proxy error: ${res.status}`);
-  const data = await res.json();
-  if (data.success && data.html) return data.html;
-  throw new Error('No HTML returned from AnimeSalt proxy');
+      if (!res.ok) throw new Error(`AnimeSalt proxy error: ${res.status}`);
+      const data = await res.json();
+      if (data.success && data.html) return data.html;
+      lastError = new Error('No HTML returned from AnimeSalt proxy');
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('AnimeSalt proxy failed');
 };
 
 const parseListPage = (html: string): { slug: string; title: string; poster: string; type: string; year: string; language?: string; episodeCount?: number }[] => {
@@ -425,11 +444,17 @@ const parsePlaybackPage = (html: string) => {
 
 /** Try direct API call first, supporting both nested and top-level response formats */
 const tryDirectApi = async (proxyUrl: string, body: any, forceRefresh = false): Promise<any | null> => {
+  const proxyUrls = Array.from(new Set([proxyUrl, ...(await getAnimeSaltProxyUrls())].map(normalizeAnApiBaseUrl).filter(Boolean)));
+  for (const candidate of proxyUrls) {
   try {
-    const base = normalizeAnApiBaseUrl(proxyUrl);
+    const base = normalizeAnApiBaseUrl(candidate);
     let endpoint = '';
     const refreshParam = forceRefresh ? `&force=1&_=${Date.now()}` : '';
-    if (body.action === 'search') endpoint = `${base}/search?q=${encodeURIComponent(body.q || body.query || '')}${refreshParam}`;
+    if (body.action === 'browse') {
+      const type = body.type === 'movies' ? 'movies' : 'series';
+      const sep = refreshParam ? refreshParam.replace(/^&/, '&') : '';
+      endpoint = `${base}/${type}?page=${encodeURIComponent(String(body.page || 1))}${sep}`;
+    } else if (body.action === 'search') endpoint = `${base}/search?q=${encodeURIComponent(body.q || body.query || '')}${refreshParam}`;
     else if (body.action === 'series') endpoint = `${base}/anime?slug=${encodeURIComponent(body.slug || '')}&type=series${refreshParam}`;
     else if (body.action === 'movie') endpoint = `${base}/episode?slug=${encodeURIComponent(body.slug || '')}&type=movies${refreshParam}`;
     else if (body.action === 'episode') endpoint = `${base}/episode?slug=${encodeURIComponent(body.slug || '')}${refreshParam}`;
@@ -440,11 +465,14 @@ const tryDirectApi = async (proxyUrl: string, body: any, forceRefresh = false): 
     if (Array.isArray(data)) return { items: data };
     if (data?.error) return null;
     if (data.data) return data.data;
+    if (data.html && body.action === 'browse') return { items: parseListPage(String(data.html)) };
     if (data.items) return { items: data.items, maxPage: data.maxPage, currentPage: data.currentPage, totalCount: data.totalCount };
     return data;
   } catch {
-    return null;
+    // Try the next configured/fallback AN API endpoint.
   }
+  }
+  return null;
 };
 
 const normalizeSeriesPayload = (payload: any) => {

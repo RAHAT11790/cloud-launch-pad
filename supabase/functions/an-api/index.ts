@@ -326,23 +326,12 @@ async function isWorkingMediaPlaylist(url: string, embedUrl: string, origin: str
     if (!/^#EXTM3U/i.test(body)) return false;
     if (/#EXT-X-STREAM-INF/i.test(body)) return true;
     if (!/#EXTINF:/i.test(body) && !/#EXT-X-MAP/i.test(body)) return false;
-    const first = firstMediaUrl(body, url);
-    if (!first) return false;
-    const headers: Record<string, string> = {
-      "User-Agent": UA,
-      Accept: "video/*,audio/*,*/*",
-      Referer: `${origin}/`,
-      Origin: origin,
-      Range: "bytes=0-0",
-    };
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 4_500);
-    try {
-      const res = await fetch(first, { headers, redirect: "follow", signal: ac.signal });
-      return res.ok || res.status === 206 || res.status === 304;
-    } finally {
-      clearTimeout(timer);
-    }
+    // Do not probe individual .ts/.m4s segments from the Edge Function. Many
+    // tokenized AnimeSalt/CDN playlists allow the browser/player request but
+    // reject server-side range probes, which caused valid fetches to be marked
+    // as failed. A syntactically valid media playlist is enough; playback goes
+    // through the HLS proxy later with the correct headers.
+    return !!firstMediaUrl(body, url) || /#EXT-X-MAP/i.test(body);
   } catch {
     return false;
   }

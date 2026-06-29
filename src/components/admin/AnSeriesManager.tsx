@@ -3,6 +3,17 @@ import CachedImg from "@/components/CachedImg";
 import { db, ref, set, get, onValue, remove } from "@/lib/firebase";
 import { animeSaltApi } from "@/lib/animeSaltApi";
 import { getEdgeFunctionUrl } from "@/lib/edgeFunctionRouter";
+import {
+  buildAdminContentIndexItem,
+  fetchAdminContentIndex,
+  fetchRecentAdminContentList,
+  mergeAdminContentLists,
+  readCachedAdminContentList,
+  removeAdminContentIndex,
+  upsertAdminContentIndex,
+  writeCachedAdminContentList,
+  type AdminContentKind,
+} from "@/lib/adminContentIndex";
 import { toast } from "sonner";
 import { CheckCircle2, Database, Edit, Loader2, RefreshCw, Search, Trash2, Zap } from "lucide-react";
 
@@ -13,6 +24,7 @@ interface Props {
   inputClass: string;
   onEditSeries?: (id: string) => void;
   onEditMovie?: (id: string) => void;
+  onSaved?: (kind: AdminContentKind, id: string, item: any) => void;
   mode?: "series" | "movie";
 }
 
@@ -67,7 +79,12 @@ const normalizeAnApiBaseUrl = (value: string): string => {
   }
 };
 
-const getAnApiBase = async () => normalizeAnApiBaseUrl(await getEdgeFunctionUrl("an-api"));
+const getAnApiBase = async () => {
+  const bundled = String((import.meta as any)?.env?.VITE_SUPABASE_URL || "").trim()
+    ? `${String((import.meta as any).env.VITE_SUPABASE_URL).replace(/\/$/, "")}/functions/v1/an-api`
+    : "";
+  return normalizeAnApiBaseUrl(bundled || await getEdgeFunctionUrl("an-api").catch(() => ""));
+};
 
 // Store direct HTTPS HLS URLs in Firebase. Runtime playback must behave like RS:
 // player reads the already-saved Firebase URLs and never calls the AN API.
@@ -396,7 +413,7 @@ const mapLimit = async <T, R,>(items: T[], limit: number, worker: (item: T, inde
   return results;
 };
 
-const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEditSeries, onEditMovie, mode = "series" }: Props) => {
+const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEditSeries, onEditMovie, onSaved, mode = "series" }: Props) => {
   const isMovieMode = mode === "movie";
   const label = isMovieMode ? "AN Movies" : "AN Series";
   const [selectedItems, setSelectedItems] = useState<SelectedAnItem[]>([]);
@@ -406,6 +423,29 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const targetKind: AdminContentKind = isMovieMode ? "movies" : "webseries";
+
+  useEffect(() => {
+    let cancelled = false;
+    const setTargetData = (items: any[]) => {
+      if (cancelled) return;
+      const mapped = Object.fromEntries((items || []).map((item: any) => [item.id, item]));
+      if (isMovieMode) setMovies(mapped);
+      else setWebseries(mapped);
+    };
+    const cached = readCachedAdminContentList(targetKind);
+    if (cached.length) setTargetData(cached);
+    Promise.all([
+      fetchAdminContentIndex(targetKind).catch(() => []),
+      fetchRecentAdminContentList(targetKind).catch(() => []),
+    ]).then(([indexed, recent]) => {
+      const merged = mergeAdminContentLists(cached, indexed, recent);
+      setTargetData(merged);
+      writeCachedAdminContentList(targetKind, merged);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [isMovieMode, targetKind]);
 
   useEffect(() => {
     const unsubSelected = onValue(ref(db, "animesaltSelected"), (snap) => {
@@ -430,9 +470,7 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       setSelectedItems(items);
       setLoading(false);
     });
-    const unsubWeb = onValue(ref(db, "webseries"), (snap) => setWebseries(snap.val() || {}));
-    const unsubMovies = onValue(ref(db, "movies"), (snap) => setMovies(snap.val() || {}));
-    return () => { unsubSelected(); unsubWeb(); unsubMovies(); };
+    return () => { unsubSelected(); };
   }, [isMovieMode]);
 
   const targetData = isMovieMode ? movies : webseries;
@@ -585,6 +623,10 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
           createdAt: existing?.data?.createdAt || item.addedAt || savedAt,
         };
         await set(ref(db, `movies/${targetId}`), stripUndefined(movieData));
+        const movieIndexItem = buildAdminContentIndexItem(targetId, movieData, "movies");
+        setMovies((prev) => ({ ...(prev || {}), [targetId]: movieIndexItem }));
+        await upsertAdminContentIndex("movies", targetId, movieData).catch(() => {});
+        onSaved?.("movies", targetId, movieData);
         await set(ref(db, `anSeries/${item.slug}/meta`), stripUndefined({
           title: movieData.title, poster, backdrop, type: "movies", storyline: movieData.storyline, movieId: targetId, updatedAt: savedAt,
         }));
@@ -624,6 +666,10 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
       };
 
       await set(ref(db, `webseries/${targetId}`), stripUndefined(seriesData));
+      const seriesIndexItem = buildAdminContentIndexItem(targetId, seriesData, "webseries");
+      setWebseries((prev) => ({ ...(prev || {}), [targetId]: seriesIndexItem }));
+      await upsertAdminContentIndex("webseries", targetId, seriesData).catch(() => {});
+      onSaved?.("webseries", targetId, seriesData);
       await set(ref(db, `anSeries/${item.slug}/meta`), stripUndefined({
         title: seriesData.title,
         poster,
@@ -659,6 +705,9 @@ const AnSeriesManager = ({ glassCard, btnPrimary, btnSecondary, inputClass, onEd
     const targetId = item.webseriesId || targetIdForSlug(item.slug);
     if (!confirm(`Delete generated ${label} card for "${item.title}"?`)) return;
     await remove(ref(db, `${isMovieMode ? "movies" : "webseries"}/${targetId}`));
+    if (isMovieMode) setMovies((prev) => Object.fromEntries(Object.entries(prev || {}).filter(([id]) => id !== targetId)));
+    else setWebseries((prev) => Object.fromEntries(Object.entries(prev || {}).filter(([id]) => id !== targetId)));
+    await removeAdminContentIndex(isMovieMode ? "movies" : "webseries", targetId).catch(() => {});
     await remove(ref(db, `anSeries/${item.slug}`));
     toast.success(`Generated ${label} card deleted`);
   };
