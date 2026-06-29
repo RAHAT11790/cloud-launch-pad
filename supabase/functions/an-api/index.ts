@@ -190,26 +190,55 @@ async function detail(slug: string, type: string, forceRefresh = false) {
   const posterM = html.match(/<meta property=["']og:image["'] content=["']([^"']+)/i);
   const descM = html.match(/<meta name=["']description["'] content=["']([^"']+)/i) || html.match(/<meta property=["']og:description["'] content=["']([^"']+)/i);
 
-  const seasons = new Map<string, { name: string; episodes: any[] }>();
-  const seen = new Set<string>();
-  const epRe = /href=["']https?:\/\/animesalt\.(?:ac|top)\/episode\/([^"'/?#]+)\/?["'][^>]*>([\s\S]*?)<\/a>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = epRe.exec(html))) {
-    const epSlug = m[1];
-    if (!epSlug || seen.has(epSlug)) continue;
-    seen.add(epSlug);
-    const sx = epSlug.match(/(\d+)x(\d+)$/i);
-    const seasonNum = sx ? Number(sx[1]) : 1;
-    const epNum = sx ? Number(sx[2]) : seen.size;
-    const key = `Season ${seasonNum}`;
-    if (!seasons.has(key)) seasons.set(key, { name: key, episodes: [] });
-    seasons.get(key)!.episodes.push({ number: epNum, episodeNumber: epNum, title: decode(m[2]) || `Episode ${epNum}`, slug: epSlug, link: `animesalt://${epSlug}` });
+  const seasons = new Map<number, { name: string; seasonNumber: number; episodes: any[] }>();
+
+  const harvestEpisodes = (body: string, defaultSeason: number) => {
+    const epRe = /href=["']https?:\/\/animesalt\.(?:ac|top)\/episode\/([^"'/?#]+)\/?["'][^>]*>([\s\S]*?)<\/a>/gi;
+    let m: RegExpExecArray | null;
+    while ((m = epRe.exec(body))) {
+      const epSlug = m[1];
+      if (!epSlug) continue;
+      const sx = epSlug.match(/(\d+)x(\d+)$/i);
+      const seasonNum = sx ? Number(sx[1]) : defaultSeason;
+      const epNum = sx ? Number(sx[2]) : 0;
+      if (!seasons.has(seasonNum)) seasons.set(seasonNum, { name: `Season ${seasonNum}`, seasonNumber: seasonNum, episodes: [] });
+      const bucket = seasons.get(seasonNum)!.episodes;
+      if (bucket.some((e) => e.slug === epSlug)) continue;
+      bucket.push({ number: epNum || bucket.length + 1, episodeNumber: epNum || bucket.length + 1, title: decode(m[2]) || `Episode ${epNum || bucket.length + 1}`, slug: epSlug, link: `animesalt://${epSlug}` });
+    }
+  };
+
+  // Static HTML usually contains only the currently-selected season (Season 1).
+  harvestEpisodes(html, 1);
+
+  // AnimeSalt loads each additional season via WP AJAX:
+  //   /wp-admin/admin-ajax.php?action=action_select_season&season=N&post=POSTID
+  // Without this fetch we only ever see Season 1 — which is why Demon Slayer
+  // and every multi-season anime had episodes missing.
+  const postId = html.match(/data-post=["'](\d+)["']/)?.[1];
+  const seasonNums = Array.from(new Set(
+    Array.from(html.matchAll(/data-season=["'](\d+)["']/g)).map((m) => Number(m[1])).filter((n) => Number.isFinite(n) && n > 0),
+  )).sort((a, b) => a - b);
+
+  if (postId && seasonNums.length) {
+    await Promise.all(seasonNums.map(async (sNum) => {
+      if (seasons.get(sNum)?.episodes.length) return; // already harvested from static HTML
+      try {
+        const seasonHtml = await fetchText(`${AN_BASE}/wp-admin/admin-ajax.php?action=action_select_season&season=${sNum}&post=${postId}`, {
+          headers: { "X-Requested-With": "XMLHttpRequest", Accept: "text/html,*/*" },
+        });
+        harvestEpisodes(seasonHtml, sNum);
+      } catch {}
+    }));
   }
 
-  const seasonsArr = Array.from(seasons.values()).map((s) => ({
-    name: s.name,
-    episodes: s.episodes.sort((a, b) => a.number - b.number),
-  }));
+  const seasonsArr = Array.from(seasons.values())
+    .sort((a, b) => a.seasonNumber - b.seasonNumber)
+    .map((s) => ({
+      name: s.name,
+      seasonNumber: s.seasonNumber,
+      episodes: s.episodes.sort((a, b) => a.number - b.number),
+    }));
 
   return setCache(cacheKey, {
     slug,
@@ -217,6 +246,8 @@ async function detail(slug: string, type: string, forceRefresh = false) {
     title: titleM ? decode(titleM[1]) : slug.replace(/-/g, " "),
     poster: posterM ? resolveUrl(posterM[1], AN_BASE) : "",
     storyline: descM ? decode(descM[1]) : "",
+    postId: postId || null,
+    seasonNumbers: seasonNums,
     seasons: seasonsArr,
     episodeCount: seasonsArr.reduce((n, s) => n + s.episodes.length, 0),
   }, 60 * 60_000);
