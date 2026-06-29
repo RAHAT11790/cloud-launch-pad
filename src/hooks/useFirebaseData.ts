@@ -7,9 +7,8 @@ import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
 const LS_WS = "rs_cache_webseries_v1";
 const LS_MOV = "rs_cache_movies_v1";
 const LS_CATS = "rs_cache_categories_v1";
-const PUBLIC_BATCH_LIMIT = 48;
-const BACKFILL_PAGE_SIZE = 24;
-const BACKFILL_CACHE_LIMIT = 360;
+const BACKFILL_PAGE_SIZE = 12;
+const BACKFILL_CACHE_LIMIT = 180;
 const MAX_CACHE_BYTES = 2_500_000;
 
 const readCache = <T,>(key: string, fallback: T): T => {
@@ -111,8 +110,8 @@ export function useFirebaseData() {
     // chunks and cache them permanently in localStorage.
 
     let cancelled = false;
-    const cancelIdle = scheduleIdle(() => {
-      void loadBackfillCards(
+    const cancelIdle = scheduleIdle(async () => {
+      await loadBackfillCards(
         "webseries",
         new Set(readCache<AnimeItem[]>(LS_WS, []).map((item) => item.id)),
         mapFirebaseWebseriesItem,
@@ -123,7 +122,8 @@ export function useFirebaseData() {
         }),
         () => cancelled,
       );
-      void loadBackfillCards(
+      if (cancelled) return;
+      await loadBackfillCards(
         "movies",
         new Set(readCache<AnimeItem[]>(LS_MOV, []).map((item) => item.id)),
         mapFirebaseMovieItem,
