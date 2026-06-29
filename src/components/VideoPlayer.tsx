@@ -2406,7 +2406,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       applyPreferredHlsAudio();
       refreshHlsAudio();
       refreshHlsSubs();
-      v.play().catch(() => {});
+      if (userPlaybackIntentRef.current) v.play().catch(() => {});
     });
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
       applyPreferredHlsAudio();
