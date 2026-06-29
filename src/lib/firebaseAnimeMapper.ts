@@ -102,7 +102,7 @@ export const mapFirebaseWebseriesItem = (id: string, item: any, opts: MapOptions
     audioTracks: opts.full ? mapAudioTracks(item?.audioTracks) : undefined,
     dubType: item?.dubType || "official",
     seasons,
-    episodeCount: opts.full ? undefined : countEpisodes(item?.seasons),
+    episodeCount: opts.full ? undefined : (Number(item?.episodeCount || 0) || countEpisodes(item?.seasons)),
     trailer: item?.trailer || undefined,
     movieLink: undefined,
     createdAt: item?.createdAt || 0,
@@ -170,6 +170,6 @@ export const mapAnimeSaltSelectedItem = (slug: string, item: any): AnimeItem => 
     dubType: item?.dubType || "official",
     createdAt: item?.createdAt || item?.addedAt || 0,
     updatedAt: item?.updatedAt || item?.addedAt || 0,
-    episodeCount: Array.isArray(item?.customSeasons) ? countEpisodes(item.customSeasons) : undefined,
+    episodeCount: Number(item?.episodeCount || 0) || (Array.isArray(item?.customSeasons) ? countEpisodes(item.customSeasons) : undefined),
   };
 };
