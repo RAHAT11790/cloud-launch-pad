@@ -252,8 +252,12 @@ export function useFirebaseData() {
         publicItems.push(mappedItem);
       });
       publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      setMovies(publicItems);
-      writeCache(LS_MOV, publicItems);
+      const movKey = JSON.stringify(publicItems);
+      if (movKey !== lastMovKey) {
+        lastMovKey = movKey;
+        setMovies(publicItems);
+        writeCache(LS_MOV, publicItems);
+      }
       checkLoaded();
     });
 
