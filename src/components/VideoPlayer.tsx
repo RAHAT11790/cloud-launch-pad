@@ -934,20 +934,43 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const getEpisodeDownloadLinksForLanguage = useCallback((ep: any, languageLabel: string) => {
     const selectedKey = String(languageLabel || "").trim().toLowerCase();
     const baseKey = String(primarySeriesLanguageLabel || "").trim().toLowerCase();
-    const matchingTrack = ep?.audioTracks?.find((entry: any) => {
+    const tracks: any[] = Array.isArray(ep?.audioTracks) ? ep.audioTracks : [];
+    const matchingTrack = tracks.find((entry: any) => {
       const trackLabel = String(entry?.label || entry?.language || "").trim().toLowerCase();
       return !!trackLabel && trackLabel === selectedKey;
     });
 
+    let result: Record<string, string> = {};
     if (matchingTrack) {
-      return getTrackQualityLinks(matchingTrack, selectedKey === baseKey ? ep : null);
+      result = getTrackQualityLinks(matchingTrack, selectedKey === baseKey ? ep : null);
+    } else if (selectedKey === baseKey) {
+      result = getTrackQualityLinks(undefined, ep);
     }
 
-    if (selectedKey === baseKey) {
-      return getTrackQualityLinks(undefined, ep);
+    // AN-style fallback: if the structured quality map is empty but the
+    // episode (or any audio track) carries a playable link, surface it as
+    // "Default" so the download panel still renders quality buttons.
+    if (Object.keys(result).length === 0) {
+      const epLink = String(ep?.link || ep?.src || ep?.url || "").trim();
+      const trackLink = String((matchingTrack || tracks[0])?.link || "").trim();
+      const fallback = epLink || trackLink;
+      if (fallback) result = { Default: fallback };
     }
 
-    return {};
+    // AN qualityLinks (Record<quality,url>) — merge them in if present.
+    const qualityMap = (matchingTrack?.qualityLinks && typeof matchingTrack.qualityLinks === "object")
+      ? matchingTrack.qualityLinks
+      : (ep?.qualityLinks && typeof ep.qualityLinks === "object" ? ep.qualityLinks : null);
+    if (qualityMap) {
+      Object.entries(qualityMap).forEach(([k, v]) => {
+        const url = String(v || "").trim();
+        if (!url) return;
+        const key = String(k).trim();
+        if (!result[key]) result[key] = url;
+      });
+    }
+
+    return result;
   }, [getTrackQualityLinks, primarySeriesLanguageLabel]);
 
   const availableDownloadQualities = useMemo(() => {
