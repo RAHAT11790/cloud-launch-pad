@@ -307,9 +307,10 @@ const fetchLiteCatalog = async () => {
   const publicCatalog = await fetchPublicCatalog();
 
   const [wsKeysRaw, movKeysRaw] = await Promise.all([
-    fetchDbJson<Record<string, boolean>>("webseries", "shallow=true"),
-    fetchDbJson<Record<string, boolean>>("movies", "shallow=true"),
+    fetchDbJson<Record<string, boolean>>("webseries", "shallow=true").catch(() => null),
+    fetchDbJson<Record<string, boolean>>("movies", "shallow=true").catch(() => null),
   ]);
+  if (!wsKeysRaw && !movKeysRaw && publicCatalog) return publicCatalog;
   const wsKeys = Object.keys(wsKeysRaw || {});
   const movKeys = Object.keys(movKeysRaw || {});
   const publicWsById = new Map((publicCatalog?.webseries || []).map((item) => [item.id, item]));
