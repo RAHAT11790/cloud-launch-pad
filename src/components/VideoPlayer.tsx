@@ -43,7 +43,7 @@ interface VideoServerOption {
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
-import { buildDirectDownloadUrl, buildVideoDownloadUrl } from "@/lib/videoDownload";
+import { buildDirectDownloadUrl, buildVideoDownloadUrl, buildVideoDownloadUrlCandidates } from "@/lib/videoDownload";
 
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
@@ -1162,21 +1162,35 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     let cancelled = false;
     const probe = async (u: string): Promise<[string, number] | null> => {
       if (isHlsLikeUrl(u)) return null;
-      const proxied = buildVideoDownloadUrl(u, "probe.mp4");
-      if (!proxied) return null;
+      const proxiedCandidates = buildVideoDownloadUrlCandidates(u, "probe.mp4");
+      for (const proxied of proxiedCandidates) {
+        try {
+          const r = await fetch(proxied, { method: "HEAD" });
+          const len = Number(r.headers.get("content-length") || 0);
+          try { await r.body?.cancel(); } catch {}
+          if (len > 0) return [u, len];
+        } catch {}
+        try {
+          const r2 = await fetch(proxied, { method: "GET", headers: { Range: "bytes=0-0" } });
+          const cr = r2.headers.get("content-range");
+          if (cr) {
+            const m = /\/(\d+)\s*$/.exec(cr);
+            if (m) {
+              try { await r2.body?.cancel(); } catch {}
+              return [u, Number(m[1])];
+            }
+          }
+          const len = Number(r2.headers.get("content-length") || 0);
+          try { await r2.body?.cancel(); } catch {}
+          if (len > 0) return [u, len];
+        } catch {}
+      }
       try {
-        const r = await fetch(proxied, { method: "HEAD" });
-        const len = Number(r.headers.get("content-length") || 0);
-        if (len > 0) return [u, len];
-      } catch {}
-      try {
-        const r2 = await fetch(proxied, { method: "GET", headers: { Range: "bytes=0-0" } });
-        const cr = r2.headers.get("content-range");
-        if (cr) {
-          const m = /\/(\d+)\s*$/.exec(cr);
-          if (m) return [u, Number(m[1])];
-        }
-        const len = Number(r2.headers.get("content-length") || 0);
+        const direct = buildDirectDownloadUrl(u);
+        if (!direct || !direct.startsWith("https://")) return null;
+        const r3 = await fetch(direct, { method: "HEAD" });
+        const len = Number(r3.headers.get("content-length") || 0);
+        try { await r3.body?.cancel(); } catch {}
         if (len > 0) return [u, len];
       } catch {}
       return null;
@@ -4943,7 +4957,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
             const directCandidate = [u, ...candidates].find((candidate) => isDirectDownloadCandidate(candidate));
             if (!directCandidate) return "";
 
-            return buildVideoDownloadUrl(directCandidate, buildDownloadFileName(String(sub || title), quality)) || buildDirectDownloadUrl(directCandidate) || "";
+            return directCandidate || buildVideoDownloadUrl(directCandidate, buildDownloadFileName(String(sub || title), quality)) || buildDirectDownloadUrl(directCandidate) || "";
           };
 
           const buildDlId = (q: string, sub: string) =>

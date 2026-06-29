@@ -1,4 +1,4 @@
-import { buildVideoDownloadUrl, triggerBackgroundVideoDownload, unwrapManagedVideoUrl } from "./videoDownload";
+import { buildVideoDownloadUrl, buildVideoDownloadUrlCandidates, triggerBackgroundVideoDownload, unwrapManagedVideoUrl } from "./videoDownload";
 
 // HLS/AN downloads are intentionally unsupported in this build — only direct
 // HTTP(S) RS files can be downloaded. Detect HLS-style URLs to reject early.
@@ -168,17 +168,44 @@ class DownloadManager {
     return raw;
   }
 
+  private resolveHttpDownloadCandidates(url: string, fileName: string) {
+    const raw = String(url || "").trim();
+    if (!raw || raw.toLowerCase().startsWith("data:") || isHlsUrl(raw)) return raw ? [raw] : [];
+    if (!/^https?:\/\//i.test(raw)) return raw ? [raw] : [];
+    const direct = unwrapManagedVideoUrl(raw) || raw;
+    return Array.from(new Set([
+      ...buildVideoDownloadUrlCandidates(raw, fileName),
+      buildVideoDownloadUrl(raw, fileName) || "",
+      direct.startsWith("https://") ? direct : "",
+    ].filter(Boolean)));
+  }
+
   private async downloadHttpBlob(
     url: string,
     fileName: string,
     signal: AbortSignal,
     onProgress: (loadedBytes: number, totalBytes: number) => void,
   ): Promise<Blob> {
-    const finalUrl = this.resolveHttpDownloadUrl(url, fileName);
-    if (!finalUrl || !/^https?:\/\//i.test(finalUrl)) throw new Error("Download link is invalid");
+    const candidates = this.resolveHttpDownloadCandidates(url, fileName).filter((candidate) => /^https?:\/\//i.test(candidate));
+    if (!candidates.length) throw new Error("Download link is invalid");
 
-    const response = await fetch(finalUrl, { signal, mode: "cors" });
-    if (!response.ok) throw new Error(`Download failed (${response.status})`);
+    let response: Response | null = null;
+    let lastError: unknown = null;
+    for (const finalUrl of candidates) {
+      try {
+        const r = await fetch(finalUrl, { signal, mode: "cors" });
+        if (!r.ok) {
+          lastError = new Error(`Download failed (${r.status})`);
+          try { await r.body?.cancel(); } catch {}
+          continue;
+        }
+        response = r;
+        break;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    if (!response) throw lastError instanceof Error ? lastError : new Error("Download failed");
 
     const contentRange = response.headers.get("content-range") || "";
     const rangeMatch = /\/(\d+)\s*$/.exec(contentRange);
@@ -267,18 +294,20 @@ class DownloadManager {
     if (cached > 0) return cached;
     if (isHlsUrl(candidate)) return 0;
     if (candidate.toLowerCase().startsWith("data:")) return decodeDataUriBytes(candidate);
-    const resolved = this.resolveHttpDownloadUrl(candidate, "probe.mp4");
-    const probeTarget = resolved || candidate;
+    const probeTargets = this.resolveHttpDownloadCandidates(candidate, "probe.mp4");
     const probePlans: RequestInit[] = [
       { method: "HEAD", mode: "cors" },
       { method: "GET", headers: { Range: "bytes=0-0" }, mode: "cors" },
     ];
 
-    for (const init of probePlans) {
-      const length = await this.fetchContentLength(probeTarget, init);
-      if (length > 0) {
-        this.writeCachedSize(candidate, length);
-        return length;
+    for (const probeTarget of probeTargets) {
+      if (!/^https?:\/\//i.test(probeTarget)) continue;
+      for (const init of probePlans) {
+        const length = await this.fetchContentLength(probeTarget, init);
+        if (length > 0) {
+          this.writeCachedSize(candidate, length);
+          return length;
+        }
       }
     }
     return 0;

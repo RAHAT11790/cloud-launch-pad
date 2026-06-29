@@ -36,6 +36,33 @@ const resolveBaseSync = (): string => {
   return DEFAULT_DOWNLOAD_BASE;
 };
 
+const unique = (items: string[]) => Array.from(new Set(items.map((item) => String(item || "").trim()).filter(Boolean)));
+
+const buildDownloadProxyUrl = (base: string, rawUrl: string, rawFileName: string) => {
+  const trimmedBase = String(base || "").trim().replace(/\/+$/, "");
+  if (!trimmedBase) return "";
+  const fileName = buildSafeFileName(rawFileName);
+  return `${trimmedBase}?filename=${encodeURIComponent(fileName)}&url=${encodeURIComponent(rawUrl)}`;
+};
+
+export function buildVideoDownloadUrlCandidates(rawUrl: string, rawFileName: string): string[] {
+  const trimmedUrl = String(rawUrl || "").trim();
+  if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return [];
+  if (isManagedVideoProxyUrl(trimmedUrl) || isManagedVideoDownloadUrl(trimmedUrl)) {
+    try {
+      const inner = new URL(trimmedUrl).searchParams.get("url");
+      if (inner) return unique([trimmedUrl, ...buildVideoDownloadUrlCandidates(inner, rawFileName)]);
+    } catch {}
+    return [trimmedUrl];
+  }
+
+  const bases = unique([
+    DEFAULT_DOWNLOAD_BASE,
+    overrideEnabled && overrideBaseUrl ? overrideBaseUrl : "",
+  ]);
+  return unique(bases.map((base) => buildDownloadProxyUrl(base, trimmedUrl, rawFileName)));
+}
+
 export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): string | null {
   const trimmedUrl = String(rawUrl || "").trim();
   if (!trimmedUrl || !isHttpUrl(trimmedUrl)) return null;
@@ -46,10 +73,7 @@ export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): stri
       if (inner) return buildVideoDownloadUrl(inner, rawFileName);
     } catch {}
   }
-  const base = resolveBaseSync();
-  if (!base) return null;
-  const fileName = buildSafeFileName(rawFileName);
-  return `${base}?filename=${encodeURIComponent(fileName)}&url=${encodeURIComponent(trimmedUrl)}`;
+  return buildVideoDownloadUrlCandidates(trimmedUrl, rawFileName)[0] || null;
 }
 
 export function unwrapManagedVideoUrl(value: string): string {
@@ -116,7 +140,8 @@ export function triggerBackgroundVideoDownload(rawUrl: string, rawFileName: stri
   // Use the admin video-download function first; direct is only a last fallback.
   const preferDirect = false;
   const directUrl = buildDirectDownloadUrl(trimmedUrl);
-  const proxiedUrl = buildVideoDownloadUrl(trimmedUrl, fileName);
+  const proxiedUrls = buildVideoDownloadUrlCandidates(trimmedUrl, fileName);
+  const proxiedUrl = proxiedUrls[0] || null;
   const finalUrl = preferDirect ? (directUrl || proxiedUrl) : (proxiedUrl || directUrl);
   if (!finalUrl) {
     toast.error("Download service is unavailable");
@@ -139,7 +164,7 @@ export function triggerBulkBackgroundDownloads(
       const unwrapped = unwrapManagedVideoUrl(u);
       const preferDirect = false;
       const direct = buildDirectDownloadUrl(u);
-      const proxied = buildVideoDownloadUrl(u, fn);
+      const proxied = buildVideoDownloadUrlCandidates(u, fn)[0] || buildVideoDownloadUrl(u, fn);
       const final = preferDirect ? (direct || proxied) : (proxied || direct);
       return final ? { final, fn } : null;
     })
