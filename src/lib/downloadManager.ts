@@ -253,13 +253,7 @@ class DownloadManager {
     if (!candidate) return 0;
     const cached = this.readCachedSize(candidate);
     if (cached > 0) return cached;
-    if (isHlsUrl(candidate)) {
-      try {
-        const bytes = await estimateHlsSize(candidate, 8);
-        if (bytes > 0) this.writeCachedSize(candidate, bytes);
-        return bytes;
-      } catch { return 0; }
-    }
+    if (isHlsUrl(candidate)) return 0;
     if (candidate.toLowerCase().startsWith("data:")) return decodeDataUriBytes(candidate);
     const resolved = this.resolveHttpDownloadUrl(candidate, "probe.mp4");
     const probeTarget = resolved || candidate;
