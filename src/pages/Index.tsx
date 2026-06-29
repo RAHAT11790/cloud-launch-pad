@@ -294,10 +294,15 @@ const getAnimeSaltDirectState = async (episodeSlug: string, forceRefresh = false
 // to refresh from /an-api/episode at play time and overlay fresh URLs on the
 // player state.
 const animeSaltLiveCache = new Map<string, Promise<Awaited<ReturnType<typeof buildAnimeSaltDirectPlaybackState>> | null>>();
+const animeSaltLiveSettled = new Map<string, Awaited<ReturnType<typeof buildAnimeSaltDirectPlaybackState>> | null>();
+const peekAnLivePlayback = (slug: string, type?: string) => {
+  if (!slug) return null;
+  return animeSaltLiveSettled.get(`${slug}|${type || ""}`) || null;
+};
 const fetchAnLivePlayback = (slug: string, type?: string, forceRefresh = false) => {
   const key = `${slug}|${type || ""}`;
   if (!slug) return Promise.resolve(null);
-  if (forceRefresh) animeSaltLiveCache.delete(key);
+  if (forceRefresh) { animeSaltLiveCache.delete(key); animeSaltLiveSettled.delete(key); }
   const cached = animeSaltLiveCache.get(key);
   if (cached) return cached;
   const req = (async () => {
@@ -310,9 +315,10 @@ const fetchAnLivePlayback = (slug: string, type?: string, forceRefresh = false) 
     } catch { return null; }
   })();
   animeSaltLiveCache.set(key, req);
+  req.then((value) => { animeSaltLiveSettled.set(key, value); }).catch(() => {});
   // 10 min TTL — AnimeSalt URLs typically expire ~hour, but we re-fetch on each
   // new playback session anyway.
-  setTimeout(() => animeSaltLiveCache.delete(key), 10 * 60_000);
+  setTimeout(() => { animeSaltLiveCache.delete(key); animeSaltLiveSettled.delete(key); }, 10 * 60_000);
   req.catch(() => animeSaltLiveCache.delete(key));
   return req;
 };
