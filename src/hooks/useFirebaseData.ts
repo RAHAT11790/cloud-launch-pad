@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { db, ref, onValue, query, orderByChild, limitToLast } from "@/lib/firebase";
+import { db, ref, onValue } from "@/lib/firebase";
 import type { AnimeItem } from "@/data/animeData";
 import { mapFirebaseMovieItem, mapFirebaseWebseriesItem } from "@/lib/firebaseAnimeMapper";
 import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
@@ -7,7 +7,7 @@ import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
 const LS_WS = "rs_cache_webseries_v1";
 const LS_MOV = "rs_cache_movies_v1";
 const LS_CATS = "rs_cache_categories_v1";
-const PUBLIC_BATCH_LIMIT = 160;
+const PUBLIC_BATCH_LIMIT = 48;
 const BACKFILL_PAGE_SIZE = 24;
 const BACKFILL_CACHE_LIMIT = 360;
 const MAX_CACHE_BYTES = 2_500_000;
@@ -105,40 +105,10 @@ export function useFirebaseData() {
     // Load only the latest lightweight card rows first. Full episode/audio data
     // is fetched on play, so AN/Ad series cannot crash the homepage by sending
     // every season/episode/audio URL at once.
-    const wsRef = query(ref(db, "webseries"), orderByChild("updatedAt"), limitToLast(PUBLIC_BATCH_LIMIT));
-    const unsubWs = onValue(wsRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      const publicItems: AnimeItem[] = [];
-      Object.entries(data).forEach(([id, item]: [string, any]) => {
-        if (item.visibility === "private") return; // skip private content
-        publicItems.push(mapFirebaseWebseriesItem(id, item, { full: false }));
-      });
-      publicItems.sort(newestFirst);
-      setWebseries((prev) => {
-        const merged = mergeById(prev, publicItems);
-        writeCache(LS_WS, merged);
-        return merged;
-      });
-      checkLoaded();
-    });
-
-    // Load movies in the same lightweight, cache-first way.
-    const movRef = query(ref(db, "movies"), orderByChild("updatedAt"), limitToLast(PUBLIC_BATCH_LIMIT));
-    const unsubMov = onValue(movRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      const publicItems: AnimeItem[] = [];
-      Object.entries(data).forEach(([id, item]: [string, any]) => {
-        if (item.visibility === "private") return; // skip private content
-        publicItems.push(mapFirebaseMovieItem(id, item, { full: false }));
-      });
-      publicItems.sort(newestFirst);
-      setMovies((prev) => {
-        const merged = mergeById(prev, publicItems);
-        writeCache(LS_MOV, merged);
-        return merged;
-      });
-      checkLoaded();
-    });
+    // IMPORTANT: do not use onValue(query(webseries/movies)) here. RTDB sends
+    // the full child payload (all seasons/audio URLs), so even a limited query
+    // can crash the browser. We read keys shallow, then hydrate cards in small
+    // chunks and cache them permanently in localStorage.
 
     let cancelled = false;
     const cancelIdle = scheduleIdle(() => {
@@ -164,14 +134,14 @@ export function useFirebaseData() {
         }),
         () => cancelled,
       );
+      checkLoaded();
+      checkLoaded();
     });
 
     return () => {
       cancelled = true;
       cancelIdle();
       unsubCats();
-      unsubWs();
-      unsubMov();
     };
   }, []);
 
