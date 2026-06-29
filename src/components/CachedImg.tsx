@@ -58,7 +58,7 @@ const CachedImg = forwardRef<HTMLImageElement, Props>(function CachedImg(
   const setRefs = useCallback((node: HTMLImageElement | null) => {
     imgRef.current = node;
     if (typeof ref === "function") ref(node);
-    else if (ref) ref.current = node;
+    else if (ref) (ref as React.MutableRefObject<HTMLImageElement | null>).current = node;
   }, [ref]);
 
   useEffect(() => {
