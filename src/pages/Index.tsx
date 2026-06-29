@@ -2616,7 +2616,7 @@ const Index = () => {
     );
   }
 
-  if ((loading || splashHold) && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute && !isAnimeRoute && !isWatchRoute) {
+  if ((loading || splashHold) && firebaseAnime.length === 0 && !playerState && !saltPlayerState && !isSearchRoute && !isNotificationsRoute && !isAnimeRoute && !isWatchRoute) {
     return <SplashLoader />;
   }
 
