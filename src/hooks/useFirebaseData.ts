@@ -49,8 +49,12 @@ export function useFirebaseData() {
       Object.values(data).forEach((cat: any) => {
         if (cat.name) cats.push(cat.name);
       });
-      setCategories(cats);
-      writeCache(LS_CATS, cats);
+      const key = JSON.stringify(cats);
+      if (key !== lastCatsKey) {
+        lastCatsKey = key;
+        setCategories(cats);
+        writeCache(LS_CATS, cats);
+      }
       checkLoaded();
     });
 
