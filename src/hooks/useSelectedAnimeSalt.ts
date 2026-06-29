@@ -61,7 +61,24 @@ export function useSelectedAnimeSalt() {
           const rows = await Promise.all(chunk.map(async (slug) => {
             try {
               const row = await firebaseRestGet<any>(`animesaltSelected/${slug}`);
-              return row ? mapAnimeSaltSelectedItem(slug, row) : null;
+              if (!row) return null;
+              // Only surface cards that have been ACTUALLY fetched by admin.
+              // Wishlisted-but-not-fetched rows (e.g. Naruto added but never
+              // fetched) must not appear in the user panel.
+              const seasons = row.customSeasons;
+              const seasonList = Array.isArray(seasons)
+                ? seasons
+                : seasons && typeof seasons === "object" ? Object.values(seasons) : [];
+              const hasPlayableEpisode = seasonList.some((season: any) => {
+                const eps = Array.isArray(season?.episodes)
+                  ? season.episodes
+                  : season?.episodes && typeof season.episodes === "object" ? Object.values(season.episodes) : [];
+                return eps.some((ep: any) =>
+                  String(ep?.link || ep?.link1080 || ep?.link720 || ep?.link480 || ep?.link4k || "").trim().length > 0,
+                );
+              });
+              if (!hasPlayableEpisode) return null;
+              return mapAnimeSaltSelectedItem(slug, row);
             } catch { return null; }
           }));
           const mapped = (rows.filter(Boolean) as AnimeItem[]).filter((item) => item.title && item.poster);
