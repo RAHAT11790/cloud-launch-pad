@@ -1991,6 +1991,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       }))
       .filter((track) => !!track.url);
   }, [propSubtitleTracks]);
+  const externalSubtitleOptionsRef = useRef<HlsSubtitleOption[]>([]);
+  useEffect(() => { externalSubtitleOptionsRef.current = externalSubtitleOptions; }, [externalSubtitleOptions]);
 
   const decodeSubtitleEntities = useCallback((value: string) => {
     return value
@@ -2050,6 +2052,44 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (subtitlePollTimerRef.current) {
       clearInterval(subtitlePollTimerRef.current);
       subtitlePollTimerRef.current = null;
+    }
+  }, []);
+
+  const manualSeekUntilRef = useRef(0);
+  const mediaRecoverySeekRef = useRef<number | null>(null);
+
+  const preserveResumePoint = useCallback((candidate = 0) => {
+    const v = videoRef.current;
+    const live = v && Number.isFinite(v.currentTime) ? v.currentTime : 0;
+    const last = Number.isFinite(lastPlaybackPositionRef.current) ? lastPlaybackPositionRef.current : 0;
+    const target = Math.max(candidate || 0, live || 0, last || 0);
+    if (target > 1) {
+      lastPlaybackPositionRef.current = target;
+      mediaRecoverySeekRef.current = target;
+      pendingSeek.current = target;
+    }
+    return target;
+  }, []);
+
+  const repairUnexpectedReset = useCallback((targetVideo?: HTMLVideoElement | null) => {
+    const v = targetVideo || videoRef.current;
+    if (!v || Date.now() < manualSeekUntilRef.current) return false;
+    const target = Math.max(
+      Number(pendingSeek.current || 0),
+      Number(mediaRecoverySeekRef.current || 0),
+      Number(lastPlaybackPositionRef.current || 0),
+    );
+    if (target <= 5) return false;
+    if (Number.isFinite(v.duration) && v.duration > 0 && target >= v.duration - 1) return false;
+    if (v.currentTime > 3 || v.currentTime >= target - 2) return false;
+    try {
+      v.currentTime = target;
+      pendingSeek.current = null;
+      setCurrentTime(target);
+      return true;
+    } catch {
+      pendingSeek.current = target;
+      return false;
     }
   }, []);
 
@@ -2234,6 +2274,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // (native HLS) only gets used when hls.js can't run.
   useEffect(() => {
     const v = videoRef.current;
+    const activeExternalSubtitleOptions = externalSubtitleOptionsRef.current;
     if (!v || !currentSrc || !isHlsSrc || isEmbedPlayback) {
       // Tear down any existing instance when not in HLS mode
       if (hlsRef.current) {
@@ -2245,10 +2286,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // of hiding the button completely.
       setHlsAudioOptions([]);
       setCurrentHlsAudio(-1);
-      if (externalSubtitleOptions.length > 0 && currentSrc && !isEmbedPlayback) {
-        hlsSubtitleMetaRef.current = externalSubtitleOptions;
-        setHlsSubtitleOptions(externalSubtitleOptions);
-        setCurrentHlsSubtitle((prev) => externalSubtitleOptions.some((track) => track.id === prev) ? prev : -1);
+      if (activeExternalSubtitleOptions.length > 0 && currentSrc && !isEmbedPlayback) {
+        hlsSubtitleMetaRef.current = activeExternalSubtitleOptions;
+        setHlsSubtitleOptions(activeExternalSubtitleOptions);
+        setCurrentHlsSubtitle((prev) => activeExternalSubtitleOptions.some((track) => track.id === prev) ? prev : -1);
       } else {
         hlsSubtitleMetaRef.current = [];
         setHlsSubtitleOptions([]);
@@ -2392,7 +2433,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const seenSubtitleUrls = new Set(manifestSubtitleOptions.map((track) => String(track.url || "").trim()).filter(Boolean));
       const nextSubtitleOptions = [
         ...manifestSubtitleOptions,
-        ...externalSubtitleOptions.filter((track) => !seenSubtitleUrls.has(String(track.url || "").trim())),
+        ...activeExternalSubtitleOptions.filter((track) => !seenSubtitleUrls.has(String(track.url || "").trim())),
       ];
       hlsSubtitleMetaRef.current = nextSubtitleOptions;
       setHlsSubtitleOptions(nextSubtitleOptions);
@@ -2410,6 +2451,9 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
       hlsFatalRetriesRef.current = 0;
+      if (mediaRecoverySeekRef.current && mediaRecoverySeekRef.current > 1) {
+        pendingSeek.current = Math.max(pendingSeek.current || 0, mediaRecoverySeekRef.current);
+      }
       // Select Hindi/preferred audio before first play so AN opens already in
       // the correct language instead of visibly switching 4-5 seconds later.
       applyPreferredHlsAudio();
@@ -2431,6 +2475,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
     hls.on(Hls.Events.ERROR, (_evt, data) => {
       if (!data.fatal) return;
+      const savedBeforeRecovery = preserveResumePoint(videoRef.current?.currentTime || 0);
       const recoverableTrackDetails = new Set([
         Hls.ErrorDetails.SUBTITLE_LOAD_ERROR,
         Hls.ErrorDetails.SUBTITLE_TRACK_LOAD_TIMEOUT,
@@ -2452,7 +2497,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (hlsFatalRetriesRef.current > fatalRetryLimit) {
         try { hls.destroy(); } catch {}
         hlsRef.current = null;
-        tryNextPlaybackRoute(videoRef.current?.currentTime || 0);
+        tryNextPlaybackRoute(savedBeforeRecovery);
         return;
       }
 
@@ -2471,7 +2516,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (hlsRef.current === hls) hlsRef.current = null;
       if (hlsObjectUrl) URL.revokeObjectURL(hlsObjectUrl);
     };
-  }, [currentSrc, isHlsSrc, isEmbedPlayback, tryNextPlaybackRoute, externalSubtitleOptions, buildReliableHlsSource]);
+  }, [currentSrc, isHlsSrc, isEmbedPlayback, tryNextPlaybackRoute, buildReliableHlsSource, preserveResumePoint]);
 
   // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
   // users reported when returning to home. Detaches HLS, clears <video>, kills timers.
@@ -2877,8 +2922,10 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   const applyPendingSeek = useCallback((targetVideo?: HTMLVideoElement | null) => {
     const v = targetVideo || videoRef.current;
-    const target = pendingSeek.current;
-    if (!v || target === null) return false;
+    const pendingTarget = pendingSeek.current;
+    const recoveryTarget = mediaRecoverySeekRef.current;
+    if (!v || (pendingTarget === null && recoveryTarget === null)) return false;
+    const target = Math.max(Number(pendingTarget ?? 0), Number(recoveryTarget ?? 0));
     if (!Number.isFinite(target) || target < 0) {
       pendingSeek.current = null;
       return false;
@@ -2896,6 +2943,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       v.currentTime = seekTo;
       if (seekTo === 0 || Math.abs(v.currentTime - seekTo) <= 1.5) {
         pendingSeek.current = null;
+        mediaRecoverySeekRef.current = null;
+        if (seekTo > 0) lastPlaybackPositionRef.current = seekTo;
         setCurrentTime(seekTo);
       }
       return true;
@@ -2906,7 +2955,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
 
   useEffect(() => {
     const v = videoRef.current;
-    if (!v || isEmbedPlayback || pendingSeek.current === null) return;
+    if (!v || isEmbedPlayback || (pendingSeek.current === null && mediaRecoverySeekRef.current === null)) return;
     if (applyPendingSeek(v)) return;
 
     let attempts = 0;
@@ -3067,12 +3116,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
         const v = videoRef.current;
-        if (v) { try { v.pause(); } catch {} }
+        if (v) { preserveResumePoint(v.currentTime || 0); try { v.pause(); } catch {} }
       }
     };
     const onPageHide = () => {
       const v = videoRef.current;
-      if (v) { try { v.pause(); } catch {} }
+      if (v) { preserveResumePoint(v.currentTime || 0); try { v.pause(); } catch {} }
     };
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", onPageHide);
@@ -3080,7 +3129,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", onPageHide);
     };
-  }, []);
+  }, [preserveResumePoint]);
 
   // MediaSession API - show anime title + artwork in Chrome media notification
   useEffect(() => {
@@ -3204,6 +3253,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const onLoaded = () => {
       setDuration(v.duration);
       applyPendingSeek(v);
+      repairUnexpectedReset(v);
       try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       // Only autoplay if ad gate is not active
       if (!adGateActiveRef.current && userPlaybackIntentRef.current) {
@@ -3243,7 +3293,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     };
     const onPause = () => {
       userPlaybackIntentRef.current = false;
-      if (v.currentTime > 0) lastPlaybackPositionRef.current = v.currentTime;
+      preserveResumePoint(v.currentTime || lastKnownTime || 0);
       setPlaying(false);
       cancelAnimationFrame(rafId.current);
     };
@@ -3258,11 +3308,12 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const MAX_RETRIES = manualQualitySelectedRef.current ? 4 : 1;
     const onError = () => {
       const errSrc = currentSrc;
+      const savedTimeForRetry = preserveResumePoint(lastKnownTime || v?.currentTime || 0);
       const prev = retryAttemptsRef.current.get(errSrc) || 0;
       const next = prev + 1;
       retryAttemptsRef.current.set(errSrc, next);
       if (next > MAX_RETRIES) {
-        tryNextPlaybackRoute(lastKnownTime || v?.currentTime || 0);
+        tryNextPlaybackRoute(savedTimeForRetry);
         return;
       }
       console.log(`Video error, retry ${next}/${MAX_RETRIES}...`);
@@ -3270,7 +3321,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const delay = next * 500;
       setTimeout(() => {
         if (v) {
-          const savedTime = v.currentTime || lastKnownTime;
+          const savedTime = preserveResumePoint(savedTimeForRetry || v.currentTime || lastKnownTime);
           // For MKV files, try removing the src attribute and re-setting it
           v.src = currentSrc;
           v.load();
@@ -3294,6 +3345,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       // Also apply pending seek here in case loadedmetadata didn't fire
       applyPendingSeek(v);
+      repairUnexpectedReset(v);
       if (v.paused && !adGateActiveRef.current && userPlaybackIntentRef.current) {
         // Keep native audio path; manual user interaction will start playback if autoplay is blocked
         v.play().catch(() => {});
@@ -3306,6 +3358,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     let waitingTimer: ReturnType<typeof setTimeout> | null = null;
     const onWaiting = () => {
       if (subtitleSwitchingUntilRef.current > Date.now()) return;
+      preserveResumePoint(lastKnownTime || v.currentTime || 0);
       if (waitingTimer) clearTimeout(waitingTimer);
       // Short debounce — show loader quickly on real stalls but stay calm on micro-hiccups
       waitingTimer = setTimeout(() => {
@@ -3345,6 +3398,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const onTimeUpdate = () => {
       const ct = v.currentTime;
       const dur = v.duration;
+      repairUnexpectedReset(v);
       if (ct > 0) lastKnownTime = ct;
       if (ct > 0) lastPlaybackPositionRef.current = ct;
       if (progressRef.current && dur > 0) {
@@ -3405,7 +3459,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [applyPendingSeek, currentSrc, playbackRouteReady, tryNextPlaybackRoute]);
+  }, [applyPendingSeek, currentSrc, playbackRouteReady, preserveResumePoint, repairUnexpectedReset, tryNextPlaybackRoute]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
@@ -3447,6 +3501,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       const v = videoRef.current;
       if (!v) return;
       if (!v.paused) {
+        preserveResumePoint(v.currentTime || 0);
         v.pause();
         setPlaying(false);
       }
@@ -3465,7 +3520,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       window.removeEventListener('beforeunload', pausePlayback);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, []);
+  }, [preserveResumePoint]);
 
   const togglePlay = useCallback(() => {
     if (isEmbedPlayback) {
@@ -3479,14 +3534,15 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!v) return;
     if (v.paused) {
       userPlaybackIntentRef.current = true;
+      repairUnexpectedReset(v);
       v.play();
     } else {
       userPlaybackIntentRef.current = false;
-      if (v.currentTime > 0) lastPlaybackPositionRef.current = v.currentTime;
+      preserveResumePoint(v.currentTime || 0);
       v.pause();
     }
     resetHideTimer();
-  }, [isEmbedPlayback, playing, resetHideTimer, sendEmbedCmd]);
+  }, [isEmbedPlayback, playing, preserveResumePoint, repairUnexpectedReset, resetHideTimer, sendEmbedCmd]);
 
   const MAX_VOL = 100;
   const applyPlayerVolume = useCallback((nextBoost: number, nextMuted = muted) => {
@@ -3540,6 +3596,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const v = videoRef.current;
     if (!v) return;
 
+    manualSeekUntilRef.current = Date.now() + 2500;
     const nextTime = getSafeSeekTime(v, v.currentTime + seconds);
     try {
       if ("fastSeek" in v && typeof v.fastSeek === "function") v.fastSeek(nextTime);
@@ -3620,6 +3677,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    manualSeekUntilRef.current = Date.now() + 2500;
     v.currentTime = getSafeSeekTime(v, pct * v.duration);
     resetHideTimer();
   }, [getSafeSeekTime, resetHideTimer]);
@@ -3635,6 +3693,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!v) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
+    manualSeekUntilRef.current = Date.now() + 2500;
     v.currentTime = getSafeSeekTime(v, pct * v.duration);
     if (progressRef.current && v.duration > 0) {
       progressRef.current.style.width = `${pct * 100}%`;
@@ -3650,6 +3709,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
     const target = getSafeSeekTime(v, pct * v.duration);
+    manualSeekUntilRef.current = Date.now() + 2500;
     v.currentTime = target;
 
     if (progressRef.current && v.duration > 0) {
