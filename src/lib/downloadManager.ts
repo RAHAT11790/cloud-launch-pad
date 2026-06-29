@@ -1,5 +1,5 @@
 import { triggerBackgroundVideoDownload } from "./videoDownload";
-import { isHlsUrl } from "./hlsDownloader";
+import { downloadHls, estimateHlsSize, isHlsUrl, saveBlobAs, toHlsFileName } from "./hlsDownloader";
 
 export type DownloadStatus = "queued" | "downloading" | "paused" | "complete" | "error" | "cancelled";
 
@@ -154,8 +154,9 @@ class DownloadManager {
   private async fetchTotalSize(url: string): Promise<number> {
     const candidate = String(url || "").trim();
     if (!candidate) return 0;
-    // HLS downloads are blocked — don't probe segment sizes.
-    if (isHlsUrl(candidate)) return 0;
+    if (isHlsUrl(candidate)) {
+      try { return await estimateHlsSize(candidate, 10); } catch { return 0; }
+    }
     if (candidate.toLowerCase().startsWith("data:")) return decodeDataUriBytes(candidate);
     const probePlans: RequestInit[] = this.isProxyDownloadUrl(candidate)
       ? [
@@ -203,15 +204,36 @@ class DownloadManager {
       }).catch(() => {});
     }
 
-    // HLS (.m3u8) streams are AN-content. Per product decision the in-browser
-    // segment downloader is disabled — show a friendly error instead of trying
-    // to bundle .ts segments. RS (direct mp4) downloads continue below.
+    // HLS (.m3u8 / AN synthetic master) downloads are handled by the browser
+    // segment downloader. The playlist/segments are already routed through the
+    // AN HLS proxy when needed, so size/progress can update in the manager.
     if (item.url && isHlsUrl(item.url)) {
-      this.settleItem(id, "error", { error: "AN video download করা যাবে না" });
-      try {
-        // Lazy import so we don't pull sonner into download bundle for everyone.
-        import("sonner").then(({ toast }) => toast.error("AN video download করা যাবে না"));
-      } catch {}
+      const ac = new AbortController();
+      downloadHls(
+        item.url,
+        (loaded, total, bytes) => {
+          const current = this.downloads.get(id);
+          if (!current || current.status !== "downloading") return;
+          const estimatedTotalBytes = current.totalMB > 1 ? current.totalMB * 1024 * 1024 : bytes;
+          this.update(id, {
+            percent: total > 0 ? Math.min(98, Math.round((loaded / total) * 100)) : current.percent,
+            loadedMB: bytes / (1024 * 1024),
+            totalMB: Math.max(current.totalMB, estimatedTotalBytes / (1024 * 1024), 1),
+          });
+        },
+        ac.signal,
+      ).then((blob) => {
+        const latest = this.downloads.get(id);
+        if (!latest || latest.status !== "downloading") return;
+        const fileName = toHlsFileName(latest.fileName || buildFileName(latest.title, latest.subtitle, latest.quality));
+        saveBlobAs(blob, fileName);
+        const mb = Math.max(blob.size / (1024 * 1024), latest.totalMB, 1);
+        this.settleItem(id, "complete", { loadedMB: mb, totalMB: mb, fileName });
+      }).catch((e) => {
+        const message = (e as Error)?.message || "HLS download failed";
+        this.settleItem(id, "error", { error: message });
+        try { import("sonner").then(({ toast }) => toast.error(message)); } catch {}
+      });
       return;
     }
 
