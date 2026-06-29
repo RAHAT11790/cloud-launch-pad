@@ -25,7 +25,7 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Headers":
     "range, content-type, authorization, apikey, x-client-info, accept, accept-encoding",
   "Access-Control-Expose-Headers":
-    "content-length, content-type, content-disposition, accept-ranges",
+    "content-length, content-range, content-type, content-disposition, accept-ranges",
   "Access-Control-Max-Age": "86400",
 };
 
