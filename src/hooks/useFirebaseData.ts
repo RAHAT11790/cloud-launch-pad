@@ -33,6 +33,14 @@ export function useFirebaseData() {
       if (loadedCount >= 3) setLoading(false);
     };
 
+    // Track last serialized payload per stream so we skip setState when the
+    // Firebase snapshot is byte-identical — this stops AnimeCard images from
+    // re-mounting on every onValue tick (the "AN cards reload every time"
+    // flicker the user reported).
+    let lastCatsKey = "";
+    let lastWsKey = "";
+    let lastMovKey = "";
+
     // Load categories
     const catsRef = ref(db, "categories");
     const unsubCats = onValue(catsRef, (snapshot) => {
