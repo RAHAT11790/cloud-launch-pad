@@ -43,7 +43,7 @@ interface VideoServerOption {
 // Cloudflare CDN proxy for fast video streaming
 import { CLOUDFLARE_CDN_URL } from "@/lib/siteConfig";
 import { downloadManager } from "@/lib/downloadManager";
-import { buildDirectDownloadUrl, buildVideoDownloadUrl, triggerBulkBackgroundDownloads } from "@/lib/videoDownload";
+import { buildDirectDownloadUrl, buildVideoDownloadUrl } from "@/lib/videoDownload";
 import { estimateHlsSize } from "@/lib/hlsDownloader";
 const CLOUDFLARE_CDN = CLOUDFLARE_CDN_URL;
 
