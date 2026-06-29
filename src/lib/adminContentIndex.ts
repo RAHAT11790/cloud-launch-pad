@@ -79,9 +79,36 @@ export const fetchAdminContentIndex = async (kind: AdminContentKind) => {
 };
 
 export const fetchRecentAdminContentList = async (kind: AdminContentKind, limit = DEFAULT_RECENT_LIMIT) => {
-  const snap = await get(query(ref(db, kind), orderByChild("updatedAt"), limitToLast(limit)));
-  const data = snap.val() || {};
-  return sortAdminContentList(Object.entries(data).map(([id, item]: [string, any]) => buildAdminContentIndexItem(id, item, kind)));
+  // 1) Try the indexed query — fastest path when items carry `updatedAt`.
+  try {
+    const snap = await get(query(ref(db, kind), orderByChild("updatedAt"), limitToLast(limit)));
+    const data = snap.val() || {};
+    const items = Object.entries(data).map(([id, item]: [string, any]) => buildAdminContentIndexItem(id, item, kind));
+    if (items.length) return sortAdminContentList(items);
+  } catch {}
+  // 2) Fallback: shallow keys + paginated REST hydration. Required because
+  // legacy webseries/movies rows written before the indexing system don't have
+  // `updatedAt`, and `orderByChild("updatedAt")` silently drops them — which
+  // is why the Admin panel was showing an empty list.
+  try {
+    const keys = await firebaseRestShallowKeys(kind);
+    const recent = keys.slice(-limit);
+    const items: any[] = [];
+    const chunkSize = 8;
+    for (let i = 0; i < recent.length; i += chunkSize) {
+      const chunk = recent.slice(i, i + chunkSize);
+      const rows = await Promise.all(chunk.map(async (id) => {
+        try {
+          const item = await firebaseRestGet<any>(`${kind}/${id}`);
+          return item ? buildAdminContentIndexItem(id, item, kind) : null;
+        } catch { return null; }
+      }));
+      rows.forEach((row) => { if (row) items.push(row); });
+    }
+    return sortAdminContentList(items);
+  } catch {
+    return [];
+  }
 };
 
 export const upsertAdminContentIndex = async (kind: AdminContentKind, id: string, item: any) => {
