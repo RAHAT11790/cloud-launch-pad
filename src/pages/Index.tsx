@@ -15,7 +15,8 @@ const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: numbe
   return `${window.location.origin}/watch/${encodeURIComponent(animeId)}${qs ? `?${qs}` : ""}`;
 };
 
-const AN_API_HLS_PROXY_PREFIX = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-api/hls`;
+const AN_API_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-api`;
+const AN_API_HLS_PROXY_PREFIX = `${AN_API_BASE}/hls`;
 
 const isInvalidPlaybackUrl = (url?: string | null) => {
   const normalized = String(url || "").trim().toLowerCase().split("?")[0].split("#")[0];
