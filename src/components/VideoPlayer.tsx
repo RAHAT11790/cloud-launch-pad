@@ -2348,7 +2348,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
         const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
         return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
       });
-      const preferredToken = String(getPrimaryLanguageToken(selectedLanguage) || selectedLanguage || "").toLowerCase();
+      const preferredLanguage = selectedLanguageRef.current;
+      const preferredToken = String(getPrimaryLanguageToken(preferredLanguage) || preferredLanguage || "").toLowerCase();
       const preferredIdx = hindiIdx >= 0
         ? hindiIdx
         : (preferredToken
@@ -2470,7 +2471,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       if (hlsRef.current === hls) hlsRef.current = null;
       if (hlsObjectUrl) URL.revokeObjectURL(hlsObjectUrl);
     };
-  }, [currentSrc, isHlsSrc, isEmbedPlayback, tryNextPlaybackRoute, externalSubtitleOptions, selectedLanguage, buildReliableHlsSource]);
+  }, [currentSrc, isHlsSrc, isEmbedPlayback, tryNextPlaybackRoute, externalSubtitleOptions, buildReliableHlsSource]);
 
   // Hard cleanup on full unmount — eliminates the "player keeps leaking" bug
   // users reported when returning to home. Detaches HLS, clears <video>, kills timers.
@@ -3205,7 +3206,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       applyPendingSeek(v);
       try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       // Only autoplay if ad gate is not active
-      if (!adGateActive && userPlaybackIntentRef.current) {
+      if (!adGateActiveRef.current && userPlaybackIntentRef.current) {
         // Keep native audio path; do not force muted autoplay fallback
         v.play().catch(() => {});
       }
@@ -3293,7 +3294,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
       // Also apply pending seek here in case loadedmetadata didn't fire
       applyPendingSeek(v);
-      if (v.paused && !adGateActive && userPlaybackIntentRef.current) {
+      if (v.paused && !adGateActiveRef.current && userPlaybackIntentRef.current) {
         // Keep native audio path; manual user interaction will start playback if autoplay is blocked
         v.play().catch(() => {});
       }
@@ -3404,7 +3405,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       // source React just rendered and force a restart from 0:00. Real teardown
       // happens in the unmount-only effect below.
     };
-  }, [applyPendingSeek, currentSrc, adGateActive, playbackRouteReady, tryNextPlaybackRoute]);
+  }, [applyPendingSeek, currentSrc, playbackRouteReady, tryNextPlaybackRoute]);
 
   // Unmount-only teardown: stop background playback when the player is removed.
   useEffect(() => {
