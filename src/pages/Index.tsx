@@ -2029,6 +2029,20 @@ const Index = () => {
           qualityOptions = directFromFirebase.qualityOptions;
           audioTracks = directFromFirebase.audioTracks;
         }
+        // Ultra-opt: if we already prefetched the fresh AN URL on pointerdown,
+        // use it as the initial src so the player doesn't first attempt a stale
+        // signed URL and then swap mid-load.
+        const baseSlugAn = String((anime as any).anSlug || (anime as any).animeSaltSlug || "").trim();
+        if (baseSlugAn) {
+          const sNum = Number(season?.seasonNumber || (resolvedSeasonIdx ?? 0) + 1);
+          const eNum = Number(episode?.episodeNumber || (resolvedEpIdx ?? 0) + 1);
+          const fresh = peekAnLivePlayback(`${baseSlugAn}-${sNum}x${eNum}`, "tvshows");
+          if (fresh?.src) {
+            src = fresh.src;
+            if (fresh.qualityOptions?.length) qualityOptions = fresh.qualityOptions as any;
+            if ((fresh.audioTracks as any)?.length) audioTracks = fresh.audioTracks as any;
+          }
+        }
       }
       } else if (getMovieSrc(anime)) {
         src = getMovieSrc(anime);
@@ -2041,6 +2055,18 @@ const Index = () => {
           src = anMovie.src;
           qualityOptions = anMovie.qualityOptions;
           audioTracks = anMovie.audioTracks as any;
+        }
+        // Ultra-opt: prefer prefetched fresh AN movie URL when available.
+        if (isAnMovie(anime)) {
+          const baseSlugAn = String((anime as any).anSlug || (anime as any).animeSaltSlug || "").trim();
+          if (baseSlugAn) {
+            const fresh = peekAnLivePlayback(baseSlugAn, "movies");
+            if (fresh?.src) {
+              src = fresh.src;
+              if (fresh.qualityOptions?.length) qualityOptions = fresh.qualityOptions as any;
+              if ((fresh.audioTracks as any)?.length) audioTracks = fresh.audioTracks as any;
+            }
+          }
         }
     }
 
