@@ -134,8 +134,9 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   }
 
   const isHttp = isInsecureHttpSource(url);
+  const isHttpLike = /^https?:\/\//i.test(url);
   const customProxyCandidate = proxyUrl ? buildProxyPlaybackUrl(proxyUrl, url, proxyApiKey) : null;
-  const nativeProxyCandidate = isHttp && DEFAULT_VIDEO_PROXY_URL
+  const nativeProxyCandidate = isHttpLike && DEFAULT_VIDEO_PROXY_URL
     ? buildProxyPlaybackUrl(DEFAULT_VIDEO_PROXY_URL, url)
     : null;
 
@@ -155,17 +156,17 @@ const buildPlaybackCandidates = (url: string, _cdnEnabled: boolean, proxyUrl?: s
   }
 
   if (isHttp) {
-    // HTTP source — ADMIN PROXY ONLY. If admin selected built-in Supabase,
-    // applyProxyConfig() puts that proxy URL into proxyUrl first.
-    // Never inject the raw http:// URL into an https page: browsers block it as
-    // mixed content and the player appears broken before failover can help.
-    addCandidate(customProxyCandidate);
+    // HTTP source — must be proxied on HTTPS pages. Prefer the built-in proxy
+    // first because a stale EGD custom proxy DNS record can otherwise make every
+    // RS card look blocked; keep the custom proxy as a secondary fallback.
     addCandidate(nativeProxyCandidate);
+    addCandidate(customProxyCandidate);
   } else {
-    // HTTPS source — strict direct playback only. Never route one HTTPS video
-    // server through another proxy/server; if Render is down, HuggingFace/other
-    // HTTPS servers must still play independently in the video tag.
+    // HTTPS source — direct first, then proxy fallback. Some RS mirrors play
+    // directly, while others intermittently block range/CORS on live domains.
     addCandidate(url);
+    addCandidate(nativeProxyCandidate);
+    addCandidate(customProxyCandidate);
   }
 
   return candidates;
