@@ -13,6 +13,18 @@ const isHlsUrl = (url: string): boolean => {
 
 const AN_DOWNLOAD_BLOCK_MESSAGE = "AN downloads are not supported. Please use our Telegram channel to get this episode.";
 
+const saveHttpBlob = (blob: Blob, fileName: string) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
+
 export type DownloadStatus = "queued" | "downloading" | "paused" | "complete" | "error" | "cancelled";
 
 export interface ActiveDownload {
