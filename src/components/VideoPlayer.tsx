@@ -2723,9 +2723,18 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     // Snapshot current playhead BEFORE swapping src so we can restore it for
     // URL refreshes on the same episode.
     const _v = videoRef.current;
-    const preservedTime = sameEpisodeUrlRefresh && _v && Number.isFinite(_v.currentTime) && _v.currentTime > 1
-      ? _v.currentTime
+    const livePosition = _v && Number.isFinite(_v.currentTime) ? _v.currentTime : 0;
+    const preservedTime = sameEpisodeUrlRefresh
+      ? Math.max(livePosition || 0, lastPlaybackPositionRef.current || 0)
       : 0;
+
+    // AN live URL refresh must never disturb a paused viewer. If a fresher HLS
+    // URL arrives for the same episode while paused, keep the current media
+    // pipeline mounted; resume continues from the same frame instead of 0:00.
+    if (sameEpisodeUrlRefresh && isAnimeSaltContent && _v?.paused) {
+      pendingSeek.current = preservedTime > 0 ? preservedTime : null;
+      return;
+    }
 
     sourceBaseRef.current = baseRawSrc;
     activeSourceBaseRef.current = baseRawSrc;
@@ -2755,7 +2764,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
           _v.removeEventListener("loadedmetadata", onMetaSeek);
         };
         _v.addEventListener("loadedmetadata", onMetaSeek);
-      } else {
+      } else if (!sameEpisodeUrlRefresh) {
         try { _v.currentTime = 0; } catch {}
         const onMetaReset = () => {
           try { if (pendingSeek.current === 0 || pendingSeek.current === null) _v.currentTime = 0; } catch {}
@@ -2770,7 +2779,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSwitchingEpisode(false);
     }, 80);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, getServerScopedSource, initialSeekTime, currentSeasonIdx, currentEpisodeIdx, currentQuality, activeServerIndex, effectiveVideoServers.length, anime]);
+  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, getServerScopedSource, initialSeekTime, currentSeasonIdx, currentEpisodeIdx, currentQuality, activeServerIndex, effectiveVideoServers.length, anime, isAnimeSaltContent]);
 
   useEffect(() => {
     if (!playbackRouteReady || !activeSourceBaseRef.current) return;
