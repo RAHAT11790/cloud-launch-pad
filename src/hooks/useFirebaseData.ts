@@ -185,8 +185,12 @@ export function useFirebaseData() {
         publicItems.push(mappedItem);
       });
       publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      setWebseries(publicItems);
-      writeCache(LS_WS, publicItems);
+      const wsKey = JSON.stringify(publicItems);
+      if (wsKey !== lastWsKey) {
+        lastWsKey = wsKey;
+        setWebseries(publicItems);
+        writeCache(LS_WS, publicItems);
+      }
       checkLoaded();
     });
 
