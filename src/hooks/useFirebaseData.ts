@@ -128,7 +128,7 @@ export function useFirebaseData() {
             });
           }
         }
-      } catch (e) { console.error("Index load failed", e); }
+      } catch { /* cached cards/backfill keep the UI usable when the index endpoint is temporarily blocked */ }
 
       checkLoaded();
       checkLoaded();
