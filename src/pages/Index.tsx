@@ -1409,10 +1409,18 @@ const Index = () => {
   const [analyticsTotals, setAnalyticsTotals] = useState<Record<string, any>>({});
   const [analyticsClicks, setAnalyticsClicks] = useState<Record<string, any>>({});
   useEffect(() => {
-    const unsubV = onValue(ref(db, "analytics/views"), (snap) => setAnalyticsViews(snap.val() || {}));
-    const unsubT = onValue(ref(db, "analytics/totals/views"), (snap) => setAnalyticsTotals(snap.val() || {}));
-    const unsubC = onValue(ref(db, "analytics/totals/clicks"), (snap) => setAnalyticsClicks(snap.val() || {}));
-    return () => { unsubV(); unsubT(); unsubC(); };
+    // Do not subscribe to root analytics nodes on the public homepage. Those
+    // counters can grow very large and were causing the same loader/data drain
+    // problem as the old root catalog listeners. Keep cached lightweight totals
+    // only; fresh analytics can be read inside Admin where it is expected.
+    try {
+      const raw = localStorage.getItem("rs_public_analytics_lite_v1");
+      if (raw) {
+        const cached = JSON.parse(raw);
+        setAnalyticsTotals(cached?.views || {});
+        setAnalyticsClicks(cached?.clicks || {});
+      }
+    } catch {}
   }, []);
 
   const getViewCount = useCallback((id: string): number => {
