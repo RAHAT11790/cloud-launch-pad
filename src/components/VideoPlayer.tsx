@@ -1161,13 +1161,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     if (!urls.length) return;
     let cancelled = false;
     const probe = async (u: string): Promise<[string, number] | null> => {
-      if (isHlsLikeUrl(u)) {
-        try {
-          const bytes = await estimateHlsSize(buildReliableHlsSource(u), 8);
-          if (bytes > 0) return [u, bytes];
-        } catch {}
-        return null;
-      }
+      if (isHlsLikeUrl(u)) return null;
       const proxied = buildVideoDownloadUrl(u, "probe.mp4");
       if (!proxied) return null;
       try {
