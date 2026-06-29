@@ -974,13 +974,16 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   }, [getTrackQualityLinks, primarySeriesLanguageLabel]);
 
   const availableDownloadQualities = useMemo(() => {
+    const order = ["Default", "480P", "720P", "1080P", "4K"];
     const season = seasons?.[downloadPanelSeasonIdx];
     if (season?.episodes?.length) {
       const qualitySet = new Set<string>();
       season.episodes.forEach((ep: any) => {
         Object.keys(getEpisodeDownloadLinksForLanguage(ep, currentDownloadLanguageLabel)).forEach((quality) => qualitySet.add(quality));
       });
-      return ["Default", "480P", "720P", "1080P", "4K"].filter((quality) => qualitySet.has(quality));
+      const known = order.filter((quality) => qualitySet.has(quality));
+      const extras = Array.from(qualitySet).filter((q) => !order.includes(q));
+      return [...known, ...extras];
     }
     const movieQualities = Object.keys(collectDownloadQualityLinks(activeDownloadLanguageTrack, {
       link: anime?.movieLink || src,
