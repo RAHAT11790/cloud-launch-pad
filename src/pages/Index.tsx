@@ -614,7 +614,7 @@ const Index = () => {
   const isRoutedOverlay = isSearchRoute || isNotificationsRoute || isAnimeRoute || isWatchRoute;
   const animeRouteId = animeRouteMatch?.params.animeId ? decodeURIComponent(animeRouteMatch.params.animeId) : null;
   const watchRouteAnimeId = watchRouteMatch?.params.animeId ? decodeURIComponent(watchRouteMatch.params.animeId) : null;
-  const { webseries, movies, allAnime: firebaseAnime, categories, loading } = useFirebaseData();
+  const { webseries, movies, allAnime: firebaseAnime, categories, loading, hydrate } = useFirebaseData();
   const { items: animeSaltItems, loading: saltLoading } = useSelectedAnimeSalt();
   const brandingConfig = useBranding();
   const displaySiteName = brandingConfig.siteName || "RS ANIME";
