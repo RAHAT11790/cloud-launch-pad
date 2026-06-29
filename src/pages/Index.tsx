@@ -656,8 +656,30 @@ const preloadImage = (src?: string | null) => {
   });
 };
 
+// Ultra-opt: warm Firebase row + AN live URL on pointerdown so by tap-release
+// (~120-300ms finger contact) the network round-trips are already in flight or
+// resolved. This is what makes RS feel instant — AN now matches.
+const prefetchAnimePlayback = (anime: AnimeItem) => {
+  if (!anime) return;
+  try { loadFullFirebaseAnimeItem(anime); } catch {}
+  const isAn = anime.source === "animesalt" || anime.sourceName === "AnimeSalt" || String(anime.id || "").startsWith("an_") || !!anime.anSlug || !!(anime as any).animeSaltSlug;
+  if (!isAn) return;
+  const baseSlug = String(anime.anSlug || (anime as any).animeSaltSlug || "").trim();
+  if (!baseSlug) return;
+  try {
+    if (anime.type === "movie") {
+      fetchAnLivePlayback(baseSlug, "movies");
+    } else {
+      fetchAnLivePlayback(`${baseSlug}-1x1`, "tvshows");
+    }
+  } catch {}
+};
+
+// Expose so AnimeCard (separate file) can warm too without prop drilling.
+if (typeof window !== "undefined") (window as any).__rsPrefetchAnime = prefetchAnimePlayback;
+
 const PosterGridCard = ({ anime, onClick }: { anime: AnimeItem; onClick: (anime: AnimeItem) => void }) => (
-  <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" onClick={() => onClick(anime)}>
+  <div key={anime.id} data-anime-card="true" className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer poster-hover" onClick={() => onClick(anime)} onPointerDown={() => prefetchAnimePlayback(anime)}>
     <img src={optimizedImageUrl(anime.poster, "poster")} alt={anime.title} className="poster-img w-full h-full object-cover" loading="eager" decoding="async" />
     <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.22) 42%, transparent 72%)" }} />
     <span className="absolute top-1.5 right-1.5 gradient-primary px-2 py-0.5 rounded text-[9px] font-bold">{anime.year}</span>
