@@ -1844,6 +1844,8 @@ const Index = () => {
       return;
     }
 
+    anime = (await loadFullFirebaseAnimeItem(anime)) || anime;
+
     const fallbackTarget = getDefaultWatchTarget(anime);
     const resolvedSeasonIdx = seasonIdx ?? fallbackTarget.seasonIdx;
     const resolvedEpIdx = epIdx ?? fallbackTarget.epIdx;
