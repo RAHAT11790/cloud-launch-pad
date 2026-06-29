@@ -340,15 +340,12 @@ export function useFirebaseData() {
   });
 
   useEffect(() => {
-    let loadedCount = 0;
-    const checkLoaded = () => {
-      loadedCount++;
-      if (loadedCount >= 3) setLoading(false);
-    };
-
-    let lastCatsSig = "";
-    let lastWsSig = "";
-    let lastMovSig = "";
+    let cancelled = false;
+    let lastCatsSig = readCache<string[]>(LS_CATS, []).join("|");
+    let lastWsSig = fingerprint(readCache<AnimeItem[]>(LS_WS, []));
+    let lastMovSig = fingerprint(readCache<AnimeItem[]>(LS_MOV, []));
+    const releaseLoader = () => { if (!cancelled) setLoading(false); };
+    const failSafe = window.setTimeout(releaseLoader, LOADER_FAILSAFE_MS);
 
     const catsRef = ref(db, "categories");
     const unsubCats = onValue(catsRef, (snapshot) => {
@@ -361,49 +358,46 @@ export function useFirebaseData() {
         setCategories(cats);
         writeCache(LS_CATS, cats);
       }
-      checkLoaded();
     });
 
-    const wsRef = ref(db, "webseries");
-    const unsubWs = onValue(wsRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      const publicItems: AnimeItem[] = [];
-      Object.entries(data).forEach(([id, item]: [string, any]) => {
-        if (item?.visibility === "private") return;
-        publicItems.push(mapWebseriesLite(id, item));
-      });
-      publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      const sig = fingerprint(publicItems);
-      if (sig !== lastWsSig) {
-        lastWsSig = sig;
-        setWebseries(publicItems);
-        writeCache(LS_WS, publicItems);
+    const applyCatalog = (nextWs: AnimeItem[], nextMov: AnimeItem[]) => {
+      const wsSig = fingerprint(nextWs);
+      const movSig = fingerprint(nextMov);
+      if (wsSig !== lastWsSig) {
+        lastWsSig = wsSig;
+        setWebseries(nextWs);
+        writeCache(LS_WS, nextWs);
       }
-      checkLoaded();
-    });
+      if (movSig !== lastMovSig) {
+        lastMovSig = movSig;
+        setMovies(nextMov);
+        writeCache(LS_MOV, nextMov);
+      }
+      writeCacheMeta();
+    };
 
-    const movRef = ref(db, "movies");
-    const unsubMov = onValue(movRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      const publicItems: AnimeItem[] = [];
-      Object.entries(data).forEach(([id, item]: [string, any]) => {
-        if (item?.visibility === "private") return;
-        publicItems.push(mapMovieLite(id, item));
-      });
-      publicItems.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
-      const sig = fingerprint(publicItems);
-      if (sig !== lastMovSig) {
-        lastMovSig = sig;
-        setMovies(publicItems);
-        writeCache(LS_MOV, publicItems);
+    const refreshCatalog = async () => {
+      try {
+        const catalog = await fetchLiteCatalog();
+        if (!cancelled) applyCatalog(catalog.webseries, catalog.movies);
+      } catch (err) {
+        console.warn("Lite catalog refresh failed; using local cache", err);
+      } finally {
+        releaseLoader();
       }
-      checkLoaded();
-    });
+    };
+
+    const hasCachedCatalog = readCache<AnimeItem[]>(LS_WS, []).length > 0 || readCache<AnimeItem[]>(LS_MOV, []).length > 0;
+    if (hasCachedCatalog) releaseLoader();
+    const stale = Date.now() - Number(readCacheMeta().fetchedAt || 0) > CATALOG_REFRESH_MS;
+    if (!hasCachedCatalog || stale) {
+      window.setTimeout(() => { if (!cancelled) void refreshCatalog(); }, hasCachedCatalog ? 350 : 0);
+    }
 
     return () => {
+      cancelled = true;
+      window.clearTimeout(failSafe);
       unsubCats();
-      unsubWs();
-      unsubMov();
     };
   }, []);
 
