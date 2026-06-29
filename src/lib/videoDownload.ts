@@ -28,9 +28,12 @@ try {
   }
 } catch {}
 
+const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || "";
+const DEFAULT_DOWNLOAD_BASE = SUPABASE_URL ? `${String(SUPABASE_URL).replace(/\/+$/, "")}/functions/v1/video-download` : "";
+
 const resolveBaseSync = (): string => {
   if (overrideEnabled && overrideBaseUrl) return overrideBaseUrl.replace(/\/+$/, "");
-  return "";
+  return DEFAULT_DOWNLOAD_BASE;
 };
 
 export function buildVideoDownloadUrl(rawUrl: string, rawFileName: string): string | null {
