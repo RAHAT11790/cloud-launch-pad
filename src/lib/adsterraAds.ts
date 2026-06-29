@@ -333,6 +333,33 @@ function removeTrackedNodes() {
   tracked.clear();
 }
 
+function removeKnownAdResidue() {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  const shouldSkip = (el: HTMLElement) => {
+    if (el.id === "root") return true;
+    if (el.closest("[data-sonner-toaster], [data-radix-portal], [data-vaul-drawer]") || el.matches("[data-sonner-toaster], [data-radix-portal], [data-vaul-drawer]")) return true;
+    return false;
+  };
+  const looksLikeAd = (el: HTMLElement) => {
+    const fingerprint = `${el.id || ""} ${el.className || ""} ${el.getAttribute("data-zone") || ""} ${el.getAttribute("data-cfasync") || ""}`.toLowerCase();
+    if (/adsterra|social.?bar|popunder|invoke|atcontainer|ads?[-_]/i.test(fingerprint)) return true;
+    if (el.querySelector('script[src*="adsterra"], script[src*="highperformanceformat"], script[src*="profitabledisplaynetwork"], iframe[src*="adsterra"], iframe[src*="highperformanceformat"], iframe[src*="profitabledisplaynetwork"]')) return true;
+    try {
+      const cs = window.getComputedStyle(el);
+      const zi = Number.parseInt(cs.zIndex || "0", 10);
+      if (cs.position === "fixed" && zi >= 10000 && (el.querySelector("iframe") || /ad|banner|pop|social/i.test(fingerprint))) return true;
+    } catch {}
+    return false;
+  };
+
+  Array.from(document.body.children).forEach((node) => {
+    if (!(node instanceof HTMLElement) || shouldSkip(node)) return;
+    if (isOwnedNode(node) || looksLikeAd(node)) {
+      try { node.remove(); } catch {}
+    }
+  });
+}
+
 function clearRefreshTimer() {
   if (typeof window === "undefined") return;
   if (window.__adsterraRefreshTimer) {
@@ -506,6 +533,7 @@ async function mountAdCycle(cfg: AdsterraConfig, fromTimer = false) {
 
 export function enterAdsterraPlayerScope() {
   if (typeof window === "undefined") return;
+  removeKnownAdResidue();
   window.__adsterraPlayerScopeActive = true;
   installPopunderThrottle();
   installPopunderGestureBridge();
@@ -518,6 +546,9 @@ export function exitAdsterraPlayerScope() {
   clearRefreshTimer();
   stopObserver();
   dismissVisibleAds(false);
+  removeKnownAdResidue();
+  window.setTimeout(removeKnownAdResidue, 250);
+  window.setTimeout(removeKnownAdResidue, 1200);
   try { window.__adsterraContainer?.remove(); } catch {}
   window.__adsterraContainer = null;
   if (window.__adsterraConfigUnsub) {
