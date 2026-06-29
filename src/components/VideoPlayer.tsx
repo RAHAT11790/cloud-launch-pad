@@ -2293,13 +2293,23 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const applyPreferredHlsAudio = () => {
       const tracks = hls.audioTracks || [];
       if (tracks.length === 0) return;
+      // Hard policy: Hindi ALWAYS wins for AN content when present in the
+      // manifest. This overrides whatever `selectedLanguage` was passed in
+      // (which may be a stale "Japanese"/"English" from the anime's stored
+      // default language) so the player opens directly in Hindi.
+      const hindiIdx = tracks.findIndex((track: any) => {
+        const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
+        return /hindi|हिन्दी|हिंदी|\bhin\b/.test(blob);
+      });
       const preferredToken = String(getPrimaryLanguageToken(selectedLanguage) || selectedLanguage || "").toLowerCase();
-      const preferredIdx = preferredToken
-        ? tracks.findIndex((track: any) => {
-            const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
-            return blob.includes(preferredToken);
-          })
-        : -1;
+      const preferredIdx = hindiIdx >= 0
+        ? hindiIdx
+        : (preferredToken
+            ? tracks.findIndex((track: any) => {
+                const blob = `${track?.lang || ""} ${track?.name || ""}`.toLowerCase();
+                return blob.includes(preferredToken);
+              })
+            : -1);
       const defaultIdx = tracks.findIndex((track: any) => track?.default);
       const wanted = preferredIdx >= 0 ? preferredIdx : (defaultIdx >= 0 ? defaultIdx : 0);
       try { hls.audioTrack = wanted; } catch {}
