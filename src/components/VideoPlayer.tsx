@@ -661,6 +661,8 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const [adGateActive, setAdGateActive] = useState(false);
   const adGateActiveRef = useRef(false);
   useEffect(() => { adGateActiveRef.current = adGateActive; }, [adGateActive]);
+  const selectedLanguageRef = useRef(selectedLanguage);
+  useEffect(() => { selectedLanguageRef.current = selectedLanguage; }, [selectedLanguage]);
   const [adLinks, setAdLinks] = useState<{ service: AdService; shortUrl: string }[]>([]);
   const [shortenLoading, setShortenLoading] = useState(false);
   const [adGateError, setAdGateError] = useState("");
