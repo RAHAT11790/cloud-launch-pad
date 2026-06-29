@@ -1,5 +1,5 @@
-import { triggerBackgroundVideoDownload } from "./videoDownload";
-import { estimateHlsSize, isHlsUrl } from "./hlsDownloader";
+import { buildVideoDownloadUrl, triggerBackgroundVideoDownload, unwrapManagedVideoUrl } from "./videoDownload";
+import { downloadHls, estimateHlsSize, isHlsUrl, saveBlobAs, toHlsFileName } from "./hlsDownloader";
 
 export type DownloadStatus = "queued" | "downloading" | "paused" | "complete" | "error" | "cancelled";
 
@@ -74,6 +74,13 @@ interface ItemTimers {
   finish?: number;
 }
 
+const SIZE_CACHE_KEY = "rs_dl_size_cache_v1";
+const bytesToMb = (bytes: number) => bytes > 0 ? bytes / (1024 * 1024) : 0;
+const isAbortError = (error: unknown) => {
+  const name = (error as { name?: string })?.name || "";
+  return name === "AbortError" || /aborted/i.test(String((error as { message?: string })?.message || error || ""));
+};
+
 class DownloadManager {
   private downloads = new Map<string, ActiveDownload>();
   private listeners = new Set<Subscriber>();
@@ -81,6 +88,7 @@ class DownloadManager {
   private activeIds = new Set<string>();
   private lastStartedId: string | null = null;
   private timers = new Map<string, ItemTimers>();
+  private controllers = new Map<string, AbortController>();
   private sequence = 0;
 
   private isProxyDownloadUrl(url: string) {
@@ -99,6 +107,68 @@ class DownloadManager {
       }
     } catch {}
     return 0;
+  }
+
+  private readCachedSize(url: string): number {
+    try {
+      const cache = JSON.parse(localStorage.getItem(SIZE_CACHE_KEY) || "{}");
+      const bytes = Number(cache?.[url] || 0);
+      return Number.isFinite(bytes) && bytes > 0 ? bytes : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  private writeCachedSize(url: string, bytes: number) {
+    if (!url || !bytes || bytes <= 0) return;
+    try {
+      const cache = JSON.parse(localStorage.getItem(SIZE_CACHE_KEY) || "{}");
+      cache[url] = Math.round(bytes);
+      localStorage.setItem(SIZE_CACHE_KEY, JSON.stringify(cache));
+    } catch {}
+  }
+
+  private resolveHttpDownloadUrl(url: string, fileName: string) {
+    const raw = String(url || "").trim();
+    if (!raw || raw.toLowerCase().startsWith("data:") || isHlsUrl(raw)) return raw;
+    if (/^https?:\/\//i.test(raw)) return buildVideoDownloadUrl(raw, fileName) || unwrapManagedVideoUrl(raw) || raw;
+    return raw;
+  }
+
+  private async downloadHttpBlob(
+    url: string,
+    fileName: string,
+    signal: AbortSignal,
+    onProgress: (loadedBytes: number, totalBytes: number) => void,
+  ): Promise<Blob> {
+    const finalUrl = this.resolveHttpDownloadUrl(url, fileName);
+    if (!finalUrl || !/^https?:\/\//i.test(finalUrl)) throw new Error("Download link is invalid");
+
+    const response = await fetch(finalUrl, { signal, mode: "cors" });
+    if (!response.ok) throw new Error(`Download failed (${response.status})`);
+
+    const contentRange = response.headers.get("content-range") || "";
+    const rangeMatch = /\/(\d+)\s*$/.exec(contentRange);
+    const totalBytes = rangeMatch ? Number(rangeMatch[1]) : Number(response.headers.get("content-length") || 0);
+
+    if (!response.body) {
+      const blob = await response.blob();
+      onProgress(blob.size, totalBytes || blob.size);
+      return blob;
+    }
+
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let loadedBytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      chunks.push(value);
+      loadedBytes += value.byteLength;
+      onProgress(loadedBytes, totalBytes || 0);
+    }
+    return new Blob(chunks as unknown as BlobPart[], { type: response.headers.get("content-type") || "application/octet-stream" });
   }
 
   private getSnapshot(): DownloadQueueSnapshot {
@@ -132,6 +202,11 @@ class DownloadManager {
     this.timers.delete(id);
   }
 
+  private abortItem(id: string) {
+    try { this.controllers.get(id)?.abort(); } catch {}
+    this.controllers.delete(id);
+  }
+
   private settleItem(id: string, status: DownloadStatus, patch: Partial<ActiveDownload> = {}) {
     this.clearItemTimers(id);
     const current = this.downloads.get(id);
@@ -145,6 +220,7 @@ class DownloadManager {
         ...patch,
       });
     }
+    this.controllers.delete(id);
     this.activeIds.delete(id);
     if (this.lastStartedId === id) this.lastStartedId = null;
     this.emit();
@@ -154,10 +230,18 @@ class DownloadManager {
   private async fetchTotalSize(url: string): Promise<number> {
     const candidate = String(url || "").trim();
     if (!candidate) return 0;
+    const cached = this.readCachedSize(candidate);
+    if (cached > 0) return cached;
     if (isHlsUrl(candidate)) {
-      try { return await estimateHlsSize(candidate, 8); } catch { return 0; }
+      try {
+        const bytes = await estimateHlsSize(candidate, 8);
+        if (bytes > 0) this.writeCachedSize(candidate, bytes);
+        return bytes;
+      } catch { return 0; }
     }
     if (candidate.toLowerCase().startsWith("data:")) return decodeDataUriBytes(candidate);
+    const resolved = this.resolveHttpDownloadUrl(candidate, "probe.mp4");
+    const probeTarget = resolved || candidate;
     const probePlans: RequestInit[] = this.isProxyDownloadUrl(candidate)
       ? [
           { method: "HEAD", mode: "cors" },
@@ -170,10 +254,101 @@ class DownloadManager {
         ];
 
     for (const init of probePlans) {
-      const length = await this.fetchContentLength(candidate, init);
-      if (length > 0) return length;
+      const length = await this.fetchContentLength(probeTarget, init);
+      if (length > 0) {
+        this.writeCachedSize(candidate, length);
+        return length;
+      }
     }
     return 0;
+  }
+
+  private prefetchTotalSize(id: string, url?: string) {
+    if (!url) return;
+    const cached = this.readCachedSize(url);
+    if (cached > 0) {
+      this.update(id, { totalMB: bytesToMb(cached) });
+      return;
+    }
+    this.fetchTotalSize(url).then((bytes) => {
+      const latest = this.downloads.get(id);
+      if (!latest || latest.status === "cancelled") return;
+      if (bytes > 0) this.update(id, { totalMB: bytesToMb(bytes) });
+    }).catch(() => {});
+  }
+
+  private async runItemDownload(id: string, controller: AbortController) {
+    const item = this.downloads.get(id);
+    if (!item || item.status !== "downloading" || !item.url) return;
+
+    const rawUrl = String(item.url || "").trim();
+    let fileName = item.fileName || buildFileName(item.title, item.subtitle, item.quality);
+    const isHls = isHlsUrl(rawUrl);
+    if (isHls) fileName = toHlsFileName(fileName);
+    this.update(id, { fileName, percent: 1, loadedMB: 0 });
+
+    try {
+      if (isHls) {
+        const cached = this.readCachedSize(rawUrl);
+        if (cached > 0) this.update(id, { totalMB: bytesToMb(cached) });
+
+        this.fetchTotalSize(rawUrl).then((bytes) => {
+          const latest = this.downloads.get(id);
+          if (!latest || latest.status !== "downloading" || controller.signal.aborted) return;
+          if (bytes > 0) this.update(id, { totalMB: bytesToMb(bytes) });
+        }).catch(() => {});
+
+        const blob = await downloadHls(rawUrl, (loaded, total, bytes) => {
+          const latest = this.downloads.get(id);
+          if (!latest || latest.status !== "downloading") return;
+          const percent = total > 0 ? Math.min(98, Math.max(1, Math.round((loaded / total) * 96))) : latest.percent;
+          const knownTotalBytes = latest.totalMB > 1 ? latest.totalMB * 1024 * 1024 : 0;
+          const estimatedTotal = knownTotalBytes || (loaded > 0 && total > 0 ? Math.round(bytes / (loaded / total)) : bytes);
+          this.update(id, {
+            percent,
+            loadedMB: bytesToMb(bytes),
+            totalMB: Math.max(bytesToMb(estimatedTotal), bytesToMb(bytes), latest.totalMB || 1),
+          });
+        }, controller.signal);
+
+        if (controller.signal.aborted) return;
+        saveBlobAs(blob, fileName);
+        this.writeCachedSize(rawUrl, blob.size);
+        this.settleItem(id, "complete", { percent: 100, loadedMB: bytesToMb(blob.size), totalMB: bytesToMb(blob.size) });
+        return;
+      }
+
+      const blob = await this.downloadHttpBlob(rawUrl, fileName, controller.signal, (loadedBytes, totalBytes) => {
+        const latest = this.downloads.get(id);
+        if (!latest || latest.status !== "downloading") return;
+        const percent = totalBytes > 0 ? Math.min(98, Math.max(1, Math.round((loadedBytes / totalBytes) * 98))) : Math.min(95, latest.percent + 1);
+        this.update(id, {
+          percent,
+          loadedMB: bytesToMb(loadedBytes),
+          totalMB: totalBytes > 0 ? bytesToMb(totalBytes) : Math.max(latest.totalMB, bytesToMb(loadedBytes), 1),
+        });
+      });
+
+      if (controller.signal.aborted) return;
+      saveBlobAs(blob, fileName);
+      this.writeCachedSize(rawUrl, blob.size);
+      this.settleItem(id, "complete", { percent: 100, loadedMB: bytesToMb(blob.size), totalMB: bytesToMb(blob.size) });
+    } catch (error) {
+      const latest = this.downloads.get(id);
+      if (controller.signal.aborted || !latest || latest.status === "paused" || latest.status === "cancelled" || isAbortError(error)) return;
+
+      if (!isHls && triggerBackgroundVideoDownload(rawUrl, fileName)) {
+        const size = latest.totalMB > 1 ? latest.totalMB : Math.max(latest.loadedMB, 1);
+        this.settleItem(id, "complete", { percent: 100, loadedMB: size, totalMB: size });
+        return;
+      }
+
+      this.settleItem(id, "error", {
+        error: String((error as { message?: string })?.message || "Download failed"),
+      });
+    } finally {
+      if (this.controllers.get(id) === controller) this.controllers.delete(id);
+    }
   }
 
   private startItem(id: string) {
@@ -189,23 +364,18 @@ class DownloadManager {
     this.downloads.set(id, {
       ...item,
       status: "downloading",
-      percent: 12,
-      loadedMB: 0.2,
+      percent: 1,
+      loadedMB: 0,
       totalMB: Math.max(item.totalMB, 1),
     });
     this.emit();
 
-    if (item.url) {
-      this.fetchTotalSize(item.url).then((bytes) => {
-        if (bytes > 0) {
-          const mb = bytes / (1024 * 1024);
-          this.update(id, { totalMB: mb });
-        }
-      }).catch(() => {});
-    }
+    this.prefetchTotalSize(id, item.url);
 
     const timers: ItemTimers = {};
     this.timers.set(id, timers);
+    const controller = new AbortController();
+    this.controllers.set(id, controller);
 
     // Stagger trigger slightly per item so the browser registers each
     // download dialog as a distinct user-initiated download.
@@ -213,19 +383,7 @@ class DownloadManager {
     timers.trigger = window.setTimeout(() => {
       const latest = this.downloads.get(id);
       if (!latest || latest.status !== "downloading") return;
-      const ok = triggerBackgroundVideoDownload(latest.url as unknown as string, latest.fileName || buildFileName(latest.title, latest.subtitle, latest.quality));
-      if (!ok) {
-        this.settleItem(id, "error", { error: "Download link is invalid" });
-        return;
-      }
-
-      const t = latest.totalMB > 1 ? latest.totalMB : 1;
-      this.update(id, { percent: 72, loadedMB: t * 0.72, totalMB: t });
-      timers.finish = window.setTimeout(() => {
-        const final = this.downloads.get(id);
-        const fT = final && final.totalMB > 1 ? final.totalMB : 1;
-        this.settleItem(id, "complete", { percent: 100, loadedMB: fT, totalMB: fT });
-      }, 900);
+      void this.runItemDownload(id, controller);
     }, 220 + offset);
   }
 
@@ -269,6 +427,7 @@ class DownloadManager {
 
   pauseDownload(id: string) {
     if (this.activeIds.has(id)) {
+      this.abortItem(id);
       this.clearItemTimers(id);
       this.activeIds.delete(id);
       if (this.lastStartedId === id) this.lastStartedId = null;
@@ -293,6 +452,7 @@ class DownloadManager {
 
   cancelDownload(id: string) {
     if (this.activeIds.has(id)) {
+      this.abortItem(id);
       this.settleItem(id, "cancelled", { percent: 0, loadedMB: 0, totalMB: 0 });
       return;
     }
@@ -332,6 +492,7 @@ class DownloadManager {
     });
     this.queue.push(params.id);
     this.emit();
+    this.prefetchTotalSize(params.id, params.url);
     this.pump();
   }
 
@@ -357,6 +518,7 @@ class DownloadManager {
     });
     this.queue.push(params.id);
     this.emit();
+    this.prefetchTotalSize(params.id, params.url);
     this.pump();
   }
 
@@ -386,13 +548,15 @@ class DownloadManager {
         fileName,
       });
       this.queue.push(params.id);
+      this.prefetchTotalSize(params.id, params.url);
     });
     this.emit();
     this.pump();
   }
 
   /**
-   * UI-only registration.
+   * Register an externally requested download and run it through the same real
+   * downloader so RS bulk items also get progress, size, and a saved file.
    */
   registerExternalDownload(params: DownloadParams) {
     const fileName = params.fileName || buildFileName(params.title, params.subtitle, params.quality);
@@ -404,16 +568,19 @@ class DownloadManager {
       subtitle: params.subtitle,
       poster: params.poster,
       quality: params.quality,
-      percent: 100,
-      loadedMB: 1,
+      percent: 0,
+      loadedMB: 0,
       totalMB: 1,
-      status: "complete",
+      status: "queued",
       sequence: this.sequence,
       queueIndex: 1,
       totalInBatch: 1,
       fileName,
     });
+    this.queue.push(params.id);
     this.emit();
+    this.prefetchTotalSize(params.id, params.url);
+    this.pump();
   }
 }
 
