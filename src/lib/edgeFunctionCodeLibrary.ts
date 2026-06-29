@@ -67,7 +67,7 @@ const entry = (
   description: string,
   source: string,
   extraSecrets: string[] = [],
-  options: { isNew?: boolean } = {},
+  options: { isNew?: boolean; badgeText?: string; badgeTone?: "emerald" | "cyan" | "amber" } = {},
 ): EdgeFnLibraryEntry => ({
   slug,
   label,
@@ -75,6 +75,8 @@ const entry = (
   source,
   secrets: autoDetectSecrets(source, extraSecrets),
   isNew: options.isNew,
+  badgeText: options.badgeText,
+  badgeTone: options.badgeTone,
 });
 
 // Only functions the admin self-deploys via EGD Manager are listed here.
@@ -83,7 +85,7 @@ const entry = (
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
   entry("video-proxy",    "Video Proxy",    "HTTP-only fast video/HLS proxy with playlist rewriting. No scripts, no protection. HTTPS plays directly without the proxy.", videoProxySource, [], { isNew: true }),
-  entry("an-api",         "AN API (AnimeSalt)", "NEW ultra-fast AnimeSalt API — stable episodes, no subtitles, edge memory cache, direct HTTPS stream metadata, Hindi audio pre-detected for rocket playback.", anApiSource, [], { isNew: true }),
+  entry("an-api",         "AN API (AnimeSalt)", "Single AnimeSalt API powering BOTH admin fetching AND user-panel video playback (live signed URL refresh, multi-season AJAX harvest, Hindi-first audio, HLS proxy). Deploy this and paste the URL in EGD Router → AN API to switch playback to your own deployment.", anApiSource, [], { badgeText: "AN API WORKING", badgeTone: "emerald" }),
   entry("video-download", "Video Download", "Dedicated, retry-hardened download proxy (recommended for downloads).", videoDownloadSource),
   entry("live-tv-proxy",  "Live TV Proxy",  "Dedicated HLS proxy for Live TV channels.", liveTvProxySource),
   entry("telegram-post",  "Telegram Post",  "Posts new episodes to your Telegram channel.", telegramPostSource),
