@@ -295,42 +295,16 @@ class DownloadManager {
     }
 
     const rawUrl = String(item.url || "").trim();
-    let fileName = item.fileName || buildFileName(item.title, item.subtitle, item.quality);
-    const isHls = isHlsUrl(rawUrl);
-    if (isHls) fileName = toHlsFileName(fileName);
+    const fileName = item.fileName || buildFileName(item.title, item.subtitle, item.quality);
+
+    if (isHlsUrl(rawUrl)) {
+      this.settleItem(id, "error", { error: AN_DOWNLOAD_BLOCK_MESSAGE });
+      return;
+    }
+
     this.update(id, { fileName, percent: 1, loadedMB: 0 });
 
     try {
-      if (isHls) {
-        const cached = this.readCachedSize(rawUrl);
-        if (cached > 0) this.update(id, { totalMB: bytesToMb(cached) });
-
-        this.fetchTotalSize(rawUrl).then((bytes) => {
-          const latest = this.downloads.get(id);
-          if (!latest || latest.status !== "downloading" || controller.signal.aborted) return;
-          if (bytes > 0) this.update(id, { totalMB: bytesToMb(bytes) });
-        }).catch(() => {});
-
-        const blob = await downloadHls(rawUrl, (loaded, total, bytes) => {
-          const latest = this.downloads.get(id);
-          if (!latest || latest.status !== "downloading") return;
-          const percent = total > 0 ? Math.min(98, Math.max(1, Math.round((loaded / total) * 96))) : latest.percent;
-          const knownTotalBytes = latest.totalMB > 1 ? latest.totalMB * 1024 * 1024 : 0;
-          const estimatedTotal = knownTotalBytes || (loaded > 0 && total > 0 ? Math.round(bytes / (loaded / total)) : bytes);
-          this.update(id, {
-            percent,
-            loadedMB: bytesToMb(bytes),
-            totalMB: Math.max(bytesToMb(estimatedTotal), bytesToMb(bytes), latest.totalMB || 1),
-          });
-        }, controller.signal);
-
-        if (controller.signal.aborted) return;
-        saveBlobAs(blob, fileName);
-        this.writeCachedSize(rawUrl, blob.size);
-        this.settleItem(id, "complete", { percent: 100, loadedMB: bytesToMb(blob.size), totalMB: bytesToMb(blob.size) });
-        return;
-      }
-
       const blob = await this.downloadHttpBlob(rawUrl, fileName, controller.signal, (loadedBytes, totalBytes) => {
         const latest = this.downloads.get(id);
         if (!latest || latest.status !== "downloading") return;
@@ -340,6 +314,24 @@ class DownloadManager {
           loadedMB: bytesToMb(loadedBytes),
           totalMB: totalBytes > 0 ? bytesToMb(totalBytes) : Math.max(latest.totalMB, bytesToMb(loadedBytes), 1),
         });
+      });
+
+      if (controller.signal.aborted) return;
+      saveHttpBlob(blob, fileName);
+      this.writeCachedSize(rawUrl, blob.size);
+      this.settleItem(id, "complete", { percent: 100, loadedMB: bytesToMb(blob.size), totalMB: bytesToMb(blob.size) });
+    } catch (error) {
+      const latest = this.downloads.get(id);
+      if (controller.signal.aborted || !latest || latest.status === "paused" || latest.status === "cancelled" || isAbortError(error)) return;
+
+      if (triggerBackgroundVideoDownload(rawUrl, fileName)) {
+        const size = latest.totalMB > 1 ? latest.totalMB : Math.max(latest.loadedMB, 1);
+        this.settleItem(id, "complete", { percent: 100, loadedMB: size, totalMB: size });
+        return;
+      }
+
+      this.settleItem(id, "error", {
+        error: String((error as { message?: string })?.message || "Download failed"),
       });
 
       if (controller.signal.aborted) return;
