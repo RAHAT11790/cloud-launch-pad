@@ -2690,13 +2690,19 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   // to "Auto" within ~1s of switching. We only want a true episode change to
   // reset the player state.
   const lastSourceFingerprintRef = useRef<string>("");
+  const lastEpisodeKeyRef = useRef<string>("");
   useEffect(() => {
     if (!playbackRouteReady) return;
-    const nextFingerprint = `${src}__${currentSeasonIdx ?? "movie"}__${currentEpisodeIdx ?? "movie"}`;
+    const episodeKey = `${(anime as any)?.id ?? ""}__${currentSeasonIdx ?? "movie"}__${currentEpisodeIdx ?? "movie"}`;
+    const nextFingerprint = `${src}__${episodeKey}`;
     if (lastSourceFingerprintRef.current === nextFingerprint) return; // same episode/movie source
+    // If only `src` changed for the SAME episode (e.g. AN live URL refresh),
+    // preserve playback position so pause→resume / URL refresh never restarts
+    // from 0.
+    const sameEpisodeUrlRefresh =
+      lastSourceFingerprintRef.current !== "" && lastEpisodeKeyRef.current === episodeKey;
     lastSourceFingerprintRef.current = nextFingerprint;
-    // Ultra-fast episode switch: do NOT pause/blank the player. Just swap src
-    // and let the video element load the new source while keeping the UI alive.
+    lastEpisodeKeyRef.current = episodeKey;
     instantSwitchRef.current = true;
     const nextQualityOptions: QualityOption[] = [{ label: "Auto", src }, ...(qualityOptions || []).filter((q) => q.src)];
     const preservedQuality = manualQualitySelectedRef.current && currentQuality !== "Auto"
@@ -2708,6 +2714,13 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     const rememberedServerIndex = typeof preferredServerIndexRef.current === "number" ? preferredServerIndexRef.current : activeServerIndex;
     const targetServerIndex = !isFastHlsSource && hadManualServer && effectiveVideoServers.length
       ? Math.min(Math.max(rememberedServerIndex, 0), effectiveVideoServers.length - 1)
+      : 0;
+
+    // Snapshot current playhead BEFORE swapping src so we can restore it for
+    // URL refreshes on the same episode.
+    const _v = videoRef.current;
+    const preservedTime = sameEpisodeUrlRefresh && _v && Number.isFinite(_v.currentTime) && _v.currentTime > 1
+      ? _v.currentTime
       : 0;
 
     sourceBaseRef.current = baseRawSrc;
@@ -2728,19 +2741,24 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
     retryAttemptsRef.current.clear();
     setVideoError(false);
     failedSrcsRef.current.clear();
-    const seekTarget = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : 0;
+    const explicitSeek = typeof initialSeekTime === "number" && initialSeekTime > 0 ? initialSeekTime : 0;
+    const seekTarget = explicitSeek || preservedTime || 0;
     pendingSeek.current = seekTarget;
-    // FORCE-RESET currentTime when switching episodes with no resume requested —
-    // otherwise the <video> element retains the previous episode's playhead and
-    // the new episode appears to "start" 22 minutes in.
-    const _v = videoRef.current;
-    if (_v && seekTarget === 0) {
-      try { _v.currentTime = 0; } catch {}
-      const onMetaReset = () => {
-        try { if (pendingSeek.current === 0 || pendingSeek.current === null) _v.currentTime = 0; } catch {}
-        _v.removeEventListener("loadedmetadata", onMetaReset);
-      };
-      _v.addEventListener("loadedmetadata", onMetaReset);
+    if (_v) {
+      if (seekTarget > 0) {
+        const onMetaSeek = () => {
+          try { _v.currentTime = seekTarget; } catch {}
+          _v.removeEventListener("loadedmetadata", onMetaSeek);
+        };
+        _v.addEventListener("loadedmetadata", onMetaSeek);
+      } else {
+        try { _v.currentTime = 0; } catch {}
+        const onMetaReset = () => {
+          try { if (pendingSeek.current === 0 || pendingSeek.current === null) _v.currentTime = 0; } catch {}
+          _v.removeEventListener("loadedmetadata", onMetaReset);
+        };
+        _v.addEventListener("loadedmetadata", onMetaReset);
+      }
     }
     setSwitchingEpisode(true);
     const t = setTimeout(() => {
@@ -2748,7 +2766,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
       setSwitchingEpisode(false);
     }, 80);
     return () => clearTimeout(t);
-  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, getServerScopedSource, initialSeekTime, currentSeasonIdx, currentEpisodeIdx, currentQuality, activeServerIndex, effectiveVideoServers.length]);
+  }, [src, qualityOptions, noProxy, playbackRouteReady, resolvePlaybackSrc, getServerScopedSource, initialSeekTime, currentSeasonIdx, currentEpisodeIdx, currentQuality, activeServerIndex, effectiveVideoServers.length, anime]);
 
   useEffect(() => {
     if (!playbackRouteReady || !activeSourceBaseRef.current) return;
