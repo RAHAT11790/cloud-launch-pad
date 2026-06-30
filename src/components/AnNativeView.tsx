@@ -1,15 +1,15 @@
 // ============================================================
 // AnNativeView — native HLS player for AN content (no iframe).
 //
-// Given already-saved Firebase AnimeSalt HLS data, this component:
+// Given AN HLS data freshly resolved from the live AnimeSalt API
+// (Index.tsx -> animeSaltApi), this component:
 //   1. Builds a synthesized HLS master playlist (data: URL) that combines
-//      ONE video variant + ALL stored audio renditions.
-//   2. Plays direct Firebase-stored URLs in a native <video> via hls.js.
-//      Runtime playback must never call AN API/proxy; Admin fetch is the only
-//      place where AnimeSalt API is allowed to populate Firebase.
-//   3. Quality switching rebuilds the
-//      master (preserves currentTime + audio track) — fixed-quality model,
-//      no ABR. Audio switching uses the hls.js audioTrack API (instant).
+//      ONE video variant + ALL provided audio renditions.
+//   2. Plays the API-returned URLs in a native <video> via hls.js.
+//      No Firebase reads — playback is 100% API-driven so links never go stale.
+//   3. Quality switching rebuilds the master (preserves currentTime + audio
+//      track) — fixed-quality model, no ABR. Audio switching uses the
+//      hls.js audioTrack API (instant).
 //
 // Falls back via onFail() if extraction returns no streams or hls errors.
 // ============================================================
