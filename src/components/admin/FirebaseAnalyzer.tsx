@@ -343,24 +343,6 @@ function FirebaseAnalyticsActions({
 
   return (
     <div className="space-y-2">
-      <button
-        onClick={purgeLegacyAn}
-        disabled={busy !== null}
-        className="flex min-h-[58px] w-full items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-left text-emerald-50 transition-colors hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-        type="button"
-      >
-        <span className="inline-flex min-w-0 items-center gap-3">
-          <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-emerald-400/15 text-emerald-200">
-            {busy === "legacy-an" ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-black">Safe AN Cleanup</span>
-            <span className="block truncate text-[11px] text-emerald-100/70">Deletes AnimeSalt/AN only from Web Series, Movies, New Releases, and admin index. RS stays protected.</span>
-          </span>
-        </span>
-        <span className="rounded-full bg-emerald-300/15 px-2 py-1 text-[10px] font-bold text-emerald-100">{legacyRoots.length} roots</span>
-      </button>
-      {legacyProgress && <p className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[11px] text-emerald-100">{legacyProgress}</p>}
       <div className="grid gap-2 sm:grid-cols-2">
         {buttons.map((button) => (
           <button
@@ -381,6 +363,7 @@ function FirebaseAnalyticsActions({
     </div>
   );
 }
+
 
 const RootBrowser = memo(function RootBrowser({ btnSecondary }: { btnSecondary: string }) {
   const [rootKeys, setRootKeys] = useState<string[]>([]);
