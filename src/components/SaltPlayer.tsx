@@ -306,29 +306,34 @@ export default function SaltPlayer({ saltPlayerState, setSaltPlayerState, getCle
   // perceived latency. Fullscreen exit + orientation unlock are kicked off
   // in parallel (fire-and-forget) instead of awaited.
   const handleClose = useCallback(() => {
+    // Stage 1: if we're fullscreen / landscape, just exit fullscreen first
+    // so the user lands back on the half-screen portrait view instantly.
+    // Stage 2 (second press): actually close the player and go home.
+    if (isFullscreen || document.fullscreenElement) {
+      try { (screen.orientation as any).unlock?.(); } catch {}
+      try { document.exitFullscreen?.().catch(() => {}); } catch {}
+      return;
+    }
     // Clear timers first so nothing fires post-unmount.
     if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null; }
     // Unmount synchronously — React swaps to home in the same frame.
     setSaltPlayerState(null);
-    // Then release fullscreen / orientation in the background.
+    // Release orientation lock in the background.
     queueMicrotask(() => {
       try { (screen.orientation as any).unlock?.(); } catch {}
-      if (document.fullscreenElement) {
-        try { document.exitFullscreen().catch(() => {}); } catch {}
-      }
     });
-  }, [setSaltPlayerState]);
+  }, [isFullscreen, setSaltPlayerState]);
 
   return (
     <div ref={containerRef} className="fixed inset-0 z-[9999] bg-background flex flex-col overflow-hidden">
       {/* Close button - auto-hides with controls in fullscreen */}
       <button
-        onClick={handleClose}
+        onPointerDown={(e) => { e.preventDefault(); handleClose(); }}
         aria-label="Close player"
         className={`absolute top-3 right-3 z-[60] w-9 h-9 rounded-xl bg-black/70 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-destructive/80 active:scale-90 transition-all duration-200 shadow-lg ${
           isFullscreen && !showControls ? 'opacity-0 pointer-events-none -translate-y-2' : 'opacity-100 translate-y-0'
         }`}
-        style={{ pointerEvents: isFullscreen && !showControls ? 'none' : 'auto' }}
+        style={{ pointerEvents: isFullscreen && !showControls ? 'none' : 'auto', touchAction: 'manipulation' }}
       >
         <X className="w-[18px] h-[18px] text-white" strokeWidth={2.4} />
       </button>
