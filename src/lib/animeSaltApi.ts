@@ -516,24 +516,51 @@ export const animeSaltApi = {
     return { success: true, items: parseListPage(html) };
   },
 
-  async browseAll() {
+  async browseAll(maxPages = 40) {
     const proxyUrl = await getAnimeSaltProxyUrl();
-    const [seriesDirect, moviesDirect] = await Promise.all([
-      tryDirectApi(proxyUrl, { action: 'browse', type: 'series', page: 1 }),
-      tryDirectApi(proxyUrl, { action: 'browse', type: 'movies', page: 1 }),
-    ]);
 
-    const sItems = (seriesDirect?.items || []).map((it: any) => ({ ...it, type: 'series' }));
-    const mItems = (moviesDirect?.items || []).map((it: any) => ({ ...it, type: 'movies' }));
-    if (sItems.length || mItems.length) return { success: true, items: [...sItems, ...mItems] };
+    const fetchType = async (type: 'series' | 'movies') => {
+      const all: any[] = [];
+      const seen = new Set<string>();
+      const CONCURRENCY = 6;
+      let stop = false;
+      let nextPage = 1;
+      const tryPage = async (page: number) => {
+        try {
+          const direct = await tryDirectApi(proxyUrl, { action: 'browse', type, page });
+          let items = direct?.items as any[] | undefined;
+          if (!items || !items.length) {
+            const url = page > 1 ? `${ANIMESALT_BASE}/${type}/page/${page}/` : `${ANIMESALT_BASE}/${type}/`;
+            const html = await fetchPage(url).catch(() => '');
+            items = html ? parseListPage(html) : [];
+          }
+          if (!items || !items.length) return 0;
+          let added = 0;
+          for (const it of items) {
+            const slug = String(it?.slug || '').trim();
+            if (!slug || seen.has(slug)) continue;
+            seen.add(slug);
+            all.push({ ...it, type });
+            added++;
+          }
+          return added;
+        } catch {
+          return 0;
+        }
+      };
 
-    const [seriesHtml, moviesHtml] = await Promise.all([
-      fetchPage(`${ANIMESALT_BASE}/series/`),
-      fetchPage(`${ANIMESALT_BASE}/movies/`),
-    ]);
-    const sParsed = parseListPage(seriesHtml).map((it) => ({ ...it, type: 'series' }));
-    const mParsed = parseListPage(moviesHtml).map((it) => ({ ...it, type: 'movies' }));
-    return { success: true, items: [...sParsed, ...mParsed] };
+      while (!stop && nextPage <= maxPages) {
+        const batch = Array.from({ length: CONCURRENCY }, (_, i) => nextPage + i).filter((p) => p <= maxPages);
+        nextPage += CONCURRENCY;
+        const results = await Promise.all(batch.map(tryPage));
+        // Stop when any page in the batch returned 0 items (end of list reached)
+        if (results.some((n) => n === 0)) stop = true;
+      }
+      return all;
+    };
+
+    const [sItems, mItems] = await Promise.all([fetchType('series'), fetchType('movies')]);
+    return { success: true, items: [...sItems, ...mItems] };
   },
 
   async getSeries(slug: string, forceRefresh = false) {
