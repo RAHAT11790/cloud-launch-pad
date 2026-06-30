@@ -415,6 +415,13 @@ import NewEpisodeReleases from "@/components/NewEpisodeReleases";
 import LoginPage from "@/components/LoginPage";
 import { useFirebaseData } from "@/hooks/useFirebaseData";
 import { useSelectedAnimeSalt } from "@/hooks/useSelectedAnimeSalt";
+import {
+  resolveAnEpisodePlayback,
+  resolveAnMoviePlayback,
+  resolveAnSeriesSeasons,
+  isAnimeSaltSentinel,
+  slugFromSentinel,
+} from "@/lib/anLivePlayback";
 import LiveSupportChat from "@/components/LiveSupportChat";
 import LiveTvPage from "@/components/LiveTvPage";
 import { initializeUiTheme } from "@/lib/uiTheme";
