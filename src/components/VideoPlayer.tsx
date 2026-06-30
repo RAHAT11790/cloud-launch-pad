@@ -4050,7 +4050,6 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
               : "w-full rounded-none aspect-video sticky top-0 z-40"
           }`}
           style={{
-            filter: `brightness(${brightness})`,
             margin: isFullscreen ? 0 : undefined,
             transform: fullscreenSwipeY ? `translate3d(0, ${fullscreenSwipeY}px, 0) scale(${fullscreenSwipeY < 0 ? 1.012 : 0.992})` : undefined,
             transition: fullscreenSwipeY ? "none" : "transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1)",
