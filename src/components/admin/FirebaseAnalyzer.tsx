@@ -298,7 +298,7 @@ function FirebaseAnalyticsActions({
         const unknown = keys.filter((key) => !candidateSet.has(key));
         for (let index = 0; index < unknown.length; index += 16) {
           const chunk = unknown.slice(index, index + 16);
-          const values = await Promise.all(chunk.map(async (key) => [key, await firebaseRestGet<any>(`${rootPath}/${key}`).catch(() => null)] as const));
+          const values = await Promise.all(chunk.map(async (key) => [key, await get(ref(db, `${rootPath}/${key}`)).then((snap) => snap.val()).catch(() => null)] as const));
           values.forEach(([key, value]) => { if (isLegacyAnEntry(key, value)) candidateSet.add(key); });
           setLegacyProgress(`${rootPath}: scanned ${Math.min(index + chunk.length, unknown.length)}/${unknown.length}, found ${candidateSet.size}`);
           await sleepFrame();
@@ -317,7 +317,7 @@ function FirebaseAnalyticsActions({
         const unknown = keys.filter((key) => !candidateSet.has(key));
         for (let index = 0; index < unknown.length; index += 32) {
           const chunk = unknown.slice(index, index + 32);
-          const values = await Promise.all(chunk.map(async (key) => [key, await firebaseRestGet<any>(`${path}/${key}`).catch(() => null)] as const));
+          const values = await Promise.all(chunk.map(async (key) => [key, await get(ref(db, `${path}/${key}`)).then((snap) => snap.val()).catch(() => null)] as const));
           values.forEach(([key, value]) => { if (isLegacyAnEntry(key, value)) candidateSet.add(key); });
           await sleepFrame();
         }
