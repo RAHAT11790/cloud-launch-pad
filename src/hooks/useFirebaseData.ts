@@ -11,6 +11,26 @@ const BACKFILL_PAGE_SIZE = 4;
 const BACKFILL_CACHE_LIMIT = 500;
 const MAX_CACHE_BYTES = 2_500_000;
 
+// AN (AnimeSalt) now runs 100% via live API. Any legacy AN entry that lingers in
+// Firebase or localStorage cache must be stripped at the source so it can never
+// leak into the user UI, regardless of which render path consumes it.
+const isLegacyAn = (item: any): boolean => {
+  if (!item || typeof item !== "object") return false;
+  const id = String(item.id || "");
+  return (
+    !!item.anSlug ||
+    !!item.animeSaltSlug ||
+    item.source === "animesalt" ||
+    item.sourceName === "AnimeSalt" ||
+    item.displayAs === "an" ||
+    id.startsWith("an_") ||
+    id.startsWith("an_mv_") ||
+    id.startsWith("as_")
+  );
+};
+const stripLegacy = <T,>(arr: T[] | undefined | null): T[] =>
+  Array.isArray(arr) ? (arr.filter((x) => !isLegacyAn(x)) as T[]) : [];
+
 const readCache = <T,>(key: string, fallback: T): T => {
   try {
     const raw = localStorage.getItem(key);
@@ -25,6 +45,7 @@ const readCache = <T,>(key: string, fallback: T): T => {
 const writeCache = (key: string, value: unknown) => {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 };
+
 
 const scheduleIdle = (callback: () => void) => {
   const idle = (window as any).requestIdleCallback;
