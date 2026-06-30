@@ -5,7 +5,7 @@ import type { AnimeItem } from "@/data/animeData";
 import AdsterraAdManager from "@/components/AdsterraAdManager";
 import AnNativeView from "@/components/AnNativeView";
 import type { AnNativeResolvedData } from "@/components/AnNativeView";
-// AN now runs purely on the live API — no Firebase reads for playback.
+import { db, ref, onValue } from "@/lib/firebase"; // user-account reads only (premium, watch-history) — never for AN media
 
 
 
