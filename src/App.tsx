@@ -25,8 +25,19 @@ installUiGuard();
 
 
 
-const Admin = lazy(() => import("./pages/Admin"));
-const AnExplorer = lazy(() => import("./pages/AnExplorer"));
+const lazyWithReload = <T,>(factory: () => Promise<{ default: T }>) =>
+  lazy(() => factory().catch((err) => {
+    const key = "rs_chunk_reload_ts";
+    const last = Number(sessionStorage.getItem(key) || 0);
+    if (Date.now() - last > 10_000) {
+      sessionStorage.setItem(key, String(Date.now()));
+      window.location.reload();
+    }
+    throw err;
+  }));
+
+const Admin = lazyWithReload(() => import("./pages/Admin"));
+const AnExplorer = lazyWithReload(() => import("./pages/AnExplorer"));
 const queryClient = new QueryClient();
 
 const RouteFallback = () => (
