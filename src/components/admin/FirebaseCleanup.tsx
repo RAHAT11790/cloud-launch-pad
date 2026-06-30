@@ -38,6 +38,9 @@ const ACTIVE_ROOTS = new Set<string>([
   "users",
   "webseries",
   "weeklyPending",
+  "weeklySchedule",
+  "adminContentIndex",
+  "animesaltSelected",
   "XNXANIKPAY",
 ]);
 
