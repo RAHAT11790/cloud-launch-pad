@@ -90,37 +90,9 @@
   </head>
 
   <body>
-    <style>
-      #rs-boot-loader{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#0a0b14;transition:opacity .25s ease;}
-      #rs-boot-loader.rs-hide{opacity:0;pointer-events:none;}
-      #rs-boot-loader .rs-ring{width:54px;height:54px;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:#7c3aed;animation:rs-spin .8s linear infinite;}
-      #rs-boot-loader .rs-brand{position:absolute;bottom:18%;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:13px;letter-spacing:.3em;color:rgba(255,255,255,.55);font-weight:600;}
-      @keyframes rs-spin{to{transform:rotate(360deg);}}
-    </style>
-    <div id="rs-boot-loader"><div class="rs-ring"></div><div class="rs-brand">RS ANIME</div></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      // Hide boot loader once React has painted the first frame.
-      (function(){
-        var hide=function(){
-          var el=document.getElementById('rs-boot-loader');
-          if(!el) return;
-          el.classList.add('rs-hide');
-          setTimeout(function(){ el && el.parentNode && el.parentNode.removeChild(el); },300);
-        };
-        var ready=function(){
-          if(document.getElementById('root') && document.getElementById('root').children.length>0){
-            requestAnimationFrame(hide);
-          } else {
-            setTimeout(ready,60);
-          }
-        };
-        setTimeout(ready,80);
-        // Safety net — never leave the loader on screen longer than 8s.
-        setTimeout(hide,8000);
-      })();
-    </script>
+
     <script>
       // Auto-unregister any legacy ad service workers (Monetag etc).
       (function () {
