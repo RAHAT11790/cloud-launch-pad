@@ -229,7 +229,7 @@ const getAnimeSaltProxyUrls = async (): Promise<string[]> => {
   // Use the app's bundled Supabase function first. It is the version that
   // matches this codebase; a stale EGD/custom URL is the usual cause of the
   // Admin "Failed to fetch" button error.
-  return Array.from(new Set([fallback, configured].map(normalizeAnApiBaseUrl).filter(Boolean)));
+  return Array.from(new Set([fallback, configured].map(ensureAnApiFunctionUrl).filter(Boolean)));
 };
 
 const normalizeAnApiBaseUrl = (value: string): string => {
@@ -247,6 +247,25 @@ const normalizeAnApiBaseUrl = (value: string): string => {
   } catch {
     return raw.replace(/\/(?:raw|search|anime|episode|embed|hls|subs|series|movies|movie)(?:\?.*)?$/i, '').replace(/\/+$/, '');
   }
+};
+
+const ensureAnApiFunctionUrl = (value: string): string => {
+  const normalized = normalizeAnApiBaseUrl(value);
+  if (!normalized) return '';
+  try {
+    const url = new URL(normalized);
+    const parts = url.pathname.split('/').filter(Boolean);
+    const functionsIdx = parts.findIndex((part, idx) => part === 'functions' && parts[idx + 1] === 'v1');
+    if (functionsIdx >= 0) {
+      const fnIdx = functionsIdx + 2;
+      if (!parts[fnIdx]) {
+        parts[fnIdx] = 'an-api';
+      }
+      url.pathname = `/${parts.join('/')}`;
+      return url.toString().replace(/\/+$/, '');
+    }
+  } catch {}
+  return normalized;
 };
 
 const fetchPage = async (url: string): Promise<string> => {
@@ -277,6 +296,16 @@ const fetchPage = async (url: string): Promise<string> => {
     }
   }
   throw lastError instanceof Error ? lastError : new Error('AnimeSalt proxy failed');
+};
+
+const parseMaxPage = (html: string, type: 'series' | 'movies'): number => {
+  const nums = [1];
+  const pageRe = new RegExp(`/${type}/page/(\\d+)/`, 'gi');
+  let m: RegExpExecArray | null;
+  while ((m = pageRe.exec(html))) nums.push(Number(m[1]));
+  const titleM = html.match(/Page\s+\d+\s+of\s+(\d+)/i);
+  if (titleM) nums.push(Number(titleM[1]));
+  return Math.max(...nums.filter((n) => Number.isFinite(n) && n > 0));
 };
 
 const parseListPage = (html: string): { slug: string; title: string; poster: string; type: string; year: string; language?: string; episodeCount?: number }[] => {
@@ -430,7 +459,7 @@ const parsePlaybackPage = (html: string) => {
 
 /** Try direct API call first, supporting both nested and top-level response formats */
 const tryDirectApi = async (proxyUrl: string, body: any, forceRefresh = false): Promise<any | null> => {
-  const proxyUrls = Array.from(new Set([proxyUrl, ...(await getAnimeSaltProxyUrls())].map(normalizeAnApiBaseUrl).filter(Boolean)));
+  const proxyUrls = Array.from(new Set([proxyUrl, ...(await getAnimeSaltProxyUrls())].map(ensureAnApiFunctionUrl).filter(Boolean)));
   for (const candidate of proxyUrls) {
   try {
     const base = normalizeAnApiBaseUrl(candidate);
@@ -451,7 +480,10 @@ const tryDirectApi = async (proxyUrl: string, body: any, forceRefresh = false): 
     if (Array.isArray(data)) return { items: data };
     if (data?.error) return null;
     if (data.data) return data.data;
-    if (data.html && body.action === 'browse') return { items: parseListPage(String(data.html)) };
+    if (data.html && body.action === 'browse') {
+      const browseType = body.type === 'movies' ? 'movies' : 'series';
+      return { items: parseListPage(String(data.html)), maxPage: parseMaxPage(String(data.html), browseType), currentPage: body.page || 1 };
+    }
     if (data.items) return { items: data.items, maxPage: data.maxPage, currentPage: data.currentPage, totalCount: data.totalCount };
     return data;
   } catch {
@@ -523,38 +555,42 @@ export const animeSaltApi = {
       const all: any[] = [];
       const seen = new Set<string>();
       const CONCURRENCY = 6;
-      let stop = false;
-      let nextPage = 1;
-      const tryPage = async (page: number) => {
+      const addItems = (items: any[]) => {
+        let added = 0;
+        for (const it of items) {
+          const slug = String(it?.slug || '').trim();
+          if (!slug || seen.has(slug)) continue;
+          seen.add(slug);
+          all.push({ ...it, type });
+          added++;
+        }
+        return added;
+      };
+      const getPage = async (page: number): Promise<{ items: any[]; maxPage?: number }> => {
         try {
           const direct = await tryDirectApi(proxyUrl, { action: 'browse', type, page });
           let items = direct?.items as any[] | undefined;
+          let maxPage = Number(direct?.maxPage || 0) || undefined;
           if (!items || !items.length) {
             const url = page > 1 ? `${ANIMESALT_BASE}/${type}/page/${page}/` : `${ANIMESALT_BASE}/${type}/`;
             const html = await fetchPage(url).catch(() => '');
             items = html ? parseListPage(html) : [];
+            maxPage = html ? parseMaxPage(html, type) : maxPage;
           }
-          if (!items || !items.length) return 0;
-          let added = 0;
-          for (const it of items) {
-            const slug = String(it?.slug || '').trim();
-            if (!slug || seen.has(slug)) continue;
-            seen.add(slug);
-            all.push({ ...it, type });
-            added++;
-          }
-          return added;
+          return { items: items || [], maxPage };
         } catch {
-          return 0;
+          return { items: [] };
         }
       };
 
-      while (!stop && nextPage <= maxPages) {
-        const batch = Array.from({ length: CONCURRENCY }, (_, i) => nextPage + i).filter((p) => p <= maxPages);
-        nextPage += CONCURRENCY;
-        const results = await Promise.all(batch.map(tryPage));
-        // Stop when any page in the batch returned 0 items (end of list reached)
-        if (results.some((n) => n === 0)) stop = true;
+      const first = await getPage(1);
+      addItems(first.items);
+      const targetMax = Math.min(maxPages, Math.max(1, Number(first.maxPage || maxPages)));
+      const pages = Array.from({ length: Math.max(0, targetMax - 1) }, (_, i) => i + 2);
+      for (let i = 0; i < pages.length; i += CONCURRENCY) {
+        const batch = pages.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(batch.map(getPage));
+        results.forEach((result) => addItems(result.items));
       }
       return all;
     };

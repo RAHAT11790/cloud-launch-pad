@@ -129,6 +129,47 @@ function uniqueBy<T>(items: T[], getKey: (item: T) => string) {
   });
 }
 
+function parseMaxPage(html: string, type: string) {
+  const safeType = type === "movies" ? "movies" : "series";
+  const nums = [1];
+  const re = new RegExp(`/${safeType}/page/(\\d+)/`, "gi");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) nums.push(Number(m[1]));
+  const title = html.match(/Page\s+\d+\s+of\s+(\d+)/i);
+  if (title) nums.push(Number(title[1]));
+  return Math.max(...nums.filter((n) => Number.isFinite(n) && n > 0));
+}
+
+function parseBrowseItems(html: string, type: string) {
+  const out: any[] = [];
+  const seen = new Set<string>();
+  const hrefRe = /<a\b[^>]*href=["']https?:\/\/animesalt\.(?:ac|top)\/(series|movies)\/([^"'/?#]+)\/?["'][^>]*>[\s\S]*?<\/a>|<a\b[^>]*href=["']https?:\/\/animesalt\.(?:ac|top)\/(series|movies)\/([^"'/?#]+)\/?["'][^>]*>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = hrefRe.exec(html))) {
+    const itemType = (m[1] || m[3] || type) === "movies" ? "movies" : "series";
+    if (itemType !== (type === "movies" ? "movies" : "series")) continue;
+    const slug = String(m[2] || m[4] || "").trim();
+    if (!slug || seen.has(slug)) continue;
+    const start = Math.max(0, m.index - 800);
+    const end = Math.min(html.length, m.index + 1600);
+    const block = html.slice(start, end);
+    const titleM = block.match(/<h[1-4][^>]*class=["'][^"']*entry-title[^"']*["'][^>]*>([\s\S]*?)<\/h[1-4]>/i)
+      || block.match(/(?:title|alt)=["']([^"']+)["']/i);
+    const imgM = block.match(/(?:data-src|src)=["']([^"']+\.(?:jpg|jpeg|png|webp)(?:\?[^"']*)?)["']/i);
+    const yearM = block.match(/(?:19|20)\d{2}/);
+    seen.add(slug);
+    out.push({
+      slug,
+      type: itemType,
+      title: titleM ? decode(titleM[1]) : slug.replace(/-/g, " "),
+      poster: imgM ? resolveUrl(imgM[1], AN_BASE) : "",
+      year: yearM?.[0] || "",
+      detailUrl: `${AN_BASE}/${itemType}/${slug}/`,
+    });
+  }
+  return uniqueBy(out, (item) => `${item.type}:${item.slug}`);
+}
+
 // ---------- SEARCH ----------
 async function search(q: string) {
   const cacheKey = `search:${q.toLowerCase().trim()}`;
@@ -619,7 +660,16 @@ async function browse(type: string, page = 1, forceRefresh = false) {
   const cached = getCache<any>(cacheKey, forceRefresh);
   if (cached) return cached;
   const listUrl = safePage > 1 ? `${AN_BASE}/${safeType}/page/${safePage}/` : `${AN_BASE}/${safeType}/`;
-  return setCache(cacheKey, { html: await fetchText(listUrl), currentPage: safePage }, 15 * 60_000);
+  try {
+    const html = await fetchText(listUrl);
+    const items = parseBrowseItems(html, safeType);
+    return setCache(cacheKey, { html, items, currentPage: safePage, maxPage: parseMaxPage(html, safeType), totalCount: items.length }, 15 * 60_000);
+  } catch (e) {
+    if (safePage > 1 && /Upstream\s+404/i.test((e as Error)?.message || String(e))) {
+      return { html: "", items: [], currentPage: safePage, maxPage: safePage - 1, totalCount: 0 };
+    }
+    throw e;
+  }
 }
 
 Deno.serve(async (req) => {
