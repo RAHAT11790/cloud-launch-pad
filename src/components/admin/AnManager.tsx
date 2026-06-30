@@ -71,12 +71,12 @@ type TmdbResult = {
   genre_ids?: number[];
 };
 
-const tmdbSearch = async (title: string, isSeries: boolean): Promise<TmdbResult[]> => {
-  if (!TMDB_API_KEY) return [];
+const tmdbSearchOne = async (title: string, isSeries: boolean): Promise<TmdbResult[]> => {
+  if (!TMDB_API_KEY || !title) return [];
   const kind = isSeries ? "tv" : "movie";
   try {
     const r = await fetch(
-      `${TMDB_BASE_URL}/search/${kind}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}`,
+      `${TMDB_BASE_URL}/search/${kind}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}&include_adult=false`,
     );
     if (!r.ok) return [];
     const j = await r.json();
@@ -95,10 +95,26 @@ const tmdbSearch = async (title: string, isSeries: boolean): Promise<TmdbResult[
   }
 };
 
+// Try cleaned title, then progressive truncations until TMDB returns results.
+const tmdbSearch = async (title: string, isSeries: boolean): Promise<TmdbResult[]> => {
+  const variants = new Set<string>();
+  variants.add(title);
+  const words = title.split(/\s+/).filter(Boolean);
+  if (words.length > 3) variants.add(words.slice(0, 3).join(" "));
+  if (words.length > 2) variants.add(words.slice(0, 2).join(" "));
+  for (const v of variants) {
+    const out = await tmdbSearchOne(v, isSeries);
+    if (out.length) return out;
+  }
+  // As a last resort, try the opposite kind (e.g. movies API for a series slug
+  // mistakenly tagged) so the user at least gets metadata.
+  return tmdbSearchOne(title, !isSeries);
+};
+
 const tmdbDetails = async (id: number, isSeries: boolean) => {
   try {
     const r = await fetch(
-      `${TMDB_BASE_URL}/${isSeries ? "tv" : "movie"}/${id}?api_key=${TMDB_API_KEY}&language=en-US`,
+      `${TMDB_BASE_URL}/${isSeries ? "tv" : "movie"}/${id}?api_key=${TMDB_API_KEY}&language=en-US&append_to_response=credits`,
     );
     if (!r.ok) return null;
     return await r.json();
@@ -115,15 +131,24 @@ const buildEnriched = async (item: ApiItem, tmdb?: TmdbResult | null): Promise<S
   const genres = Array.isArray(det?.genres)
     ? det.genres.map((g: any) => String(g?.name || "").trim()).filter(Boolean)
     : [];
+  const directors = Array.isArray(det?.credits?.crew)
+    ? det.credits.crew
+        .filter((c: any) => /director/i.test(String(c?.job || "")))
+        .map((c: any) => String(c?.name || "").trim())
+        .filter(Boolean)
+        .slice(0, 3)
+    : [];
+  const releaseDate = tmdb.first_air_date || tmdb.release_date || det?.first_air_date || det?.release_date || "";
   return {
     ...base,
     tmdbId: tmdb.id,
-    rating: tmdb.vote_average ? Number(tmdb.vote_average).toFixed(1) : "",
+    rating: (tmdb.vote_average || det?.vote_average) ? Number(tmdb.vote_average || det?.vote_average).toFixed(1) : "",
     overview: tmdb.overview || det?.overview || "",
-    backdrop: tmdb.backdrop_path ? `${TMDB_IMG_BASE}original${tmdb.backdrop_path}` : "",
-    poster: tmdb.poster_path ? `${TMDB_IMG_BASE}w500${tmdb.poster_path}` : item.poster,
+    backdrop: tmdb.backdrop_path ? `${TMDB_IMG_BASE}original${tmdb.backdrop_path}` : (det?.backdrop_path ? `${TMDB_IMG_BASE}original${det.backdrop_path}` : ""),
+    poster: tmdb.poster_path ? `${TMDB_IMG_BASE}w500${tmdb.poster_path}` : (det?.poster_path ? `${TMDB_IMG_BASE}w500${det.poster_path}` : item.poster),
     genres,
-    year: item.year || (tmdb.first_air_date || tmdb.release_date || "").slice(0, 4),
+    year: item.year || String(releaseDate || "").slice(0, 4),
+    ...(directors.length ? { directors } as any : {}),
   };
 };
 
