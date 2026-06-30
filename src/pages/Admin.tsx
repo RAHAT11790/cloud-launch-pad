@@ -2528,9 +2528,9 @@ const Admin = forwardRef<HTMLDivElement>((_, _ref) => {
   return () => { countsCancelled = true; unsubs.forEach(u => u()); };
  }, []);
 
- // Lazy-load USERS data (only when dashboard, users, notifications, or free-access section)
+ // Lazy-load USERS data (dashboard needs it for live Total/Online/Offline)
  useEffect(() => {
-  const needsUsers = ["users", "free-access", "device-limits"].includes(activeSection);
+  const needsUsers = ["dashboard", "users", "free-access", "device-limits"].includes(activeSection);
  if (!needsUsers) return;
 
  const unsubs: (() => void)[] = [];
