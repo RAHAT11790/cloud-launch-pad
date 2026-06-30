@@ -594,6 +594,28 @@ export default function AnManager({
 
       {/* === Bulk actions === */}
       <div className={`${glassCard} p-4 space-y-3`}>
+        <div className="rounded-xl border border-cyan-400/25 bg-cyan-500/10 p-3">
+          <div className="flex flex-col lg:flex-row gap-2 lg:items-end">
+            <div className="flex-1">
+              <label className="text-[10px] text-cyan-200 font-semibold mb-1 block">TMDB API Key</label>
+              <input
+                value={tmdbKeyInput}
+                onChange={(e) => setTmdbKeyInput(e.target.value)}
+                placeholder="VITE_TMDB_API_KEY env না থাকলে এখানে TMDB key বসান"
+                className={inputClass}
+              />
+            </div>
+            <button onClick={saveTmdbKey} className={`${btnPrimary} px-4 py-2 text-xs whitespace-nowrap`}>
+              Save Key
+            </button>
+          </div>
+          <div className={`mt-2 text-[10px] ${hasTmdbKey ? "text-emerald-300" : "text-amber-200"}`}>
+            {hasTmdbKey
+              ? "✅ TMDB key active — Load All Details, TMDB ID fetch, rating/year/description/cast সব কাজ করবে।"
+              : "⚠️ এই project-এর env-এ VITE_TMDB_API_KEY নাই। তাই AN Manager আগে key not found দেখাচ্ছিল; এখানে key save করলে সরাসরি কাজ করবে।"}
+          </div>
+        </div>
+
         <div className="flex flex-wrap gap-2 items-center">
           <button onClick={selectAllVisible} className={`${btnSecondary} px-3 py-2 text-xs flex items-center gap-1.5`}>
             <CheckSquare size={14} /> Select All ({stats.filtered})
@@ -676,6 +698,7 @@ export default function AnManager({
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {filtered.map((it) => {
               const isSaved = !!saved[it.slug];
+              const display = saved[it.slug] || it;
               const isSelected = selectedSlugs.has(it.slug);
               return (
                 <div
@@ -691,17 +714,20 @@ export default function AnManager({
                   >
                     {isSelected ? <CheckSquare size={14} /> : <Square size={14} />}
                   </button>
+                  <span className="absolute top-1.5 left-8 z-10 text-[9px] px-1.5 py-0.5 rounded bg-purple-600/90 text-white font-black border border-white/20">
+                    AN
+                  </span>
                   {isSaved && (
                     <span className="absolute top-1.5 right-1.5 z-10 text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/90 text-white font-bold">
                       SAVED
                     </span>
                   )}
                   <div className="aspect-[2/3] bg-black/40">
-                    {it.poster ? (
+                    {display.poster ? (
                       <CachedImg
                         key={`${it.slug}-${imgVersion}`}
-                        src={it.poster}
-                        alt={it.title}
+                        src={display.poster}
+                        alt={display.title}
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -710,12 +736,23 @@ export default function AnManager({
                   </div>
                   <div className="p-2">
                     <div className="text-[11px] font-semibold leading-tight line-clamp-2 min-h-[2.4em]">
-                      {it.title}
+                      {display.title}
                     </div>
                     <div className="text-[9px] text-[#D1C4E9] mt-1 flex justify-between">
                       <span className="uppercase">{it.type}</span>
-                      <span>{it.year}</span>
+                      <span>{display.year}</span>
                     </div>
+                    {isSaved && (
+                      <div className="mt-1 space-y-1">
+                        <div className="flex items-center gap-1 text-[9px] text-amber-200">
+                          <span>★ {display.rating || "—"}</span>
+                          {display.tmdbId ? <span className="text-cyan-300">TMDB {display.tmdbId}</span> : <span className="text-rose-300">No TMDB ID</span>}
+                        </div>
+                        <div className="text-[9px] text-zinc-400 line-clamp-2 min-h-[2.3em]">
+                          {display.overview || "Description empty — Edit থেকে TMDB ID দিয়ে Fetch করুন"}
+                        </div>
+                      </div>
+                    )}
                     <div className="flex gap-1 mt-1.5">
                       {isSaved ? (
                         <>
