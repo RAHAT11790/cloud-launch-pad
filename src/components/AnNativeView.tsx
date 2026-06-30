@@ -136,7 +136,7 @@ export default function AnNativeView({ videoStyle, videoClassName, resumeTime, o
           try { window.dispatchEvent(new Event("rs:force-close-details-loader")); } catch {}
           return;
         }
-        onFail?.("firebase-an-media-missing");
+        onFail?.("an-api-no-streams");
       } catch (e) {
         if (cancelled) return;
         onFail?.((e as Error).message);
