@@ -166,7 +166,7 @@ export default function AnManager({
       if (forceRefresh) {
         try { localStorage.removeItem("rs_cache_animesalt_api_cards_v2"); localStorage.removeItem("rs_cache_animesalt_api_cards_v3"); localStorage.removeItem("animesalt_all_v3"); } catch {}
       }
-      const r = await animeSaltApi.browseAll();
+      const r = await animeSaltApi.browseAll(forceRefresh);
       const mapped = (r?.items || []).map(normalizeItem).filter((x) => x.slug && x.title);
       // de-dup by slug, prefer series flavour
       const dedup = new Map<string, ApiItem>();
