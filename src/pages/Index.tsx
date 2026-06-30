@@ -686,16 +686,33 @@ const Index = () => {
   // Merge AnimeSalt items into main data lists (only when enabled)
   const activeSaltItems = useMemo(() => animeSaltEnabled ? animeSaltItems : [], [animeSaltEnabled, animeSaltItems]);
 
-  const allAnime = useMemo(() => mergeAnimeCards(firebaseAnime, activeSaltItems), [firebaseAnime, activeSaltItems]);
+  // Strip legacy AN entries stored in Firebase. AN now runs 100% via live API.
+  const isLegacyAnEntry = (item: AnimeItem) => {
+    const id = String(item?.id || "");
+    return (
+      !!item?.anSlug ||
+      !!item?.animeSaltSlug ||
+      item?.sourceName === "AnimeSalt" ||
+      item?.source === "animesalt" ||
+      (item as any)?.displayAs === "an" ||
+      id.startsWith("an_") ||
+      id.startsWith("an_mv_")
+    );
+  };
+  const cleanFirebaseAnime = useMemo(() => firebaseAnime.filter((a) => !isLegacyAnEntry(a)), [firebaseAnime]);
+  const cleanWebseries = useMemo(() => webseries.filter((a) => !isLegacyAnEntry(a)), [webseries]);
+  const cleanMovies = useMemo(() => movies.filter((a) => !isLegacyAnEntry(a)), [movies]);
+
+  const allAnime = useMemo(() => mergeAnimeCards(cleanFirebaseAnime, activeSaltItems), [cleanFirebaseAnime, activeSaltItems]);
 
   const allSeries = useMemo(() => {
-    // Include BOTH saved Firebase rows and selected AN/Ad rows; dedupe by AN slug.
-    return mergeAnimeCards(webseries, activeSaltItems.filter((item) => item.type === "webseries"));
-  }, [webseries, activeSaltItems]);
+    return mergeAnimeCards(cleanWebseries, activeSaltItems.filter((item) => item.type === "webseries"));
+  }, [cleanWebseries, activeSaltItems]);
 
   const allMovies = useMemo(() => {
-    return mergeAnimeCards(movies, activeSaltItems.filter((item) => item.type === "movie"));
-  }, [movies, activeSaltItems]);
+    return mergeAnimeCards(cleanMovies, activeSaltItems.filter((item) => item.type === "movie"));
+  }, [cleanMovies, activeSaltItems]);
+
   
   // Maintenance mode check
   const [maintenance, setMaintenance] = useState<any>(null);
