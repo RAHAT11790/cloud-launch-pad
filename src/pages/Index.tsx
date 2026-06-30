@@ -2168,10 +2168,15 @@ const Index = () => {
     if (!anime) return;
     anime = (await loadFullFirebaseAnimeItem(anime)) || anime;
 
-    if (anime.source === "animesalt" && !hasStoredFirebasePlayback(anime)) {
-      toast.error("AN video/audio is not saved in Firebase yet. Refresh it from Admin first.");
+    if (anime.source === "animesalt") {
+      // Route AN continue-watching through the live-API click flow so playback
+      // URLs are always fresh.
+      const sIdx = item.episodeInfo?.seasonIdx ?? (item.episodeInfo ? item.episodeInfo.season - 1 : undefined);
+      const eIdx = item.episodeInfo?.epIdx ?? (item.episodeInfo ? item.episodeInfo.episode - 1 : undefined);
+      await handleCardClick(anime, sIdx, eIdx);
       return;
     }
+
 
     // Use preserveProgress=true so we don't overwrite currentTime/duration
       if (item.episodeInfo) {
