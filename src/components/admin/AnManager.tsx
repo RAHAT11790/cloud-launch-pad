@@ -38,7 +38,25 @@ type SavedItem = ApiItem & {
   genres?: string[];
   category?: string;
   directors?: string[];
+  cast?: { name: string; character?: string; photo?: string }[];
   savedAt?: number;
+};
+
+const TMDB_KEY_STORAGE = "rs_admin_tmdb_api_key";
+let runtimeTmdbApiKey = "";
+
+const getTmdbApiKey = () => {
+  if (runtimeTmdbApiKey.trim()) return runtimeTmdbApiKey.trim();
+  if (TMDB_API_KEY.trim()) return TMDB_API_KEY.trim();
+  try { return String(localStorage.getItem(TMDB_KEY_STORAGE) || "").trim(); } catch { return ""; }
+};
+
+const setRuntimeTmdbKey = (value: string) => {
+  runtimeTmdbApiKey = String(value || "").trim();
+  try {
+    if (runtimeTmdbApiKey) localStorage.setItem(TMDB_KEY_STORAGE, runtimeTmdbApiKey);
+    else localStorage.removeItem(TMDB_KEY_STORAGE);
+  } catch {}
 };
 
 const normalizeType = (v: unknown): AnType =>
@@ -73,11 +91,12 @@ type TmdbResult = {
 };
 
 const tmdbSearchOne = async (title: string, isSeries: boolean): Promise<TmdbResult[]> => {
-  if (!TMDB_API_KEY || !title) return [];
+  const key = getTmdbApiKey();
+  if (!key || !title) return [];
   const kind = isSeries ? "tv" : "movie";
   try {
     const r = await fetch(
-      `${TMDB_BASE_URL}/search/${kind}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}&include_adult=false`,
+      `${TMDB_BASE_URL}/search/${kind}?api_key=${encodeURIComponent(key)}&query=${encodeURIComponent(title)}&include_adult=false&language=en-US&page=1`,
     );
     if (!r.ok) return [];
     const j = await r.json();
@@ -113,15 +132,32 @@ const tmdbSearch = async (title: string, isSeries: boolean): Promise<TmdbResult[
 };
 
 const tmdbDetails = async (id: number, isSeries: boolean) => {
+  const key = getTmdbApiKey();
+  if (!key || !id) return null;
   try {
     const r = await fetch(
-      `${TMDB_BASE_URL}/${isSeries ? "tv" : "movie"}/${id}?api_key=${TMDB_API_KEY}&language=en-US&append_to_response=credits`,
+      `${TMDB_BASE_URL}/${isSeries ? "tv" : "movie"}/${id}?api_key=${encodeURIComponent(key)}&language=en-US&append_to_response=credits`,
     );
     if (!r.ok) return null;
     return await r.json();
   } catch {
     return null;
   }
+};
+
+const tmdbFetchById = async (id: number, isSeries: boolean): Promise<TmdbResult | null> => {
+  const det = await tmdbDetails(id, isSeries);
+  if (!det?.id) return null;
+  return {
+    id: det.id,
+    title: det.name || det.title || det.original_name || det.original_title || "",
+    poster_path: det.poster_path,
+    backdrop_path: det.backdrop_path,
+    overview: det.overview,
+    vote_average: det.vote_average,
+    first_air_date: det.first_air_date,
+    release_date: det.release_date,
+  };
 };
 
 const buildEnriched = async (item: ApiItem, tmdb?: TmdbResult | null): Promise<SavedItem> => {
@@ -139,6 +175,16 @@ const buildEnriched = async (item: ApiItem, tmdb?: TmdbResult | null): Promise<S
         .filter(Boolean)
         .slice(0, 3)
     : [];
+  const cast = Array.isArray(det?.credits?.cast)
+    ? det.credits.cast
+        .map((c: any) => ({
+          name: String(c?.name || "").trim(),
+          character: String(c?.character || "").trim(),
+          photo: c?.profile_path ? `${TMDB_IMG_BASE}w185${c.profile_path}` : "",
+        }))
+        .filter((c: any) => c.name)
+        .slice(0, 10)
+    : [];
   const releaseDate = tmdb.first_air_date || tmdb.release_date || det?.first_air_date || det?.release_date || "";
   return {
     ...base,
@@ -150,6 +196,7 @@ const buildEnriched = async (item: ApiItem, tmdb?: TmdbResult | null): Promise<S
     genres,
     year: item.year || String(releaseDate || "").slice(0, 4),
     ...(directors.length ? { directors } as any : {}),
+    ...(cast.length ? { cast } as any : {}),
   };
 };
 
