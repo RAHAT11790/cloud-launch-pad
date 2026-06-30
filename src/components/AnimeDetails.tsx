@@ -33,6 +33,9 @@ interface ReplyData {
 
 const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onClose, onPlay }, _ref) => {
   const branding = useBranding();
+  const sourceBadge = anime.source === "animesalt" || String(anime.id || "").startsWith("an_") || String(anime.id || "").startsWith("as_") || !!anime.anSlug || !!anime.animeSaltSlug
+    ? "AN"
+    : "RS";
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [comments, setComments] = useState<CommentData[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -236,7 +239,7 @@ const AnimeDetails = forwardRef<HTMLDivElement, AnimeDetailsProps>(({ anime, onC
                 ? "bg-accent/85 text-accent-foreground"
                 : "bg-primary/85 text-primary-foreground"
             }`}>
-              {anime.source === "animesalt" ? (branding.anCardLabel || "AN") : (branding.rsCardLabel || "RS")}
+              {sourceBadge === "AN" ? (branding.anCardLabel || "AN") : (branding.rsCardLabel || "RS")}
             </span>
           </div>
         </div>
