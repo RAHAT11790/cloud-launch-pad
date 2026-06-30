@@ -5172,10 +5172,10 @@ ${tgBulkFooter}
 
  <div className="grid grid-cols-2 gap-2.5 mb-4">
  {[
- { icon: <Film size={18} />, value: Math.max(adminFastCounts.webseries, webseriesData.length), label: "Web Series", color: "text-indigo-400" },
- { icon: <Video size={18} />, value: Math.max(adminFastCounts.movies, moviesData.length), label: "Movies", color: "text-emerald-400" },
- { icon: <FolderOpen size={18} />, value: totalCategories, label: "Categories", color: "text-amber-400" },
- { icon: <Users size={18} />, value: Math.max(adminFastCounts.users, usersData.length), label: "Total Users", color: "text-sky-400" },
+  { icon: <Film size={18} />, value: adminFastCounts.webseries || webseriesData.length, label: "Web Series", color: "text-indigo-400" },
+  { icon: <Video size={18} />, value: adminFastCounts.movies || moviesData.length, label: "Movies", color: "text-emerald-400" },
+  { icon: <FolderOpen size={18} />, value: totalCategories, label: "Categories", color: "text-amber-400" },
+  { icon: <Users size={18} />, value: adminFastCounts.users || usersData.length, label: "Total Users", color: "text-sky-400" },
  ].map((stat, i) => (
  <div key={i} className="bg-[#141422] border border-white/5 rounded-xl p-4">
  <div className={`w-9 h-9 bg-white/5 rounded-lg flex items-center justify-center mb-2.5 ${stat.color}`}>{stat.icon}</div>
