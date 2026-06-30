@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { db, get, ref, remove } from "@/lib/firebase";
 import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
-import { clearLegacyAnBrowserCaches, isLegacyAnEntry, LEGACY_AN_CARD_ROOTS, LEGACY_AN_ROOTS, LEGACY_AN_ROOT_SET } from "@/lib/legacyAn";
+
 import { toast } from "sonner";
 import {
   AlertTriangle,
