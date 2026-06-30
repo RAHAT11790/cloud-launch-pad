@@ -164,7 +164,7 @@ export default function AnManager({
   const loadFromApi = async (forceRefresh = false) => {
     try {
       if (forceRefresh) {
-        try { localStorage.removeItem("rs_cache_animesalt_api_cards_v2"); } catch {}
+        try { localStorage.removeItem("rs_cache_animesalt_api_cards_v2"); localStorage.removeItem("rs_cache_animesalt_api_cards_v3"); localStorage.removeItem("animesalt_all_v3"); } catch {}
       }
       const r = await animeSaltApi.browseAll();
       const mapped = (r?.items || []).map(normalizeItem).filter((x) => x.slug && x.title);
