@@ -8,6 +8,8 @@ import { db, ref, onValue } from "@/lib/firebase";
 
 const SELECTED_PATH = "animesaltSelected";
 const CACHE_KEY = "rs_cache_animesalt_selected_v1";
+const CARTOON_BLOCK_RE = /\b(?:ben\s*10|alien\s*swarm|omniverse|ultimate\s*alien|generator\s*rex|teen\s*titans|justice\s*league|batman|superman|spider\s*man|avengers|tom\s*(?:and|&)\s*jerry|looney\s*tunes|scooby\s*doo|powerpuff|regular\s*show|adventure\s*time|gumball|samurai\s*jack|kung\s*fu\s*panda|madagascar|minions|despicable\s*me|cars|toy\s*story|frozen|shrek|ice\s*age|hotel\s*transylvania|cartoon\s*network|nickelodeon|disney|pixar|tintin|tin\s*tin)\b/i;
+const ANIME_ALLOW_RE = /\b(?:pokemon|pokémon|doraemon|shin\s*chan|crayon\s*shin|naruto|boruto|one\s*piece|dragon\s*ball|bleach|demon\s*slayer|jujutsu\s*kaisen|attack\s*on\s*titan|detective\s*conan)\b/i;
 
 type SavedItem = {
   slug: string;
@@ -46,6 +48,8 @@ const mapSaved = (row: SavedItem): AnimeItem | null => {
   const slug = String(row?.slug || "").trim();
   const title = String(row?.title || "").trim();
   if (!slug || !title) return null;
+  const blob = `${title} ${slug}`.replace(/[-_]+/g, " ").toLowerCase();
+  if (CARTOON_BLOCK_RE.test(blob) && !ANIME_ALLOW_RE.test(blob)) return null;
   const isMovie = String(row?.type || "").toLowerCase().includes("movie");
   const id = isMovie ? `an_mv_${slug}` : `an_${slug}`;
   const poster = String(row?.poster || "").trim();

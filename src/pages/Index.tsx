@@ -16,7 +16,8 @@ const buildEpisodeDeepLink = (animeId: string, seasonIdx?: number, epIdx?: numbe
 };
 
 const AN_API_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-api`;
-const AN_API_HLS_PROXY_PREFIX = `${AN_API_BASE}/hls`;
+const AN_PLAYBACK_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1/an-playback`;
+const AN_API_HLS_PROXY_PREFIX = `${AN_PLAYBACK_BASE || AN_API_BASE}/hls`;
 
 const isInvalidPlaybackUrl = (url?: string | null) => {
   const normalized = String(url || "").trim().toLowerCase().split("?")[0].split("#")[0];
@@ -39,7 +40,7 @@ const buildAnHlsPlaybackUrl = (url: string) => {
   const raw = String(url || "").trim();
   if (!raw) return raw;
   if (raw.startsWith("data:application/vnd.apple.mpegurl")) return raw;
-  if (/\/an-api\/hls\?/i.test(raw)) return raw;
+  if (/\/(?:an-api|an-playback)\/hls\?/i.test(raw) || /\/functions\/v1\/hls\?/i.test(raw)) return raw;
   // Firebase stores raw AnimeSalt video/audio URLs, but Android/desktop hls.js
   // cannot read AnimeSalt CDN directly because those playlists do not expose
   // CORS headers. Playback therefore wraps only at runtime; storage stays raw.
@@ -419,6 +420,7 @@ import {
   resolveAnEpisodePlayback,
   resolveAnMoviePlayback,
   resolveAnSeriesSeasons,
+  warmAnSeriesPlaybackCache,
   isAnimeSaltSentinel,
   slugFromSentinel,
 } from "@/lib/anLivePlayback";
@@ -1823,6 +1825,7 @@ const Index = () => {
               firstAudio = epData.audioTracks as any;
             }
           }
+          window.setTimeout(() => warmAnSeriesPlaybackCache(slug, seasons), 350);
           setLoadingDetails((s) => ({ ...s, step: "Preparing player", progress: 95, completed: [...s.completed, "Audio tracks ready"] }));
           const enriched: AnimeItem = {
             ...playableAnime,

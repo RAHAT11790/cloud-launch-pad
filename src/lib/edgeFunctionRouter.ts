@@ -92,6 +92,7 @@ const SELF_DEPLOYED_FUNCTIONS = new Set([
   "link-share-bot",
   "shorten-arolinks",
   "an-api",
+  "an-playback",
   "verify-admin-pin",
 ]);
 
@@ -107,6 +108,7 @@ function supabaseFallbackUrl(fnName: string): string {
     // Playback critical defaults: EGD Router may point to the user's own
     // deployment, but preview/runtime must still have a working backup.
     "an-api",
+    "an-playback",
     "video-proxy",
     "verify-admin-pin",
   ]);

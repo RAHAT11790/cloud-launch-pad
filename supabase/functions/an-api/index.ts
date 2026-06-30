@@ -43,6 +43,18 @@ const setCache = (key: string, data: unknown, ttl: number) => {
   return data;
 };
 
+const CARTOON_BLOCK_RE = /\b(?:ben\s*10|alien\s*swarm|omniverse|ultimate\s*alien|generator\s*rex|teen\s*titans|justice\s*league|batman|superman|spider\s*man|avengers|tom\s*(?:and|&)\s*jerry|looney\s*tunes|scooby\s*doo|powerpuff|courage\s*the\s*cowardly|regular\s*show|adventure\s*time|gumball|samurai\s*jack|kung\s*fu\s*panda|madagascar|minions|despicable\s*me|cars|toy\s*story|frozen|shrek|ice\s*age|hotel\s*transylvania|rio|moana|tangled|how\s*to\s*train\s*your\s*dragon|avatar\s*the\s*last\s*airbender|sponge\s*bob|nickelodeon|cartoon\s*network|disney|pixar|tintin|tin\s*tin)\b/i;
+const ANIME_ALLOW_RE = /\b(?:pokemon|pokémon|doraemon|shin\s*chan|crayon\s*shin|naruto|boruto|one\s*piece|dragon\s*ball|bleach|demon\s*slayer|jujutsu\s*kaisen|attack\s*on\s*titan|detective\s*conan|solo\s*leveling)\b/i;
+
+function isAllowedAnimeItem(item: any) {
+  const blob = `${item?.title || ""} ${item?.slug || ""}`.replace(/[-_]+/g, " ").toLowerCase();
+  if (!blob.trim()) return false;
+  if (ANIME_ALLOW_RE.test(blob)) return true;
+  return !CARTOON_BLOCK_RE.test(blob);
+}
+
+const filterAnimeOnly = <T extends any>(items: T[]): T[] => (Array.isArray(items) ? items.filter(isAllowedAnimeItem) : []);
+
 const cors: Record<string, string> = {
   ...corsHeaders,
   "Access-Control-Allow-Methods": "GET, POST, HEAD, OPTIONS",
@@ -231,7 +243,7 @@ async function search(q: string) {
       out.push({ slug, type, title: titleM ? decode(titleM[1]) : slug.replace(/-/g, " "), poster: imgM ? resolveUrl(imgM[1], AN_BASE) : "", year: yearM?.[0] || "", detailUrl: `${AN_BASE}/${type}/${slug}/` });
     }
   }
-  return setCache(cacheKey, out, 15 * 60_000) as any[];
+  return setCache(cacheKey, filterAnimeOnly(out), 15 * 60_000) as any[];
 }
 
 // ---------- DETAIL / EPISODES ----------
@@ -687,6 +699,9 @@ async function extractFromPlayer(embedUrl: string, forceRefresh = false) {
 }
 
 async function episode(slug: string, type = "", forceRefresh = false) {
+  if (!isAllowedAnimeItem({ slug, title: slug })) {
+    return { success: false, blocked: true, animeOnly: true, slug, error: "Blocked non-anime/cartoon slug" };
+  }
   const t = type === "movies" || type === "movie" ? "movies" : "episode";
   const pageUrl = t === "movies" ? `${AN_BASE}/movies/${slug}/` : `${AN_BASE}/episode/${slug}/`;
   const html = await fetchText(pageUrl);
@@ -720,7 +735,8 @@ async function browse(type: string, page = 1, forceRefresh = false) {
   try {
     const html = await fetchText(listUrl);
     const items = parseBrowseItems(html, safeType);
-    return setCache(cacheKey, { html, items, currentPage: safePage, maxPage: parseMaxPage(html, safeType), totalCount: items.length }, 15 * 60_000);
+    const filtered = filterAnimeOnly(items);
+    return setCache(cacheKey, { html, items: filtered, currentPage: safePage, maxPage: parseMaxPage(html, safeType), totalCount: filtered.length }, 15 * 60_000);
   } catch (e) {
     if (safePage > 1 && /Upstream\s+404/i.test((e as Error)?.message || String(e))) {
       return { html: "", items: [], currentPage: safePage, maxPage: safePage - 1, totalCount: 0 };
@@ -766,11 +782,11 @@ Deno.serve(async (req) => {
     if (path === "/search") {
       const q = url.searchParams.get("q") || "";
       if (!q.trim()) return json({ error: "missing ?q=" }, 400);
-      return json(await search(q.trim()));
+      return json(filterAnimeOnly(await search(q.trim())));
     }
     if (path === "/series" || path === "/movies") {
       const result = await browse(path === "/movies" ? "movies" : "series", Number(url.searchParams.get("page") || 1), url.searchParams.get("force") === "1");
-      return json({ success: true, ...result });
+      return json({ success: true, ...result, items: filterAnimeOnly(result.items || []) });
     }
     if (path === "/anime") {
       const slug = url.searchParams.get("slug") || "";

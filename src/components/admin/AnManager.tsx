@@ -16,7 +16,7 @@ import {
   Film,
   Tv,
 } from "lucide-react";
-import { animeSaltApi } from "@/lib/animeSaltApi";
+import { animeSaltApi, isAnimeSaltAllowedAnime } from "@/lib/animeSaltApi";
 import { TMDB_API_KEY, TMDB_BASE_URL, TMDB_IMG_BASE } from "@/lib/siteConfig";
 import CachedImg from "@/components/CachedImg";
 
@@ -24,8 +24,9 @@ import CachedImg from "@/components/CachedImg";
  * AN Manager — pure API-driven curation.
  *
  * Browse list comes from `animeSaltApi.browseAll()` (cached 30 min).
- * "Save" stores ONLY slug + TMDB-enriched metadata to `animesaltSelected/{slug}`.
- * Video URLs are NEVER saved — the user panel + player fetch them live.
+ * "Save" stores slug + TMDB-enriched metadata to `animesaltSelected/{slug}`.
+ * Short-lived playback URLs are cached later by the user panel in
+ * `anPlaybackCache/*` with an expiry timer for smooth episode switching.
  */
 
 type AnType = "series" | "movies";
@@ -246,7 +247,7 @@ export default function AnManager({
         try { localStorage.removeItem("rs_cache_animesalt_api_cards_v2"); localStorage.removeItem("rs_cache_animesalt_api_cards_v3"); localStorage.removeItem("animesalt_all_v3"); } catch {}
       }
       const r = await animeSaltApi.browseAll(forceRefresh);
-      const mapped = (r?.items || []).map(normalizeItem).filter((x) => x.slug && x.title);
+      const mapped = (r?.items || []).map(normalizeItem).filter((x) => x.slug && x.title && isAnimeSaltAllowedAnime(x));
       // de-dup by slug, prefer series flavour
       const dedup = new Map<string, ApiItem>();
       mapped.forEach((x) => { if (!dedup.has(x.slug)) dedup.set(x.slug, x); });
@@ -384,10 +385,13 @@ export default function AnManager({
   const onDeleteAllSaved = async () => {
     const n = Object.keys(saved).length;
     if (n === 0) return toast.error("Nothing saved");
-    if (!confirm(`Delete ALL ${n} saved AN items? This cannot be undone.`)) return;
+    if (!confirm(`Delete ALL ${n} saved AN items and AN playback cache? This cannot be undone.`)) return;
     setBulkBusy(true);
     try {
-      await remove(ref(db, SELECTED_PATH));
+      await Promise.all([
+        remove(ref(db, SELECTED_PATH)),
+        remove(ref(db, "anPlaybackCache")),
+      ]);
       toast.success("All saved AN items deleted");
     } catch (e: any) {
       toast.error("Delete all failed: " + (e?.message || "unknown"));
@@ -400,6 +404,17 @@ export default function AnManager({
     await loadFromApi(true);
     setReloading(false);
     toast.success("AN API reloaded");
+  };
+
+  const onClearLoadedCards = () => {
+    setApiItems([]);
+    setSelectedSlugs(new Set());
+    try {
+      localStorage.removeItem("rs_cache_animesalt_api_cards_v2");
+      localStorage.removeItem("rs_cache_animesalt_api_cards_v3");
+      localStorage.removeItem("animesalt_all_v3");
+    } catch {}
+    toast.success("Loaded AN cards cleared");
   };
 
   /**
@@ -601,7 +616,15 @@ export default function AnManager({
 
         <button onClick={onReload} disabled={reloading} className={`${btnSecondary} px-3 py-2 text-xs flex items-center gap-1.5`}>
           {reloading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          Reload API
+          Refresh API
+        </button>
+
+        <button
+          onClick={onClearLoadedCards}
+          disabled={bulkBusy || reloading}
+          className="px-3 py-2 text-xs flex items-center gap-1.5 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 disabled:opacity-50"
+        >
+          <Trash2 size={14} /> Clear Loaded Cards
         </button>
 
         <button onClick={onRefreshImages} className={`${btnSecondary} px-3 py-2 text-xs flex items-center gap-1.5`}>

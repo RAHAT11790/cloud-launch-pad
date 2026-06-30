@@ -46,7 +46,7 @@ interface Props {
 
 const hlsUrl = (u: string) => {
   const raw = String(u || "").trim();
-  const proxyMatch = raw.match(/\/an-api\/hls\?url=([^&]+)/i);
+  const proxyMatch = raw.match(/\/(?:an-api|an-playback)\/hls\?url=([^&]+)/i);
   if (proxyMatch) {
     try { return decodeURIComponent(proxyMatch[1]); } catch { return raw; }
   }

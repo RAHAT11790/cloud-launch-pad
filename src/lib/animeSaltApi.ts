@@ -4,6 +4,17 @@ const ANIMESALT_BASE = 'https://animesalt.ac';
 const PLAYABLE_EXT_RE = /\.(?:m3u8|mp4|webm|ogg|mov|mkv)(?:[?#].*)?$/i;
 const ASSET_EXT_RE = /\.(?:js|css|json|jpe?g|png|gif|svg|webp|ico|woff2?|ttf)(?:[?#].*)?$/i;
 const FETCH_TIMEOUT_MS = 12_000;
+const CARTOON_BLOCK_RE = /\b(?:ben\s*10|alien\s*swarm|omniverse|ultimate\s*alien|generator\s*rex|teen\s*titans|justice\s*league|batman|superman|spider\s*man|avengers|tom\s*(?:and|&)\s*jerry|looney\s*tunes|scooby\s*doo|powerpuff|courage\s*the\s*cowardly|regular\s*show|adventure\s*time|gumball|samurai\s*jack|kung\s*fu\s*panda|madagascar|minions|despicable\s*me|cars|toy\s*story|frozen|shrek|ice\s*age|hotel\s*transylvania|rio|moana|tangled|how\s*to\s*train\s*your\s*dragon|avatar\s*the\s*last\s*airbender|sponge\s*bob|nickelodeon|cartoon\s*network|disney|pixar|tintin|tin\s*tin)\b/i;
+const ANIME_ALLOW_RE = /\b(?:pokemon|pokémon|doraemon|shin\s*chan|crayon\s*shin|naruto|boruto|one\s*piece|dragon\s*ball|bleach|demon\s*slayer|jujutsu\s*kaisen|attack\s*on\s*titan|detective\s*conan|solo\s*leveling)\b/i;
+
+export const isAnimeSaltAllowedAnime = (item: { title?: string; slug?: string }) => {
+  const blob = `${item?.title || ''} ${item?.slug || ''}`.replace(/[-_]+/g, ' ').toLowerCase();
+  if (!blob.trim()) return false;
+  if (ANIME_ALLOW_RE.test(blob)) return true;
+  return !CARTOON_BLOCK_RE.test(blob);
+};
+
+const filterAnimeOnly = <T extends { title?: string; slug?: string }>(items: T[]) => (Array.isArray(items) ? items.filter(isAnimeSaltAllowedAnime) : []);
 
 // LocalStorage-first + Firebase-backed cache for AnimeSalt API responses.
 // Series structure rarely changes -> long TTL. Playback URLs may be signed -> shorter TTL.
@@ -507,7 +518,7 @@ const tryDirectApi = async (proxyUrl: string, body: any, forceRefresh = false): 
       const browseType = body.type === 'movies' ? 'movies' : 'series';
       return { items: parseListPage(String(data.html)), maxPage: parseMaxPage(String(data.html), browseType), currentPage: body.page || 1 };
     }
-    if (data.items) return { items: data.items, maxPage: data.maxPage, currentPage: data.currentPage, totalCount: data.totalCount };
+    if (data.items) return { items: filterAnimeOnly(data.items), maxPage: data.maxPage, currentPage: data.currentPage, totalCount: data.totalCount };
     return data;
   } catch {
     // Try the next configured/fallback AN API endpoint.
@@ -568,7 +579,7 @@ export const animeSaltApi = {
 
     const url = page > 1 ? `${ANIMESALT_BASE}/${type}/page/${page}/` : `${ANIMESALT_BASE}/${type}/`;
     const html = await fetchPage(url);
-    return { success: true, items: parseListPage(html) };
+    return { success: true, items: filterAnimeOnly(parseListPage(html)) };
   },
 
   async browseAll(maxPagesOrForce: number | boolean = 40, forceRefresh = false) {
@@ -586,7 +597,9 @@ export const animeSaltApi = {
           const slug = String(it?.slug || '').trim();
           if (!slug || seen.has(slug)) continue;
           seen.add(slug);
-          all.push({ ...it, type });
+          const next = { ...it, type };
+          if (!isAnimeSaltAllowedAnime(next)) continue;
+          all.push(next);
           added++;
         }
         return added;
@@ -621,7 +634,7 @@ export const animeSaltApi = {
     };
 
     const [sItems, mItems] = await Promise.all([fetchType('series'), fetchType('movies')]);
-    return { success: true, items: [...sItems, ...mItems] };
+    return { success: true, items: filterAnimeOnly([...sItems, ...mItems]) };
   },
 
   async getSeries(slug: string, forceRefresh = false) {

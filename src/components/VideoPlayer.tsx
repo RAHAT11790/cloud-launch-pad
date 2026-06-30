@@ -85,7 +85,7 @@ const isHlsLikeUrl = (url: string): boolean => {
     || /\.m3u8(?:%3f|%23|$)/.test(value);
 };
 
-const isAnApiHlsProxyUrl = (url: string): boolean => /\/an-api\/hls\?/i.test(String(url || ""));
+const isAnApiHlsProxyUrl = (url: string): boolean => /\/(?:an-api|an-playback)\/hls\?/i.test(String(url || ""));
 
 const sanitizeAnimeDownloadTitle = (value: string): string => {
   return String(value || "")
@@ -786,7 +786,7 @@ const VideoPlayer = ({ src, title, subtitle, poster, anime, selectedLanguage, on
   const buildReliableHlsSource = useCallback((rawUrl: string) => {
     // Runtime playback still reads Firebase-stored URLs only. AnimeSalt CDN does
     // not send CORS headers for hls.js, so synthetic masters may contain the
-    // `/an-api/hls?url=...` runtime wrapper. Do not unwrap it here; that wrapper
+    // `/an-api/hls?url=...` or `/an-playback/hls?url=...` runtime wrapper. Do not unwrap it here; that wrapper
     // is required for video-only + separate audio playlists to load together.
     const clean = String(rawUrl || "").trim();
     if (!clean) return clean;

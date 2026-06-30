@@ -1,8 +1,8 @@
-// hls — legacy-compatible AN HLS proxy.
+// an-playback — playback-only AN HLS proxy.
 //
-// Older builds generated `/functions/v1/hls?url=...` links. This function now
-// proxies directly (not 302) so HLS.js, CORS preflight, range requests and stale
-// cached links all behave the same as `/functions/v1/an-api/hls`.
+// The fetch/extract API (`an-api`) gathers metadata, seasons, streams and audio.
+// This function does only one job: proxy HLS playlists/segments with stable CORS
+// and CDN-safe headers so video playback load is separated from extraction load.
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -51,7 +51,7 @@ function getSafeOrigin(value?: string | null) {
 function wrapHlsUrl(raw: string, baseUrl: string, proxyPrefix: string, parentOrigin = "") {
   const value = decode(raw || "");
   if (!value || value.startsWith("data:")) return value;
-  if (/\/functions\/v1\/hls\?url=/i.test(value) || /\/an-api\/hls\?url=/i.test(value)) return value;
+  if (/\/an-playback\/hls\?url=/i.test(value) || /\/an-api\/hls\?url=/i.test(value) || /\/functions\/v1\/hls\?url=/i.test(value)) return value;
   const abs = /^https?:\/\//i.test(value) ? value : resolveUrl(value, baseUrl);
   const params = new URLSearchParams({ url: abs });
   const inheritedOrigin = getSafeOrigin(parentOrigin) || getSafeOrigin(baseUrl);
@@ -115,52 +115,44 @@ async function fetchHlsUpstream(req: Request, targetUrl: URL, parentOrigin: stri
 
 Deno.serve(async (req) => {
   try {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (req.method !== "GET" && req.method !== "HEAD") return new Response("method not allowed", { status: 405, headers: cors });
+    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+    if (req.method !== "GET" && req.method !== "HEAD") return new Response("method not allowed", { status: 405, headers: cors });
 
-  const reqUrl = new URL(req.url);
-  const target = reqUrl.searchParams.get("url") || "";
-  if (!target) {
-    return new Response(JSON.stringify({ error: "missing ?url=" }), {
-      status: 400,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
+    const reqUrl = new URL(req.url);
+    const path = reqUrl.pathname.includes("/an-playback") ? (reqUrl.pathname.split("/an-playback")[1] || "/") : reqUrl.pathname;
+    if (path !== "/" && path !== "/hls") return new Response(JSON.stringify({ ok: true, endpoint: "/hls?url=..." }), { headers: { ...cors, "Content-Type": "application/json" } });
+    const target = reqUrl.searchParams.get("url") || "";
+    if (!target) return new Response(JSON.stringify({ error: "missing ?url=" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
 
-  let targetUrl: URL;
-  try { targetUrl = new URL(deepDecodeUrl(target)); } catch { return new Response("bad url", { status: 400, headers: cors }); }
-  if (!/^https?:$/i.test(targetUrl.protocol)) return new Response("blocked protocol", { status: 400, headers: cors });
+    let targetUrl: URL;
+    try { targetUrl = new URL(deepDecodeUrl(target)); } catch { return new Response("bad url", { status: 400, headers: cors }); }
+    if (!/^https?:$/i.test(targetUrl.protocol)) return new Response("blocked protocol", { status: 400, headers: cors });
 
-  const parentOrigin = getSafeOrigin(reqUrl.searchParams.get("origin") || reqUrl.searchParams.get("parent") || reqUrl.searchParams.get("ref")) || targetUrl.origin;
-  const upstream = await fetchHlsUpstream(req, targetUrl, parentOrigin);
-  if (!(upstream instanceof Response)) return new Response(`AN upstream fetch failed: ${upstream.errorStatus || "network"}`, { status: 502, headers: cors });
+    const parentOrigin = getSafeOrigin(reqUrl.searchParams.get("origin") || reqUrl.searchParams.get("parent") || reqUrl.searchParams.get("ref")) || targetUrl.origin;
+    const upstream = await fetchHlsUpstream(req, targetUrl, parentOrigin);
+    if (!(upstream instanceof Response)) return new Response(`AN upstream fetch failed: ${upstream.errorStatus || "network"}`, { status: 502, headers: cors });
 
-  const h = new Headers(cors);
-  for (const k of ["content-type", "content-length", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"]) {
-    const v = upstream.headers.get(k);
-    if (v) h.set(k, v);
-  }
-
-  const ct = (upstream.headers.get("content-type") || "").toLowerCase();
-  const isM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(?:\?|$)/i.test(targetUrl.pathname);
-  if (isM3u8) {
-    h.delete("content-length");
-    h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
-    h.set("cache-control", "no-store");
-    if (req.method === "HEAD") return new Response(null, { status: upstream.status, headers: h });
-    return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), `${reqUrl.origin}/functions/v1/hls`, parentOrigin), {
-      status: upstream.status,
-      headers: h,
-    });
-  }
-
-  if (/\.(?:ts|m4s|js)(?:$|\?)/i.test(targetUrl.pathname) || /\/p\//i.test(targetUrl.pathname) || /javascript|text\/plain/i.test(ct)) {
-    h.set("content-type", /\.m4s/i.test(targetUrl.pathname) ? "video/iso.segment" : "video/mp2t");
-    h.set("content-disposition", "inline");
-  }
-  if (!h.has("accept-ranges")) h.set("accept-ranges", "bytes");
-  if (req.method === "HEAD") return new Response(null, { status: upstream.status, statusText: upstream.statusText, headers: h });
-  return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: h });
+    const h = new Headers(cors);
+    for (const k of ["content-type", "content-length", "content-range", "accept-ranges", "cache-control", "etag", "last-modified"]) {
+      const v = upstream.headers.get(k);
+      if (v) h.set(k, v);
+    }
+    const ct = (upstream.headers.get("content-type") || "").toLowerCase();
+    const isM3u8 = /mpegurl|m3u8/.test(ct) || /\.m3u8(?:\?|$)/i.test(targetUrl.pathname);
+    if (isM3u8) {
+      h.delete("content-length");
+      h.set("content-type", "application/vnd.apple.mpegurl; charset=utf-8");
+      h.set("cache-control", "no-store");
+      if (req.method === "HEAD") return new Response(null, { status: upstream.status, headers: h });
+      return new Response(rewriteM3U8(await upstream.text(), targetUrl.toString(), `${reqUrl.origin}/functions/v1/an-playback/hls`, parentOrigin), { status: upstream.status, headers: h });
+    }
+    if (/\.(?:ts|m4s|js)(?:$|\?)/i.test(targetUrl.pathname) || /\/p\//i.test(targetUrl.pathname) || /javascript|text\/plain/i.test(ct)) {
+      h.set("content-type", /\.m4s/i.test(targetUrl.pathname) ? "video/iso.segment" : "video/mp2t");
+      h.set("content-disposition", "inline");
+    }
+    if (!h.has("accept-ranges")) h.set("accept-ranges", "bytes");
+    if (req.method === "HEAD") return new Response(null, { status: upstream.status, statusText: upstream.statusText, headers: h });
+    return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers: h });
   } catch (e) {
     return new Response(`AN playback proxy failed: ${(e as Error)?.message || String(e)}`, { status: 502, headers: cors });
   }

@@ -1,12 +1,79 @@
-// Resolve AN playback live from the AnimeSalt API and convert the response into
-// the same Episode/AudioTrack shape the existing `buildAnimeSaltEpisodePlaybackFromFirebase`
-// helper consumes. Lets us reuse the full VideoPlayer pipeline without storing
-// any short-lived CDN URLs in Firebase.
+// Resolve AN playback from short-lived Firebase + localStorage cache first,
+// then refresh through the fetch API only when the signed links expire.
 import { animeSaltApi } from "@/lib/animeSaltApi";
 import type { AnimeItem, AudioTrack, Episode, Season } from "@/data/animeData";
+import { db, ref, get, set, remove } from "@/lib/firebase";
 
 type ApiStream = { url: string; height?: number | string; label?: string };
 type ApiAudio = { language?: string; name?: string; uri?: string };
+
+const PLAYBACK_TTL_MS = 150 * 60 * 1000; // safer than AnimeSalt's ~2-3h signed URL window
+const SERIES_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const PRUNE_THROTTLE_MS = 15 * 60 * 1000;
+const mem = new Map<string, { expiresAt: number; data: any }>();
+let lastPrune = 0;
+
+const safeKey = (value: string) => String(value || "").replace(/[.#$/\[\]]/g, "_").slice(0, 180);
+const localKey = (kind: string, slug: string) => `rs_an_playback:${kind}:${safeKey(slug)}`;
+const fbPath = (kind: string, slug: string) => `anPlaybackCache/${kind}/${safeKey(slug)}`;
+
+export async function pruneExpiredPlaybackCache() {
+  const now = Date.now();
+  if (now - lastPrune < PRUNE_THROTTLE_MS) return;
+  lastPrune = now;
+  try {
+    for (const [key, hit] of Array.from(mem.entries())) if (!hit?.expiresAt || hit.expiresAt <= now) mem.delete(key);
+    const snap = await get(ref(db, "anPlaybackCache"));
+    const tree = snap.val() || {};
+    const jobs: Promise<unknown>[] = [];
+    for (const kind of ["episode", "movie", "series"] as const) {
+      const bucket = tree?.[kind] || {};
+      Object.entries(bucket).forEach(([slugKey, row]: [string, any]) => {
+        if (!row?.expiresAt || row.expiresAt <= now) jobs.push(remove(ref(db, `anPlaybackCache/${kind}/${slugKey}`)).catch(() => null));
+      });
+    }
+    await Promise.all(jobs);
+  } catch {}
+}
+
+async function readPlaybackCache<T>(kind: "episode" | "movie" | "series", slug: string): Promise<T | null> {
+  const key = `${kind}:${slug}`;
+  const now = Date.now();
+  void pruneExpiredPlaybackCache();
+  const hit = mem.get(key);
+  if (hit && hit.expiresAt > now) return hit.data as T;
+  try {
+    const raw = localStorage.getItem(localKey(kind, slug));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.expiresAt > now && parsed?.data) {
+        mem.set(key, { expiresAt: parsed.expiresAt, data: parsed.data });
+        return parsed.data as T;
+      }
+      localStorage.removeItem(localKey(kind, slug));
+    }
+  } catch {}
+  try {
+    const snap = await get(ref(db, fbPath(kind, slug)));
+    const row = snap.val();
+    if (row?.expiresAt > now && row?.data) {
+      mem.set(key, { expiresAt: row.expiresAt, data: row.data });
+      try { localStorage.setItem(localKey(kind, slug), JSON.stringify({ expiresAt: row.expiresAt, data: row.data })); } catch {}
+      return row.data as T;
+    }
+    if (row) await remove(ref(db, fbPath(kind, slug))).catch(() => {});
+  } catch {}
+  return null;
+}
+
+async function writePlaybackCache(kind: "episode" | "movie" | "series", slug: string, data: any, ttl = PLAYBACK_TTL_MS) {
+  void pruneExpiredPlaybackCache();
+  const expiresAt = Date.now() + ttl;
+  const key = `${kind}:${slug}`;
+  mem.set(key, { expiresAt, data });
+  try { localStorage.setItem(localKey(kind, slug), JSON.stringify({ expiresAt, data })); } catch {}
+  try { await set(ref(db, fbPath(kind, slug)), { slug, kind, savedAt: Date.now(), expiresAt, data }); } catch {}
+}
 
 const isHindi = (a: ApiAudio) =>
   /hindi|हिन्दी|हिंदी|\bhin\b/i.test(`${a?.language || ""} ${a?.name || ""}`);
@@ -45,12 +112,16 @@ const pickPayload = (r: any) => r?.data || r;
 export async function resolveAnEpisodePlayback(slug: string): Promise<Partial<Episode> | null> {
   if (!slug) return null;
   try {
+    const cached = await readPlaybackCache<Partial<Episode>>("episode", slug);
+    if (cached?.link) return cached;
     const r: any = await animeSaltApi.getEpisode(slug);
     const data = pickPayload(r);
     const streams = (data?.streams || []) as ApiStream[];
     if (!streams.length) return null;
     const audio = ((data?.audio || []) as ApiAudio[]).map(toAudioTrack);
-    return { ...streamFields(streams), audioTracks: audio };
+    const resolved = { ...streamFields(streams), audioTracks: audio };
+    await writePlaybackCache("episode", slug, resolved);
+    return resolved;
   } catch {
     return null;
   }
@@ -61,13 +132,15 @@ export async function resolveAnMoviePlayback(
 ): Promise<{ fields: Partial<AnimeItem>; audioTracks: AudioTrack[] } | null> {
   if (!slug) return null;
   try {
+    const cached = await readPlaybackCache<{ fields: Partial<AnimeItem>; audioTracks: AudioTrack[] }>("movie", slug);
+    if (cached?.fields?.movieLink) return cached;
     const r: any = await animeSaltApi.getMovie(slug);
     const data = pickPayload(r);
     const streams = (data?.streams || []) as ApiStream[];
     if (!streams.length) return null;
     const audioTracks = ((data?.audio || []) as ApiAudio[]).map(toAudioTrack);
     const sf = streamFields(streams);
-    return {
+    const resolved = {
       fields: {
         movieLink: sf.link,
         movieLink480: sf.link480,
@@ -78,6 +151,8 @@ export async function resolveAnMoviePlayback(
       },
       audioTracks,
     };
+    await writePlaybackCache("movie", slug, resolved);
+    return resolved;
   } catch {
     return null;
   }
@@ -86,10 +161,12 @@ export async function resolveAnMoviePlayback(
 export async function resolveAnSeriesSeasons(slug: string): Promise<Season[]> {
   if (!slug) return [];
   try {
+    const cached = await readPlaybackCache<Season[]>("series", slug);
+    if (cached?.length) return cached;
     const r: any = await animeSaltApi.getSeries(slug);
     const data = pickPayload(r);
     const seasons = (data?.seasons || []) as any[];
-    return seasons.map((s, sIdx) => ({
+    const resolved = seasons.map((s, sIdx) => ({
       name: s?.name || `Season ${sIdx + 1}`,
       episodes: (s?.episodes || []).map((e: any, eIdx: number) => ({
         episodeNumber: Number(e?.number || eIdx + 1),
@@ -98,9 +175,24 @@ export async function resolveAnSeriesSeasons(slug: string): Promise<Season[]> {
         link: e?.slug ? `animesalt://${e.slug}` : "",
       })),
     })).filter((s: Season) => s.episodes.length > 0);
+    if (resolved.length) await writePlaybackCache("series", slug, resolved, SERIES_TTL_MS);
+    return resolved;
   } catch {
     return [];
   }
+}
+
+export function warmAnSeriesPlaybackCache(_seriesSlug: string, seasons: Season[]) {
+  const slugs = seasons.flatMap((s) => s.episodes || []).map((ep) => slugFromSentinel(ep.link)).filter((slug): slug is string => Boolean(slug));
+  const unique = Array.from(new Set(slugs));
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(3, unique.length) }, async () => {
+    while (cursor < unique.length) {
+      const next = unique[cursor++];
+      await resolveAnEpisodePlayback(next).catch(() => null);
+    }
+  });
+  Promise.all(workers).catch(() => {});
 }
 
 export const isAnimeSaltSentinel = (link?: string | null) =>

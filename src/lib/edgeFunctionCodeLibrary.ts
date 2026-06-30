@@ -21,6 +21,7 @@ import shortenArolinksSource from "../../supabase/functions/shorten-arolinks/ind
 // via the auto-deployed `lovable-backdrop` edge function.
 
 import anApiSource from "../../supabase/functions/an-api/index.ts?raw";
+import anPlaybackSource from "../../supabase/functions/an-playback/index.ts?raw";
 import verifyAdminPinSource from "../../supabase/functions/verify-admin-pin/index.ts?raw";
 
 
@@ -85,7 +86,8 @@ const entry = (
 
 export const EDGE_FUNCTION_LIBRARY: EdgeFnLibraryEntry[] = [
   entry("video-proxy",    "Video Proxy",    "Universal RS video/HLS proxy with HTTP+HTTPS support, playlist rewriting, range streaming, and RS mirror fallback.", videoProxySource, [], { isNew: true }),
-  entry("an-api",         "AN API (AnimeSalt)", "Single AnimeSalt API powering BOTH admin fetching AND user-panel video playback (live signed URL refresh, multi-season AJAX harvest, Hindi-first audio, HLS proxy). Deploy this and paste the URL in EGD Router → AN API to switch playback to your own deployment.", anApiSource, [], { badgeText: "AN API WORKING", badgeTone: "emerald" }),
+  entry("an-api",         "AN Fetch API", "AnimeSalt fetch/index API only: anime-only browse/search filter, all seasons/episodes/details extraction, Hindi-first stream/audio extraction, and short-lived link discovery for Firebase/localStorage cache refresh.", anApiSource, [], { badgeText: "AN FETCH", badgeTone: "emerald" }),
+  entry("an-playback",    "AN Playback API", "Playback-only AnimeSalt HLS proxy: playlist/segment CORS, range streaming, and CDN-safe headers. Use for user-panel video playback after links are cached.", anPlaybackSource, [], { badgeText: "AN PLAYBACK", badgeTone: "cyan" }),
   entry("video-download", "Video Download", "Dedicated, retry-hardened download proxy (recommended for downloads).", videoDownloadSource),
   entry("live-tv-proxy",  "Live TV Proxy",  "Dedicated HLS proxy for Live TV channels.", liveTvProxySource),
   entry("telegram-post",  "Telegram Post",  "Posts new episodes to your Telegram channel.", telegramPostSource),
