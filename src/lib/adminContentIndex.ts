@@ -144,7 +144,12 @@ export const fetchAdminCount = async (path: string, ttlMs = 30 * 1000) => {
       if (parsed?.ts && Date.now() - Number(parsed.ts) < ttlMs) return Number(parsed.count || 0);
     }
   } catch {}
-  const count = (await firebaseRestShallowKeys(path)).length;
+  const keys = await firebaseRestShallowKeys(path);
+  // Strip legacy AN keys (an_/as_ prefixed) so deleted-but-leftover rows don't inflate counts.
+  const filtered = (path === "movies" || path === "webseries")
+    ? keys.filter((k) => !isLegacyAnEntry(k))
+    : keys;
+  const count = filtered.length;
   try {
     const payload = JSON.stringify({ ts: Date.now(), count });
     sessionStorage.setItem(key, payload);
