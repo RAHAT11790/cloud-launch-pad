@@ -143,29 +143,43 @@ function parseMaxPage(html: string, type: string) {
 function parseBrowseItems(html: string, type: string) {
   const out: any[] = [];
   const seen = new Set<string>();
-  const hrefRe = /<a\b[^>]*href=["']https?:\/\/animesalt\.(?:ac|top)\/(series|movies)\/([^"'/?#]+)\/?["'][^>]*>[\s\S]*?<\/a>|<a\b[^>]*href=["']https?:\/\/animesalt\.(?:ac|top)\/(series|movies)\/([^"'/?#]+)\/?["'][^>]*>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = hrefRe.exec(html))) {
-    const itemType = (m[1] || m[3] || type) === "movies" ? "movies" : "series";
-    if (itemType !== (type === "movies" ? "movies" : "series")) continue;
-    const slug = String(m[2] || m[4] || "").trim();
-    if (!slug || seen.has(slug)) continue;
-    const start = Math.max(0, m.index - 800);
-    const end = Math.min(html.length, m.index + 1600);
-    const block = html.slice(start, end);
+  const safeType = type === "movies" ? "movies" : "series";
+  const skipSlugs = new Set(["page", "feed", "wp-json", "category", "tag", "author"]);
+  const pushFromBlock = (block: string) => {
+    const hrefM = block.match(new RegExp(`href=["'](?:https?:)?\\/\\/animesalt\\.(?:ac|top)\\/${safeType}\\/([^"'/?#]+)\\/?["']`, "i"))
+      || block.match(new RegExp(`href=["']\\/${safeType}\\/([^"'/?#]+)\\/?["']`, "i"));
+    const slug = String(hrefM?.[1] || "").trim();
+    if (!slug || skipSlugs.has(slug.toLowerCase()) || seen.has(slug)) return;
+
     const titleM = block.match(/<h[1-4][^>]*class=["'][^"']*entry-title[^"']*["'][^>]*>([\s\S]*?)<\/h[1-4]>/i)
-      || block.match(/(?:title|alt)=["']([^"']+)["']/i);
-    const imgM = block.match(/(?:data-src|src)=["']([^"']+\.(?:jpg|jpeg|png|webp)(?:\?[^"']*)?)["']/i);
-    const yearM = block.match(/(?:19|20)\d{2}/);
+      || block.match(/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/i)
+      || block.match(/<img\b[^>]*(?:alt|title)=["'](?:Image\s*)?([^"']+)["']/i);
+    const imgM = block.match(/<img\b[^>]*(?:data-src|data-original|data-lazy-src|srcset|src)=["']([^"']+\.(?:jpg|jpeg|png|webp)(?:\?[^"']*)?)["']/i);
+    const yearM = block.match(/\bannee-(\d{4})\b/i) || block.match(/\b(?:19|20)\d{2}\b/);
     seen.add(slug);
     out.push({
       slug,
-      type: itemType,
-      title: titleM ? decode(titleM[1]) : slug.replace(/-/g, " "),
-      poster: imgM ? resolveUrl(imgM[1], AN_BASE) : "",
-      year: yearM?.[0] || "",
-      detailUrl: `${AN_BASE}/${itemType}/${slug}/`,
+      type: safeType,
+      title: titleM ? decode(titleM[1]).replace(/^Image\s+/i, "") : slug.replace(/-/g, " "),
+      poster: imgM ? resolveUrl(imgM[1].split(/\s+/)[0], AN_BASE) : "",
+      year: yearM ? (yearM[1] || yearM[0]) : "",
+      detailUrl: `${AN_BASE}/${safeType}/${slug}/`,
     });
+  };
+
+  const liRe = /<li\b[^>]*class=["'][^"']*\b(?:series|movies|movie|type-series|type-movies)\b[^"']*["'][^>]*>[\s\S]*?<\/li>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = liRe.exec(html))) pushFromBlock(m[0]);
+
+  // Fallback for future layout changes: scan anchors, but only the requested
+  // direct content path. This deliberately ignores /series/page/N pagination.
+  if (out.length === 0) {
+    const hrefRe = new RegExp(`href=["'](?:https?:)?\\/\\/animesalt\\.(?:ac|top)\\/${safeType}\\/([^"'/?#]+)\\/?["'][^>]*>`, "gi");
+    while ((m = hrefRe.exec(html))) {
+      const start = Math.max(0, m.index - 900);
+      const end = Math.min(html.length, m.index + 1200);
+      pushFromBlock(html.slice(start, end));
+    }
   }
   return uniqueBy(out, (item) => `${item.type}:${item.slug}`);
 }
