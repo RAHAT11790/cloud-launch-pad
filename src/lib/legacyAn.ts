@@ -1,4 +1,5 @@
 export const LEGACY_AN_ROOTS = ["animesaltCache", "anSeries", "anMovies", "animesalt", "animesaltSelected"] as const;
+export const LEGACY_AN_ROOT_SET = new Set<string>(LEGACY_AN_ROOTS);
 export const LEGACY_AN_CARD_ROOTS = ["webseries", "movies", "newEpisodeReleases"] as const;
 
 const normalize = (value: unknown) => String(value || "").trim().toLowerCase();

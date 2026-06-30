@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { db, get, ref, remove } from "@/lib/firebase";
 import { firebaseRestGet, firebaseRestShallowKeys } from "@/lib/firebaseRest";
-import { clearLegacyAnBrowserCaches, isLegacyAnEntry, LEGACY_AN_CARD_ROOTS, LEGACY_AN_ROOTS } from "@/lib/legacyAn";
+import { clearLegacyAnBrowserCaches, isLegacyAnEntry, LEGACY_AN_CARD_ROOTS, LEGACY_AN_ROOTS, LEGACY_AN_ROOT_SET } from "@/lib/legacyAn";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -245,7 +245,7 @@ function FirebaseAnalyticsActions({
   const [busy, setBusy] = useState<string | null>(null);
   const [legacyProgress, setLegacyProgress] = useState("");
   const orphanKeys = useMemo(() => rootKeys.filter((key) => !ACTIVE_ROOTS.has(key)), [rootKeys]);
-  const legacyRoots = useMemo(() => rootKeys.filter((key) => LEGACY_AN_ROOTS.includes(key)), [rootKeys]);
+  const legacyRoots = useMemo(() => rootKeys.filter((key) => LEGACY_AN_ROOT_SET.has(key)), [rootKeys]);
 
   const deleteExpiredTokens = useCallback(async () => {
     if (!confirm("Delete expired and consumed unlock tokens?")) return;
@@ -325,7 +325,7 @@ function FirebaseAnalyticsActions({
         deletedIndexes += candidateSet.size;
       }
       clearLegacyAnBrowserCaches();
-      setRootKeys((keys) => keys.filter((key) => !LEGACY_AN_ROOTS.includes(key)));
+      setRootKeys((keys) => keys.filter((key) => !LEGACY_AN_ROOT_SET.has(key)));
       setLegacyProgress(`Done: ${deletedCards} cards, ${deletedIndexes} index rows removed`);
       toast.success(`Safe AN cleanup done: ${deletedCards} cards + ${deletedIndexes} index rows removed. RS kept safe.`);
     } catch (error: any) {
