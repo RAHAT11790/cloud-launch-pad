@@ -508,6 +508,15 @@ export default function AnManager({
           >
             <Trash2 size={14} /> Delete All Saved
           </button>
+          <button
+            onClick={onLoadAllDetails}
+            disabled={bulkBusy}
+            className="px-3 py-2 text-xs flex items-center gap-1.5 rounded-lg bg-amber-500/20 text-amber-200 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50"
+            title="Fetch rating, year, overview, genres, directors from TMDB for every saved item"
+          >
+            {bulkBusy ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Load All Details
+          </button>
         </div>
 
         {bulkBusy && (
