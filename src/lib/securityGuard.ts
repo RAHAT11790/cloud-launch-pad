@@ -104,7 +104,10 @@ export const logAdminAccess = async (entry: Omit<AdminAccessLog, "ts" | "fingerp
       country: geo.country,
       city: geo.city,
     };
-    await push(ref(db, "adminAccess/logs"), payload);
+    const cleanPayload = Object.fromEntries(
+      Object.entries(payload).filter(([, value]) => value !== undefined),
+    ) as AdminAccessLog;
+    await push(ref(db, "adminAccess/logs"), cleanPayload);
   } catch (e) {
     // swallow — never block login on logging failure
     console.warn("[securityGuard] log failed", e);
